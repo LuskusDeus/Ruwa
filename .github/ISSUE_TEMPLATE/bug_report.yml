@@ -1,0 +1,71 @@
+# SPDX-License-Identifier: MPL-2.0
+
+name: Bug report
+description: Report something that is broken or behaves incorrectly.
+labels: ["bug"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for taking the time to file a bug. Please **do not** report
+        security vulnerabilities here — see [SECURITY.md](https://github.com/LuskusDeus/Ruwa/blob/main/SECURITY.md).
+  - type: textarea
+    id: description
+    attributes:
+      label: Describe the bug
+      description: A clear and concise description of what the bug is.
+    validations:
+      required: true
+  - type: textarea
+    id: repro
+    attributes:
+      label: Steps to reproduce
+      description: What did you do, step by step?
+      placeholder: |
+        1. Create a new document (...)
+        2. Select the ... tool
+        3. ...
+    validations:
+      required: true
+  - type: textarea
+    id: expected
+    attributes:
+      label: Expected behavior
+      description: What did you expect to happen instead?
+    validations:
+      required: true
+  - type: textarea
+    id: media
+    attributes:
+      label: Screenshots or recording
+      description: If applicable, add screenshots or a short recording to help explain the problem.
+    validations:
+      required: false
+  - type: input
+    id: version
+    attributes:
+      label: Ruwa version
+      description: Copy the value shown on the About screen, or provide the commit hash if built from source.
+    validations:
+      required: true
+  - type: input
+    id: os
+    attributes:
+      label: Operating system
+      description: e.g. Windows 11 x64 (build 26100).
+    validations:
+      required: true
+  - type: input
+    id: gpu
+    attributes:
+      label: GPU and driver
+      description: e.g. NVIDIA RTX 3060, driver 555.xx. Helpful for rendering/canvas issues.
+    validations:
+      required: false
+  - type: textarea
+    id: context
+    attributes:
+      label: Additional context
+      description: Anything else relevant — tablet/stylus model, log output, etc.
+    validations:
+      required: false

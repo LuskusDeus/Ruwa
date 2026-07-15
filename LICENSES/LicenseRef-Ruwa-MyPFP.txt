@@ -1,0 +1,12 @@
+Ruwa MyPFP Asset Exception
+
+This notice applies only to resources/icons/MyPFP.jpg.
+
+The file is intentionally excluded from the Ruwa project licences. Ruwa makes
+no ownership claim to the depicted third-party character or other underlying
+third-party material. No copyright, trademark, publicity, or other permission
+for that underlying material is granted by this repository.
+
+The file may be present in Ruwa distributions at the project owner's direction.
+No permission is granted to extract, reuse, modify, sublicense, or redistribute
+it separately except where applicable law independently permits that use.

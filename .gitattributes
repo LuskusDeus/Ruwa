@@ -1,0 +1,27 @@
+# SPDX-License-Identifier: MPL-2.0
+
+# Keep repository text deterministic across Windows and Unix contributors.
+* text=auto eol=lf
+
+# Native Windows command scripts require CRLF for reliable cmd.exe parsing.
+*.bat text eol=crlf
+*.cmd text eol=crlf
+
+# Binary assets and generated runtime data must never undergo text conversion.
+*.a binary
+*.bin binary
+*.dll binary
+*.exe binary
+*.ico binary
+*.icns binary
+*.jpg binary
+*.jpeg binary
+*.lib binary
+*.lut binary
+*.obj binary
+*.otf binary
+*.png binary
+*.qm binary
+*.rbf binary
+*.ttf binary
+*.zip binary

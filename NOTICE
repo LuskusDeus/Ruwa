@@ -1,0 +1,64 @@
+Ruwa Third-Party Notice
+=======================
+
+This notice identifies known third-party components and assets used by Ruwa.
+Ruwa source code is licensed under the Mozilla Public License 2.0 in LICENSE.
+Project-owned assets are governed by ASSET_POLICY.md; use of the Ruwa name and
+marks is governed separately by TRADEMARKS.md. This notice does not alter any
+licence. See THIRD_PARTY_NOTICES.md for the component inventory and release
+obligations.
+
+The public source tree uses Qt 6 and QWindowKit as application dependencies,
+Catch2 as a test-only dependency, and the qmsetup/syscmdline build helpers
+pinned transitively by QWindowKit. It vendors font files under resources/fonts.
+Discord Rich Presence is implemented
+as first-party Ruwa code over Discord's local IPC socket (Qt only); it uses no
+third-party Discord SDK and bundles no proprietary binary, and is enabled by
+default.
+
+Ruwa uses the Qt framework (reference release: Qt 6.10.2), dynamically linked
+under the GNU Lesser General Public License version 3 (LGPL-3.0). Qt is a
+trademark of The Qt Company Ltd. The LGPL-3.0 and GPL-3.0 license texts are
+stored at `third-party/notices/qt/LICENSE.LGPLv3.txt` and
+`third-party/notices/qt/LICENSE.GPLv3.txt`
+and must ship in every binary package, together with the exact Qt version and a
+way to obtain the corresponding Qt source. See THIRD_PARTY_NOTICES.md and
+RELEASE.md for the full obligations.
+
+Release requirements
+--------------------
+
+- Every binary package must include the applicable full licence texts and
+  notices, including the Qt, QWindowKit, icon, and font obligations described in
+  THIRD_PARTY_NOTICES.md.
+
+`resources/icons/MyPFP.jpg` is an explicit project-owner exception. It is not
+licensed under a general Ruwa asset licence; see ASSET_POLICY.md and
+`LICENSES/LicenseRef-Ruwa-MyPFP.txt`.
+
+The raster icons under `resources/icons` are drawn from the Lucide (ISC, with
+MIT portions from Feather) and Tabler Icons (MIT) open-source sets. Both licences
+are permissive and require no per-icon attribution; their upstream texts are
+stored at `third-party/notices/lucide/LICENSE` and
+`third-party/notices/tabler/LICENSE`. The canonical ISC, MIT, and SIL Open Font
+License 1.1 texts are stored under `LICENSES/`.
+
+QWindowKit 1.5.0 is licensed under Apache License 2.0. Its exact upstream
+licence text and copyright notice are stored at
+`third-party/notices/qwindowkit/LICENSE`; provenance is recorded in
+`third-party/notices/qwindowkit/README.txt`. The MIT notices for its transitive
+qmsetup and syscmdline build helpers are stored in the same directory. Catch2
+3.8.1 is used only by tests under BSL-1.0; its notice is stored under
+`third-party/notices/catch2/`.
+
+Release policy
+--------------
+
+- Public Qt builds must use a licence-compliant deployment model. Ruwa's
+  intended open-source distribution is dynamic linking under Qt's LGPL-3.0
+  path, unless a separately approved commercial Qt licence is used.
+- Do not add proprietary SDK files, private credentials, or unreviewed assets
+  to the public repository or release packages.
+- Update this notice and THIRD_PARTY_NOTICES.md in the same change as every
+  dependency or third-party asset addition/removal. Update REUSE.toml for every
+  asset addition or licensing change.

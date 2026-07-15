@@ -1,0 +1,95 @@
+# SPDX-License-Identifier: MPL-2.0
+
+# =============================================================================
+# Build outputs
+# =============================================================================
+build/
+cmake-build-*/
+out/
+dist/
+*.exe
+*.dll
+*.so
+*.dylib
+*.a
+*.lib
+*.o
+*.obj
+
+# =============================================================================
+# IDE / Editor
+# =============================================================================
+.qtcreator/
+.vscode/
+.claude/
+*.user
+*.user.*
+*.pro.user
+*.autosave
+
+# =============================================================================
+# Qt
+# =============================================================================
+*.moc
+moc_*.cpp
+qrc_*.cpp
+ui_*.h
+*.qm
+
+# =============================================================================
+# Legacy Discord Game SDK (no longer used; kept as a guard against accidental
+# commits of any leftover local SDK binary). Rich Presence is now first-party
+# Qt code in src/services/discord and needs no SDK.
+# =============================================================================
+/third-party/discord/
+
+# =============================================================================
+# System
+# =============================================================================
+.DS_Store
+Thumbs.db
+Desktop.ini
+*.swp
+*.swo
+*~
+/nul
+/src/nul
+
+# =============================================================================
+# Python
+# =============================================================================
+__pycache__/
+*.py[cod]
+.venv/
+venv/
+.env
+
+# Update-signing private keys must never enter the repository.
+*.pfx
+*.p12
+*.pem
+*.key
+
+# =============================================================================
+# Node.js
+# =============================================================================
+node_modules/
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+
+# =============================================================================
+# Local diagnostics / experiments
+# =============================================================================
+*.wetbak_*
+/*.rbf
+/ruwa.csv
+/scripts/extract_shader.py
+/scripts/generate_project.js
+/scripts/kSmudgePickup*.glsl
+/scripts/package-lock.json
+/scripts/package.json
+/scripts/parse_dump.py
+/scripts/resolve_stack.py
+/scripts/sim_*.py
+/scripts/sim_*.png

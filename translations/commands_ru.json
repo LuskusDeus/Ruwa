@@ -1,0 +1,272 @@
+{
+  "categories": {
+    "File": "Файл",
+    "Edit": "Правка",
+    "View": "Вид",
+    "Navigation": "Навигация",
+    "Tab": "Вкладки",
+    "Layers": "Слои",
+    "Tools": "Инструменты",
+    "Transform": "Трансформация"
+  },
+  "file.new": {
+    "title": "Новый проект",
+    "category": "Файл",
+    "description": "Создать новый проект",
+    "aliases": ["нп", "создать", "новый", "fnp"]
+  },
+  "file.open": {
+    "title": "Открыть проект",
+    "category": "Файл",
+    "description": "Открыть существующий проект",
+    "aliases": ["открыть", "о", "загрузить", "fop", "op"]
+  },
+  "file.save": {
+    "title": "Сохранить",
+    "category": "Файл",
+    "description": "Сохранить текущий проект",
+    "aliases": ["сохранить", "с", "sv"]
+  },
+  "file.saveAs": {
+    "title": "Сохранить как...",
+    "category": "Файл",
+    "description": "Сохранить проект под новым именем",
+    "aliases": ["сохранить как", "са", "fsa"]
+  },
+  "file.quickNewProject": {
+    "title": "Быстрое создание проекта",
+    "category": "Файл",
+    "description": "Создать новый проект (шаблон или 1920×1080 по умолчанию)",
+    "aliases": ["бсп", "бсд", "быстро", "быстрый проект", "qnp"]
+  },
+  "file.exit": {
+    "title": "Выход",
+    "category": "Файл",
+    "description": "Закрыть приложение",
+    "aliases": ["выход", "закрыть", "quit", "exit"]
+  },
+  "edit.undo": {
+    "title": "Отменить",
+    "category": "Правка",
+    "description": "Отменить последнее действие",
+    "aliases": ["отмена", "отменить", "undo", "z"]
+  },
+  "edit.redo": {
+    "title": "Повторить",
+    "category": "Правка",
+    "description": "Повторить отменённое действие",
+    "aliases": ["повторить", "redo", "y"]
+  },
+  "edit.transform": {
+    "title": "Свободная трансформация",
+    "category": "Правка",
+    "description": "Трансформировать выбранный слой",
+    "aliases": ["трансформ", "трансформация", "масштаб", "поворот", "transform"]
+  },
+  "edit.transform-last-stroke": {
+    "title": "Трансформация последнего мазка",
+    "category": "Правка",
+    "description": "Трансформировать последний мазок кисти",
+    "aliases": ["трансформ мазок", "мазок", "stroke transform"]
+  },
+  "tab.close": {
+    "title": "Закрыть вкладку",
+    "category": "Вкладки",
+    "description": "Закрыть текущую вкладку",
+    "aliases": ["закрыть", "зв", "close", "tc"]
+  },
+  "tab.closeAll": {
+    "title": "Закрыть все вкладки",
+    "category": "Вкладки",
+    "description": "Закрыть все открытые вкладки",
+    "aliases": ["закрыть все", "звв", "closeall", "tca"]
+  },
+  "tab.closeOthers": {
+    "title": "Закрыть остальные вкладки",
+    "category": "Вкладки",
+    "description": "Закрыть все вкладки кроме текущей",
+    "aliases": ["закрыть другие", "зд", "closeothers", "tco"]
+  },
+  "tab.duplicate": {
+    "title": "Дублировать вкладку",
+    "category": "Вкладки",
+    "description": "Создать копию текущей вкладки",
+    "aliases": ["дублировать", "дубль", "duplicate", "td"]
+  },
+  "nav.nextTab": {
+    "title": "Следующая вкладка",
+    "category": "Навигация",
+    "description": "Переключиться на следующую вкладку",
+    "aliases": ["след", "следующий", "next", "nt"]
+  },
+  "nav.previousTab": {
+    "title": "Предыдущая вкладка",
+    "category": "Навигация",
+    "description": "Переключиться на предыдущую вкладку",
+    "aliases": ["пред", "предыдущий", "prev", "pt"]
+  },
+  "nav.goToTab": {
+    "title": "Перейти к вкладке...",
+    "category": "Навигация",
+    "description": "Переключиться на вкладку по номеру (1-9)",
+    "aliases": ["перейти", "вкладка", "goto", "gt"]
+  },
+  "nav.settings": {
+    "title": "Настройки",
+    "category": "Навигация",
+    "description": "Открыть страницу настроек",
+    "aliases": ["настройки", "н", "параметры", "settings", "prefs"]
+  },
+  "nav.home": {
+    "title": "Главная",
+    "category": "Навигация",
+    "description": "Перейти на главную страницу",
+    "aliases": ["главная", "домой", "home", "start"]
+  },
+  "view.fullscreen": {
+    "title": "Полный экран",
+    "category": "Вид",
+    "description": "Переключить полноэкранный режим",
+    "aliases": ["полный экран", "пэ", "fullscreen", "fscr", "f11"]
+  },
+  "view.commandPalette": {
+    "title": "Палитра команд",
+    "category": "Вид",
+    "description": "Открыть палитру команд",
+    "aliases": ["палитра", "команды", "пк", "palette", "cp"]
+  },
+  "view.zoomIn": {
+    "title": "Увеличить",
+    "category": "Вид",
+    "description": "Увеличить масштаб холста",
+    "aliases": ["увеличить", "зум +", "zoomin", "zi", "+"]
+  },
+  "view.zoomOut": {
+    "title": "Уменьшить",
+    "category": "Вид",
+    "description": "Уменьшить масштаб холста",
+    "aliases": ["уменьшить", "зум -", "zoomout", "zo", "-"]
+  },
+  "view.zoomReset": {
+    "title": "Сбросить масштаб",
+    "category": "Вид",
+    "description": "Сбросить масштаб до 100%",
+    "aliases": ["100%", "сброс зума", "zoom100", "zr"]
+  },
+  "view.zoomToFit": {
+    "title": "Вписать в окно",
+    "category": "Вид",
+    "description": "Вписать холст в окно",
+    "aliases": ["вписать", "по размеру", "fit", "zoomfit", "zf"]
+  },
+  "view.resetLayout": {
+    "title": "Сбросить макет",
+    "category": "Вид",
+    "description": "Восстановить панели по умолчанию",
+    "aliases": ["сброс макета", "макет", "resetlayout"]
+  },
+  "layers.delete": {
+    "title": "Удалить выбранные слои",
+    "category": "Слои",
+    "description": "Удалить выбранные слои",
+    "aliases": ["удалить слои", "удс", "layer-delete"]
+  },
+  "layers.duplicate": {
+    "title": "Дублировать выбранные слои",
+    "category": "Слои",
+    "description": "Дублировать выбранные слои",
+    "aliases": ["дублировать слои", "дс", "layer-duplicate"]
+  },
+  "layers.quick-clipping-mask": {
+    "title": "Быстрая обтравочная маска",
+    "category": "Слои",
+    "description": "Применить обтравочную маску к выбранным слоям",
+    "aliases": ["обтравка", "маска", "клип", "quick-clip", "clip-mask"]
+  },
+  "layers.toggle-visibility": {
+    "title": "Переключить видимость слоя",
+    "category": "Слои",
+    "description": "Скрыть или показать выбранные слои",
+    "aliases": ["видимость", "показать слой", "скрыть слой", "hide-layer"]
+  },
+  "tools.hand": {
+    "title": "Рука",
+    "category": "Инструменты",
+    "aliases": ["рука", "панорама", "hand", "h", "pan"]
+  },
+  "tools.brush": {
+    "title": "Кисть",
+    "category": "Инструменты",
+    "aliases": ["кисть", "к", "рисовать", "brush", "b", "paint"]
+  },
+  "tools.blur": {
+    "title": "Размытие",
+    "category": "Инструменты",
+    "aliases": ["размытие", "блюр", "blur"]
+  },
+  "tools.eraser": {
+    "title": "Ластик",
+    "category": "Инструменты",
+    "aliases": ["ластик", "л", "eraser", "e"]
+  },
+  "tools.eyedropper": {
+    "title": "Пипетка",
+    "category": "Инструменты",
+    "aliases": ["пипетка", "п", "цвет", "eyedropper", "i", "pipette"]
+  },
+  "tools.lasso": {
+    "title": "Лассо",
+    "category": "Инструменты",
+    "aliases": ["лассо", "выделение", "lasso", "l"]
+  },
+  "tools.square-selection": {
+    "title": "Прямоугольное выделение",
+    "category": "Инструменты",
+    "aliases": ["прямоугольник", "выделение", "marquee", "m"]
+  },
+  "tools.circle-selection": {
+    "title": "Круговое выделение",
+    "category": "Инструменты",
+    "aliases": ["круг", "овал", "circle", "o"]
+  },
+  "tools.rotate-view": {
+    "title": "Поворот вида",
+    "category": "Инструменты",
+    "aliases": ["поворот", "rotate", "r"]
+  },
+  "tools.text": {
+    "title": "Текст",
+    "category": "Инструменты",
+    "aliases": ["текст", "т", "надпись", "text", "t"]
+  },
+  "tools.zoom": {
+    "title": "Масштаб",
+    "category": "Инструменты",
+    "aliases": ["масштаб", "зум", "zoom", "z"]
+  },
+  "tools.canvas-resize": {
+    "title": "Изменение размера холста",
+    "category": "Инструменты",
+    "aliases": ["холст", "размер холста", "canvas-resize"]
+  },
+  "tools.brushSizeIncrease": {
+    "title": "Увеличить размер кисти",
+    "category": "Инструменты",
+    "aliases": ["кисть +", "увеличить кисть"]
+  },
+  "tools.brushSizeDecrease": {
+    "title": "Уменьшить размер кисти",
+    "category": "Инструменты",
+    "aliases": ["кисть -", "уменьшить кисть"]
+  },
+  "tools.brushOpacityIncrease": {
+    "title": "Увеличить непрозрачность кисти",
+    "category": "Инструменты",
+    "aliases": ["непрозрачность +"]
+  },
+  "tools.brushOpacityDecrease": {
+    "title": "Уменьшить непрозрачность кисти",
+    "category": "Инструменты",
+    "aliases": ["непрозрачность -"]
+  }
+}
