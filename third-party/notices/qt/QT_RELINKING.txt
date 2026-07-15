@@ -1,0 +1,21 @@
+Replacing the dynamically linked Qt libraries
+==============================================
+
+Ruwa is linked dynamically against Qt 6.10.2 (MinGW 64-bit). Ruwa does not
+apply integrity checks or technical restrictions that prevent users from
+replacing the Qt shared libraries and plugins in the installation folder.
+
+To use a compatible modified Qt build:
+
+1. Keep a backup copy of the Ruwa installation.
+2. Build Qt 6.10.2 for Windows x64 with the MinGW ABI and the modules listed in
+   THIRD_PARTY_NOTICES.md. Apply any desired Qt modifications before building.
+3. Replace the Qt6*.dll files and the corresponding plugin directories beside
+   Ruwa.exe with the compatible files from that build. Preserve the directory
+   names used by the original package.
+4. Start Ruwa.exe directly and test the modified libraries.
+
+Ruwa and its standard effect plugins are covered-source components; their
+source is published with the matching Ruwa release. No cryptographic signature
+check in Ruwa rejects user-replaced Qt libraries. Authenticode signatures, when
+present, only identify the publisher and do not prevent replacement.

@@ -1,0 +1,156 @@
+<!-- SPDX-License-Identifier: MPL-2.0 -->
+
+<RCC>
+    <qresource prefix="/updates">
+        <file alias="ApplyUpdate.ps1">resources/updates/ApplyUpdate.ps1</file>
+    </qresource>
+    <qresource prefix="/fonts">
+        <file alias="JetBrainsMono-Regular">resources/fonts/JetBrainsMono-Regular.ttf</file>
+        <file alias="JetBrainsMono-Medium">resources/fonts/JetBrainsMono-Medium.ttf</file>
+        <file alias="JetBrainsMono-Bold">resources/fonts/JetBrainsMono-Bold.ttf</file>
+        <file alias="JetBrainsMono-Light">resources/fonts/JetBrainsMono-Light.ttf</file>
+        <file alias="JetBrainsMono-Italic">resources/fonts/JetBrainsMono-Italic.ttf</file>
+        <file alias="Manrope-Regular">resources/fonts/Manrope-Regular.ttf</file>
+        <file alias="Manrope-Medium">resources/fonts/Manrope-Medium.ttf</file>
+        <file alias="Manrope-SemiBold">resources/fonts/Manrope-SemiBold.ttf</file>
+        <file alias="Manrope-Bold">resources/fonts/Manrope-Bold.ttf</file>
+        <file alias="Manrope-ExtraLight">resources/fonts/Manrope-ExtraLight.ttf</file>
+        <file alias="Manrope-Light">resources/fonts/Manrope-Light.ttf</file>
+        <file alias="Manrope-ExtraBold">resources/fonts/Manrope-ExtraBold.ttf</file>
+        <file alias="IBMPlexSans-Bold">resources/fonts/IBMPlexSans_Condensed-Bold.ttf</file>
+        <file alias="IBMPlexSans-Light">resources/fonts/IBMPlexSans_Condensed-Light.ttf</file>
+        <file alias="IBMPlexSans-Regular">resources/fonts/IBMPlexSans_Condensed-Regular.ttf</file>
+        <file alias="IBMPlexSans-Thin">resources/fonts/IBMPlexSans_Condensed-Thin.ttf</file>
+        <file alias="Comfortaa-Bold">resources/fonts/Comfortaa-Bold.ttf</file>
+        <file alias="Comfortaa-Light">resources/fonts/Comfortaa-Light.ttf</file>
+        <file alias="Comfortaa-Medium">resources/fonts/Comfortaa-Medium.ttf</file>
+        <file alias="Comfortaa-Regular">resources/fonts/Comfortaa-Regular.ttf</file>
+        <file alias="InstrumentSerif-Regular">resources/fonts/InstrumentSerif-Regular.ttf</file>
+        <file alias="InstrumentSerif-Italic">resources/fonts/InstrumentSerif-Italic.ttf</file>
+        <file alias="DMSans18pt-Regular">resources/fonts/DMSans_18pt-Regular.ttf</file>
+        <file alias="DMSans18pt-SemiBold">resources/fonts/DMSans_18pt-SemiBold.ttf</file>
+    </qresource>
+    <qresource prefix="/icons">
+        <file alias="Home">resources/icons/Home.png</file>
+        <file alias="NewFile">resources/icons/NewFile.png</file>
+        <file alias="Settings">resources/icons/Settings.png</file>
+        <file alias="Appearance">resources/icons/Appearance.png</file>
+        <file alias="Find">resources/icons/Find.png</file>
+        <file alias="List">resources/icons/List.png</file>
+        <file alias="CardView">resources/icons/CardView.png</file>
+        <file alias="Performance">resources/icons/Performance.png</file>
+        <file alias="Discord">resources/icons/Discord.png</file>
+        <file alias="Github">resources/icons/Github.png</file>
+        <file alias="Telegram">resources/icons/Telegram.png</file>
+        <file alias="MyPFP">resources/icons/MyPFP.jpg</file>
+        <file alias="Brush">resources/icons/Brush.png</file>
+        <file alias="Eyedropper">resources/icons/Eyedropper.png</file>
+        <file alias="Text">resources/icons/Text.png</file>
+        <file alias="Bold">resources/icons/Bold.png</file>
+        <file alias="Italic">resources/icons/Italic.png</file>
+        <file alias="Underline">resources/icons/Underline.png</file>
+        <file alias="Zoom">resources/icons/Zoom.png</file>
+        <file alias="OpaqueLogoIcon">resources/icons/OpaqueLogo.png</file>
+        <file alias="TransparentLogoIcon">resources/icons/TransparentLogo.png</file>
+        <file alias="BasicFile">resources/icons/BasicFile.png</file>
+        <file alias="Import">resources/icons/Import.png</file>
+        <file alias="Export">resources/icons/Export.png</file>
+        <file alias="Save">resources/icons/Save.png</file>
+        <file alias="Edit">resources/icons/Edit.png</file>
+        <file alias="OpenedFolder">resources/icons/OpenedFolder.png</file>
+        <file alias="UndoArrow">resources/icons/ArrowUndo.png</file>
+        <file alias="Brushpack">resources/icons/Brushpack.png</file>
+        <file alias="Eraser">resources/icons/Eraser.png</file>
+        <file alias="Lasso">resources/icons/Lasso.png</file>
+        <file alias="LassoFill">resources/icons/LassoFill.png</file>
+        <file alias="Close">resources/icons/Close.png</file>
+        <file alias="Minimize">resources/icons/Minimize.png</file>
+        <file alias="Maximize">resources/icons/Maximize.png</file>
+        <file alias="MinimizeWindow">resources/icons/MinimizeWindow.png</file>
+        <file alias="Hand">resources/icons/Hand.png</file>
+        <file alias="SquareSelection">resources/icons/SquareSelection.png</file>
+        <file alias="CircleSelection">resources/icons/CircleSelection.png</file>
+        <file alias="RotateView">resources/icons/RotateView.png</file>
+        <file alias="Folder">resources/icons/Folder.png</file>
+        <file alias="Remove">resources/icons/Remove.png</file>
+        <file alias="Eye">resources/icons/Eye.png</file>
+        <file alias="EyeDeactivated">resources/icons/EyeDeactivated.png</file>
+        <file alias="ArrowDown">resources/icons/ArrowDown.png</file>
+        <file alias="ArrowUp">resources/icons/ArrowUp.png</file>
+        <file alias="Pencil">resources/icons/Pencil.png</file>
+        <file alias="Curve">resources/icons/Curve.png</file>
+        <file alias="CanvasResize">resources/icons/CanvasResize.png</file>
+        <file alias="Crop">resources/icons/Crop.png</file>
+        <file alias="FillColor">resources/icons/FillColor.png</file>
+        <file alias="SmartFillColor">resources/icons/SmartFillColor.png</file>
+        <file alias="Camera">resources/icons/Camera.png</file>
+        <file alias="Confirm">resources/icons/Confirm.png</file>
+        <file alias="Move">resources/icons/Move.png</file>
+        <file alias="Alpha">resources/icons/Alpha.png</file>
+        <file alias="ZeroAlphaBrush">resources/icons/ZeroAlphaBrush.png</file>
+        <file alias="Lock">resources/icons/Lock.png</file>
+        <file alias="Duplicate">resources/icons/Duplicate.png</file>
+        <file alias="DotsIcon">resources/icons/DotsIcon.png</file>
+        <file alias="Link">resources/icons/Link.png</file>
+        <file alias="FlipVertical">resources/icons/FlipVertical.png</file>
+        <file alias="FlipHorizontal">resources/icons/FlipHorizontal.png</file>
+        <file alias="DockLayout">resources/icons/Dock-layout.png</file>
+        <file alias="LayoutSwitch">resources/icons/LayoutSwitch.png</file>
+        <file alias="DetachPanel">resources/icons/DetachPanel.png</file>
+        <file alias="Resize">resources/icons/Resize.png</file>
+        <file alias="RotationCorner">resources/icons/RotationCorner.png</file>
+        <file alias="Blur">resources/icons/Blur.png</file>
+        <file alias="Smudge">resources/icons/Smudge.png</file>
+        <file alias="Swap">resources/icons/Swap.png</file>
+        <file alias="PenPressure">resources/icons/PenPressure.png</file>
+        <file alias="Time">resources/icons/Time.png</file>
+        <file alias="Random">resources/icons/Random.png</file>
+        <file alias="Direction">resources/icons/Direction.png</file>
+        <file alias="NotAvailable">resources/icons/NotAvailable.png</file>
+        <file alias="Liquify">resources/icons/Liquify.png</file>
+        <file alias="LiquifyPush">resources/icons/LiquifyPush.png</file>
+        <file alias="LiquifyTwirlCW">resources/icons/LiquifyTwirl_cw.png</file>
+        <file alias="LiquifyTwirlCCW">resources/icons/LiquifyTwirl_ccw.png</file>
+        <file alias="LiquifyGrow">resources/icons/LiquifyGrow.png</file>
+        <file alias="LiquifyShrink">resources/icons/LiquifyShrink.png</file>
+        <file alias="LayerMask">resources/icons/LayerMask.png</file>
+        <file alias="AdjustmentLayer">resources/icons/AdjustmentLayer.png</file>
+        <file alias="ColorPanel">resources/icons/ColorPanel.png</file>
+        <file alias="ComposerPanel">resources/icons/ComposerPanel.png</file>
+        <file alias="LayerEffectsPanel">resources/icons/LayerEffectsPanel.png</file>
+        <file alias="LayersPanel">resources/icons/LayersPanel.png</file>
+        <file alias="ToolsPanel">resources/icons/ToolsPanel.png</file>
+    </qresource>
+    <qresource prefix="/images">
+        <file alias="WelcomeBanner">resources/pictures/WelcomeBanner.png</file>
+        <file alias="WelcomeBanner2">resources/pictures/WelcomeBanner2.png</file>
+        <file alias="UpdateBanner">resources/pictures/UpdateBanner.png</file>
+        <file alias="UpdateMessageBanner">resources/pictures/UpdateMessageBanner.png</file>
+        <file alias="Banner1April">resources/pictures/Banner1April.png</file>
+    </qresource>
+    <qresource prefix="/brushes">
+        <file alias="1">resources/brushes/1.png</file>
+        <file alias="2">resources/brushes/2.png</file>
+        <file alias="3">resources/brushes/3.png</file>
+        <file alias="4">resources/brushes/4.png</file>
+        <file alias="5">resources/brushes/5.png</file>
+    </qresource>
+    <qresource prefix="/standard_brushes">
+        <file alias="Classic Brushes/Classic Brushes.rbf">resources/brushes/StandardBrushes/Classic Brushes.rbf</file>
+        <file alias="Experimental Brushes/Experimental Brushes.rbf">resources/brushes/StandardBrushes/Experimental Brushes.rbf</file>
+        <file alias="Lineart Brushes/Lineart Brushes.rbf">resources/brushes/StandardBrushes/Lineart Brushes.rbf</file>
+        <file alias="Wet Brushes/Wet Brushes.rbf">resources/brushes/StandardBrushes/Wet Brushes.rbf</file>
+    </qresource>
+    <qresource prefix="/pigments">
+        <file alias="ruwa-pigments-v1.lut">resources/pigments/ruwa-pigments-v1.lut</file>
+    </qresource>
+    <qresource prefix="/layouts">
+        <file alias="Base.json">resources/Layouts/Base.json</file>
+    </qresource>
+    <qresource prefix="/i18n">
+        <file alias="commands_ru.json">translations/commands_ru.json</file>
+    </qresource>
+    <qresource prefix="/">
+        <file>resources/app.ico</file>
+    </qresource>
+</RCC>

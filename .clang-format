@@ -1,0 +1,38 @@
+# SPDX-License-Identifier: MPL-2.0
+
+# Ruwa C++ code formatting rules.
+#
+# Requires clang-format >= 16.
+# Based on the WebKit style, which matches Qt/Ruwa conventions closely:
+#   - 4-space indentation, no tabs
+#   - opening brace on a new line for functions, attached for control flow
+#   - pointer/reference bound to the type (QWidget* w, const QString& s)
+#
+# The whole tree is kept clang-format clean (CI runs --dry-run --Werror over
+# src/). Use clang-format 21.1.x to match CI. To reformat locally:
+#   clang-format -i $(git ls-files 'src/*.cpp' 'src/*.h')
+---
+Language: Cpp
+BasedOnStyle: WebKit
+Standard: Latest
+
+ColumnLimit: 100
+IndentWidth: 4
+TabWidth: 4
+UseTab: Never
+
+PointerAlignment: Left
+ReferenceAlignment: Left
+NamespaceIndentation: None
+FixNamespaceComments: true
+
+BreakBeforeBraces: WebKit
+AllowShortFunctionsOnASingleLine: Inline
+AllowShortIfStatementsOnASingleLine: Never
+AllowShortLoopsOnASingleLine: false
+SpaceAfterCStyleCast: true
+
+# Includes are grouped logically (project headers first, then Qt/system),
+# not alphabetically. Do not reorder them.
+SortIncludes: false
+IncludeBlocks: Preserve

@@ -1,0 +1,37 @@
+# SPDX-License-Identifier: MPL-2.0
+
+# EditorConfig — https://editorconfig.org
+# Baseline whitespace/encoding rules for editors without clang-format.
+root = true
+
+[*]
+charset = utf-8
+end_of_line = lf
+insert_final_newline = true
+trim_trailing_whitespace = true
+indent_style = space
+indent_size = 4
+
+# C/C++ and GLSL shaders — 4-space indentation (see .clang-format for C++).
+[*.{c,cc,cpp,cxx,h,hpp,hxx,inl,glsl,vert,frag}]
+indent_size = 4
+
+# CMake
+[{CMakeLists.txt,*.cmake,*.cmake.in}]
+indent_size = 4
+
+# Web tooling / data
+[*.{js,mjs,ts,json,yml,yaml}]
+indent_size = 2
+
+# Python
+[*.py]
+indent_size = 4
+
+# Markdown — trailing whitespace is significant (two spaces = hard line break).
+[*.md]
+trim_trailing_whitespace = false
+
+# Windows-specific files stay CRLF.
+[*.{rc,bat,cmd,ps1}]
+end_of_line = crlf

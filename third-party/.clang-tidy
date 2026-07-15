@@ -1,0 +1,9 @@
+# Vendored third-party material (notice/licence texts and any vendored code).
+#
+# clang-tidy applies the nearest .clang-tidy to each translation unit, so this
+# file overrides the project root configuration for everything under
+# third-party/. We do not own this material and do not want to lint or "fix" it.
+---
+Checks: '-*'
+HeaderFilterRegex: '$^'
+WarningsAsErrors: ''

@@ -1,0 +1,10 @@
+# SPDX-License-Identifier: MPL-2.0
+
+blank_issues_enabled: false
+contact_links:
+  - name: Ruwa Discord
+    url: https://discord.gg/SecuUEhwPd
+    about: Questions, usage help, and general discussion.
+  - name: Security vulnerability
+    url: https://github.com/LuskusDeus/Ruwa/blob/main/SECURITY.md
+    about: Please report security issues privately — do not open a public issue.

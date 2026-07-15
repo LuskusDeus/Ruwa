@@ -1,0 +1,162 @@
+version = 1
+
+# Ruwa-owned source, build files, documentation, and project infrastructure.
+# Existing inline SPDX markers remain authoritative; this annotation supplies
+# a uniform copyright statement and covers non-commentable project files.
+[[annotations]]
+path = [
+    ".clang-format",
+    ".clang-tidy",
+    ".editorconfig",
+    ".gitattributes",
+    ".gitignore",
+    ".github/**",
+    "ASSET_POLICY.md",
+    "BUILDING.md",
+    "CHANGELOG.md",
+    "CMakeLists.txt",
+    "CODE_OF_CONDUCT.md",
+    "CONTRIBUTING.md",
+    "GOVERNANCE.md",
+    "NOTICE",
+    "README.md",
+    "RELEASE.md",
+    "SECURITY.md",
+    "THIRD_PARTY_NOTICES.md",
+    "TRADEMARKS.md",
+    "app.rc",
+    "cmake/**",
+    "docs/**",
+    "plugins/**",
+    "resources.qrc",
+    "scripts/**",
+    "sdk/**",
+    "src/**",
+    "tests/**",
+    "third-party/.clang-tidy",
+    "tools/**",
+    "translations/**",
+]
+precedence = "aggregate"
+SPDX-FileCopyrightText = "2026 Ruwa contributors"
+SPDX-License-Identifier = "MPL-2.0"
+
+# Project-authored dependency provenance and the compiled font notice.
+[[annotations]]
+path = [
+    "third-party/notices/catch2/README.txt",
+    "third-party/notices/fonts/OFL-FONT-NOTICES.txt",
+    "third-party/notices/qt/README.txt",
+    "third-party/notices/qt/QT_RELINKING.txt",
+    "third-party/notices/qwindowkit/README.txt",
+]
+precedence = "override"
+SPDX-FileCopyrightText = "2026 Ruwa contributors"
+SPDX-License-Identifier = "CC0-1.0"
+
+[[annotations]]
+path = "third-party/notices/qwindowkit/qmsetup-LICENSE"
+precedence = "override"
+SPDX-FileCopyrightText = "Stdware Collections"
+SPDX-License-Identifier = "MIT"
+
+[[annotations]]
+path = "third-party/notices/qwindowkit/syscmdline-LICENSE"
+precedence = "override"
+SPDX-FileCopyrightText = "2023 SineStriker"
+SPDX-License-Identifier = "MIT"
+
+# Functional assets are deliberately frictionless for forks and reuse.
+[[annotations]]
+path = [
+    "resources/Layouts/**",
+    "resources/brushes/**",
+    "resources/pigments/**",
+]
+precedence = "override"
+SPDX-FileCopyrightText = "2026 Ruwa contributors"
+SPDX-License-Identifier = "CC0-1.0"
+
+# Project artwork. The grant applies only to rights held by the rightsholder.
+[[annotations]]
+path = "resources/pictures/**"
+precedence = "override"
+SPDX-FileCopyrightText = "2026 Ruwa contributors"
+SPDX-License-Identifier = "CC-BY-4.0"
+
+# Brand artwork is copyright-licensed with the application; trademark rights
+# are governed separately by TRADEMARKS.md.
+[[annotations]]
+path = [
+    "resources/app.ico",
+    "resources/icons/OpaqueLogo.png",
+    "resources/icons/TransparentLogo.png",
+]
+precedence = "override"
+SPDX-FileCopyrightText = "2026 Ruwa contributors"
+SPDX-License-Identifier = "MPL-2.0"
+
+# The UI icon directory combines Lucide (ISC, including MIT-derived Feather
+# portions) and Tabler Icons (MIT). The exact upstream notices are retained.
+[[annotations]]
+path = "resources/icons/*.png"
+precedence = "override"
+SPDX-FileCopyrightText = [
+    "Lucide Contributors",
+    "Cole Bemis",
+    "Pawel Kuna",
+]
+SPDX-License-Identifier = "ISC AND MIT"
+
+# Explicitly override the general icon rule for Ruwa's marks.
+[[annotations]]
+path = [
+    "resources/icons/OpaqueLogo.png",
+    "resources/icons/TransparentLogo.png",
+]
+precedence = "override"
+SPDX-FileCopyrightText = "2026 Ruwa contributors"
+SPDX-License-Identifier = "MPL-2.0"
+
+# Explicit exception requested by the project owner.
+[[annotations]]
+path = "resources/icons/MyPFP.jpg"
+precedence = "override"
+SPDX-FileCopyrightText = "NOASSERTION"
+SPDX-License-Identifier = "LicenseRef-Ruwa-MyPFP"
+
+[[annotations]]
+path = "resources/fonts/Comfortaa-*.ttf"
+precedence = "override"
+SPDX-FileCopyrightText = "2011 The Comfortaa Project Authors (https://github.com/alexeiva/comfortaa)"
+SPDX-License-Identifier = "OFL-1.1"
+
+[[annotations]]
+path = "resources/fonts/DMSans_18pt-*.ttf"
+precedence = "override"
+SPDX-FileCopyrightText = "2014 The DM Sans Project Authors (https://github.com/googlefonts/dm-fonts)"
+SPDX-License-Identifier = "OFL-1.1"
+
+[[annotations]]
+path = "resources/fonts/IBMPlexSans_Condensed-*.ttf"
+precedence = "override"
+SPDX-FileCopyrightText = "2019 IBM Corp."
+SPDX-License-Identifier = "OFL-1.1"
+
+[[annotations]]
+path = "resources/fonts/InstrumentSerif-*.ttf"
+precedence = "override"
+SPDX-FileCopyrightText = "2022 The Instrument Serif Project Authors (https://github.com/Instrument/instrument-serif)"
+SPDX-License-Identifier = "OFL-1.1"
+
+[[annotations]]
+path = "resources/fonts/JetBrainsMono-*.ttf"
+precedence = "override"
+SPDX-FileCopyrightText = "2020 The JetBrains Mono Project Authors (https://github.com/JetBrains/JetBrainsMono)"
+SPDX-License-Identifier = "OFL-1.1"
+
+[[annotations]]
+path = "resources/fonts/Manrope-*.ttf"
+precedence = "override"
+SPDX-FileCopyrightText = "2019 The Manrope Project Authors (https://github.com/sharanda/manrope)"
+SPDX-License-Identifier = "OFL-1.1"

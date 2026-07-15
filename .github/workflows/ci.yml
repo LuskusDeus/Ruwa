@@ -1,0 +1,157 @@
+# SPDX-License-Identifier: MPL-2.0
+
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+# Cancel superseded runs on the same ref.
+concurrency:
+  group: ci-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  build:
+    # This is a compatibility build, not the pinned release build documented in
+    # RELEASE.md. Official packages use Qt 6.10.2 with MinGW-w64 GCC 13.1.0.
+    name: Compatibility build (${{ matrix.name }}, Qt ${{ matrix.qt }})
+    runs-on: ${{ matrix.os }}
+    continue-on-error: ${{ matrix.experimental }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - name: Windows / MSVC
+            os: windows-latest
+            qt: '6.7.2'
+            experimental: false
+          # Ruwa is primarily developed on Windows; the Linux build is kept as
+          # an informational job until it is fully green. Flip experimental to
+          # false to make it a required check.
+          - name: Linux / GCC
+            os: ubuntu-latest
+            qt: '6.7.2'
+            experimental: true
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4.3.1
+
+      - name: Install Linux system dependencies
+        if: runner.os == 'Linux'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends \
+            ninja-build \
+            libgl1-mesa-dev libglu1-mesa-dev \
+            libxcb-cursor0 libxcb-xinerama0 \
+            libxkbcommon-x11-0
+
+      - name: Install Qt
+        uses: jurplel/install-qt-action@48d3ad6db93f3627c8ee7a0454bc6f3744f7e730 # v4.3.1
+        with:
+          version: ${{ matrix.qt }}
+          cache: true
+
+      - name: Configure
+        run: cmake -S . -B build -DCMAKE_BUILD_TYPE=Release
+
+      - name: Build
+        run: cmake --build build --config Release --parallel
+
+      - name: Test
+        run: ctest --test-dir build --build-config Release --output-on-failure
+
+  format-check:
+    name: clang-format
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4.3.1
+
+      # Pin the exact clang-format version the tree was formatted with, so CI
+      # never disagrees with local runs over a patch-level formatting change.
+      - name: Install clang-format 21.1.x
+        run: pipx install "clang-format==21.1.*"
+
+      - name: Check formatting
+        run: |
+          clang-format --version
+          find src -type f \( \
+              -name '*.cpp' -o -name '*.h' -o -name '*.hpp' \
+              -o -name '*.cc' -o -name '*.cxx' -o -name '*.hxx' -o -name '*.inl' \
+            \) -print0 | xargs -0 clang-format --dry-run --Werror
+
+  license-headers:
+    name: MPL-2.0 headers
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4.3.1
+
+      - name: Check source licence headers
+        shell: pwsh
+        run: ./scripts/manage-license-headers.ps1 -Check
+
+  reuse-licensing:
+    name: REUSE licensing
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4.3.1
+
+      - name: Install REUSE 6.2.0
+        run: pipx install "reuse[charset-normalizer]==6.2.0"
+
+      - name: Check repository licensing metadata
+        run: reuse lint
+
+  static-analysis:
+    name: clang-tidy + clazy
+    runs-on: ubuntu-latest
+    # Informational until the tree is finding-clean, mirroring the Linux build.
+    # The runner scripts are report-only, so this job stays green while surfacing
+    # findings in the log; continue-on-error keeps it non-blocking regardless.
+    continue-on-error: true
+    steps:
+      - name: Checkout
+        uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4.3.1
+
+      - name: Install analyzers and build tooling
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends \
+            clang clang-tidy clazy ninja-build \
+            libgl1-mesa-dev libglu1-mesa-dev \
+            libxcb-cursor0 libxcb-xinerama0 libxkbcommon-x11-0
+
+      - name: Install Qt
+        uses: jurplel/install-qt-action@48d3ad6db93f3627c8ee7a0454bc6f3744f7e730 # v4.3.1
+        with:
+          # Analysis uses the compatibility CI baseline, not the release Qt.
+          version: '6.7.2'
+          cache: true
+
+      # Configure only: compile_commands.json is generated at configure time, so
+      # a full build is not required to analyze the sources. A Clang compilation
+      # database keeps the flags understandable to clang-tidy and clazy.
+      - name: Configure (export compile database)
+        run: >
+          cmake -S . -B build -G Ninja
+          -DCMAKE_BUILD_TYPE=Debug
+          -DCMAKE_C_COMPILER=clang
+          -DCMAKE_CXX_COMPILER=clang++
+
+      - name: Run clang-tidy
+        shell: pwsh
+        run: pwsh scripts/run-clang-tidy.ps1 -BuildDir build
+
+      - name: Run clazy
+        shell: pwsh
+        run: pwsh scripts/run-clazy.ps1 -BuildDir build

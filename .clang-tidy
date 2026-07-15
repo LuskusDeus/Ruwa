@@ -1,0 +1,85 @@
+# SPDX-License-Identifier: MPL-2.0
+
+# Ruwa C++ static-analysis rules for clang-tidy.
+#
+# Requires clang-tidy >= 18; the reference toolchain uses 21.1.x (matching the
+# clang-format pin). Qt Creator, the standalone runner in
+# `scripts/run-clang-tidy.ps1`, and the CI `static-analysis` job all read this
+# file. See BUILDING.md ("Static Analysis") for how to run it.
+#
+# Rationale for the enabled groups:
+#   bugprone-*        real correctness traps
+#   clang-analyzer-*  the deeper path-sensitive analyzer
+#   concurrency-*     threading mistakes (Ruwa uses QtConcurrent/QThread)
+#   cppcoreguidelines selected safety rules (Qt-hostile ones disabled below)
+#   misc/modernize/performance/portability/readability — hygiene and idiom
+#
+# The disabled checks are ones that fight Qt idioms (parent-owned raw pointers,
+# Q_OBJECT/signals-slots macros, moc-generated code) or that are pure style the
+# project deliberately does not enforce. Keep this list curated rather than
+# blanket-enabling everything — noise erodes trust in the tool.
+---
+Checks: >
+  -*,
+  bugprone-*,
+  clang-analyzer-*,
+  concurrency-*,
+  cppcoreguidelines-*,
+  misc-*,
+  modernize-*,
+  performance-*,
+  portability-*,
+  readability-*,
+  -bugprone-easily-swappable-parameters,
+  -bugprone-narrowing-conversions,
+  -cppcoreguidelines-avoid-c-arrays,
+  -cppcoreguidelines-avoid-magic-numbers,
+  -cppcoreguidelines-avoid-non-const-global-variables,
+  -cppcoreguidelines-macro-usage,
+  -cppcoreguidelines-narrowing-conversions,
+  -cppcoreguidelines-non-private-member-variables-in-classes,
+  -cppcoreguidelines-owning-memory,
+  -cppcoreguidelines-pro-bounds-array-to-pointer-decay,
+  -cppcoreguidelines-pro-bounds-constant-array-index,
+  -cppcoreguidelines-pro-bounds-pointer-arithmetic,
+  -cppcoreguidelines-pro-type-reinterpret-cast,
+  -cppcoreguidelines-pro-type-static-cast-downcast,
+  -cppcoreguidelines-pro-type-union-access,
+  -cppcoreguidelines-pro-type-vararg,
+  -cppcoreguidelines-special-member-functions,
+  -misc-include-cleaner,
+  -misc-no-recursion,
+  -misc-non-private-member-variables-in-classes,
+  -misc-use-anonymous-namespace,
+  -modernize-avoid-c-arrays,
+  -modernize-use-nodiscard,
+  -modernize-use-trailing-return-type,
+  -readability-avoid-nested-conditional-operator,
+  -readability-braces-around-statements,
+  -readability-function-cognitive-complexity,
+  -readability-identifier-length,
+  -readability-implicit-bool-conversion,
+  -readability-magic-numbers,
+  -readability-redundant-access-specifiers,
+  -readability-uppercase-literal-suffix
+
+# Report only for now: introducing static analysis to an existing 700-file tree
+# should not turn every pre-existing finding into a hard build failure. Once the
+# tree is clean, promote specific families here (e.g. 'bugprone-*').
+WarningsAsErrors: ''
+
+# Only diagnose Ruwa's own headers under src/. Qt and other system headers are
+# out of scope; vendored code under third-party/ is silenced by its own
+# .clang-tidy. clang-tidy matches this regex against each header's full path.
+HeaderFilterRegex: '[/\\]src[/\\].*\.(h|hpp|hxx|inl)$'
+ExcludeHeaderFilterRegex: '(third-party|_autogen|qwindowkit|[/\\]build[/\\])'
+
+# Apply .clang-format to any fixes clang-tidy rewrites.
+FormatStyle: file
+
+# Keep Ruwa's naming intent readable in check output without enforcing a scheme.
+CheckOptions:
+  - key: readability-identifier-naming.IgnoreMainLikeFunctions
+    value: 'true'
+  - key: misc-include-cleaner.IgnoreHeaders
+    value: '.*\.moc;moc_.*;ui_.*;qrc_.*'
