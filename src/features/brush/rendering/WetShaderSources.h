@@ -203,31 +203,21 @@ vec2 wetSampleDabShapeSafe(vec2 uv) {
     vec2 outside = max(max(-uv, uv - vec2(1.0)), vec2(0.0)) * 2.0;
     if (outside.x > 0.0 || outside.y > 0.0) {
         shape.r = 0.0;
-        shape.g = clamp(shape.g + length(outside), 0.0, 1.0);
+        shape.g = 0.0;
     }
     return shape;
 }
 float wetCustomDabCoverage(vec2 uv) {
     vec2 shape = wetSampleDabShapeSafe(uv);
     float baseAlpha = clamp(shape.r, 0.0, 1.0);
+    float softAlpha = clamp(shape.g, 0.0, 1.0);
     float softness = max(1.0 - clamp(uBrushHardness, 0.0, 1.0), 0.0);
-    if (softness <= 0.0001) return baseAlpha;
-    vec2 textureSizePx = vec2(textureSize(uDabShapeTexture, 0));
-    float edgeWidth = (2.0 * uDabSoftEdgeRadiusTexels * softness)
-        / max(max(textureSizePx.x, textureSizePx.y), 1.0);
-    if (edgeWidth <= 0.0001) return baseAlpha;
-    float halfTexel = 1.0 / max(max(textureSizePx.x, textureSizePx.y), 1.0);
-    float signedDistance = (baseAlpha >= 0.5 ? 1.0 : -1.0) * max(shape.g - halfTexel, 0.0);
-    float coverage = smoothstep(0.0, 1.0, (signedDistance + edgeWidth) / (2.0 * edgeWidth));
-    return clamp(mix(coverage, baseAlpha, clamp(uBrushHardness, 0.0, 1.0)), 0.0, 1.0);
+    return mix(baseAlpha, softAlpha, softness);
 }
 float wetBrushCoverage(vec2 local) {
     if (uUseDabShapeTexture != 0) {
         vec2 shapeLocal = local / uBrushRadius / max(uDabShapeScale, vec2(0.0001));
-        float softness = max(1.0 - clamp(uBrushHardness, 0.0, 1.0), 0.0);
-        vec2 textureSizePx = max(vec2(textureSize(uDabShapeTexture, 0)) - vec2(1.0), vec2(1.0));
-        vec2 padding = (2.0 * uDabSoftEdgeRadiusTexels * softness) / textureSizePx;
-        if (abs(shapeLocal.x) > 1.0 + padding.x || abs(shapeLocal.y) > 1.0 + padding.y)
+        if (abs(shapeLocal.x) > 1.0 || abs(shapeLocal.y) > 1.0)
             return 0.0;
         return wetCustomDabCoverage((shapeLocal + 1.0) * 0.5);
     }
@@ -289,7 +279,6 @@ uniform int uUseMask;
 uniform sampler2D uDabShapeTexture;
 uniform int uUseDabShapeTexture;
 uniform vec2 uDabShapeScale;
-uniform float uDabSoftEdgeRadiusTexels;
 uniform vec2 uTileOriginPx;
 uniform vec2 uInvTileSize;
 uniform vec2 uRoiOriginPx;
@@ -339,7 +328,6 @@ uniform vec2 uInvMaskSize;
 uniform sampler2D uDabShapeTexture;
 uniform int uUseDabShapeTexture;
 uniform vec2 uDabShapeScale;
-uniform float uDabSoftEdgeRadiusTexels;
 uniform vec2 uInvTexSize;
 uniform float uReservoirHalf;
 uniform vec2 uInvReservoirPhys;

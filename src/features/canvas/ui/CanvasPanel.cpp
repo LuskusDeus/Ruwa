@@ -1612,29 +1612,47 @@ void CanvasPanel::applyBrushSettings(const ruwa::core::brushes::BrushSettingsDat
 {
     if (!m_glWidget)
         return;
-    m_glWidget->brush().setBrushSettings(settings);
-    if (!settings.dabCustomImagePath.isEmpty()) {
+    auto& brush = m_glWidget->brush();
+    const bool canReuseDabShapeMask = brush.dabShapeMaskMatches(settings);
+    const float previousRoundness = brush.roundness();
+    const float previousAngle = brush.angleDegrees();
+    const float previousDabXScale = brush.dabXScale();
+    const float previousDabYScale = brush.dabYScale();
+    const float previousDabRotation = brush.dabRotation();
+    brush.setBrushSettings(settings);
+
+    if (canReuseDabShapeMask) {
+        // A custom image is represented by dab type 1 after loading, even if
+        // an imported preset did not persist the matching built-in type.
+        if (!settings.dabCustomImagePath.isEmpty()) {
+            brush.setDabType(1);
+        }
+    } else if (!settings.dabCustomImagePath.isEmpty()) {
         auto grid
             = aether::DabShapeCache::instance().getCustomAlphaGrid(settings.dabCustomImagePath,
                 settings.dabThreshold, settings.dabCompression, settings.dabInterpolation);
         if (!grid.data.empty()) {
-            m_glWidget->brush().setDabType(1);
-            m_glWidget->brush().setDabShapeMask(grid.data.data(),
-                grid.edgeDistance.empty() ? nullptr : grid.edgeDistance.data(), grid.width,
-                grid.height);
+            brush.setDabType(1);
+            brush.setDabShapeMask(grid.data.data(),
+                grid.softAlpha.empty() ? nullptr : grid.softAlpha.data(), grid.width, grid.height);
         } else {
-            m_glWidget->brush().setDabShapeMask(nullptr, 0, 0);
+            brush.setDabShapeMask(nullptr, 0, 0);
         }
     } else if (settings.dabType > 0) {
         auto grid = aether::DabShapeCache::instance().getAlphaGrid(settings.dabType);
-        m_glWidget->brush().setDabShapeMask(grid.data.empty() ? nullptr : grid.data.data(),
-            grid.edgeDistance.empty() ? nullptr : grid.edgeDistance.data(), grid.width,
-            grid.height);
+        brush.setDabShapeMask(grid.data.empty() ? nullptr : grid.data.data(),
+            grid.softAlpha.empty() ? nullptr : grid.softAlpha.data(), grid.width, grid.height);
     } else {
-        m_glWidget->brush().setDabShapeMask(nullptr, 0, 0);
+        brush.setDabShapeMask(nullptr, 0, 0);
     }
 
-    m_glWidget->updateBrushCursorStamp();
+    const bool cursorStampChanged = !canReuseDabShapeMask
+        || previousRoundness != brush.roundness() || previousAngle != brush.angleDegrees()
+        || previousDabXScale != brush.dabXScale() || previousDabYScale != brush.dabYScale()
+        || previousDabRotation != brush.dabRotation();
+    if (cursorStampChanged) {
+        m_glWidget->updateBrushCursorStamp();
+    }
 
     if (m_brushOverlay) {
         m_brushOverlay->setBrushSettings(settings);

@@ -5,6 +5,7 @@
 // ==========================================================================
 
 #include "features/brush/rendering/DabShapeCache.h"
+#include "shared/tiles/DabShapeFalloff.h"
 
 #include <QByteArray>
 #include <QCryptographicHash>
@@ -19,116 +20,93 @@ namespace aether {
 
 namespace {
 
-constexpr float kDistanceInf = 1.0e20f;
-
-void distanceTransform1D(const std::vector<float>& input, int count, std::vector<float>& output)
+void boxBlurHorizontal(const std::vector<float>& input, int width, int height, int radius,
+    std::vector<float>& output)
 {
-    std::vector<int> v(static_cast<size_t>(count));
-    std::vector<float> z(static_cast<size_t>(count) + 1u);
-
-    int k = 0;
-    v[0] = 0;
-    z[0] = -kDistanceInf;
-    z[1] = kDistanceInf;
-
-    for (int q = 1; q < count; ++q) {
-        float s = 0.0f;
-        while (true) {
-            const int vk = v[k];
-            s = ((input[static_cast<size_t>(q)] + static_cast<float>(q * q))
-                    - (input[static_cast<size_t>(vk)] + static_cast<float>(vk * vk)))
-                / static_cast<float>(2 * (q - vk));
-            if (s > z[static_cast<size_t>(k)] || k == 0) {
-                break;
-            }
-            --k;
-        }
-        if (s <= z[static_cast<size_t>(k)]) {
-            s = -kDistanceInf;
-        } else {
-            ++k;
-        }
-        v[static_cast<size_t>(k)] = q;
-        z[static_cast<size_t>(k)] = s;
-        z[static_cast<size_t>(k + 1)] = kDistanceInf;
-    }
-
-    k = 0;
-    for (int q = 0; q < count; ++q) {
-        while (z[static_cast<size_t>(k + 1)] < static_cast<float>(q)) {
-            ++k;
-        }
-        const float delta = static_cast<float>(q - v[static_cast<size_t>(k)]);
-        output[static_cast<size_t>(q)]
-            = delta * delta + input[static_cast<size_t>(v[static_cast<size_t>(k)])];
-    }
-}
-
-std::vector<float> buildDistanceToMask(
-    const std::vector<uint8_t>& alpha, int width, int height, bool featureInside)
-{
-    const size_t pixelCount = static_cast<size_t>(width) * static_cast<size_t>(height);
-    std::vector<float> out(pixelCount, 0.0f);
-    if (alpha.empty() || width <= 0 || height <= 0) {
-        return out;
-    }
-
-    std::vector<float> rowInput(static_cast<size_t>(width));
-    std::vector<float> rowOutput(static_cast<size_t>(width));
-    std::vector<float> temp(pixelCount, 0.0f);
-
+    output.assign(input.size(), 0.0f);
+    const float invWindow = 1.0f / static_cast<float>(radius * 2 + 1);
     for (int y = 0; y < height; ++y) {
-        const size_t rowBase = static_cast<size_t>(y) * static_cast<size_t>(width);
-        for (int x = 0; x < width; ++x) {
-            const bool inside = alpha[rowBase + static_cast<size_t>(x)] > 0;
-            rowInput[static_cast<size_t>(x)] = (inside == featureInside) ? 0.0f : kDistanceInf;
+        const size_t row = static_cast<size_t>(y) * static_cast<size_t>(width);
+        float sum = 0.0f;
+        for (int x = 0; x <= std::min(radius, width - 1); ++x) {
+            sum += input[row + static_cast<size_t>(x)];
         }
-        distanceTransform1D(rowInput, width, rowOutput);
         for (int x = 0; x < width; ++x) {
-            temp[rowBase + static_cast<size_t>(x)] = rowOutput[static_cast<size_t>(x)];
+            output[row + static_cast<size_t>(x)] = sum * invWindow;
+            const int removeX = x - radius;
+            const int addX = x + radius + 1;
+            if (removeX >= 0) {
+                sum -= input[row + static_cast<size_t>(removeX)];
+            }
+            if (addX < width) {
+                sum += input[row + static_cast<size_t>(addX)];
+            }
         }
     }
-
-    std::vector<float> colInput(static_cast<size_t>(height));
-    std::vector<float> colOutput(static_cast<size_t>(height));
-
-    for (int x = 0; x < width; ++x) {
-        for (int y = 0; y < height; ++y) {
-            colInput[static_cast<size_t>(y)]
-                = temp[static_cast<size_t>(y) * static_cast<size_t>(width)
-                    + static_cast<size_t>(x)];
-        }
-        distanceTransform1D(colInput, height, colOutput);
-        for (int y = 0; y < height; ++y) {
-            const size_t idx
-                = static_cast<size_t>(y) * static_cast<size_t>(width) + static_cast<size_t>(x);
-            out[idx] = std::sqrt(std::max(colOutput[static_cast<size_t>(y)], 0.0f));
-        }
-    }
-
-    return out;
 }
 
-std::vector<uint8_t> buildEdgeDistanceField(
+void boxBlurVertical(const std::vector<float>& input, int width, int height, int radius,
+    std::vector<float>& output)
+{
+    output.assign(input.size(), 0.0f);
+    const float invWindow = 1.0f / static_cast<float>(radius * 2 + 1);
+    for (int x = 0; x < width; ++x) {
+        float sum = 0.0f;
+        for (int y = 0; y <= std::min(radius, height - 1); ++y) {
+            sum += input[static_cast<size_t>(y) * static_cast<size_t>(width)
+                + static_cast<size_t>(x)];
+        }
+        for (int y = 0; y < height; ++y) {
+            const size_t index
+                = static_cast<size_t>(y) * static_cast<size_t>(width) + static_cast<size_t>(x);
+            output[index] = sum * invWindow;
+            const int removeY = y - radius;
+            const int addY = y + radius + 1;
+            if (removeY >= 0) {
+                sum -= input[static_cast<size_t>(removeY) * static_cast<size_t>(width)
+                    + static_cast<size_t>(x)];
+            }
+            if (addY < height) {
+                sum += input[static_cast<size_t>(addY) * static_cast<size_t>(width)
+                    + static_cast<size_t>(x)];
+            }
+        }
+    }
+}
+
+std::vector<uint8_t> buildSoftAlphaMask(
     const std::vector<uint8_t>& alpha, int width, int height)
 {
-    const size_t pixelCount = static_cast<size_t>(width) * static_cast<size_t>(height);
-    std::vector<uint8_t> out(pixelCount, 0);
     if (alpha.empty() || width <= 0 || height <= 0) {
-        return out;
+        return {};
     }
 
-    const std::vector<float> distanceToInside = buildDistanceToMask(alpha, width, height, true);
-    const std::vector<float> distanceToOutside = buildDistanceToMask(alpha, width, height, false);
-    const float texelScale = 2.0f / static_cast<float>(std::max(width, height));
+    // Three equal box passes closely approximate a Gaussian. Their combined
+    // support matches the existing 48-texel hardness feather, while every pass
+    // remains linear in the number of pixels and runs only when a dab is loaded.
+    constexpr int kBoxPassCount = 3;
+    const int radius = std::max(1,
+        static_cast<int>(std::round(
+            dab_shape_falloff::kSoftEdgeRadiusTexels / static_cast<float>(kBoxPassCount))));
 
-    for (size_t idx = 0; idx < pixelCount; ++idx) {
-        const bool inside = alpha[idx] > 0;
-        const float distancePx = inside ? distanceToOutside[idx] : distanceToInside[idx];
-        const float distanceNorm = std::clamp(distancePx * texelScale, 0.0f, 1.0f);
-        out[idx] = static_cast<uint8_t>(std::round(distanceNorm * 255.0f));
+    std::vector<float> current(alpha.size());
+    for (size_t i = 0; i < alpha.size(); ++i) {
+        current[i] = static_cast<float>(alpha[i]) / 255.0f;
     }
 
+    std::vector<float> horizontal;
+    std::vector<float> vertical;
+    for (int pass = 0; pass < kBoxPassCount; ++pass) {
+        boxBlurHorizontal(current, width, height, radius, horizontal);
+        boxBlurVertical(horizontal, width, height, radius, vertical);
+        current.swap(vertical);
+    }
+
+    std::vector<uint8_t> out(alpha.size());
+    for (size_t i = 0; i < current.size(); ++i) {
+        out[i] = static_cast<uint8_t>(
+            std::round(std::clamp(current[i], 0.0f, 1.0f) * 255.0f));
+    }
     return out;
 }
 
@@ -167,7 +145,7 @@ void DabShapeCache::loadFromResources()
 
         const int idx = i - kMinType;
         m_shapes[idx].alpha = std::move(alpha);
-        m_shapes[idx].edgeDistance = buildEdgeDistanceField(m_shapes[idx].alpha, w, h);
+        m_shapes[idx].softAlpha = buildSoftAlphaMask(m_shapes[idx].alpha, w, h);
         m_shapes[idx].width = w;
         m_shapes[idx].height = h;
     }
@@ -189,7 +167,7 @@ DabShapeCache::AlphaGrid DabShapeCache::getAlphaGrid(int dabType)
         return out;
 
     out.data = s.alpha;
-    out.edgeDistance = s.edgeDistance;
+    out.softAlpha = s.softAlpha;
     out.width = s.width;
     out.height = s.height;
     return out;
@@ -247,7 +225,7 @@ GLuint DabShapeCache::getTextureId(QOpenGLFunctions_4_5_Core* gl, int dabType)
         static_cast<size_t>(s.width) * static_cast<size_t>(s.height) * 2u, 0);
     for (size_t i = 0; i < s.alpha.size(); ++i) {
         textureData[i * 2u + 0u] = s.alpha[i];
-        textureData[i * 2u + 1u] = s.edgeDistance.empty() ? 0 : s.edgeDistance[i];
+        textureData[i * 2u + 1u] = s.softAlpha.empty() ? s.alpha[i] : s.softAlpha[i];
     }
 
     GLint prevUnpackAlignment = 4;
@@ -392,7 +370,7 @@ DabShapeCache::Shape* DabShapeCache::ensureCustomShapeLoaded(const QString& imag
 
     Shape shape;
     shape.alpha = std::move(alpha);
-    shape.edgeDistance = buildEdgeDistanceField(shape.alpha, w, h);
+    shape.softAlpha = buildSoftAlphaMask(shape.alpha, w, h);
     shape.width = w;
     shape.height = h;
 
@@ -409,7 +387,7 @@ DabShapeCache::AlphaGrid DabShapeCache::getCustomAlphaGrid(
     if (!shape || shape->alpha.empty())
         return out;
     out.data = shape->alpha;
-    out.edgeDistance = shape->edgeDistance;
+    out.softAlpha = shape->softAlpha;
     out.width = shape->width;
     out.height = shape->height;
     return out;
@@ -453,7 +431,8 @@ GLuint DabShapeCache::getCustomTextureId(QOpenGLFunctions_4_5_Core* gl, const QS
         static_cast<size_t>(shape->width) * static_cast<size_t>(shape->height) * 2u, 0);
     for (size_t i = 0; i < shape->alpha.size(); ++i) {
         textureData[i * 2u + 0u] = shape->alpha[i];
-        textureData[i * 2u + 1u] = shape->edgeDistance.empty() ? 0 : shape->edgeDistance[i];
+        textureData[i * 2u + 1u]
+            = shape->softAlpha.empty() ? shape->alpha[i] : shape->softAlpha[i];
     }
 
     GLint prevUnpackAlignment = 4;

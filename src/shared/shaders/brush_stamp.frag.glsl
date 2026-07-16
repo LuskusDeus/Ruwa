@@ -24,7 +24,6 @@ uniform int   uUseTexture;
 uniform int   uUseDabShapeTexture;
 uniform vec2  uDabShapeScale;
 uniform float uTextureEdgeBoost;
-uniform float uDabSoftEdgeRadiusTexels;
 uniform float uInvTileSize;
 
 in vec2 fragPixelCoord;       // tile-local pixel position (from vertex shader)
@@ -49,38 +48,17 @@ vec2 sampleDabShapeSafe(vec2 uv) {
     vec2 outsideUv = max(max(-uv, uv - vec2(1.0)), vec2(0.0)) * 2.0;
     if (outsideUv.x > 0.0 || outsideUv.y > 0.0) {
         shape.r = 0.0;
-        shape.g = clamp(shape.g + length(outsideUv), 0.0, 1.0);
+        shape.g = 0.0;
     }
     return shape;
 }
 
-float customDabSoftEdgeShapePad(float hardness) {
-    float softness = max(1.0 - clamp(hardness, 0.0, 1.0), 0.0);
-    vec2 texSize = vec2(textureSize(uDabShapeTexture, 0));
-    vec2 safeSize = max(texSize - vec2(1.0), vec2(1.0));
-    vec2 pad = (2.0 * uDabSoftEdgeRadiusTexels * softness) / safeSize;
-    return max(pad.x, pad.y);
-}
-
-float sampleCustomDabEdgeFalloff(vec2 uv, float hardness) {
+float sampleCustomDabCoverage(vec2 uv, float hardness) {
     vec2 shape = sampleDabShapeSafe(uv);
     float baseAlpha = clamp(shape.r, 0.0, 1.0);
+    float softAlpha = clamp(shape.g, 0.0, 1.0);
     float softness = max(1.0 - clamp(hardness, 0.0, 1.0), 0.0);
-    if (softness <= 0.0001) {
-        return baseAlpha;
-    }
-
-    vec2 texSize = vec2(textureSize(uDabShapeTexture, 0));
-    float edgeWidth = (2.0 * uDabSoftEdgeRadiusTexels * softness) / max(max(texSize.x, texSize.y), 1.0);
-    if (edgeWidth <= 0.0001) {
-        return baseAlpha;
-    }
-
-    float halfTexel = 1.0 / max(max(texSize.x, texSize.y), 1.0);
-    float edgeDistance = max(shape.g - halfTexel, 0.0);
-    float signedDistance = baseAlpha >= 0.5 ? edgeDistance : -edgeDistance;
-    float coverage = smoothstep(0.0, 1.0, (signedDistance + edgeWidth) / (2.0 * edgeWidth));
-    return clamp(mix(coverage, baseAlpha, clamp(hardness, 0.0, 1.0)), 0.0, 1.0);
+    return mix(baseAlpha, softAlpha, softness);
 }
 
 void main() {
@@ -99,15 +77,14 @@ void main() {
     float edgeFactor = 0.0;
 
     if (uUseDabShapeTexture != 0) {
-        float shapePad = customDabSoftEdgeShapePad(uBrushHardness);
-        if (abs(shapeLocal.x) > 1.0 + shapePad || abs(shapeLocal.y) > 1.0 + shapePad) {
+        if (abs(shapeLocal.x) > 1.0 || abs(shapeLocal.y) > 1.0) {
             outColor = vec4(0.0);
             return;
         }
 
         vec2 uv = (shapeLocal + 1.0) * 0.5;
         float baseAlpha = sampleDabShapeSafe(uv).r;
-        float falloff = sampleCustomDabEdgeFalloff(uv, uBrushHardness);
+        float falloff = sampleCustomDabCoverage(uv, uBrushHardness);
         if (falloff <= 0.0) {
             outColor = vec4(0.0);
             return;

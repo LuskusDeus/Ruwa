@@ -213,9 +213,20 @@ public:
     {
         return m_dabType > 0 && !m_dabShapeAlpha.empty() && m_dabShapeW > 0 && m_dabShapeH > 0;
     }
-    float dabShapeBlurPad(float hardness) const
+    bool dabShapeMaskMatches(const ruwa::core::brushes::BrushSettingsData& settings) const
     {
-        return dab_shape_falloff::shapePad(m_dabShapeW, m_dabShapeH, hardness);
+        const bool hasStoredMask = !m_dabShapeAlpha.empty() && !m_dabShapeSoftAlpha.empty()
+            && m_dabShapeW > 0 && m_dabShapeH > 0;
+        if (!settings.dabCustomImagePath.isEmpty()) {
+            return hasStoredMask && m_dabType == 1
+                && m_dabCustomImagePath == settings.dabCustomImagePath
+                && m_dabThreshold == std::clamp(settings.dabThreshold, 0.0f, 1.0f)
+                && m_dabCompression == std::clamp(settings.dabCompression, 0.0f, 1.0f)
+                && m_dabInterpolation == std::clamp(settings.dabInterpolation, 0, 1);
+        }
+
+        const int dabType = std::clamp(settings.dabType, 0, 5);
+        return dabType > 0 ? hasStoredMask && m_dabType == dabType : !hasStoredMask;
     }
     float dabCoverageExtent(float radius, float hardness, float roundness, float angleDegrees,
         bool includeRasterPadding = false) const
@@ -253,21 +264,21 @@ public:
     }
 
     void setDabShapeMask(
-        const uint8_t* alphaData, const uint8_t* edgeDistanceData, int width, int height)
+        const uint8_t* alphaData, const uint8_t* softAlphaData, int width, int height)
     {
         if (!alphaData || width <= 0 || height <= 0) {
             m_dabShapeAlpha.clear();
-            m_dabShapeEdgeDistance.clear();
+            m_dabShapeSoftAlpha.clear();
             m_dabShapeW = 0;
             m_dabShapeH = 0;
             return;
         }
         const size_t n = static_cast<size_t>(width * height);
         m_dabShapeAlpha.assign(alphaData, alphaData + n);
-        if (edgeDistanceData) {
-            m_dabShapeEdgeDistance.assign(edgeDistanceData, edgeDistanceData + n);
+        if (softAlphaData) {
+            m_dabShapeSoftAlpha.assign(softAlphaData, softAlphaData + n);
         } else {
-            m_dabShapeEdgeDistance.clear();
+            m_dabShapeSoftAlpha = m_dabShapeAlpha;
         }
         m_dabShapeW = width;
         m_dabShapeH = height;
@@ -1668,6 +1679,7 @@ private:
     DabCoverageBounds computeDabCoverageBounds(float radius, float hardness, float roundness,
         float angleDegrees, bool includeRasterPadding) const
     {
+        static_cast<void>(hardness);
         if (!std::isfinite(radius) || radius <= 0.0f) {
             return {};
         }
@@ -1680,9 +1692,8 @@ private:
             return { rasterPadding, rasterPadding };
         }
 
-        const float shapePad = dabShapeBlurPad(hardness);
-        const float halfShapeX = radius * m_dabXScale * (1.0f + shapePad);
-        const float halfShapeY = radius * m_dabYScale * (1.0f + shapePad);
+        const float halfShapeX = radius * m_dabXScale;
+        const float halfShapeY = radius * m_dabYScale;
         const float clampedRoundness = std::max(0.01f, std::clamp(roundness, 0.0f, 1.0f));
         constexpr float kDegToRad = 3.14159265358979323846f / 180.0f;
         const float brushAngle = angleDegrees * kDegToRad;
@@ -2319,22 +2330,13 @@ private:
         return ax0 + (ax1 - ax0) * ty;
     }
 
-    float sampleDabShapeEdgeFalloff(float u, float v, float hardness) const
+    float sampleDabShapeSoftAlpha(float u, float v, float hardness) const
     {
-        const float clampedU = std::clamp(u, 0.0f, 1.0f);
-        const float clampedV = std::clamp(v, 0.0f, 1.0f);
-        const float outsideU = std::max(std::max(-u, u - 1.0f), 0.0f) * 2.0f;
-        const float outsideV = std::max(std::max(-v, v - 1.0f), 0.0f) * 2.0f;
-        const float uvOutsideDistance = std::sqrt(outsideU * outsideU + outsideV * outsideV);
-
-        const float alpha = sampleMaskAlphaBilinear(
-            m_dabShapeAlpha, m_dabShapeW, m_dabShapeH, clampedU, clampedV);
-        const float storedDistance = m_dabShapeEdgeDistance.empty()
-            ? 1.0f
-            : sampleMaskAlphaBilinear(
-                  m_dabShapeEdgeDistance, m_dabShapeW, m_dabShapeH, clampedU, clampedV);
-        return dab_shape_falloff::edgeFeatherAlpha(
-            alpha, storedDistance + uvOutsideDistance, m_dabShapeW, m_dabShapeH, hardness);
+        const float alpha
+            = sampleMaskAlphaBilinear(m_dabShapeAlpha, m_dabShapeW, m_dabShapeH, u, v);
+        const float softAlpha
+            = sampleMaskAlphaBilinear(m_dabShapeSoftAlpha, m_dabShapeW, m_dabShapeH, u, v);
+        return dab_shape_falloff::softenAlpha(alpha, softAlpha, hardness);
     }
 
     float sampleDabFalloff(
@@ -2361,36 +2363,25 @@ private:
         shapeY /= m_dabYScale;
 
         if (m_dabType > 0 && !m_dabShapeAlpha.empty() && m_dabShapeW > 0 && m_dabShapeH > 0) {
-            const float pad = dab_shape_falloff::shapePad(m_dabShapeW, m_dabShapeH, hardness);
-            if (std::abs(shapeX) > 1.0f + pad || std::abs(shapeY) > 1.0f + pad) {
+            if (std::abs(shapeX) > 1.0f || std::abs(shapeY) > 1.0f) {
                 return 0.0f;
             }
 
             const float u = (shapeX + 1.0f) * 0.5f;
             const float v = (shapeY + 1.0f) * 0.5f;
-            const float clampedU = std::clamp(u, 0.0f, 1.0f);
-            const float clampedV = std::clamp(v, 0.0f, 1.0f);
-            const float outsideU = std::max(std::max(-u, u - 1.0f), 0.0f) * 2.0f;
-            const float outsideV = std::max(std::max(-v, v - 1.0f), 0.0f) * 2.0f;
-            const float uvOutsideDistance = std::sqrt(outsideU * outsideU + outsideV * outsideV);
             const int maskX
-                = std::clamp(static_cast<int>(clampedU * (m_dabShapeW - 1)), 0, m_dabShapeW - 1);
+                = std::clamp(static_cast<int>(u * (m_dabShapeW - 1)), 0, m_dabShapeW - 1);
             const int maskY
-                = std::clamp(static_cast<int>(clampedV * (m_dabShapeH - 1)), 0, m_dabShapeH - 1);
+                = std::clamp(static_cast<int>(v * (m_dabShapeH - 1)), 0, m_dabShapeH - 1);
             const size_t maskIndex = static_cast<size_t>(maskY * m_dabShapeW + maskX);
-            const float outsideDistance = m_dabShapeEdgeDistance.empty()
-                ? 1.0f
-                : static_cast<float>(m_dabShapeEdgeDistance[maskIndex]) / 255.0f
-                    + uvOutsideDistance;
 
             if (m_dabInterpolation == 1) {
-                const float alpha = (uvOutsideDistance > 0.0f)
-                    ? 0.0f
-                    : static_cast<float>(m_dabShapeAlpha[maskIndex]) / 255.0f;
-                return dab_shape_falloff::edgeFeatherAlpha(
-                    alpha, outsideDistance, m_dabShapeW, m_dabShapeH, hardness);
+                const float alpha = static_cast<float>(m_dabShapeAlpha[maskIndex]) / 255.0f;
+                const float softAlpha
+                    = static_cast<float>(m_dabShapeSoftAlpha[maskIndex]) / 255.0f;
+                return dab_shape_falloff::softenAlpha(alpha, softAlpha, hardness);
             }
-            return sampleDabShapeEdgeFalloff(u, v, hardness);
+            return sampleDabShapeSoftAlpha(u, v, hardness);
         }
 
         const float t = std::sqrt(shapeX * shapeX + shapeY * shapeY);
@@ -3158,8 +3149,7 @@ private:
     int m_textureType = 0; // 0=Procedural, 1=Noise, 2=Perlin
     int m_dabType = 0; // 0..5 — dab shape/type (0=circle, 1-5=PNG)
     std::vector<uint8_t> m_dabShapeAlpha; // PNG alpha mask for dabType 1-5
-    std::vector<uint8_t>
-        m_dabShapeEdgeDistance; // normalized outside distance for custom-dab feather
+    std::vector<uint8_t> m_dabShapeSoftAlpha; // prefiltered alpha for custom-dab hardness
     int m_dabShapeW = 0;
     int m_dabShapeH = 0;
     QString m_dabCustomImagePath;

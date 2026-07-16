@@ -118,33 +118,15 @@ GLuint resolveDabTextureId(QOpenGLFunctions_4_5_Core* gl, const TileBrush& brush
 float dabCoverageExtent(const TileBrush& brush, float radius, float hardness, float roundness,
     float angleDegrees, bool includeRasterPadding = false)
 {
-    float extent
-        = brush.dabCoverageExtent(radius, hardness, roundness, angleDegrees, includeRasterPadding);
-    if (brush.dabType() > 0 && !brush.hasDabShapeMask() && radius > 0.0f) {
-        int fallbackWidth = 0;
-        int fallbackHeight = 0;
-        DabShapeCache::instance().getShapeSize(brush.dabType(), fallbackWidth, fallbackHeight);
-        const float fallbackPad
-            = dab_shape_falloff::shapePad(fallbackWidth, fallbackHeight, hardness);
-        extent += radius * fallbackPad * 1.41421356237f;
-    }
-    return extent;
+    return brush.dabCoverageExtent(
+        radius, hardness, roundness, angleDegrees, includeRasterPadding);
 }
 
 float dabRotationInvariantCoverageExtent(const TileBrush& brush, float radius, float hardness,
     float roundness, bool includeRasterPadding = false)
 {
-    float extent = brush.dabRotationInvariantCoverageExtent(
+    return brush.dabRotationInvariantCoverageExtent(
         radius, hardness, roundness, includeRasterPadding);
-    if (brush.dabType() > 0 && !brush.hasDabShapeMask() && radius > 0.0f) {
-        int fallbackWidth = 0;
-        int fallbackHeight = 0;
-        DabShapeCache::instance().getShapeSize(brush.dabType(), fallbackWidth, fallbackHeight);
-        const float fallbackPad
-            = dab_shape_falloff::shapePad(fallbackWidth, fallbackHeight, hardness);
-        extent += radius * fallbackPad * 1.41421356237f;
-    }
-    return extent;
 }
 
 // Square reservoir texture pair. Grows geometrically across strokes to
@@ -255,7 +237,6 @@ const QString kBatchRebuildFrag = QStringLiteral(
     "uniform int uUseDabShapeTexture;\n"
     "uniform vec2 uDabShapeScale;\n"
     "uniform float uTextureEdgeBoost;\n"
-    "uniform float uDabSoftEdgeRadiusTexels;\n"
     "uniform float uInvTileSize;\n"
     "in vec2 fragPixelCoord;\n"
     "out vec4 outColor;\n"
@@ -272,31 +253,16 @@ const QString kBatchRebuildFrag = QStringLiteral(
     "    vec2 outsideUv = max(max(-uv, uv - vec2(1.0)), vec2(0.0)) * 2.0;\n"
     "    if (outsideUv.x > 0.0 || outsideUv.y > 0.0) {\n"
     "        shape.r = 0.0;\n"
-    "        shape.g = clamp(shape.g + length(outsideUv), 0.0, 1.0);\n"
+    "        shape.g = 0.0;\n"
     "    }\n"
     "    return shape;\n"
     "}\n"
-    "float customDabSoftEdgeShapePad(float hardness) {\n"
-    "    float softness = max(1.0 - clamp(hardness, 0.0, 1.0), 0.0);\n"
-    "    vec2 texSize = vec2(textureSize(uDabShapeTexture, 0));\n"
-    "    vec2 safeSize = max(texSize - vec2(1.0), vec2(1.0));\n"
-    "    vec2 pad = (2.0 * uDabSoftEdgeRadiusTexels * softness) / safeSize;\n"
-    "    return max(pad.x, pad.y);\n"
-    "}\n"
-    "float sampleCustomDabEdgeFalloff(vec2 uv, float hardness) {\n"
+    "float sampleCustomDabCoverage(vec2 uv, float hardness) {\n"
     "    vec2 shape = sampleDabShapeSafe(uv);\n"
     "    float baseAlpha = clamp(shape.r, 0.0, 1.0);\n"
+    "    float softAlpha = clamp(shape.g, 0.0, 1.0);\n"
     "    float softness = max(1.0 - clamp(hardness, 0.0, 1.0), 0.0);\n"
-    "    if (softness <= 0.0001) return baseAlpha;\n"
-    "    vec2 texSize = vec2(textureSize(uDabShapeTexture, 0));\n"
-    "    float edgeWidth = (2.0 * uDabSoftEdgeRadiusTexels * softness) / max(max(texSize.x, "
-    "texSize.y), 1.0);\n"
-    "    if (edgeWidth <= 0.0001) return baseAlpha;\n"
-    "    float halfTexel = 1.0 / max(max(texSize.x, texSize.y), 1.0);\n"
-    "    float edgeDistance = max(shape.g - halfTexel, 0.0);\n"
-    "    float signedDistance = baseAlpha >= 0.5 ? edgeDistance : -edgeDistance;\n"
-    "    float coverage = smoothstep(0.0, 1.0, (signedDistance + edgeWidth) / (2.0 * edgeWidth));\n"
-    "    return clamp(mix(coverage, baseAlpha, clamp(hardness, 0.0, 1.0)), 0.0, 1.0);\n"
+    "    return mix(baseAlpha, softAlpha, softness);\n"
     "}\n"
     "void main() {\n"
     "    float maskScale = 1.0;\n"
@@ -326,12 +292,11 @@ const QString kBatchRebuildFrag = QStringLiteral(
     "        float edgeDistance = 0.0;\n"
     "        float edgeFactor = 0.0;\n"
     "        if (uUseDabShapeTexture != 0) {\n"
-    "            float shapePad = customDabSoftEdgeShapePad(hardness);\n"
-    "            if (abs(shapeLocal.x) > 1.0 + shapePad || abs(shapeLocal.y) > 1.0 + shapePad) "
+    "            if (abs(shapeLocal.x) > 1.0 || abs(shapeLocal.y) > 1.0) "
     "continue;\n"
     "            vec2 uv = (shapeLocal + 1.0) * 0.5;\n"
     "            float baseAlpha = sampleDabShapeSafe(uv).r;\n"
-    "            float falloff = sampleCustomDabEdgeFalloff(uv, hardness);\n"
+    "            float falloff = sampleCustomDabCoverage(uv, hardness);\n"
     "            if (falloff <= 0.0) continue;\n"
     "            edgeFactor = max(0.0, falloff - baseAlpha);\n"
     "            float dabTextureA = textureA;\n"
@@ -684,7 +649,6 @@ const QString kSmudgeApplyFrag = QStringLiteral(
     "uniform sampler2D uDabShapeTexture;\n"
     "uniform int   uUseDabShapeTexture;\n"
     "uniform vec2  uDabShapeScale;\n"
-    "uniform float uDabSoftEdgeRadiusTexels;\n"
     "uniform vec2  uTileOriginPx;\n"
     "uniform vec2  uInvTileSize;\n"
     "uniform vec2  uRoiOriginPx;\n"
@@ -704,42 +668,25 @@ const QString kSmudgeApplyFrag = QStringLiteral(
     "    vec2 outsideUv = max(max(-uv, uv - vec2(1.0)), vec2(0.0)) * 2.0;\n"
     "    if (outsideUv.x > 0.0 || outsideUv.y > 0.0) {\n"
     "        shape.r = 0.0;\n"
-    "        shape.g = clamp(shape.g + length(outsideUv), 0.0, 1.0);\n"
+    "        shape.g = 0.0;\n"
     "    }\n"
     "    return shape;\n"
     "}\n"
-    "float customDabSoftEdgeShapePad(float hardness) {\n"
-    "    float softness = max(1.0 - clamp(hardness, 0.0, 1.0), 0.0);\n"
-    "    vec2 texSize = vec2(textureSize(uDabShapeTexture, 0));\n"
-    "    vec2 safeSize = max(texSize - vec2(1.0), vec2(1.0));\n"
-    "    vec2 pad = (2.0 * uDabSoftEdgeRadiusTexels * softness) / safeSize;\n"
-    "    return max(pad.x, pad.y);\n"
-    "}\n"
-    "float sampleCustomDabEdgeFalloff(vec2 uv, float hardness) {\n"
+    "float sampleCustomDabCoverage(vec2 uv, float hardness) {\n"
     "    vec2 shape = sampleDabShapeSafe(uv);\n"
     "    float baseAlpha = clamp(shape.r, 0.0, 1.0);\n"
+    "    float softAlpha = clamp(shape.g, 0.0, 1.0);\n"
     "    float softness = max(1.0 - clamp(hardness, 0.0, 1.0), 0.0);\n"
-    "    if (softness <= 0.0001) { return baseAlpha; }\n"
-    "    vec2 texSize = vec2(textureSize(uDabShapeTexture, 0));\n"
-    "    float edgeWidth = (2.0 * uDabSoftEdgeRadiusTexels * softness) / max(max(texSize.x, "
-    "texSize.y), 1.0);\n"
-    "    if (edgeWidth <= 0.0001) { return baseAlpha; }\n"
-    "    float halfTexel = 1.0 / max(max(texSize.x, texSize.y), 1.0);\n"
-    "    float edgeDistance = max(shape.g - halfTexel, 0.0);\n"
-    "    float signedDistance = baseAlpha >= 0.5 ? edgeDistance : -edgeDistance;\n"
-    "    float coverage = smoothstep(0.0, 1.0, (signedDistance + edgeWidth) / (2.0 * "
-    "edgeWidth));\n"
-    "    return clamp(mix(coverage, baseAlpha, clamp(hardness, 0.0, 1.0)), 0.0, 1.0);\n"
+    "    return mix(baseAlpha, softAlpha, softness);\n"
     "}\n"
     "float brushCoverage(vec2 local) {\n"
     "    if (uUseDabShapeTexture != 0) {\n"
     "        vec2 shapeLocal = local / uBrushRadius;\n"
     "        shapeLocal /= max(uDabShapeScale, vec2(0.0001));\n"
-    "        float shapePad = customDabSoftEdgeShapePad(uBrushHardness);\n"
-    "        if (abs(shapeLocal.x) > 1.0 + shapePad || abs(shapeLocal.y) > 1.0 + shapePad) {\n"
+    "        if (abs(shapeLocal.x) > 1.0 || abs(shapeLocal.y) > 1.0) {\n"
     "            return 0.0;\n"
     "        }\n"
-    "        return sampleCustomDabEdgeFalloff((shapeLocal + 1.0) * 0.5, uBrushHardness);\n"
+    "        return sampleCustomDabCoverage((shapeLocal + 1.0) * 0.5, uBrushHardness);\n"
     "    }\n"
     "    float t = length(local) / uBrushRadius;\n"
     "    if (t > 1.0) { return 0.0; }\n"
@@ -905,7 +852,6 @@ const QString kSmudgeBatchFrag = QStringLiteral(
     "uniform sampler2D uDabShapeTexture;\n"
     "uniform int   uUseDabShapeTexture;\n"
     "uniform vec2  uDabShapeScale;\n"
-    "uniform float uDabSoftEdgeRadiusTexels;\n"
     // Work buffers may be larger than the active ROI (geometric growth to
     // avoid reallocating every segment). The valid data lives in
     // [0, viewport]; texel sampling has to go via texel-size so we don't
@@ -928,42 +874,25 @@ const QString kSmudgeBatchFrag = QStringLiteral(
     "    vec2 outsideUv = max(max(-uv, uv - vec2(1.0)), vec2(0.0)) * 2.0;\n"
     "    if (outsideUv.x > 0.0 || outsideUv.y > 0.0) {\n"
     "        shape.r = 0.0;\n"
-    "        shape.g = clamp(shape.g + length(outsideUv), 0.0, 1.0);\n"
+    "        shape.g = 0.0;\n"
     "    }\n"
     "    return shape;\n"
     "}\n"
-    "float customDabSoftEdgeShapePad(float hardness) {\n"
-    "    float softness = max(1.0 - clamp(hardness, 0.0, 1.0), 0.0);\n"
-    "    vec2 texSize = vec2(textureSize(uDabShapeTexture, 0));\n"
-    "    vec2 safeSize = max(texSize - vec2(1.0), vec2(1.0));\n"
-    "    vec2 pad = (2.0 * uDabSoftEdgeRadiusTexels * softness) / safeSize;\n"
-    "    return max(pad.x, pad.y);\n"
-    "}\n"
-    "float sampleCustomDabEdgeFalloff(vec2 uv, float hardness) {\n"
+    "float sampleCustomDabCoverage(vec2 uv, float hardness) {\n"
     "    vec2 shape = sampleDabShapeSafe(uv);\n"
     "    float baseAlpha = clamp(shape.r, 0.0, 1.0);\n"
+    "    float softAlpha = clamp(shape.g, 0.0, 1.0);\n"
     "    float softness = max(1.0 - clamp(hardness, 0.0, 1.0), 0.0);\n"
-    "    if (softness <= 0.0001) { return baseAlpha; }\n"
-    "    vec2 texSize = vec2(textureSize(uDabShapeTexture, 0));\n"
-    "    float edgeWidth = (2.0 * uDabSoftEdgeRadiusTexels * softness) / max(max(texSize.x, "
-    "texSize.y), 1.0);\n"
-    "    if (edgeWidth <= 0.0001) { return baseAlpha; }\n"
-    "    float halfTexel = 1.0 / max(max(texSize.x, texSize.y), 1.0);\n"
-    "    float edgeDistance = max(shape.g - halfTexel, 0.0);\n"
-    "    float signedDistance = baseAlpha >= 0.5 ? edgeDistance : -edgeDistance;\n"
-    "    float coverage = smoothstep(0.0, 1.0, (signedDistance + edgeWidth) / (2.0 * "
-    "edgeWidth));\n"
-    "    return clamp(mix(coverage, baseAlpha, clamp(hardness, 0.0, 1.0)), 0.0, 1.0);\n"
+    "    return mix(baseAlpha, softAlpha, softness);\n"
     "}\n"
     "float brushCoverage(vec2 local) {\n"
     "    if (uUseDabShapeTexture != 0) {\n"
     "        vec2 shapeLocal = local / uBrushRadius;\n"
     "        shapeLocal /= max(uDabShapeScale, vec2(0.0001));\n"
-    "        float shapePad = customDabSoftEdgeShapePad(uBrushHardness);\n"
-    "        if (abs(shapeLocal.x) > 1.0 + shapePad || abs(shapeLocal.y) > 1.0 + shapePad) {\n"
+    "        if (abs(shapeLocal.x) > 1.0 || abs(shapeLocal.y) > 1.0) {\n"
     "            return 0.0;\n"
     "        }\n"
-    "        return sampleCustomDabEdgeFalloff((shapeLocal + 1.0) * 0.5, uBrushHardness);\n"
+    "        return sampleCustomDabCoverage((shapeLocal + 1.0) * 0.5, uBrushHardness);\n"
     "    }\n"
     "    float t = length(local) / uBrushRadius;\n"
     "    if (t > 1.0) { return 0.0; }\n"
@@ -2591,8 +2520,6 @@ void GLBrushRenderer::stampGPU(TileGrid& strokeBuffer, GLTileRenderer* tileRende
         applyProgram->setUniform("uInvTileSize", 1.0f / static_cast<float>(TILE_SIZE),
             1.0f / static_cast<float>(TILE_SIZE));
         applyProgram->setUniform("uDabShapeScale", brush.dabXScale(), brush.dabYScale());
-        applyProgram->setUniform(
-            "uDabSoftEdgeRadiusTexels", dab_shape_falloff::kSoftEdgeRadiusTexels);
         applyProgram->setUniform("uUseDabShapeTexture", useDabShape);
         if (dabTexId != 0) {
             applyProgram->setUniform("uDabShapeTexture", 3);
@@ -2776,7 +2703,6 @@ void GLBrushRenderer::stampGPU(TileGrid& strokeBuffer, GLTileRenderer* tileRende
     prog->setUniform("uTextureEdgeBoost", brush.textureEdgeBoost());
     prog->setUniform("uUseDabShapeTexture", useDabShape ? 1 : 0);
     prog->setUniform("uDabShapeScale", brush.dabXScale(), brush.dabYScale());
-    prog->setUniform("uDabSoftEdgeRadiusTexels", dab_shape_falloff::kSoftEdgeRadiusTexels);
 
     if (useSelectionMask) {
         prog->setUniform("uMaskTexture", 1);
@@ -2996,8 +2922,6 @@ bool GLBrushRenderer::stampDabSegmentGPU(TileGrid& strokeBuffer, GLTileRenderer*
     m_rebuildBatchProgram->setUniform("uUseDabShapeTexture", useDabShape ? 1 : 0);
     m_rebuildBatchProgram->setUniform("uTextureEdgeBoost", brush.textureEdgeBoost());
     m_rebuildBatchProgram->setUniform("uDabShapeScale", brush.dabXScale(), brush.dabYScale());
-    m_rebuildBatchProgram->setUniform(
-        "uDabSoftEdgeRadiusTexels", dab_shape_falloff::kSoftEdgeRadiusTexels);
     m_rebuildBatchProgram->setUniform("uInvTileSize", 1.0f / static_cast<float>(TILE_SIZE));
     m_rebuildBatchProgram->setUniform("uQuadMin", 0.0f, 0.0f);
     m_rebuildBatchProgram->setUniform(
@@ -3193,8 +3117,6 @@ void GLBrushRenderer::rebuildStrokeBufferFromDabsGPU(TileGrid& strokeBuffer,
     m_rebuildBatchProgram->setUniform("uUseDabShapeTexture", useDabShape ? 1 : 0);
     m_rebuildBatchProgram->setUniform("uTextureEdgeBoost", brush.textureEdgeBoost());
     m_rebuildBatchProgram->setUniform("uDabShapeScale", brush.dabXScale(), brush.dabYScale());
-    m_rebuildBatchProgram->setUniform(
-        "uDabSoftEdgeRadiusTexels", dab_shape_falloff::kSoftEdgeRadiusTexels);
     m_rebuildBatchProgram->setUniform("uInvTileSize", 1.0f / static_cast<float>(TILE_SIZE));
     m_rebuildBatchProgram->setUniform("uQuadMin", 0.0f, 0.0f);
     m_rebuildBatchProgram->setUniform(
@@ -3448,8 +3370,6 @@ void GLBrushRenderer::rebuildStrokeBufferRangeFromDabsGPU(TileGrid& strokeBuffer
     m_rebuildBatchProgram->setUniform("uUseDabShapeTexture", useDabShape ? 1 : 0);
     m_rebuildBatchProgram->setUniform("uTextureEdgeBoost", brush.textureEdgeBoost());
     m_rebuildBatchProgram->setUniform("uDabShapeScale", brush.dabXScale(), brush.dabYScale());
-    m_rebuildBatchProgram->setUniform(
-        "uDabSoftEdgeRadiusTexels", dab_shape_falloff::kSoftEdgeRadiusTexels);
     m_rebuildBatchProgram->setUniform("uInvTileSize", 1.0f / static_cast<float>(TILE_SIZE));
     m_rebuildBatchProgram->setUniform("uQuadMin", 0.0f, 0.0f);
     m_rebuildBatchProgram->setUniform(
@@ -4646,7 +4566,6 @@ bool GLBrushRenderer::stampSmudgeSegmentGPU(TileGrid& strokeBuffer, GLTileRender
         p->setUniform("uMaxValidUv", maxValidUvX, maxValidUvY);
         if (usesDabShape) {
             p->setUniform("uDabShapeScale", brush.dabXScale(), brush.dabYScale());
-            p->setUniform("uDabSoftEdgeRadiusTexels", dab_shape_falloff::kSoftEdgeRadiusTexels);
             p->setUniform("uUseDabShapeTexture", useDabShape);
             if (dabTexId != 0)
                 p->setUniform("uDabShapeTexture", 3);

@@ -7,6 +7,7 @@ add_executable(RuwaTests
     ../src/services/updates/SemanticVersion.cpp
     ../src/services/updates/UpdateManifest.cpp
     ../src/services/updates/UpdateSecurity.cpp
+    dab_shape_falloff_test.cpp
     pigment_lut_test.cpp
     pigment_model_test.cpp
     project_serializer_test.cpp

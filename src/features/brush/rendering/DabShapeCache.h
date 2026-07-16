@@ -5,8 +5,8 @@
 // ==========================================================================
 //   Loads PNG dab shapes from :/brushes/1.png .. 5.png (dab type 1-5).
 //   Type 0 = standard circle (no image).
-//   CPU keeps the original alpha mask plus a precomputed outside-distance field.
-//   GPU uses the same data so custom dab hardness can feather the edge quickly.
+//   CPU keeps the original alpha mask plus one prefiltered soft-alpha mask.
+//   GPU uses the same pair so custom dab hardness remains a single texture sample.
 
 #ifndef AETHER_ENGINE_QT_DABSHAPECACHE_H
 #define AETHER_ENGINE_QT_DABSHAPECACHE_H
@@ -31,11 +31,11 @@ public:
     /// Load shapes from resources. Call once at startup.
     void loadFromResources();
 
-    /// CPU: get alpha mask plus normalized outside-distance field for dab type 1-5.
+    /// CPU: get source alpha plus its prefiltered soft-alpha mask for dab type 1-5.
     /// data is empty if type invalid or not loaded.
     struct AlphaGrid {
         std::vector<uint8_t> data;
-        std::vector<uint8_t> edgeDistance;
+        std::vector<uint8_t> softAlpha;
         int width = 0;
         int height = 0;
     };
@@ -49,7 +49,7 @@ public:
         const QString& imagePath, float threshold, float compression, int interpolation);
 
     /// GPU: ensure GL dab texture exists for dab type 1-5.
-    /// Texture is RG8: R = source alpha, G = normalized outside-edge distance.
+    /// Texture is RG8: R = source alpha, G = prefiltered soft alpha.
     /// Must be called with GL context active.
     GLuint getTextureId(QOpenGLFunctions_4_5_Core* gl, int dabType);
 
@@ -71,7 +71,7 @@ private:
 
     struct Shape {
         std::vector<uint8_t> alpha;
-        std::vector<uint8_t> edgeDistance;
+        std::vector<uint8_t> softAlpha;
         int width = 0;
         int height = 0;
         GLuint textureId = 0;

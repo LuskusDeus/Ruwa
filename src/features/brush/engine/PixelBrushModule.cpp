@@ -485,8 +485,7 @@ void applyDabShapeMaskFromSettings(aether::TileBrush& brush, const BrushSettings
         if (!grid.data.empty()) {
             brush.setDabType(1);
             brush.setDabShapeMask(grid.data.data(),
-                grid.edgeDistance.empty() ? nullptr : grid.edgeDistance.data(), grid.width,
-                grid.height);
+                grid.softAlpha.empty() ? nullptr : grid.softAlpha.data(), grid.width, grid.height);
             return;
         }
     }
@@ -494,8 +493,7 @@ void applyDabShapeMaskFromSettings(aether::TileBrush& brush, const BrushSettings
     if (settings.dabType > 0) {
         auto grid = aether::DabShapeCache::instance().getAlphaGrid(settings.dabType);
         brush.setDabShapeMask(grid.data.empty() ? nullptr : grid.data.data(),
-            grid.edgeDistance.empty() ? nullptr : grid.edgeDistance.data(), grid.width,
-            grid.height);
+            grid.softAlpha.empty() ? nullptr : grid.softAlpha.data(), grid.width, grid.height);
     } else {
         brush.setDabShapeMask(nullptr, 0, 0);
     }
