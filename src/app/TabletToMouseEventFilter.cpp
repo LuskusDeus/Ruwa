@@ -384,7 +384,11 @@ bool TabletToMouseEventFilter::eventFilter(QObject* watched, QEvent* event)
                 return true;
             }
 
-            if (nativeButtonsActive && mouseEvent->buttons() == Qt::NoButton) {
+            if (nativeButtonsActive) {
+                // While a physical WinTab button is held, the synchronous events
+                // dispatched by StylusInputManager are the complete authoritative
+                // stream. A delayed compatibility move from Windows can carry
+                // LeftButton too, so checking for NoButton is not sufficient.
                 mouseEvent->accept();
                 return true;
             }
@@ -397,9 +401,17 @@ bool TabletToMouseEventFilter::eventFilter(QObject* watched, QEvent* event)
         case QEvent::MouseButtonPress:
         case QEvent::MouseButtonDblClick:
         case QEvent::MouseButtonRelease: {
-            if (!nativeButtonsActive) {
-                stylusInput.activateMousePointer();
+            auto* mouseEvent = static_cast<QMouseEvent*>(event);
+            if (nativeButtonsActive) {
+                // Windows can post a compatibility release for the press which
+                // activated the window after the direct WinTab stroke has begun.
+                // Letting that release reach CanvasPanel ends the stroke while
+                // the pen is still physically down. Native synthetic events do
+                // not enter this branch because isDispatchingNativeInput() is true.
+                mouseEvent->accept();
+                return true;
             }
+            stylusInput.activateMousePointer();
             break;
         }
         case QEvent::Wheel:
@@ -469,6 +481,13 @@ bool TabletToMouseEventFilter::eventFilter(QObject* watched, QEvent* event)
         clearPendingStylusSwipe();
         clearHoverTarget(QPoint());
         clearTabletCursorOverride();
+        if (stylusInput.usesNativeUiRouting()) {
+            // Ruwa WinTab owns proximity and release tracking. The parallel
+            // Windows Ink stream may report a leave while focus is changing;
+            // forwarding it would terminate an otherwise active native stroke.
+            event->accept();
+            return true;
+        }
         return false;
     }
 
@@ -478,6 +497,10 @@ bool TabletToMouseEventFilter::eventFilter(QObject* watched, QEvent* event)
         // override-cursor user) would otherwise remain visible on top of the
         // canvas's BlankCursor while the user draws.
         clearTabletCursorOverride();
+        if (stylusInput.usesNativeUiRouting()) {
+            event->accept();
+            return true;
+        }
         return false;
     }
 

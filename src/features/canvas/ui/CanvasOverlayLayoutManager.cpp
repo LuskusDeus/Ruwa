@@ -46,9 +46,22 @@ void CanvasOverlayLayoutManager::attachOverlays()
     using Layout = CanvasOverlayLayout;
     const Layout::Caps draggable = Layout::Draggable | Layout::Solid | Layout::SnapEdges
         | Layout::ResizeTracked | Layout::BoundsClamped;
+    const auto registerCanvasWidget
+        = [this](QWidget* widget, Layout::Anchor anchor, Layout::Caps caps, int priority) {
+              if (!widget) {
+                  return;
+              }
+
+              // A canvas widget owns its complete rectangle. Its controls may deliberately ignore
+              // clicks on their background, but those ignored events must stop at the widget root
+              // instead of propagating through the content container into CanvasPanel, where the
+              // same press would be interpreted as the beginning of a paint stroke.
+              widget->setAttribute(Qt::WA_NoMousePropagation);
+              m_engine->registerItem(widget, anchor, caps, priority);
+          };
 
     if (m_panel->m_brushOverlay) {
-        m_engine->registerItem(m_panel->m_brushOverlay, Layout::Anchor::CenterLeft, draggable, 50);
+        registerCanvasWidget(m_panel->m_brushOverlay, Layout::Anchor::CenterLeft, draggable, 50);
         // Adopt a position restored before the widget was registered.
         if (m_panel->m_pendingBrushOverlayPositionNormalized.has_value()) {
             m_engine->setNormalizedPosition(
@@ -59,7 +72,7 @@ void CanvasOverlayLayoutManager::attachOverlays()
         // The joystick now evaluates its joystick/panel swap deterministically in
         // handleDrag (on the logical cursor target), so it can use the same trailing
         // drag lag as the other overlays.
-        m_engine->registerItem(
+        registerCanvasWidget(
             m_panel->m_stylusJoystick, Layout::Anchor::BottomRight, draggable, 50);
         if (m_panel->m_pendingStylusJoystickPositionNormalized.has_value()) {
             m_engine->setNormalizedPosition(
@@ -69,7 +82,7 @@ void CanvasOverlayLayoutManager::attachOverlays()
     // Tool HUD is auto-positioned (top-center) but acts as a solid obstacle so the
     // draggable overlays cannot slide under it.
     if (m_panel->m_toolStateOverlay) {
-        m_engine->registerItem(m_panel->m_toolStateOverlay, Layout::Anchor::TopCenter,
+        registerCanvasWidget(m_panel->m_toolStateOverlay, Layout::Anchor::TopCenter,
             Layout::Solid | Layout::BoundsClamped, 100);
     }
 }

@@ -354,6 +354,14 @@ bool CanvasCursorManager::isOverCanvas(const QPoint& globalPos) const
         return false;
     }
 
+    QWidget* topLevel = m_container->window();
+    if (!topLevel || !topLevel->isActiveWindow()) {
+        // The GL cursor belongs to Ruwa's active canvas interaction. It must not
+        // remain painted over an inactive window while Windows shows the real
+        // system pointer for the foreground application.
+        return false;
+    }
+
     const QPoint canvasLocalPos = m_canvasWidget->mapFromGlobal(globalPos);
     if (!m_canvasWidget->rect().contains(canvasLocalPos)) {
         return false;
