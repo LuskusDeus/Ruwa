@@ -18,8 +18,10 @@ class QMouseEvent;
 class QObject;
 class QPaintEvent;
 class QGraphicsOpacityEffect;
+class QHideEvent;
 class QPushButton;
 class QResizeEvent;
+class QShowEvent;
 class QVariantAnimation;
 
 namespace ruwa::ui::widgets {
@@ -73,6 +75,8 @@ signals:
     void editingFinished();
 
 protected:
+    void showEvent(QShowEvent* event) override;
+    void hideEvent(QHideEvent* event) override;
     void paintEvent(QPaintEvent* event) override;
     void mousePressEvent(QMouseEvent* event) override;
     void keyPressEvent(QKeyEvent* event) override;
@@ -107,6 +111,7 @@ private:
     void updatePanelPresentation();
     void updateSourceButtons();
     void updateStyles();
+    void setShortcutBlocking(bool blocked);
 
     QWidget* m_panel = nullptr;
     QWidget* m_body = nullptr;

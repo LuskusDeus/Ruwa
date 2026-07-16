@@ -840,10 +840,6 @@ BrushEditorParameterOverlay::BrushEditorParameterOverlay(QWidget* parent)
     connect(m_dimAnimation, &QVariantAnimation::finished, this, [this]() {
         if (m_isHiding) {
             m_isHiding = false;
-            if (m_shortcutsBlocked) {
-                m_shortcutsBlocked = false;
-                ruwa::core::ShortcutManager::instance().popShortcutsDisabled();
-            }
             QWidget::hide();
         } else if (m_isShowing) {
             m_isShowing = false;
@@ -996,6 +992,9 @@ BrushEditorParameterOverlay::BrushEditorParameterOverlay(QWidget* parent)
         parentWidget()->installEventFilter(this);
         resize(parentWidget()->size());
     }
+    if (QWidget* hostWindow = window(); hostWindow && hostWindow != parentWidget()) {
+        hostWindow->installEventFilter(this);
+    }
 
     updateStyles();
     updatePanelGeometry();
@@ -1004,10 +1003,7 @@ BrushEditorParameterOverlay::BrushEditorParameterOverlay(QWidget* parent)
 
 BrushEditorParameterOverlay::~BrushEditorParameterOverlay()
 {
-    if (m_shortcutsBlocked) {
-        m_shortcutsBlocked = false;
-        ruwa::core::ShortcutManager::instance().popShortcutsDisabled();
-    }
+    setShortcutBlocking(false);
 }
 
 void BrushEditorParameterOverlay::showOverlay(const QString& settingKey,
@@ -1039,11 +1035,6 @@ void BrushEditorParameterOverlay::showOverlay(const QString& settingKey,
     QWidget::show();
     raise();
     setFocus();
-
-    if (!wasActive) {
-        ruwa::core::ShortcutManager::instance().pushShortcutsDisabled();
-        m_shortcutsBlocked = true;
-    }
 
     m_isShowing = true;
     m_isHiding = false;
@@ -1104,6 +1095,18 @@ void BrushEditorParameterOverlay::setCurveAxesConfig(CurveAxesConfig curveAxesCo
     }
 }
 
+void BrushEditorParameterOverlay::showEvent(QShowEvent* event)
+{
+    QWidget::showEvent(event);
+    setShortcutBlocking(window() && window()->isActiveWindow());
+}
+
+void BrushEditorParameterOverlay::hideEvent(QHideEvent* event)
+{
+    setShortcutBlocking(false);
+    QWidget::hideEvent(event);
+}
+
 void BrushEditorParameterOverlay::paintEvent(QPaintEvent* event)
 {
     Q_UNUSED(event);
@@ -1150,8 +1153,28 @@ bool BrushEditorParameterOverlay::eventFilter(QObject* watched, QEvent* event)
         auto* resizeEvent = static_cast<QResizeEvent*>(event);
         resize(resizeEvent->size());
         updatePanelGeometry();
+    } else if (watched == window()) {
+        if (event->type() == QEvent::WindowActivate) {
+            setShortcutBlocking(isVisible());
+        } else if (event->type() == QEvent::WindowDeactivate) {
+            setShortcutBlocking(false);
+        }
     }
     return QWidget::eventFilter(watched, event);
+}
+
+void BrushEditorParameterOverlay::setShortcutBlocking(bool blocked)
+{
+    if (blocked == m_shortcutsBlocked) {
+        return;
+    }
+
+    m_shortcutsBlocked = blocked;
+    if (blocked) {
+        ruwa::core::ShortcutManager::instance().pushShortcutsDisabled();
+    } else {
+        ruwa::core::ShortcutManager::instance().popShortcutsDisabled();
+    }
 }
 
 bool BrushEditorParameterOverlay::isSourceAvailable(BrushInputSourceKey source) const
