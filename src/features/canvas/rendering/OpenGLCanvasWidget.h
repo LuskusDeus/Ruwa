@@ -341,7 +341,7 @@ public:
     QImage grabCanvasImage(const QRect& worldRect);
     QImage renderCompositedRegion(const QRect& worldRect, const QSize& targetSize);
     bool computeExportContentBounds(QRect& outBounds);
-    bool computeComposerContentBounds(QRect& outBounds);
+    bool computeNavigatorContentBounds(QRect& outBounds);
 
     /// Update brush cursor stamp contour from current brush (call when brush changes).
     void updateBrushCursorStamp();

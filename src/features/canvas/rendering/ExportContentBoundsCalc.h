@@ -26,7 +26,7 @@ bool computeExportLayerBoundsRecursive(
     const QList<std::shared_ptr<ruwa::core::layers::LayerData>>& layers,
     const LayerCompositingBuilder* compositingBuilder, bool parentVisible, int& outMinX,
     int& outMinY, int& outMaxX, int& outMaxY);
-bool computeComposerLayerBoundsRecursive(
+bool computeNavigatorLayerBoundsRecursive(
     const QList<std::shared_ptr<ruwa::core::layers::LayerData>>& layers,
     const LayerCompositingBuilder* compositingBuilder, bool parentVisible, int& outMinX,
     int& outMinY, int& outMaxX, int& outMaxY);

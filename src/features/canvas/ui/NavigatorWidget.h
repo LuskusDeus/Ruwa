@@ -1,11 +1,11 @@
 // SPDX-License-Identifier: MPL-2.0
 
 // ==========================================================================
-//   R U W A   |   C O M P O S E R   W I D G E T
+//   R U W A   |   N A V I G A T O R   W I D G E T
 // ==========================================================================
 
-#ifndef RUWA_UI_WORKSPACE_COMPOSERWIDGET_H
-#define RUWA_UI_WORKSPACE_COMPOSERWIDGET_H
+#ifndef RUWA_UI_WORKSPACE_NAVIGATORWIDGET_H
+#define RUWA_UI_WORKSPACE_NAVIGATORWIDGET_H
 
 #include <QWidget>
 #include <QList>
@@ -23,12 +23,12 @@ namespace ruwa::ui::workspace {
 /**
  * @brief Widget displaying full canvas overview with viewport rect and pan control
  */
-class ComposerWidget : public QWidget {
+class NavigatorWidget : public QWidget {
     Q_OBJECT
 
 public:
-    explicit ComposerWidget(QWidget* parent = nullptr);
-    ~ComposerWidget() override;
+    explicit NavigatorWidget(QWidget* parent = nullptr);
+    ~NavigatorWidget() override;
 
     void setCanvasPanel(CanvasPanel* panel);
     CanvasPanel* canvasPanel() const { return m_canvasPanel; }
@@ -68,4 +68,4 @@ private:
 
 } // namespace ruwa::ui::workspace
 
-#endif // RUWA_UI_WORKSPACE_COMPOSERWIDGET_H
+#endif // RUWA_UI_WORKSPACE_NAVIGATORWIDGET_H

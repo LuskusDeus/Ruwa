@@ -350,9 +350,9 @@ QByteArray ProjectSerializer::writeProjectInfo(const ProjectData& data) const
     out << data.toolStateOverlayPosNormalized;
     out << data.stylusJoystickPosNormalized;
     out << static_cast<quint8>(data.stylusJoystickAbovePanel ? 1 : 0);
-    out << static_cast<quint8>(data.joystickVisible ? 1 : 0);
-    out << static_cast<quint8>(data.brushControlVisible ? 1 : 0);
-    out << static_cast<quint8>(data.toolStateOverlayVisible ? 1 : 0);
+    out << static_cast<quint8>(data.canvasWidgets[ruwa::ui::CanvasWidget::Joystick] ? 1 : 0);
+    out << static_cast<quint8>(data.canvasWidgets[ruwa::ui::CanvasWidget::BrushControl] ? 1 : 0);
+    out << static_cast<quint8>(data.canvasWidgets[ruwa::ui::CanvasWidget::ToolState] ? 1 : 0);
     out << data.selectedLayerId;
     out << static_cast<quint8>(data.contentTileFormat); // v27: content tile pixel format
 
@@ -650,9 +650,9 @@ bool ProjectSerializer::readProjectInfo(const QByteArray& blob, ProjectData& dat
         }
         data.editingForegroundColor = (editingForegroundColor != 0);
         data.stylusJoystickAbovePanel = (stylusJoystickAbovePanel != 0);
-        data.joystickVisible = (joystickVisible != 0);
-        data.brushControlVisible = (brushControlVisible != 0);
-        data.toolStateOverlayVisible = (toolStateOverlayVisible != 0);
+        data.canvasWidgets[ruwa::ui::CanvasWidget::Joystick] = (joystickVisible != 0);
+        data.canvasWidgets[ruwa::ui::CanvasWidget::BrushControl] = (brushControlVisible != 0);
+        data.canvasWidgets[ruwa::ui::CanvasWidget::ToolState] = (toolStateOverlayVisible != 0);
         if (data.version < 6) {
             data.brushToolState.colorRgba = data.lastUsedColorRgba;
             data.eraserToolState.colorRgba = data.lastUsedColorRgba;
@@ -704,9 +704,7 @@ bool ProjectSerializer::readProjectInfo(const QByteArray& blob, ProjectData& dat
         data.toolStateOverlayPosNormalized = QPointF(-1.0, -1.0);
         data.stylusJoystickPosNormalized = QPointF(-1.0, -1.0);
         data.stylusJoystickAbovePanel = true;
-        data.joystickVisible = true;
-        data.brushControlVisible = true;
-        data.toolStateOverlayVisible = true;
+        data.canvasWidgets = ruwa::ui::CanvasWidgetVisibility {};
     }
     if (data.version < 11) {
         data.canvasBoundsMode = ruwa::core::canvas::CanvasBoundsMode::Bounded;

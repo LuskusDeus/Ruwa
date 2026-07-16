@@ -1,11 +1,11 @@
 // SPDX-License-Identifier: MPL-2.0
 
 // ==========================================================================
-//   R U W A   |   C O M P O S E R   P A N E L
+//   R U W A   |   N A V I G A T O R   P A N E L
 // ==========================================================================
 
-#include "ComposerPanel.h"
-#include "ComposerWidget.h"
+#include "NavigatorPanel.h"
+#include "NavigatorWidget.h"
 #include "CanvasPanel.h"
 #include "shared/resources/IconProvider.h"
 
@@ -13,10 +13,10 @@
 
 namespace ruwa::ui::workspace {
 
-ComposerPanel::ComposerPanel(QWidget* parent)
-    : DockPanel(tr("Composer"), parent)
+NavigatorPanel::NavigatorPanel(QWidget* parent)
+    : DockPanel(tr("Navigator"), parent)
 {
-    setIconType(ruwa::ui::core::IconProvider::StandardIcon::ComposerPanel);
+    setIconType(ruwa::ui::core::IconProvider::StandardIcon::NavigatorPanel);
     setMinimumPanelSize(150, 120);
     setPreferredPanelSize(220, 180);
     setClosable(true);
@@ -24,28 +24,28 @@ ComposerPanel::ComposerPanel(QWidget* parent)
     setMovable(true);
 }
 
-ComposerPanel::~ComposerPanel() = default;
+NavigatorPanel::~NavigatorPanel() = default;
 
-void ComposerPanel::setCanvasPanel(CanvasPanel* panel)
+void NavigatorPanel::setCanvasPanel(CanvasPanel* panel)
 {
     if (m_canvasPanel == panel)
         return;
     m_canvasPanel = panel;
     if (contentWidget()) {
-        if (auto* w = qobject_cast<ComposerWidget*>(contentWidget())) {
+        if (auto* w = qobject_cast<NavigatorWidget*>(contentWidget())) {
             w->setCanvasPanel(panel);
         }
     }
 }
 
-QWidget* ComposerPanel::createContent()
+QWidget* NavigatorPanel::createContent()
 {
-    auto* widget = new ComposerWidget(this);
+    auto* widget = new NavigatorWidget(this);
     widget->setCanvasPanel(m_canvasPanel);
     return widget;
 }
 
-void ComposerPanel::onThemeChanged()
+void NavigatorPanel::onThemeChanged()
 {
     DockPanel::onThemeChanged();
 }

@@ -239,8 +239,8 @@ QString IconProvider::getStandardIconName(StandardIcon icon) const
     // Panels
     case StandardIcon::ColorPanel:
         return "ColorPanel";
-    case StandardIcon::ComposerPanel:
-        return "ComposerPanel";
+    case StandardIcon::NavigatorPanel:
+        return "NavigatorPanel";
     case StandardIcon::LayerEffectsPanel:
         return "LayerEffectsPanel";
     case StandardIcon::LayersPanel:

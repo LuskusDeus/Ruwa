@@ -3182,8 +3182,8 @@ Please choose a different shortcut.</source>
     </message>
     <message>
         <location filename="../src/shell/top-bar/TopBar.cpp" line="1093"/>
-        <source>Composer</source>
-        <translation>Компоновщик</translation>
+        <source>Navigator</source>
+        <translation>Навигатор</translation>
     </message>
     <message>
         <location filename="../src/shell/top-bar/TopBar.cpp" line="1130"/>
@@ -3312,8 +3312,8 @@ Please choose a different shortcut.</source>
     </message>
     <message>
         <location filename="../src/shell/top-bar/TopBar.cpp" line="1090"/>
-        <source>Composer</source>
-        <translation type="unfinished"></translation>
+        <source>Navigator</source>
+        <translation>Навигатор</translation>
     </message>
     <message>
         <location filename="../src/shell/top-bar/TopBar.cpp" line="1123"/>
@@ -3720,11 +3720,11 @@ Please choose a different shortcut.</source>
     </message>
 </context>
 <context>
-    <name>ruwa::ui::workspace::ComposerPanel</name>
+    <name>ruwa::ui::workspace::NavigatorPanel</name>
     <message>
-        <location filename="../src/features/canvas/ui/ComposerPanel.cpp" line="15"/>
-        <source>Composer</source>
-        <translation>Компоновщик</translation>
+        <location filename="../src/features/canvas/ui/NavigatorPanel.cpp" line="15"/>
+        <source>Navigator</source>
+        <translation>Навигатор</translation>
     </message>
 </context>
 <context>
@@ -4099,8 +4099,8 @@ Please choose a different shortcut.</source>
     </message>
     <message>
         <location filename="../src/shell/docking/state/DockLayoutPreset.h" line="305"/>
-        <source>Wide canvas with a right-side stack for color, layers and composer.</source>
-        <translation>Широкий холст с правой панелью для цвета, слоёв и компоновщика.</translation>
+        <source>Wide canvas with a right-side stack for color, layers and navigator.</source>
+        <translation>Широкий холст с правой панелью для цвета, слоёв и навигатора.</translation>
     </message>
     <message>
         <location filename="../src/shell/docking/state/DockLayoutPreset.h" line="341"/>

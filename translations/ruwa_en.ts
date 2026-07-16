@@ -120,8 +120,8 @@
     </message>
     <message>
         <location filename="../src/shell/top-bar/TopBar.cpp" line="1093"/>
-        <source>Composer</source>
-        <translation>Composer</translation>
+        <source>Navigator</source>
+        <translation>Navigator</translation>
     </message>
     <message>
         <location filename="../src/shell/top-bar/TopBar.cpp" line="1130"/>
@@ -153,11 +153,11 @@
     </message>
 </context>
 <context>
-    <name>ruwa::ui::workspace::ComposerPanel</name>
+    <name>ruwa::ui::workspace::NavigatorPanel</name>
     <message>
-        <location filename="../src/features/canvas/ui/ComposerPanel.cpp" line="15"/>
-        <source>Composer</source>
-        <translation>Composer</translation>
+        <location filename="../src/features/canvas/ui/NavigatorPanel.cpp" line="15"/>
+        <source>Navigator</source>
+        <translation>Navigator</translation>
     </message>
 </context>
 <context>
@@ -214,8 +214,8 @@
     </message>
     <message>
         <location filename="../src/shell/docking/state/DockLayoutPreset.h" line="305"/>
-        <source>Wide canvas with a right-side stack for color, layers and composer.</source>
-        <translation>Wide canvas with a right-side stack for color, layers and composer.</translation>
+        <source>Wide canvas with a right-side stack for color, layers and navigator.</source>
+        <translation>Wide canvas with a right-side stack for color, layers and navigator.</translation>
     </message>
     <message>
         <location filename="../src/shell/docking/state/DockLayoutPreset.h" line="341"/>

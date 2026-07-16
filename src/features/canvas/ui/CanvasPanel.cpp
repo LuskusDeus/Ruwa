@@ -1013,15 +1013,15 @@ void CanvasPanel::onSimpleContextAction(int actionId)
     using ruwa::ui::canvas_overlay::CanvasOverlayContextActionId;
 
     if (actionId == static_cast<int>(CanvasOverlayContextActionId::HideBrushControl)) {
-        setBrushControlVisible(false);
+        setCanvasWidgetVisible(CanvasWidget::BrushControl, false);
         return;
     }
     if (actionId == static_cast<int>(CanvasOverlayContextActionId::HideToolStateOverlay)) {
-        setToolStateOverlayVisible(false);
+        setCanvasWidgetVisible(CanvasWidget::ToolState, false);
         return;
     }
     if (actionId == static_cast<int>(CanvasOverlayContextActionId::HideStylusJoystick)) {
-        setJoystickVisible(false);
+        setCanvasWidgetVisible(CanvasWidget::Joystick, false);
         return;
     }
 
@@ -3161,33 +3161,20 @@ void CanvasPanel::scheduleInitialBrushOverlayPlacement()
         m_overlayLayoutManager->scheduleInitialBrushOverlayPlacement();
 }
 
-void CanvasPanel::setJoystickVisible(bool visible)
+void CanvasPanel::setCanvasWidgetVisible(CanvasWidget widget, bool visible)
 {
-    const bool before = isJoystickVisible();
+    const bool before = isCanvasWidgetVisible(widget);
     if (m_overlayLayoutManager)
-        m_overlayLayoutManager->setJoystickVisible(visible);
-    if (before != isJoystickVisible()) {
+        m_overlayLayoutManager->setCanvasWidgetVisible(widget, visible);
+    if (before != isCanvasWidgetVisible(widget)) {
         emit canvasWidgetsVisibilityChanged();
     }
 }
 
-void CanvasPanel::setBrushControlVisible(bool visible)
+void CanvasPanel::setCanvasWidgetVisibility(const CanvasWidgetVisibility& visibility)
 {
-    const bool before = isBrushControlVisible();
-    if (m_overlayLayoutManager)
-        m_overlayLayoutManager->setBrushControlVisible(visible);
-    if (before != isBrushControlVisible()) {
-        emit canvasWidgetsVisibilityChanged();
-    }
-}
-
-void CanvasPanel::setToolStateOverlayVisible(bool visible)
-{
-    const bool before = isToolStateOverlayVisible();
-    if (m_overlayLayoutManager)
-        m_overlayLayoutManager->setToolStateOverlayVisible(visible);
-    if (before != isToolStateOverlayVisible()) {
-        emit canvasWidgetsVisibilityChanged();
+    for (const CanvasWidget widget : kCanvasWidgets) {
+        setCanvasWidgetVisible(widget, visibility[widget]);
     }
 }
 
@@ -3205,9 +3192,9 @@ void CanvasPanel::resetCanvasOverlaysToDefault()
     m_stylusJoystickUserMoved = false;
 
     if (m_overlayLayoutManager) {
-        m_overlayLayoutManager->setJoystickVisible(true);
-        m_overlayLayoutManager->setBrushControlVisible(true);
-        m_overlayLayoutManager->setToolStateOverlayVisible(true);
+        for (const CanvasWidget widget : kCanvasWidgets) {
+            m_overlayLayoutManager->setCanvasWidgetVisible(widget, true);
+        }
         if (m_stylusJoystick) {
             m_stylusJoystick->setJoystickAbovePanel(true);
         }
@@ -3221,21 +3208,18 @@ void CanvasPanel::resetCanvasOverlaysToDefault()
     }
 }
 
-bool CanvasPanel::isJoystickVisible() const
+bool CanvasPanel::isCanvasWidgetVisible(CanvasWidget widget) const
 {
-    return m_overlayLayoutManager ? m_overlayLayoutManager->isJoystickVisible() : m_joystickVisible;
+    return m_canvasWidgets[widget];
 }
 
-bool CanvasPanel::isBrushControlVisible() const
+CanvasWidgetVisibility CanvasPanel::canvasWidgetVisibility() const
 {
-    return m_overlayLayoutManager ? m_overlayLayoutManager->isBrushControlVisible()
-                                  : m_brushControlVisible;
-}
-
-bool CanvasPanel::isToolStateOverlayVisible() const
-{
-    return m_overlayLayoutManager ? m_overlayLayoutManager->isToolStateOverlayVisible()
-                                  : m_toolStateOverlayVisible;
+    CanvasWidgetVisibility visibility;
+    for (const CanvasWidget widget : kCanvasWidgets) {
+        visibility[widget] = isCanvasWidgetVisible(widget);
+    }
+    return visibility;
 }
 
 void CanvasPanel::beginPositionPicking(const QPointF& initialDocPos,
@@ -3251,12 +3235,10 @@ void CanvasPanel::beginPositionPicking(const QPointF& initialDocPos,
     m_positionPickerOnPicked = std::move(onPicked);
     m_positionPickerOnCanceled = std::move(onCanceled);
 
-    m_positionPickerPrevBrushVisible = isBrushControlVisible();
-    m_positionPickerPrevToolStateVisible = isToolStateOverlayVisible();
-    m_positionPickerPrevJoystickVisible = isJoystickVisible();
-    setBrushControlVisible(false);
-    setToolStateOverlayVisible(false);
-    setJoystickVisible(false);
+    m_positionPickerPrevWidgets = canvasWidgetVisibility();
+    for (const CanvasWidget widget : kCanvasWidgets) {
+        setCanvasWidgetVisible(widget, false);
+    }
 
     if (m_positionPickerOverlay) {
         m_positionPickerOverlay->setDocumentPosition(initialDocPos);
@@ -3278,9 +3260,7 @@ CanvasPanel::endPositionPickingSession()
 {
     m_positionPickerActive = false;
 
-    setBrushControlVisible(m_positionPickerPrevBrushVisible);
-    setToolStateOverlayVisible(m_positionPickerPrevToolStateVisible);
-    setJoystickVisible(m_positionPickerPrevJoystickVisible);
+    setCanvasWidgetVisibility(m_positionPickerPrevWidgets);
 
     if (m_positionPickerOverlay) {
         m_positionPickerOverlay->hide();

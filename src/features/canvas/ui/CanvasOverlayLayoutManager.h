@@ -7,10 +7,15 @@
 #ifndef RUWA_UI_WORKSPACE_PANELS_CANVASOVERLAYLAYOUTMANAGER_H
 #define RUWA_UI_WORKSPACE_PANELS_CANVASOVERLAYLAYOUTMANAGER_H
 
+#include "shared/types/CanvasWidgets.h"
+
 #include <QPoint>
 #include <QSize>
 
 #include <memory>
+
+class QGraphicsOpacityEffect;
+class QWidget;
 
 namespace ruwa::ui::workspace {
 
@@ -43,12 +48,7 @@ public:
     void positionStylusJoystickDefault();
     void repositionStylusJoystickOnResize(const QSize& newSize, const QSize& oldSize);
     void scheduleInitialBrushOverlayPlacement();
-    void setJoystickVisible(bool visible);
-    void setBrushControlVisible(bool visible);
-    void setToolStateOverlayVisible(bool visible);
-    bool isJoystickVisible() const;
-    bool isBrushControlVisible() const;
-    bool isToolStateOverlayVisible() const;
+    void setCanvasWidgetVisible(CanvasWidget widget, bool visible);
 
     void layoutToolStateOverlay();
     void repositionToolStateOverlayOnResize(const QSize& newSize, const QSize& oldSize);
@@ -57,6 +57,13 @@ public:
     void onContentResized(const QSize& newSize, const QSize& oldSize);
 
 private:
+    /// The panel-owned objects backing one canvas widget.
+    struct WidgetHandles {
+        QWidget* widget = nullptr;
+        QGraphicsOpacityEffect* opacity = nullptr;
+    };
+    WidgetHandles handlesFor(CanvasWidget widget) const;
+
     CanvasPanel* m_panel = nullptr;
     std::unique_ptr<CanvasOverlayLayout> m_engine;
 };

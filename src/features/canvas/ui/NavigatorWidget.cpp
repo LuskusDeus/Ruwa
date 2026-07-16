@@ -1,10 +1,10 @@
 // SPDX-License-Identifier: MPL-2.0
 
 // ==========================================================================
-//   R U W A   |   C O M P O S E R   W I D G E T
+//   R U W A   |   N A V I G A T O R   W I D G E T
 // ==========================================================================
 
-#include "ComposerWidget.h"
+#include "NavigatorWidget.h"
 
 #include "CanvasPanel.h"
 #include "OverviewCache.h"
@@ -32,7 +32,7 @@ bool canNavigateCamera(const CanvasPanel* panel)
 
 } // namespace
 
-ComposerWidget::ComposerWidget(QWidget* parent)
+NavigatorWidget::NavigatorWidget(QWidget* parent)
     : QWidget(parent)
     , m_overviewCache(new OverviewCache())
 {
@@ -63,12 +63,12 @@ ComposerWidget::ComposerWidget(QWidget* parent)
     });
 }
 
-ComposerWidget::~ComposerWidget()
+NavigatorWidget::~NavigatorWidget()
 {
     delete m_overviewCache;
 }
 
-void ComposerWidget::setCanvasPanel(CanvasPanel* panel)
+void NavigatorWidget::setCanvasPanel(CanvasPanel* panel)
 {
     if (m_canvasPanel == panel) {
         return;
@@ -80,15 +80,15 @@ void ComposerWidget::setCanvasPanel(CanvasPanel* panel)
     m_canvasPanel = panel;
     if (m_canvasPanel) {
         connect(m_canvasPanel, &CanvasPanel::glContentReady, this,
-            &ComposerWidget::scheduleOverviewRefresh, Qt::UniqueConnection);
+            &NavigatorWidget::scheduleOverviewRefresh, Qt::UniqueConnection);
         connect(m_canvasPanel, &CanvasPanel::canvasContentChanged, this,
-            &ComposerWidget::scheduleOverviewRefresh, Qt::UniqueConnection);
+            &NavigatorWidget::scheduleOverviewRefresh, Qt::UniqueConnection);
         connect(m_canvasPanel, &CanvasPanel::canvasContentTilesChanged, this,
-            &ComposerWidget::invalidateOverviewTiles, Qt::UniqueConnection);
+            &NavigatorWidget::invalidateOverviewTiles, Qt::UniqueConnection);
         connect(m_canvasPanel, &CanvasPanel::canvasSizeChanged, this,
-            &ComposerWidget::scheduleOverviewRefresh, Qt::UniqueConnection);
+            &NavigatorWidget::scheduleOverviewRefresh, Qt::UniqueConnection);
         connect(m_canvasPanel, &CanvasPanel::exportFrameChanged, this,
-            &ComposerWidget::scheduleOverviewRefresh, Qt::UniqueConnection);
+            &NavigatorWidget::scheduleOverviewRefresh, Qt::UniqueConnection);
     }
 
     m_overviewCache->clear();
@@ -100,7 +100,7 @@ void ComposerWidget::setCanvasPanel(CanvasPanel* panel)
     }
 }
 
-void ComposerWidget::refreshOverview()
+void NavigatorWidget::refreshOverview()
 {
     if (m_overviewRefreshTimer) {
         m_overviewRefreshTimer->stop();
@@ -109,13 +109,13 @@ void ComposerWidget::refreshOverview()
     update();
 }
 
-void ComposerWidget::invalidateOverviewTiles(const QList<QPoint>& tilePositions)
+void NavigatorWidget::invalidateOverviewTiles(const QList<QPoint>& tilePositions)
 {
     if (!m_canvasPanel || !m_canvasPanel->isGLContentReady()) {
         return;
     }
 
-    const QRect currentFrame = m_canvasPanel->composerDisplayFrame().normalized();
+    const QRect currentFrame = m_canvasPanel->navigatorDisplayFrame().normalized();
     const QSize overviewSize = targetOverviewSize();
     if (!currentFrame.isValid() || currentFrame.isEmpty() || !overviewSize.isValid()) {
         if (m_overviewCache->isValid()) {
@@ -141,13 +141,13 @@ void ComposerWidget::invalidateOverviewTiles(const QList<QPoint>& tilePositions)
     }
 }
 
-void ComposerWidget::invalidateAllOverview()
+void NavigatorWidget::invalidateAllOverview()
 {
     if (!m_canvasPanel || !m_canvasPanel->isGLContentReady()) {
         return;
     }
 
-    const QRect currentFrame = m_canvasPanel->composerDisplayFrame().normalized();
+    const QRect currentFrame = m_canvasPanel->navigatorDisplayFrame().normalized();
     const QSize overviewSize = targetOverviewSize();
     if (!currentFrame.isValid() || currentFrame.isEmpty() || !overviewSize.isValid()) {
         if (m_overviewCache->isValid()) {
@@ -168,7 +168,7 @@ void ComposerWidget::invalidateAllOverview()
     }
 }
 
-void ComposerWidget::scheduleOverviewRefresh()
+void NavigatorWidget::scheduleOverviewRefresh()
 {
     if (!m_canvasPanel || !isVisible() || !m_overviewRefreshTimer) {
         return;
@@ -179,7 +179,7 @@ void ComposerWidget::scheduleOverviewRefresh()
     }
 }
 
-void ComposerWidget::updateOverview()
+void NavigatorWidget::updateOverview()
 {
     if (!m_canvasPanel) {
         m_overviewCache->clear();
@@ -187,7 +187,7 @@ void ComposerWidget::updateOverview()
         return;
     }
 
-    const QRect frame = m_canvasPanel->composerDisplayFrame().normalized();
+    const QRect frame = m_canvasPanel->navigatorDisplayFrame().normalized();
     const QSize overviewSize = targetOverviewSize();
     if (!frame.isValid() || frame.isEmpty() || !overviewSize.isValid()) {
         m_overviewCache->clear();
@@ -210,7 +210,7 @@ void ComposerWidget::updateOverview()
         }
 
         const QImage tileImage
-            = m_canvasPanel->renderComposerOverviewTile(worldRect, pixelRect.size());
+            = m_canvasPanel->renderNavigatorOverviewTile(worldRect, pixelRect.size());
         if (tileImage.isNull()) {
             continue;
         }
@@ -218,12 +218,12 @@ void ComposerWidget::updateOverview()
     }
 }
 
-QSize ComposerWidget::targetOverviewSize() const
+QSize NavigatorWidget::targetOverviewSize() const
 {
     const int maxSize = qMax(256, qMin(width(), height()) * 2);
     QSize size(maxSize, maxSize);
     if (m_canvasPanel) {
-        const QRect frame = m_canvasPanel->composerDisplayFrame().normalized();
+        const QRect frame = m_canvasPanel->navigatorDisplayFrame().normalized();
         if (frame.isValid() && !frame.isEmpty()) {
             size = frame.size();
             size.scale(maxSize, maxSize, Qt::KeepAspectRatio);
@@ -232,7 +232,7 @@ QSize ComposerWidget::targetOverviewSize() const
     return size;
 }
 
-QRectF ComposerWidget::canvasDisplayRect() const
+QRectF NavigatorWidget::canvasDisplayRect() const
 {
     if (!m_canvasPanel || !m_overviewCache->isValid()) {
         return {};
@@ -250,7 +250,7 @@ QRectF ComposerWidget::canvasDisplayRect() const
     return QRectF(ox, oy, sw, sh);
 }
 
-QPointF ComposerWidget::widgetToWorld(const QPointF& widgetPos) const
+QPointF NavigatorWidget::widgetToWorld(const QPointF& widgetPos) const
 {
     const QRectF disp = canvasDisplayRect();
     if (disp.isEmpty() || !m_canvasPanel || !m_canvasPanel->isGLContentReady()) {
@@ -267,7 +267,7 @@ QPointF ComposerWidget::widgetToWorld(const QPointF& widgetPos) const
         static_cast<float>(m_worldFrame.y()) + ny * static_cast<float>(m_worldFrame.height()));
 }
 
-QPointF ComposerWidget::worldToWidget(const QPointF& worldPos) const
+QPointF NavigatorWidget::worldToWidget(const QPointF& worldPos) const
 {
     const QRectF disp = canvasDisplayRect();
     if (disp.isEmpty() || !m_worldFrame.isValid() || m_worldFrame.isEmpty()) {
@@ -281,7 +281,7 @@ QPointF ComposerWidget::worldToWidget(const QPointF& worldPos) const
     return QPointF(disp.x() + nx * disp.width(), disp.y() + ny * disp.height());
 }
 
-void ComposerWidget::paintEvent(QPaintEvent* event)
+void NavigatorWidget::paintEvent(QPaintEvent* event)
 {
     Q_UNUSED(event);
     QPainter p(this);
@@ -318,7 +318,7 @@ void ComposerWidget::paintEvent(QPaintEvent* event)
     }
 }
 
-void ComposerWidget::mousePressEvent(QMouseEvent* event)
+void NavigatorWidget::mousePressEvent(QMouseEvent* event)
 {
     if (event->button() == Qt::LeftButton && canNavigateCamera(m_canvasPanel)) {
         m_dragging = true;
@@ -330,7 +330,7 @@ void ComposerWidget::mousePressEvent(QMouseEvent* event)
     QWidget::mousePressEvent(event);
 }
 
-void ComposerWidget::mouseMoveEvent(QMouseEvent* event)
+void NavigatorWidget::mouseMoveEvent(QMouseEvent* event)
 {
     if (m_dragging && !canNavigateCamera(m_canvasPanel)) {
         m_dragging = false;
@@ -348,7 +348,7 @@ void ComposerWidget::mouseMoveEvent(QMouseEvent* event)
     QWidget::mouseMoveEvent(event);
 }
 
-void ComposerWidget::mouseReleaseEvent(QMouseEvent* event)
+void NavigatorWidget::mouseReleaseEvent(QMouseEvent* event)
 {
     if (event->button() == Qt::LeftButton && m_dragging && !canNavigateCamera(m_canvasPanel)) {
         m_dragging = false;
@@ -369,7 +369,7 @@ void ComposerWidget::mouseReleaseEvent(QMouseEvent* event)
     QWidget::mouseReleaseEvent(event);
 }
 
-void ComposerWidget::wheelEvent(QWheelEvent* event)
+void NavigatorWidget::wheelEvent(QWheelEvent* event)
 {
     if (!canNavigateCamera(m_canvasPanel)) {
         QWidget::wheelEvent(event);
@@ -397,7 +397,7 @@ void ComposerWidget::wheelEvent(QWheelEvent* event)
     event->accept();
 }
 
-void ComposerWidget::showEvent(QShowEvent* event)
+void NavigatorWidget::showEvent(QShowEvent* event)
 {
     QWidget::showEvent(event);
     if (m_canvasPanel) {
@@ -410,7 +410,7 @@ void ComposerWidget::showEvent(QShowEvent* event)
     }
 }
 
-void ComposerWidget::hideEvent(QHideEvent* event)
+void NavigatorWidget::hideEvent(QHideEvent* event)
 {
     QWidget::hideEvent(event);
     m_viewportSyncTimer->stop();
@@ -419,7 +419,7 @@ void ComposerWidget::hideEvent(QHideEvent* event)
     }
 }
 
-void ComposerWidget::resizeEvent(QResizeEvent* event)
+void NavigatorWidget::resizeEvent(QResizeEvent* event)
 {
     QWidget::resizeEvent(event);
     scheduleOverviewRefresh();

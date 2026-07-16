@@ -17,6 +17,7 @@
 #include "features/canvas/scene/Canvas.h"
 #include "features/canvas/scene/Viewport.h"
 #include "features/layers/model/LayerData.h"
+#include "shared/types/CanvasWidgets.h"
 
 #include <QColor>
 #include <QImage>
@@ -129,7 +130,7 @@ public:
     bool hasExportFrame() const { return m_exportFrame.width() > 0 && m_exportFrame.height() > 0; }
     QSize exportFrameSize() const { return m_exportFrame.size(); }
     QRect effectiveDisplayFrame() const;
-    QRect composerDisplayFrame() const;
+    QRect navigatorDisplayFrame() const;
     QRect exportPreviewCameraFrame() const;
     void setExportFrame(const QRect& frame);
     void setCanvasBoundsMode(ruwa::core::canvas::CanvasBoundsMode mode);
@@ -162,7 +163,7 @@ public:
     void setZoom(float zoom);
     void setZoomSmooth(float zoom);
     void zoomBy(float factor);
-    /// Zoom at a world-space point (e.g. from Composer widget). Zooms toward that point.
+    /// Zoom at a world-space point (e.g. from Navigator widget). Zooms toward that point.
     void zoomAtWorldPoint(float factor, const QPointF& worldPos);
     void zoomToFit();
     void centerCanvas();
@@ -256,10 +257,10 @@ public:
     /// ready.
     QPixmap grabCanvasThumbnail(int maxSize = 256) const;
 
-    /// Full canvas image scaled to maxSize (for Composer panel). Returns null if GL not ready.
+    /// Full canvas image scaled to maxSize (for Navigator panel). Returns null if GL not ready.
     QImage getFullCanvasThumbnail(int maxSize = 512) const;
     QImage getCanvasRegionThumbnail(const QRect& worldRect, const QSize& targetSize) const;
-    QImage renderComposerOverviewTile(const QRect& worldRect, const QSize& targetSize) const;
+    QImage renderNavigatorOverviewTile(const QRect& worldRect, const QSize& targetSize) const;
 
     /// Get full-resolution canvas image for export. Returns null QImage if GL not ready.
     QImage exportCanvasImage();
@@ -319,12 +320,10 @@ public:
     bool isGLContentReady() const;
 
     /// Canvas widgets visibility (View → Canvas widgets menu)
-    void setJoystickVisible(bool visible);
-    void setBrushControlVisible(bool visible);
-    void setToolStateOverlayVisible(bool visible);
-    bool isJoystickVisible() const;
-    bool isBrushControlVisible() const;
-    bool isToolStateOverlayVisible() const;
+    void setCanvasWidgetVisible(CanvasWidget widget, bool visible);
+    bool isCanvasWidgetVisible(CanvasWidget widget) const;
+    void setCanvasWidgetVisibility(const CanvasWidgetVisibility& visibility);
+    CanvasWidgetVisibility canvasWidgetVisibility() const;
 
     // === Export mode ===
 
@@ -661,9 +660,7 @@ private:
     QPointF m_selectionPopupWorldCenter;
     bool m_selectionPopupWorldCenterValid = false;
     bool m_brushOverlayNeedsInitialPlacement = false;
-    bool m_joystickVisible = true;
-    bool m_brushControlVisible = true;
-    bool m_toolStateOverlayVisible = true;
+    CanvasWidgetVisibility m_canvasWidgets;
     std::optional<QPoint> m_savedBrushOverlayPosition;
     std::optional<QPointF>
         m_pendingBrushOverlayPositionNormalized; ///< From restore; applied when content ready
@@ -681,9 +678,7 @@ private:
     bool m_positionPickerActive = false;
     std::function<void(const QPointF&)> m_positionPickerOnPicked;
     std::function<void()> m_positionPickerOnCanceled;
-    bool m_positionPickerPrevBrushVisible = true;
-    bool m_positionPickerPrevToolStateVisible = true;
-    bool m_positionPickerPrevJoystickVisible = true;
+    CanvasWidgetVisibility m_positionPickerPrevWidgets; ///< Restored when the session ends
 
     // Canvas cursor manager (GL brush/eyedropper cursor when over canvas)
     CanvasCursorManager* m_cursorManager = nullptr;

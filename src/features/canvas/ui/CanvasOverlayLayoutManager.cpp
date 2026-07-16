@@ -133,58 +133,34 @@ void CanvasOverlayLayoutManager::scheduleInitialBrushOverlayPlacement()
     });
 }
 
-void CanvasOverlayLayoutManager::setJoystickVisible(bool visible)
+CanvasOverlayLayoutManager::WidgetHandles CanvasOverlayLayoutManager::handlesFor(
+    CanvasWidget widget) const
 {
-    if (m_panel->m_joystickVisible == visible)
-        return;
-    m_panel->m_joystickVisible = visible;
-    if (m_panel->m_stylusJoystick) {
-        m_panel->m_stylusJoystick->setVisible(visible);
-        if (visible && m_panel->m_stylusJoystickOpacity) {
-            m_panel->m_stylusJoystickOpacity->setOpacity(1.0);
-        }
+    switch (widget) {
+    case CanvasWidget::Joystick:
+        return { m_panel->m_stylusJoystick, m_panel->m_stylusJoystickOpacity };
+    case CanvasWidget::BrushControl:
+        return { m_panel->m_brushOverlay, m_panel->m_brushOverlayOpacity };
+    case CanvasWidget::ToolState:
+        return { m_panel->m_toolStateOverlay, m_panel->m_toolStateOverlayOpacity };
     }
+    return {};
 }
 
-void CanvasOverlayLayoutManager::setBrushControlVisible(bool visible)
+void CanvasOverlayLayoutManager::setCanvasWidgetVisible(CanvasWidget widget, bool visible)
 {
-    if (m_panel->m_brushControlVisible == visible)
+    if (m_panel->m_canvasWidgets[widget] == visible)
         return;
-    m_panel->m_brushControlVisible = visible;
-    if (m_panel->m_brushOverlay) {
-        m_panel->m_brushOverlay->setVisible(visible);
-        if (visible && m_panel->m_brushOverlayOpacity) {
-            m_panel->m_brushOverlayOpacity->setOpacity(1.0);
-        }
-    }
-}
+    m_panel->m_canvasWidgets[widget] = visible;
 
-void CanvasOverlayLayoutManager::setToolStateOverlayVisible(bool visible)
-{
-    if (m_panel->m_toolStateOverlayVisible == visible)
+    const WidgetHandles handles = handlesFor(widget);
+    if (!handles.widget)
         return;
-    m_panel->m_toolStateOverlayVisible = visible;
-    if (m_panel->m_toolStateOverlay) {
-        m_panel->m_toolStateOverlay->setVisible(visible);
-        if (visible && m_panel->m_toolStateOverlayOpacity) {
-            m_panel->m_toolStateOverlayOpacity->setOpacity(1.0);
-        }
+    handles.widget->setVisible(visible);
+    // Showing again after a fade-out would otherwise keep the faded opacity.
+    if (visible && handles.opacity) {
+        handles.opacity->setOpacity(1.0);
     }
-}
-
-bool CanvasOverlayLayoutManager::isJoystickVisible() const
-{
-    return m_panel->m_joystickVisible;
-}
-
-bool CanvasOverlayLayoutManager::isBrushControlVisible() const
-{
-    return m_panel->m_brushControlVisible;
-}
-
-bool CanvasOverlayLayoutManager::isToolStateOverlayVisible() const
-{
-    return m_panel->m_toolStateOverlayVisible;
 }
 
 void CanvasOverlayLayoutManager::layoutToolStateOverlay()

@@ -44,7 +44,7 @@ QRect CanvasPanel::effectiveDisplayFrame() const
                             : QRect(0, 0, m_canvasSize.width(), m_canvasSize.height());
 }
 
-QRect CanvasPanel::composerDisplayFrame() const
+QRect CanvasPanel::navigatorDisplayFrame() const
 {
     if (hasFiniteDocumentBounds()) {
         return QRect(0, 0, m_canvasSize.width(), m_canvasSize.height());
@@ -52,7 +52,7 @@ QRect CanvasPanel::composerDisplayFrame() const
 
     QRect bounds;
     if (m_glWidget && m_glWidget->isInitialized()
-        && m_glWidget->computeComposerContentBounds(bounds)) {
+        && m_glWidget->computeNavigatorContentBounds(bounds)) {
         return bounds;
     }
 
@@ -295,7 +295,7 @@ QImage CanvasPanel::getFullCanvasThumbnail(int maxSize) const
     if (!m_glWidget || !m_glWidget->isInitialized()) {
         return QImage();
     }
-    const QRect frame = composerDisplayFrame();
+    const QRect frame = navigatorDisplayFrame();
     QImage full = m_glWidget->grabCanvasImage(frame);
     if (full.isNull())
         return QImage();
@@ -326,7 +326,7 @@ QImage CanvasPanel::getCanvasRegionThumbnail(const QRect& worldRect, const QSize
     return image.scaled(targetSize, Qt::IgnoreAspectRatio, Qt::SmoothTransformation);
 }
 
-QImage CanvasPanel::renderComposerOverviewTile(
+QImage CanvasPanel::renderNavigatorOverviewTile(
     const QRect& worldRect, const QSize& targetSize) const
 {
     if (!m_glWidget || !m_glWidget->isInitialized()) {

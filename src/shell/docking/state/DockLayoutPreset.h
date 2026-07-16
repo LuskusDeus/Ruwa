@@ -4,6 +4,7 @@
 #ifndef RUWA_UI_DOCKING_STATE_DOCKLAYOUTPRESET_H
 #define RUWA_UI_DOCKING_STATE_DOCKLAYOUTPRESET_H
 
+#include "shared/types/CanvasWidgets.h"
 #include "shell/docking/DockTypes.h"
 
 #include <QByteArray>
@@ -90,9 +91,7 @@ struct DockLayoutPreset {
     bool hasToolStateOverlayPos = false;
     bool hasStylusJoystickPos = false;
     bool stylusJoystickAbovePanel = true;
-    bool joystickVisible = true;
-    bool brushControlVisible = true;
-    bool toolStateOverlayVisible = true;
+    ruwa::ui::CanvasWidgetVisibility canvasWidgets;
 
     bool usesLayoutTree() const { return !layoutTree.isEmpty(); }
     bool hasSerializedDockState() const { return !dockState.isEmpty(); }
@@ -140,9 +139,9 @@ struct DockLayoutPreset {
             obj["stylusJoystickPosNormalizedY"] = stylusJoystickPosNormalized.y();
         }
         obj["stylusJoystickAbovePanel"] = stylusJoystickAbovePanel;
-        obj["joystickVisible"] = joystickVisible;
-        obj["brushControlVisible"] = brushControlVisible;
-        obj["toolStateOverlayVisible"] = toolStateOverlayVisible;
+        obj["joystickVisible"] = canvasWidgets[ruwa::ui::CanvasWidget::Joystick];
+        obj["brushControlVisible"] = canvasWidgets[ruwa::ui::CanvasWidget::BrushControl];
+        obj["toolStateOverlayVisible"] = canvasWidgets[ruwa::ui::CanvasWidget::ToolState];
 
         return obj;
     }
@@ -201,9 +200,12 @@ struct DockLayoutPreset {
                 && preset.stylusJoystickPosNormalized.y() <= 1.0;
         }
         preset.stylusJoystickAbovePanel = obj["stylusJoystickAbovePanel"].toBool(true);
-        preset.joystickVisible = obj["joystickVisible"].toBool(true);
-        preset.brushControlVisible = obj["brushControlVisible"].toBool(true);
-        preset.toolStateOverlayVisible = obj["toolStateOverlayVisible"].toBool(true);
+        preset.canvasWidgets[ruwa::ui::CanvasWidget::Joystick]
+            = obj["joystickVisible"].toBool(true);
+        preset.canvasWidgets[ruwa::ui::CanvasWidget::BrushControl]
+            = obj["brushControlVisible"].toBool(true);
+        preset.canvasWidgets[ruwa::ui::CanvasWidget::ToolState]
+            = obj["toolStateOverlayVisible"].toBool(true);
 
         return preset;
     }

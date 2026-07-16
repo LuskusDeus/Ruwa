@@ -97,7 +97,7 @@ bool computeExportLayerBoundsRecursive(
     return hasAny;
 }
 
-bool computeComposerLayerBoundsRecursive(
+bool computeNavigatorLayerBoundsRecursive(
     const QList<std::shared_ptr<ruwa::core::layers::LayerData>>& layers,
     const aether::LayerCompositingBuilder* compositingBuilder, bool parentVisible, int& outMinX,
     int& outMinY, int& outMaxX, int& outMaxY)
@@ -140,7 +140,7 @@ bool computeComposerLayerBoundsRecursive(
         }
 
         if (!layer->children.isEmpty()
-            && computeComposerLayerBoundsRecursive(
+            && computeNavigatorLayerBoundsRecursive(
                 layer->children, compositingBuilder, visible, outMinX, outMinY, outMaxX, outMaxY)) {
             hasAny = true;
         }

@@ -622,9 +622,8 @@ void MainWindow::connectSignals()
                 m_topBar->setPanelsVisibilityState(ws->isToolsPanelVisible(),
                     ws->isBrushesPanelVisible(), ws->isLayersPanelVisible(),
                     ws->isLayerPropertiesPanelVisible(), ws->isLayerEffectsPanelVisible(),
-                    ws->isColorPanelVisible(), ws->isComposerPanelVisible());
-                m_topBar->setCanvasWidgetsVisibilityState(ws->isJoystickVisible(),
-                    ws->isBrushControlVisible(), ws->isToolStateOverlayVisible());
+                    ws->isColorPanelVisible(), ws->isNavigatorPanelVisible());
+                m_topBar->setCanvasWidgetsVisibilityState(ws->canvasWidgetVisibility());
             }
         });
 
@@ -667,25 +666,15 @@ void MainWindow::connectSignals()
             ws->setColorPanelVisible(visible);
     });
     connect(
-        m_topBar, &widgets::TopBar::panelsComposerVisibilityChanged, this, [this](bool visible) {
+        m_topBar, &widgets::TopBar::panelsNavigatorVisibilityChanged, this, [this](bool visible) {
             if (auto* ws = activeWorkspaceTab())
-                ws->setComposerPanelVisible(visible);
+                ws->setNavigatorPanelVisible(visible);
         });
     // Canvas widgets visibility (View → Canvas widgets submenu)
-    connect(m_topBar, &widgets::TopBar::canvasWidgetsJoystickVisibilityChanged, this,
-        [this](bool visible) {
+    connect(m_topBar, &widgets::TopBar::canvasWidgetVisibilityChanged, this,
+        [this](ruwa::ui::CanvasWidget widget, bool visible) {
             if (auto* ws = activeWorkspaceTab())
-                ws->setJoystickVisible(visible);
-        });
-    connect(m_topBar, &widgets::TopBar::canvasWidgetsBrushControlVisibilityChanged, this,
-        [this](bool visible) {
-            if (auto* ws = activeWorkspaceTab())
-                ws->setBrushControlVisible(visible);
-        });
-    connect(m_topBar, &widgets::TopBar::canvasWidgetsToolStateOverlayVisibilityChanged, this,
-        [this](bool visible) {
-            if (auto* ws = activeWorkspaceTab())
-                ws->setToolStateOverlayVisible(visible);
+                ws->setCanvasWidgetVisible(widget, visible);
         });
 
     // First-launch update message (when dismissed, save flag)
@@ -984,9 +973,8 @@ void MainWindow::onActiveTabChanged(ruwa::core::BaseTab* newTab)
             m_topBar->setPanelsVisibilityState(ws->isToolsPanelVisible(),
                 ws->isBrushesPanelVisible(), ws->isLayersPanelVisible(),
                 ws->isLayerPropertiesPanelVisible(), ws->isLayerEffectsPanelVisible(),
-                ws->isColorPanelVisible(), ws->isComposerPanelVisible());
-            m_topBar->setCanvasWidgetsVisibilityState(ws->isJoystickVisible(),
-                ws->isBrushControlVisible(), ws->isToolStateOverlayVisible());
+                ws->isColorPanelVisible(), ws->isNavigatorPanelVisible());
+            m_topBar->setCanvasWidgetsVisibilityState(ws->canvasWidgetVisibility());
         }
     } else {
         setWindowTitle(QStringLiteral("Ruwa"));

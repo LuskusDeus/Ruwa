@@ -603,7 +603,7 @@ void TopBar::onWindowStateChanged(Qt::WindowState state)
 }
 
 void TopBar::setPanelsVisibilityState(bool toolsVisible, bool brushesVisible, bool layersVisible,
-    bool layerPropertiesVisible, bool layerEffectsVisible, bool colorVisible, bool composerVisible)
+    bool layerPropertiesVisible, bool layerEffectsVisible, bool colorVisible, bool navigatorVisible)
 {
     m_panelsToolsVisible = toolsVisible;
     m_panelsBrushesVisible = brushesVisible;
@@ -611,15 +611,12 @@ void TopBar::setPanelsVisibilityState(bool toolsVisible, bool brushesVisible, bo
     m_panelsLayerPropertiesVisible = layerPropertiesVisible;
     m_panelsLayerEffectsVisible = layerEffectsVisible;
     m_panelsColorVisible = colorVisible;
-    m_panelsComposerVisible = composerVisible;
+    m_panelsNavigatorVisible = navigatorVisible;
 }
 
-void TopBar::setCanvasWidgetsVisibilityState(
-    bool joystickVisible, bool brushControlVisible, bool toolStateOverlayVisible)
+void TopBar::setCanvasWidgetsVisibilityState(const CanvasWidgetVisibility& visibility)
 {
-    m_canvasWidgetsJoystickVisible = joystickVisible;
-    m_canvasWidgetsBrushControlVisible = brushControlVisible;
-    m_canvasWidgetsToolStateOverlayVisible = toolStateOverlayVisible;
+    m_canvasWidgets = visibility;
 }
 
 void TopBar::initOverlay(QWidget* centralWidget)
@@ -800,19 +797,32 @@ MenuItem TopBar::buildPanelsMenuItem()
         emit panelsColorVisibilityChanged(checked);
     };
 
-    MenuItem composerItem;
-    composerItem.text = tr("Composer");
-    composerItem.enabled = true;
-    composerItem.isToggle = true;
-    composerItem.checked = m_panelsComposerVisible;
-    composerItem.toggleAction = [this](bool checked) {
-        m_panelsComposerVisible = checked;
-        emit panelsComposerVisibilityChanged(checked);
+    MenuItem navigatorItem;
+    navigatorItem.text = tr("Navigator");
+    navigatorItem.enabled = true;
+    navigatorItem.isToggle = true;
+    navigatorItem.checked = m_panelsNavigatorVisible;
+    navigatorItem.toggleAction = [this](bool checked) {
+        m_panelsNavigatorVisible = checked;
+        emit panelsNavigatorVisibilityChanged(checked);
     };
 
     panelsItem.submenu = { toolsItem, brushesItem, layersItem, layerPropsItem, layerEffectsItem,
-        colorItem, composerItem };
+        colorItem, navigatorItem };
     return panelsItem;
+}
+
+QString TopBar::canvasWidgetLabel(CanvasWidget widget)
+{
+    switch (widget) {
+    case CanvasWidget::Joystick:
+        return tr("Joystick");
+    case CanvasWidget::BrushControl:
+        return tr("Brush Control");
+    case CanvasWidget::ToolState:
+        return tr("Tool bar");
+    }
+    return {};
 }
 
 MenuItem TopBar::buildCanvasWidgetsMenuItem()
@@ -821,37 +831,19 @@ MenuItem TopBar::buildCanvasWidgetsMenuItem()
     canvasWidgetsItem.text = tr("Canvas Widgets");
     canvasWidgetsItem.enabled = true;
 
-    MenuItem joystickItem;
-    joystickItem.text = tr("Joystick");
-    joystickItem.enabled = true;
-    joystickItem.isToggle = true;
-    joystickItem.checked = m_canvasWidgetsJoystickVisible;
-    joystickItem.toggleAction = [this](bool checked) {
-        m_canvasWidgetsJoystickVisible = checked;
-        emit canvasWidgetsJoystickVisibilityChanged(checked);
-    };
+    for (const CanvasWidget widget : kCanvasWidgets) {
+        MenuItem item;
+        item.text = canvasWidgetLabel(widget);
+        item.enabled = true;
+        item.isToggle = true;
+        item.checked = m_canvasWidgets[widget];
+        item.toggleAction = [this, widget](bool checked) {
+            m_canvasWidgets[widget] = checked;
+            emit canvasWidgetVisibilityChanged(widget, checked);
+        };
+        canvasWidgetsItem.submenu.append(item);
+    }
 
-    MenuItem brushControlItem;
-    brushControlItem.text = tr("Brush Control");
-    brushControlItem.enabled = true;
-    brushControlItem.isToggle = true;
-    brushControlItem.checked = m_canvasWidgetsBrushControlVisible;
-    brushControlItem.toggleAction = [this](bool checked) {
-        m_canvasWidgetsBrushControlVisible = checked;
-        emit canvasWidgetsBrushControlVisibilityChanged(checked);
-    };
-
-    MenuItem toolStateItem;
-    toolStateItem.text = tr("Tool bar");
-    toolStateItem.enabled = true;
-    toolStateItem.isToggle = true;
-    toolStateItem.checked = m_canvasWidgetsToolStateOverlayVisible;
-    toolStateItem.toggleAction = [this](bool checked) {
-        m_canvasWidgetsToolStateOverlayVisible = checked;
-        emit canvasWidgetsToolStateOverlayVisibilityChanged(checked);
-    };
-
-    canvasWidgetsItem.submenu = { joystickItem, brushControlItem, toolStateItem };
     return canvasWidgetsItem;
 }
 

@@ -9,6 +9,7 @@
 #include "features/effects/LayerEffectTypes.h"
 #include "features/project/ProjectData.h"
 #include "features/theme/manager/ThemeContext.h"
+#include "shared/types/CanvasWidgets.h"
 #include "shell/docking/DockTypes.h"
 #include "shell/docking/state/DockLayoutPreset.h"
 
@@ -59,8 +60,8 @@ class ToolsPanel;
 class BrushesPanel;
 class ColorPanel;
 class CanvasPanel;
-class ComposerPanel;
-class ComposerWidget;
+class NavigatorPanel;
+class NavigatorWidget;
 } // namespace ruwa::ui::workspace
 
 namespace ruwa::core::layers {
@@ -117,9 +118,7 @@ public:
         QPointF toolStateOverlayPosNormalized = QPointF(-1.0, -1.0);
         QPointF stylusJoystickPosNormalized = QPointF(-1.0, -1.0);
         bool stylusJoystickAbovePanel = true;
-        bool joystickVisible = true;
-        bool brushControlVisible = true;
-        bool toolStateOverlayVisible = true;
+        ruwa::ui::CanvasWidgetVisibility canvasWidgets;
     };
 
     struct ProjectSettings {
@@ -248,7 +247,7 @@ public:
     workspace::BrushesPanel* brushesPanel() const { return m_brushesPanel; }
     workspace::ColorPanel* colorPanel() const { return m_colorPanel; }
     workspace::CanvasPanel* canvasPanel() const { return m_canvasPanel; }
-    workspace::ComposerPanel* composerPanel() const { return m_composerPanel; }
+    workspace::NavigatorPanel* navigatorPanel() const { return m_navigatorPanel; }
     void setWorkspaceColorState(const WorkspaceColorState& state);
 
     // === Dock Management ===
@@ -284,12 +283,10 @@ public:
     void setLayerPropertiesPanelVisible(bool visible);
     void setLayerEffectsPanelVisible(bool visible);
     void setColorPanelVisible(bool visible);
-    void setComposerPanelVisible(bool visible);
+    void setNavigatorPanelVisible(bool visible);
 
     /// Set canvas widgets visibility (called from View → Canvas widgets menu)
-    void setJoystickVisible(bool visible);
-    void setBrushControlVisible(bool visible);
-    void setToolStateOverlayVisible(bool visible);
+    void setCanvasWidgetVisible(ruwa::ui::CanvasWidget widget, bool visible);
 
     /// Current panel visibility (for syncing TopBar menu state)
     bool isToolsPanelVisible() const;
@@ -298,12 +295,11 @@ public:
     bool isLayerPropertiesPanelVisible() const;
     bool isLayerEffectsPanelVisible() const;
     bool isColorPanelVisible() const;
-    bool isComposerPanelVisible() const;
+    bool isNavigatorPanelVisible() const;
 
     /// Current canvas widgets visibility (for syncing TopBar menu state)
-    bool isJoystickVisible() const;
-    bool isBrushControlVisible() const;
-    bool isToolStateOverlayVisible() const;
+    bool isCanvasWidgetVisible(ruwa::ui::CanvasWidget widget) const;
+    ruwa::ui::CanvasWidgetVisibility canvasWidgetVisibility() const;
 
     /// Toggle export mode (enter if not active, exit if active)
     void toggleExportMode();
@@ -329,7 +325,7 @@ signals:
     void saveFinished(bool success);
 
 public:
-    struct ComposerTrackedLayerState {
+    struct NavigatorTrackedLayerState {
         bool visible = true;
         qreal opacity = 1.0;
         int blendMode = 0;
@@ -363,20 +359,18 @@ private:
         bool hasToolStateOverlayPos = false;
         bool hasStylusJoystickPos = false;
         bool stylusJoystickAbovePanel = true;
-        bool joystickVisible = true;
-        bool brushControlVisible = true;
-        bool toolStateOverlayVisible = true;
+        ruwa::ui::CanvasWidgetVisibility canvasWidgets;
     };
 
 private:
-    workspace::ComposerWidget* composerWidget() const;
-    void invalidateComposerTiles(const QList<QPoint>& tilePositions);
-    void invalidateComposerOverview();
-    void rebuildComposerTrackedLayerStates();
-    void onComposerTrackedLayerChanged(const QUuid& id);
-    void onComposerTrackedLayerAboutToRemove(const QUuid& id);
-    void onComposerOpacityEditStarted(const QUuid& id);
-    void onComposerOpacityEditFinished(const QUuid& id, bool changed);
+    workspace::NavigatorWidget* navigatorWidget() const;
+    void invalidateNavigatorTiles(const QList<QPoint>& tilePositions);
+    void invalidateNavigatorOverview();
+    void rebuildNavigatorTrackedLayerStates();
+    void onNavigatorTrackedLayerChanged(const QUuid& id);
+    void onNavigatorTrackedLayerAboutToRemove(const QUuid& id);
+    void onNavigatorOpacityEditStarted(const QUuid& id);
+    void onNavigatorOpacityEditFinished(const QUuid& id, bool changed);
     void setupLoadingShell();
     void showLoadingShell(const QString& statusText);
     void hideLoadingShell(std::function<void()> onFinished = {});
@@ -465,10 +459,10 @@ private:
     std::vector<PendingTileLayerLoad> m_pendingTileLoads;
     int m_pendingTileLoadIndex = 0;
     int m_pendingTileIndex = 0;
-    QHash<QUuid, ComposerTrackedLayerState> m_composerTrackedLayerStates;
-    QSet<QPoint> m_pendingComposerRemovedTiles;
-    QSet<QUuid> m_pendingComposerOpacityCommitIds;
-    bool m_pendingComposerFullRefresh = false;
+    QHash<QUuid, NavigatorTrackedLayerState> m_navigatorTrackedLayerStates;
+    QSet<QPoint> m_pendingNavigatorRemovedTiles;
+    QSet<QUuid> m_pendingNavigatorOpacityCommitIds;
+    bool m_pendingNavigatorFullRefresh = false;
 
     // Docking system
     docking::DockContainerWidget* m_dockContainer = nullptr;
@@ -483,7 +477,7 @@ private:
     workspace::ToolsPanel* m_toolsPanel = nullptr;
     workspace::BrushesPanel* m_brushesPanel = nullptr;
     workspace::ColorPanel* m_colorPanel = nullptr;
-    workspace::ComposerPanel* m_composerPanel = nullptr;
+    workspace::NavigatorPanel* m_navigatorPanel = nullptr;
 
     // Toolbar
     QWidget* m_toolbar = nullptr;
@@ -506,12 +500,12 @@ private:
     std::optional<docking::PanelPlacement> m_savedLayerPropertiesPlacement;
     std::optional<docking::PanelPlacement> m_savedLayerEffectsPlacement;
     std::optional<docking::PanelPlacement> m_savedColorPlacement;
-    std::optional<docking::PanelPlacement> m_savedComposerPlacement;
+    std::optional<docking::PanelPlacement> m_savedNavigatorPlacement;
 
     // Per-workspace autosave timer
     QTimer* m_autoSaveTimer = nullptr;
     QTimer* m_dockLayoutSaveTimer = nullptr;
-    QTimer* m_composerThumbnailRefreshTimer
+    QTimer* m_navigatorThumbnailRefreshTimer
         = nullptr; ///< Deferred refresh when user stops interacting
     QFutureWatcher<void>* m_workspaceStateFlushWatcher = nullptr;
     QFutureWatcher<ruwa::ui::workspace::detail::ImportedLayerBatch>* m_startupImageImportWatcher
@@ -538,9 +532,7 @@ private:
     bool m_workspaceColorStateSeededFromCanvasDefaults = false;
     bool m_syncingWorkspaceColorState = false;
     bool m_serializedStylusJoystickAbovePanel = true;
-    bool m_serializedJoystickVisible = true;
-    bool m_serializedBrushControlVisible = true;
-    bool m_serializedToolStateOverlayVisible = true;
+    ruwa::ui::CanvasWidgetVisibility m_serializedCanvasWidgets;
     bool m_hasSerializedWorkspaceState = false;
     bool m_restoringWorkspaceUiState = false;
     void startAutoSaveTimer();

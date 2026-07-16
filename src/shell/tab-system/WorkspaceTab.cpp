@@ -27,8 +27,8 @@
 #include "features/color/RecentColorsPersistence.h"
 #include "features/canvas/ui/CanvasPanel.h"
 #include "features/canvas/ui/CanvasPanelHelpers.h"
-#include "features/canvas/ui/ComposerPanel.h"
-#include "features/canvas/ui/ComposerWidget.h"
+#include "features/canvas/ui/NavigatorPanel.h"
+#include "features/canvas/ui/NavigatorWidget.h"
 #include "shared/undo/UndoManager.h"
 #include "shared/tiles/TileTypes.h"
 #include "shared/tiles/TileFormat.h"
@@ -115,20 +115,33 @@ constexpr auto kWorkspaceBrushOverlayPosKey = "Workspace/brushControlOverlayPos"
 constexpr auto kWorkspaceToolStateOverlayPosKey = "Workspace/toolStateOverlayPos";
 constexpr auto kWorkspaceStylusJoystickPosKey = "Workspace/stylusJoystickPos";
 constexpr auto kWorkspaceStylusJoystickAbovePanelKey = "Workspace/stylusJoystickAbovePanel";
-constexpr auto kWorkspaceJoystickVisibleKey = "Workspace/canvasWidgetsJoystickVisible";
-constexpr auto kWorkspaceBrushControlVisibleKey = "Workspace/canvasWidgetsBrushControlVisible";
-constexpr auto kWorkspaceToolStateOverlayVisibleKey
-    = "Workspace/canvasWidgetsToolStateOverlayVisible";
+/// QSettings key holding one canvas widget's visibility. The strings are part
+/// of the on-disk settings format — keep them as they are.
+const char* canvasWidgetVisibleKey(ruwa::ui::CanvasWidget widget)
+{
+    switch (widget) {
+    case ruwa::ui::CanvasWidget::Joystick:
+        return "Workspace/canvasWidgetsJoystickVisible";
+    case ruwa::ui::CanvasWidget::BrushControl:
+        return "Workspace/canvasWidgetsBrushControlVisible";
+    case ruwa::ui::CanvasWidget::ToolState:
+        return "Workspace/canvasWidgetsToolStateOverlayVisible";
+    }
+    return "";
+}
 constexpr auto kWorkspaceForegroundColorKey = "Workspace/foregroundColorRgba";
 constexpr auto kWorkspaceBackgroundColorKey = "Workspace/backgroundColorRgba";
 constexpr auto kWorkspaceEditingForegroundColorKey = "Workspace/editingForegroundColor";
+// Persistent panel keys are part of the serialized dock-state format and must remain stable
+// across user-facing renames. "composer" is the compatibility ID of the Navigator panel.
+constexpr auto kNavigatorPanelPersistentKey = "composer";
 constexpr auto kUiDragActiveProperty = "ruwa_ui_drag_active";
 constexpr int kTileRestoreBatchBudgetMs = 6;
 constexpr int kTileRestoreBatchMaxTiles = 96;
 
-WorkspaceTab::ComposerTrackedLayerState captureComposerTrackedLayerState(const LayerData* layer)
+WorkspaceTab::NavigatorTrackedLayerState captureNavigatorTrackedLayerState(const LayerData* layer)
 {
-    WorkspaceTab::ComposerTrackedLayerState state;
+    WorkspaceTab::NavigatorTrackedLayerState state;
     if (!layer) {
         return state;
     }
@@ -149,8 +162,8 @@ WorkspaceTab::ComposerTrackedLayerState captureComposerTrackedLayerState(const L
     return state;
 }
 
-bool affectsComposerOverview(const WorkspaceTab::ComposerTrackedLayerState& lhs,
-    const WorkspaceTab::ComposerTrackedLayerState& rhs)
+bool affectsNavigatorOverview(const WorkspaceTab::NavigatorTrackedLayerState& lhs,
+    const WorkspaceTab::NavigatorTrackedLayerState& rhs)
 {
     return lhs.visible != rhs.visible || !qFuzzyCompare(lhs.opacity, rhs.opacity)
         || lhs.blendMode != rhs.blendMode || lhs.groupCompositingMode != rhs.groupCompositingMode
@@ -161,7 +174,7 @@ bool affectsComposerOverview(const WorkspaceTab::ComposerTrackedLayerState& lhs,
         || lhs.hasRetainedVisualContent != rhs.hasRetainedVisualContent;
 }
 
-bool effectResultAffectsComposer(
+bool effectResultAffectsNavigator(
     const QList<LayerEffectState>& lhs, const QList<LayerEffectState>& rhs)
 {
     if (lhs.size() != rhs.size()) {
@@ -180,8 +193,8 @@ bool effectResultAffectsComposer(
     return false;
 }
 
-bool affectsComposerOverviewExceptOpacity(const WorkspaceTab::ComposerTrackedLayerState& lhs,
-    const WorkspaceTab::ComposerTrackedLayerState& rhs)
+bool affectsNavigatorOverviewExceptOpacity(const WorkspaceTab::NavigatorTrackedLayerState& lhs,
+    const WorkspaceTab::NavigatorTrackedLayerState& rhs)
 {
     return lhs.visible != rhs.visible || lhs.blendMode != rhs.blendMode
         || lhs.groupCompositingMode != rhs.groupCompositingMode
@@ -269,7 +282,7 @@ QList<QPoint> effectExpandedLayerTilePositions(
     return expandedPositions.values();
 }
 
-QList<QPoint> composerEffectChangedTilePositions(const LayerData* layer,
+QList<QPoint> navigatorEffectChangedTilePositions(const LayerData* layer,
     const QList<LayerEffectState>& beforeEffects, const QList<LayerEffectState>& afterEffects)
 {
     QSet<QPoint> positions;
@@ -493,9 +506,7 @@ ruwa::core::serialization::ProjectData buildProjectDataFromSnapshot(
     data.toolStateOverlayPosNormalized = snapshot.toolStateOverlayPosNormalized;
     data.stylusJoystickPosNormalized = snapshot.stylusJoystickPosNormalized;
     data.stylusJoystickAbovePanel = snapshot.stylusJoystickAbovePanel;
-    data.joystickVisible = snapshot.joystickVisible;
-    data.brushControlVisible = snapshot.brushControlVisible;
-    data.toolStateOverlayVisible = snapshot.toolStateOverlayVisible;
+    data.canvasWidgets = snapshot.canvasWidgets;
     data.selectedLayerId = snapshot.selectedLayerId;
 
     data.rootLayers.reserve(snapshot.rootLayers.size());
@@ -598,34 +609,34 @@ workspace::ToolsPanel::Tool toToolsPanelTool(workspace::CanvasPanel::ToolMode mo
 
 } // namespace
 
-workspace::ComposerWidget* WorkspaceTab::composerWidget() const
+workspace::NavigatorWidget* WorkspaceTab::navigatorWidget() const
 {
-    if (!m_composerPanel || !m_composerPanel->contentWidget()) {
+    if (!m_navigatorPanel || !m_navigatorPanel->contentWidget()) {
         return nullptr;
     }
-    return qobject_cast<workspace::ComposerWidget*>(m_composerPanel->contentWidget());
+    return qobject_cast<workspace::NavigatorWidget*>(m_navigatorPanel->contentWidget());
 }
 
-void WorkspaceTab::invalidateComposerTiles(const QList<QPoint>& tilePositions)
+void WorkspaceTab::invalidateNavigatorTiles(const QList<QPoint>& tilePositions)
 {
     if (tilePositions.isEmpty()) {
         return;
     }
-    if (auto* widget = composerWidget()) {
+    if (auto* widget = navigatorWidget()) {
         widget->invalidateOverviewTiles(tilePositions);
     }
 }
 
-void WorkspaceTab::invalidateComposerOverview()
+void WorkspaceTab::invalidateNavigatorOverview()
 {
-    if (auto* widget = composerWidget()) {
+    if (auto* widget = navigatorWidget()) {
         widget->invalidateAllOverview();
     }
 }
 
-void WorkspaceTab::rebuildComposerTrackedLayerStates()
+void WorkspaceTab::rebuildNavigatorTrackedLayerStates()
 {
-    m_composerTrackedLayerStates.clear();
+    m_navigatorTrackedLayerStates.clear();
     if (!m_layersPanel || !m_layersPanel->layerModel()) {
         return;
     }
@@ -634,11 +645,11 @@ void WorkspaceTab::rebuildComposerTrackedLayerStates()
         if (!layer) {
             return;
         }
-        m_composerTrackedLayerStates.insert(layer->id, captureComposerTrackedLayerState(layer));
+        m_navigatorTrackedLayerStates.insert(layer->id, captureNavigatorTrackedLayerState(layer));
     });
 }
 
-void WorkspaceTab::onComposerTrackedLayerChanged(const LayerId& id)
+void WorkspaceTab::onNavigatorTrackedLayerChanged(const LayerId& id)
 {
     if (!m_layersPanel || !m_layersPanel->layerModel()) {
         return;
@@ -646,58 +657,58 @@ void WorkspaceTab::onComposerTrackedLayerChanged(const LayerId& id)
 
     auto* layer = m_layersPanel->layerModel()->layerById(id);
     if (!layer) {
-        m_composerTrackedLayerStates.remove(id);
+        m_navigatorTrackedLayerStates.remove(id);
         return;
     }
 
-    const ComposerTrackedLayerState previous
-        = m_composerTrackedLayerStates.value(id, captureComposerTrackedLayerState(layer));
-    const ComposerTrackedLayerState current = captureComposerTrackedLayerState(layer);
-    m_composerTrackedLayerStates.insert(id, current);
+    const NavigatorTrackedLayerState previous
+        = m_navigatorTrackedLayerStates.value(id, captureNavigatorTrackedLayerState(layer));
+    const NavigatorTrackedLayerState current = captureNavigatorTrackedLayerState(layer);
+    m_navigatorTrackedLayerStates.insert(id, current);
 
     const bool effectChainChanged = previous.effectChainRevision != current.effectChainRevision;
-    if (effectChainChanged && effectResultAffectsComposer(previous.effects, current.effects)) {
+    if (effectChainChanged && effectResultAffectsNavigator(previous.effects, current.effects)) {
         if (current.isBackground || previous.isBackground) {
-            invalidateComposerOverview();
+            invalidateNavigatorOverview();
             return;
         }
 
         const QList<QPoint> tilePositions
-            = composerEffectChangedTilePositions(layer, previous.effects, current.effects);
+            = navigatorEffectChangedTilePositions(layer, previous.effects, current.effects);
         if (!tilePositions.isEmpty()) {
-            invalidateComposerTiles(tilePositions);
+            invalidateNavigatorTiles(tilePositions);
             return;
         }
 
-        invalidateComposerOverview();
+        invalidateNavigatorOverview();
         return;
     }
 
-    if (!affectsComposerOverview(previous, current)) {
+    if (!affectsNavigatorOverview(previous, current)) {
         return;
     }
 
-    if (m_pendingComposerOpacityCommitIds.contains(id)
-        && !affectsComposerOverviewExceptOpacity(previous, current)) {
+    if (m_pendingNavigatorOpacityCommitIds.contains(id)
+        && !affectsNavigatorOverviewExceptOpacity(previous, current)) {
         return;
     }
 
     if (current.isBackground || previous.isBackground) {
-        invalidateComposerOverview();
+        invalidateNavigatorOverview();
         return;
     }
 
     const QList<QPoint> tilePositions
         = effectExpandedLayerTilePositions(layer, current.effects, true);
     if (!tilePositions.isEmpty()) {
-        invalidateComposerTiles(tilePositions);
+        invalidateNavigatorTiles(tilePositions);
         return;
     }
 
-    invalidateComposerOverview();
+    invalidateNavigatorOverview();
 }
 
-void WorkspaceTab::onComposerTrackedLayerAboutToRemove(const LayerId& id)
+void WorkspaceTab::onNavigatorTrackedLayerAboutToRemove(const LayerId& id)
 {
     if (!m_layersPanel || !m_layersPanel->layerModel()) {
         return;
@@ -707,27 +718,27 @@ void WorkspaceTab::onComposerTrackedLayerAboutToRemove(const LayerId& id)
         const QList<QPoint> tilePositions
             = effectExpandedLayerTilePositions(layer, layer->effects, false);
         for (const QPoint& tilePos : tilePositions) {
-            m_pendingComposerRemovedTiles.insert(tilePos);
+            m_pendingNavigatorRemovedTiles.insert(tilePos);
         }
         if (tilePositions.isEmpty()
             && (layer->hasRetainedVisualContent()
                 || (!layer->isGroup() && !layer->isPixelLayer()))) {
-            m_pendingComposerFullRefresh = true;
+            m_pendingNavigatorFullRefresh = true;
         }
-        m_composerTrackedLayerStates.remove(id);
+        m_navigatorTrackedLayerStates.remove(id);
     }
 }
 
-void WorkspaceTab::onComposerOpacityEditStarted(const QUuid& id)
+void WorkspaceTab::onNavigatorOpacityEditStarted(const QUuid& id)
 {
     if (!id.isNull()) {
-        m_pendingComposerOpacityCommitIds.insert(id);
+        m_pendingNavigatorOpacityCommitIds.insert(id);
     }
 }
 
-void WorkspaceTab::onComposerOpacityEditFinished(const QUuid& id, bool changed)
+void WorkspaceTab::onNavigatorOpacityEditFinished(const QUuid& id, bool changed)
 {
-    m_pendingComposerOpacityCommitIds.remove(id);
+    m_pendingNavigatorOpacityCommitIds.remove(id);
     if (!changed || id.isNull() || !m_layersPanel || !m_layersPanel->layerModel()) {
         return;
     }
@@ -738,18 +749,18 @@ void WorkspaceTab::onComposerOpacityEditFinished(const QUuid& id, bool changed)
     }
 
     if (layer->isBackground()) {
-        invalidateComposerOverview();
+        invalidateNavigatorOverview();
         return;
     }
 
     const QList<QPoint> tilePositions
         = effectExpandedLayerTilePositions(layer, layer->effects, true);
     if (!tilePositions.isEmpty()) {
-        invalidateComposerTiles(tilePositions);
+        invalidateNavigatorTiles(tilePositions);
         return;
     }
 
-    invalidateComposerOverview();
+    invalidateNavigatorOverview();
 }
 
 WorkspaceTab::WorkspaceTab(const ProjectSettings& settings, QWidget* parent)
@@ -1185,9 +1196,10 @@ void WorkspaceTab::onTransitionFinishedImpl()
         }
     }
 
-    // Refresh composer thumbnail as soon as GL content is ready
-    if (glContentCreated && m_composerPanel && m_composerPanel->contentWidget()) {
-        if (auto* w = qobject_cast<workspace::ComposerWidget*>(m_composerPanel->contentWidget())) {
+    // Refresh navigator thumbnail as soon as GL content is ready
+    if (glContentCreated && m_navigatorPanel && m_navigatorPanel->contentWidget()) {
+        if (auto* w
+            = qobject_cast<workspace::NavigatorWidget*>(m_navigatorPanel->contentWidget())) {
             w->refreshThumbnail();
         }
     }
@@ -1776,8 +1788,9 @@ void WorkspaceTab::tryFinishAsyncStartup()
         m_layersPanel->setThumbnailLoadingMode(false);
     }
 
-    if (m_composerPanel && m_composerPanel->contentWidget()) {
-        if (auto* w = qobject_cast<workspace::ComposerWidget*>(m_composerPanel->contentWidget())) {
+    if (m_navigatorPanel && m_navigatorPanel->contentWidget()) {
+        if (auto* w
+            = qobject_cast<workspace::NavigatorWidget*>(m_navigatorPanel->contentWidget())) {
             w->refreshThumbnail();
         }
     }
@@ -1892,7 +1905,7 @@ void WorkspaceTab::setupPanels()
         });
 
     m_colorPanel = new workspace::ColorPanel();
-    m_composerPanel = new workspace::ComposerPanel();
+    m_navigatorPanel = new workspace::NavigatorPanel();
 
     m_canvasPanel->setPersistentKey(QStringLiteral("canvas"));
     m_toolsPanel->setPersistentKey(QStringLiteral("tools"));
@@ -1901,9 +1914,9 @@ void WorkspaceTab::setupPanels()
     m_layerPropertiesPanel->setPersistentKey(QStringLiteral("layer-properties"));
     m_layerEffectsPanel->setPersistentKey(QStringLiteral("layer-effects"));
     m_colorPanel->setPersistentKey(QStringLiteral("color"));
-    m_composerPanel->setPersistentKey(QStringLiteral("composer"));
+    m_navigatorPanel->setPersistentKey(QString::fromLatin1(kNavigatorPanelPersistentKey));
 
-    m_composerPanel->setCanvasPanel(m_canvasPanel);
+    m_navigatorPanel->setCanvasPanel(m_canvasPanel);
     m_brushesPanel->setCanvasPanel(m_canvasPanel);
     {
         m_toolsPanel->setCurrentTool(toToolsPanelTool(m_canvasPanel->toolMode()));
@@ -1927,7 +1940,7 @@ void WorkspaceTab::setupPanels()
     m_colorPanel->setUserHorizontalDockedWidth(kDefaultRightPanelWidth);
     // Color panel: compact height (240px) so Layers gets most of the right column
     m_colorPanel->setUserVerticalDockedHeight(kDefaultRightPanelWidth * 3 / 4);
-    m_composerPanel->setUserHorizontalDockedWidth(220);
+    m_navigatorPanel->setUserHorizontalDockedWidth(220);
 
     // Register with dock manager (manager takes ownership)
     m_dockManager->registerPanel(m_canvasPanel);
@@ -1937,7 +1950,7 @@ void WorkspaceTab::setupPanels()
     m_dockManager->registerPanel(m_layerPropertiesPanel);
     m_dockManager->registerPanel(m_layerEffectsPanel);
     m_dockManager->registerPanel(m_colorPanel);
-    m_dockManager->registerPanel(m_composerPanel);
+    m_dockManager->registerPanel(m_navigatorPanel);
 }
 
 void WorkspaceTab::setupDefaultLayout()
@@ -1953,7 +1966,7 @@ void WorkspaceTab::setupDefaultLayout()
     // │      │                     │        │
     // │      │                     │        │
     // └──────┴─────────────────────┴────────┘
-    // Layer Properties and Composer are hidden by default.
+    // Layer Properties and Navigator are hidden by default.
 
     // Add canvas first (center)
     m_dockManager->addPanel(m_canvasPanel, DockPosition::Center);
@@ -1970,10 +1983,10 @@ void WorkspaceTab::setupDefaultLayout()
     // Add color above layers (3:4 aspect ratio set in setupPanels)
     m_dockManager->addPanelRelativeTo(m_colorPanel, m_layersPanel, DockPosition::Top);
 
-    // Composer, Layer Properties and Layer Effects are not added to layout by default.
+    // Navigator, Layer Properties and Layer Effects are not added to layout by default.
     // Mark as hidden so visibility getters return false.
     // User can show them via View → Panels.
-    m_dockManager->closePanel(m_composerPanel);
+    m_dockManager->closePanel(m_navigatorPanel);
     m_dockManager->closePanel(m_layerPropertiesPanel);
     m_dockManager->closePanel(m_layerEffectsPanel);
 }
@@ -2049,18 +2062,12 @@ void WorkspaceTab::restoreUserDockLayout()
             applyPresetCanvasWidgetState(defaultPreset);
         } else {
             // Restore overlay state from settings
-            const bool joystickVisible = useSerializedWorkspaceState
-                ? m_serializedJoystickVisible
-                : settings.value(kWorkspaceJoystickVisibleKey, true).toBool();
-            const bool brushControlVisible = useSerializedWorkspaceState
-                ? m_serializedBrushControlVisible
-                : settings.value(kWorkspaceBrushControlVisibleKey, true).toBool();
-            const bool toolStateOverlayVisible = useSerializedWorkspaceState
-                ? m_serializedToolStateOverlayVisible
-                : settings.value(kWorkspaceToolStateOverlayVisibleKey, true).toBool();
-            m_canvasPanel->setJoystickVisible(joystickVisible);
-            m_canvasPanel->setBrushControlVisible(brushControlVisible);
-            m_canvasPanel->setToolStateOverlayVisible(toolStateOverlayVisible);
+            for (const ruwa::ui::CanvasWidget widget : ruwa::ui::kCanvasWidgets) {
+                const bool visible = useSerializedWorkspaceState
+                    ? m_serializedCanvasWidgets[widget]
+                    : settings.value(canvasWidgetVisibleKey(widget), true).toBool();
+                m_canvasPanel->setCanvasWidgetVisible(widget, visible);
+            }
 
             const QPointF brushNorm = useSerializedWorkspaceState
                 ? m_serializedBrushOverlayPosNormalized
@@ -2224,9 +2231,7 @@ void WorkspaceTab::saveDockLayoutNow()
         m_serializedStylusJoystickPosNormalized = snapshot.stylusJoystickPosNormalized;
     }
     m_serializedStylusJoystickAbovePanel = snapshot.stylusJoystickAbovePanel;
-    m_serializedJoystickVisible = snapshot.joystickVisible;
-    m_serializedBrushControlVisible = snapshot.brushControlVisible;
-    m_serializedToolStateOverlayVisible = snapshot.toolStateOverlayVisible;
+    m_serializedCanvasWidgets = snapshot.canvasWidgets;
     m_hasSerializedWorkspaceState = !m_serializedDockLayoutState.isEmpty()
         || (m_serializedBrushOverlayPosNormalized.x() >= 0.0
             && m_serializedBrushOverlayPosNormalized.y() >= 0.0)
@@ -2234,8 +2239,7 @@ void WorkspaceTab::saveDockLayoutNow()
             && m_serializedToolStateOverlayPosNormalized.y() >= 0.0)
         || (m_serializedStylusJoystickPosNormalized.x() >= 0.0
             && m_serializedStylusJoystickPosNormalized.y() >= 0.0)
-        || !m_serializedStylusJoystickAbovePanel || !m_serializedJoystickVisible
-        || !m_serializedBrushControlVisible || !m_serializedToolStateOverlayVisible;
+        || !m_serializedStylusJoystickAbovePanel || !m_serializedCanvasWidgets.allVisible();
     m_workspaceStateDirty = false;
     m_pendingWorkspaceStateSnapshot = snapshot;
     m_workspaceStateSyncPending = true;
@@ -2366,29 +2370,30 @@ void WorkspaceTab::connectPanelSignals()
         &workspace::LayersPanel::setFillProcessingLayer);
     connect(m_canvasPanel, &workspace::CanvasPanel::canvasContentChanged, this,
         [this]() { markProjectModified(); });
-    // Refresh composer thumbnail only when user has stopped interacting (not during
+    // Refresh navigator thumbnail only when user has stopped interacting (not during
     // drawing/transform)
-    m_composerThumbnailRefreshTimer = new QTimer(this);
-    m_composerThumbnailRefreshTimer->setSingleShot(true);
-    m_composerThumbnailRefreshTimer->setInterval(800);
-    connect(m_composerThumbnailRefreshTimer, &QTimer::timeout, this, [this]() {
+    m_navigatorThumbnailRefreshTimer = new QTimer(this);
+    m_navigatorThumbnailRefreshTimer->setSingleShot(true);
+    m_navigatorThumbnailRefreshTimer->setInterval(800);
+    connect(m_navigatorThumbnailRefreshTimer, &QTimer::timeout, this, [this]() {
         if (m_canvasPanel && !m_canvasPanel->isDrawingActive()
-            && !m_canvasPanel->isTransformActive() && m_composerPanel
-            && m_composerPanel->contentWidget() && m_composerPanel->isVisible()) {
+            && !m_canvasPanel->isTransformActive() && m_navigatorPanel
+            && m_navigatorPanel->contentWidget() && m_navigatorPanel->isVisible()) {
             if (auto* w
-                = qobject_cast<workspace::ComposerWidget*>(m_composerPanel->contentWidget())) {
+                = qobject_cast<workspace::NavigatorWidget*>(m_navigatorPanel->contentWidget())) {
                 w->refreshThumbnail();
             }
         }
     });
     connect(m_canvasPanel, &workspace::CanvasPanel::canvasContentChanged, this, [this]() {
-        if (m_composerPanel && m_composerPanel->contentWidget() && m_composerPanel->isVisible()) {
-            m_composerThumbnailRefreshTimer->start();
+        if (m_navigatorPanel && m_navigatorPanel->contentWidget()
+            && m_navigatorPanel->isVisible()) {
+            m_navigatorThumbnailRefreshTimer->start();
         }
     });
     connect(m_canvasPanel, &workspace::CanvasPanel::zoomChanged, this, [this]() {
-        if (m_composerPanel && m_composerPanel->contentWidget()) {
-            m_composerPanel->contentWidget()->update();
+        if (m_navigatorPanel && m_navigatorPanel->contentWidget()) {
+            m_navigatorPanel->contentWidget()->update();
         }
     });
     connect(m_canvasPanel, &workspace::CanvasPanel::brushOverlayPositionChanged, this,
@@ -2412,54 +2417,54 @@ void WorkspaceTab::connectPanelSignals()
         [this]() { scheduleDockLayoutSave(); });
     connect(m_layersPanel->layerModel(), &ruwa::core::layers::LayerModel::layersChanged, this,
         [this]() {
-            if (!m_pendingComposerRemovedTiles.isEmpty()) {
-                invalidateComposerTiles(m_pendingComposerRemovedTiles.values());
-                m_pendingComposerRemovedTiles.clear();
+            if (!m_pendingNavigatorRemovedTiles.isEmpty()) {
+                invalidateNavigatorTiles(m_pendingNavigatorRemovedTiles.values());
+                m_pendingNavigatorRemovedTiles.clear();
             }
-            if (m_pendingComposerFullRefresh) {
-                invalidateComposerOverview();
-                m_pendingComposerFullRefresh = false;
+            if (m_pendingNavigatorFullRefresh) {
+                invalidateNavigatorOverview();
+                m_pendingNavigatorFullRefresh = false;
             }
-            rebuildComposerTrackedLayerStates();
+            rebuildNavigatorTrackedLayerStates();
             markProjectModified();
         });
     connect(m_layersPanel->layerModel(), &ruwa::core::layers::LayerModel::layerDataChanged, this,
         [this](const LayerId& id) {
-            onComposerTrackedLayerChanged(id);
+            onNavigatorTrackedLayerChanged(id);
             markProjectModified();
         });
     connect(m_layersPanel->layerModel(), &ruwa::core::layers::LayerModel::layerEffectsChanged, this,
         [this](const LayerId& id, quint64 revision) {
-            const auto it = m_composerTrackedLayerStates.constFind(id);
-            if (it == m_composerTrackedLayerStates.constEnd()
+            const auto it = m_navigatorTrackedLayerStates.constFind(id);
+            if (it == m_navigatorTrackedLayerStates.constEnd()
                 || it.value().effectChainRevision != revision) {
-                onComposerTrackedLayerChanged(id);
+                onNavigatorTrackedLayerChanged(id);
                 markProjectModified();
             }
         });
     connect(m_layersPanel->layerModel(), &ruwa::core::layers::LayerModel::layerAboutToBeRemoved,
-        this, &WorkspaceTab::onComposerTrackedLayerAboutToRemove);
+        this, &WorkspaceTab::onNavigatorTrackedLayerAboutToRemove);
     connect(m_layersPanel->layerModel(), &ruwa::core::layers::LayerModel::layerRemoved, this,
         [this](const LayerId&) {
-            if (m_pendingComposerRemovedTiles.isEmpty()) {
-                if (!m_pendingComposerFullRefresh) {
+            if (m_pendingNavigatorRemovedTiles.isEmpty()) {
+                if (!m_pendingNavigatorFullRefresh) {
                     return;
                 }
             }
-            if (!m_pendingComposerRemovedTiles.isEmpty()) {
-                invalidateComposerTiles(m_pendingComposerRemovedTiles.values());
-                m_pendingComposerRemovedTiles.clear();
+            if (!m_pendingNavigatorRemovedTiles.isEmpty()) {
+                invalidateNavigatorTiles(m_pendingNavigatorRemovedTiles.values());
+                m_pendingNavigatorRemovedTiles.clear();
             }
-            if (m_pendingComposerFullRefresh) {
-                invalidateComposerOverview();
-                m_pendingComposerFullRefresh = false;
+            if (m_pendingNavigatorFullRefresh) {
+                invalidateNavigatorOverview();
+                m_pendingNavigatorFullRefresh = false;
             }
         });
     connect(m_layersPanel, &workspace::LayersPanel::layerOpacityEditStarted, this,
-        &WorkspaceTab::onComposerOpacityEditStarted);
+        &WorkspaceTab::onNavigatorOpacityEditStarted);
     connect(m_layersPanel, &workspace::LayersPanel::layerOpacityEditFinished, this,
-        &WorkspaceTab::onComposerOpacityEditFinished);
-    rebuildComposerTrackedLayerStates();
+        &WorkspaceTab::onNavigatorOpacityEditFinished);
+    rebuildNavigatorTrackedLayerStates();
     connect(m_dockManager, &docking::DockManager::dragStarted, this,
         [](docking::DockPanel*) { setUiDragActive(true); });
     connect(m_dockManager, &docking::DockManager::dragFinished, this,
@@ -2847,9 +2852,7 @@ ruwa::core::serialization::ProjectData WorkspaceTab::toProjectData() const
         data.toolStateOverlayPosNormalized = m_canvasPanel->toolStateOverlayPositionNormalized();
         data.stylusJoystickPosNormalized = m_canvasPanel->stylusJoystickPositionNormalized();
         data.stylusJoystickAbovePanel = m_canvasPanel->stylusJoystickAbovePanel();
-        data.joystickVisible = m_canvasPanel->isJoystickVisible();
-        data.brushControlVisible = m_canvasPanel->isBrushControlVisible();
-        data.toolStateOverlayVisible = m_canvasPanel->isToolStateOverlayVisible();
+        data.canvasWidgets = m_canvasPanel->canvasWidgetVisibility();
     }
 
     data.foregroundColorRgba = m_workspaceColorState.foreground.rgba();
@@ -2891,9 +2894,7 @@ bool WorkspaceTab::fromProjectDataStructure(const ruwa::core::serialization::Pro
     m_serializedToolStateOverlayPosNormalized = data.toolStateOverlayPosNormalized;
     m_serializedStylusJoystickPosNormalized = data.stylusJoystickPosNormalized;
     m_serializedStylusJoystickAbovePanel = data.stylusJoystickAbovePanel;
-    m_serializedJoystickVisible = data.joystickVisible;
-    m_serializedBrushControlVisible = data.brushControlVisible;
-    m_serializedToolStateOverlayVisible = data.toolStateOverlayVisible;
+    m_serializedCanvasWidgets = data.canvasWidgets;
     m_workspaceColorState.foreground = QColor::fromRgba(data.foregroundColorRgba);
     m_workspaceColorState.background = QColor::fromRgba(data.backgroundColorRgba);
     m_workspaceColorState.editingForeground = data.editingForegroundColor;
@@ -2906,8 +2907,7 @@ bool WorkspaceTab::fromProjectDataStructure(const ruwa::core::serialization::Pro
             && m_serializedToolStateOverlayPosNormalized.y() >= 0.0)
         || (m_serializedStylusJoystickPosNormalized.x() >= 0.0
             && m_serializedStylusJoystickPosNormalized.y() >= 0.0)
-        || !m_serializedStylusJoystickAbovePanel || !m_serializedJoystickVisible
-        || !m_serializedBrushControlVisible || !m_serializedToolStateOverlayVisible;
+        || !m_serializedStylusJoystickAbovePanel || !m_serializedCanvasWidgets.allVisible();
     if (isInitialized()) {
         restoreUserDockLayout();
     }
@@ -3285,9 +3285,7 @@ WorkspaceTab::ProjectSaveSnapshot WorkspaceTab::captureProjectSaveSnapshot() con
             = m_canvasPanel->toolStateOverlayPositionNormalized();
         snapshot.stylusJoystickPosNormalized = m_canvasPanel->stylusJoystickPositionNormalized();
         snapshot.stylusJoystickAbovePanel = m_canvasPanel->stylusJoystickAbovePanel();
-        snapshot.joystickVisible = m_canvasPanel->isJoystickVisible();
-        snapshot.brushControlVisible = m_canvasPanel->isBrushControlVisible();
-        snapshot.toolStateOverlayVisible = m_canvasPanel->isToolStateOverlayVisible();
+        snapshot.canvasWidgets = m_canvasPanel->canvasWidgetVisibility();
     }
 
     snapshot.foregroundColorRgba = m_workspaceColorState.foreground.rgba();
@@ -3337,9 +3335,7 @@ WorkspaceTab::WorkspaceStateSnapshot WorkspaceTab::captureWorkspaceStateSnapshot
     }
 
     snapshot.stylusJoystickAbovePanel = m_canvasPanel->stylusJoystickAbovePanel();
-    snapshot.joystickVisible = m_canvasPanel->isJoystickVisible();
-    snapshot.brushControlVisible = m_canvasPanel->isBrushControlVisible();
-    snapshot.toolStateOverlayVisible = m_canvasPanel->isToolStateOverlayVisible();
+    snapshot.canvasWidgets = m_canvasPanel->canvasWidgetVisibility();
     return snapshot;
 }
 
@@ -3355,9 +3351,7 @@ void WorkspaceTab::applyPresetCanvasWidgetState(const docking::DockLayoutPreset&
         m_canvasPanel->resetCanvasOverlaysToDefault();
     }
 
-    m_canvasPanel->setJoystickVisible(preset.joystickVisible);
-    m_canvasPanel->setBrushControlVisible(preset.brushControlVisible);
-    m_canvasPanel->setToolStateOverlayVisible(preset.toolStateOverlayVisible);
+    m_canvasPanel->setCanvasWidgetVisibility(preset.canvasWidgets);
     m_canvasPanel->setPendingStylusJoystickAbovePanel(preset.stylusJoystickAbovePanel);
 
     if (preset.hasBrushOverlayPos) {
@@ -3388,9 +3382,9 @@ void WorkspaceTab::writeWorkspaceStateSnapshot(const WorkspaceStateSnapshot& sna
         settings.setValue(kWorkspaceStylusJoystickPosKey, snapshot.stylusJoystickPosNormalized);
     }
     settings.setValue(kWorkspaceStylusJoystickAbovePanelKey, snapshot.stylusJoystickAbovePanel);
-    settings.setValue(kWorkspaceJoystickVisibleKey, snapshot.joystickVisible);
-    settings.setValue(kWorkspaceBrushControlVisibleKey, snapshot.brushControlVisible);
-    settings.setValue(kWorkspaceToolStateOverlayVisibleKey, snapshot.toolStateOverlayVisible);
+    for (const ruwa::ui::CanvasWidget widget : ruwa::ui::kCanvasWidgets) {
+        settings.setValue(canvasWidgetVisibleKey(widget), snapshot.canvasWidgets[widget]);
+    }
     settings.setValue(
         kWorkspaceForegroundColorKey, static_cast<quint32>(snapshot.foregroundColorRgba));
     settings.setValue(
@@ -3743,7 +3737,7 @@ QByteArray WorkspaceTab::saveDockState() const
     addPlacement("Layer Properties", m_savedLayerPropertiesPlacement);
     addPlacement("Layer Effects", m_savedLayerEffectsPlacement);
     addPlacement("Color", m_savedColorPlacement);
-    addPlacement("Composer", m_savedComposerPlacement);
+    addPlacement("Navigator", m_savedNavigatorPlacement);
     if (!hiddenPlacements.isEmpty()) {
         state["hiddenPlacements"] = hiddenPlacements;
     }
@@ -3779,7 +3773,7 @@ bool WorkspaceTab::restoreDockState(const QByteArray& state)
     m_savedLayerPropertiesPlacement = restorePlacement("Layer Properties");
     m_savedLayerEffectsPlacement = restorePlacement("Layer Effects");
     m_savedColorPlacement = restorePlacement("Color");
-    m_savedComposerPlacement = restorePlacement("Composer");
+    m_savedNavigatorPlacement = restorePlacement("Navigator");
 
     return m_serializer->restoreFromByteArray(state);
 }
@@ -3798,9 +3792,9 @@ void WorkspaceTab::resetDockLayout()
     settings.remove(kWorkspaceToolStateOverlayPosKey);
     settings.remove(kWorkspaceStylusJoystickPosKey);
     settings.remove(kWorkspaceStylusJoystickAbovePanelKey);
-    settings.remove(kWorkspaceJoystickVisibleKey);
-    settings.remove(kWorkspaceBrushControlVisibleKey);
-    settings.remove(kWorkspaceToolStateOverlayVisibleKey);
+    for (const ruwa::ui::CanvasWidget widget : ruwa::ui::kCanvasWidgets) {
+        settings.remove(canvasWidgetVisibleKey(widget));
+    }
     settings.sync();
 
     m_savedToolsPlacement.reset();
@@ -3808,15 +3802,13 @@ void WorkspaceTab::resetDockLayout()
     m_savedLayersPlacement.reset();
     m_savedLayerPropertiesPlacement.reset();
     m_savedColorPlacement.reset();
-    m_savedComposerPlacement.reset();
+    m_savedNavigatorPlacement.reset();
     m_serializedDockLayoutState.clear();
     m_serializedBrushOverlayPosNormalized = QPointF(-1.0, -1.0);
     m_serializedToolStateOverlayPosNormalized = QPointF(-1.0, -1.0);
     m_serializedStylusJoystickPosNormalized = QPointF(-1.0, -1.0);
     m_serializedStylusJoystickAbovePanel = true;
-    m_serializedJoystickVisible = true;
-    m_serializedBrushControlVisible = true;
-    m_serializedToolStateOverlayVisible = true;
+    m_serializedCanvasWidgets = ruwa::ui::CanvasWidgetVisibility {};
     m_hasSerializedWorkspaceState = false;
 
     const bool wasRestoring = m_restoringDockLayout;
@@ -3912,9 +3904,7 @@ bool WorkspaceTab::createCurrentLayoutPreset(
     preset.hasToolStateOverlayPos = snapshot.hasToolStateOverlayPos;
     preset.hasStylusJoystickPos = snapshot.hasStylusJoystickPos;
     preset.stylusJoystickAbovePanel = snapshot.stylusJoystickAbovePanel;
-    preset.joystickVisible = snapshot.joystickVisible;
-    preset.brushControlVisible = snapshot.brushControlVisible;
-    preset.toolStateOverlayVisible = snapshot.toolStateOverlayVisible;
+    preset.canvasWidgets = snapshot.canvasWidgets;
     if (preset.dockState.isEmpty()
         && (preset.layoutTree.isEmpty()
             || !preset.layoutTree.value(QStringLiteral("hasRoot")).toBool(false))) {
@@ -4084,13 +4074,13 @@ void WorkspaceTab::setColorPanelVisible(bool visible)
     }
 }
 
-void WorkspaceTab::setComposerPanelVisible(bool visible)
+void WorkspaceTab::setNavigatorPanelVisible(bool visible)
 {
-    if (!m_composerPanel || !m_dockManager)
+    if (!m_navigatorPanel || !m_dockManager)
         return;
-    if (visible && m_composerPanel->isHidden()) {
-        if (m_savedComposerPlacement) {
-            applyPanelPlacement(m_composerPanel, *m_savedComposerPlacement);
+    if (visible && m_navigatorPanel->isHidden()) {
+        if (m_savedNavigatorPlacement) {
+            applyPanelPlacement(m_navigatorPanel, *m_savedNavigatorPlacement);
         } else {
             docking::DockPanel* ref = (m_colorPanel && !m_colorPanel->isHidden())
                 ? static_cast<docking::DockPanel*>(m_colorPanel)
@@ -4099,38 +4089,20 @@ void WorkspaceTab::setComposerPanelVisible(bool visible)
                           : ((m_layerPropertiesPanel && !m_layerPropertiesPanel->isHidden())
                                     ? static_cast<docking::DockPanel*>(m_layerPropertiesPanel)
                                     : static_cast<docking::DockPanel*>(m_layersPanel)));
-            m_dockManager->addPanelRelativeTo(m_composerPanel, ref, docking::DockPosition::Bottom);
+            m_dockManager->addPanelRelativeTo(m_navigatorPanel, ref, docking::DockPosition::Bottom);
         }
-    } else if (!visible && !m_composerPanel->isHidden()) {
+    } else if (!visible && !m_navigatorPanel->isHidden()) {
         if (m_dockContainer) {
-            m_savedComposerPlacement = m_dockContainer->getPanelPlacement(m_composerPanel);
+            m_savedNavigatorPlacement = m_dockContainer->getPanelPlacement(m_navigatorPanel);
         }
-        m_dockManager->closePanel(m_composerPanel);
+        m_dockManager->closePanel(m_navigatorPanel);
     }
 }
 
-void WorkspaceTab::setJoystickVisible(bool visible)
+void WorkspaceTab::setCanvasWidgetVisible(ruwa::ui::CanvasWidget widget, bool visible)
 {
     if (m_canvasPanel) {
-        m_canvasPanel->setJoystickVisible(visible);
-        scheduleDockLayoutSave();
-        emit panelsVisibilityChanged();
-    }
-}
-
-void WorkspaceTab::setBrushControlVisible(bool visible)
-{
-    if (m_canvasPanel) {
-        m_canvasPanel->setBrushControlVisible(visible);
-        scheduleDockLayoutSave();
-        emit panelsVisibilityChanged();
-    }
-}
-
-void WorkspaceTab::setToolStateOverlayVisible(bool visible)
-{
-    if (m_canvasPanel) {
-        m_canvasPanel->setToolStateOverlayVisible(visible);
+        m_canvasPanel->setCanvasWidgetVisible(widget, visible);
         scheduleDockLayoutSave();
         emit panelsVisibilityChanged();
     }
@@ -4166,24 +4138,20 @@ bool WorkspaceTab::isColorPanelVisible() const
     return m_colorPanel && !m_colorPanel->isHidden();
 }
 
-bool WorkspaceTab::isComposerPanelVisible() const
+bool WorkspaceTab::isNavigatorPanelVisible() const
 {
-    return m_composerPanel && !m_composerPanel->isHidden();
+    return m_navigatorPanel && !m_navigatorPanel->isHidden();
 }
 
-bool WorkspaceTab::isJoystickVisible() const
+bool WorkspaceTab::isCanvasWidgetVisible(ruwa::ui::CanvasWidget widget) const
 {
-    return m_canvasPanel && m_canvasPanel->isJoystickVisible();
+    return m_canvasPanel && m_canvasPanel->isCanvasWidgetVisible(widget);
 }
 
-bool WorkspaceTab::isBrushControlVisible() const
+ruwa::ui::CanvasWidgetVisibility WorkspaceTab::canvasWidgetVisibility() const
 {
-    return m_canvasPanel && m_canvasPanel->isBrushControlVisible();
-}
-
-bool WorkspaceTab::isToolStateOverlayVisible() const
-{
-    return m_canvasPanel && m_canvasPanel->isToolStateOverlayVisible();
+    return m_canvasPanel ? m_canvasPanel->canvasWidgetVisibility()
+                         : ruwa::ui::CanvasWidgetVisibility {};
 }
 
 void WorkspaceTab::refreshToolbarState()

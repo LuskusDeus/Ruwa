@@ -201,7 +201,7 @@ void CanvasPanel::hideLoadingOverlayImmediately()
     if (m_loadingOverlayOpacity) {
         m_loadingOverlayOpacity->setOpacity(1.0);
     }
-    if (m_brushOverlay && m_brushControlVisible) {
+    if (m_brushOverlay && m_canvasWidgets[CanvasWidget::BrushControl]) {
         if (m_contentWidget && m_contentWidget->width() > 0 && m_contentWidget->height() > 0) {
             if (m_pendingBrushOverlayPositionNormalized.has_value()) {
                 setBrushOverlayPositionFromNormalized(*m_pendingBrushOverlayPositionNormalized);
@@ -231,7 +231,7 @@ void CanvasPanel::hideLoadingOverlayImmediately()
     } else if (m_brushOverlay) {
         m_brushOverlay->hide();
     }
-    if (m_toolStateOverlay && m_toolStateOverlayVisible) {
+    if (m_toolStateOverlay && m_canvasWidgets[CanvasWidget::ToolState]) {
         if (m_contentWidget && m_contentWidget->width() > 0 && m_contentWidget->height() > 0) {
             if (m_pendingToolStateOverlayPositionNormalized.has_value()) {
                 setToolStateOverlayPositionFromNormalized(
@@ -257,7 +257,7 @@ void CanvasPanel::hideLoadingOverlayImmediately()
     } else if (m_toolStateOverlay) {
         m_toolStateOverlay->hide();
     }
-    if (m_stylusJoystick && m_stylusJoystickOpacity && m_joystickVisible) {
+    if (m_stylusJoystick && m_stylusJoystickOpacity && m_canvasWidgets[CanvasWidget::Joystick]) {
         if (m_contentWidget && m_contentWidget->width() > 0 && m_contentWidget->height() > 0) {
             if (m_pendingStylusJoystickPositionNormalized.has_value()) {
                 setStylusJoystickPositionFromNormalized(*m_pendingStylusJoystickPositionNormalized);

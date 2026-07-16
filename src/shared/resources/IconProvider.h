@@ -97,7 +97,7 @@ public:
 
         // Panels
         ColorPanel,
-        ComposerPanel,
+        NavigatorPanel,
         LayerEffectsPanel,
         LayersPanel,
         ToolsPanel,

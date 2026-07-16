@@ -9,6 +9,7 @@
 #include <QPointer>
 #include <QTimer>
 #include "MenuPopup.h"
+#include "shared/types/CanvasWidgets.h"
 #include "shell/docking/state/DockLayoutPreset.h"
 #include "shared/widgets/BaseAnimatedButton.h"
 #include "shared/widgets/MenuButton.h"
@@ -123,11 +124,10 @@ public slots:
     /// Sync panel visibility state from active workspace (for menu checkmarks)
     void setPanelsVisibilityState(bool toolsVisible, bool brushesVisible, bool layersVisible,
         bool layerPropertiesVisible, bool layerEffectsVisible, bool colorVisible,
-        bool composerVisible = true);
+        bool navigatorVisible = true);
 
     /// Sync canvas widgets visibility state from active workspace (for menu checkmarks)
-    void setCanvasWidgetsVisibilityState(
-        bool joystickVisible, bool brushControlVisible, bool toolStateOverlayVisible);
+    void setCanvasWidgetsVisibilityState(const CanvasWidgetVisibility& visibility);
 
 signals:
     // Logo
@@ -176,12 +176,10 @@ signals:
     void panelsLayerPropertiesVisibilityChanged(bool visible);
     void panelsLayerEffectsVisibilityChanged(bool visible);
     void panelsColorVisibilityChanged(bool visible);
-    void panelsComposerVisibilityChanged(bool visible);
+    void panelsNavigatorVisibilityChanged(bool visible);
 
     // Canvas widgets visibility (View → Canvas widgets submenu)
-    void canvasWidgetsJoystickVisibilityChanged(bool visible);
-    void canvasWidgetsBrushControlVisibilityChanged(bool visible);
-    void canvasWidgetsToolStateOverlayVisibilityChanged(bool visible);
+    void canvasWidgetVisibilityChanged(ruwa::ui::CanvasWidget widget, bool visible);
 
 protected:
     void paintEvent(QPaintEvent* event) override;
@@ -224,6 +222,7 @@ private:
     QList<MenuItem> viewItemsWithEnabledState();
     MenuItem buildPanelsMenuItem();
     MenuItem buildCanvasWidgetsMenuItem();
+    static QString canvasWidgetLabel(CanvasWidget widget);
     MenuButton* menuButtonAt(const QPoint& globalPos) const;
     MenuButton* gutterMenuButtonAt(const QPoint& globalPos) const;
     bool isMenuPopupSessionOpen() const;
@@ -293,11 +292,9 @@ private:
     bool m_panelsLayerPropertiesVisible = true;
     bool m_panelsLayerEffectsVisible = false;
     bool m_panelsColorVisible = true;
-    bool m_panelsComposerVisible = true;
+    bool m_panelsNavigatorVisible = true;
 
-    bool m_canvasWidgetsJoystickVisible = true;
-    bool m_canvasWidgetsBrushControlVisible = true;
-    bool m_canvasWidgetsToolStateOverlayVisible = true;
+    CanvasWidgetVisibility m_canvasWidgets;
 
     QWidget* m_menuContainer = nullptr;
 

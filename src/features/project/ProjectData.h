@@ -7,6 +7,7 @@
 #include "features/canvas/CanvasBoundsMode.h"
 #include "features/effects/LayerEffectTypes.h"
 #include "shared/tiles/TileFormat.h"
+#include "shared/types/CanvasWidgets.h"
 
 #include <QString>
 #include <QSize>
@@ -193,9 +194,7 @@ struct ProjectData {
     QPointF toolStateOverlayPosNormalized = QPointF(-1.0, -1.0);
     QPointF stylusJoystickPosNormalized = QPointF(-1.0, -1.0);
     bool stylusJoystickAbovePanel = true;
-    bool joystickVisible = true;
-    bool brushControlVisible = true;
-    bool toolStateOverlayVisible = true;
+    ruwa::ui::CanvasWidgetVisibility canvasWidgets;
 
     bool isValid() const
     {

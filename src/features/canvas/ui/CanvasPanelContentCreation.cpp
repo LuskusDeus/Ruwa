@@ -350,7 +350,7 @@ QWidget* CanvasPanel::createContent()
     m_stylusJoystickOpacity = new QGraphicsOpacityEffect(m_stylusJoystick);
     m_stylusJoystickOpacity->setOpacity(0.0);
     m_stylusJoystick->setGraphicsEffect(m_stylusJoystickOpacity);
-    m_stylusJoystick->setVisible(m_joystickVisible);
+    m_stylusJoystick->setVisible(m_canvasWidgets[CanvasWidget::Joystick]);
     if (m_loadingOverlay) {
         m_stylusJoystick->stackUnder(m_loadingOverlay);
     }

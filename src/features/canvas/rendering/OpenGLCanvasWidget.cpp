@@ -7619,7 +7619,7 @@ bool OpenGLCanvasWidget::computeExportContentBounds(QRect& outBounds)
     return outBounds.isValid() && !outBounds.isEmpty();
 }
 
-bool OpenGLCanvasWidget::computeComposerContentBounds(QRect& outBounds)
+bool OpenGLCanvasWidget::computeNavigatorContentBounds(QRect& outBounds)
 {
     if (!m_layerModel || !m_layerCompositingBuilder) {
         return false;
