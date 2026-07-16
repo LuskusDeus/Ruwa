@@ -363,22 +363,54 @@ bool TabletToMouseEventFilter::eventFilter(QObject* watched, QEvent* event)
     auto* widget = qobject_cast<QWidget*>(watched);
 
     auto& stylusInput = services::input::StylusInputManager::instance();
-    if (type == QEvent::MouseMove && !stylusInput.isDispatchingNativeInput()
-        && stylusInput.hasActiveNativePointerButtons()) {
-        auto* mouseEvent = static_cast<QMouseEvent*>(event);
+    if (!stylusInput.isDispatchingNativeInput() && stylusInput.usesNativeUiRouting()) {
+        const bool nativeButtonsActive = stylusInput.hasActiveNativePointerButtons();
 
-        // The direct WinTab context owns pointer routing and QCursor::setPos keeps
-        // the visible system cursor under the pen. Each cursor warp also posts an
-        // ordinary asynchronous MouseMove with no mouse buttons, which otherwise
-        // races the canonical synthetic WinTab move and can cancel pressed-state
-        // tracking in custom controls (notably layer rows). Suppress that
-        // unpressed competing stream only while the WinTab pen itself is pressed.
-        // During hover the ordinary move must pass so Qt can switch away from a
-        // canvas BlankCursor when the pen crosses into regular UI. A real mouse
-        // drag still carries buttons and remains available alongside either state.
-        if (mouseEvent->buttons() == Qt::NoButton) {
-            mouseEvent->accept();
-            return true;
+        switch (type) {
+        case QEvent::MouseMove: {
+            auto* mouseEvent = static_cast<QMouseEvent*>(event);
+            const QPoint globalPos = mouseEvent->globalPosition().toPoint();
+
+            // QCursor::setPos() posts a normal, asynchronous MouseMove. It is not
+            // a new mouse sample and must neither steal pointer ownership from the
+            // direct WinTab stream nor cancel pressed-state tracking in widgets.
+            const bool nativeCursorWarp = stylusInput.consumeNativeCursorWarpAt(globalPos);
+
+            if (nativeCursorWarp && !stylusInput.nativeCursorPosition()) {
+                // Ownership has already moved to the mouse. This is an older
+                // SetCursorPos result still draining from the Windows queue; do
+                // not let canvas-owned overlays revive the stylus cursor with it.
+                mouseEvent->accept();
+                return true;
+            }
+
+            if (nativeButtonsActive && mouseEvent->buttons() == Qt::NoButton) {
+                mouseEvent->accept();
+                return true;
+            }
+
+            if (!nativeButtonsActive && !nativeCursorWarp) {
+                stylusInput.activateMousePointer();
+            }
+            break;
+        }
+        case QEvent::MouseButtonPress:
+        case QEvent::MouseButtonDblClick:
+        case QEvent::MouseButtonRelease: {
+            if (!nativeButtonsActive) {
+                stylusInput.activateMousePointer();
+            }
+            break;
+        }
+        case QEvent::Wheel:
+            if (!nativeButtonsActive) {
+                // A wheel event transfers ownership without changing the one
+                // system position shared by mouse and pen.
+                stylusInput.activateMousePointer();
+            }
+            break;
+        default:
+            break;
         }
     }
 

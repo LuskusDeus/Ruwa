@@ -7,6 +7,7 @@
 #include "CanvasViewController.h"
 
 #include "CanvasPanel.h"
+#include "CanvasCursorManager.h"
 #include "CanvasOverlayLayoutManager.h"
 #include "features/brush/ui/BrushControlOverlay.h"
 #include "features/brush/ui/BrushSizeCurve.h"
@@ -23,6 +24,7 @@
 #include "features/color/ColorPickerOverlay.h"
 #include "features/export/ExportSettingsPanel.h"
 #include "features/selection/SelectionActionPopup.h"
+#include "services/input/StylusInputManager.h"
 #include "shared/undo/UndoManager.h"
 #include "shared/widgets/overlays/ConfirmationPopup.h"
 #include "TextEditingController.h"
@@ -406,7 +408,12 @@ bool CanvasViewController::handleWheelZoom(QWheelEvent* event)
     const float exponent = std::clamp(zoomDelta / 120.0f, -5.0f, 5.0f);
     const float zoomFactor = std::pow(1.15f, exponent);
 
-    QPoint localPos = m_panel->m_glWidget->mapFromGlobal(event->globalPosition().toPoint());
+    const bool directWinTabRouting
+        = ruwa::services::input::StylusInputManager::instance().usesNativeUiRouting();
+    const QPoint globalPos = directWinTabRouting && m_panel->m_cursorManager
+        ? m_panel->m_cursorManager->activeCursorPosition()
+        : event->globalPosition().toPoint();
+    QPoint localPos = m_panel->m_glWidget->mapFromGlobal(globalPos);
     aether::Vector2 screenPoint(localPos.x(), localPos.y());
     aether::Vector2 viewportSize(
         m_panel->m_glWidget->viewport().width(), m_panel->m_glWidget->viewport().height());

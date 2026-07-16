@@ -2413,6 +2413,12 @@ void CanvasPanel::wheelEvent(QWheelEvent* event)
 
 bool CanvasPanel::handleWheelZoom(QWheelEvent* event)
 {
+    if (m_cursorManager) {
+        // The application-level input arbiter has selected the wheel's mouse
+        // source before this handler runs. Refresh the custom cursor immediately
+        // so it cannot remain at the previous direct-WinTab sample.
+        m_cursorManager->refreshCursorPosition();
+    }
     return m_viewController && m_viewController->handleWheelZoom(event);
 }
 

@@ -8,6 +8,9 @@
 #include "shared/widgets/inputs/ProgressHandleSlider.h"
 #include "shared/widgets/layout/SmoothScrollArea.h"
 
+#include <algorithm>
+#include <iterator>
+
 #include <QAbstractButton>
 #include <QAbstractItemView>
 #include <QAbstractSlider>
@@ -47,11 +50,20 @@
 namespace ruwa::services::input {
 
 struct StylusInputManager::State {
+    struct PendingNativeCursorWarp {
+        QPoint pos;
+        qint64 queuedAtMs = 0;
+    };
+
     QApplication* application = nullptr;
     bool useNativeUiRouting = false;
     quint64 lastHandledPacketSerial = 0;
     Qt::MouseButtons lastButtons = Qt::NoButton;
     QPoint lastGlobalPos;
+    bool nativePointerIsActive = false;
+    bool nativePointerWasInProximity = false;
+    QElapsedTimer cursorWarpClock;
+    std::vector<PendingNativeCursorWarp> pendingNativeCursorWarps;
     QPointer<QWidget> hoverTarget;
     QPointer<QWidget> activeMouseTarget;
     QPointer<QWidget> activeCanvasTarget;
@@ -101,6 +113,7 @@ bool useRuwaWinTabBackend()
 // event-loop flooding from high-frequency WinTab packets (200-266+ Hz).
 constexpr qint64 kUiMoveThrottleMs = 25; // ~40 Hz
 constexpr qint64 kUiDragMoveThrottleMs = 16; // ~60 Hz
+constexpr qint64 kCursorWarpLifetimeMs = 1000;
 
 bool isCanvasWidget(QWidget* widget)
 {
@@ -315,6 +328,10 @@ void StylusInputManager::initialize(QApplication* application)
     m_state->useNativeUiRouting = useRuwaWinTabBackend();
     m_state->lastHandledPacketSerial = 0;
     m_state->lastButtons = Qt::NoButton;
+    m_state->nativePointerIsActive = false;
+    m_state->nativePointerWasInProximity = false;
+    m_state->cursorWarpClock.start();
+    m_state->pendingNativeCursorWarps.clear();
     m_state->hoverTarget.clear();
     m_state->activeMouseTarget.clear();
     m_state->activeCanvasTarget.clear();
@@ -370,6 +387,9 @@ bool StylusInputManager::handleNativeEvent(void* message)
     // Process it below before clearing routing state; otherwise release-driven Qt
     // controls remain pressed and lasso interactions never receive their final point.
     const bool proximityLost = !snapshot.winTabInProximity;
+    const bool proximityGained
+        = snapshot.winTabInProximity && !m_state->nativePointerWasInProximity;
+    m_state->nativePointerWasInProximity = snapshot.winTabInProximity;
 
     const Qt::KeyboardModifiers modifiers = QApplication::keyboardModifiers();
 
@@ -448,11 +468,49 @@ bool StylusInputManager::handleNativeEvent(void* message)
         }
 
         const Qt::MouseButtons previousButtons = m_state->lastButtons;
+        if (!proximityLost
+            && (m_state->nativePointerIsActive || globalPos != m_state->lastGlobalPos
+                || currentButtons != previousButtons || proximityGained)) {
+            // Stationary hover packets are not user intent and must not steal
+            // ownership back immediately after a mouse move or wheel event.
+            // Pen movement and button transitions are authoritative WinTab input.
+            m_state->nativePointerIsActive = true;
+        }
+
+        if (!m_state->nativePointerIsActive) {
+            // The mouse currently owns the pointer. WinTab may continue reporting
+            // identical hover samples at tablet report rate; forwarding them would
+            // immediately revive the stale canvas cursor after mouse-wheel input.
+            continue;
+        }
+
+        // Windows exposes one shared pointer for mouse and pen. Keep its physical
+        // position synchronized on every native packet, including a canvas that
+        // currently uses BlankCursor for GL rendering. BlankCursor controls only
+        // visibility; freezing QCursor here leaves a second arrow over the UI and
+        // makes the next real mouse move resume from the canvas-entry boundary.
+        syncSystemCursorFromNative(globalPos);
+
         const Qt::MouseButton button = changedButton(previousButtons, currentButtons);
         const Qt::MouseButtons addedButtons = currentButtons & ~previousButtons;
         const Qt::MouseButtons removedButtons = previousButtons & ~currentButtons;
         QWidget* target = resolveMouseTarget(m_state->activeMouseTarget, globalPos);
         QWidget* canvasTarget = resolveCanvasTarget(m_state->activeCanvasTarget, globalPos);
+
+        const bool canvasCaptureActive
+            = m_state->activeCanvasTarget && previousButtons != Qt::NoButton;
+        const bool uiCaptureActive
+            = (m_state->activeMouseTarget || m_state->pendingPressTarget)
+            && previousButtons != Qt::NoButton;
+        if (canvasCaptureActive) {
+            // A stroke that began on canvas owns the complete press/move/release
+            // sequence, even after crossing over UI.
+            canvasTarget = m_state->activeCanvasTarget;
+        } else if (uiCaptureActive) {
+            // Symmetrically, a press that began on a UI control must not turn into
+            // a canvas stroke merely because the pen crossed the viewport.
+            canvasTarget = nullptr;
+        }
 
         // Pen-down stroke continuation: once a stroke starts on a canvas, keep
         // routing every packet to that canvas until the pen lifts — even after
@@ -476,16 +534,6 @@ bool StylusInputManager::handleNativeEvent(void* message)
         if (canvasTarget) {
             // Flush any pending UI move before switching to canvas.
             flushCoalescedUiMove();
-
-            // CXO_SYSTEM is disabled for the direct WinTab context, so the driver
-            // cannot move the Windows cursor for us. CanvasCursorManager already
-            // exposes the active cursor mode on the canvas widget: BlankCursor means
-            // a GL/custom cursor is drawing itself; every other shape needs the real
-            // system cursor kept under the pen.
-            if (canvasTarget->cursor().shape() != Qt::BlankCursor
-                && m_state->lastGlobalPos != globalPos) {
-                QCursor::setPos(globalPos);
-            }
 
             clearPendingStylusSwipe();
             updateHoverTarget(m_state->hoverTarget, nullptr);
@@ -554,19 +602,6 @@ bool StylusInputManager::handleNativeEvent(void* message)
         // Move-only packet (no button change) — coalesce instead of
         // dispatching immediately to avoid flooding the event loop.
         if (previousButtons == currentButtons) {
-            // Keep the system cursor physically under the pen on the UI.  The
-            // WinTab context is opened with CXO_SYSTEM cleared (see
-            // WinTabBackend::attach), so the driver does NOT move the system
-            // cursor.  Without this, after the pen leaves the canvas the system
-            // cursor stays frozen at the last canvas position — invisible,
-            // because the canvas widget hides it to draw its own brush ring —
-            // even though synthetic UI hover/click events still fire.
-            // setPos is cheap, so do it every packet (the synthetic MouseMove
-            // dispatch below stays throttled to avoid event-loop flooding).
-            if (m_state->lastGlobalPos != globalPos) {
-                QCursor::setPos(globalPos);
-            }
-
             if (m_state->pendingScrollArea) {
                 if (!m_state->stylusSwipeDragging
                     && (globalPos - m_state->pendingPressGlobalPos).manhattanLength()
@@ -602,10 +637,6 @@ bool StylusInputManager::handleNativeEvent(void* message)
         // receives the latest position before the press/release.
         flushCoalescedUiMove();
 
-        // Keep the system cursor in sync for button changes.
-        if (m_state->lastGlobalPos != globalPos) {
-            QCursor::setPos(globalPos);
-        }
         updateHoverTarget(m_state->hoverTarget, target);
 
         if (addedButtons != Qt::NoButton) {
@@ -675,6 +706,10 @@ bool StylusInputManager::handleNativeEvent(void* message)
     }
 
     if (proximityLost) {
+        // Mouse and pen share one Windows pointer, so ownership changes here but
+        // its position intentionally remains at the final pen sample.
+        activateMousePointer();
+
         // The terminal packet above has already delivered the release through the
         // regular target-capture path. Discard only delayed hover movement and reset
         // the routing session after that release has completed.
@@ -718,7 +753,7 @@ bool StylusInputManager::usesNativeUiRouting() const
 
 std::optional<QPoint> StylusInputManager::nativeCursorPosition() const
 {
-    if (!usesNativeUiRouting()) {
+    if (!usesNativeUiRouting() || !m_state->nativePointerIsActive) {
         return std::nullopt;
     }
 
@@ -746,6 +781,57 @@ bool StylusInputManager::hasActiveNativePointerButtons() const
         && snapshot.winTabButtons != Qt::NoButton;
 }
 
+void StylusInputManager::activateMousePointer()
+{
+    if (!m_state) {
+        return;
+    }
+
+    m_state->nativePointerIsActive = false;
+    m_state->hasCoalescedUiMove = false;
+    m_state->coalescedUiMoveTarget.clear();
+}
+
+bool StylusInputManager::consumeNativeCursorWarpAt(const QPoint& globalPos)
+{
+    if (!m_state) {
+        return false;
+    }
+
+    auto& warps = m_state->pendingNativeCursorWarps;
+    const qint64 nowMs = m_state->cursorWarpClock.elapsed();
+    warps.erase(std::remove_if(warps.begin(), warps.end(), [nowMs](const auto& warp) {
+        return nowMs - warp.queuedAtMs > kCursorWarpLifetimeMs;
+    }), warps.end());
+
+    const auto it = std::find_if(warps.begin(), warps.end(), [&globalPos](const auto& warp) {
+        return warp.pos == globalPos;
+    });
+    if (it == warps.end()) {
+        return false;
+    }
+
+    // Windows may coalesce several SetCursorPos-generated WM_MOUSEMOVE messages.
+    // A match therefore acknowledges this warp and every older queued position.
+    warps.erase(warps.begin(), std::next(it));
+    return true;
+}
+
+void StylusInputManager::syncSystemCursorFromNative(const QPoint& globalPos)
+{
+    if (!m_state || QCursor::pos() == globalPos) {
+        return;
+    }
+
+    auto& warps = m_state->pendingNativeCursorWarps;
+    warps.push_back({ globalPos, m_state->cursorWarpClock.elapsed() });
+    constexpr size_t kMaxPendingCursorWarps = 64;
+    if (warps.size() > kMaxPendingCursorWarps) {
+        warps.erase(warps.begin(), warps.begin() + kMaxPendingCursorWarps / 2);
+    }
+    QCursor::setPos(globalPos);
+}
+
 float StylusInputManager::dispatchPressure() const
 {
     if (m_state && m_state->dispatchingToCanvas) {
@@ -756,7 +842,8 @@ float StylusInputManager::dispatchPressure() const
 
 bool StylusInputManager::shouldIgnoreCanvasMouseMove(const QMouseEvent* event) const
 {
-    if (!m_state || !m_state->useNativeUiRouting || !event || m_state->dispatchingToCanvas) {
+    if (!m_state || !m_state->useNativeUiRouting || !m_state->nativePointerIsActive || !event
+        || m_state->dispatchingToCanvas) {
         return false;
     }
 

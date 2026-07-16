@@ -29,12 +29,14 @@ public:
     bool isDispatchingNativeInput() const;
     /// Whether the direct WinTab pointer currently has at least one pressed button.
     bool hasActiveNativePointerButtons() const;
+    /// Marks authoritative mouse input and hands ownership to the shared system cursor.
+    void activateMousePointer();
+    /// Consumes a delayed MouseMove known to have been posted by a native QCursor warp.
+    bool consumeNativeCursorWarpAt(const QPoint& globalPos);
     float dispatchPressure() const;
     bool shouldIgnoreCanvasMouseMove(const QMouseEvent* event) const;
 
     /// Returns the direct WinTab position while it is the active pointer source.
-    /// The system cursor is intentionally not moved for a GL canvas cursor, so
-    /// QCursor::pos() may still refer to the last UI location in this mode.
     std::optional<QPoint> nativeCursorPosition() const;
 
     /// One recovered mouse position from the OS coalescing buffer.
@@ -61,6 +63,7 @@ private:
     ~StylusInputManager();
     void clearPendingStylusSwipe();
     void recordNativeCanvasDispatch();
+    void syncSystemCursorFromNative(const QPoint& globalPos);
 
     StylusInputManager(const StylusInputManager&) = delete;
     StylusInputManager& operator=(const StylusInputManager&) = delete;

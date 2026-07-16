@@ -151,7 +151,7 @@ bool CanvasCursorManager::eventFilter(QObject* /*watched*/, QEvent* event)
         }
 
         const auto* mouseEvent = static_cast<QMouseEvent*>(event);
-        // QCursor::setPos() is used to keep regular UI widgets in sync with the
+        // QCursor::setPos() keeps the shared Windows pointer in sync with the
         // direct WinTab backend. Windows delivers its generated MouseMove later,
         // potentially after a newer WinTab sample. Do not let that stale cursor
         // warp overwrite the GL cursor's direct-packet position.
@@ -172,6 +172,11 @@ bool CanvasCursorManager::eventFilter(QObject* /*watched*/, QEvent* event)
         updateCursorPosition(te->globalPosition().toPoint());
         break;
     }
+    case QEvent::Wheel:
+        // Wheel input can transfer ownership to the mouse without a preceding
+        // MouseMove, so re-evaluate the custom cursor at the shared pointer.
+        refreshCursorPosition();
+        break;
     case QEvent::Leave:
         refreshCursorPosition();
         break;

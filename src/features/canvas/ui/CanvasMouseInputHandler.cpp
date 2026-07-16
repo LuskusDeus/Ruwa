@@ -100,12 +100,10 @@ MousePointerSample sampleMousePointer(aether::OpenGLCanvasWidget* canvasWidget, 
             // batch, causing pressure-driven size/opacity artifacts on all intermediate points.
             sample.stylusLike = true;
             sample.pressure = std::clamp(stylusInput.dispatchPressure(), 0.0f, 1.0f);
-        } else {
+        } else if (stylusInput.nativeCursorPosition()) {
             const auto snapshot = ruwa::services::input::StylusDebugService::instance()->snapshot();
-            if (snapshot.winTabAttached && snapshot.winTabInProximity) {
-                sample.stylusLike = true;
-                sample.pressure = std::clamp(snapshot.winTabPressure, 0.0f, 1.0f);
-            }
+            sample.stylusLike = true;
+            sample.pressure = std::clamp(snapshot.winTabPressure, 0.0f, 1.0f);
         }
     }
 
@@ -211,7 +209,7 @@ void CanvasMouseInputHandler::dispatchUncoalescedWorldMoves(
         return;
     }
     auto& stylusInput = ruwa::services::input::StylusInputManager::instance();
-    if (!stylusInput.usesNativeUiRouting()) {
+    if (!stylusInput.usesNativeUiRouting() || !stylusInput.nativeCursorPosition()) {
         const QPointF currentGlobal = event->globalPosition();
         // Outside the GL viewport, WM_MOUSEMOVE history often mixes unrelated screen samples
         // (second monitor, chrome). Per-point clamping turns those into fake edge tours.
@@ -695,12 +693,12 @@ bool CanvasMouseInputHandler::handleMousePress(QMouseEvent* event)
             || m_host->currentInputTool() == CanvasPanel::ToolMode::Liquify
             || m_host->currentInputTool() == CanvasPanel::ToolMode::Eraser) {
             if (m_panel->m_tabletActive) {
-                // When not using native routing, a real mouse press means the
-                // tablet is no longer active (missed TabletRelease).  Reset the
-                // flag so the mouse can draw.  With native routing the
-                // StylusInputManager dispatches synthetic mouse events that
-                // must still be blocked while the tablet stroke is in progress.
-                if (!ruwa::services::input::StylusInputManager::instance().usesNativeUiRouting()
+                // An authoritative real-mouse press means the tablet is no longer
+                // active (missed TabletRelease). Reset the flag so the mouse can
+                // draw. A direct WinTab dispatch remains blocked while its tablet
+                // stroke is in progress.
+                auto& stylusInput = ruwa::services::input::StylusInputManager::instance();
+                if ((!stylusInput.usesNativeUiRouting() || !stylusInput.nativeCursorPosition())
                     && event->deviceType() == QInputDevice::DeviceType::Mouse) {
                     m_panel->m_tabletActive = false;
                     // End the orphaned tablet stroke so beginStroke below starts
@@ -1091,7 +1089,7 @@ bool CanvasMouseInputHandler::handleMouseMove(QMouseEvent* event)
         if (m_panel->m_tabletActive) {
             // Real mouse move while tablet supposedly active — tablet probably
             // went away without a proper TabletRelease.  Let the mouse through.
-            if (!ruwa::services::input::StylusInputManager::instance().usesNativeUiRouting()
+            if ((!stylusInput.usesNativeUiRouting() || !stylusInput.nativeCursorPosition())
                 && event->deviceType() == QInputDevice::DeviceType::Mouse) {
                 m_panel->m_tabletActive = false;
             } else {
@@ -1100,36 +1098,24 @@ bool CanvasMouseInputHandler::handleMouseMove(QMouseEvent* event)
             }
         }
 
-        // When native WinTab routing is active, the ONLY valid source of stroke
-        // data is the synthetic mouse events dispatched by StylusInputManager
-        // (isDispatchingNativeInput() == true).  Any other mouse move — whether
-        // from the OS, from QCursor::setPos warps, or from Qt's internal mouse
-        // synthesis — carries a stale position and must be discarded.  Letting
-        // these through causes visible "staircase" / bump artifacts because
-        // the brush engine receives out-of-order positions.
-        if (stylusInput.usesNativeUiRouting() && !stylusInput.isDispatchingNativeInput()) {
-            // While the WinTab pen is in proximity, the synthetic dispatches are
-            // the canonical stroke source; any other move is a stale
-            // QCursor::setPos warp and must be dropped (otherwise: staircase).
-            // But when the pen is NOT in proximity the user is drawing with a
-            // real mouse — its OS move events are the ONLY stroke source, so let
-            // them through.  Without this, mouse strokes degenerate to a single
-            // dot at the press position.
-            const auto snapshot = ruwa::services::input::StylusDebugService::instance()->snapshot();
-            if (snapshot.winTabInProximity) {
-                event->accept();
-                return true;
-            }
+        // While WinTab owns the pointer, the ONLY valid stroke samples are the
+        // synthetic events dispatched by StylusInputManager. Other mouse moves
+        // are delayed cursor warps or Qt synthesis and would add out-of-order
+        // positions to the brush engine.
+        if (stylusInput.usesNativeUiRouting() && stylusInput.nativeCursorPosition()
+            && !stylusInput.isDispatchingNativeInput()) {
+            // Proximity alone is insufficient: a wheel or real mouse event may
+            // already have transferred ownership while the pen is still nearby.
+            event->accept();
+            return true;
         }
 
         const MousePointerSample pointerSample = sampleMousePointer(m_panel->m_glWidget, event);
         const float currentElapsedSec = m_panel->m_glWidget->strokeElapsedSecondsNow();
 
-        // Recover intermediate mouse positions that Windows coalesced at the
-        // OS level (WM_MOUSEMOVE merging).  Skip this when native WinTab routing
-        // is active — all intermediate positions already come from the WinTab
-        // packet buffer.
-        if (!stylusInput.usesNativeUiRouting()) {
+        // Recover intermediate OS mouse positions. Skip this only while WinTab
+        // owns the pointer; its packet buffer already contains those samples.
+        if (!stylusInput.usesNativeUiRouting() || !stylusInput.nativeCursorPosition()) {
             const QPoint currentScreenPos = event->globalPosition().toPoint();
             if (m_panel->isGlobalOverGlViewport(currentScreenPos)) {
                 const auto recovered
