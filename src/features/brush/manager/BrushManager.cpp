@@ -171,6 +171,25 @@ void setError(QString* errorMessage, const QString& message)
     }
 }
 
+QStringList canonicalStarredKeys(const QStringList& keys)
+{
+    QSet<QString> uniqueKeys;
+    for (const QString& key : keys) {
+        if (!key.isEmpty()) {
+            uniqueKeys.insert(key);
+        }
+    }
+
+    QStringList result(uniqueKeys.begin(), uniqueKeys.end());
+    result.sort();
+    return result;
+}
+
+QStringList canonicalStarredKeys(const QSet<QString>& keys)
+{
+    return canonicalStarredKeys(QStringList(keys.begin(), keys.end()));
+}
+
 // The custom dab tip is stored in live engine settings as an absolute
 // filesystem path (dab.customImage). That path is used only to read the image
 // while exporting; it must never be serialized into a portable pack. The image
@@ -340,19 +359,20 @@ bool readBrushesFromFile(
             }
         }
 
-        // Carry the author's starred ("fav") setting keys through to import,
-        // where they are re-applied under the freshly assigned brush id.
+        // Keep the author's starred ("fav") setting keys on the brush data so
+        // pack and single-brush imports follow the exact same path.
         const QJsonValue starredValue = object.value(QStringLiteral("starred"));
         if (starredValue.isArray()) {
-            brush.hasImportedStarred = true;
+            brush.hasStarredKeys = true;
             const QJsonArray starredArray = starredValue.toArray();
-            brush.importedStarredKeys.reserve(starredArray.size());
+            brush.starredKeys.reserve(starredArray.size());
             for (const QJsonValue& key : starredArray) {
                 const QString keyStr = key.toString();
                 if (!keyStr.isEmpty()) {
-                    brush.importedStarredKeys.append(keyStr);
+                    brush.starredKeys.append(keyStr);
                 }
             }
+            brush.starredKeys = canonicalStarredKeys(brush.starredKeys);
         }
 
         normalizeBrushData(brush);
@@ -436,6 +456,10 @@ void writeBrushPacksToSettings(const QVector<BrushPresetData>& presets,
             settings.setValue(QStringLiteral("iconPath"), brushes[j].iconPath);
             settings.setValue(QStringLiteral("engineId"), brushes[j].engineId);
             settings.setValue(QStringLiteral("engineVersion"), brushes[j].engineVersion);
+            if (brushes[j].hasStarredKeys) {
+                settings.setValue(
+                    QStringLiteral("starred"), canonicalStarredKeys(brushes[j].starredKeys));
+            }
             writeEngineSettingsGroup(settings, brushes[j].engineSettings);
         }
         settings.endArray();
@@ -494,8 +518,17 @@ bool BrushManager::removePreset(const QString& presetId)
     ensureLoaded();
     for (int i = 0; i < m_presets.size(); ++i) {
         if (m_presets[i].id == presetId) {
+            bool starredSettingsChanged = false;
+            const auto& removedBrushes = m_brushesByPreset[presetId];
+            for (const BrushData& brush : removedBrushes) {
+                starredSettingsChanged
+                    = m_starredSettingsByBrush.remove(brush.id) > 0 || starredSettingsChanged;
+            }
             m_presets.removeAt(i);
             m_brushesByPreset.remove(presetId);
+            if (starredSettingsChanged) {
+                saveStarredSettings();
+            }
             save();
             emit presetRemoved(presetId);
             return true;
@@ -537,8 +570,13 @@ QString BrushManager::createBrush(const QString& presetId)
     brush.engineId = QLatin1String(kPixelBrushEngineId);
     brush.engineVersion = pixelModule().currentVersion();
     brush.engineSettings = pixelModule().defaultSettings();
+    brush.starredKeys
+        = canonicalStarredKeys(defaultStarredKeys(pixelModule().descriptor().settingsTabs));
+    brush.hasStarredKeys = true;
     syncCompatibilitySettings(brush);
     m_brushesByPreset[presetId].append(brush);
+    m_starredSettingsByBrush.insert(
+        brush.id, QSet<QString>(brush.starredKeys.begin(), brush.starredKeys.end()));
     save();
     emit brushCreated(presetId, brush.id);
     return brush.id;
@@ -643,10 +681,9 @@ bool BrushManager::exportBrushesToFile(const QString& filePath, const QVector<Br
     for (const BrushData& brush : brushes) {
         BrushData normalizedBrush = brush;
         normalizeBrushData(normalizedBrush);
-        // starredSettings() lazily loads + is non-const; reach it through the
-        // singleton so this const exporter can read the live pinned-set.
-        QStringList starredKeys = BrushManager::instance().starredSettings(brush.id).values();
-        starredKeys.sort();
+        const QStringList starredKeys = normalizedBrush.hasStarredKeys
+            ? canonicalStarredKeys(normalizedBrush.starredKeys)
+            : canonicalStarredKeys(BrushManager::instance().starredSettings(brush.id));
         array.append(brushToJsonObject(normalizedBrush, starredKeys));
     }
 
@@ -710,6 +747,8 @@ bool BrushManager::importBrushesIntoPreset(const QVector<BrushData>& brushes,
     QStringList ids;
     QStringList starredRestoredIds;
     auto& targetBrushes = m_brushesByPreset[presetId];
+    const QStringList defaultStarred
+        = canonicalStarredKeys(defaultStarredKeys(pixelModule().descriptor().settingsTabs));
     for (const BrushData& sourceBrush : brushes) {
         BrushData brush = sourceBrush;
         brush.id = QUuid::createUuid().toString(QUuid::WithoutBraces);
@@ -717,8 +756,12 @@ bool BrushManager::importBrushesIntoPreset(const QVector<BrushData>& brushes,
         if (brush.name.trimmed().isEmpty()) {
             brush.name = QObject::tr("Brush");
         }
+        if (!brush.hasStarredKeys) {
+            brush.starredKeys = defaultStarred;
+            brush.hasStarredKeys = true;
+        }
         normalizeBrushData(brush);
-        if (stageImportedStarredSettings(brush.id, sourceBrush)) {
+        if (stageStarredSettings(brush.id, brush)) {
             starredRestoredIds.append(brush.id);
         }
         ids.append(brush.id);
@@ -771,6 +814,8 @@ QString BrushManager::importBrushesAsPreset(const QVector<BrushData>& brushes,
     QStringList starredRestoredIds;
     QVector<BrushData> importedBrushes;
     importedBrushes.reserve(brushes.size());
+    const QStringList defaultStarred
+        = canonicalStarredKeys(defaultStarredKeys(pixelModule().descriptor().settingsTabs));
     for (const BrushData& sourceBrush : brushes) {
         BrushData brush = sourceBrush;
         brush.id = QUuid::createUuid().toString(QUuid::WithoutBraces);
@@ -778,8 +823,12 @@ QString BrushManager::importBrushesAsPreset(const QVector<BrushData>& brushes,
         if (brush.name.trimmed().isEmpty()) {
             brush.name = QObject::tr("Brush");
         }
+        if (!brush.hasStarredKeys) {
+            brush.starredKeys = defaultStarred;
+            brush.hasStarredKeys = true;
+        }
         normalizeBrushData(brush);
-        if (stageImportedStarredSettings(brush.id, sourceBrush)) {
+        if (stageStarredSettings(brush.id, brush)) {
             starredRestoredIds.append(brush.id);
         }
         ids.append(brush.id);
@@ -908,14 +957,26 @@ QString BrushManager::presetIdForBrush(const QString& brushId)
 QSet<QString> BrushManager::starredSettings(const QString& brushId)
 {
     const auto tabs = pixelModule().descriptor().settingsTabs;
-    if (!m_starredLoaded) {
-        loadStarredSettings();
-    }
     if (brushId.isEmpty()) {
         return defaultStarredKeys(tabs);
     }
+
+    ensureLoaded();
+    if (!m_starredLoaded) {
+        loadStarredSettings();
+    }
     if (m_starredSettingsByBrush.contains(brushId)) {
         return m_starredSettingsByBrush.value(brushId);
+    }
+
+    for (auto it = m_brushesByPreset.cbegin(); it != m_brushesByPreset.cend(); ++it) {
+        for (const BrushData& brush : it.value()) {
+            if (brush.id == brushId && brush.hasStarredKeys) {
+                const QSet<QString> keys(brush.starredKeys.begin(), brush.starredKeys.end());
+                m_starredSettingsByBrush.insert(brushId, keys);
+                return keys;
+            }
+        }
     }
 
     QSettings settings(QCoreApplication::organizationName(), QCoreApplication::applicationName());
@@ -954,7 +1015,21 @@ void BrushManager::setSettingStarred(const QString& brushId, const QString& key,
     }
     m_starredSettingsByBrush.insert(brushId, starredKeys);
 
+    bool brushUpdated = false;
+    for (auto it = m_brushesByPreset.begin();
+         it != m_brushesByPreset.end() && !brushUpdated; ++it) {
+        for (BrushData& brush : it.value()) {
+            if (brush.id == brushId) {
+                brush.starredKeys = canonicalStarredKeys(starredKeys);
+                brush.hasStarredKeys = true;
+                brushUpdated = true;
+                break;
+            }
+        }
+    }
+
     saveStarredSettings();
+    scheduleDeferredSave();
     emit starredSettingsChanged(brushId);
 }
 
@@ -991,16 +1066,16 @@ void BrushManager::saveStarredSettings() const
     settings.sync();
 }
 
-bool BrushManager::stageImportedStarredSettings(const QString& brushId, const BrushData& source)
+bool BrushManager::stageStarredSettings(const QString& brushId, const BrushData& source)
 {
-    if (!source.hasImportedStarred || brushId.isEmpty()) {
+    if (!source.hasStarredKeys || brushId.isEmpty()) {
         return false;
     }
     if (!m_starredLoaded) {
         loadStarredSettings();
     }
-    m_starredSettingsByBrush.insert(brushId,
-        QSet<QString>(source.importedStarredKeys.begin(), source.importedStarredKeys.end()));
+    const QStringList keys = canonicalStarredKeys(source.starredKeys);
+    m_starredSettingsByBrush.insert(brushId, QSet<QString>(keys.begin(), keys.end()));
     return true;
 }
 
@@ -1096,6 +1171,11 @@ void BrushManager::load()
                 brush.engineVersion = settings.value(QStringLiteral("engineVersion"), 1).toInt();
                 brush.engineSettings = readEngineSettingsGroup(settings);
             }
+            if (settings.contains(QStringLiteral("starred"))) {
+                brush.starredKeys = canonicalStarredKeys(
+                    settings.value(QStringLiteral("starred")).toStringList());
+                brush.hasStarredKeys = true;
+            }
             normalizeBrushData(brush);
 
             if (brush.id.isEmpty()) {
@@ -1113,8 +1193,42 @@ void BrushManager::load()
     }
     settings.endArray();
 
+    loadStarredSettings();
+    QSet<QString> fallbackStarred;
+    if (settings.contains(QStringLiteral("StarredBrushSettings"))) {
+        const QStringList legacyKeys
+            = settings.value(QStringLiteral("StarredBrushSettings")).toStringList();
+        fallbackStarred = QSet<QString>(legacyKeys.begin(), legacyKeys.end());
+    } else {
+        fallbackStarred = defaultStarredKeys(pixelModule().descriptor().settingsTabs);
+    }
+
+    bool brushStorageNeedsStarredMigration = false;
+    for (auto it = m_brushesByPreset.begin(); it != m_brushesByPreset.end(); ++it) {
+        for (BrushData& brush : it.value()) {
+            QSet<QString> keys;
+            if (brush.hasStarredKeys) {
+                brush.starredKeys = canonicalStarredKeys(brush.starredKeys);
+                keys = QSet<QString>(brush.starredKeys.begin(), brush.starredKeys.end());
+            } else if (m_starredSettingsByBrush.contains(brush.id)) {
+                brushStorageNeedsStarredMigration = true;
+                keys = m_starredSettingsByBrush.value(brush.id);
+                brush.starredKeys = canonicalStarredKeys(keys);
+                brush.hasStarredKeys = true;
+            } else {
+                brushStorageNeedsStarredMigration = true;
+                keys = fallbackStarred;
+                brush.starredKeys = canonicalStarredKeys(keys);
+                brush.hasStarredKeys = true;
+            }
+            m_starredSettingsByBrush.insert(brush.id, keys);
+        }
+    }
+
     if (m_presets.isEmpty()) {
         loadDefaults();
+        save();
+    } else if (brushStorageNeedsStarredMigration) {
         save();
     }
 

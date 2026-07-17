@@ -36,14 +36,11 @@ struct BrushData {
     QVariantMap engineSettings;
     BrushSettingsData settings;
 
-    // Transient: starred ("fav") setting keys parsed from an imported brush
-    // file. Not persisted to QSettings as part of BrushData — it is consumed by
-    // importBrushesInto*()/importBrushesAsPreset() to restore the author's
-    // pinned settings under the freshly assigned brush id. The flag
-    // distinguishes "file carried an explicit (possibly empty) set" from "file
-    // had no starred info" (in which case the local defaults apply).
-    QStringList importedStarredKeys;
-    bool hasImportedStarred = false;
+    // Starred ("fav") setting keys belong to the brush preset and are persisted
+    // together with it. The flag distinguishes an explicit (possibly empty)
+    // set from legacy data that did not carry starred settings.
+    QStringList starredKeys;
+    bool hasStarredKeys = false;
 };
 
 struct BrushImportResult {
@@ -121,10 +118,10 @@ private:
     void loadDefaults();
     void loadStarredSettings();
     void saveStarredSettings() const;
-    // Stages an imported brush's starred-setting set into the in-memory map
+    // Stages a brush's explicit starred-setting set into the in-memory map
     // under its new id. Returns true if anything was staged. Callers must
     // saveStarredSettings() and emit starredSettingsChanged() afterwards.
-    bool stageImportedStarredSettings(const QString& brushId, const BrushData& source);
+    bool stageStarredSettings(const QString& brushId, const BrushData& source);
     void ensureRecentBrushesLoaded();
     void loadRecentBrushes();
     void saveRecentBrushes() const;
