@@ -1744,8 +1744,15 @@ void BrushPackPanel::applyCanonicalSelection(
 
     BrushPresetPage* targetPage = pageForPreset(m_selectedPresetId);
     if (presetChanged && targetPage && m_stackedWidget) {
-        m_pageSelectionSyncDeferred = true;
-        m_stackedWidget->setCurrentWidget(targetPage);
+        if (m_stackedWidget->currentWidget() == targetPage) {
+            // The first page is already current when it is inserted, so no
+            // currentChanged signal will arrive to finish deferred selection.
+            m_pageSelectionSyncDeferred = false;
+            syncPageSelectionsAfterTransition();
+        } else {
+            m_pageSelectionSyncDeferred = true;
+            m_stackedWidget->setCurrentWidget(targetPage);
+        }
     } else {
         syncStackedWidgetToSelectedPreset();
     }

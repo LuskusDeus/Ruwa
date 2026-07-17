@@ -20,7 +20,7 @@ class QTimer;
 namespace ruwa::ui::workspace {
 
 struct CanvasLoadedToolState {
-    CanvasToolMode currentTool = CanvasToolMode::Hand;
+    CanvasToolMode currentTool = CanvasToolMode::Brush;
     CanvasToolMode lastDrawTool = CanvasToolMode::Brush;
     QColor currentColor = QColor(0, 0, 0, 255);
     qreal lassoStabilization = 0.0;
@@ -117,7 +117,7 @@ private:
     bool m_profileFlush = false;
     CanvasToolStateSnapshot m_pendingSnapshot;
 
-    CanvasToolMode m_currentTool = CanvasToolMode::Hand;
+    CanvasToolMode m_currentTool = CanvasToolMode::Brush;
     CanvasToolMode m_lastDrawTool = CanvasToolMode::Brush;
     QColor m_currentColor = QColor(0, 0, 0, 255);
     qreal m_lassoStabilization = 0.0;

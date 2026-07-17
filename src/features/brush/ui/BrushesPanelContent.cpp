@@ -26,6 +26,10 @@ using ruwa::core::brushes::BrushData;
 using ruwa::core::brushes::BrushManager;
 using ruwa::core::brushes::BrushPresetData;
 
+namespace {
+constexpr int kPanelStateVersion = 1;
+}
+
 BrushesPanelContent::BrushesPanelContent(QWidget* parent)
     : QWidget(parent)
 {
@@ -156,29 +160,9 @@ void BrushesPanelContent::reloadFromManager()
 
     ensureSelection();
 
-    if (m_expandedPackIds.isEmpty() && !m_hasExplicitExpandedState) {
-        QString selectedPackId;
+    if (!m_hasExplicitExpandedState) {
         for (const BrushListPackData& pack : m_packs) {
-            for (const BrushListBrushData& brush : pack.brushes) {
-                if (brush.id == m_selectedBrushId) {
-                    selectedPackId = pack.id;
-                    break;
-                }
-            }
-            if (!selectedPackId.isEmpty()) {
-                break;
-            }
-        }
-
-        if (!selectedPackId.isEmpty()) {
-            m_expandedPackIds.insert(selectedPackId);
-        } else {
-            for (const BrushListPackData& pack : m_packs) {
-                if (!pack.brushes.isEmpty()) {
-                    m_expandedPackIds.insert(pack.id);
-                    break;
-                }
-            }
+            m_expandedPackIds.insert(pack.id);
         }
     }
 
@@ -188,6 +172,7 @@ void BrushesPanelContent::reloadFromManager()
 QJsonObject BrushesPanelContent::saveState() const
 {
     QJsonObject state;
+    state["version"] = kPanelStateVersion;
     QJsonArray expandedPacks;
     for (auto it = m_expandedPackIds.begin(); it != m_expandedPackIds.end(); ++it) {
         expandedPacks.append(*it);
@@ -207,7 +192,14 @@ void BrushesPanelContent::restoreState(const QJsonObject& state)
 
     m_restoringState = true;
 
-    if (state.contains("expandedPacks")) {
+    const int stateVersion = state["version"].toInt(0);
+    if (stateVersion < kPanelStateVersion) {
+        // Earlier versions defaulted to collapsed packs and persisted that
+        // default as an explicit empty list. Migrate it once to the new
+        // all-expanded default; subsequent user choices are versioned below.
+        m_expandedPackIds.clear();
+        m_hasExplicitExpandedState = false;
+    } else if (state.contains("expandedPacks")) {
         QSet<QString> expandedPackIds;
         const QJsonArray expandedPacks = state["expandedPacks"].toArray();
         for (const QJsonValue& value : expandedPacks) {
@@ -481,6 +473,13 @@ void BrushesPanelContent::ensureSelection()
 
     if (!m_selectedBrushId.isEmpty() && containsBrush(m_selectedBrushId)) {
         return;
+    }
+
+    for (const BrushListPackData& pack : m_packs) {
+        if (!pack.brushes.isEmpty()) {
+            m_selectedBrushId = pack.brushes.first().id;
+            return;
+        }
     }
 
     m_selectedBrushId.clear();

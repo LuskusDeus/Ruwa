@@ -55,7 +55,7 @@ struct CanvasToolBrushStateSnapshot {
 };
 
 struct CanvasToolStateSnapshot {
-    int currentTool = static_cast<int>(CanvasToolMode::Hand);
+    int currentTool = static_cast<int>(CanvasToolMode::Brush);
     int lastDrawTool = static_cast<int>(CanvasToolMode::Brush);
     QRgb currentColorRgba = QColor(0, 0, 0, 255).rgba();
     qreal lassoStabilization = 0.0;

@@ -285,7 +285,7 @@ public:
     void setToolMode(ToolMode tool) override;
     ToolMode toolMode() const
     {
-        return m_toolStateController ? m_toolStateController->currentTool() : ToolMode::Hand;
+        return m_toolStateController ? m_toolStateController->currentTool() : ToolMode::Brush;
     }
     qreal lassoStabilization() const
     {

@@ -396,6 +396,18 @@ void CanvasPanel::loadGlobalToolState()
 {
     if (m_toolStateController) {
         m_toolStateController->loadRuntimeState();
+
+        // Resolve the active brush context immediately, before either brush UI
+        // is attached. This makes the first brush a real canonical selection on
+        // first launch instead of only applying its settings later during GL
+        // content creation.
+        const ToolMode selectionTool = brushSelectionToolMode();
+        if (selectionTool != ToolMode::Liquify) {
+            if (const ToolBrushState* state = toolBrushStateForInstrument(selectionTool)) {
+                applyBrushSelectionForTool(
+                    selectionTool, state->brushId, QString(), false, false);
+            }
+        }
     }
 }
 

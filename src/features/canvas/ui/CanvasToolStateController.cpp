@@ -351,7 +351,8 @@ CanvasLoadedToolState CanvasToolStateController::loadPersistedState()
 
     const int minTool = static_cast<int>(CanvasToolMode::Hand);
     const int maxTool = static_cast<int>(CanvasToolMode::Liquify);
-    const int storedTool = settings.value("currentTool", minTool).toInt();
+    const int storedTool
+        = settings.value("currentTool", static_cast<int>(CanvasToolMode::Brush)).toInt();
     loaded.currentTool = static_cast<CanvasToolMode>(qBound(minTool, storedTool, maxTool));
 
     const int storedLastDraw

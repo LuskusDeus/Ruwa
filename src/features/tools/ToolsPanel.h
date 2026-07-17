@@ -119,7 +119,7 @@ private:
     CanvasPanel* m_canvasPanel = nullptr;
     LayersPanel* m_layersPanel = nullptr;
 
-    Tool m_currentTool = Tool::Hand;
+    Tool m_currentTool = Tool::Brush;
     Orientation m_orientation = Orientation::Vertical;
     bool m_contentCreated = false;
     bool m_layoutBoundsInitialized = false;

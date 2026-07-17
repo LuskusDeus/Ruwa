@@ -453,9 +453,9 @@ QWidget* ToolsPanel::createContent()
         m_toolsData[m_currentTool].button->setChecked(true);
     } else if (m_toolsData.contains(displayToolFor(m_currentTool))) {
         m_toolsData[displayToolFor(m_currentTool)].button->setChecked(true);
-    } else if (m_toolsData.contains(Tool::Hand)) {
-        m_toolsData[Tool::Hand].button->setChecked(true);
-        m_currentTool = Tool::Hand;
+    } else if (m_toolsData.contains(Tool::Brush)) {
+        m_toolsData[Tool::Brush].button->setChecked(true);
+        m_currentTool = Tool::Brush;
     }
 
     updateIcons();
