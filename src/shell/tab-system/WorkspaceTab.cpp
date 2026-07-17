@@ -668,6 +668,11 @@ void WorkspaceTab::onNavigatorTrackedLayerChanged(const LayerId& id)
 
     const bool effectChainChanged = previous.effectChainRevision != current.effectChainRevision;
     if (effectChainChanged && effectResultAffectsNavigator(previous.effects, current.effects)) {
+        if (current.effects.size() < previous.effects.size()) {
+            invalidateNavigatorOverview();
+            return;
+        }
+
         if (current.isBackground || previous.isBackground) {
             invalidateNavigatorOverview();
             return;
