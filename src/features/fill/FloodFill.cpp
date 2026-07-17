@@ -360,6 +360,28 @@ inline PremultPixel compositeOver(
     return out;
 }
 
+inline PremultPixel compositeOverPreservingAlpha(
+    const PremultPixel& dst, uint8_t fillR, uint8_t fillG, uint8_t fillB, uint8_t fillA)
+{
+    if (dst.a == 0 || fillA == 0) {
+        return dst;
+    }
+
+    const uint64_t alphaScale = 255;
+    const uint64_t denominator = alphaScale * alphaScale;
+    const uint64_t invFillA = alphaScale - static_cast<uint64_t>(fillA);
+    auto blendChannel = [&](uint8_t fillChannel, uint8_t dstChannel) {
+        const uint64_t numerator
+            = static_cast<uint64_t>(fillChannel) * fillA * dst.a
+            + static_cast<uint64_t>(dstChannel) * invFillA * alphaScale;
+        return static_cast<uint8_t>(
+            std::clamp<uint64_t>((numerator + denominator / 2) / denominator, 0, dst.a));
+    };
+
+    return { blendChannel(fillR, dst.r), blendChannel(fillG, dst.g),
+        blendChannel(fillB, dst.b), dst.a };
+}
+
 inline PremultPixel compositeUnder(
     const PremultPixel& src, uint8_t fillR, uint8_t fillG, uint8_t fillB, uint8_t fillA)
 {
@@ -516,7 +538,7 @@ inline const std::vector<uint8_t>* rawTileForKey(const FloodFillResult::RawTileM
 inline void applyMaskTileToMutation(TileFillMutation& mutation,
     const std::vector<uint8_t>* maskTile, const std::vector<uint8_t>* selectionTile,
     bool selectionClipping, FillSemanticMode fillMode, uint8_t fillR, uint8_t fillG, uint8_t fillB,
-    uint8_t fillA, TilePixelFormat fmt)
+    uint8_t fillA, TilePixelFormat fmt, bool preserveDestinationAlpha)
 {
     for (uint32_t localY = 0; localY < TILE_SIZE; ++localY) {
         for (uint32_t localX = 0; localX < TILE_SIZE; ++localX) {
@@ -528,15 +550,29 @@ inline void applyMaskTileToMutation(TileFillMutation& mutation,
                 mutation.hasBefore ? &mutation.beforeTile : nullptr, localX, localY, fmt);
             const uint8_t capAlpha
                 = selectionClipping ? selectionAlphaAtLocal(selectionTile, localX, localY) : 255;
-            if (selectionClipping && originalPx.a > capAlpha) {
+            if (!preserveDestinationAlpha && selectionClipping && originalPx.a > capAlpha) {
                 // Pre-existing alpha already above the soft-mask cap; never reduce.
                 continue;
             }
-            PremultPixel blendedPx = (fillMode == FillSemanticMode::Exterior)
-                ? compositeUnder(originalPx, fillR, fillG, fillB, fillA)
-                : compositeOver(originalPx, fillR, fillG, fillB, fillA);
-            if (selectionClipping) {
-                blendedPx = applyFillAlphaCap(blendedPx, capAlpha);
+
+            PremultPixel blendedPx;
+            if (preserveDestinationAlpha) {
+                const uint8_t effectiveFillA = selectionClipping
+                    ? static_cast<uint8_t>(
+                          (static_cast<uint32_t>(fillA) * capAlpha + 127u) / 255u)
+                    : fillA;
+                if (originalPx.a == 0 || effectiveFillA == 0) {
+                    continue;
+                }
+                blendedPx = compositeOverPreservingAlpha(
+                    originalPx, fillR, fillG, fillB, effectiveFillA);
+            } else {
+                blendedPx = (fillMode == FillSemanticMode::Exterior)
+                    ? compositeUnder(originalPx, fillR, fillG, fillB, fillA)
+                    : compositeOver(originalPx, fillR, fillG, fillB, fillA);
+                if (selectionClipping) {
+                    blendedPx = applyFillAlphaCap(blendedPx, capAlpha);
+                }
             }
             setRawPixel(mutation.afterTile, localX, localY, blendedPx.r, blendedPx.g, blendedPx.b,
                 blendedPx.a, fmt);
@@ -549,7 +585,8 @@ FloodFillResult buildResultFromMaskTiles(const TileGrid& sourceGrid,
     const FloodFillResult::RawTileMap& interiorMaskTiles,
     const FloodFillResult::RawTileMap& softEdgeMaskTiles, FillSemanticMode fillMode, uint8_t fillR,
     uint8_t fillG, uint8_t fillB, uint8_t fillA,
-    const FloodFillResult::RawTileMap* selectionMaskTiles = nullptr)
+    const FloodFillResult::RawTileMap* selectionMaskTiles = nullptr,
+    bool preserveDestinationAlpha = false)
 {
     FloodFillResult result;
 
@@ -610,9 +647,9 @@ FloodFillResult buildResultFromMaskTiles(const TileGrid& sourceGrid,
             const bool selectionClipping = (selectionMaskTiles != nullptr);
 
             applyMaskTileToMutation(mutation, interiorTile, selTile, selectionClipping, fillMode,
-                fillR, fillG, fillB, fillA, fmt);
+                fillR, fillG, fillB, fillA, fmt, preserveDestinationAlpha);
             applyMaskTileToMutation(mutation, softTile, selTile, selectionClipping, fillMode, fillR,
-                fillG, fillB, fillA, fmt);
+                fillG, fillB, fillA, fmt, preserveDestinationAlpha);
 
             if (mutation.fillMaskTile.empty() || mutation.pixelsFilled == 0) {
                 mutation.afterTile.clear();
@@ -740,9 +777,9 @@ FloodFillResult buildResultFromMaskTiles(const FloodFillResult::RawTileMap& sour
             const bool selectionClipping = (selectionMaskTiles != nullptr);
 
             applyMaskTileToMutation(mutation, interiorTile, selTile, selectionClipping, fillMode,
-                fillR, fillG, fillB, fillA, fmt);
+                fillR, fillG, fillB, fillA, fmt, false);
             applyMaskTileToMutation(mutation, softTile, selTile, selectionClipping, fillMode, fillR,
-                fillG, fillB, fillA, fmt);
+                fillG, fillB, fillA, fmt, false);
 
             if (mutation.fillMaskTile.empty() || mutation.pixelsFilled == 0) {
                 mutation.afterTile.clear();
@@ -2184,7 +2221,8 @@ FloodFillResult fillPolygon(TileGrid& grid, const std::vector<Vector2>& polygon,
 }
 
 FloodFillResult fillMaskTiles(TileGrid& grid, const FloodFillResult::RawTileMap& maskTiles,
-    uint8_t fillR, uint8_t fillG, uint8_t fillB, uint8_t fillA, const TileGrid* selectionMask)
+    uint8_t fillR, uint8_t fillG, uint8_t fillB, uint8_t fillA, const TileGrid* selectionMask,
+    bool preserveDestinationAlpha)
 {
     if (maskTiles.empty()) {
         return {};
@@ -2195,7 +2233,8 @@ FloodFillResult fillMaskTiles(TileGrid& grid, const FloodFillResult::RawTileMap&
 
     FloodFillResult result
         = buildResultFromMaskTiles(grid, maskTiles, FloodFillResult::RawTileMap {},
-            FillSemanticMode::Stroke, fillR, fillG, fillB, fillA, selectionPtr);
+            FillSemanticMode::Stroke, fillR, fillG, fillB, fillA, selectionPtr,
+            preserveDestinationAlpha);
     if (result.pixelsFilled > 0) {
         applyFillResultToGrid(grid, result);
     }

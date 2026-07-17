@@ -3974,7 +3974,8 @@ bool OpenGLCanvasWidget::performLassoFill(const std::vector<Vector2>& polygon)
     }
 
     FloodFillResult result = fillMaskTiles(
-        *layer->tileGrid, screenMaskTiles, fillR, fillG, fillB, fillA, selectionMask);
+        *layer->tileGrid, screenMaskTiles, fillR, fillG, fillB, fillA, selectionMask,
+        layer->alphaLock);
 
     return applyFloodFillResult(layer->id, std::move(result), buildCurrentSelectionRestore());
 }

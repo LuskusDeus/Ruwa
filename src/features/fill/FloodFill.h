@@ -133,9 +133,13 @@ FloodFillResult fillPolygon(TileGrid& grid, const std::vector<Vector2>& polygon,
 
 /// Apply an already-rasterized fill mask to the grid using the same stroke fill
 /// compositing semantics as `fillPolygon`.
+///
+/// If `preserveDestinationAlpha` is true, the fill changes premultiplied color
+/// only and keeps each destination pixel's alpha unchanged (alpha-lock
+/// semantics). In that mode a selection mask scales the fill coverage.
 FloodFillResult fillMaskTiles(TileGrid& grid, const FloodFillResult::RawTileMap& maskTiles,
     uint8_t fillR, uint8_t fillG, uint8_t fillB, uint8_t fillA,
-    const TileGrid* selectionMask = nullptr);
+    const TileGrid* selectionMask = nullptr, bool preserveDestinationAlpha = false);
 
 /// Build polygon fill preview without mutating the live grid.
 FloodFillResult previewFillPolygon(const TileGrid& grid, const std::vector<Vector2>& polygon,
