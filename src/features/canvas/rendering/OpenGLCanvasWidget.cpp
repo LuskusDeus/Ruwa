@@ -11055,9 +11055,11 @@ void OpenGLCanvasWidget::paintGL_renderLassoOverlay()
     }
 
     const auto contentVp = canvasContentViewProjectionMatrix();
+    const std::function<Vector2(const Vector2&)> documentWorldFromScreenFn
+        = [this](const Vector2& screen) { return documentWorldFromScreen(screen); };
     lassoOverlay->render(m_viewport, lassoPoints, activeClosed, *edgesToRender, edgesAlpha,
         addPathMaskTexture, maskOriginX, maskOriginY, maskWidth, maskHeight, pathAlphaInside,
-        pathAlphaOutside, &contentVp);
+        pathAlphaOutside, &contentVp, &documentWorldFromScreenFn);
     if (lassoOverlay->isAnimating())
         update();
 }

@@ -16,6 +16,7 @@
 
 #include <array>
 #include <chrono>
+#include <functional>
 #include <vector>
 
 namespace aether {
@@ -31,12 +32,15 @@ public:
     Result<void> initialize();
     void shutdown();
 
+    /// documentWorldFromScreen must match viewProjectionContent so off-screen edge culling
+    /// remains correct when the document view is mirrored.
     void render(const Viewport& viewport, const std::vector<Vector2>& activePath, bool activeClosed,
         const std::vector<LassoEdgeSegment>& edges, float edgesAlpha = 0.9f,
         GLuint addPathMaskTexture = 0, float maskAtlasOriginX = 0.0f, float maskAtlasOriginY = 0.0f,
         float maskAtlasWidth = 0.0f, float maskAtlasHeight = 0.0f, float pathAlphaInsideMask = 0.2f,
         float pathAlphaOutsideMask = 1.0f,
-        const std::array<float, 16>* viewProjectionContent = nullptr);
+        const std::array<float, 16>* viewProjectionContent = nullptr,
+        const std::function<Vector2(const Vector2&)>* documentWorldFromScreen = nullptr);
 
     bool isInitialized() const { return m_initialized; }
     bool isAnimating() const { return m_animating; }

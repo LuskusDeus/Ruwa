@@ -182,7 +182,8 @@ void LassoOverlay::render(const Viewport& viewport, const std::vector<Vector2>& 
     bool activeClosed, const std::vector<LassoEdgeSegment>& edges, float edgesAlpha,
     GLuint addPathMaskTexture, float maskAtlasOriginX, float maskAtlasOriginY, float maskAtlasWidth,
     float maskAtlasHeight, float pathAlphaInsideMask, float pathAlphaOutsideMask,
-    const std::array<float, 16>* viewProjectionContent)
+    const std::array<float, 16>* viewProjectionContent,
+    const std::function<Vector2(const Vector2&)>* documentWorldFromScreen)
 {
     if (!m_initialized)
         return;
@@ -199,11 +200,15 @@ void LassoOverlay::render(const Viewport& viewport, const std::vector<Vector2>& 
         = viewProjectionContent ? *viewProjectionContent : viewport.viewProjectionMatrix();
     const auto& cam = viewport.camera();
     Vector2 vpSize = viewport.size();
+    auto toDocumentWorld = [&](const Vector2& screen) {
+        return documentWorldFromScreen ? (*documentWorldFromScreen)(screen)
+                                       : cam.screenToWorld(screen, vpSize);
+    };
     // Use all 4 screen corners for correct AABB when view is rotated
-    Vector2 w0 = cam.screenToWorld({ 0.0f, 0.0f }, vpSize);
-    Vector2 w1 = cam.screenToWorld({ vpSize.x, 0.0f }, vpSize);
-    Vector2 w2 = cam.screenToWorld({ vpSize.x, vpSize.y }, vpSize);
-    Vector2 w3 = cam.screenToWorld({ 0.0f, vpSize.y }, vpSize);
+    Vector2 w0 = toDocumentWorld({ 0.0f, 0.0f });
+    Vector2 w1 = toDocumentWorld({ vpSize.x, 0.0f });
+    Vector2 w2 = toDocumentWorld({ vpSize.x, vpSize.y });
+    Vector2 w3 = toDocumentWorld({ 0.0f, vpSize.y });
     float viewMinX = std::min({ w0.x, w1.x, w2.x, w3.x });
     float viewMinY = std::min({ w0.y, w1.y, w2.y, w3.y });
     float viewMaxX = std::max({ w0.x, w1.x, w2.x, w3.x });
