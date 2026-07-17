@@ -122,6 +122,8 @@
         <file alias="ToolsPanel">resources/icons/ToolsPanel.png</file>
     </qresource>
     <qresource prefix="/images">
+        <file alias="FirstIntegrationBottom">resources/pictures/FirstIntegrationBottom.png</file>
+        <file alias="FirstIntegrationHero">resources/pictures/FirstIntegrationHero.png</file>
         <file alias="WelcomeBanner">resources/pictures/WelcomeBanner.png</file>
         <file alias="WelcomeBanner2">resources/pictures/WelcomeBanner2.png</file>
         <file alias="UpdateBanner">resources/pictures/UpdateBanner.png</file>

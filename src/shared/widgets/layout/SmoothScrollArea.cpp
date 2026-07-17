@@ -25,6 +25,8 @@ constexpr qreal kStylusSwipeInertiaFactor = 0.18;
 constexpr int kHoverUpdateIntervalMs = 40;
 constexpr qreal kScrollBarWidth = 12.0; // Must match SmoothScrollBar::setFixedWidth(12).
 constexpr int kReserveAnimationMs = 220;
+constexpr int kDefaultScrollDurationMs = 200;
+constexpr int kStepScrollDurationMs = 120;
 } // namespace
 
 SmoothScrollArea::SmoothScrollArea(QWidget* parent)
@@ -45,7 +47,7 @@ SmoothScrollArea::SmoothScrollArea(QWidget* parent)
         &SmoothScrollArea::onStepScrollRequested);
 
     m_scrollAnimation = new QPropertyAnimation(this, "scrollValue");
-    m_scrollAnimation->setDuration(200);
+    m_scrollAnimation->setDuration(kDefaultScrollDurationMs);
     m_scrollAnimation->setEasingCurve(QEasingCurve::OutCubic);
 
     // Animates the reserved scrollbar column width so content is pushed aside
@@ -165,15 +167,47 @@ void SmoothScrollArea::refreshScrollGeometry()
 
 void SmoothScrollArea::scrollTo(int value, bool animated)
 {
-    m_targetScrollValue = qBound(0, value, m_maxScroll);
+    if (animated) {
+        scrollTo(value, kDefaultScrollDurationMs, QEasingCurve::OutCubic);
+        return;
+    }
 
-    if (animated && m_targetScrollValue != m_currentScrollValue) {
-        m_scrollAnimation->stop();
+    m_scrollAnimation->stop();
+    m_targetScrollValue = qBound(0, value, m_maxScroll);
+    setScrollValue(m_targetScrollValue);
+}
+
+void SmoothScrollArea::scrollTo(
+    int value, int durationMs, QEasingCurve::Type easingCurve)
+{
+    m_targetScrollValue = qBound(0, value, m_maxScroll);
+    m_scrollAnimation->stop();
+
+    if (durationMs > 0 && m_targetScrollValue != m_currentScrollValue) {
+        m_scrollAnimation->setDuration(durationMs);
+        m_scrollAnimation->setEasingCurve(easingCurve);
         m_scrollAnimation->setStartValue(m_currentScrollValue);
         m_scrollAnimation->setEndValue(m_targetScrollValue);
         m_scrollAnimation->start();
     } else {
         setScrollValue(m_targetScrollValue);
+    }
+}
+
+void SmoothScrollArea::setUserScrollingEnabled(bool enabled)
+{
+    if (m_userScrollingEnabled == enabled) {
+        return;
+    }
+
+    m_userScrollingEnabled = enabled;
+    m_verticalScrollBar->setEnabled(enabled);
+    m_verticalScrollBar->setAttribute(Qt::WA_TransparentForMouseEvents, !enabled);
+
+    if (!enabled) {
+        m_scrollAnimation->stop();
+        m_targetScrollValue = m_currentScrollValue;
+        cancelStylusSwipe();
     }
 }
 
@@ -240,6 +274,10 @@ void SmoothScrollArea::resizeEvent(QResizeEvent* event)
 
 void SmoothScrollArea::beginStylusSwipe(const QPoint& globalPos)
 {
+    if (!m_userScrollingEnabled) {
+        return;
+    }
+
     m_scrollAnimation->stop();
     m_stylusSwipeActive = true;
     m_stylusSwipeStartGlobalPos = globalPos;
@@ -253,7 +291,7 @@ void SmoothScrollArea::beginStylusSwipe(const QPoint& globalPos)
 
 void SmoothScrollArea::updateStylusSwipe(const QPoint& globalPos)
 {
-    if (!m_stylusSwipeActive) {
+    if (!m_userScrollingEnabled || !m_stylusSwipeActive) {
         return;
     }
 
@@ -274,7 +312,7 @@ void SmoothScrollArea::updateStylusSwipe(const QPoint& globalPos)
 
 void SmoothScrollArea::endStylusSwipe(const QPoint& globalPos)
 {
-    if (!m_stylusSwipeActive) {
+    if (!m_userScrollingEnabled || !m_stylusSwipeActive) {
         return;
     }
 
@@ -296,6 +334,7 @@ void SmoothScrollArea::endStylusSwipe(const QPoint& globalPos)
     m_targetScrollValue = inertiaTarget;
     m_scrollAnimation->stop();
     m_scrollAnimation->setDuration(kStylusSwipeInertiaDurationMs);
+    m_scrollAnimation->setEasingCurve(QEasingCurve::OutCubic);
     m_scrollAnimation->setStartValue(m_currentScrollValue);
     m_scrollAnimation->setEndValue(m_targetScrollValue);
     m_scrollAnimation->start();
@@ -410,6 +449,11 @@ void SmoothScrollArea::scheduleContentLayoutRefresh()
 
 void SmoothScrollArea::wheelEvent(QWheelEvent* event)
 {
+    if (!m_userScrollingEnabled) {
+        event->accept();
+        return;
+    }
+
     if (!m_contentWidget || m_maxScroll <= 0) {
         return;
     }
@@ -434,7 +478,8 @@ void SmoothScrollArea::wheelEvent(QWheelEvent* event)
 
     m_targetScrollValue = qBound(0, baseValue + delta, m_maxScroll);
 
-    m_scrollAnimation->setDuration(120);
+    m_scrollAnimation->setDuration(kStepScrollDurationMs);
+    m_scrollAnimation->setEasingCurve(QEasingCurve::OutCubic);
     m_scrollAnimation->setStartValue(m_currentScrollValue);
     m_scrollAnimation->setEndValue(m_targetScrollValue);
     m_scrollAnimation->start();
@@ -546,6 +591,8 @@ void SmoothScrollArea::onScrollBarValueChanged(int value)
 
     if (qAbs(value - m_currentScrollValue) > 2) {
         m_scrollAnimation->stop();
+        m_scrollAnimation->setDuration(kDefaultScrollDurationMs);
+        m_scrollAnimation->setEasingCurve(QEasingCurve::OutCubic);
         m_scrollAnimation->setStartValue(m_currentScrollValue);
         m_scrollAnimation->setEndValue(value);
         m_scrollAnimation->start();
@@ -556,7 +603,7 @@ void SmoothScrollArea::onScrollBarValueChanged(int value)
 
 void SmoothScrollArea::onStepScrollRequested(int delta)
 {
-    if (!m_contentWidget || m_maxScroll <= 0) {
+    if (!m_userScrollingEnabled || !m_contentWidget || m_maxScroll <= 0) {
         return;
     }
 
@@ -568,7 +615,8 @@ void SmoothScrollArea::onStepScrollRequested(int delta)
     m_targetScrollValue = qBound(0, baseValue + delta, m_maxScroll);
 
     m_scrollAnimation->stop();
-    m_scrollAnimation->setDuration(120);
+    m_scrollAnimation->setDuration(kStepScrollDurationMs);
+    m_scrollAnimation->setEasingCurve(QEasingCurve::OutCubic);
     m_scrollAnimation->setStartValue(m_currentScrollValue);
     m_scrollAnimation->setEndValue(m_targetScrollValue);
     m_scrollAnimation->start();

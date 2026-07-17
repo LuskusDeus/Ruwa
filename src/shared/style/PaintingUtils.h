@@ -375,7 +375,9 @@ inline void drawTonedGlassPanel(QPainter& painter, const QRectF& rect, qreal rad
     painter.drawImage(rect.topLeft(), dithered);
     painter.restore();
 
-    drawGradientBorder(painter, rect, radius, borderTop, borderBottom, borderWidth);
+    if (borderWidth > 0.0) {
+        drawGradientBorder(painter, rect, radius, borderTop, borderBottom, borderWidth);
+    }
 }
 
 } // namespace ruwa::ui::painting

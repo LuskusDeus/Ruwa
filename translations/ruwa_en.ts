@@ -709,69 +709,164 @@
 <context>
     <name>ruwa::ui::first_run_integration::FirstRunIntegrationWidget</name>
     <message>
-        <location filename="../src/features/first-run-integration/FirstRunIntegrationWidget.cpp" line="850"/>
-        <source>Welcome to</source>
-        <translation>Welcome to</translation>
+        <source>Welcome to Ruwa</source>
+        <translation>Welcome to Ruwa</translation>
     </message>
     <message>
-        <location filename="../src/features/first-run-integration/FirstRunIntegrationWidget.cpp" line="853"/>
-        <source>A next-generation drawing tool built for artists who refuse to compromise. Precision, freedom, expression - all in one canvas.</source>
-        <translation>A next-generation drawing tool built for artists who refuse to compromise. Precision, freedom, expression - all in one canvas.</translation>
+        <source>Let&apos;s tailor everything to the way you create.</source>
+        <translation>Let&apos;s tailor everything to the way you create.</translation>
     </message>
     <message>
-        <location filename="../src/features/first-run-integration/FirstRunIntegrationWidget.cpp" line="858"/>
-        <source>Setup</source>
-        <translation>Setup</translation>
+        <source>Start customizing</source>
+        <translation>Start customizing</translation>
     </message>
     <message>
-        <location filename="../src/features/first-run-integration/FirstRunIntegrationWidget.cpp" line="861"/>
-        <source>All essentials are set</source>
-        <translation>All essentials are set</translation>
+        <source>No, thanks</source>
+        <translation>No, thanks</translation>
     </message>
     <message>
-        <location filename="../src/features/first-run-integration/FirstRunIntegrationWidget.cpp" line="864"/>
-        <source>Language</source>
-        <translation>Language</translation>
+        <source>Appearance settings</source>
+        <translation>Appearance settings</translation>
     </message>
     <message>
-        <location filename="../src/features/first-run-integration/FirstRunIntegrationWidget.cpp" line="867"/>
-        <source>Theme</source>
-        <translation>Theme</translation>
+        <source>UI Scale</source>
+        <translation>UI Scale</translation>
     </message>
     <message>
-        <location filename="../src/features/first-run-integration/FirstRunIntegrationWidget.cpp" line="870"/>
-        <source>Built-in themes only</source>
-        <translation>Built-in themes only</translation>
+        <source>Adjust the size of UI elements</source>
+        <translation>Adjust the size of UI elements</translation>
     </message>
     <message>
-        <location filename="../src/features/first-run-integration/FirstRunIntegrationWidget.cpp" line="873"/>
-        <source>If you want deeper customization, you can always find more options in Settings.</source>
-        <translation>If you want deeper customization, you can always find more options in Settings.</translation>
+        <source>Small</source>
+        <translation>Small</translation>
     </message>
     <message>
-        <location filename="../src/features/first-run-integration/FirstRunIntegrationWidget.cpp" line="877"/>
-        <source>Ruwa is still in alpha. Future versions will bring many more setup and personalization options.</source>
-        <translation>Ruwa is still in alpha. Future versions will bring many more setup and personalization options.</translation>
+        <source>Medium</source>
+        <translation>Medium</translation>
     </message>
     <message>
-        <location filename="../src/features/first-run-integration/FirstRunIntegrationWidget.cpp" line="882"/>
-        <source>Skip setup</source>
-        <translation>Skip setup</translation>
+        <source>Large</source>
+        <translation>Large</translation>
     </message>
     <message>
-        <location filename="../src/features/first-run-integration/FirstRunIntegrationWidget.cpp" line="886"/>
-        <source>Get started -&gt;</source>
-        <translation>Get started -&gt;</translation>
+        <source>Top bar tab alignment</source>
+        <translation>Top bar tab alignment</translation>
     </message>
     <message>
-        <location filename="../src/features/first-run-integration/FirstRunIntegrationWidget.cpp" line="890"/>
-        <source>Continue</source>
-        <translation>Continue</translation>
+        <source>Place the tab strip at the left of the title bar or centered in the free space</source>
+        <translation>Place the tab strip at the left of the title bar or centered in the free space</translation>
     </message>
     <message>
-        <location filename="../src/features/first-run-integration/FirstRunIntegrationWidget.cpp" line="894"/>
-        <source>Start creating</source>
-        <translation>Start creating</translation>
+        <source>Left</source>
+        <translation>Left</translation>
+    </message>
+    <message>
+        <source>Center</source>
+        <translation>Center</translation>
+    </message>
+    <message>
+        <source>Editor</source>
+        <translation>Editor</translation>
+    </message>
+    <message>
+        <source>Auto-Save</source>
+        <translation>Auto-Save</translation>
+    </message>
+    <message>
+        <source>Automatically save your work at the selected interval</source>
+        <translation>Automatically save your work at the selected interval</translation>
+    </message>
+    <message>
+        <source>Off</source>
+        <translation>Off</translation>
+    </message>
+    <message>
+        <source>2 min</source>
+        <translation>2 min</translation>
+    </message>
+    <message>
+        <source>5 min</source>
+        <translation>5 min</translation>
+    </message>
+    <message>
+        <source>10 min</source>
+        <translation>10 min</translation>
+    </message>
+    <message>
+        <source>Quick Shapes</source>
+        <translation>Quick Shapes</translation>
+    </message>
+    <message>
+        <source>Hold stroke to morph into straight line, circle, triangle, or square</source>
+        <translation>Hold stroke to morph into straight line, circle, triangle, or square</translation>
+    </message>
+    <message>
+        <source>Performance</source>
+        <translation>Performance</translation>
+    </message>
+    <message>
+        <source>Undo Memory Limit</source>
+        <translation>Undo Memory Limit</translation>
+    </message>
+    <message>
+        <source>Maximum memory available for undo history</source>
+        <translation>Maximum memory available for undo history</translation>
+    </message>
+    <message>
+        <source>300 MB</source>
+        <translation>300 MB</translation>
+    </message>
+    <message>
+        <source>1 GB</source>
+        <translation>1 GB</translation>
+    </message>
+    <message>
+        <source>3 GB</source>
+        <translation>3 GB</translation>
+    </message>
+    <message>
+        <source>8 GB</source>
+        <translation>8 GB</translation>
+    </message>
+    <message>
+        <source>Tablet Input Backend</source>
+        <translation>Tablet Input Backend</translation>
+    </message>
+    <message>
+        <source>Choose the stylus input backend. Restart is required to apply this setting.</source>
+        <translation>Choose the stylus input backend. Restart is required to apply this setting.</translation>
+    </message>
+    <message>
+        <source>WinTab (Qt)</source>
+        <translation>WinTab (Qt)</translation>
+    </message>
+    <message>
+        <source>Windows Ink</source>
+        <translation>Windows Ink</translation>
+    </message>
+    <message>
+        <source>WinTab (Ruwa)</source>
+        <translation>WinTab (Ruwa)</translation>
+    </message>
+    <message>
+        <source>Tablet backend was changed. Restart is required to apply this setting.</source>
+        <translation>Tablet backend was changed. Restart is required to apply this setting.</translation>
+    </message>
+    <message>
+        <source>Later</source>
+        <translation>Later</translation>
+    </message>
+    <message>
+        <source>Restart now</source>
+        <translation>Restart now</translation>
+    </message>
+    <message>
+        <source>You can change all of these settings later in the Settings tab.</source>
+        <translation>You can change all of these settings later in the Settings tab.</translation>
+    </message>
+    <message>
+        <source>Finish personalization</source>
+        <translation>Finish personalization</translation>
     </message>
 </context>
 <context>

@@ -99,7 +99,6 @@ private slots:
     void onSectionChanged(ruwa::ui::widgets::HomePageSidebar::Section section);
     void onFirstRunCompletedChanged(bool completed);
     void onFirstRunCompletedRequested();
-    void onFirstRunCustomizeRequested();
 
 private:
     void setupUI();

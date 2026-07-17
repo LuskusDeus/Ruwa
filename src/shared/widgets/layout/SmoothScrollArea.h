@@ -5,6 +5,7 @@
 #define RUWA_UI_WIDGETS_COMMON_SMOOTHSCROLLAREA_H
 
 #include <QWidget>
+#include <QEasingCurve>
 #include <QPoint>
 #include <QPointer>
 #include <QPropertyAnimation>
@@ -46,6 +47,14 @@ public:
 
     /// Scroll to position with animation
     void scrollTo(int value, bool animated = true);
+
+    /// Scroll to position with a caller-defined animation.
+    void scrollTo(int value, int durationMs, QEasingCurve::Type easingCurve);
+
+    /// Enable or disable user-initiated scrolling without disabling child controls.
+    /// Programmatic scrollTo() calls remain available.
+    void setUserScrollingEnabled(bool enabled);
+    bool isUserScrollingEnabled() const { return m_userScrollingEnabled; }
 
     /// Recompute content size and scroll range (call after bulk changes inside the content widget).
     void refreshScrollGeometry();
@@ -139,6 +148,7 @@ private:
     bool m_fillBackground { true };
     bool m_scrollBarTransparentTrack { false };
     bool m_refreshingLayout { false };
+    bool m_userScrollingEnabled { true };
 
     QPropertyAnimation* m_scrollAnimation { nullptr };
     QPropertyAnimation* m_reserveAnimation { nullptr };

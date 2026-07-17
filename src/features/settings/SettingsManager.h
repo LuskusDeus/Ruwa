@@ -79,7 +79,7 @@ public:
     void setBrushDisplayColorIndex(const QString& brushId, int colorIndex);
 
     // === EDITOR SETTERS ===
-    void setAutoSaveInterval(int minutes); // 0=Off, 5=5min, 10=10min, 20=20min
+    void setAutoSaveInterval(int minutes); // 0=Off, 2=2min, 5=5min, 10=10min
     void setQuickshapesEnabled(bool enabled);
 
     // === PERFORMANCE SETTERS ===

@@ -7,14 +7,13 @@
 #include <QPropertyAnimation>
 #include <QAbstractAnimation>
 #include <QEvent>
-#include <QResizeEvent>
 #include <QTimer>
-#include <QCoreApplication>
+
 namespace ruwa::ui::widgets {
 
 WidgetFadeInOverlay::WidgetFadeInOverlay(
     QWidget* target, const QColor& backgroundColor, QWidget* parent)
-    : QWidget(nullptr, Qt::FramelessWindowHint | Qt::WindowStaysOnTopHint | Qt::Tool)
+    : QWidget(target)
     , m_target(target)
     , m_backgroundColor(backgroundColor)
 {
@@ -25,34 +24,31 @@ WidgetFadeInOverlay::WidgetFadeInOverlay(
         return;
     }
 
-    // Top-level popup window flags
-    setAttribute(Qt::WA_TranslucentBackground);
-    setAttribute(Qt::WA_ShowWithoutActivating); // Don't steal focus
+    setAttribute(Qt::WA_OpaquePaintEvent);
+    setAttribute(Qt::WA_TransparentForMouseEvents);
     setAttribute(Qt::WA_DeleteOnClose);
     setAutoFillBackground(false);
+    setFocusPolicy(Qt::NoFocus);
 
     // Start fully opaque
     m_opacity = 1.0;
 
-    // Position overlay in SCREEN coordinates over target
     updateGeometry();
 
-    // Track target movement/resize
+    // The overlay uses target-local coordinates and only needs to follow its size.
     m_target->installEventFilter(this);
-
-    // Also track target's window for move events
-    if (m_target->window()) {
-        m_target->window()->installEventFilter(this);
-    }
 }
 
 void WidgetFadeInOverlay::showOverlay()
 {
-    // Update position right before showing
-    updateGeometry();
+    if (!m_target) {
+        return;
+    }
 
-    // Show as popup
+    updateGeometry();
+    m_targetSnapshot = m_target->grab();
     show();
+    raise();
 
     // Force immediate paint
     repaint();
@@ -62,9 +58,6 @@ void WidgetFadeInOverlay::startAnimation(
     int durationMs, int delayMs, QEasingCurve::Type easingCurve)
 {
     auto doStartAnimation = [this, durationMs, easingCurve]() {
-        // Ensure painted
-        repaint();
-
         // Create fade animation
         m_animation = new QPropertyAnimation(this, "opacity", this);
         m_animation->setDuration(durationMs);
@@ -104,19 +97,27 @@ void WidgetFadeInOverlay::paintEvent(QPaintEvent* event)
     QPainter painter(this);
     painter.setRenderHint(QPainter::Antialiasing, false);
 
-    QColor color = m_backgroundColor;
-    color.setAlphaF(m_opacity);
-    painter.fillRect(rect(), color);
+    QColor background = m_backgroundColor;
+    background.setAlpha(255);
+    painter.fillRect(rect(), background);
+
+    if (!m_targetSnapshot.isNull() && m_opacity < 1.0) {
+        const qreal snapshotDpr = m_targetSnapshot.devicePixelRatio();
+        const QRectF sourceRect(QPointF(0, 0),
+            QSizeF(m_targetSnapshot.width() / snapshotDpr,
+                m_targetSnapshot.height() / snapshotDpr));
+        painter.setOpacity(1.0 - m_opacity);
+        painter.setRenderHint(QPainter::SmoothPixmapTransform);
+        painter.drawPixmap(QRectF(rect()), m_targetSnapshot, sourceRect);
+    }
 }
 
 bool WidgetFadeInOverlay::eventFilter(QObject* watched, QEvent* event)
 {
-    // Update position when target or its window moves/resizes
-    if (watched == m_target || (m_target && watched == m_target->window())) {
-        if (event->type() == QEvent::Resize || event->type() == QEvent::Move
-            || event->type() == QEvent::Show) {
-            updateGeometry();
-        }
+    if (watched == m_target
+        && (event->type() == QEvent::Resize || event->type() == QEvent::Show)) {
+        updateGeometry();
+        raise();
     }
 
     return QWidget::eventFilter(watched, event);
@@ -128,11 +129,7 @@ void WidgetFadeInOverlay::updateGeometry()
         return;
     }
 
-    // Get target's position in SCREEN coordinates
-    QPoint globalPos = m_target->mapToGlobal(QPoint(0, 0));
-
-    // Set geometry in screen coordinates (we're a top-level window)
-    setGeometry(globalPos.x(), globalPos.y(), m_target->width(), m_target->height());
+    setGeometry(m_target->rect());
 }
 
 } // namespace ruwa::ui::widgets

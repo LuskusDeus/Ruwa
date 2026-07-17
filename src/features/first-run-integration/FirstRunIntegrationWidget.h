@@ -3,33 +3,34 @@
 #ifndef RUWA_FEATURES_FIRSTRUNINTEGRATION_WIDGET_H
 #define RUWA_FEATURES_FIRSTRUNINTEGRATION_WIDGET_H
 
-#include <QList>
-#include <QPoint>
-#include <QVector>
+#include <QPointer>
 #include <QWidget>
 
-#include <functional>
-
-class QGraphicsOpacityEffect;
 class QEvent;
+class QFrame;
 class QHideEvent;
 class QLabel;
+class QResizeEvent;
 class QShowEvent;
-class QVariantAnimation;
 class QVBoxLayout;
 
 namespace ruwa::ui::widgets {
-class ThemePreviewWidget;
+class SettingsChoice;
+class SettingsToggle;
+class SmoothScrollArea;
+class ThemeSelectorWidget;
 class WelcomeBannerButton;
+class WidgetFadeInOverlay;
 } // namespace ruwa::ui::widgets
 
 namespace ruwa::ui::first_run_integration {
 
-class FirstRunIntegrationBackgroundWidget;
-class FirstRunIntegrationHeroBodyWidget;
-class FirstRunIntegrationHeroTitleWidget;
-class FirstRunIntegrationSetupTitleWidget;
-
+/**
+ * @brief Scrollable first-run personalization page.
+ *
+ * Presents the first-run hero and the application settings selected for the
+ * onboarding flow.
+ */
 class FirstRunIntegrationWidget final : public QWidget {
     Q_OBJECT
 
@@ -37,75 +38,54 @@ public:
     explicit FirstRunIntegrationWidget(QWidget* parent = nullptr);
     ~FirstRunIntegrationWidget() override = default;
 
-    void startPreview();
     void setContentSideMargin(int margin);
 
 signals:
     void completedRequested();
-    void customizeRequested();
 
 protected:
-    void showEvent(QShowEvent* event) override;
-    void hideEvent(QHideEvent* event) override;
     void changeEvent(QEvent* event) override;
+    bool eventFilter(QObject* watched, QEvent* event) override;
+    void hideEvent(QHideEvent* event) override;
+    void resizeEvent(QResizeEvent* event) override;
+    void showEvent(QShowEvent* event) override;
 
 private:
     void setupUi();
     void retranslateUi();
+    void ensureAppearanceOverlay();
+    void startAppearanceAnimation();
     void updateTheme();
-    void updateOverlayMargins();
-    void startIntroAnimations();
-    void stopIntroAnimations();
-    void resetIntroAnimationState();
-    void animateIntroProgress(int delayMs, std::function<void(qreal)> applyProgress);
-    void animateButtonsIntro(int delayMs);
-    void startSetupSectionTransition();
-    void startWelcomeSectionTransition();
-    void startFinishSectionTransition();
-    void startSetupFromFinishTransition();
-    void stopPageTransitionAnimations();
-    void animatePageTransitionProgress(int delayMs, std::function<void(qreal)> applyProgress);
+    void updateContentMargins();
+    void updateHeroHeight();
 
 private:
-    FirstRunIntegrationBackgroundWidget* m_background { nullptr };
-    QVBoxLayout* m_overlayLayout { nullptr };
-    QVBoxLayout* m_nextPageLayout { nullptr };
-    QVBoxLayout* m_finishPageLayout { nullptr };
-    QWidget* m_welcomePage { nullptr };
-    QWidget* m_nextPage { nullptr };
-    QWidget* m_finishPage { nullptr };
-    QGraphicsOpacityEffect* m_nextPageOpacityEffect { nullptr };
-    QGraphicsOpacityEffect* m_finishPageOpacityEffect { nullptr };
-    FirstRunIntegrationHeroTitleWidget* m_heroTitle { nullptr };
-    FirstRunIntegrationHeroBodyWidget* m_bodyText { nullptr };
-    FirstRunIntegrationSetupTitleWidget* m_setupTitle { nullptr };
-    FirstRunIntegrationSetupTitleWidget* m_finishTitle { nullptr };
-    QLabel* m_languageLabel { nullptr };
-    QLabel* m_themeLabel { nullptr };
-    QLabel* m_themeDescription { nullptr };
-    QLabel* m_finishBody { nullptr };
-    QLabel* m_finishAlphaBody { nullptr };
-    QWidget* m_actionsSlot { nullptr };
-    QWidget* m_actionsContainer { nullptr };
-    QGraphicsOpacityEffect* m_actionsOpacityEffect { nullptr };
-    ruwa::ui::widgets::WelcomeBannerButton* m_skipSetupButton { nullptr };
-    ruwa::ui::widgets::WelcomeBannerButton* m_getStartedButton { nullptr };
-    ruwa::ui::widgets::WelcomeBannerButton* m_setupBackButton { nullptr };
-    ruwa::ui::widgets::WelcomeBannerButton* m_setupContinueButton { nullptr };
-    ruwa::ui::widgets::WelcomeBannerButton* m_finishBackButton { nullptr };
-    ruwa::ui::widgets::WelcomeBannerButton* m_startCreatingButton { nullptr };
-    QVector<ruwa::ui::widgets::ThemePreviewWidget*> m_setupThemePreviews;
-    QList<QVariantAnimation*> m_introAnimations;
-    QList<QVariantAnimation*> m_pageTransitionAnimations;
-    QPoint m_actionsFinalPosition;
-    QPoint m_welcomePageFinalPosition;
-    QPoint m_nextPageFinalPosition;
-    QPoint m_finishPageFinalPosition;
+    QVBoxLayout* m_pageLayout { nullptr };
+    QVBoxLayout* m_contentLayout { nullptr };
+    ruwa::ui::widgets::SmoothScrollArea* m_scrollArea { nullptr };
+    QFrame* m_heroSection { nullptr };
+    QWidget* m_heroGlassPanel { nullptr };
+    QLabel* m_heroLogo { nullptr };
+    QLabel* m_heroTitle { nullptr };
+    QLabel* m_heroDescription { nullptr };
+    ruwa::ui::widgets::WelcomeBannerButton* m_startCustomizationButton { nullptr };
+    ruwa::ui::widgets::WelcomeBannerButton* m_skipCustomizationButton { nullptr };
+    QLabel* m_appearanceTitle { nullptr };
+    ruwa::ui::widgets::ThemeSelectorWidget* m_themeSelector { nullptr };
+    ruwa::ui::widgets::SettingsChoice* m_uiScaleChoice { nullptr };
+    ruwa::ui::widgets::SettingsChoice* m_topBarTabAlignmentChoice { nullptr };
+    QLabel* m_editorTitle { nullptr };
+    ruwa::ui::widgets::SettingsChoice* m_autoSaveChoice { nullptr };
+    ruwa::ui::widgets::SettingsToggle* m_quickshapesToggle { nullptr };
+    QLabel* m_performanceTitle { nullptr };
+    ruwa::ui::widgets::SettingsChoice* m_undoMemoryChoice { nullptr };
+    ruwa::ui::widgets::SettingsChoice* m_tabletBackendChoice { nullptr };
+    QFrame* m_finishSection { nullptr };
+    QLabel* m_finishDescription { nullptr };
+    ruwa::ui::widgets::WelcomeBannerButton* m_finishButton { nullptr };
+    QPointer<ruwa::ui::widgets::WidgetFadeInOverlay> m_appearanceOverlay;
     int m_contentSideMargin { 0 };
-    int m_introGeneration { 0 };
-    int m_pageTransitionGeneration { 0 };
-    bool m_actionsFinalPositionKnown { false };
-    bool m_pageTransitionRunning { false };
+    bool m_appearanceAnimationStarted { false };
 };
 
 } // namespace ruwa::ui::first_run_integration

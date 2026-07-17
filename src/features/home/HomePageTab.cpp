@@ -150,9 +150,6 @@ void HomePageTab::setupUI()
     connect(m_firstRunIntegration,
         &ruwa::ui::first_run_integration::FirstRunIntegrationWidget::completedRequested, this,
         &HomePageTab::onFirstRunCompletedRequested);
-    connect(m_firstRunIntegration,
-        &ruwa::ui::first_run_integration::FirstRunIntegrationWidget::customizeRequested, this,
-        &HomePageTab::onFirstRunCustomizeRequested);
 
     m_homeContainer = new QWidget(this);
     setupHomeContent();
@@ -319,12 +316,6 @@ void HomePageTab::onFirstRunCompletedChanged(bool completed)
 void HomePageTab::onFirstRunCompletedRequested()
 {
     ruwa::core::SettingsManager::instance().setFirstRunIntegrationCompleted(true);
-}
-
-void HomePageTab::onFirstRunCustomizeRequested()
-{
-    ruwa::core::SettingsManager::instance().setFirstRunIntegrationCompleted(true);
-    navigateToWelcome();
 }
 
 } // namespace ruwa::ui::tabs

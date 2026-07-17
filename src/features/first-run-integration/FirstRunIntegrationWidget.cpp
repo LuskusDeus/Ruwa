@@ -2,446 +2,288 @@
 
 #include "features/first-run-integration/FirstRunIntegrationWidget.h"
 
-#include "features/first-run-integration/FirstRunIntegrationBackgroundWidget.h"
-#include "features/settings/SettingsManager.h"
+#include "app/Application.h"
 #include "features/home/welcome/WelcomeBannerButton.h"
-#include "features/theme/editor/ThemePreviewWidget.h"
+#include "features/settings/SettingsManager.h"
+#include "features/settings/SettingsChoice.h"
+#include "features/settings/SettingsToggle.h"
+#include "features/theme/editor/ThemeSelectorWidget.h"
 #include "features/theme/manager/ThemeManager.h"
 #include "shared/i18n/TranslationManager.h"
-#include "shared/resources/FontFamilyNames.h"
-#include "shared/widgets/inputs/AnimatedComboBox.h"
+#include "shared/resources/IconProvider.h"
+#include "shared/style/PaintingUtils.h"
+#include "shared/widgets/layout/SmoothScrollArea.h"
+#include "shared/widgets/overlays/WidgetFadeInOverlay.h"
+#include "shell/top-bar/MessagePopupManager.h"
 
-#include <QApplication>
 #include <QColor>
 #include <QEasingCurve>
 #include <QEvent>
 #include <QFont>
-#include <QFontMetrics>
-#include <QGraphicsOpacityEffect>
-#include <QHBoxLayout>
+#include <QFrame>
 #include <QHideEvent>
+#include <QHBoxLayout>
 #include <QLabel>
 #include <QPainter>
-#include <QPen>
+#include <QPaintEvent>
+#include <QPainterPath>
+#include <QPixmap>
+#include <QResizeEvent>
 #include <QShowEvent>
+#include <QSize>
 #include <QSizePolicy>
-#include <QStackedLayout>
-#include <QTextOption>
+#include <QString>
 #include <QTimer>
-#include <QVariantAnimation>
 #include <QVBoxLayout>
-#include <QtGlobal>
-
-#include <utility>
 
 namespace ruwa::ui::first_run_integration {
 
 namespace {
 
-constexpr int kBaseOverlayMargin = 64;
-constexpr int kTitleWelcomePixelSize = 112;
-constexpr int kTitleProductPixelSize = 128;
-constexpr int kTitleLineSpacing = 6;
-constexpr int kTitleTopPadding = 2;
-constexpr int kTitleBottomPadding = 2;
-constexpr int kTitleToBodySpacing = 20;
-constexpr int kProductUnderlineOffset = 8;
-constexpr int kProductUnderlineWidth = 2;
-constexpr int kBodyTextPixelSize = 19;
-constexpr int kBodyTextMaxWidth = 700;
-constexpr int kIntroStartDelayMs = 1500;
-constexpr int kIntroAnimationDurationMs = 620;
-constexpr int kIntroNextStartPercent = 20;
-constexpr int kIntroSlideDistance = 18;
-constexpr int kPageTransitionDurationMs = 620;
-constexpr int kNextPageStartPercent = 80;
-constexpr int kPageTransitionSlideDistance = 96;
-constexpr int kSetupTitlePixelSize = 52;
-constexpr int kSetupLabelPixelSize = 17;
-constexpr int kSetupDescriptionPixelSize = 14;
-constexpr int kSetupActionSlotWidth = 720;
+constexpr int kBaseContentSideMargin = 64;
+constexpr int kContentTopMargin = 48;
+constexpr int kContentBottomMargin = 64;
+constexpr int kContentSpacing = 24;
+constexpr int kSettingsSectionMinimumHeight = 180;
+constexpr int kFinishMinimumHeight = 320;
+constexpr int kAppearanceDelayMs = 800;
+constexpr int kAppearanceDurationMs = 933;
+constexpr int kImageSectionMargin = 15;
+constexpr qreal kImageSectionCornerRadius = 20.0;
+constexpr int kHeroLogoSize = 72;
+constexpr int kHeroGlassBlurRadius = 10;
+constexpr qreal kHeroGlassCornerRadius = 24.0;
+constexpr int kCustomizationScrollDurationMs = 900;
 
-QFont makePixelFont(const QString& family, int pixelSize, QFont::Weight weight = QFont::Normal)
+int autoSaveIndexForMinutes(int minutes)
 {
-    QFont font(family);
-    font.setPixelSize(pixelSize);
-    font.setWeight(weight);
-    return font;
-}
-
-qreal normalizedProgress(qreal value)
-{
-    return qBound(0.0, value, 1.0);
-}
-
-QString displayApplicationVersion()
-{
-    QString version = QApplication::applicationVersion().trimmed();
-    const int suffixIndex = version.indexOf(QLatin1Char('-'));
-    if (suffixIndex > 0) {
-        version = version.left(suffixIndex);
+    switch (minutes) {
+    case 0:
+        return 0;
+    case 2:
+        return 1;
+    case 10:
+        return 3;
+    case 5:
+    default:
+        return 2;
     }
-    return version;
+}
+
+int undoMemoryIndexForMegabytes(int megabytes)
+{
+    switch (megabytes) {
+    case 300:
+        return 0;
+    case 1024:
+        return 1;
+    case 8192:
+        return 3;
+    case 3072:
+    default:
+        return 2;
+    }
+}
+
+class FirstRunIntegrationImageSection final : public QFrame {
+public:
+    explicit FirstRunIntegrationImageSection(
+        const QString& objectName, const QString& imageResource, QWidget* parent = nullptr)
+        : QFrame(parent)
+        , m_backgroundImage(imageResource)
+    {
+        setObjectName(objectName);
+        setFrameShape(QFrame::NoFrame);
+        setMinimumHeight(1);
+        setSizePolicy(QSizePolicy::Expanding, QSizePolicy::Fixed);
+        setAttribute(Qt::WA_OpaquePaintEvent);
+    }
+
+    QPixmap createBlurredBackdrop(const QRect& area, int blurRadius) const
+    {
+        if (area.isEmpty()) {
+            return {};
+        }
+
+        const qreal dpr = devicePixelRatioF();
+        const QSize deviceSize(
+            qMax(1, qRound(area.width() * dpr)), qMax(1, qRound(area.height() * dpr)));
+        QPixmap snapshot(deviceSize);
+        snapshot.setDevicePixelRatio(dpr);
+        snapshot.fill(Qt::transparent);
+
+        QPainter painter(&snapshot);
+        painter.translate(-area.topLeft());
+        drawBackground(painter);
+        painter.end();
+
+        return ruwa::ui::painting::blurSnapshotPixmap(snapshot, blurRadius);
+    }
+
+protected:
+    void paintEvent(QPaintEvent* event) override
+    {
+        Q_UNUSED(event);
+
+        QPainter painter(this);
+        drawBackground(painter);
+    }
+
+private:
+    void drawBackground(QPainter& painter) const
+    {
+        painter.fillRect(rect(), ruwa::ui::core::ThemeManager::instance().colors().background);
+
+        if (m_backgroundImage.isNull() || width() <= 0 || height() <= 0) {
+            return;
+        }
+
+        const QRectF imageRect
+            = QRectF(rect()).adjusted(kImageSectionMargin, kImageSectionMargin,
+                -kImageSectionMargin, -kImageSectionMargin);
+        if (imageRect.isEmpty()) {
+            return;
+        }
+
+        const qreal targetAspect = imageRect.width() / imageRect.height();
+        const qreal imageAspect
+            = static_cast<qreal>(m_backgroundImage.width()) / m_backgroundImage.height();
+        QRectF sourceRect(m_backgroundImage.rect());
+
+        if (imageAspect > targetAspect) {
+            const qreal sourceWidth = m_backgroundImage.height() * targetAspect;
+            sourceRect.setLeft((m_backgroundImage.width() - sourceWidth) / 2.0);
+            sourceRect.setWidth(sourceWidth);
+        } else if (imageAspect < targetAspect) {
+            const qreal sourceHeight = m_backgroundImage.width() / targetAspect;
+            sourceRect.setTop((m_backgroundImage.height() - sourceHeight) / 2.0);
+            sourceRect.setHeight(sourceHeight);
+        }
+
+        QPainterPath clipPath;
+        clipPath.addRoundedRect(
+            imageRect, kImageSectionCornerRadius, kImageSectionCornerRadius);
+        painter.setClipPath(clipPath);
+        painter.setRenderHint(QPainter::SmoothPixmapTransform);
+        painter.drawPixmap(imageRect, m_backgroundImage, sourceRect);
+    }
+
+    QPixmap m_backgroundImage;
+};
+
+class FirstRunHeroGlassPanel final : public QWidget {
+public:
+    explicit FirstRunHeroGlassPanel(
+        FirstRunIntegrationImageSection* hero, QWidget* parent = nullptr)
+        : QWidget(parent)
+        , m_hero(hero)
+    {
+        setObjectName(QStringLiteral("FirstRunHeroGlassPanel"));
+        setAttribute(Qt::WA_TranslucentBackground);
+        setAutoFillBackground(false);
+        setSizePolicy(QSizePolicy::Preferred, QSizePolicy::Fixed);
+        setMaximumWidth(720);
+
+        if (m_hero) {
+            m_hero->installEventFilter(this);
+        }
+    }
+
+protected:
+    bool event(QEvent* event) override
+    {
+        if (event->type() == QEvent::Move || event->type() == QEvent::Resize
+            || event->type() == QEvent::Show
+            || event->type() == QEvent::DevicePixelRatioChange) {
+            m_blurredBackdrop = {};
+        }
+        return QWidget::event(event);
+    }
+
+    void paintEvent(QPaintEvent* event) override
+    {
+        Q_UNUSED(event);
+
+        ensureBackdrop();
+
+        const auto& theme = ruwa::ui::core::ThemeManager::instance();
+        const auto& colors = theme.colors();
+        QPainter painter(this);
+        painter.setRenderHint(QPainter::Antialiasing);
+
+        ruwa::ui::painting::drawTonedGlassPanel(painter, QRectF(rect()),
+            theme.scaled(kHeroGlassCornerRadius), QSizeF(size()), m_blurredBackdrop,
+            colors.surface, colors.primary, colors.isDark, colors.borderSubtleHover(),
+            ruwa::ui::core::ThemeColors::withAlpha(
+                colors.borderSubtle(), colors.borderSubtle().alpha() / 2),
+            0.0);
+    }
+
+    bool eventFilter(QObject* watched, QEvent* event) override
+    {
+        if (watched == m_hero
+            && (event->type() == QEvent::Resize || event->type() == QEvent::StyleChange
+                || event->type() == QEvent::PaletteChange)) {
+            m_blurredBackdrop = {};
+            update();
+        }
+        return QWidget::eventFilter(watched, event);
+    }
+
+private:
+    void ensureBackdrop()
+    {
+        if (!m_hero) {
+            m_blurredBackdrop = {};
+            return;
+        }
+
+        const auto& theme = ruwa::ui::core::ThemeManager::instance();
+        const QRect sampleGeometry = geometry();
+        const QRgb backgroundRgba = theme.colors().background.rgba();
+        const qreal dpr = devicePixelRatioF();
+        if (!m_blurredBackdrop.isNull() && m_cachedHeroSize == m_hero->size()
+            && m_cachedGeometry == sampleGeometry && m_cachedBackgroundRgba == backgroundRgba
+            && qFuzzyCompare(m_cachedDpr, dpr)) {
+            return;
+        }
+
+        m_cachedHeroSize = m_hero->size();
+        m_cachedGeometry = sampleGeometry;
+        m_cachedBackgroundRgba = backgroundRgba;
+        m_cachedDpr = dpr;
+        m_blurredBackdrop = m_hero->createBlurredBackdrop(
+            sampleGeometry, theme.scaled(kHeroGlassBlurRadius));
+    }
+
+private:
+    FirstRunIntegrationImageSection* m_hero { nullptr };
+    QPixmap m_blurredBackdrop;
+    QSize m_cachedHeroSize;
+    QRect m_cachedGeometry;
+    QRgb m_cachedBackgroundRgba { 0 };
+    qreal m_cachedDpr { 0.0 };
+};
+
+QFrame* createSection(QWidget* parent, const QString& objectName, int minimumHeight)
+{
+    auto* section = new QFrame(parent);
+    section->setObjectName(objectName);
+    section->setFrameShape(QFrame::NoFrame);
+    section->setMinimumHeight(minimumHeight);
+    section->setSizePolicy(QSizePolicy::Expanding, QSizePolicy::Fixed);
+    return section;
+}
+
+QLabel* createSectionTitle(QWidget* parent)
+{
+    auto* label = new QLabel(parent);
+    label->setObjectName(QStringLiteral("FirstRunSectionTitle"));
+    label->setSizePolicy(QSizePolicy::Preferred, QSizePolicy::Fixed);
+    return label;
 }
 
 } // namespace
-
-class FirstRunIntegrationHeroTitleWidget final : public QWidget {
-public:
-    explicit FirstRunIntegrationHeroTitleWidget(QWidget* parent = nullptr)
-        : QWidget(parent)
-    {
-        setAttribute(Qt::WA_TranslucentBackground);
-        setSizePolicy(QSizePolicy::Preferred, QSizePolicy::Fixed);
-    }
-
-    QSize sizeHint() const override { return QSize(metricsWidth(), metricsHeight()); }
-
-    QSize minimumSizeHint() const override { return sizeHint(); }
-
-    void refresh()
-    {
-        setMinimumSize(sizeHint());
-        updateGeometry();
-        update();
-    }
-
-    void setWelcomeText(const QString& text)
-    {
-        if (m_welcomeText == text) {
-            return;
-        }
-
-        m_welcomeText = text;
-        refresh();
-    }
-
-    void setWelcomeProgress(qreal progress)
-    {
-        const qreal normalized = normalizedProgress(progress);
-        if (qFuzzyCompare(m_welcomeProgress, normalized)) {
-            return;
-        }
-
-        m_welcomeProgress = normalized;
-        update();
-    }
-
-    void setProductProgress(qreal progress)
-    {
-        const qreal normalized = normalizedProgress(progress);
-        if (qFuzzyCompare(m_productProgress, normalized)) {
-            return;
-        }
-
-        m_productProgress = normalized;
-        update();
-    }
-
-    void setPageOpacity(qreal opacity)
-    {
-        const qreal normalized = normalizedProgress(opacity);
-        if (qFuzzyCompare(m_pageOpacity, normalized)) {
-            return;
-        }
-
-        m_pageOpacity = normalized;
-        update();
-    }
-
-protected:
-    void paintEvent(QPaintEvent* event) override
-    {
-        Q_UNUSED(event);
-
-        const auto& colors = ruwa::ui::core::ThemeManager::instance().colors();
-
-        const QFont welcomeFont = makeTitleFont(kTitleWelcomePixelSize);
-        const QFont productFont = makeTitleFont(kTitleProductPixelSize);
-
-        QPainter painter(this);
-        painter.setRenderHint(QPainter::Antialiasing);
-        painter.setRenderHint(QPainter::TextAntialiasing);
-        painter.setPen(colors.text);
-
-        const QFontMetrics welcomeMetrics(welcomeFont);
-        const QFontMetrics productMetrics(productFont);
-        const QRect welcomeBounds = welcomeMetrics.tightBoundingRect(m_welcomeText);
-        const QRect productBounds = productMetrics.tightBoundingRect(productText());
-
-        const int welcomeOffset = -qRound(kIntroSlideDistance * (1.0 - m_welcomeProgress));
-        const int productOffset = -qRound(kIntroSlideDistance * (1.0 - m_productProgress));
-
-        int y = kTitleTopPadding - welcomeBounds.top() + welcomeOffset;
-        painter.setFont(welcomeFont);
-        painter.setOpacity(m_pageOpacity * m_welcomeProgress);
-        painter.drawText(QPoint(-welcomeBounds.left(), y), m_welcomeText);
-
-        y = kTitleTopPadding + welcomeBounds.height() + kTitleLineSpacing - productBounds.top()
-            + productOffset;
-        painter.setFont(productFont);
-        painter.setOpacity(m_pageOpacity * m_productProgress);
-        painter.drawText(QPoint(-productBounds.left(), y), productText());
-
-        const int underlineY = y + productBounds.bottom() + kProductUnderlineOffset;
-        const int underlineStartX
-            = -productBounds.left() + productMetrics.horizontalAdvance(QStringLiteral("Ruwa "));
-        const int underlineEndX
-            = -productBounds.left() + productMetrics.horizontalAdvance(productText());
-        painter.setPen(QPen(colors.text, kProductUnderlineWidth, Qt::SolidLine, Qt::RoundCap));
-        painter.drawLine(QPointF(underlineStartX, underlineY), QPointF(underlineEndX, underlineY));
-    }
-
-private:
-    QString productText() const
-    {
-        return QStringLiteral("Ruwa v%1").arg(displayApplicationVersion());
-    }
-
-    QFont makeTitleFont(int pixelSize) const
-    {
-        const auto& colors = ruwa::ui::core::ThemeManager::instance().colors();
-        QFont font(colors.fonts.titleFont);
-        font.setPixelSize(pixelSize);
-        font.setWeight(QFont::Normal);
-        return font;
-    }
-
-    int metricsWidth() const
-    {
-        const QFont welcomeFont = makeTitleFont(kTitleWelcomePixelSize);
-        const QFont productFont = makeTitleFont(kTitleProductPixelSize);
-        const QFontMetrics welcomeMetrics(welcomeFont);
-        const QFontMetrics productMetrics(productFont);
-        const int welcomeWidth = qMax(welcomeMetrics.horizontalAdvance(m_welcomeText),
-            welcomeMetrics.tightBoundingRect(m_welcomeText).width());
-        const int productWidth = qMax(productMetrics.horizontalAdvance(productText()),
-            productMetrics.tightBoundingRect(productText()).width());
-        return qMax(720, qMax(welcomeWidth, productWidth) + kIntroSlideDistance + 16);
-    }
-
-    int metricsHeight() const
-    {
-        const QFont welcomeFont = makeTitleFont(kTitleWelcomePixelSize);
-        const QFont productFont = makeTitleFont(kTitleProductPixelSize);
-        const QFontMetrics welcomeMetrics(welcomeFont);
-        const QFontMetrics productMetrics(productFont);
-        return kTitleTopPadding + welcomeMetrics.tightBoundingRect(m_welcomeText).height()
-            + kTitleLineSpacing + productMetrics.tightBoundingRect(productText()).height()
-            + kProductUnderlineOffset + kProductUnderlineWidth + kTitleBottomPadding;
-    }
-
-private:
-    QString m_welcomeText { QStringLiteral("Welcome to") };
-    qreal m_welcomeProgress { 0.0 };
-    qreal m_productProgress { 0.0 };
-    qreal m_pageOpacity { 1.0 };
-};
-
-class FirstRunIntegrationHeroBodyWidget final : public QWidget {
-public:
-    explicit FirstRunIntegrationHeroBodyWidget(QWidget* parent = nullptr)
-        : QWidget(parent)
-    {
-        setAttribute(Qt::WA_TranslucentBackground);
-        setSizePolicy(QSizePolicy::Preferred, QSizePolicy::Fixed);
-        setMaximumWidth(kBodyTextMaxWidth);
-    }
-
-    QSize sizeHint() const override
-    {
-        return QSize(kBodyTextMaxWidth, textHeight(kBodyTextMaxWidth));
-    }
-
-    QSize minimumSizeHint() const override { return QSize(420, textHeight(420)); }
-
-    void setText(const QString& text)
-    {
-        if (m_text == text) {
-            return;
-        }
-
-        m_text = text;
-        refresh();
-    }
-
-    void setTextFont(const QFont& font)
-    {
-        if (m_font == font) {
-            return;
-        }
-
-        m_font = font;
-        refresh();
-    }
-
-    void setTextColor(const QColor& color)
-    {
-        if (m_textColor == color) {
-            return;
-        }
-
-        m_textColor = color;
-        update();
-    }
-
-    void setRevealProgress(qreal progress)
-    {
-        const qreal normalized = normalizedProgress(progress);
-        if (qFuzzyCompare(m_revealProgress, normalized)) {
-            return;
-        }
-
-        m_revealProgress = normalized;
-        update();
-    }
-
-    void setPageOpacity(qreal opacity)
-    {
-        const qreal normalized = normalizedProgress(opacity);
-        if (qFuzzyCompare(m_pageOpacity, normalized)) {
-            return;
-        }
-
-        m_pageOpacity = normalized;
-        update();
-    }
-
-protected:
-    void paintEvent(QPaintEvent* event) override
-    {
-        Q_UNUSED(event);
-
-        QPainter painter(this);
-        painter.setRenderHint(QPainter::TextAntialiasing);
-        painter.setFont(m_font);
-        painter.setPen(m_textColor);
-        painter.setOpacity(m_pageOpacity * m_revealProgress);
-
-        QTextOption option;
-        option.setAlignment(Qt::AlignLeft | Qt::AlignTop);
-        option.setWrapMode(QTextOption::WordWrap);
-
-        const int offset = qRound(kIntroSlideDistance * (1.0 - m_revealProgress));
-        painter.drawText(QRectF(rect()).translated(0, offset), m_text, option);
-    }
-
-private:
-    void refresh()
-    {
-        updateGeometry();
-        update();
-    }
-
-    int textHeight(int width) const
-    {
-        const QFontMetrics metrics(m_font);
-        const QRect bounds
-            = metrics.boundingRect(QRect(0, 0, qMax(1, width), 1000), Qt::TextWordWrap, m_text);
-        return bounds.height() + 2;
-    }
-
-private:
-    QString m_text;
-    QFont m_font;
-    QColor m_textColor { Qt::white };
-    qreal m_revealProgress { 0.0 };
-    qreal m_pageOpacity { 1.0 };
-};
-
-class FirstRunIntegrationSetupTitleWidget final : public QWidget {
-public:
-    explicit FirstRunIntegrationSetupTitleWidget(const QString& text, QWidget* parent = nullptr)
-        : QWidget(parent)
-        , m_text(text)
-    {
-        setAttribute(Qt::WA_TranslucentBackground);
-        setSizePolicy(QSizePolicy::Preferred, QSizePolicy::Fixed);
-    }
-
-    QSize sizeHint() const override { return QSize(textWidth(), textHeight()); }
-
-    QSize minimumSizeHint() const override { return QSize(textWidth(), textHeight()); }
-
-    void setText(const QString& text)
-    {
-        if (m_text == text) {
-            return;
-        }
-
-        m_text = text;
-        refresh();
-    }
-
-    void setTextFont(const QFont& font)
-    {
-        if (m_font == font) {
-            return;
-        }
-
-        m_font = font;
-        refresh();
-    }
-
-    void setTextColor(const QColor& color)
-    {
-        if (m_textColor == color) {
-            return;
-        }
-
-        m_textColor = color;
-        update();
-    }
-
-protected:
-    void paintEvent(QPaintEvent* event) override
-    {
-        Q_UNUSED(event);
-
-        QPainter painter(this);
-        painter.setRenderHint(QPainter::TextAntialiasing);
-        painter.setFont(m_font);
-        painter.setPen(m_textColor);
-
-        const QFontMetrics metrics(m_font);
-        const QRect bounds = metrics.tightBoundingRect(m_text);
-        painter.drawText(QPoint(-bounds.left(), kTitleTopPadding - bounds.top()), m_text);
-    }
-
-private:
-    void refresh()
-    {
-        updateGeometry();
-        update();
-    }
-
-    int textWidth() const { return QFontMetrics(m_font).horizontalAdvance(m_text) + 8; }
-
-    int textHeight() const
-    {
-        return kTitleTopPadding + QFontMetrics(m_font).tightBoundingRect(m_text).height()
-            + kTitleBottomPadding;
-    }
-
-private:
-    QString m_text;
-    QFont m_font;
-    QColor m_textColor { Qt::white };
-};
-
-class FirstRunIntegrationThemePreviewWidget final : public ruwa::ui::widgets::ThemePreviewWidget {
-public:
-    explicit FirstRunIntegrationThemePreviewWidget(
-        const ruwa::ui::core::ThemePreset& preset, QWidget* parent = nullptr)
-        : ThemePreviewWidget(preset, parent)
-    {
-    }
-
-    ruwa::ui::widgets::ContextMenuType contextMenuType() const override
-    {
-        return ruwa::ui::widgets::ContextMenuType::None;
-    }
-};
 
 FirstRunIntegrationWidget::FirstRunIntegrationWidget(QWidget* parent)
     : QWidget(parent)
@@ -457,40 +299,15 @@ FirstRunIntegrationWidget::FirstRunIntegrationWidget(QWidget* parent)
         &FirstRunIntegrationWidget::retranslateUi);
 }
 
-void FirstRunIntegrationWidget::startPreview()
-{
-    if (m_background) {
-        m_background->setPreviewAnimationRunning(true);
-    }
-}
-
 void FirstRunIntegrationWidget::setContentSideMargin(int margin)
 {
-    const int normalized = qMax(0, margin);
-    if (m_contentSideMargin == normalized) {
+    const int normalizedMargin = qMax(0, margin);
+    if (m_contentSideMargin == normalizedMargin) {
         return;
     }
 
-    m_contentSideMargin = normalized;
-    updateOverlayMargins();
-}
-
-void FirstRunIntegrationWidget::showEvent(QShowEvent* event)
-{
-    QWidget::showEvent(event);
-
-    startPreview();
-    startIntroAnimations();
-}
-
-void FirstRunIntegrationWidget::hideEvent(QHideEvent* event)
-{
-    stopIntroAnimations();
-    stopPageTransitionAnimations();
-    if (m_background) {
-        m_background->setPreviewAnimationRunning(false);
-    }
-    QWidget::hideEvent(event);
+    m_contentSideMargin = normalizedMargin;
+    updateContentMargins();
 }
 
 void FirstRunIntegrationWidget::changeEvent(QEvent* event)
@@ -501,1058 +318,485 @@ void FirstRunIntegrationWidget::changeEvent(QEvent* event)
     }
 }
 
+bool FirstRunIntegrationWidget::eventFilter(QObject* watched, QEvent* event)
+{
+    if (m_scrollArea && watched == m_scrollArea->viewport() && event->type() == QEvent::Resize) {
+        updateHeroHeight();
+    }
+    return QWidget::eventFilter(watched, event);
+}
+
+void FirstRunIntegrationWidget::hideEvent(QHideEvent* event)
+{
+    m_scrollArea->setUserScrollingEnabled(true);
+
+    if (m_appearanceOverlay) {
+        m_appearanceOverlay->close();
+        m_appearanceOverlay.clear();
+    }
+    QWidget::hideEvent(event);
+}
+
+void FirstRunIntegrationWidget::resizeEvent(QResizeEvent* event)
+{
+    QWidget::resizeEvent(event);
+    updateHeroHeight();
+}
+
+void FirstRunIntegrationWidget::showEvent(QShowEvent* event)
+{
+    QWidget::showEvent(event);
+
+    // Startup briefly shows the main window at zero opacity to create its native
+    // handle, then hides it again. Prepare and paint the opaque overlay
+    // synchronously while the window is still invisible, so no uncovered
+    // content frame can appear when the splash is removed.
+    if (!m_appearanceAnimationStarted) {
+        ensureAppearanceOverlay();
+    }
+
+    // Starting the fade remains deferred: the startup controller restores the
+    // main-window opacity later in the same call stack.
+    QTimer::singleShot(0, this, [this]() { startAppearanceAnimation(); });
+}
+
 void FirstRunIntegrationWidget::setupUi()
 {
-    auto* stack = new QStackedLayout(this);
-    stack->setContentsMargins(0, 0, 0, 0);
-    stack->setStackingMode(QStackedLayout::StackAll);
+    auto* rootLayout = new QVBoxLayout(this);
+    rootLayout->setContentsMargins(0, 0, 0, 0);
+    rootLayout->setSpacing(0);
 
-    m_background = new FirstRunIntegrationBackgroundWidget(this);
-    stack->addWidget(m_background);
+    m_scrollArea = new ruwa::ui::widgets::SmoothScrollArea(this);
+    m_scrollArea->setObjectName(QStringLiteral("FirstRunScrollArea"));
+    m_scrollArea->setVerticalScrollBarPolicy(Qt::ScrollBarAsNeeded);
+    m_scrollArea->setScrollBarMargin(4);
+    m_scrollArea->setFillBackground(false);
+    m_scrollArea->setScrollBarTransparentTrack(true);
+    m_scrollArea->viewport()->installEventFilter(this);
 
-    auto* overlay = new QWidget(this);
-    overlay->setAttribute(Qt::WA_TranslucentBackground);
-    auto* pagesLayout = new QStackedLayout(overlay);
-    pagesLayout->setContentsMargins(0, 0, 0, 0);
-    pagesLayout->setStackingMode(QStackedLayout::StackAll);
+    auto* page = new QWidget(m_scrollArea);
+    page->setObjectName(QStringLiteral("FirstRunPage"));
+    m_pageLayout = new QVBoxLayout(page);
+    m_pageLayout->setContentsMargins(0, 0, 0, 0);
+    m_pageLayout->setSpacing(0);
 
-    m_welcomePage = new QWidget(overlay);
-    m_welcomePage->setAttribute(Qt::WA_TranslucentBackground);
+    auto* heroSection = new FirstRunIntegrationImageSection(
+        QStringLiteral("FirstRunHeroSection"),
+        QStringLiteral(":/images/FirstIntegrationHero"), page);
+    m_heroSection = heroSection;
+    auto* heroLayout = new QVBoxLayout(m_heroSection);
+    heroLayout->setContentsMargins(48, 48, 48, 48);
+    heroLayout->setSpacing(0);
+    heroLayout->addStretch(1);
 
-    m_nextPage = new QWidget(overlay);
-    m_nextPage->setAttribute(Qt::WA_TranslucentBackground);
-    m_nextPageOpacityEffect = new QGraphicsOpacityEffect(m_nextPage);
-    m_nextPageOpacityEffect->setOpacity(0.0);
-    m_nextPage->setGraphicsEffect(m_nextPageOpacityEffect);
-    m_nextPage->hide();
+    m_heroGlassPanel = new FirstRunHeroGlassPanel(heroSection, m_heroSection);
+    auto* heroContentLayout = new QVBoxLayout(m_heroGlassPanel);
+    heroContentLayout->setContentsMargins(36, 32, 36, 32);
+    heroContentLayout->setSpacing(0);
 
-    m_finishPage = new QWidget(overlay);
-    m_finishPage->setAttribute(Qt::WA_TranslucentBackground);
-    m_finishPageOpacityEffect = new QGraphicsOpacityEffect(m_finishPage);
-    m_finishPageOpacityEffect->setOpacity(0.0);
-    m_finishPage->setGraphicsEffect(m_finishPageOpacityEffect);
-    m_finishPage->hide();
+    m_heroLogo = new QLabel(m_heroGlassPanel);
+    m_heroLogo->setObjectName(QStringLiteral("FirstRunHeroLogo"));
+    m_heroLogo->setFixedSize(kHeroLogoSize, kHeroLogoSize);
+    m_heroLogo->setAlignment(Qt::AlignCenter);
+    m_heroTitle = new QLabel(m_heroGlassPanel);
+    m_heroTitle->setObjectName(QStringLiteral("FirstRunHeroTitle"));
+    m_heroTitle->setAlignment(Qt::AlignCenter);
+    m_heroDescription = new QLabel(m_heroGlassPanel);
+    m_heroDescription->setObjectName(QStringLiteral("FirstRunBodyText"));
+    m_heroDescription->setAlignment(Qt::AlignCenter);
+    m_heroDescription->setWordWrap(true);
+    m_heroDescription->setMaximumWidth(620);
 
-    pagesLayout->addWidget(m_finishPage);
-    pagesLayout->addWidget(m_nextPage);
-    pagesLayout->addWidget(m_welcomePage);
-    pagesLayout->setCurrentWidget(m_welcomePage);
-
-    m_overlayLayout = new QVBoxLayout(m_welcomePage);
-    m_overlayLayout->setSpacing(0);
-    m_nextPageLayout = new QVBoxLayout(m_nextPage);
-    m_nextPageLayout->setSpacing(0);
-    m_finishPageLayout = new QVBoxLayout(m_finishPage);
-    m_finishPageLayout->setSpacing(0);
-    updateOverlayMargins();
-
-    auto* copyColumn = new QVBoxLayout();
-    copyColumn->setContentsMargins(0, 0, 0, 0);
-    copyColumn->setSpacing(0);
-
-    m_heroTitle = new FirstRunIntegrationHeroTitleWidget(m_welcomePage);
-
-    m_bodyText = new FirstRunIntegrationHeroBodyWidget(m_welcomePage);
-
-    copyColumn->addWidget(m_heroTitle);
-    copyColumn->addSpacing(kTitleToBodySpacing);
-    copyColumn->addWidget(m_bodyText);
-
-    m_actionsSlot = new QWidget(m_welcomePage);
-    m_actionsSlot->setAttribute(Qt::WA_TranslucentBackground);
-    m_actionsSlot->setSizePolicy(QSizePolicy::Fixed, QSizePolicy::Fixed);
-
-    m_actionsContainer = new QWidget(m_actionsSlot);
-    m_actionsContainer->setAttribute(Qt::WA_TranslucentBackground);
-    m_actionsOpacityEffect = new QGraphicsOpacityEffect(m_actionsContainer);
-    m_actionsOpacityEffect->setOpacity(0.0);
-    m_actionsContainer->setGraphicsEffect(m_actionsOpacityEffect);
-
-    auto* actionsColumn = new QVBoxLayout(m_actionsContainer);
-    actionsColumn->setContentsMargins(0, 0, 0, 0);
-    actionsColumn->setSpacing(0);
-
-    auto* actionsLayout = new QHBoxLayout();
-    actionsLayout->setContentsMargins(0, 0, 0, 0);
-    actionsLayout->setSpacing(14);
-
-    m_skipSetupButton = new ruwa::ui::widgets::WelcomeBannerButton(QString(),
-        ruwa::ui::widgets::WelcomeBannerButton::ButtonStyle::Secondary, m_actionsContainer);
-    m_skipSetupButton->setSecondaryIdleFillAlpha(24);
-    connect(m_skipSetupButton, &ruwa::ui::widgets::WelcomeBannerButton::clicked, this,
-        &FirstRunIntegrationWidget::completedRequested);
-
-    m_getStartedButton = new ruwa::ui::widgets::WelcomeBannerButton(QString(),
-        ruwa::ui::widgets::WelcomeBannerButton::ButtonStyle::Primary, m_actionsContainer);
-    m_getStartedButton->setPrimaryBorderVisible(false);
-    connect(m_getStartedButton, &ruwa::ui::widgets::WelcomeBannerButton::clicked, this,
-        &FirstRunIntegrationWidget::startSetupSectionTransition);
-
-    actionsLayout->addWidget(m_skipSetupButton);
-    actionsLayout->addWidget(m_getStartedButton);
-    actionsColumn->addLayout(actionsLayout);
-
-    auto* copyRow = new QHBoxLayout();
-    copyRow->setContentsMargins(0, 0, 0, 0);
-    copyRow->setSpacing(0);
-    copyRow->addLayout(copyColumn);
-    copyRow->addStretch(1);
-
-    auto* bottomRow = new QHBoxLayout();
-    bottomRow->setContentsMargins(0, 0, 0, 0);
-    bottomRow->setSpacing(0);
-    bottomRow->addStretch(1);
-    bottomRow->addWidget(m_actionsSlot);
-
-    m_overlayLayout->addStretch(7);
-    m_overlayLayout->addLayout(copyRow);
-    m_overlayLayout->addStretch(6);
-    m_overlayLayout->addLayout(bottomRow);
-    m_overlayLayout->addStretch(2);
-
-    auto* setupColumn = new QVBoxLayout();
-    setupColumn->setContentsMargins(0, 0, 0, 0);
-    setupColumn->setSpacing(18);
-
-    m_setupTitle = new FirstRunIntegrationSetupTitleWidget(QString(), m_nextPage);
-
-    m_languageLabel = new QLabel(m_nextPage);
-    m_languageLabel->setObjectName(QStringLiteral("FirstRunSetupLabel"));
-    m_languageLabel->setAttribute(Qt::WA_TranslucentBackground);
-    m_languageLabel->setSizePolicy(QSizePolicy::Preferred, QSizePolicy::Fixed);
-
-    auto* languageCombo = new ruwa::ui::widgets::AnimatedComboBox(m_nextPage);
-    languageCombo->setMinimumWidth(260);
-    languageCombo->setPopupMinWidth(260);
-    const auto languages = ruwa::ui::core::TranslationManager::instance().availableLanguages();
-    if (languages.isEmpty()) {
-        languageCombo->addItem(QStringLiteral("English"), QStringLiteral("en"));
-        languageCombo->addItem(QStringLiteral("Russian"), QStringLiteral("ru"));
-    } else {
-        for (const auto& language : languages) {
-            languageCombo->addItem(language.name, language.code);
-        }
-    }
-    const int languageIndex = languageCombo->findIndexByData(
-        ruwa::ui::core::TranslationManager::instance().currentLanguage());
-    languageCombo->setCurrentIndex(languageIndex >= 0 ? languageIndex : 0);
-    connect(languageCombo, &ruwa::ui::widgets::AnimatedComboBox::currentIndexChanged, this,
-        [languageCombo](int index) {
-            const QString code = languageCombo->itemData(index).toString();
-            if (!code.isEmpty()) {
-                ruwa::ui::core::TranslationManager::instance().setLanguage(code);
+    m_startCustomizationButton = new ruwa::ui::widgets::WelcomeBannerButton(QString(),
+        ruwa::ui::widgets::WelcomeBannerButton::ButtonStyle::Primary, m_heroGlassPanel);
+    m_startCustomizationButton->setPrimaryBorderVisible(false);
+    connect(m_startCustomizationButton,
+        &ruwa::ui::widgets::WelcomeBannerButton::clicked, this, [this]() {
+            if (!m_scrollArea->isUserScrollingEnabled()) {
+                return;
             }
+            m_scrollArea->scrollTo(m_heroSection->height(),
+                kCustomizationScrollDurationMs, QEasingCurve::InOutCubic);
         });
 
-    m_themeLabel = new QLabel(m_nextPage);
-    m_themeLabel->setObjectName(QStringLiteral("FirstRunSetupLabel"));
-    m_themeLabel->setAttribute(Qt::WA_TranslucentBackground);
-    m_themeLabel->setSizePolicy(QSizePolicy::Preferred, QSizePolicy::Fixed);
+    m_skipCustomizationButton = new ruwa::ui::widgets::WelcomeBannerButton(QString(),
+        ruwa::ui::widgets::WelcomeBannerButton::ButtonStyle::Secondary, m_heroGlassPanel);
+    m_skipCustomizationButton->setSecondaryIdleFillAlpha(24);
+    connect(m_skipCustomizationButton,
+        &ruwa::ui::widgets::WelcomeBannerButton::clicked, this,
+        &FirstRunIntegrationWidget::completedRequested);
 
-    m_themeDescription = new QLabel(m_nextPage);
-    m_themeDescription->setObjectName(QStringLiteral("FirstRunSetupDescription"));
-    m_themeDescription->setAttribute(Qt::WA_TranslucentBackground);
-    m_themeDescription->setSizePolicy(QSizePolicy::Preferred, QSizePolicy::Fixed);
+    auto* heroActions = new QHBoxLayout();
+    heroActions->setContentsMargins(0, 0, 0, 0);
+    heroActions->setSpacing(14);
+    heroActions->addStretch(1);
+    heroActions->addWidget(m_startCustomizationButton);
+    heroActions->addWidget(m_skipCustomizationButton);
+    heroActions->addStretch(1);
 
-    auto* themeRow = new QHBoxLayout();
-    themeRow->setContentsMargins(0, 0, 0, 0);
-    themeRow->setSpacing(10);
+    heroContentLayout->addWidget(m_heroLogo, 0, Qt::AlignHCenter);
+    heroContentLayout->addSpacing(28);
+    heroContentLayout->addWidget(m_heroTitle);
+    heroContentLayout->addSpacing(12);
+    heroContentLayout->addWidget(m_heroDescription, 0, Qt::AlignHCenter);
+    heroContentLayout->addSpacing(28);
+    heroContentLayout->addLayout(heroActions);
 
-    const auto builtInThemes = ruwa::ui::core::ThemeManager::instance().builtInPresets();
-    const QUuid currentThemeId = ruwa::ui::core::ThemeManager::instance().currentPresetId();
-    for (const auto& preset : builtInThemes) {
-        auto* preview = new FirstRunIntegrationThemePreviewWidget(preset, m_nextPage);
-        preview->setSelected(preset.id == currentThemeId);
-        m_setupThemePreviews.append(preview);
-        connect(preview, &ruwa::ui::widgets::ThemePreviewWidget::selected, this,
-            [this](const ruwa::ui::core::ThemePreset& selectedPreset) {
-                for (auto* themePreview : m_setupThemePreviews) {
-                    if (themePreview && themePreview->preset().id != selectedPreset.id) {
-                        themePreview->setSelected(false);
-                    }
-                }
+    heroLayout->addWidget(m_heroGlassPanel, 0, Qt::AlignCenter);
+    heroLayout->addStretch(1);
+    m_pageLayout->addWidget(m_heroSection);
 
-                auto& themeManager = ruwa::ui::core::ThemeManager::instance();
-                themeManager.applyPreset(selectedPreset);
-                auto& settings = ruwa::core::SettingsManager::instance();
-                settings.setThemeId(selectedPreset.id);
-                settings.save();
-            });
-        themeRow->addWidget(preview);
-    }
-    themeRow->addStretch(1);
+    auto* content = new QWidget(page);
+    content->setObjectName(QStringLiteral("FirstRunContent"));
+    m_contentLayout = new QVBoxLayout(content);
+    m_contentLayout->setSpacing(kContentSpacing);
+    updateContentMargins();
 
-    auto* setupActionsSlot = new QWidget(m_nextPage);
-    setupActionsSlot->setAttribute(Qt::WA_TranslucentBackground);
-    setupActionsSlot->setFixedWidth(kSetupActionSlotWidth);
+    auto* appearanceSection
+        = createSection(content, QStringLiteral("FirstRunAppearanceSection"),
+            kSettingsSectionMinimumHeight);
+    auto* appearanceLayout = new QVBoxLayout(appearanceSection);
+    appearanceLayout->setContentsMargins(0, 0, 0, 0);
+    appearanceLayout->setSpacing(8);
 
-    auto* setupActionsRow = new QHBoxLayout(setupActionsSlot);
-    setupActionsRow->setContentsMargins(0, 0, 0, 0);
-    setupActionsRow->setSpacing(14);
-    setupActionsRow->addStretch(1);
+    m_appearanceTitle = createSectionTitle(appearanceSection);
+    m_appearanceTitle->setAlignment(Qt::AlignCenter);
+    appearanceLayout->addWidget(m_appearanceTitle, 0, Qt::AlignHCenter);
+    appearanceLayout->addSpacing(8);
 
-    m_setupBackButton = new ruwa::ui::widgets::WelcomeBannerButton(QStringLiteral("<-"),
-        ruwa::ui::widgets::WelcomeBannerButton::ButtonStyle::Secondary, m_nextPage);
-    m_setupBackButton->setBaseMinimumWidth(48);
-    m_setupBackButton->setSecondaryIdleFillAlpha(24);
-    connect(m_setupBackButton, &ruwa::ui::widgets::WelcomeBannerButton::clicked, this,
-        &FirstRunIntegrationWidget::startWelcomeSectionTransition);
+    m_themeSelector
+        = new ruwa::ui::widgets::ThemeSelectorWidget(appearanceSection, false);
+    connect(m_themeSelector, &ruwa::ui::widgets::ThemeSelectorWidget::themeSelected,
+        this, [](const ruwa::ui::core::ThemePreset& preset) {
+            auto& settings = ruwa::core::SettingsManager::instance();
+            settings.setThemeId(preset.id);
+            settings.save();
+        });
+    appearanceLayout->addWidget(m_themeSelector);
 
-    m_setupContinueButton = new ruwa::ui::widgets::WelcomeBannerButton(
-        QString(), ruwa::ui::widgets::WelcomeBannerButton::ButtonStyle::Primary, m_nextPage);
-    m_setupContinueButton->setPrimaryBorderVisible(false);
-    connect(m_setupContinueButton, &ruwa::ui::widgets::WelcomeBannerButton::clicked, this,
-        &FirstRunIntegrationWidget::startFinishSectionTransition);
+    const auto& appearanceSettings
+        = ruwa::core::SettingsManager::instance().settings().appearance;
 
-    setupActionsRow->addWidget(m_setupBackButton);
-    setupActionsRow->addWidget(m_setupContinueButton);
+    m_uiScaleChoice = new ruwa::ui::widgets::SettingsChoice(tr("UI Scale"),
+        tr("Adjust the size of UI elements"),
+        { tr("Small"), tr("Medium"), tr("Large") },
+        qBound(0, appearanceSettings.uiScale, 2),
+        appearanceSection);
+    connect(m_uiScaleChoice, &ruwa::ui::widgets::SettingsChoice::selectionChanged,
+        this, [](int value) {
+            auto& settings = ruwa::core::SettingsManager::instance();
+            settings.setUiScale(value);
+            settings.save();
+        });
+    appearanceLayout->addWidget(m_uiScaleChoice);
 
-    setupColumn->addWidget(m_setupTitle);
-    setupColumn->addSpacing(8);
-    setupColumn->addWidget(m_languageLabel);
-    setupColumn->addWidget(languageCombo);
-    setupColumn->addSpacing(12);
-    setupColumn->addWidget(m_themeLabel);
-    setupColumn->addWidget(m_themeDescription);
-    setupColumn->addLayout(themeRow);
-    auto* setupRow = new QHBoxLayout();
-    setupRow->setContentsMargins(0, 0, 0, 0);
-    setupRow->setSpacing(0);
-    setupRow->addLayout(setupColumn);
-    setupRow->addStretch(1);
+    m_topBarTabAlignmentChoice = new ruwa::ui::widgets::SettingsChoice(
+        tr("Top bar tab alignment"),
+        tr("Place the tab strip at the left of the title bar or centered in the free space"),
+        { tr("Left"), tr("Center") },
+        appearanceSettings.topBarTabAlignment == 1 ? 1 : 0, appearanceSection);
+    connect(m_topBarTabAlignmentChoice,
+        &ruwa::ui::widgets::SettingsChoice::selectionChanged, this, [](int index) {
+            auto& settings = ruwa::core::SettingsManager::instance();
+            settings.setTopBarTabAlignment(index == 1 ? 1 : 0);
+            settings.save();
+        });
+    appearanceLayout->addWidget(m_topBarTabAlignmentChoice);
 
-    m_nextPageLayout->addStretch(5);
-    m_nextPageLayout->addLayout(setupRow);
-    m_nextPageLayout->addStretch(4);
-    auto* setupActionsPageRow = new QHBoxLayout();
-    setupActionsPageRow->setContentsMargins(0, 0, 0, 0);
-    setupActionsPageRow->setSpacing(0);
-    setupActionsPageRow->addWidget(setupActionsSlot);
-    setupActionsPageRow->addStretch(1);
-    m_nextPageLayout->addLayout(setupActionsPageRow);
-    m_nextPageLayout->addStretch(2);
+    m_contentLayout->addWidget(appearanceSection);
 
-    auto* finishColumn = new QVBoxLayout();
-    finishColumn->setContentsMargins(0, 0, 0, 0);
-    finishColumn->setSpacing(18);
+    const auto& editorSettings
+        = ruwa::core::SettingsManager::instance().settings().editor;
+    auto* editorSection = createSection(
+        content, QStringLiteral("FirstRunEditorSection"), kSettingsSectionMinimumHeight);
+    auto* editorLayout = new QVBoxLayout(editorSection);
+    editorLayout->setContentsMargins(0, 0, 0, 0);
+    editorLayout->setSpacing(8);
 
-    m_finishTitle = new FirstRunIntegrationSetupTitleWidget(QString(), m_finishPage);
+    m_editorTitle = createSectionTitle(editorSection);
+    m_editorTitle->setAlignment(Qt::AlignCenter);
+    editorLayout->addWidget(m_editorTitle, 0, Qt::AlignHCenter);
+    editorLayout->addSpacing(8);
 
-    m_finishBody = new QLabel(m_finishPage);
-    m_finishBody->setObjectName(QStringLiteral("FirstRunSetupDescription"));
-    m_finishBody->setAttribute(Qt::WA_TranslucentBackground);
-    m_finishBody->setWordWrap(true);
-    m_finishBody->setMaximumWidth(720);
-    m_finishBody->setSizePolicy(QSizePolicy::Preferred, QSizePolicy::Fixed);
+    m_autoSaveChoice = new ruwa::ui::widgets::SettingsChoice(tr("Auto-Save"),
+        tr("Automatically save your work at the selected interval"),
+        { tr("Off"), tr("2 min"), tr("5 min"), tr("10 min") },
+        autoSaveIndexForMinutes(editorSettings.autoSaveInterval), editorSection);
+    connect(m_autoSaveChoice, &ruwa::ui::widgets::SettingsChoice::selectionChanged,
+        this, [](int index) {
+            static constexpr int intervals[] = { 0, 2, 5, 10 };
+            if (index < 0 || index >= 4) {
+                return;
+            }
+            auto& settings = ruwa::core::SettingsManager::instance();
+            settings.setAutoSaveInterval(intervals[index]);
+            settings.save();
+        });
+    editorLayout->addWidget(m_autoSaveChoice);
 
-    m_finishAlphaBody = new QLabel(m_finishPage);
-    m_finishAlphaBody->setObjectName(QStringLiteral("FirstRunSetupDescription"));
-    m_finishAlphaBody->setAttribute(Qt::WA_TranslucentBackground);
-    m_finishAlphaBody->setWordWrap(true);
-    m_finishAlphaBody->setMaximumWidth(720);
-    m_finishAlphaBody->setSizePolicy(QSizePolicy::Preferred, QSizePolicy::Fixed);
+    m_quickshapesToggle = new ruwa::ui::widgets::SettingsToggle(tr("Quick Shapes"),
+        tr("Hold stroke to morph into straight line, circle, triangle, or square"),
+        editorSettings.quickshapesEnabled, editorSection);
+    connect(m_quickshapesToggle, &ruwa::ui::widgets::SettingsToggle::toggled,
+        this, [](bool checked) {
+            auto& settings = ruwa::core::SettingsManager::instance();
+            settings.setQuickshapesEnabled(checked);
+            settings.save();
+        });
+    editorLayout->addWidget(m_quickshapesToggle);
+    m_contentLayout->addWidget(editorSection);
 
-    auto* finishActionsSlot = new QWidget(m_finishPage);
-    finishActionsSlot->setAttribute(Qt::WA_TranslucentBackground);
-    finishActionsSlot->setFixedWidth(kSetupActionSlotWidth);
+    const auto& performanceSettings
+        = ruwa::core::SettingsManager::instance().settings().performance;
+    auto* performanceSection = createSection(
+        content, QStringLiteral("FirstRunPerformanceSection"), kSettingsSectionMinimumHeight);
+    auto* performanceLayout = new QVBoxLayout(performanceSection);
+    performanceLayout->setContentsMargins(0, 0, 0, 0);
+    performanceLayout->setSpacing(8);
 
-    auto* finishActionsRow = new QHBoxLayout(finishActionsSlot);
-    finishActionsRow->setContentsMargins(0, 0, 0, 0);
-    finishActionsRow->setSpacing(14);
-    finishActionsRow->addStretch(1);
+    m_performanceTitle = createSectionTitle(performanceSection);
+    m_performanceTitle->setAlignment(Qt::AlignCenter);
+    performanceLayout->addWidget(m_performanceTitle, 0, Qt::AlignHCenter);
+    performanceLayout->addSpacing(8);
 
-    m_finishBackButton = new ruwa::ui::widgets::WelcomeBannerButton(QStringLiteral("<-"),
-        ruwa::ui::widgets::WelcomeBannerButton::ButtonStyle::Secondary, m_finishPage);
-    m_finishBackButton->setBaseMinimumWidth(48);
-    m_finishBackButton->setSecondaryIdleFillAlpha(24);
-    connect(m_finishBackButton, &ruwa::ui::widgets::WelcomeBannerButton::clicked, this,
-        &FirstRunIntegrationWidget::startSetupFromFinishTransition);
+    m_undoMemoryChoice = new ruwa::ui::widgets::SettingsChoice(
+        tr("Undo Memory Limit"), tr("Maximum memory available for undo history"),
+        { tr("300 MB"), tr("1 GB"), tr("3 GB"), tr("8 GB") },
+        undoMemoryIndexForMegabytes(performanceSettings.undoMemoryLimitMb),
+        performanceSection);
+    connect(m_undoMemoryChoice, &ruwa::ui::widgets::SettingsChoice::selectionChanged,
+        this, [](int index) {
+            static constexpr int limitsMb[] = { 300, 1024, 3072, 8192 };
+            if (index < 0 || index >= 4) {
+                return;
+            }
+            auto& settings = ruwa::core::SettingsManager::instance();
+            settings.setUndoMemoryLimitMb(limitsMb[index]);
+            settings.save();
+        });
+    performanceLayout->addWidget(m_undoMemoryChoice);
 
-    m_startCreatingButton = new ruwa::ui::widgets::WelcomeBannerButton(
-        QString(), ruwa::ui::widgets::WelcomeBannerButton::ButtonStyle::Primary, m_finishPage);
-    m_startCreatingButton->setPrimaryBorderVisible(false);
-    connect(m_startCreatingButton, &ruwa::ui::widgets::WelcomeBannerButton::clicked, this,
-        &FirstRunIntegrationWidget::customizeRequested);
+    m_tabletBackendChoice = new ruwa::ui::widgets::SettingsChoice(
+        tr("Tablet Input Backend"),
+        tr("Choose the stylus input backend. Restart is required to apply this setting."),
+        { tr("WinTab (Qt)"), tr("Windows Ink"), tr("WinTab (Ruwa)") },
+        qBound(0, performanceSettings.tabletBackend, 2), performanceSection);
+    connect(m_tabletBackendChoice,
+        &ruwa::ui::widgets::SettingsChoice::selectionChanged, this, [this](int index) {
+            if (index < 0 || index > 2) {
+                return;
+            }
 
-    finishActionsRow->addWidget(m_finishBackButton);
-    finishActionsRow->addWidget(m_startCreatingButton);
+            const bool backendChanged = ruwa::Application::currentTabletBackend() != index;
+            auto& settings = ruwa::core::SettingsManager::instance();
+            settings.setTabletBackend(index);
+            settings.save();
 
-    finishColumn->addWidget(m_finishTitle);
-    finishColumn->addSpacing(8);
-    finishColumn->addWidget(m_finishBody);
-    finishColumn->addWidget(m_finishAlphaBody);
-    auto* finishRow = new QHBoxLayout();
-    finishRow->setContentsMargins(0, 0, 0, 0);
-    finishRow->setSpacing(0);
-    finishRow->addLayout(finishColumn);
-    finishRow->addStretch(1);
+            if (backendChanged) {
+                ruwa::ui::widgets::MessagePopupManager::show(this,
+                    tr("Tablet backend was changed. Restart is required to apply this setting."),
+                    { { tr("Later"), false, []() {} },
+                        { tr("Restart now"), true,
+                            []() {
+                                QTimer::singleShot(220, []() {
+                                    if (!ruwa::Application::restart()) { }
+                                });
+                            } } },
+                    420, m_tabletBackendChoice);
+            }
+        });
+    performanceLayout->addWidget(m_tabletBackendChoice);
+    m_contentLayout->addWidget(performanceSection);
 
-    m_finishPageLayout->addStretch(6);
-    m_finishPageLayout->addLayout(finishRow);
-    m_finishPageLayout->addStretch(5);
-    auto* finishActionsPageRow = new QHBoxLayout();
-    finishActionsPageRow->setContentsMargins(0, 0, 0, 0);
-    finishActionsPageRow->setSpacing(0);
-    finishActionsPageRow->addWidget(finishActionsSlot);
-    finishActionsPageRow->addStretch(1);
-    m_finishPageLayout->addLayout(finishActionsPageRow);
-    m_finishPageLayout->addStretch(2);
+    auto* finishSection = new FirstRunIntegrationImageSection(
+        QStringLiteral("FirstRunFinishSection"),
+        QStringLiteral(":/images/FirstIntegrationBottom"), content);
+    m_finishSection = finishSection;
+    finishSection->setMinimumHeight(kFinishMinimumHeight);
+    auto* finishLayout = new QVBoxLayout(finishSection);
+    finishLayout->setContentsMargins(48, 48, 48, 48);
+    finishLayout->setSpacing(0);
+    finishLayout->addStretch(1);
 
-    stack->addWidget(overlay);
-    stack->setCurrentWidget(overlay);
+    m_finishDescription = new QLabel(finishSection);
+    m_finishDescription->setObjectName(QStringLiteral("FirstRunBodyText"));
+    m_finishDescription->setAlignment(Qt::AlignCenter);
+    m_finishDescription->setWordWrap(true);
+    m_finishDescription->setMaximumWidth(620);
+    m_finishButton = new ruwa::ui::widgets::WelcomeBannerButton(QString(),
+        ruwa::ui::widgets::WelcomeBannerButton::ButtonStyle::Primary, finishSection);
+    m_finishButton->setPrimaryBorderVisible(false);
+    connect(m_finishButton, &ruwa::ui::widgets::WelcomeBannerButton::clicked, this,
+        &FirstRunIntegrationWidget::completedRequested);
+
+    finishLayout->addWidget(m_finishDescription, 0, Qt::AlignHCenter);
+    finishLayout->addSpacing(20);
+    finishLayout->addWidget(m_finishButton, 0, Qt::AlignHCenter);
+    finishLayout->addStretch(1);
+    m_contentLayout->addWidget(finishSection);
+    m_pageLayout->addWidget(content);
+
+    m_scrollArea->setWidget(page);
+    rootLayout->addWidget(m_scrollArea);
+    updateHeroHeight();
 }
 
 void FirstRunIntegrationWidget::retranslateUi()
 {
-    if (m_heroTitle) {
-        m_heroTitle->setWelcomeText(tr("Welcome to"));
-    }
-    if (m_bodyText) {
-        m_bodyText->setText(
-            tr("A next-generation drawing tool built for artists who refuse to compromise. "
-               "Precision, freedom, expression - all in one canvas."));
-    }
-    if (m_setupTitle) {
-        m_setupTitle->setText(tr("Setup"));
-    }
-    if (m_finishTitle) {
-        m_finishTitle->setText(tr("All essentials are set"));
-    }
-    if (m_languageLabel) {
-        m_languageLabel->setText(tr("Language"));
-    }
-    if (m_themeLabel) {
-        m_themeLabel->setText(tr("Theme"));
-    }
-    if (m_themeDescription) {
-        m_themeDescription->setText(tr("Built-in themes only"));
-    }
-    if (m_finishBody) {
-        m_finishBody->setText(
-            tr("If you want deeper customization, you can always find more options in Settings."));
-    }
-    if (m_finishAlphaBody) {
-        m_finishAlphaBody->setText(tr("Ruwa is still in alpha. Future versions will bring many "
-                                      "more setup and personalization options."));
+    m_heroTitle->setText(tr("Welcome to Ruwa"));
+    m_heroDescription->setText(tr("Let's tailor everything to the way you create."));
+    m_startCustomizationButton->setText(tr("Start customizing"));
+    m_startCustomizationButton->syncSizeToText();
+    m_skipCustomizationButton->setText(tr("No, thanks"));
+    m_skipCustomizationButton->syncSizeToText();
+    m_appearanceTitle->setText(tr("Appearance settings"));
+    m_uiScaleChoice->retranslateUi(tr("UI Scale"), tr("Adjust the size of UI elements"),
+        { tr("Small"), tr("Medium"), tr("Large") });
+    m_topBarTabAlignmentChoice->retranslateUi(tr("Top bar tab alignment"),
+        tr("Place the tab strip at the left of the title bar or centered in the free space"),
+        { tr("Left"), tr("Center") });
+    m_editorTitle->setText(tr("Editor"));
+    m_autoSaveChoice->retranslateUi(tr("Auto-Save"),
+        tr("Automatically save your work at the selected interval"),
+        { tr("Off"), tr("2 min"), tr("5 min"), tr("10 min") });
+    m_quickshapesToggle->setLabel(tr("Quick Shapes"));
+    m_quickshapesToggle->setDescription(
+        tr("Hold stroke to morph into straight line, circle, triangle, or square"));
+    m_performanceTitle->setText(tr("Performance"));
+    m_undoMemoryChoice->retranslateUi(
+        tr("Undo Memory Limit"), tr("Maximum memory available for undo history"),
+        { tr("300 MB"), tr("1 GB"), tr("3 GB"), tr("8 GB") });
+    m_tabletBackendChoice->retranslateUi(tr("Tablet Input Backend"),
+        tr("Choose the stylus input backend. Restart is required to apply this setting."),
+        { tr("WinTab (Qt)"), tr("Windows Ink"), tr("WinTab (Ruwa)") });
+    m_finishDescription->setText(
+        tr("You can change all of these settings later in the Settings tab."));
+    m_finishButton->setText(tr("Finish personalization"));
+    m_finishButton->syncSizeToText();
+}
+
+void FirstRunIntegrationWidget::ensureAppearanceOverlay()
+{
+    if (m_appearanceAnimationStarted || m_appearanceOverlay || !isVisible()) {
+        return;
     }
 
-    if (m_skipSetupButton) {
-        m_skipSetupButton->setText(tr("Skip setup"));
-        m_skipSetupButton->syncSizeToText();
-    }
-    if (m_getStartedButton) {
-        m_getStartedButton->setText(tr("Get started ->"));
-        m_getStartedButton->syncSizeToText();
-    }
-    if (m_setupContinueButton) {
-        m_setupContinueButton->setText(tr("Continue"));
-        m_setupContinueButton->syncSizeToText();
-    }
-    if (m_startCreatingButton) {
-        m_startCreatingButton->setText(tr("Start creating"));
-        m_startCreatingButton->syncSizeToText();
+    const QColor backgroundColor
+        = ruwa::ui::core::ThemeManager::instance().colors().background;
+    auto* overlay
+        = new ruwa::ui::widgets::WidgetFadeInOverlay(this, backgroundColor);
+    m_appearanceOverlay = overlay;
+    m_scrollArea->setUserScrollingEnabled(false);
+    connect(overlay, &ruwa::ui::widgets::WidgetFadeInOverlay::animationFinished,
+        this, [this]() { m_scrollArea->setUserScrollingEnabled(true); });
+    connect(overlay, &QObject::destroyed, this, [this, overlay]() {
+        if (m_appearanceOverlay == overlay) {
+            m_appearanceOverlay.clear();
+            m_scrollArea->setUserScrollingEnabled(true);
+        }
+    });
+
+    overlay->showOverlay();
+}
+
+void FirstRunIntegrationWidget::startAppearanceAnimation()
+{
+    if (m_appearanceAnimationStarted || !isVisible() || !window()->isVisible()
+        || window()->windowOpacity() <= 0.0) {
+        return;
     }
 
-    if (m_actionsSlot && m_actionsContainer) {
-        const QSize actionsSize = m_actionsContainer->sizeHint();
-        m_actionsSlot->setFixedSize(actionsSize + QSize(0, kIntroSlideDistance));
-        m_actionsContainer->resize(actionsSize);
+    ensureAppearanceOverlay();
+    if (!m_appearanceOverlay) {
+        return;
     }
+
+    m_appearanceAnimationStarted = true;
+    m_appearanceOverlay->startAnimation(
+        kAppearanceDurationMs, kAppearanceDelayMs, QEasingCurve::InOutCubic);
 }
 
 void FirstRunIntegrationWidget::updateTheme()
 {
-    const auto& theme = ruwa::ui::core::ThemeManager::instance();
-    const auto& colors = theme.colors();
+    const auto& colors = ruwa::ui::core::ThemeManager::instance().colors();
+    const QString style = QStringLiteral(
+                              "FirstRunIntegrationWidget, "
+                              "QWidget#FirstRunScrollArea, "
+                              "QWidget#FirstRunPage, "
+                              "QWidget#FirstRunContent {"
+                              "  background: %1;"
+                              "}"
+                              "QFrame#FirstRunHeroSection {"
+                              "  background: transparent;"
+                              "  border: none;"
+                              "  border-radius: 0;"
+                              "}"
+                              "QFrame#FirstRunAppearanceSection, "
+                              "QFrame#FirstRunEditorSection, "
+                              "QFrame#FirstRunPerformanceSection, "
+                              "QFrame#FirstRunFinishSection {"
+                              "  background: transparent;"
+                              "  border: none;"
+                              "}"
+                              "QLabel#FirstRunHeroTitle, "
+                              "QLabel#FirstRunSectionTitle {"
+                              "  color: %3;"
+                              "}"
+                              "QLabel#FirstRunBodyText {"
+                              "  color: %2;"
+                              "}")
+                              .arg(colors.background.name(QColor::HexArgb),
+                                  colors.textMuted.name(QColor::HexArgb),
+                                  colors.text.name(QColor::HexArgb));
+    setStyleSheet(style);
+    m_heroSection->update();
+    m_heroGlassPanel->update();
+    m_finishSection->update();
 
-    if (m_background) {
-        m_background->setRevealOverlayColor(colors.background);
-        m_background->setBlobColor(colors.primary);
-    }
+    const QPixmap logo = ruwa::ui::core::ThemeManager::instance().icons()
+                             .getApplicationLogoPixmap(QSize(kHeroLogoSize, kHeroLogoSize));
+    m_heroLogo->setPixmap(logo);
 
-    if (m_bodyText) {
-        m_bodyText->setTextFont(
-            makePixelFont(ruwa::ui::core::FontFamilyNames::DMSans18pt, kBodyTextPixelSize));
-        m_bodyText->setTextColor(colors.textMuted);
-    }
+    QFont heroFont = colors.fonts.getTitleFont();
+    heroFont.setPixelSize(48);
+    m_heroTitle->setFont(heroFont);
 
-    if (m_nextPage || m_finishPage) {
-        QFont setupTitleFont(colors.fonts.titleFont);
-        setupTitleFont.setPixelSize(kSetupTitlePixelSize);
-        setupTitleFont.setWeight(QFont::Normal);
+    QFont heroDescriptionFont = colors.fonts.getUIFont();
+    heroDescriptionFont.setPixelSize(17);
+    m_heroDescription->setFont(heroDescriptionFont);
 
-        const QFont setupLabelFont = makePixelFont(
-            ruwa::ui::core::FontFamilyNames::DMSans18pt, kSetupLabelPixelSize, QFont::DemiBold);
-        const QFont setupDescriptionFont = makePixelFont(
-            ruwa::ui::core::FontFamilyNames::DMSans18pt, kSetupDescriptionPixelSize);
+    QFont finishDescriptionFont = colors.fonts.getUIFont();
+    finishDescriptionFont.setPixelSize(14);
+    m_finishDescription->setFont(finishDescriptionFont);
 
-        const QVector<QWidget*> setupPages { m_nextPage, m_finishPage };
-        for (auto* page : setupPages) {
-            if (!page) {
-                continue;
-            }
-            for (auto* label : page->findChildren<QLabel*>(QStringLiteral("FirstRunSetupLabel"))) {
-                label->setFont(setupLabelFont);
-                label->setStyleSheet(QStringLiteral("color: %1; background: transparent;")
-                        .arg(colors.text.name(QColor::HexArgb)));
-            }
-            for (auto* label :
-                page->findChildren<QLabel*>(QStringLiteral("FirstRunSetupDescription"))) {
-                label->setFont(setupDescriptionFont);
-                label->setStyleSheet(QStringLiteral("color: %1; background: transparent;")
-                        .arg(colors.textMuted.name(QColor::HexArgb)));
-            }
-        }
-
-        if (m_setupTitle) {
-            m_setupTitle->setTextFont(setupTitleFont);
-            m_setupTitle->setTextColor(colors.text);
-        }
-        if (m_finishTitle) {
-            m_finishTitle->setTextFont(setupTitleFont);
-            m_finishTitle->setTextColor(colors.text);
-        }
-    }
-
-    if (m_heroTitle) {
-        m_heroTitle->refresh();
-    }
-
-    if (m_skipSetupButton) {
-        m_skipSetupButton->setSizeScale(0.86);
-        m_skipSetupButton->syncSizeToText();
-    }
-
-    if (m_getStartedButton) {
-        m_getStartedButton->setSizeScale(0.86);
-        m_getStartedButton->syncSizeToText();
-    }
-
-    if (m_setupBackButton) {
-        m_setupBackButton->setSizeScale(0.86);
-        m_setupBackButton->syncSizeToText();
-    }
-
-    if (m_setupContinueButton) {
-        m_setupContinueButton->setSizeScale(0.86);
-        m_setupContinueButton->syncSizeToText();
-    }
-
-    if (m_finishBackButton) {
-        m_finishBackButton->setSizeScale(0.86);
-        m_finishBackButton->syncSizeToText();
-    }
-
-    if (m_startCreatingButton) {
-        m_startCreatingButton->setSizeScale(0.86);
-        m_startCreatingButton->syncSizeToText();
-    }
-
-    if (m_actionsSlot && m_actionsContainer) {
-        const QSize actionsSize = m_actionsContainer->sizeHint();
-        m_actionsSlot->setFixedSize(actionsSize + QSize(0, kIntroSlideDistance));
-        m_actionsContainer->resize(actionsSize);
-        if (!m_actionsFinalPositionKnown) {
-            m_actionsContainer->move(0, kIntroSlideDistance);
-        }
+    QFont sectionFont = colors.fonts.getTitleFont();
+    sectionFont.setPixelSize(22);
+    for (QLabel* label : { m_appearanceTitle, m_editorTitle, m_performanceTitle }) {
+        label->setFont(sectionFont);
     }
 }
 
-void FirstRunIntegrationWidget::startIntroAnimations()
+void FirstRunIntegrationWidget::updateContentMargins()
 {
-    stopPageTransitionAnimations();
-    m_pageTransitionRunning = false;
-    if (m_welcomePage) {
-        m_welcomePage->show();
-        m_welcomePage->raise();
-        m_welcomePage->move(QPoint(0, 0));
-    }
-    if (m_nextPage) {
-        m_nextPage->hide();
-        m_nextPage->move(QPoint(0, 0));
-    }
-    if (m_finishPage) {
-        m_finishPage->hide();
-        m_finishPage->move(QPoint(0, 0));
-    }
-    if (m_nextPageOpacityEffect) {
-        m_nextPageOpacityEffect->setOpacity(0.0);
-    }
-    if (m_finishPageOpacityEffect) {
-        m_finishPageOpacityEffect->setOpacity(0.0);
-    }
-    if (m_getStartedButton) {
-        m_getStartedButton->setEnabled(true);
-    }
-
-    stopIntroAnimations();
-    resetIntroAnimationState();
-    ++m_introGeneration;
-
-    // Resolve the actions-slot size and settle the overlay layout up front,
-    // while the copy is still invisible (opacity 0). Doing this here — instead
-    // of inside the delayed buttons step — means any relayout from a late
-    // theme/DPI scale change happens before the reveal, so the already-settled
-    // hero title can never jump vertically when the buttons appear.
-    if (m_actionsSlot && m_actionsContainer) {
-        const QSize actionsSize = m_actionsContainer->sizeHint();
-        m_actionsSlot->setFixedSize(actionsSize + QSize(0, kIntroSlideDistance));
-        m_actionsContainer->resize(actionsSize);
-    }
-    if (m_overlayLayout) {
-        m_overlayLayout->activate();
-    }
-
-    const int stepDelay = kIntroAnimationDurationMs * kIntroNextStartPercent / 100;
-    animateIntroProgress(kIntroStartDelayMs, [this](qreal progress) {
-        if (m_heroTitle) {
-            m_heroTitle->setWelcomeProgress(progress);
-        }
-    });
-    animateIntroProgress(kIntroStartDelayMs + stepDelay, [this](qreal progress) {
-        if (m_heroTitle) {
-            m_heroTitle->setProductProgress(progress);
-        }
-    });
-    animateIntroProgress(kIntroStartDelayMs + stepDelay * 2, [this](qreal progress) {
-        if (m_bodyText) {
-            m_bodyText->setRevealProgress(progress);
-        }
-    });
-    animateButtonsIntro(kIntroStartDelayMs + stepDelay * 3);
-}
-
-void FirstRunIntegrationWidget::stopIntroAnimations()
-{
-    ++m_introGeneration;
-    for (QVariantAnimation* animation : m_introAnimations) {
-        if (!animation) {
-            continue;
-        }
-        animation->stop();
-        animation->deleteLater();
-    }
-    m_introAnimations.clear();
-}
-
-void FirstRunIntegrationWidget::resetIntroAnimationState()
-{
-    if (m_heroTitle) {
-        m_heroTitle->setPageOpacity(1.0);
-        m_heroTitle->setWelcomeProgress(0.0);
-        m_heroTitle->setProductProgress(0.0);
-    }
-
-    if (m_bodyText) {
-        m_bodyText->setPageOpacity(1.0);
-        m_bodyText->setRevealProgress(0.0);
-    }
-
-    if (m_actionsOpacityEffect) {
-        m_actionsOpacityEffect->setOpacity(0.0);
-    }
-    if (m_actionsContainer) {
-        m_actionsContainer->move(0, kIntroSlideDistance);
-    }
-}
-
-void FirstRunIntegrationWidget::animateIntroProgress(
-    int delayMs, std::function<void(qreal)> applyProgress)
-{
-    const int generation = m_introGeneration;
-    QTimer::singleShot(
-        delayMs, this, [this, generation, applyProgress = std::move(applyProgress)]() {
-            if (generation != m_introGeneration) {
-                return;
-            }
-
-            auto* animation = new QVariantAnimation(this);
-            m_introAnimations.append(animation);
-            animation->setStartValue(0.0);
-            animation->setEndValue(1.0);
-            animation->setDuration(kIntroAnimationDurationMs);
-            animation->setEasingCurve(QEasingCurve::OutCubic);
-
-            connect(animation, &QVariantAnimation::valueChanged, this,
-                [applyProgress](const QVariant& value) { applyProgress(value.toReal()); });
-            connect(animation, &QVariantAnimation::finished, this, [this, animation]() {
-                m_introAnimations.removeAll(animation);
-                animation->deleteLater();
-            });
-
-            applyProgress(0.0);
-            animation->start();
-        });
-}
-
-void FirstRunIntegrationWidget::animateButtonsIntro(int delayMs)
-{
-    const int generation = m_introGeneration;
-    QTimer::singleShot(delayMs, this, [this, generation]() {
-        if (generation != m_introGeneration || !m_actionsContainer || !m_actionsOpacityEffect) {
-            return;
-        }
-
-        // The actions slot was already sized and the layout settled in
-        // startIntroAnimations(), so we only drive position/opacity here —
-        // no geometry changes that could relayout (and nudge) the hero title.
-        const QPoint endPosition(0, kIntroSlideDistance);
-        m_actionsFinalPosition = endPosition;
-        m_actionsFinalPositionKnown = true;
-        const QPoint startPosition(0, 0);
-        m_actionsContainer->move(startPosition);
-        m_actionsOpacityEffect->setOpacity(0.0);
-
-        auto* animation = new QVariantAnimation(this);
-        m_introAnimations.append(animation);
-        animation->setStartValue(0.0);
-        animation->setEndValue(1.0);
-        animation->setDuration(kIntroAnimationDurationMs);
-        animation->setEasingCurve(QEasingCurve::OutCubic);
-
-        connect(animation, &QVariantAnimation::valueChanged, this,
-            [this, startPosition, endPosition](const QVariant& value) {
-                const qreal progress = normalizedProgress(value.toReal());
-                if (m_actionsOpacityEffect) {
-                    m_actionsOpacityEffect->setOpacity(progress);
-                }
-                if (m_actionsContainer) {
-                    const int y = qRound(
-                        startPosition.y() + (endPosition.y() - startPosition.y()) * progress);
-                    m_actionsContainer->move(endPosition.x(), y);
-                }
-            });
-        connect(animation, &QVariantAnimation::finished, this, [this, animation, endPosition]() {
-            if (m_actionsOpacityEffect) {
-                m_actionsOpacityEffect->setOpacity(1.0);
-            }
-            if (m_actionsContainer) {
-                m_actionsContainer->move(endPosition);
-            }
-            m_introAnimations.removeAll(animation);
-            animation->deleteLater();
-        });
-
-        animation->start();
-    });
-}
-
-void FirstRunIntegrationWidget::startSetupSectionTransition()
-{
-    if (m_pageTransitionRunning || !m_welcomePage || !m_nextPage) {
+    if (!m_contentLayout) {
         return;
     }
 
-    stopIntroAnimations();
-    stopPageTransitionAnimations();
-    m_pageTransitionRunning = true;
-    ++m_pageTransitionGeneration;
-
-    if (m_getStartedButton) {
-        m_getStartedButton->setEnabled(false);
-    }
-    if (m_setupBackButton) {
-        m_setupBackButton->setEnabled(false);
-    }
-    if (m_setupContinueButton) {
-        m_setupContinueButton->setEnabled(false);
-    }
-
-    m_welcomePageFinalPosition = m_welcomePage->pos();
-    m_nextPageFinalPosition = m_welcomePageFinalPosition;
-    const QPoint welcomeStart = m_welcomePageFinalPosition;
-    const QPoint welcomeEnd = m_welcomePageFinalPosition + QPoint(-kPageTransitionSlideDistance, 0);
-    const QPoint nextStart = m_nextPageFinalPosition + QPoint(kPageTransitionSlideDistance, 0);
-
-    m_nextPage->show();
-    m_nextPage->raise();
-    m_welcomePage->raise();
-    m_nextPage->move(nextStart);
-    if (m_heroTitle) {
-        m_heroTitle->setPageOpacity(1.0);
-    }
-    if (m_bodyText) {
-        m_bodyText->setPageOpacity(1.0);
-    }
-    if (m_actionsOpacityEffect) {
-        m_actionsOpacityEffect->setOpacity(1.0);
-    }
-    if (m_nextPageOpacityEffect) {
-        m_nextPageOpacityEffect->setOpacity(0.0);
-    }
-
-    animatePageTransitionProgress(0, [this, welcomeStart, welcomeEnd](qreal progress) {
-        const qreal normalized = normalizedProgress(progress);
-        const qreal opacity = 1.0 - normalized;
-        if (m_heroTitle) {
-            m_heroTitle->setPageOpacity(opacity);
-        }
-        if (m_bodyText) {
-            m_bodyText->setPageOpacity(opacity);
-        }
-        if (m_actionsOpacityEffect) {
-            m_actionsOpacityEffect->setOpacity(opacity);
-        }
-        if (m_welcomePage) {
-            const int x
-                = qRound(welcomeStart.x() + (welcomeEnd.x() - welcomeStart.x()) * normalized);
-            m_welcomePage->move(x, welcomeStart.y());
-        }
-    });
-
-    const int nextPageDelay = kPageTransitionDurationMs * kNextPageStartPercent / 100;
-    animatePageTransitionProgress(nextPageDelay, [this, nextStart](qreal progress) {
-        const qreal normalized = normalizedProgress(progress);
-        if (m_nextPageOpacityEffect) {
-            m_nextPageOpacityEffect->setOpacity(normalized);
-        }
-        if (m_nextPage) {
-            const int x = qRound(
-                nextStart.x() + (m_nextPageFinalPosition.x() - nextStart.x()) * normalized);
-            m_nextPage->move(x, m_nextPageFinalPosition.y());
-        }
-
-        if (qFuzzyCompare(normalized, 1.0)) {
-            if (m_welcomePage) {
-                m_welcomePage->hide();
-                m_welcomePage->move(m_welcomePageFinalPosition);
-            }
-            if (m_nextPage) {
-                m_nextPage->move(m_nextPageFinalPosition);
-                m_nextPage->raise();
-            }
-            if (m_setupBackButton) {
-                m_setupBackButton->setEnabled(true);
-            }
-            if (m_setupContinueButton) {
-                m_setupContinueButton->setEnabled(true);
-            }
-            m_pageTransitionRunning = false;
-        }
-    });
+    const int sideMargin = kBaseContentSideMargin + m_contentSideMargin;
+    m_contentLayout->setContentsMargins(
+        sideMargin, kContentTopMargin, sideMargin, kContentBottomMargin);
 }
 
-void FirstRunIntegrationWidget::startWelcomeSectionTransition()
+void FirstRunIntegrationWidget::updateHeroHeight()
 {
-    if (m_pageTransitionRunning || !m_welcomePage || !m_nextPage) {
+    if (!m_scrollArea || !m_heroSection) {
         return;
     }
 
-    stopIntroAnimations();
-    stopPageTransitionAnimations();
-    m_pageTransitionRunning = true;
-    ++m_pageTransitionGeneration;
-
-    if (m_setupBackButton) {
-        m_setupBackButton->setEnabled(false);
-    }
-    if (m_setupContinueButton) {
-        m_setupContinueButton->setEnabled(false);
-    }
-
-    m_welcomePageFinalPosition = QPoint(0, 0);
-    m_nextPageFinalPosition = m_nextPage->pos();
-    const QPoint nextStart = m_nextPageFinalPosition;
-    const QPoint nextEnd = m_nextPageFinalPosition + QPoint(kPageTransitionSlideDistance, 0);
-    const QPoint welcomeStart
-        = m_welcomePageFinalPosition + QPoint(-kPageTransitionSlideDistance, 0);
-
-    if (m_heroTitle) {
-        m_heroTitle->setWelcomeProgress(1.0);
-        m_heroTitle->setProductProgress(1.0);
-        m_heroTitle->setPageOpacity(0.0);
-    }
-    if (m_bodyText) {
-        m_bodyText->setRevealProgress(1.0);
-        m_bodyText->setPageOpacity(0.0);
-    }
-    if (m_actionsOpacityEffect) {
-        m_actionsOpacityEffect->setOpacity(0.0);
-    }
-    if (m_actionsContainer) {
-        m_actionsContainer->move(0, kIntroSlideDistance);
-    }
-
-    m_welcomePage->show();
-    m_welcomePage->move(welcomeStart);
-    m_welcomePage->raise();
-    m_nextPage->raise();
-    if (m_nextPageOpacityEffect) {
-        m_nextPageOpacityEffect->setOpacity(1.0);
-    }
-
-    animatePageTransitionProgress(0, [this, nextStart, nextEnd](qreal progress) {
-        const qreal normalized = normalizedProgress(progress);
-        if (m_nextPageOpacityEffect) {
-            m_nextPageOpacityEffect->setOpacity(1.0 - normalized);
-        }
-        if (m_nextPage) {
-            const int x = qRound(nextStart.x() + (nextEnd.x() - nextStart.x()) * normalized);
-            m_nextPage->move(x, nextStart.y());
-        }
-    });
-
-    const int welcomeDelay = kPageTransitionDurationMs * kNextPageStartPercent / 100;
-    animatePageTransitionProgress(welcomeDelay, [this, welcomeStart](qreal progress) {
-        const qreal normalized = normalizedProgress(progress);
-        if (m_heroTitle) {
-            m_heroTitle->setPageOpacity(normalized);
-        }
-        if (m_bodyText) {
-            m_bodyText->setPageOpacity(normalized);
-        }
-        if (m_actionsOpacityEffect) {
-            m_actionsOpacityEffect->setOpacity(normalized);
-        }
-        if (m_welcomePage) {
-            const int x = qRound(welcomeStart.x()
-                + (m_welcomePageFinalPosition.x() - welcomeStart.x()) * normalized);
-            m_welcomePage->move(x, m_welcomePageFinalPosition.y());
-        }
-
-        if (qFuzzyCompare(normalized, 1.0)) {
-            if (m_nextPage) {
-                m_nextPage->hide();
-                m_nextPage->move(m_nextPageFinalPosition);
-            }
-            if (m_welcomePage) {
-                m_welcomePage->move(m_welcomePageFinalPosition);
-                m_welcomePage->raise();
-            }
-            if (m_getStartedButton) {
-                m_getStartedButton->setEnabled(true);
-            }
-            m_pageTransitionRunning = false;
-        }
-    });
-}
-
-void FirstRunIntegrationWidget::startFinishSectionTransition()
-{
-    if (m_pageTransitionRunning || !m_nextPage || !m_finishPage) {
-        return;
-    }
-
-    stopIntroAnimations();
-    stopPageTransitionAnimations();
-    m_pageTransitionRunning = true;
-    ++m_pageTransitionGeneration;
-
-    if (m_setupBackButton) {
-        m_setupBackButton->setEnabled(false);
-    }
-    if (m_setupContinueButton) {
-        m_setupContinueButton->setEnabled(false);
-    }
-    if (m_finishBackButton) {
-        m_finishBackButton->setEnabled(false);
-    }
-    if (m_startCreatingButton) {
-        m_startCreatingButton->setEnabled(false);
-    }
-
-    m_nextPageFinalPosition = m_nextPage->pos();
-    m_finishPageFinalPosition = m_nextPageFinalPosition;
-    const QPoint setupStart = m_nextPageFinalPosition;
-    const QPoint setupEnd = m_nextPageFinalPosition + QPoint(-kPageTransitionSlideDistance, 0);
-    const QPoint finishStart = m_finishPageFinalPosition + QPoint(kPageTransitionSlideDistance, 0);
-
-    m_finishPage->show();
-    m_finishPage->raise();
-    m_nextPage->raise();
-    m_finishPage->move(finishStart);
-    if (m_nextPageOpacityEffect) {
-        m_nextPageOpacityEffect->setOpacity(1.0);
-    }
-    if (m_finishPageOpacityEffect) {
-        m_finishPageOpacityEffect->setOpacity(0.0);
-    }
-
-    animatePageTransitionProgress(0, [this, setupStart, setupEnd](qreal progress) {
-        const qreal normalized = normalizedProgress(progress);
-        if (m_nextPageOpacityEffect) {
-            m_nextPageOpacityEffect->setOpacity(1.0 - normalized);
-        }
-        if (m_nextPage) {
-            const int x = qRound(setupStart.x() + (setupEnd.x() - setupStart.x()) * normalized);
-            m_nextPage->move(x, setupStart.y());
-        }
-    });
-
-    const int finishDelay = kPageTransitionDurationMs * kNextPageStartPercent / 100;
-    animatePageTransitionProgress(finishDelay, [this, finishStart](qreal progress) {
-        const qreal normalized = normalizedProgress(progress);
-        if (m_finishPageOpacityEffect) {
-            m_finishPageOpacityEffect->setOpacity(normalized);
-        }
-        if (m_finishPage) {
-            const int x = qRound(
-                finishStart.x() + (m_finishPageFinalPosition.x() - finishStart.x()) * normalized);
-            m_finishPage->move(x, m_finishPageFinalPosition.y());
-        }
-
-        if (qFuzzyCompare(normalized, 1.0)) {
-            if (m_nextPage) {
-                m_nextPage->hide();
-                m_nextPage->move(m_nextPageFinalPosition);
-            }
-            if (m_finishPage) {
-                m_finishPage->move(m_finishPageFinalPosition);
-                m_finishPage->raise();
-            }
-            if (m_finishBackButton) {
-                m_finishBackButton->setEnabled(true);
-            }
-            if (m_startCreatingButton) {
-                m_startCreatingButton->setEnabled(true);
-            }
-            m_pageTransitionRunning = false;
-        }
-    });
-}
-
-void FirstRunIntegrationWidget::startSetupFromFinishTransition()
-{
-    if (m_pageTransitionRunning || !m_nextPage || !m_finishPage) {
-        return;
-    }
-
-    stopIntroAnimations();
-    stopPageTransitionAnimations();
-    m_pageTransitionRunning = true;
-    ++m_pageTransitionGeneration;
-
-    if (m_finishBackButton) {
-        m_finishBackButton->setEnabled(false);
-    }
-    if (m_startCreatingButton) {
-        m_startCreatingButton->setEnabled(false);
-    }
-    if (m_setupBackButton) {
-        m_setupBackButton->setEnabled(false);
-    }
-    if (m_setupContinueButton) {
-        m_setupContinueButton->setEnabled(false);
-    }
-
-    m_finishPageFinalPosition = m_finishPage->pos();
-    m_nextPageFinalPosition = QPoint(0, 0);
-    const QPoint finishStart = m_finishPageFinalPosition;
-    const QPoint finishEnd = m_finishPageFinalPosition + QPoint(kPageTransitionSlideDistance, 0);
-    const QPoint setupStart = m_nextPageFinalPosition + QPoint(-kPageTransitionSlideDistance, 0);
-
-    m_nextPage->show();
-    m_nextPage->move(setupStart);
-    m_nextPage->raise();
-    m_finishPage->raise();
-    if (m_nextPageOpacityEffect) {
-        m_nextPageOpacityEffect->setOpacity(0.0);
-    }
-    if (m_finishPageOpacityEffect) {
-        m_finishPageOpacityEffect->setOpacity(1.0);
-    }
-
-    animatePageTransitionProgress(0, [this, finishStart, finishEnd](qreal progress) {
-        const qreal normalized = normalizedProgress(progress);
-        if (m_finishPageOpacityEffect) {
-            m_finishPageOpacityEffect->setOpacity(1.0 - normalized);
-        }
-        if (m_finishPage) {
-            const int x = qRound(finishStart.x() + (finishEnd.x() - finishStart.x()) * normalized);
-            m_finishPage->move(x, finishStart.y());
-        }
-    });
-
-    const int setupDelay = kPageTransitionDurationMs * kNextPageStartPercent / 100;
-    animatePageTransitionProgress(setupDelay, [this, setupStart](qreal progress) {
-        const qreal normalized = normalizedProgress(progress);
-        if (m_nextPageOpacityEffect) {
-            m_nextPageOpacityEffect->setOpacity(normalized);
-        }
-        if (m_nextPage) {
-            const int x = qRound(
-                setupStart.x() + (m_nextPageFinalPosition.x() - setupStart.x()) * normalized);
-            m_nextPage->move(x, m_nextPageFinalPosition.y());
-        }
-
-        if (qFuzzyCompare(normalized, 1.0)) {
-            if (m_finishPage) {
-                m_finishPage->hide();
-                m_finishPage->move(m_finishPageFinalPosition);
-            }
-            if (m_nextPage) {
-                m_nextPage->move(m_nextPageFinalPosition);
-                m_nextPage->raise();
-            }
-            if (m_setupBackButton) {
-                m_setupBackButton->setEnabled(true);
-            }
-            if (m_setupContinueButton) {
-                m_setupContinueButton->setEnabled(true);
-            }
-            m_pageTransitionRunning = false;
-        }
-    });
-}
-
-void FirstRunIntegrationWidget::stopPageTransitionAnimations()
-{
-    ++m_pageTransitionGeneration;
-    for (QVariantAnimation* animation : m_pageTransitionAnimations) {
-        if (!animation) {
-            continue;
-        }
-        animation->stop();
-        animation->deleteLater();
-    }
-    m_pageTransitionAnimations.clear();
-}
-
-void FirstRunIntegrationWidget::animatePageTransitionProgress(
-    int delayMs, std::function<void(qreal)> applyProgress)
-{
-    const int generation = m_pageTransitionGeneration;
-    QTimer::singleShot(
-        delayMs, this, [this, generation, applyProgress = std::move(applyProgress)]() {
-            if (generation != m_pageTransitionGeneration) {
-                return;
-            }
-
-            auto* animation = new QVariantAnimation(this);
-            m_pageTransitionAnimations.append(animation);
-            animation->setStartValue(0.0);
-            animation->setEndValue(1.0);
-            animation->setDuration(kPageTransitionDurationMs);
-            animation->setEasingCurve(QEasingCurve::OutCubic);
-
-            connect(animation, &QVariantAnimation::valueChanged, this,
-                [applyProgress](const QVariant& value) { applyProgress(value.toReal()); });
-            connect(animation, &QVariantAnimation::finished, this, [this, animation]() {
-                m_pageTransitionAnimations.removeAll(animation);
-                animation->deleteLater();
-            });
-
-            applyProgress(0.0);
-            animation->start();
-        });
-}
-
-void FirstRunIntegrationWidget::updateOverlayMargins()
-{
-    if (!m_overlayLayout) {
-        return;
-    }
-
-    const int horizontalMargin = kBaseOverlayMargin + m_contentSideMargin;
-    m_overlayLayout->setContentsMargins(
-        horizontalMargin, kBaseOverlayMargin, horizontalMargin, kBaseOverlayMargin);
-    if (m_nextPageLayout) {
-        m_nextPageLayout->setContentsMargins(
-            horizontalMargin, kBaseOverlayMargin, horizontalMargin, kBaseOverlayMargin);
-    }
-    if (m_finishPageLayout) {
-        m_finishPageLayout->setContentsMargins(
-            horizontalMargin, kBaseOverlayMargin, horizontalMargin, kBaseOverlayMargin);
+    const int viewportHeight = m_scrollArea->viewport()->height();
+    if (viewportHeight > 0 && m_heroSection->height() != viewportHeight) {
+        m_heroSection->setFixedHeight(viewportHeight);
+        m_heroGlassPanel->update();
     }
 }
 

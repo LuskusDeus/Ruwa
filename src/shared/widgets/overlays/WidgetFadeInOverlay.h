@@ -7,6 +7,7 @@
 #include <QWidget>
 #include <QColor>
 #include <QEasingCurve>
+#include <QPixmap>
 
 class QPropertyAnimation;
 
@@ -37,7 +38,7 @@ public:
      * @brief Create fade-in overlay for a widget
      * @param target Widget to overlay (must be visible)
      * @param backgroundColor Color of the overlay (usually theme background)
-     * @param parent Ignored - overlay is always a top-level window
+     * @param parent Retained for source compatibility; the target owns the overlay
      */
     explicit WidgetFadeInOverlay(
         QWidget* target, const QColor& backgroundColor, QWidget* parent = nullptr);
@@ -81,6 +82,7 @@ private:
 private:
     QWidget* m_target = nullptr;
     QColor m_backgroundColor;
+    QPixmap m_targetSnapshot;
     qreal m_opacity = 1.0;
     QPropertyAnimation* m_animation = nullptr;
 };

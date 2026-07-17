@@ -4116,69 +4116,164 @@ Please choose a different shortcut.</source>
 <context>
     <name>ruwa::ui::first_run_integration::FirstRunIntegrationWidget</name>
     <message>
-        <location filename="../src/features/first-run-integration/FirstRunIntegrationWidget.cpp" line="850"/>
-        <source>Welcome to</source>
-        <translation>Добро пожаловать в</translation>
+        <source>Welcome to Ruwa</source>
+        <translation>Добро пожаловать в Ruwa</translation>
     </message>
     <message>
-        <location filename="../src/features/first-run-integration/FirstRunIntegrationWidget.cpp" line="853"/>
-        <source>A next-generation drawing tool built for artists who refuse to compromise. Precision, freedom, expression - all in one canvas.</source>
-        <translation>Инструмент для рисования нового поколения для художников, которые не готовы идти на компромиссы. Точность, свобода, выразительность - все в одном холсте.</translation>
+        <source>Let&apos;s tailor everything to the way you create.</source>
+        <translation>Давайте настроим всё под ваш творческий процесс.</translation>
     </message>
     <message>
-        <location filename="../src/features/first-run-integration/FirstRunIntegrationWidget.cpp" line="858"/>
-        <source>Setup</source>
-        <translation>Настройка</translation>
+        <source>Start customizing</source>
+        <translation>Начать персонализацию</translation>
     </message>
     <message>
-        <location filename="../src/features/first-run-integration/FirstRunIntegrationWidget.cpp" line="861"/>
-        <source>All essentials are set</source>
-        <translation>Основные параметры настроены</translation>
+        <source>No, thanks</source>
+        <translation>Нет, спасибо</translation>
     </message>
     <message>
-        <location filename="../src/features/first-run-integration/FirstRunIntegrationWidget.cpp" line="864"/>
-        <source>Language</source>
-        <translation>Язык</translation>
+        <source>Appearance settings</source>
+        <translation>Настройки внешнего вида</translation>
     </message>
     <message>
-        <location filename="../src/features/first-run-integration/FirstRunIntegrationWidget.cpp" line="867"/>
-        <source>Theme</source>
-        <translation>Тема</translation>
+        <source>UI Scale</source>
+        <translation>Масштаб интерфейса</translation>
     </message>
     <message>
-        <location filename="../src/features/first-run-integration/FirstRunIntegrationWidget.cpp" line="870"/>
-        <source>Built-in themes only</source>
-        <translation>Только встроенные темы</translation>
+        <source>Adjust the size of UI elements</source>
+        <translation>Настройка размера элементов интерфейса</translation>
     </message>
     <message>
-        <location filename="../src/features/first-run-integration/FirstRunIntegrationWidget.cpp" line="873"/>
-        <source>If you want deeper customization, you can always find more options in Settings.</source>
-        <translation>Если нужна более глубокая настройка, дополнительные параметры всегда доступны в настройках.</translation>
+        <source>Small</source>
+        <translation>Маленький</translation>
     </message>
     <message>
-        <location filename="../src/features/first-run-integration/FirstRunIntegrationWidget.cpp" line="877"/>
-        <source>Ruwa is still in alpha. Future versions will bring many more setup and personalization options.</source>
-        <translation>Ruwa все еще в альфа-версии. В будущих версиях появится больше параметров первичной настройки и персонализации.</translation>
+        <source>Medium</source>
+        <translation>Средний</translation>
     </message>
     <message>
-        <location filename="../src/features/first-run-integration/FirstRunIntegrationWidget.cpp" line="882"/>
-        <source>Skip setup</source>
-        <translation>Пропустить настройку</translation>
+        <source>Large</source>
+        <translation>Большой</translation>
     </message>
     <message>
-        <location filename="../src/features/first-run-integration/FirstRunIntegrationWidget.cpp" line="886"/>
-        <source>Get started -&gt;</source>
-        <translation>Начать -&gt;</translation>
+        <source>Top bar tab alignment</source>
+        <translation>Выравнивание топбара</translation>
     </message>
     <message>
-        <location filename="../src/features/first-run-integration/FirstRunIntegrationWidget.cpp" line="890"/>
-        <source>Continue</source>
-        <translation>Продолжить</translation>
+        <source>Place the tab strip at the left of the title bar or centered in the free space</source>
+        <translation>Слева — как сейчас; по центру — вкладки в центре свободной области заголовка</translation>
     </message>
     <message>
-        <location filename="../src/features/first-run-integration/FirstRunIntegrationWidget.cpp" line="894"/>
-        <source>Start creating</source>
-        <translation>Начать рисовать</translation>
+        <source>Left</source>
+        <translation>Слева</translation>
+    </message>
+    <message>
+        <source>Center</source>
+        <translation>По центру</translation>
+    </message>
+    <message>
+        <source>Editor</source>
+        <translation>Редактор</translation>
+    </message>
+    <message>
+        <source>Auto-Save</source>
+        <translation>Автосохранение</translation>
+    </message>
+    <message>
+        <source>Automatically save your work at the selected interval</source>
+        <translation>Автоматически сохранять работу с выбранным интервалом</translation>
+    </message>
+    <message>
+        <source>Off</source>
+        <translation>Выкл</translation>
+    </message>
+    <message>
+        <source>2 min</source>
+        <translation>2 мин</translation>
+    </message>
+    <message>
+        <source>5 min</source>
+        <translation>5 мин</translation>
+    </message>
+    <message>
+        <source>10 min</source>
+        <translation>10 мин</translation>
+    </message>
+    <message>
+        <source>Quick Shapes</source>
+        <translation>Быстрые фигуры</translation>
+    </message>
+    <message>
+        <source>Hold stroke to morph into straight line, circle, triangle, or square</source>
+        <translation>Удерживайте штрих, чтобы превратить его в прямую линию, круг, треугольник или квадрат</translation>
+    </message>
+    <message>
+        <source>Performance</source>
+        <translation>Производительность</translation>
+    </message>
+    <message>
+        <source>Undo Memory Limit</source>
+        <translation>Лимит памяти для отмены</translation>
+    </message>
+    <message>
+        <source>Maximum memory available for undo history</source>
+        <translation>Максимальный объём памяти для истории отмены</translation>
+    </message>
+    <message>
+        <source>300 MB</source>
+        <translation>300 МБ</translation>
+    </message>
+    <message>
+        <source>1 GB</source>
+        <translation>1 ГБ</translation>
+    </message>
+    <message>
+        <source>3 GB</source>
+        <translation>3 ГБ</translation>
+    </message>
+    <message>
+        <source>8 GB</source>
+        <translation>8 ГБ</translation>
+    </message>
+    <message>
+        <source>Tablet Input Backend</source>
+        <translation>Ввод стилуса</translation>
+    </message>
+    <message>
+        <source>Choose the stylus input backend. Restart is required to apply this setting.</source>
+        <translation>Выберите способ ввода стилуса. Чтобы применить настройку, требуется перезапуск программы.</translation>
+    </message>
+    <message>
+        <source>WinTab (Qt)</source>
+        <translation>WinTab (Qt)</translation>
+    </message>
+    <message>
+        <source>Windows Ink</source>
+        <translation>Windows Ink</translation>
+    </message>
+    <message>
+        <source>WinTab (Ruwa)</source>
+        <translation>WinTab (Ruwa)</translation>
+    </message>
+    <message>
+        <source>Tablet backend was changed. Restart is required to apply this setting.</source>
+        <translation>Способ ввода стилуса изменён. Чтобы применить настройку, требуется перезапуск программы.</translation>
+    </message>
+    <message>
+        <source>Later</source>
+        <translation>Позже</translation>
+    </message>
+    <message>
+        <source>Restart now</source>
+        <translation>Перезапустить сейчас</translation>
+    </message>
+    <message>
+        <source>You can change all of these settings later in the Settings tab.</source>
+        <translation>Все эти настройки можно будет изменить позже во вкладке «Настройки».</translation>
+    </message>
+    <message>
+        <source>Finish personalization</source>
+        <translation>Закончить персонализацию</translation>
     </message>
 </context>
 </TS>
