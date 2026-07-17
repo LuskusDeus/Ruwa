@@ -3458,7 +3458,9 @@ void CanvasPanel::updateToolCursor()
             float zoom = m_glWidget->viewport().camera().zoom();
             auto& tc = m_glWidget->transformController();
             const auto hit = tc.hitTestDetailed(worldPos, zoom);
-            cursor = detail::cursorForTransformHandle(hit, tc.cornersActAsRotationHandles());
+            cursor = detail::cursorForTransformHandle(hit, tc.state(),
+                tc.cornersActAsRotationHandles(), m_glWidget->canvasContentFlipHorizontal(),
+                m_glWidget->canvasContentFlipVertical());
         }
         m_cursorManager->setRequestedCursor(cursor);
         m_cursorManager->updateCursorPosition(pos);
@@ -3558,7 +3560,8 @@ std::optional<Qt::CursorShape> CanvasPanel::resolveCursorForPosition(const QPoin
     float zoom = m_glWidget->viewport().camera().zoom();
     auto& tc = m_glWidget->transformController();
     const auto hit = tc.hitTestDetailed(worldPos, zoom);
-    return detail::cursorForTransformHandle(hit, tc.cornersActAsRotationHandles());
+    return detail::cursorForTransformHandle(hit, tc.state(), tc.cornersActAsRotationHandles(),
+        m_glWidget->canvasContentFlipHorizontal(), m_glWidget->canvasContentFlipVertical());
 }
 
 void CanvasPanel::updateBrushCursorOverlayRadius()

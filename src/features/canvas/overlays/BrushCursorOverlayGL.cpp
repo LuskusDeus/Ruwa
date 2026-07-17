@@ -9,6 +9,7 @@
 
 #include <QOpenGLContext>
 
+#include <algorithm>
 #include <cmath>
 #include <vector>
 
@@ -124,7 +125,8 @@ Result<void> BrushCursorOverlayGL::initialize()
     m_gl->glGenBuffers(1, &m_vbo);
     m_gl->glBindVertexArray(m_vao);
     m_gl->glBindBuffer(GL_ARRAY_BUFFER, m_vbo);
-    m_gl->glBufferData(GL_ARRAY_BUFFER, 4096 * sizeof(float), nullptr, GL_DYNAMIC_DRAW);
+    m_vboCapacityBytes = 4096 * static_cast<GLsizeiptr>(sizeof(float));
+    m_gl->glBufferData(GL_ARRAY_BUFFER, m_vboCapacityBytes, nullptr, GL_DYNAMIC_DRAW);
     m_gl->glVertexAttribPointer(0, 2, GL_FLOAT, GL_FALSE, 2 * sizeof(float), nullptr);
     m_gl->glEnableVertexAttribArray(0);
     m_gl->glBindVertexArray(0);
@@ -158,6 +160,7 @@ void BrushCursorOverlayGL::shutdown()
     }
 
     m_vbo = 0;
+    m_vboCapacityBytes = 0;
     m_vao = 0;
     m_passthroughProgram = 0;
     m_invertProgram = 0;
@@ -209,7 +212,7 @@ void BrushCursorOverlayGL::render(float centerX, float centerY, float radiusPx, 
         for (const auto& contour : m_stampContours) {
             if (contour.size() < 3)
                 continue;
-            drawPolygonRing(centerX, centerY, radiusPx, innerRadius, contour, rotCos, rotSin,
+            drawPolygonStroke(centerX, centerY, radiusPx, kStrokeWidth, contour, rotCos, rotSin,
                 mvpArr, sceneTextureId, vpW, vpH);
         }
     } else {
@@ -254,7 +257,7 @@ void BrushCursorOverlayGL::drawCircle(float cx, float cy, float radius, int segm
     m_gl->glBindVertexArray(0);
 }
 
-void BrushCursorOverlayGL::drawPolygonRing(float cx, float cy, float outerScale, float innerScale,
+void BrushCursorOverlayGL::drawPolygonStroke(float cx, float cy, float scale, float strokeWidth,
     const std::vector<Vector2>& contour, float rotationCos, float rotationSin,
     const std::array<float, 16>& mvp, GLuint sceneTextureId, float vpW, float vpH)
 {
@@ -262,102 +265,56 @@ void BrushCursorOverlayGL::drawPolygonRing(float cx, float cy, float outerScale,
         return;
 
     const size_t n = contour.size();
-    std::vector<float> outerFan((n + 2) * 2);
-    std::vector<float> innerFan((n + 2) * 2);
-
-    // Outer polygon in pixel space. Apply dynamic rotation (from direction
-    // dynamics) to each normalized contour point, then scale by radius.
-    std::vector<Vector2> outerPts(n);
-    float centroidX = 0.0f;
-    float centroidY = 0.0f;
+    std::vector<Vector2> points(n);
     for (size_t i = 0; i < n; ++i) {
         const float nx = contour[i].x * rotationCos - contour[i].y * rotationSin;
         const float ny = contour[i].x * rotationSin + contour[i].y * rotationCos;
-        outerPts[i] = Vector2(cx + nx * outerScale, cy + ny * outerScale);
-        centroidX += outerPts[i].x;
-        centroidY += outerPts[i].y;
+        points[i] = Vector2(cx + nx * scale, cy + ny * scale);
     }
-    centroidX /= static_cast<float>(n);
-    centroidY /= static_cast<float>(n);
 
-    // Triangle-fan centers. The contour is star-convex from its own centroid
-    // (by construction in BrushCursorContourBuilder), so the fan correctly
-    // fills the polygon interior even when the brush center (cx, cy) lies
-    // outside this sub-contour (multi-blob dabs).
-    outerFan[0] = centroidX;
-    outerFan[1] = centroidY;
-    innerFan[0] = centroidX;
-    innerFan[1] = centroidY;
+    const float halfWidth = std::max(0.5f, strokeWidth * 0.5f);
+    std::vector<float> vertices;
+    vertices.reserve(n * 24);
 
-    // Stroke is the radial gap between outer and inner scales — uniform in pixels.
-    const float strokeWidth = std::max(0.5f, outerScale - innerScale);
-    // Clamp miter to avoid spikes on sharp corners.
-    const float maxMiterLen = strokeWidth * 4.0f;
-    const float maxMiterLenSq = maxMiterLen * maxMiterLen;
+    const auto appendTriangle = [&vertices](
+                                    const Vector2& a, const Vector2& b, const Vector2& c) {
+        vertices.push_back(a.x);
+        vertices.push_back(a.y);
+        vertices.push_back(b.x);
+        vertices.push_back(b.y);
+        vertices.push_back(c.x);
+        vertices.push_back(c.y);
+    };
 
-    std::vector<Vector2> innerPts(n);
     for (size_t i = 0; i < n; ++i) {
-        const Vector2& prev = outerPts[(i + n - 1) % n];
-        const Vector2& curr = outerPts[i];
-        const Vector2& next = outerPts[(i + 1) % n];
+        const Vector2& from = points[i];
+        const Vector2& to = points[(i + 1) % n];
+        const float dx = to.x - from.x;
+        const float dy = to.y - from.y;
+        const float length = std::hypot(dx, dy);
+        if (length <= 0.0001f)
+            continue;
 
-        // 90°-rotated edge vectors; pick orientation that points toward (cx, cy).
-        Vector2 n1(-(curr.y - prev.y), curr.x - prev.x);
-        Vector2 n2(-(next.y - curr.y), next.x - curr.x);
-        const float l1 = std::sqrt(n1.x * n1.x + n1.y * n1.y);
-        const float l2 = std::sqrt(n2.x * n2.x + n2.y * n2.y);
-        if (l1 > 0.0001f) {
-            n1.x /= l1;
-            n1.y /= l1;
-        }
-        if (l2 > 0.0001f) {
-            n2.x /= l2;
-            n2.y /= l2;
-        }
+        const Vector2 normal(-dy * halfWidth / length, dx * halfWidth / length);
+        const Vector2 fromLeft(from.x + normal.x, from.y + normal.y);
+        const Vector2 fromRight(from.x - normal.x, from.y - normal.y);
+        const Vector2 toLeft(to.x + normal.x, to.y + normal.y);
+        const Vector2 toRight(to.x - normal.x, to.y - normal.y);
+        appendTriangle(fromLeft, fromRight, toLeft);
+        appendTriangle(toLeft, fromRight, toRight);
 
-        Vector2 sum(n1.x + n2.x, n1.y + n2.y);
-        // Miter: m = sum * 2 * strokeWidth / |sum|² so that m·n1 = m·n2 = strokeWidth.
-        const float denom = sum.x * sum.x + sum.y * sum.y;
-        Vector2 miter;
-        if (denom > 0.0001f) {
-            const float k = 2.0f * strokeWidth / denom;
-            miter = Vector2(sum.x * k, sum.y * k);
-            const float mlSq = miter.x * miter.x + miter.y * miter.y;
-            if (mlSq > maxMiterLenSq) {
-                const float s = std::sqrt(maxMiterLenSq / mlSq);
-                miter.x *= s;
-                miter.y *= s;
-            }
-        } else {
-            // Degenerate (180° turn) — fall back to inset toward polygon centroid.
-            const float dx = curr.x - centroidX;
-            const float dy = curr.y - centroidY;
-            const float dl = std::sqrt(dx * dx + dy * dy);
-            if (dl > 0.0001f) {
-                miter = Vector2(-dx * strokeWidth / dl, -dy * strokeWidth / dl);
-            }
-        }
-
-        // Flip miter toward the polygon's own interior (its centroid) if it
-        // points outward. Using (cx, cy) here would break for sub-contours
-        // that don't enclose the brush center (multi-blob dabs).
-        const float toCenterX = centroidX - curr.x;
-        const float toCenterY = centroidY - curr.y;
-        if (miter.x * toCenterX + miter.y * toCenterY < 0.0f) {
-            miter.x = -miter.x;
-            miter.y = -miter.y;
-        }
-
-        innerPts[i] = Vector2(curr.x + miter.x, curr.y + miter.y);
+        // A tiny square join covers the wedge between adjacent segment quads. Unlike a miter,
+        // it has a fixed one-pixel reach and therefore cannot fold over at short concave turns.
+        const Vector2 topLeft(from.x - halfWidth, from.y - halfWidth);
+        const Vector2 topRight(from.x + halfWidth, from.y - halfWidth);
+        const Vector2 bottomLeft(from.x - halfWidth, from.y + halfWidth);
+        const Vector2 bottomRight(from.x + halfWidth, from.y + halfWidth);
+        appendTriangle(topLeft, bottomLeft, topRight);
+        appendTriangle(topRight, bottomLeft, bottomRight);
     }
 
-    for (size_t i = 0; i <= n; ++i) {
-        const size_t idx = i % n;
-        outerFan[(i + 1) * 2 + 0] = outerPts[idx].x;
-        outerFan[(i + 1) * 2 + 1] = outerPts[idx].y;
-        innerFan[(i + 1) * 2 + 0] = innerPts[idx].x;
-        innerFan[(i + 1) * 2 + 1] = innerPts[idx].y;
-    }
+    if (vertices.empty())
+        return;
 
     m_gl->glUseProgram(m_invertProgram);
     m_gl->glUniformMatrix4fv(m_locInvertMVP, 1, GL_FALSE, mvp.data());
@@ -369,20 +326,14 @@ void BrushCursorOverlayGL::drawPolygonRing(float cx, float cy, float outerScale,
 
     m_gl->glBindVertexArray(m_vao);
     m_gl->glBindBuffer(GL_ARRAY_BUFFER, m_vbo);
-    m_gl->glBufferSubData(GL_ARRAY_BUFFER, 0,
-        static_cast<GLsizeiptr>(outerFan.size() * sizeof(float)), outerFan.data());
-    m_gl->glDrawArrays(GL_TRIANGLE_FAN, 0, static_cast<GLsizei>(n + 2));
-
-    m_gl->glBlendFunc(GL_ONE, GL_ZERO); // passthrough: replace, no blend (avoids premult mismatch)
-    m_gl->glUseProgram(m_passthroughProgram);
-    m_gl->glUniformMatrix4fv(m_locPassthroughMVP, 1, GL_FALSE, mvp.data());
-    m_gl->glUniform1i(m_locPassthroughSceneTexture, 0);
-    m_gl->glUniform2f(m_locPassthroughViewportSize, vpW, vpH);
-
-    m_gl->glBufferSubData(GL_ARRAY_BUFFER, 0,
-        static_cast<GLsizeiptr>(innerFan.size() * sizeof(float)), innerFan.data());
-    m_gl->glDrawArrays(GL_TRIANGLE_FAN, 0, static_cast<GLsizei>(n + 2));
-    m_gl->glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA); // restore for callers
+    const GLsizeiptr requiredBytes
+        = static_cast<GLsizeiptr>(vertices.size() * sizeof(float));
+    if (requiredBytes > m_vboCapacityBytes) {
+        m_vboCapacityBytes = std::max(requiredBytes, m_vboCapacityBytes * 2);
+        m_gl->glBufferData(GL_ARRAY_BUFFER, m_vboCapacityBytes, nullptr, GL_DYNAMIC_DRAW);
+    }
+    m_gl->glBufferSubData(GL_ARRAY_BUFFER, 0, requiredBytes, vertices.data());
+    m_gl->glDrawArrays(GL_TRIANGLES, 0, static_cast<GLsizei>(vertices.size() / 2));
 
     m_gl->glBindVertexArray(0);
 }

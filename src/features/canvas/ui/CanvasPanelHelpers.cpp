@@ -397,6 +397,28 @@ Qt::CursorShape cursorForTransformHandle(
     return cursorForTransformHandle(hit.handle, cornersActAsRotationHandles);
 }
 
+Qt::CursorShape cursorForTransformHandle(const aether::TransformHitResult& hit,
+    const aether::TransformState& state, bool cornersActAsRotationHandles,
+    bool canvasContentFlipHorizontal, bool canvasContentFlipVertical)
+{
+    Qt::CursorShape cursor = cursorForTransformHandle(hit, cornersActAsRotationHandles);
+    if (cursor != Qt::SizeFDiagCursor && cursor != Qt::SizeBDiagCursor) {
+        return cursor;
+    }
+
+    const bool visuallyFlippedHorizontal
+        = std::signbit(state.scale.x) != canvasContentFlipHorizontal;
+    const bool visuallyFlippedVertical
+        = std::signbit(state.scale.y) != canvasContentFlipVertical;
+    // A single reflection reverses the diagonal shown on screen. Two reflections amount to a
+    // 180-degree rotation, so the original diagonal remains correct.
+    if (visuallyFlippedHorizontal == visuallyFlippedVertical) {
+        return cursor;
+    }
+
+    return cursor == Qt::SizeFDiagCursor ? Qt::SizeBDiagCursor : Qt::SizeFDiagCursor;
+}
+
 Qt::CursorShape cursorForTransformHandle(
     aether::TransformHandle handle, bool cornersActAsRotationHandles)
 {

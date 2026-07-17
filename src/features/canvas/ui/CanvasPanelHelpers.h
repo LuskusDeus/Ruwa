@@ -71,6 +71,9 @@ QColor sampleColorFromLayerModel(
 
 Qt::CursorShape cursorForTransformHandle(
     const aether::TransformHitResult& hit, bool cornersActAsRotationHandles = false);
+Qt::CursorShape cursorForTransformHandle(const aether::TransformHitResult& hit,
+    const aether::TransformState& state, bool cornersActAsRotationHandles,
+    bool canvasContentFlipHorizontal, bool canvasContentFlipVertical);
 Qt::CursorShape cursorForTransformHandle(
     aether::TransformHandle handle, bool cornersActAsRotationHandles = false);
 

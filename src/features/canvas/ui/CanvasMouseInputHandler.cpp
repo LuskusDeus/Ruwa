@@ -400,7 +400,10 @@ bool CanvasMouseInputHandler::handleMousePress(QMouseEvent* event)
             if (ctrl.mousePress(worldPos, zoom, event->modifiers())) {
                 m_panel->m_transformDragCursorValid = true;
                 m_panel->m_transformDragCursor
-                    = detail::cursorForTransformHandle(hit, ctrl.cornersActAsRotationHandles());
+                    = detail::cursorForTransformHandle(hit, ctrl.state(),
+                        ctrl.cornersActAsRotationHandles(),
+                        glWidget->canvasContentFlipHorizontal(),
+                        glWidget->canvasContentFlipVertical());
                 if (auto* cursorManager = m_host->inputCursorManager()) {
                     cursorManager->setRequestedCursor(m_panel->m_transformDragCursor);
                     cursorManager->updateCursorPosition(event->globalPosition().toPoint());
@@ -849,8 +852,9 @@ bool CanvasMouseInputHandler::handleMouseMove(QMouseEvent* event)
             float zoom = glWidget->viewport().camera().zoom();
             auto& tc = glWidget->transformController();
             const auto hit = tc.hitTestDetailed(worldPos, zoom);
-            cursorManager->setRequestedCursor(
-                detail::cursorForTransformHandle(hit, tc.cornersActAsRotationHandles()));
+            cursorManager->setRequestedCursor(detail::cursorForTransformHandle(hit, tc.state(),
+                tc.cornersActAsRotationHandles(), glWidget->canvasContentFlipHorizontal(),
+                glWidget->canvasContentFlipVertical()));
         }
     }
     if (m_host->currentInputTool() == CanvasPanel::ToolMode::CanvasResize && glWidget

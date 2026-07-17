@@ -41,8 +41,8 @@ public:
         GLuint sceneTextureId, float rotationRadians = 0.0f);
 
     /// Set custom stamp contours (normalized to [-1,1], centered around the
-    /// brush center). One entry per connected blob of the dab; pass an empty
-    /// list to fall back to a plain circle.
+    /// brush center). One entry per outer or inner boundary loop of the dab;
+    /// pass an empty list to fall back to a plain circle.
     void setStampContours(const std::vector<std::vector<Vector2>>& contours);
 
     bool isInitialized() const { return m_initialized; }
@@ -52,7 +52,7 @@ private:
         const std::array<float, 16>& mvp, GLuint sceneTextureId, float vpW, float vpH);
     void drawRing(float cx, float cy, float outerRadius, float innerRadius, int segments,
         const std::array<float, 16>& mvp, GLuint sceneTextureId, float vpW, float vpH);
-    void drawPolygonRing(float cx, float cy, float outerScale, float innerScale,
+    void drawPolygonStroke(float cx, float cy, float scale, float strokeWidth,
         const std::vector<Vector2>& contour, float rotationCos, float rotationSin,
         const std::array<float, 16>& mvp, GLuint sceneTextureId, float vpW, float vpH);
 
@@ -63,6 +63,7 @@ private:
     GLuint m_passthroughProgram = 0;
     GLuint m_vao = 0;
     GLuint m_vbo = 0;
+    GLsizeiptr m_vboCapacityBytes = 0;
 
     GLint m_locInvertMVP = -1;
     GLint m_locInvertColor = -1;
