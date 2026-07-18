@@ -501,8 +501,7 @@ void DockPanelTitleBar::setupUI()
 void DockPanelTitleBar::updateInteractiveWidgetGeometries()
 {
     const bool hideChrome = !m_interactiveWidgetsVisibleWhenFloating && m_panel
-        && m_panel->isFloating()
-        && handleCrossfadeOpacity(m_floatingLayoutProgress) > 0.35;
+        && m_panel->isFloating() && handleCrossfadeOpacity(m_floatingLayoutProgress) > 0.35;
 
     auto updateHost = [this, hideChrome](
                           QWidget* host, QWidget* content, int x, Qt::Alignment alignment) {
@@ -534,8 +533,7 @@ void DockPanelTitleBar::updateInteractiveWidgetGeometries()
 
         const int slide = m_interactiveWidgetsVisibleWhenFloating
             ? 0
-            : titleSlideOffsetPx(
-                  m_panel, m_height, m_scaledSlideExtra, m_floatingLayoutProgress);
+            : titleSlideOffsetPx(m_panel, m_height, m_scaledSlideExtra, m_floatingLayoutProgress);
         const int y = slide + qMax(0, (m_height - size.height()) / 2);
         if (alignment == Qt::AlignLeft) {
             host->move(x, y);

@@ -410,8 +410,7 @@ void CanvasPanel::loadGlobalToolState()
         const ToolMode selectionTool = brushSelectionToolMode();
         if (!usesFixedSoftBrush(selectionTool)) {
             if (const ToolBrushState* state = toolBrushStateForInstrument(selectionTool)) {
-                applyBrushSelectionForTool(
-                    selectionTool, state->brushId, QString(), false, false);
+                applyBrushSelectionForTool(selectionTool, state->brushId, QString(), false, false);
             }
         }
     }
@@ -1674,10 +1673,9 @@ void CanvasPanel::applyBrushSettings(const ruwa::core::brushes::BrushSettingsDat
         brush.setDabShapeMask(nullptr, 0, 0);
     }
 
-    const bool cursorStampChanged = !canReuseDabShapeMask
-        || previousRoundness != brush.roundness() || previousAngle != brush.angleDegrees()
-        || previousDabXScale != brush.dabXScale() || previousDabYScale != brush.dabYScale()
-        || previousDabRotation != brush.dabRotation();
+    const bool cursorStampChanged = !canReuseDabShapeMask || previousRoundness != brush.roundness()
+        || previousAngle != brush.angleDegrees() || previousDabXScale != brush.dabXScale()
+        || previousDabYScale != brush.dabYScale() || previousDabRotation != brush.dabRotation();
     if (cursorStampChanged) {
         m_glWidget->updateBrushCursorStamp();
     }

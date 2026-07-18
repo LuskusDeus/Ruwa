@@ -499,8 +499,7 @@ bool StylusInputManager::handleNativeEvent(void* message)
 
         const bool canvasCaptureActive
             = m_state->activeCanvasTarget && previousButtons != Qt::NoButton;
-        const bool uiCaptureActive
-            = (m_state->activeMouseTarget || m_state->pendingPressTarget)
+        const bool uiCaptureActive = (m_state->activeMouseTarget || m_state->pendingPressTarget)
             && previousButtons != Qt::NoButton;
         if (canvasCaptureActive) {
             // A stroke that began on canvas owns the complete press/move/release
@@ -800,13 +799,13 @@ bool StylusInputManager::consumeNativeCursorWarpAt(const QPoint& globalPos)
 
     auto& warps = m_state->pendingNativeCursorWarps;
     const qint64 nowMs = m_state->cursorWarpClock.elapsed();
-    warps.erase(std::remove_if(warps.begin(), warps.end(), [nowMs](const auto& warp) {
-        return nowMs - warp.queuedAtMs > kCursorWarpLifetimeMs;
-    }), warps.end());
+    warps.erase(
+        std::remove_if(warps.begin(), warps.end(),
+            [nowMs](const auto& warp) { return nowMs - warp.queuedAtMs > kCursorWarpLifetimeMs; }),
+        warps.end());
 
-    const auto it = std::find_if(warps.begin(), warps.end(), [&globalPos](const auto& warp) {
-        return warp.pos == globalPos;
-    });
+    const auto it = std::find_if(warps.begin(), warps.end(),
+        [&globalPos](const auto& warp) { return warp.pos == globalPos; });
     if (it == warps.end()) {
         return false;
     }

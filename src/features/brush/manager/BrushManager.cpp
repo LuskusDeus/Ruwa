@@ -1016,8 +1016,8 @@ void BrushManager::setSettingStarred(const QString& brushId, const QString& key,
     m_starredSettingsByBrush.insert(brushId, starredKeys);
 
     bool brushUpdated = false;
-    for (auto it = m_brushesByPreset.begin();
-         it != m_brushesByPreset.end() && !brushUpdated; ++it) {
+    for (auto it = m_brushesByPreset.begin(); it != m_brushesByPreset.end() && !brushUpdated;
+        ++it) {
         for (BrushData& brush : it.value()) {
             if (brush.id == brushId) {
                 brush.starredKeys = canonicalStarredKeys(starredKeys);

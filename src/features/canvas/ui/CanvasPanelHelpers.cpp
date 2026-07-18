@@ -408,8 +408,7 @@ Qt::CursorShape cursorForTransformHandle(const aether::TransformHitResult& hit,
 
     const bool visuallyFlippedHorizontal
         = std::signbit(state.scale.x) != canvasContentFlipHorizontal;
-    const bool visuallyFlippedVertical
-        = std::signbit(state.scale.y) != canvasContentFlipVertical;
+    const bool visuallyFlippedVertical = std::signbit(state.scale.y) != canvasContentFlipVertical;
     // A single reflection reverses the diagonal shown on screen. Two reflections amount to a
     // 180-degree rotation, so the original diagonal remains correct.
     if (visuallyFlippedHorizontal == visuallyFlippedVertical) {

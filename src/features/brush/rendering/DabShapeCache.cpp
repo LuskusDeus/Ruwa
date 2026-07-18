@@ -20,8 +20,8 @@ namespace aether {
 
 namespace {
 
-void boxBlurHorizontal(const std::vector<float>& input, int width, int height, int radius,
-    std::vector<float>& output)
+void boxBlurHorizontal(
+    const std::vector<float>& input, int width, int height, int radius, std::vector<float>& output)
 {
     output.assign(input.size(), 0.0f);
     const float invWindow = 1.0f / static_cast<float>(radius * 2 + 1);
@@ -45,8 +45,8 @@ void boxBlurHorizontal(const std::vector<float>& input, int width, int height, i
     }
 }
 
-void boxBlurVertical(const std::vector<float>& input, int width, int height, int radius,
-    std::vector<float>& output)
+void boxBlurVertical(
+    const std::vector<float>& input, int width, int height, int radius, std::vector<float>& output)
 {
     output.assign(input.size(), 0.0f);
     const float invWindow = 1.0f / static_cast<float>(radius * 2 + 1);
@@ -74,8 +74,7 @@ void boxBlurVertical(const std::vector<float>& input, int width, int height, int
     }
 }
 
-std::vector<uint8_t> buildSoftAlphaMask(
-    const std::vector<uint8_t>& alpha, int width, int height)
+std::vector<uint8_t> buildSoftAlphaMask(const std::vector<uint8_t>& alpha, int width, int height)
 {
     if (alpha.empty() || width <= 0 || height <= 0) {
         return {};
@@ -104,8 +103,7 @@ std::vector<uint8_t> buildSoftAlphaMask(
 
     std::vector<uint8_t> out(alpha.size());
     for (size_t i = 0; i < current.size(); ++i) {
-        out[i] = static_cast<uint8_t>(
-            std::round(std::clamp(current[i], 0.0f, 1.0f) * 255.0f));
+        out[i] = static_cast<uint8_t>(std::round(std::clamp(current[i], 0.0f, 1.0f) * 255.0f));
     }
     return out;
 }
@@ -431,8 +429,7 @@ GLuint DabShapeCache::getCustomTextureId(QOpenGLFunctions_4_5_Core* gl, const QS
         static_cast<size_t>(shape->width) * static_cast<size_t>(shape->height) * 2u, 0);
     for (size_t i = 0; i < shape->alpha.size(); ++i) {
         textureData[i * 2u + 0u] = shape->alpha[i];
-        textureData[i * 2u + 1u]
-            = shape->softAlpha.empty() ? shape->alpha[i] : shape->softAlpha[i];
+        textureData[i * 2u + 1u] = shape->softAlpha.empty() ? shape->alpha[i] : shape->softAlpha[i];
     }
 
     GLint prevUnpackAlignment = 4;

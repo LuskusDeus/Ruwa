@@ -144,8 +144,8 @@ protected:
 
 private slots:
     void onLayerSelected(const ruwa::core::layers::LayerId& id, Qt::KeyboardModifiers modifiers);
-    void onLayerPaintTargetSelected(const ruwa::core::layers::LayerId& id, bool maskTarget,
-        Qt::KeyboardModifiers modifiers);
+    void onLayerPaintTargetSelected(
+        const ruwa::core::layers::LayerId& id, bool maskTarget, Qt::KeyboardModifiers modifiers);
     void onLayerContentSelectionRequested(const ruwa::core::layers::LayerId& id);
     void onLayerTextEditRequested(const ruwa::core::layers::LayerId& id);
     void onLayerExpandToggled(const ruwa::core::layers::LayerId& id);

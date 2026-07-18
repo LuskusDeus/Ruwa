@@ -407,8 +407,7 @@ void ColorPanel::setupChannelSection(QVBoxLayout* parentLayout)
         return;
     }
 
-    m_channelStack
-        = new ruwa::ui::widgets::AnimatedStackedWidget(parentLayout->parentWidget());
+    m_channelStack = new ruwa::ui::widgets::AnimatedStackedWidget(parentLayout->parentWidget());
     m_channelStack->setObjectName(QStringLiteral("colorChannelStack"));
     m_channelStack->setSlideOrientation(
         ruwa::ui::widgets::AnimatedStackedWidget::SlideOrientation::Horizontal);
@@ -419,8 +418,8 @@ void ColorPanel::setupChannelSection(QVBoxLayout* parentLayout)
     // Stack indices intentionally match m_channelMode: HSV = 0, RGB = 1.
     m_channelStack->addWidget(createChannelWidget(false));
     m_channelStack->addWidget(createChannelWidget(true));
-    m_channelStack->setFixedHeight(qMax(
-        m_hsvChannelSliders->sizeHint().height(), m_rgbChannelSliders->sizeHint().height()));
+    m_channelStack->setFixedHeight(
+        qMax(m_hsvChannelSliders->sizeHint().height(), m_rgbChannelSliders->sizeHint().height()));
     m_channelStack->setCurrentIndexWithoutAnimation(m_channelMode);
 
     parentLayout->addWidget(m_channelStack);
@@ -506,8 +505,8 @@ void ColorPanel::onThemeChanged()
         m_colorPicker->setMinimumHeight(theme.scaled(140));
     }
     if (m_channelStack && m_rgbChannelSliders && m_hsvChannelSliders) {
-        m_channelStack->setFixedHeight(qMax(m_hsvChannelSliders->sizeHint().height(),
-            m_rgbChannelSliders->sizeHint().height()));
+        m_channelStack->setFixedHeight(qMax(
+            m_hsvChannelSliders->sizeHint().height(), m_rgbChannelSliders->sizeHint().height()));
     }
     updateModeSwitcherButtons();
     updateChannelModeButtons();

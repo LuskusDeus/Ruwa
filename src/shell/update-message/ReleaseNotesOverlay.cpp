@@ -59,8 +59,7 @@ QVector<ReleaseNoteEntry> releaseNoteEntries()
     const char* ctx = "ReleaseNotesOverlay";
 
     return {
-        { QCoreApplication::translate(
-              ctx, "Personalization, colour controls, and input fixes"),
+        { QCoreApplication::translate(ctx, "Personalization, colour controls, and input fixes"),
             QStringLiteral("0.2.5-alpha"), QStringLiteral("18.07.2026"),
             QCoreApplication::translate(ctx,
                 "<p><b>This update introduces a redesigned first-run personalization flow and "

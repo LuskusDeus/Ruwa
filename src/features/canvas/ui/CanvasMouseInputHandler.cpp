@@ -399,11 +399,9 @@ bool CanvasMouseInputHandler::handleMousePress(QMouseEvent* event)
             glWidget->beginTransformUndoStep();
             if (ctrl.mousePress(worldPos, zoom, event->modifiers())) {
                 m_panel->m_transformDragCursorValid = true;
-                m_panel->m_transformDragCursor
-                    = detail::cursorForTransformHandle(hit, ctrl.state(),
-                        ctrl.cornersActAsRotationHandles(),
-                        glWidget->canvasContentFlipHorizontal(),
-                        glWidget->canvasContentFlipVertical());
+                m_panel->m_transformDragCursor = detail::cursorForTransformHandle(hit, ctrl.state(),
+                    ctrl.cornersActAsRotationHandles(), glWidget->canvasContentFlipHorizontal(),
+                    glWidget->canvasContentFlipVertical());
                 if (auto* cursorManager = m_host->inputCursorManager()) {
                     cursorManager->setRequestedCursor(m_panel->m_transformDragCursor);
                     cursorManager->updateCursorPosition(event->globalPosition().toPoint());

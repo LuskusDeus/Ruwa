@@ -72,8 +72,7 @@ void CanvasOverlayLayoutManager::attachOverlays()
         // The joystick now evaluates its joystick/panel swap deterministically in
         // handleDrag (on the logical cursor target), so it can use the same trailing
         // drag lag as the other overlays.
-        registerCanvasWidget(
-            m_panel->m_stylusJoystick, Layout::Anchor::BottomRight, draggable, 50);
+        registerCanvasWidget(m_panel->m_stylusJoystick, Layout::Anchor::BottomRight, draggable, 50);
         if (m_panel->m_pendingStylusJoystickPositionNormalized.has_value()) {
             m_engine->setNormalizedPosition(
                 m_panel->m_stylusJoystick, *m_panel->m_pendingStylusJoystickPositionNormalized);

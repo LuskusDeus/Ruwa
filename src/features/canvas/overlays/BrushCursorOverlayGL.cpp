@@ -276,8 +276,7 @@ void BrushCursorOverlayGL::drawPolygonStroke(float cx, float cy, float scale, fl
     std::vector<float> vertices;
     vertices.reserve(n * 24);
 
-    const auto appendTriangle = [&vertices](
-                                    const Vector2& a, const Vector2& b, const Vector2& c) {
+    const auto appendTriangle = [&vertices](const Vector2& a, const Vector2& b, const Vector2& c) {
         vertices.push_back(a.x);
         vertices.push_back(a.y);
         vertices.push_back(b.x);
@@ -326,8 +325,7 @@ void BrushCursorOverlayGL::drawPolygonStroke(float cx, float cy, float scale, fl
 
     m_gl->glBindVertexArray(m_vao);
     m_gl->glBindBuffer(GL_ARRAY_BUFFER, m_vbo);
-    const GLsizeiptr requiredBytes
-        = static_cast<GLsizeiptr>(vertices.size() * sizeof(float));
+    const GLsizeiptr requiredBytes = static_cast<GLsizeiptr>(vertices.size() * sizeof(float));
     if (requiredBytes > m_vboCapacityBytes) {
         m_vboCapacityBytes = std::max(requiredBytes, m_vboCapacityBytes * 2);
         m_gl->glBufferData(GL_ARRAY_BUFFER, m_vboCapacityBytes, nullptr, GL_DYNAMIC_DRAW);

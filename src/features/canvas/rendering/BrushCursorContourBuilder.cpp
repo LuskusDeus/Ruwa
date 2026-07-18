@@ -109,8 +109,7 @@ float distanceToSegmentSquared(const Vector2& point, const Vector2& a, const Vec
     }
 
     const float projection
-        = std::clamp(((point.x - a.x) * abX + (point.y - a.y) * abY) / abLengthSquared,
-            0.0f, 1.0f);
+        = std::clamp(((point.x - a.x) * abX + (point.y - a.y) * abY) / abLengthSquared, 0.0f, 1.0f);
     const float dx = point.x - (a.x + abX * projection);
     const float dy = point.y - (a.y + abY * projection);
     return dx * dx + dy * dy;
@@ -263,7 +262,7 @@ std::vector<std::vector<Vector2>> traceAlphaMaskContours(
     const auto inside = [&](int x, int y) {
         return x >= 0 && y >= 0 && x < W && y < H
             && mask[static_cast<size_t>(y) * static_cast<size_t>(W) + static_cast<size_t>(x)]
-                >= kAlphaThreshold;
+            >= kAlphaThreshold;
     };
 
     for (int y = 0; y < H; ++y) {
@@ -342,9 +341,8 @@ std::vector<std::vector<Vector2>> traceAlphaMaskContours(
         }
     }
 
-    std::sort(candidates.begin(), candidates.end(), [](const auto& a, const auto& b) {
-        return a.area > b.area;
-    });
+    std::sort(candidates.begin(), candidates.end(),
+        [](const auto& a, const auto& b) { return a.area > b.area; });
 
     std::vector<std::vector<Vector2>> result;
     result.reserve(std::min(candidates.size(), kMaxContourCount));

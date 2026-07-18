@@ -138,9 +138,8 @@ private:
             return;
         }
 
-        const QRectF imageRect
-            = QRectF(rect()).adjusted(kImageSectionMargin, kImageSectionMargin,
-                -kImageSectionMargin, -kImageSectionMargin);
+        const QRectF imageRect = QRectF(rect()).adjusted(
+            kImageSectionMargin, kImageSectionMargin, -kImageSectionMargin, -kImageSectionMargin);
         if (imageRect.isEmpty()) {
             return;
         }
@@ -161,8 +160,7 @@ private:
         }
 
         QPainterPath clipPath;
-        clipPath.addRoundedRect(
-            imageRect, kImageSectionCornerRadius, kImageSectionCornerRadius);
+        clipPath.addRoundedRect(imageRect, kImageSectionCornerRadius, kImageSectionCornerRadius);
         painter.setClipPath(clipPath);
         painter.setRenderHint(QPainter::SmoothPixmapTransform);
         painter.drawPixmap(imageRect, m_backgroundImage, sourceRect);
@@ -193,8 +191,7 @@ protected:
     bool event(QEvent* event) override
     {
         if (event->type() == QEvent::Move || event->type() == QEvent::Resize
-            || event->type() == QEvent::Show
-            || event->type() == QEvent::DevicePixelRatioChange) {
+            || event->type() == QEvent::Show || event->type() == QEvent::DevicePixelRatioChange) {
             m_blurredBackdrop = {};
         }
         return QWidget::event(event);
@@ -212,8 +209,8 @@ protected:
         painter.setRenderHint(QPainter::Antialiasing);
 
         ruwa::ui::painting::drawTonedGlassPanel(painter, QRectF(rect()),
-            theme.scaled(kHeroGlassCornerRadius), QSizeF(size()), m_blurredBackdrop,
-            colors.surface, colors.primary, colors.isDark, colors.borderSubtleHover(),
+            theme.scaled(kHeroGlassCornerRadius), QSizeF(size()), m_blurredBackdrop, colors.surface,
+            colors.primary, colors.isDark, colors.borderSubtleHover(),
             ruwa::ui::core::ThemeColors::withAlpha(
                 colors.borderSubtle(), colors.borderSubtle().alpha() / 2),
             0.0);
@@ -252,8 +249,8 @@ private:
         m_cachedGeometry = sampleGeometry;
         m_cachedBackgroundRgba = backgroundRgba;
         m_cachedDpr = dpr;
-        m_blurredBackdrop = m_hero->createBlurredBackdrop(
-            sampleGeometry, theme.scaled(kHeroGlassBlurRadius));
+        m_blurredBackdrop
+            = m_hero->createBlurredBackdrop(sampleGeometry, theme.scaled(kHeroGlassBlurRadius));
     }
 
 private:
@@ -380,8 +377,7 @@ void FirstRunIntegrationWidget::setupUi()
     m_pageLayout->setContentsMargins(0, 0, 0, 0);
     m_pageLayout->setSpacing(0);
 
-    auto* heroSection = new FirstRunIntegrationImageSection(
-        QStringLiteral("FirstRunHeroSection"),
+    auto* heroSection = new FirstRunIntegrationImageSection(QStringLiteral("FirstRunHeroSection"),
         QStringLiteral(":/images/FirstIntegrationHero"), page);
     m_heroSection = heroSection;
     auto* heroLayout = new QVBoxLayout(m_heroSection);
@@ -407,23 +403,22 @@ void FirstRunIntegrationWidget::setupUi()
     m_heroDescription->setWordWrap(true);
     m_heroDescription->setMaximumWidth(620);
 
-    m_startCustomizationButton = new ruwa::ui::widgets::WelcomeBannerButton(QString(),
-        ruwa::ui::widgets::WelcomeBannerButton::ButtonStyle::Primary, m_heroGlassPanel);
+    m_startCustomizationButton = new ruwa::ui::widgets::WelcomeBannerButton(
+        QString(), ruwa::ui::widgets::WelcomeBannerButton::ButtonStyle::Primary, m_heroGlassPanel);
     m_startCustomizationButton->setPrimaryBorderVisible(false);
-    connect(m_startCustomizationButton,
-        &ruwa::ui::widgets::WelcomeBannerButton::clicked, this, [this]() {
+    connect(m_startCustomizationButton, &ruwa::ui::widgets::WelcomeBannerButton::clicked, this,
+        [this]() {
             if (!m_scrollArea->isUserScrollingEnabled()) {
                 return;
             }
-            m_scrollArea->scrollTo(m_heroSection->height(),
-                kCustomizationScrollDurationMs, QEasingCurve::InOutCubic);
+            m_scrollArea->scrollTo(
+                m_heroSection->height(), kCustomizationScrollDurationMs, QEasingCurve::InOutCubic);
         });
 
     m_skipCustomizationButton = new ruwa::ui::widgets::WelcomeBannerButton(QString(),
         ruwa::ui::widgets::WelcomeBannerButton::ButtonStyle::Secondary, m_heroGlassPanel);
     m_skipCustomizationButton->setSecondaryIdleFillAlpha(24);
-    connect(m_skipCustomizationButton,
-        &ruwa::ui::widgets::WelcomeBannerButton::clicked, this,
+    connect(m_skipCustomizationButton, &ruwa::ui::widgets::WelcomeBannerButton::clicked, this,
         &FirstRunIntegrationWidget::completedRequested);
 
     auto* heroActions = new QHBoxLayout();
@@ -452,9 +447,8 @@ void FirstRunIntegrationWidget::setupUi()
     m_contentLayout->setSpacing(kContentSpacing);
     updateContentMargins();
 
-    auto* appearanceSection
-        = createSection(content, QStringLiteral("FirstRunAppearanceSection"),
-            kSettingsSectionMinimumHeight);
+    auto* appearanceSection = createSection(
+        content, QStringLiteral("FirstRunAppearanceSection"), kSettingsSectionMinimumHeight);
     auto* appearanceLayout = new QVBoxLayout(appearanceSection);
     appearanceLayout->setContentsMargins(0, 0, 0, 0);
     appearanceLayout->setSpacing(8);
@@ -464,39 +458,34 @@ void FirstRunIntegrationWidget::setupUi()
     appearanceLayout->addWidget(m_appearanceTitle, 0, Qt::AlignHCenter);
     appearanceLayout->addSpacing(8);
 
-    m_themeSelector
-        = new ruwa::ui::widgets::ThemeSelectorWidget(appearanceSection, false);
-    connect(m_themeSelector, &ruwa::ui::widgets::ThemeSelectorWidget::themeSelected,
-        this, [](const ruwa::ui::core::ThemePreset& preset) {
+    m_themeSelector = new ruwa::ui::widgets::ThemeSelectorWidget(appearanceSection, false);
+    connect(m_themeSelector, &ruwa::ui::widgets::ThemeSelectorWidget::themeSelected, this,
+        [](const ruwa::ui::core::ThemePreset& preset) {
             auto& settings = ruwa::core::SettingsManager::instance();
             settings.setThemeId(preset.id);
             settings.save();
         });
     appearanceLayout->addWidget(m_themeSelector);
 
-    const auto& appearanceSettings
-        = ruwa::core::SettingsManager::instance().settings().appearance;
+    const auto& appearanceSettings = ruwa::core::SettingsManager::instance().settings().appearance;
 
     m_uiScaleChoice = new ruwa::ui::widgets::SettingsChoice(tr("UI Scale"),
-        tr("Adjust the size of UI elements"),
-        { tr("Small"), tr("Medium"), tr("Large") },
-        qBound(0, appearanceSettings.uiScale, 2),
-        appearanceSection);
-    connect(m_uiScaleChoice, &ruwa::ui::widgets::SettingsChoice::selectionChanged,
-        this, [](int value) {
+        tr("Adjust the size of UI elements"), { tr("Small"), tr("Medium"), tr("Large") },
+        qBound(0, appearanceSettings.uiScale, 2), appearanceSection);
+    connect(
+        m_uiScaleChoice, &ruwa::ui::widgets::SettingsChoice::selectionChanged, this, [](int value) {
             auto& settings = ruwa::core::SettingsManager::instance();
             settings.setUiScale(value);
             settings.save();
         });
     appearanceLayout->addWidget(m_uiScaleChoice);
 
-    m_topBarTabAlignmentChoice = new ruwa::ui::widgets::SettingsChoice(
-        tr("Top bar tab alignment"),
+    m_topBarTabAlignmentChoice = new ruwa::ui::widgets::SettingsChoice(tr("Top bar tab alignment"),
         tr("Place the tab strip at the left of the title bar or centered in the free space"),
-        { tr("Left"), tr("Center") },
-        appearanceSettings.topBarTabAlignment == 1 ? 1 : 0, appearanceSection);
-    connect(m_topBarTabAlignmentChoice,
-        &ruwa::ui::widgets::SettingsChoice::selectionChanged, this, [](int index) {
+        { tr("Left"), tr("Center") }, appearanceSettings.topBarTabAlignment == 1 ? 1 : 0,
+        appearanceSection);
+    connect(m_topBarTabAlignmentChoice, &ruwa::ui::widgets::SettingsChoice::selectionChanged, this,
+        [](int index) {
             auto& settings = ruwa::core::SettingsManager::instance();
             settings.setTopBarTabAlignment(index == 1 ? 1 : 0);
             settings.save();
@@ -505,8 +494,7 @@ void FirstRunIntegrationWidget::setupUi()
 
     m_contentLayout->addWidget(appearanceSection);
 
-    const auto& editorSettings
-        = ruwa::core::SettingsManager::instance().settings().editor;
+    const auto& editorSettings = ruwa::core::SettingsManager::instance().settings().editor;
     auto* editorSection = createSection(
         content, QStringLiteral("FirstRunEditorSection"), kSettingsSectionMinimumHeight);
     auto* editorLayout = new QVBoxLayout(editorSection);
@@ -522,8 +510,8 @@ void FirstRunIntegrationWidget::setupUi()
         tr("Automatically save your work at the selected interval"),
         { tr("Off"), tr("2 min"), tr("5 min"), tr("10 min") },
         autoSaveIndexForMinutes(editorSettings.autoSaveInterval), editorSection);
-    connect(m_autoSaveChoice, &ruwa::ui::widgets::SettingsChoice::selectionChanged,
-        this, [](int index) {
+    connect(m_autoSaveChoice, &ruwa::ui::widgets::SettingsChoice::selectionChanged, this,
+        [](int index) {
             static constexpr int intervals[] = { 0, 2, 5, 10 };
             if (index < 0 || index >= 4) {
                 return;
@@ -537,8 +525,8 @@ void FirstRunIntegrationWidget::setupUi()
     m_quickshapesToggle = new ruwa::ui::widgets::SettingsToggle(tr("Quick Shapes"),
         tr("Hold stroke to morph into straight line, circle, triangle, or square"),
         editorSettings.quickshapesEnabled, editorSection);
-    connect(m_quickshapesToggle, &ruwa::ui::widgets::SettingsToggle::toggled,
-        this, [](bool checked) {
+    connect(
+        m_quickshapesToggle, &ruwa::ui::widgets::SettingsToggle::toggled, this, [](bool checked) {
             auto& settings = ruwa::core::SettingsManager::instance();
             settings.setQuickshapesEnabled(checked);
             settings.save();
@@ -559,13 +547,12 @@ void FirstRunIntegrationWidget::setupUi()
     performanceLayout->addWidget(m_performanceTitle, 0, Qt::AlignHCenter);
     performanceLayout->addSpacing(8);
 
-    m_undoMemoryChoice = new ruwa::ui::widgets::SettingsChoice(
-        tr("Undo Memory Limit"), tr("Maximum memory available for undo history"),
+    m_undoMemoryChoice = new ruwa::ui::widgets::SettingsChoice(tr("Undo Memory Limit"),
+        tr("Maximum memory available for undo history"),
         { tr("300 MB"), tr("1 GB"), tr("3 GB"), tr("8 GB") },
-        undoMemoryIndexForMegabytes(performanceSettings.undoMemoryLimitMb),
-        performanceSection);
-    connect(m_undoMemoryChoice, &ruwa::ui::widgets::SettingsChoice::selectionChanged,
-        this, [](int index) {
+        undoMemoryIndexForMegabytes(performanceSettings.undoMemoryLimitMb), performanceSection);
+    connect(m_undoMemoryChoice, &ruwa::ui::widgets::SettingsChoice::selectionChanged, this,
+        [](int index) {
             static constexpr int limitsMb[] = { 300, 1024, 3072, 8192 };
             if (index < 0 || index >= 4) {
                 return;
@@ -576,13 +563,12 @@ void FirstRunIntegrationWidget::setupUi()
         });
     performanceLayout->addWidget(m_undoMemoryChoice);
 
-    m_tabletBackendChoice = new ruwa::ui::widgets::SettingsChoice(
-        tr("Tablet Input Backend"),
+    m_tabletBackendChoice = new ruwa::ui::widgets::SettingsChoice(tr("Tablet Input Backend"),
         tr("Choose the stylus input backend. Restart is required to apply this setting."),
         { tr("WinTab (Qt)"), tr("Windows Ink"), tr("WinTab (Ruwa)") },
         qBound(0, performanceSettings.tabletBackend, 2), performanceSection);
-    connect(m_tabletBackendChoice,
-        &ruwa::ui::widgets::SettingsChoice::selectionChanged, this, [this](int index) {
+    connect(m_tabletBackendChoice, &ruwa::ui::widgets::SettingsChoice::selectionChanged, this,
+        [this](int index) {
             if (index < 0 || index > 2) {
                 return;
             }
@@ -608,9 +594,9 @@ void FirstRunIntegrationWidget::setupUi()
     performanceLayout->addWidget(m_tabletBackendChoice);
     m_contentLayout->addWidget(performanceSection);
 
-    auto* finishSection = new FirstRunIntegrationImageSection(
-        QStringLiteral("FirstRunFinishSection"),
-        QStringLiteral(":/images/FirstIntegrationBottom"), content);
+    auto* finishSection
+        = new FirstRunIntegrationImageSection(QStringLiteral("FirstRunFinishSection"),
+            QStringLiteral(":/images/FirstIntegrationBottom"), content);
     m_finishSection = finishSection;
     finishSection->setMinimumHeight(kFinishMinimumHeight);
     auto* finishLayout = new QVBoxLayout(finishSection);
@@ -623,8 +609,8 @@ void FirstRunIntegrationWidget::setupUi()
     m_finishDescription->setAlignment(Qt::AlignCenter);
     m_finishDescription->setWordWrap(true);
     m_finishDescription->setMaximumWidth(620);
-    m_finishButton = new ruwa::ui::widgets::WelcomeBannerButton(QString(),
-        ruwa::ui::widgets::WelcomeBannerButton::ButtonStyle::Primary, finishSection);
+    m_finishButton = new ruwa::ui::widgets::WelcomeBannerButton(
+        QString(), ruwa::ui::widgets::WelcomeBannerButton::ButtonStyle::Primary, finishSection);
     m_finishButton->setPrimaryBorderVisible(false);
     connect(m_finishButton, &ruwa::ui::widgets::WelcomeBannerButton::clicked, this,
         &FirstRunIntegrationWidget::completedRequested);
@@ -663,8 +649,8 @@ void FirstRunIntegrationWidget::retranslateUi()
     m_quickshapesToggle->setDescription(
         tr("Hold stroke to morph into straight line, circle, triangle, or square"));
     m_performanceTitle->setText(tr("Performance"));
-    m_undoMemoryChoice->retranslateUi(
-        tr("Undo Memory Limit"), tr("Maximum memory available for undo history"),
+    m_undoMemoryChoice->retranslateUi(tr("Undo Memory Limit"),
+        tr("Maximum memory available for undo history"),
         { tr("300 MB"), tr("1 GB"), tr("3 GB"), tr("8 GB") });
     m_tabletBackendChoice->retranslateUi(tr("Tablet Input Backend"),
         tr("Choose the stylus input backend. Restart is required to apply this setting."),
@@ -681,14 +667,12 @@ void FirstRunIntegrationWidget::ensureAppearanceOverlay()
         return;
     }
 
-    const QColor backgroundColor
-        = ruwa::ui::core::ThemeManager::instance().colors().background;
-    auto* overlay
-        = new ruwa::ui::widgets::WidgetFadeInOverlay(this, backgroundColor);
+    const QColor backgroundColor = ruwa::ui::core::ThemeManager::instance().colors().background;
+    auto* overlay = new ruwa::ui::widgets::WidgetFadeInOverlay(this, backgroundColor);
     m_appearanceOverlay = overlay;
     m_scrollArea->setUserScrollingEnabled(false);
-    connect(overlay, &ruwa::ui::widgets::WidgetFadeInOverlay::animationFinished,
-        this, [this]() { m_scrollArea->setUserScrollingEnabled(true); });
+    connect(overlay, &ruwa::ui::widgets::WidgetFadeInOverlay::animationFinished, this,
+        [this]() { m_scrollArea->setUserScrollingEnabled(true); });
     connect(overlay, &QObject::destroyed, this, [this, overlay]() {
         if (m_appearanceOverlay == overlay) {
             m_appearanceOverlay.clear();
@@ -719,42 +703,41 @@ void FirstRunIntegrationWidget::startAppearanceAnimation()
 void FirstRunIntegrationWidget::updateTheme()
 {
     const auto& colors = ruwa::ui::core::ThemeManager::instance().colors();
-    const QString style = QStringLiteral(
-                              "FirstRunIntegrationWidget, "
-                              "QWidget#FirstRunScrollArea, "
-                              "QWidget#FirstRunPage, "
-                              "QWidget#FirstRunContent {"
-                              "  background: %1;"
-                              "}"
-                              "QFrame#FirstRunHeroSection {"
-                              "  background: transparent;"
-                              "  border: none;"
-                              "  border-radius: 0;"
-                              "}"
-                              "QFrame#FirstRunAppearanceSection, "
-                              "QFrame#FirstRunEditorSection, "
-                              "QFrame#FirstRunPerformanceSection, "
-                              "QFrame#FirstRunFinishSection {"
-                              "  background: transparent;"
-                              "  border: none;"
-                              "}"
-                              "QLabel#FirstRunHeroTitle, "
-                              "QLabel#FirstRunSectionTitle {"
-                              "  color: %3;"
-                              "}"
-                              "QLabel#FirstRunBodyText {"
-                              "  color: %2;"
-                              "}")
-                              .arg(colors.background.name(QColor::HexArgb),
-                                  colors.textMuted.name(QColor::HexArgb),
-                                  colors.text.name(QColor::HexArgb));
+    const QString style
+        = QStringLiteral("FirstRunIntegrationWidget, "
+                         "QWidget#FirstRunScrollArea, "
+                         "QWidget#FirstRunPage, "
+                         "QWidget#FirstRunContent {"
+                         "  background: %1;"
+                         "}"
+                         "QFrame#FirstRunHeroSection {"
+                         "  background: transparent;"
+                         "  border: none;"
+                         "  border-radius: 0;"
+                         "}"
+                         "QFrame#FirstRunAppearanceSection, "
+                         "QFrame#FirstRunEditorSection, "
+                         "QFrame#FirstRunPerformanceSection, "
+                         "QFrame#FirstRunFinishSection {"
+                         "  background: transparent;"
+                         "  border: none;"
+                         "}"
+                         "QLabel#FirstRunHeroTitle, "
+                         "QLabel#FirstRunSectionTitle {"
+                         "  color: %3;"
+                         "}"
+                         "QLabel#FirstRunBodyText {"
+                         "  color: %2;"
+                         "}")
+              .arg(colors.background.name(QColor::HexArgb), colors.textMuted.name(QColor::HexArgb),
+                  colors.text.name(QColor::HexArgb));
     setStyleSheet(style);
     m_heroSection->update();
     m_heroGlassPanel->update();
     m_finishSection->update();
 
-    const QPixmap logo = ruwa::ui::core::ThemeManager::instance().icons()
-                             .getApplicationLogoPixmap(QSize(kHeroLogoSize, kHeroLogoSize));
+    const QPixmap logo = ruwa::ui::core::ThemeManager::instance().icons().getApplicationLogoPixmap(
+        QSize(kHeroLogoSize, kHeroLogoSize));
     m_heroLogo->setPixmap(logo);
 
     QFont heroFont = colors.fonts.getTitleFont();

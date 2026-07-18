@@ -23,8 +23,7 @@ inline float softenAlpha(float alpha, float softAlpha, float hardness)
     const float clampedAlpha = std::clamp(alpha, 0.0f, 1.0f);
     const float clampedSoftAlpha = std::clamp(softAlpha, 0.0f, 1.0f);
     const float softness = softnessFromHardness(hardness);
-    return std::clamp(
-        clampedAlpha + (clampedSoftAlpha - clampedAlpha) * softness, 0.0f, 1.0f);
+    return std::clamp(clampedAlpha + (clampedSoftAlpha - clampedAlpha) * softness, 0.0f, 1.0f);
 }
 
 } // namespace aether::dab_shape_falloff

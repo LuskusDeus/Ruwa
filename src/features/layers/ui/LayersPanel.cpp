@@ -1889,8 +1889,8 @@ bool LayersPanel::pasteLayerSnapshots(const QList<std::shared_ptr<LayerData>>& s
         return false;
     }
 
-    const bool hasPasteableSnapshot = std::any_of(snapshots.cbegin(), snapshots.cend(),
-        [](const std::shared_ptr<LayerData>& snapshot) {
+    const bool hasPasteableSnapshot = std::any_of(
+        snapshots.cbegin(), snapshots.cend(), [](const std::shared_ptr<LayerData>& snapshot) {
             return snapshot && !snapshot->isBackground();
         });
     if (!hasPasteableSnapshot) {

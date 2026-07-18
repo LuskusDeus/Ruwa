@@ -46,8 +46,8 @@ ColorChannelSlidersWidget::ColorChannelSlidersWidget(Model model, QWidget* paren
         auto* animation = new QVariantAnimation(this);
         animation->setDuration(kHoverDuration);
         animation->setEasingCurve(QEasingCurve::OutCubic);
-        connect(animation, &QVariantAnimation::valueChanged, this,
-            [this, i](const QVariant& value) {
+        connect(
+            animation, &QVariantAnimation::valueChanged, this, [this, i](const QVariant& value) {
                 m_hoverProgress[i] = qBound(0.0, value.toReal(), 1.0);
                 update(channelRect(i).toAlignedRect().adjusted(-1, -1, 1, 1));
             });
@@ -103,8 +103,7 @@ void ColorChannelSlidersWidget::setColor(const QColor& color)
 QSize ColorChannelSlidersWidget::sizeHint() const
 {
     auto& theme = ruwa::ui::core::ThemeManager::instance();
-    const int height = theme.scaled(kBaseOuterPadding * 2 + kBaseRowHeight * 3
-        + kBaseRowGap * 2);
+    const int height = theme.scaled(kBaseOuterPadding * 2 + kBaseRowHeight * 3 + kBaseRowGap * 2);
     return QSize(theme.scaled(180), height);
 }
 
@@ -182,12 +181,10 @@ qreal ColorChannelSlidersWidget::valueRatio(int index) const
 
 QString ColorChannelSlidersWidget::channelLabel(int index) const
 {
-    static const std::array<QString, 3> rgbLabels {
-        QStringLiteral("R"), QStringLiteral("G"), QStringLiteral("B")
-    };
-    static const std::array<QString, 3> hsvLabels {
-        QStringLiteral("H"), QStringLiteral("S"), QStringLiteral("V")
-    };
+    static const std::array<QString, 3> rgbLabels { QStringLiteral("R"), QStringLiteral("G"),
+        QStringLiteral("B") };
+    static const std::array<QString, 3> hsvLabels { QStringLiteral("H"), QStringLiteral("S"),
+        QStringLiteral("V") };
     return m_model == Model::RGB ? rgbLabels[index] : hsvLabels[index];
 }
 
@@ -255,8 +252,7 @@ void ColorChannelSlidersWidget::setChannelValue(int index, int value, bool notif
     }
 }
 
-void ColorChannelSlidersWidget::updateValueFromPosition(
-    int index, const QPointF& position)
+void ColorChannelSlidersWidget::updateValueFromPosition(int index, const QPointF& position)
 {
     setChannelValue(index, valueFromPosition(index, position), true);
 }
@@ -342,8 +338,8 @@ void ColorChannelSlidersWidget::paintEvent(QPaintEvent* event)
         if (m_hoverProgress[i] > 0.001) {
             QColor accent = colors.primary;
             accent.setAlpha(150);
-            rowBorder = ruwa::ui::core::ThemeColors::interpolate(
-                rowBorder, accent, m_hoverProgress[i]);
+            rowBorder
+                = ruwa::ui::core::ThemeColors::interpolate(rowBorder, accent, m_hoverProgress[i]);
         }
         if (hasFocus() && m_focusedChannel == i) {
             rowBorder = colors.primary;
@@ -367,11 +363,10 @@ void ColorChannelSlidersWidget::paintEvent(QPaintEvent* event)
 
         const QRectF track = valueTrackRect(i);
         const qreal handleX = track.left() + valueRatio(i) * track.width();
-        const QRectF handleShadow(
-            handleX - theme.scaled(1.5), row.top() + chipInset, theme.scaled(3.0),
+        const QRectF handleShadow(handleX - theme.scaled(1.5), row.top() + chipInset,
+            theme.scaled(3.0), row.height() - chipInset * 2);
+        const QRectF handle(handleX - theme.scaled(0.75), row.top() + chipInset, theme.scaled(1.5),
             row.height() - chipInset * 2);
-        const QRectF handle(handleX - theme.scaled(0.75), row.top() + chipInset,
-            theme.scaled(1.5), row.height() - chipInset * 2);
         painter.setPen(Qt::NoPen);
         painter.setBrush(colors.shadow(115));
         painter.drawRoundedRect(handleShadow, theme.scaled(1.0), theme.scaled(1.0));

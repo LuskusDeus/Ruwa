@@ -2377,8 +2377,7 @@ private:
 
             if (m_dabInterpolation == 1) {
                 const float alpha = static_cast<float>(m_dabShapeAlpha[maskIndex]) / 255.0f;
-                const float softAlpha
-                    = static_cast<float>(m_dabShapeSoftAlpha[maskIndex]) / 255.0f;
+                const float softAlpha = static_cast<float>(m_dabShapeSoftAlpha[maskIndex]) / 255.0f;
                 return dab_shape_falloff::softenAlpha(alpha, softAlpha, hardness);
             }
             return sampleDabShapeSoftAlpha(u, v, hardness);

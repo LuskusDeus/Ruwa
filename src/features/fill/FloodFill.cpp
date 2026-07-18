@@ -371,15 +371,14 @@ inline PremultPixel compositeOverPreservingAlpha(
     const uint64_t denominator = alphaScale * alphaScale;
     const uint64_t invFillA = alphaScale - static_cast<uint64_t>(fillA);
     auto blendChannel = [&](uint8_t fillChannel, uint8_t dstChannel) {
-        const uint64_t numerator
-            = static_cast<uint64_t>(fillChannel) * fillA * dst.a
+        const uint64_t numerator = static_cast<uint64_t>(fillChannel) * fillA * dst.a
             + static_cast<uint64_t>(dstChannel) * invFillA * alphaScale;
         return static_cast<uint8_t>(
             std::clamp<uint64_t>((numerator + denominator / 2) / denominator, 0, dst.a));
     };
 
-    return { blendChannel(fillR, dst.r), blendChannel(fillG, dst.g),
-        blendChannel(fillB, dst.b), dst.a };
+    return { blendChannel(fillR, dst.r), blendChannel(fillG, dst.g), blendChannel(fillB, dst.b),
+        dst.a };
 }
 
 inline PremultPixel compositeUnder(
@@ -558,14 +557,13 @@ inline void applyMaskTileToMutation(TileFillMutation& mutation,
             PremultPixel blendedPx;
             if (preserveDestinationAlpha) {
                 const uint8_t effectiveFillA = selectionClipping
-                    ? static_cast<uint8_t>(
-                          (static_cast<uint32_t>(fillA) * capAlpha + 127u) / 255u)
+                    ? static_cast<uint8_t>((static_cast<uint32_t>(fillA) * capAlpha + 127u) / 255u)
                     : fillA;
                 if (originalPx.a == 0 || effectiveFillA == 0) {
                     continue;
                 }
-                blendedPx = compositeOverPreservingAlpha(
-                    originalPx, fillR, fillG, fillB, effectiveFillA);
+                blendedPx
+                    = compositeOverPreservingAlpha(originalPx, fillR, fillG, fillB, effectiveFillA);
             } else {
                 blendedPx = (fillMode == FillSemanticMode::Exterior)
                     ? compositeUnder(originalPx, fillR, fillG, fillB, fillA)
@@ -2231,10 +2229,9 @@ FloodFillResult fillMaskTiles(TileGrid& grid, const FloodFillResult::RawTileMap&
     FloodFillResult::RawTileMap selectionTiles = snapshotSelectionMaskTiles(selectionMask);
     const FloodFillResult::RawTileMap* selectionPtr = selectionMask ? &selectionTiles : nullptr;
 
-    FloodFillResult result
-        = buildResultFromMaskTiles(grid, maskTiles, FloodFillResult::RawTileMap {},
-            FillSemanticMode::Stroke, fillR, fillG, fillB, fillA, selectionPtr,
-            preserveDestinationAlpha);
+    FloodFillResult result = buildResultFromMaskTiles(grid, maskTiles,
+        FloodFillResult::RawTileMap {}, FillSemanticMode::Stroke, fillR, fillG, fillB, fillA,
+        selectionPtr, preserveDestinationAlpha);
     if (result.pixelsFilled > 0) {
         applyFillResultToGrid(grid, result);
     }

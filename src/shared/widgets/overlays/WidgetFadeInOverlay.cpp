@@ -104,8 +104,8 @@ void WidgetFadeInOverlay::paintEvent(QPaintEvent* event)
     if (!m_targetSnapshot.isNull() && m_opacity < 1.0) {
         const qreal snapshotDpr = m_targetSnapshot.devicePixelRatio();
         const QRectF sourceRect(QPointF(0, 0),
-            QSizeF(m_targetSnapshot.width() / snapshotDpr,
-                m_targetSnapshot.height() / snapshotDpr));
+            QSizeF(
+                m_targetSnapshot.width() / snapshotDpr, m_targetSnapshot.height() / snapshotDpr));
         painter.setOpacity(1.0 - m_opacity);
         painter.setRenderHint(QPainter::SmoothPixmapTransform);
         painter.drawPixmap(QRectF(rect()), m_targetSnapshot, sourceRect);
@@ -114,8 +114,7 @@ void WidgetFadeInOverlay::paintEvent(QPaintEvent* event)
 
 bool WidgetFadeInOverlay::eventFilter(QObject* watched, QEvent* event)
 {
-    if (watched == m_target
-        && (event->type() == QEvent::Resize || event->type() == QEvent::Show)) {
+    if (watched == m_target && (event->type() == QEvent::Resize || event->type() == QEvent::Show)) {
         updateGeometry();
         raise();
     }

@@ -13,7 +13,7 @@ namespace ruwa::ui::widgets {
 class AnimatedStackedWidget;
 class ColorChannelSlidersWidget;
 class ColorPicker;
-}
+} // namespace ruwa::ui::widgets
 
 class QPushButton;
 class QVBoxLayout;

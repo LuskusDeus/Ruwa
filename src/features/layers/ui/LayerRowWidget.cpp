@@ -1842,8 +1842,7 @@ void LayerRowWidget::mouseReleaseEvent(QMouseEvent* e)
         // (layer pixels vs the mask) and selects the layer.
         if (hasMaskThumbnail() && (zone == HitZone::Thumbnail || zone == HitZone::MaskThumbnail)
             && !(e->modifiers() & Qt::ControlModifier)) {
-            emit paintTargetClicked(
-                m_data->id, zone == HitZone::MaskThumbnail, e->modifiers());
+            emit paintTargetClicked(m_data->id, zone == HitZone::MaskThumbnail, e->modifiers());
             break;
         }
         emit clicked(m_data->id, e->modifiers());

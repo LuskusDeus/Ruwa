@@ -118,8 +118,7 @@ GLuint resolveDabTextureId(QOpenGLFunctions_4_5_Core* gl, const TileBrush& brush
 float dabCoverageExtent(const TileBrush& brush, float radius, float hardness, float roundness,
     float angleDegrees, bool includeRasterPadding = false)
 {
-    return brush.dabCoverageExtent(
-        radius, hardness, roundness, angleDegrees, includeRasterPadding);
+    return brush.dabCoverageExtent(radius, hardness, roundness, angleDegrees, includeRasterPadding);
 }
 
 float dabRotationInvariantCoverageExtent(const TileBrush& brush, float radius, float hardness,

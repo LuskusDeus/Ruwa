@@ -177,8 +177,7 @@ void SmoothScrollArea::scrollTo(int value, bool animated)
     setScrollValue(m_targetScrollValue);
 }
 
-void SmoothScrollArea::scrollTo(
-    int value, int durationMs, QEasingCurve::Type easingCurve)
+void SmoothScrollArea::scrollTo(int value, int durationMs, QEasingCurve::Type easingCurve)
 {
     m_targetScrollValue = qBound(0, value, m_maxScroll);
     m_scrollAnimation->stop();

@@ -2102,8 +2102,8 @@ void LayerListView::recycleRow(LayerRowWidget* row)
 void LayerListView::connectRowSignals(LayerRowWidget* row)
 {
     connect(row, &LayerRowWidget::clicked, this, &LayerListView::onRowClicked);
-    connect(row, &LayerRowWidget::paintTargetClicked, this,
-        &LayerListView::onRowPaintTargetClicked);
+    connect(
+        row, &LayerRowWidget::paintTargetClicked, this, &LayerListView::onRowPaintTargetClicked);
     connect(row, &LayerRowWidget::thumbnailCtrlClicked, this,
         &LayerListView::onRowThumbnailCtrlClicked);
     connect(row, &LayerRowWidget::textEditRequested, this, &LayerListView::onRowTextEditRequested);
