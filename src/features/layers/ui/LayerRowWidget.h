@@ -181,6 +181,8 @@ public slots:
 
 signals:
     void clicked(const ruwa::core::layers::LayerId& id, Qt::KeyboardModifiers mods);
+    void paintTargetClicked(
+        const ruwa::core::layers::LayerId& id, bool maskTarget, Qt::KeyboardModifiers mods);
     void thumbnailCtrlClicked(const ruwa::core::layers::LayerId& id);
     void textEditRequested(const ruwa::core::layers::LayerId& id);
     void doubleClicked(const ruwa::core::layers::LayerId& id);

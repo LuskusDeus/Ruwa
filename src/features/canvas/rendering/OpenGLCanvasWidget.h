@@ -290,6 +290,10 @@ public:
 
     // Transform mode
     bool isTransformActive() const { return m_transformController.isActive(); }
+    bool transformUsesSelectionMask() const
+    {
+        return m_transformController.isActive() && m_transformController.usesSelectionMask();
+    }
     bool isMoveOnlyTransform() const { return m_moveOnlyTransform; }
     bool isAutoApplyingTransform() const { return m_autoApplyingTransform; }
     aether::TransformInteractionMode transformInteractionMode() const

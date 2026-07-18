@@ -553,6 +553,9 @@ void CanvasResizeController::applySelection()
     const bool geometryChanged = (newSize != oldSize) || (offsetX != 0 || offsetY != 0);
 
     if (geometryChanged && m_layerModel) {
+        if (m_callbacks.beforeDocumentMutation) {
+            m_callbacks.beforeDocumentMutation();
+        }
         aether::CanvasResizeCommand::Hooks hooks {
             m_callbacks.setCanvasSize,
             m_callbacks.requestRender,

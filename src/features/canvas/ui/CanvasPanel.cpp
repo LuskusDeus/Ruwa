@@ -541,6 +541,7 @@ void CanvasPanel::setCanvasSize(const QSize& size)
         return;
     }
 
+    commitTransformBeforeDocumentMutation();
     m_canvasSize = normalizedSize;
     if (hasFiniteDocumentBounds()) {
         m_exportFrame = QRect(0, 0, normalizedSize.width(), normalizedSize.height());
@@ -585,6 +586,7 @@ void CanvasPanel::setCanvasBoundsMode(ruwa::core::canvas::CanvasBoundsMode mode)
         return;
     }
 
+    commitTransformBeforeDocumentMutation();
     m_canvasBoundsMode = mode;
     if (hasFiniteDocumentBounds()) {
         m_infiniteExportFrameUserDefined = false;
@@ -1012,6 +1014,14 @@ void CanvasPanel::confirmTransform()
     emit transformModeChanged(false);
     syncToolStateOverlayContent();
     updateSelectionActionPopup();
+}
+
+void CanvasPanel::commitTransformBeforeDocumentMutation()
+{
+    confirmTransform();
+    if (m_glWidget) {
+        m_glWidget->flushPendingTransformFinalization();
+    }
 }
 
 void CanvasPanel::cancelTransform()
@@ -2048,11 +2058,11 @@ void CanvasPanel::selectLayerContent(const ruwa::core::layers::LayerId& id)
         return;
     }
 
+    commitTransformBeforeDocumentMutation();
     if (m_layerModel->selectedLayerId() != id) {
         m_layerModel->setSelectedLayer(id);
     }
 
-    confirmTransform();
     if (m_glWidget) {
         m_glWidget->selectActiveLayerContent();
     }
@@ -2070,7 +2080,7 @@ bool CanvasPanel::startTextLayerEditing(const ruwa::core::layers::LayerId& id)
         return false;
     }
 
-    confirmTransform();
+    commitTransformBeforeDocumentMutation();
     if (toolMode() != ToolMode::Text) {
         setToolMode(ToolMode::Text);
     }
@@ -2079,41 +2089,51 @@ bool CanvasPanel::startTextLayerEditing(const ruwa::core::layers::LayerId& id)
 
 bool CanvasPanel::clearLayerPixelContent(const ruwa::core::layers::LayerId& id)
 {
-    if (!m_glWidget || id.isNull()) {
+    auto* layer = m_layerModel ? m_layerModel->layerById(id) : nullptr;
+    if (!m_glWidget || !layer || !layer->isRaster() || !layer->pixelGrid()) {
         return false;
     }
+    commitTransformBeforeDocumentMutation();
     return m_glWidget->clearLayerPixelContent(id);
 }
 
 bool CanvasPanel::rasterizeSmartLayer(const ruwa::core::layers::LayerId& id)
 {
-    if (!m_glWidget || id.isNull()) {
+    auto* layer = m_layerModel ? m_layerModel->layerById(id) : nullptr;
+    if (!m_glWidget || !layer || (!layer->isSmart() && !layer->isBoard() && !layer->isText())) {
         return false;
     }
+    commitTransformBeforeDocumentMutation();
     return m_glWidget->rasterizeSmartLayerById(id);
 }
 
 bool CanvasPanel::applyLayerMask(const ruwa::core::layers::LayerId& id)
 {
-    if (!m_glWidget || id.isNull()) {
+    auto* layer = m_layerModel ? m_layerModel->layerById(id) : nullptr;
+    if (!m_glWidget || !layer || !layer->isRaster() || !layer->hasMask()) {
         return false;
     }
+    commitTransformBeforeDocumentMutation();
     return m_glWidget->applyLayerMask(id);
 }
 
 bool CanvasPanel::invertLayerMask(const ruwa::core::layers::LayerId& id)
 {
-    if (!m_glWidget || id.isNull()) {
+    auto* layer = m_layerModel ? m_layerModel->layerById(id) : nullptr;
+    if (!m_glWidget || !layer || !layer->isRaster() || !layer->hasMask()) {
         return false;
     }
+    commitTransformBeforeDocumentMutation();
     return m_glWidget->invertLayerMask(id);
 }
 
 bool CanvasPanel::applyLayerEffects(const ruwa::core::layers::LayerId& id)
 {
-    if (!m_glWidget || id.isNull()) {
+    auto* layer = m_layerModel ? m_layerModel->layerById(id) : nullptr;
+    if (!m_glWidget || !layer || !layer->isRaster() || layer->effects.isEmpty()) {
         return false;
     }
+    commitTransformBeforeDocumentMutation();
     return m_glWidget->applyLayerEffects(id);
 }
 
@@ -2131,16 +2151,20 @@ void CanvasPanel::clearSelectionMask()
         return;
     }
 
+    if (m_glWidget->transformUsesSelectionMask()) {
+        commitTransformBeforeDocumentMutation();
+    }
     m_glWidget->clearSelectionMask();
     updateSelectionActionPopup();
 }
 
 bool CanvasPanel::fillSelectionWithCurrentColor()
 {
-    if (!m_glWidget) {
+    if (!m_glWidget || !m_glWidget->hasSelectionMask()) {
         return false;
     }
 
+    commitTransformBeforeDocumentMutation();
     const bool filled = m_glWidget->fillSelectionWithColor(currentBrushColor());
     if (filled) {
         emit canvasContentChanged();

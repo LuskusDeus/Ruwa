@@ -1545,6 +1545,8 @@ QWidget* LayersPanel::createContent()
     // Connect list view signals
     connect(m_listView, &ruwa::ui::widgets::LayerListView::layerSelected, this,
         &LayersPanel::onLayerSelected);
+    connect(m_listView, &ruwa::ui::widgets::LayerListView::layerPaintTargetSelected, this,
+        &LayersPanel::onLayerPaintTargetSelected);
     connect(m_listView, &ruwa::ui::widgets::LayerListView::layerContentSelectionRequested, this,
         &LayersPanel::onLayerContentSelectionRequested);
     connect(m_listView, &ruwa::ui::widgets::LayerListView::layerTextEditRequested, this,
@@ -1836,7 +1838,10 @@ LayerData* LayersPanel::selectedLayer() const
 
 void LayersPanel::selectLayer(const LayerId& id)
 {
-    emit aboutToChangeLayerSelection();
+    if (m_layerModel.selectedLayerId() == id && m_layerModel.selectionCount() == 1) {
+        return;
+    }
+    emit aboutToPerformTransformIncompatibleEdit();
     m_layerModel.setSelectedLayer(id);
 }
 
@@ -1883,6 +1888,15 @@ bool LayersPanel::pasteLayerSnapshots(const QList<std::shared_ptr<LayerData>>& s
     if (snapshots.isEmpty()) {
         return false;
     }
+
+    const bool hasPasteableSnapshot = std::any_of(snapshots.cbegin(), snapshots.cend(),
+        [](const std::shared_ptr<LayerData>& snapshot) {
+            return snapshot && !snapshot->isBackground();
+        });
+    if (!hasPasteableSnapshot) {
+        return false;
+    }
+    emit aboutToPerformTransformIncompatibleEdit();
 
     if (m_listView) {
         m_listView->setFocus(Qt::OtherFocusReason);
@@ -2003,6 +2017,11 @@ bool LayersPanel::deleteSelectedLayers()
             removeRoots.append(layer);
         }
     }
+    if (removeRoots.isEmpty()) {
+        return false;
+    }
+
+    emit aboutToPerformTransformIncompatibleEdit();
 
     QList<std::shared_ptr<LayerData>> clones;
     QList<std::pair<LayerId, int>> restorePositions;
@@ -2050,6 +2069,19 @@ bool LayersPanel::deleteSelectedLayers()
 
 bool LayersPanel::duplicateSelectedLayers()
 {
+    bool hasDuplicableLayer = false;
+    for (const LayerId& id : m_layerModel.selectedLayerIds()) {
+        const auto* layer = m_layerModel.layerById(id);
+        if (layer && !layer->isBackground()) {
+            hasDuplicableLayer = true;
+            break;
+        }
+    }
+    if (!hasDuplicableLayer) {
+        return false;
+    }
+
+    emit aboutToPerformTransformIncompatibleEdit();
     const QList<LayerId> addedIds = m_layerModel.duplicateSelectedLayers();
     if (addedIds.isEmpty()) {
         return false;
@@ -2115,6 +2147,7 @@ bool LayersPanel::mergeSelectedLayerDown()
         return false;
     }
 
+    emit aboutToPerformTransformIncompatibleEdit();
     auto* source = m_layerModel.layerById(candidate.sourceId);
     auto* target = m_layerModel.layerById(candidate.targetId);
     auto sourceSnapshot = LayerModel::cloneLayerTree(source, true);
@@ -2233,6 +2266,10 @@ bool LayersPanel::mergeLayerSet(
         if (!layer) {
             return false;
         }
+    }
+    emit aboutToPerformTransformIncompatibleEdit();
+
+    for (LayerData* layer : orderedTopToBottom) {
         auto snapshot = LayerModel::cloneLayerTree(layer, true);
         if (!snapshot) {
             return false;
@@ -2378,8 +2415,11 @@ bool LayersPanel::performMerge()
 
 void LayersPanel::onLayerSelected(const LayerId& id, Qt::KeyboardModifiers modifiers)
 {
-    // Apply pending changes (e.g. transform) on current layer before switching
-    emit aboutToChangeLayerSelection();
+    const bool selectionWillChange = (modifiers & (Qt::ControlModifier | Qt::ShiftModifier))
+        || m_layerModel.selectedLayerId() != id || m_layerModel.selectionCount() != 1;
+    if (selectionWillChange) {
+        emit aboutToPerformTransformIncompatibleEdit();
+    }
 
     if (modifiers & Qt::ControlModifier) {
         m_layerModel.toggleSelection(id);
@@ -2399,9 +2439,41 @@ void LayersPanel::onLayerSelected(const LayerId& id, Qt::KeyboardModifiers modif
     emit layerSelected(id);
 }
 
+void LayersPanel::onLayerPaintTargetSelected(
+    const LayerId& id, bool maskTarget, Qt::KeyboardModifiers modifiers)
+{
+    auto* layer = m_layerModel.layerById(id);
+    if (!layer || !layer->hasMask()) {
+        onLayerSelected(id, modifiers);
+        return;
+    }
+
+    const bool selectionWillChange = (modifiers & Qt::ShiftModifier)
+        || m_layerModel.selectedLayerId() != id || m_layerModel.selectionCount() != 1;
+    const bool paintTargetWillChange = layer->maskEditActive != maskTarget;
+    if (selectionWillChange || paintTargetWillChange) {
+        emit aboutToPerformTransformIncompatibleEdit();
+    }
+
+    layer->maskEditActive = maskTarget;
+    if (modifiers & Qt::ShiftModifier) {
+        const LayerId primary = m_layerModel.selectedLayerId();
+        if (!primary.isNull()) {
+            m_layerModel.selectRange(primary, id);
+        } else {
+            m_layerModel.setSelectedLayer(id);
+        }
+    } else {
+        m_layerModel.setSelectedLayer(id);
+    }
+
+    syncLayerControls();
+    emit layerSelected(id);
+}
+
 void LayersPanel::onLayerContentSelectionRequested(const LayerId& id)
 {
-    emit aboutToChangeLayerSelection();
+    emit aboutToPerformTransformIncompatibleEdit();
     if (m_layerModel.selectedLayerId() != id) {
         m_layerModel.setSelectedLayer(id);
     }
@@ -2411,7 +2483,7 @@ void LayersPanel::onLayerContentSelectionRequested(const LayerId& id)
 
 void LayersPanel::onLayerTextEditRequested(const LayerId& id)
 {
-    emit aboutToChangeLayerSelection();
+    emit aboutToPerformTransformIncompatibleEdit();
     if (m_layerModel.selectedLayerId() != id) {
         m_layerModel.setSelectedLayer(id);
     }
@@ -2421,7 +2493,9 @@ void LayersPanel::onLayerTextEditRequested(const LayerId& id)
 
 void LayersPanel::onLayerDuplicateRequested(const LayerId& id)
 {
-    emit aboutToChangeLayerSelection();
+    if (m_layerModel.selectedLayerId() != id || m_layerModel.selectionCount() != 1) {
+        emit aboutToPerformTransformIncompatibleEdit();
+    }
     m_layerModel.setSelectedLayer(id);
     syncLayerControls();
     duplicateSelectedLayers();
@@ -2429,7 +2503,9 @@ void LayersPanel::onLayerDuplicateRequested(const LayerId& id)
 
 void LayersPanel::onLayerDeleteRequested(const LayerId& id)
 {
-    emit aboutToChangeLayerSelection();
+    if (m_layerModel.selectedLayerId() != id || m_layerModel.selectionCount() != 1) {
+        emit aboutToPerformTransformIncompatibleEdit();
+    }
     m_layerModel.setSelectedLayer(id);
     syncLayerControls();
     deleteSelectedLayers();
@@ -2437,7 +2513,9 @@ void LayersPanel::onLayerDeleteRequested(const LayerId& id)
 
 void LayersPanel::onLayerQuickClippingMaskRequested(const LayerId& id)
 {
-    emit aboutToChangeLayerSelection();
+    if (m_layerModel.selectedLayerId() != id || m_layerModel.selectionCount() != 1) {
+        emit aboutToPerformTransformIncompatibleEdit();
+    }
     m_layerModel.setSelectedLayer(id);
     syncLayerControls();
     applyQuickClippingMask();
@@ -2445,7 +2523,7 @@ void LayersPanel::onLayerQuickClippingMaskRequested(const LayerId& id)
 
 void LayersPanel::onLayerClearPixelsRequested(const LayerId& id)
 {
-    emit aboutToChangeLayerSelection();
+    emit aboutToPerformTransformIncompatibleEdit();
     m_layerModel.setSelectedLayer(id);
     syncLayerControls();
     emit layerClearPixelContentRequested(id);
@@ -2453,7 +2531,7 @@ void LayersPanel::onLayerClearPixelsRequested(const LayerId& id)
 
 void LayersPanel::onLayerRasterizeSmartRequested(const LayerId& id)
 {
-    emit aboutToChangeLayerSelection();
+    emit aboutToPerformTransformIncompatibleEdit();
     m_layerModel.setSelectedLayer(id);
     syncLayerControls();
     emit layerRasterizeSmartRequested(id);
@@ -2461,7 +2539,7 @@ void LayersPanel::onLayerRasterizeSmartRequested(const LayerId& id)
 
 void LayersPanel::onLayerApplyMaskRequested(const LayerId& id)
 {
-    emit aboutToChangeLayerSelection();
+    emit aboutToPerformTransformIncompatibleEdit();
     m_layerModel.setSelectedLayer(id);
     syncLayerControls();
     emit layerApplyMaskRequested(id);
@@ -2469,7 +2547,7 @@ void LayersPanel::onLayerApplyMaskRequested(const LayerId& id)
 
 void LayersPanel::onLayerInvertMaskRequested(const LayerId& id)
 {
-    emit aboutToChangeLayerSelection();
+    emit aboutToPerformTransformIncompatibleEdit();
     m_layerModel.setSelectedLayer(id);
     syncLayerControls();
     emit layerInvertMaskRequested(id);
@@ -2477,7 +2555,7 @@ void LayersPanel::onLayerInvertMaskRequested(const LayerId& id)
 
 void LayersPanel::onLayerApplyEffectsRequested(const LayerId& id)
 {
-    emit aboutToChangeLayerSelection();
+    emit aboutToPerformTransformIncompatibleEdit();
     m_layerModel.setSelectedLayer(id);
     syncLayerControls();
     emit layerApplyEffectsRequested(id);
@@ -2485,7 +2563,9 @@ void LayersPanel::onLayerApplyEffectsRequested(const LayerId& id)
 
 void LayersPanel::onLayerToggleAlphaLockRequested(const LayerId& id)
 {
-    emit aboutToChangeLayerSelection();
+    if (m_layerModel.selectedLayerId() != id || m_layerModel.selectionCount() != 1) {
+        emit aboutToPerformTransformIncompatibleEdit();
+    }
     m_layerModel.setSelectedLayer(id);
     auto* layer = m_layerModel.layerById(id);
     if (!layer || !layer->isPixelLayer()) {
@@ -2511,7 +2591,7 @@ void LayersPanel::onLayerToggleAlphaLockRequested(const LayerId& id)
 
 void LayersPanel::onLayerToggleLockRequested(const LayerId& id)
 {
-    emit aboutToChangeLayerSelection();
+    emit aboutToPerformTransformIncompatibleEdit();
     m_layerModel.setSelectedLayer(id);
     auto* layer = m_layerModel.layerById(id);
     if (!layer || layer->isBackground()) {
@@ -2615,6 +2695,17 @@ void LayersPanel::onLayerDragDropped(const LayerId& id, int dropInsertIndex, int
 
     // Edge case: insert at very top → root index 0
     if (dropInsertIndex <= 0 || flat.isEmpty()) {
+        bool willMove = false;
+        for (int i = 0; i < layersToMove.size(); ++i) {
+            const auto* layer = m_layerModel.layerById(layersToMove[i]);
+            if (layer && (layer->parent || rootLayerIndex(m_layerModel, layer) != i)) {
+                willMove = true;
+                break;
+            }
+        }
+        if (willMove) {
+            emit aboutToPerformTransformIncompatibleEdit();
+        }
         for (int i = 0; i < layersToMove.size(); ++i) {
             m_layerModel.moveLayer(layersToMove[i], nullptr, i);
         }
@@ -2694,6 +2785,7 @@ void LayersPanel::onLayerDragDropped(const LayerId& id, int dropInsertIndex, int
     // For each layer we re-read anchorLayer's live index so we stay correct
     // regardless of move direction (up or down) and after each tree mutation.
     bool anyMoved = false;
+    bool transformCommitted = false;
     for (int i = 0; i < layersToMove.size(); ++i) {
         const LayerId& moveId = layersToMove[i];
 
@@ -2718,6 +2810,15 @@ void LayersPanel::onLayerDragDropped(const LayerId& id, int dropInsertIndex, int
             }
         }
 
+        const int sourceIndex = sourceLayer
+            ? (sourceLayer->parent ? sourceLayer->indexInParent()
+                                   : rootLayerIndex(m_layerModel, sourceLayer))
+            : -1;
+        if (!transformCommitted && sourceLayer
+            && (sourceLayer->parent != targetParent || sourceIndex != liveIndex)) {
+            emit aboutToPerformTransformIncompatibleEdit();
+            transformCommitted = true;
+        }
         if (m_layerModel.moveLayer(moveId, targetParent, liveIndex)) {
             anyMoved = true;
         }
@@ -2821,6 +2922,7 @@ void LayersPanel::onLayerDragCopyDropped(const LayerId& id, int dropInsertIndex,
     QList<std::shared_ptr<LayerData>> undoClones;
     QList<std::pair<LayerId, int>> undoPositions;
     QList<LayerId> copiedIds;
+    bool transformCommitted = false;
 
     for (int i = 0; i < layersToCopy.size(); ++i) {
         LayerData* sourceLayer = m_layerModel.layerById(layersToCopy[i]);
@@ -2828,6 +2930,10 @@ void LayersPanel::onLayerDragCopyDropped(const LayerId& id, int dropInsertIndex,
             continue;
         }
 
+        if (!transformCommitted) {
+            emit aboutToPerformTransformIncompatibleEdit();
+            transformCommitted = true;
+        }
         auto copy = LayerModel::cloneLayerTree(sourceLayer, false);
         if (!copy) {
             continue;
@@ -2998,6 +3104,8 @@ void LayersPanel::onClipSelectionRequested(const LayerId& baseLayerId)
 
 void LayersPanel::onAddLayer()
 {
+    emit aboutToPerformTransformIncompatibleEdit();
+
     LayerData* newLayer = nullptr;
     auto* sel = m_layerModel.selectedLayer();
     if (sel) {
@@ -3052,6 +3160,8 @@ void LayersPanel::onAddLayer()
 
 void LayersPanel::onAddAdjustmentLayer()
 {
+    emit aboutToPerformTransformIncompatibleEdit();
+
     LayerData* newLayer = nullptr;
     auto* sel = m_layerModel.selectedLayer();
     if (sel) {
@@ -3107,6 +3217,7 @@ void LayersPanel::onAddAdjustmentLayer()
 void LayersPanel::onAddGroup()
 {
     const QList<LayerData*> groupableLayers = collectGroupableSelectionRoots(m_layerModel);
+    emit aboutToPerformTransformIncompatibleEdit();
 
     LayerData* newGroup = nullptr;
     LayerId parentId;
@@ -3200,6 +3311,8 @@ void LayersPanel::onAddMask()
         return;
     }
 
+    emit aboutToPerformTransformIncompatibleEdit();
+
     if (!layer->hasMask()) {
         // Fresh mask becomes the active paint target so it can be tested right
         // away. This is an undoable structural change. If a selection is active,
@@ -3290,10 +3403,14 @@ void LayersPanel::onLayerLockClicked(const LayerId& id)
         return;
 
     const bool oldVal = layer->locked;
+    if (!oldVal) {
+        return;
+    }
+    emit aboutToPerformTransformIncompatibleEdit();
     m_layerModel.setLayerLocked(id, false);
     emit layerLockChanged(id, false);
 
-    if (m_pushUndoFn && oldVal) {
+    if (m_pushUndoFn) {
         QList<aether::LayerPropertyCommand::Entry> entries;
         entries.append({ id, oldVal, false });
         auto cmd = std::make_unique<aether::LayerPropertyCommand>(&m_layerModel,
@@ -3343,9 +3460,16 @@ void LayersPanel::onLockToggled()
         auto* layer = m_layerModel.layerById(id);
         if (layer && !layer->isBackground() && layer->locked != locked) {
             entries.append({ id, layer->locked, locked });
-            m_layerModel.setLayerLocked(id, locked);
-            emit layerLockChanged(id, locked);
         }
+    }
+    if (entries.isEmpty()) {
+        return;
+    }
+
+    emit aboutToPerformTransformIncompatibleEdit();
+    for (const auto& entry : entries) {
+        m_layerModel.setLayerLocked(entry.layerId, locked);
+        emit layerLockChanged(entry.layerId, locked);
     }
     if (m_pushUndoFn && !entries.isEmpty()) {
         auto cmd = std::make_unique<aether::LayerPropertyCommand>(&m_layerModel,

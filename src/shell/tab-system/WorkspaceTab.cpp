@@ -2593,9 +2593,9 @@ void WorkspaceTab::connectPanelSignals()
             }
         });
 
-    // Apply transform (and other pending changes) when switching layers
-    connect(m_layersPanel, &workspace::LayersPanel::aboutToChangeLayerSelection, m_canvasPanel,
-        &workspace::CanvasPanel::confirmTransform);
+    // Finish pending canvas edits before an incompatible layer operation mutates the document.
+    connect(m_layersPanel, &workspace::LayersPanel::aboutToPerformTransformIncompatibleEdit,
+        m_canvasPanel, &workspace::CanvasPanel::commitTransformBeforeDocumentMutation);
     connect(m_layersPanel, &workspace::LayersPanel::layerContentSelectionRequested, m_canvasPanel,
         &workspace::CanvasPanel::selectLayerContent);
     connect(m_layersPanel, &workspace::LayersPanel::layerTextEditRequested, m_canvasPanel,
@@ -3650,7 +3650,13 @@ bool WorkspaceTab::handleCutRequest()
     if (!m_layersPanel || !isLayerClipboardTargetActive()) {
         return false;
     }
+    if (!m_layersPanel->selectedLayer()) {
+        return false;
+    }
 
+    if (m_canvasPanel) {
+        m_canvasPanel->commitTransformBeforeDocumentMutation();
+    }
     QList<std::shared_ptr<LayerData>> snapshots;
     if (!m_layersPanel->copySelectedLayerSnapshots(&snapshots)) {
         return false;

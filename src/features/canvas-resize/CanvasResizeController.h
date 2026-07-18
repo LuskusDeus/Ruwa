@@ -57,6 +57,7 @@ public:
         std::function<void()> onContentChanged;
         std::function<void()> updateToolCursor;
         std::function<void()> updateSelectionActionPopup;
+        std::function<void()> beforeDocumentMutation;
     };
 
     explicit CanvasResizeController(QObject* parent = nullptr);

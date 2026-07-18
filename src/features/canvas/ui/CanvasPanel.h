@@ -301,6 +301,9 @@ public:
     // Transform mode
     void enterTransformMode();
     void confirmTransform();
+    /// Commit transform and synchronously finish deferred GPU readback before
+    /// an operation mutates layer content, structure, selection, or canvas geometry.
+    void commitTransformBeforeDocumentMutation();
     void cancelTransform();
     bool isDrawingActive() const override;
     bool isTransformActive() const;

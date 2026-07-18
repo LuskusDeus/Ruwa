@@ -27,7 +27,8 @@ void CanvasPanel::setupCanvasResizeController()
     m_canvasResizeController->setEnabled(hasFiniteDocumentBounds());
     m_canvasResizeController->setCallbacks({ [this](QSize size) { setCanvasSize(size); },
         [this]() { requestRender(); }, [this]() { emit canvasContentChanged(); },
-        [this]() { updateToolCursor(); }, [this]() { updateSelectionActionPopup(); } });
+        [this]() { updateToolCursor(); }, [this]() { updateSelectionActionPopup(); },
+        [this]() { commitTransformBeforeDocumentMutation(); } });
     // Wire the overlay signal handlers exactly once. They are lambdas, so we
     // cannot rely on Qt::UniqueConnection (it asserts on non-member-function
     // slots in debug builds); guard with a flag since the controller and this

@@ -142,7 +142,7 @@ void CanvasImageImportHelper::applyImportedBatchAtRoot(detail::ImportedLayerBatc
         return;
     }
 
-    m_panel->confirmTransform();
+    m_panel->commitTransformBeforeDocumentMutation();
     if (m_panel->m_glWidget) {
         m_panel->m_glWidget->clearSelectionMask();
     }
@@ -188,7 +188,7 @@ void CanvasImageImportHelper::applyImportedBatchBelowSelectedKeepingSelection(
         return;
     }
 
-    m_panel->confirmTransform();
+    m_panel->commitTransformBeforeDocumentMutation();
     if (m_panel->m_glWidget) {
         m_panel->m_glWidget->clearSelectionMask();
     }

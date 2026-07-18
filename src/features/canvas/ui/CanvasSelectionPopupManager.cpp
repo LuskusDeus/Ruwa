@@ -316,9 +316,7 @@ void CanvasSelectionPopupManager::dismissSelectionActionPopupUntilSelectionReset
         && m_panel->m_selectionColorPickerOverlay->isActive()) {
         m_panel->m_selectionColorPickerOverlay->hidePicker();
     }
-    if (m_panel->m_glWidget) {
-        m_panel->m_glWidget->clearSelectionMask();
-    }
+    m_panel->clearSelectionMask();
     updateSelectionActionPopup();
 }
 

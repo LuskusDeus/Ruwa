@@ -98,9 +98,9 @@ public:
     void addAdjustmentLayer();
 
 signals:
-    /// Emitted before layer selection changes (e.g. user clicked another layer).
-    /// Use this to apply pending changes (e.g. transform) on the current layer.
-    void aboutToChangeLayerSelection();
+    /// Emitted before an operation invalidates the current canvas edit target.
+    /// Pending operations such as transform must be committed synchronously.
+    void aboutToPerformTransformIncompatibleEdit();
     void layerSelected(const ruwa::core::layers::LayerId& id);
     void layerContentSelectionRequested(const ruwa::core::layers::LayerId& id);
     void layerTextEditRequested(const ruwa::core::layers::LayerId& id);
@@ -144,6 +144,8 @@ protected:
 
 private slots:
     void onLayerSelected(const ruwa::core::layers::LayerId& id, Qt::KeyboardModifiers modifiers);
+    void onLayerPaintTargetSelected(const ruwa::core::layers::LayerId& id, bool maskTarget,
+        Qt::KeyboardModifiers modifiers);
     void onLayerContentSelectionRequested(const ruwa::core::layers::LayerId& id);
     void onLayerTextEditRequested(const ruwa::core::layers::LayerId& id);
     void onLayerExpandToggled(const ruwa::core::layers::LayerId& id);

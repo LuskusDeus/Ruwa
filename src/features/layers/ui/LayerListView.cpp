@@ -771,6 +771,36 @@ void LayerListView::onRowClicked(const LayerId& id, Qt::KeyboardModifiers mods)
     emit layerSelected(id, mods);
 }
 
+void LayerListView::onRowPaintTargetClicked(
+    const LayerId& id, bool maskTarget, Qt::KeyboardModifiers mods)
+{
+    if (m_settlingDrag)
+        return;
+
+    for (auto* row : m_activeRows) {
+        if (row->layerId() != id) {
+            row->closeRightExpandMenu();
+        }
+    }
+
+    if ((mods & Qt::AltModifier) && !m_dragActive && m_dragDrop && !m_dragDrop->isDragging()) {
+        int insertIdx = -1;
+        LayerId baseId;
+        if (resolveClipPreviewTarget(id, &insertIdx, &baseId)) {
+            emit clipSelectionRequested(baseId);
+            return;
+        }
+    }
+
+    emit layerPaintTargetSelected(id, maskTarget, mods);
+    for (auto* row : m_activeRows) {
+        if (row->layerId() == id) {
+            row->update();
+            break;
+        }
+    }
+}
+
 void LayerListView::onRowThumbnailCtrlClicked(const LayerId& id)
 {
     if (m_settlingDrag || !m_model)
@@ -2072,6 +2102,8 @@ void LayerListView::recycleRow(LayerRowWidget* row)
 void LayerListView::connectRowSignals(LayerRowWidget* row)
 {
     connect(row, &LayerRowWidget::clicked, this, &LayerListView::onRowClicked);
+    connect(row, &LayerRowWidget::paintTargetClicked, this,
+        &LayerListView::onRowPaintTargetClicked);
     connect(row, &LayerRowWidget::thumbnailCtrlClicked, this,
         &LayerListView::onRowThumbnailCtrlClicked);
     connect(row, &LayerRowWidget::textEditRequested, this, &LayerListView::onRowTextEditRequested);
