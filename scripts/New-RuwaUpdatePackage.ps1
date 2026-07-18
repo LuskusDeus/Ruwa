@@ -23,7 +23,7 @@ if ($MaximumPackageBytes -le 0) {
     throw 'MaximumPackageBytes must be greater than zero.'
 }
 if ($Version -notmatch '^(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)(?:-[0-9A-Za-z-]+(?:\.[0-9A-Za-z-]+)*)?(?:\+[0-9A-Za-z-]+(?:\.[0-9A-Za-z-]+)*)?$') {
-    throw 'Version must be a valid Semantic Version, for example 0.2.4 or 0.2.4-alpha.1.'
+    throw 'Version must be a valid Semantic Version, for example 1.2.3 or 1.2.3-alpha.1.'
 }
 $releaseUri = $null
 if (-not [Uri]::TryCreate($ReleaseBaseUrl, [UriKind]::Absolute, [ref]$releaseUri) -or
@@ -126,7 +126,7 @@ if ($archiveItem.Length -gt $MaximumPackageBytes) {
         $MaximumPackageBytes + ' bytes.')
 }
 $archiveHash = (Get-FileHash -LiteralPath $archivePath -Algorithm SHA256).Hash.ToLowerInvariant()
-$archiveUrl = $ReleaseBaseUrl.TrimEnd('/') + '/v' + $Version + '/' + $archiveName
+$archiveUrl = $ReleaseBaseUrl.TrimEnd('/') + '/' + $Version + '/' + $archiveName
 
 $manifest = [ordered]@{
     format = 'ruwa-patch-v1'

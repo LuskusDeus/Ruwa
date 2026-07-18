@@ -54,10 +54,10 @@ Prepare the same compact directory layout used by existing Ruwa updates. For
 example:
 
 ```text
-D:\RuwaUpdates\0.2.4\
+D:\RuwaUpdates\0.2.5-alpha\
 |-- Main\Ruwa.exe
 |-- effects\...
-|-- Shaders\...
+|-- shaders\...
 ```
 
 `Main\` is stripped from installation destinations; other top-level paths are
@@ -65,10 +65,10 @@ kept. Then run:
 
 ```powershell
 & .\scripts\New-RuwaUpdatePackage.ps1 `
-  -Version 0.2.4 `
-  -SourceDirectory "D:\RuwaUpdates\0.2.4" `
+  -Version 0.2.5-alpha `
+  -SourceDirectory "D:\RuwaUpdates\0.2.5-alpha" `
   -SigningKeyPath "D:\RuwaSecrets\ruwa-update-signing.pfx" `
-  -Description "Ruwa 0.2.4"
+  -Description "Ruwa 0.2.5-alpha"
 ```
 
 The command prompts for the PFX password, validates the patch, creates a ZIP,
@@ -76,16 +76,20 @@ generates its per-file signed manifest, signs the exact manifest bytes, verifies
 the resulting signature, and checks that the PFX matches the fingerprint in
 `cmake/RuwaUpdateTrust.cmake`.
 
-Upload all three generated files to the GitHub release tagged with the matching
-version:
+Upload all three generated files to the matching version release in
+`LuskusDeus/Ruwa-releases`:
 
-- `Ruwa-0.2.4-win64.patch.zip`
+- `Ruwa-0.2.5-alpha-win64.patch.zip`
 - `latest.json`
 - `latest.json.p7s`
 
 The stable updater endpoint is the `latest.json` asset of the latest release;
 the signed manifest points to the versioned patch asset. Never replace only one
 of these files: publish the matching set together.
+
+Before the first signed-patch release is published, the stable endpoint may
+return `404`. A release is not complete until all three matching assets are
+public and the stable `latest.json` URL returns the newly uploaded manifest.
 
 Use `-DeletePath` only for installation-relative paths that must be removed by
 the update. Deletions are signed and are applied to staging, never directly to

@@ -12,14 +12,17 @@ and licence texts are retained under
 ## Ruwa-owned functional assets
 
 Ruwa-owned brushes, brush previews, default layouts, themes, presets, pigment
-lookup tables, and comparable functional data are dedicated to the public
-domain under CC0-1.0, to the extent that the rightsholder can do so.
+lookup tables, project-created UI glyphs, and comparable functional data are
+dedicated to the public domain under CC0-1.0, to the extent that the
+rightsholder can do so.
 
 Current locations include:
 
 - `resources/brushes/`
 - `resources/Layouts/`
 - `resources/pigments/`
+- `resources/icons/RGB.png`
+- `resources/icons/HSV.png`
 
 These assets may be copied, modified, and redistributed without attribution.
 Attribution is appreciated but is not a condition of use.
@@ -60,9 +63,10 @@ a way that suggests an official or endorsed build. See
 ## Third-party assets
 
 Third-party files remain under their upstream licences and are not relicensed
-by this policy. This currently includes the Lucide and Tabler-derived icons and
-the bundled OFL-1.1 fonts. Exact copyright notices, licence texts, and
-provenance are documented in
+by this policy. This currently includes the Lucide and Tabler-derived icons
+other than Ruwa's project-created marks and RGB/HSV mode icons, plus the bundled
+OFL-1.1 fonts. Exact copyright notices, licence texts, and provenance are
+documented in
 [`THIRD_PARTY_NOTICES.md`](THIRD_PARTY_NOTICES.md), [`LICENSES/`](LICENSES), and
 [`third-party/notices/`](third-party/notices).
 

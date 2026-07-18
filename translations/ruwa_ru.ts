@@ -700,29 +700,24 @@ Missing files:
         <translation>Добро пожаловать в последнюю версию Ruwa.</translation>
     </message>
     <message>
-        <location filename="../src/shell/update-message/UpdateMessageOverlay.cpp" line="391"/>
-        <source>A major update. It adds the Liquify tool and layer masks, gives every canvas widget a new frosted-glass look, reworks the wet brush mechanics, and fixes a large number of UI and visual bugs.</source>
-        <translation>Крупное обновление. Добавлен инструмент Liquify и маски слоев, все canvas виджеты получили новый эффект тонированного стекла, переработана механика мокрых кистей, а также исправлено большое количество багов UI и визуальных багов.</translation>
+        <source>This update introduces a redesigned first-run personalization flow and compact RGB/HSV controls, improves brush startup and custom dab rendering, and fixes WinTab input, transform safety, and several canvas interaction issues.</source>
+        <translation>Это обновление добавляет переработанную персонализацию при первом запуске и компактные регуляторы RGB/HSV, улучшает стартовую настройку кистей и отрисовку пользовательских отпечатков, а также исправляет ввод WinTab, применение трансформаций и несколько проблем взаимодействия с холстом.</translation>
     </message>
     <message>
-        <location filename="../src/shell/update-message/UpdateMessageOverlay.cpp" line="408"/>
-        <source>Liquify — a new tool for warping the canvas, with Push, Rotate CW/CCW, Bloat, and Pucker modes.</source>
-        <translation>Liquify — новый инструмент для деформации холста, с режимами Push, Rotate CW/CCW, Bloat и Pucker.</translation>
+        <source>Redesigned first-run personalization for appearance, editor, performance, and tablet input.</source>
+        <translation>Переработанная персонализация первого запуска для настройки оформления, редактора, производительности и планшетного ввода.</translation>
     </message>
     <message>
-        <location filename="../src/shell/update-message/UpdateMessageOverlay.cpp" line="412"/>
-        <source>Layer masks. Add, edit, transform, and invert masks from the context menu.</source>
-        <translation>Маски слоев. Их можно добавлять, редактировать, трансформировать и инвертировать через контекстное меню.</translation>
+        <source>Compact RGB and HSV channel controls in the Color panel, with the selected mode saved in layouts.</source>
+        <translation>Компактные регуляторы каналов RGB и HSV в панели цвета с сохранением выбранного режима в раскладках.</translation>
     </message>
     <message>
-        <location filename="../src/shell/update-message/UpdateMessageOverlay.cpp" line="416"/>
-        <source>Every canvas widget redesigned with a frosted-glass look and a more reliable layout system, plus fully reworked wet brush mechanics.</source>
-        <translation>Все canvas виджеты переделаны с эффектом тонированного стекла и более надежной системой лайаута, плюс полностью переработанная механика мокрых кистей.</translation>
+        <source>Nine new default brush presets, improved Brush Editor undo, smoother custom dabs, and more accurate cursor previews.</source>
+        <translation>Девять новых стандартных кистей, улучшенная отмена действий в редакторе кистей, более плавные пользовательские отпечатки и точный предпросмотр курсора.</translation>
     </message>
     <message>
-        <location filename="../src/shell/update-message/UpdateMessageOverlay.cpp" line="420"/>
-        <source>Refreshed top bar popups and Color Picker, faster floating panels, and a large number of UI and visual fixes.</source>
-        <translation>Обновленные попапы топбара и Color Picker, более быстрые плавающие панели и большое количество исправлений UI и визуала.</translation>
+        <source>More reliable WinTab strokes and transform finalization, plus fixes for selections, alpha lock, Blur, and Navigator.</source>
+        <translation>Более надёжные штрихи WinTab и завершение трансформаций, а также исправления выделений, блокировки альфа-канала, Blur и Навигатора.</translation>
     </message>
     <message>
         <location filename="../src/shell/update-message/UpdateMessageOverlay.cpp" line="378"/>
@@ -738,12 +733,20 @@ Missing files:
 <context>
     <name>ReleaseNotesOverlay</name>
     <message>
-        <source>Open-source release and first-party Discord integration</source>
-        <translation>Открытый исходный код и собственная интеграция Discord</translation>
+        <source>Personalization, colour controls, and input fixes</source>
+        <translation>Персонализация, управление цветом и исправления ввода</translation>
     </message>
     <message>
-        <source>&lt;p&gt;&lt;b&gt;Ruwa is now open source.&lt;/b&gt; This release opens the source code and contribution process, and completes the licensing, security, governance, CI, and release infrastructure needed for public development.&lt;/p&gt;&lt;p&gt;&lt;b&gt;Changed&lt;/b&gt;&lt;/p&gt;&lt;ul&gt;&lt;li&gt;The proprietary Discord Game SDK has been replaced with a first-party Discord Rich Presence implementation over local IPC using Qt only.&lt;/li&gt;&lt;li&gt;The public contribution process now includes governance, security, code of conduct, DCO sign-off, issue templates, and pull request guidance.&lt;/li&gt;&lt;li&gt;Dependency and asset provenance, licence notices, CI checks, and the release procedure are documented in the repository.&lt;/li&gt;&lt;/ul&gt;</source>
-        <translation>&lt;p&gt;&lt;b&gt;Исходный код Ruwa теперь открыт.&lt;/b&gt; В этом релизе открыты исходный код и процесс внесения изменений, а также завершена подготовка лицензирования, безопасности, управления проектом, CI и выпуска для публичной разработки.&lt;/p&gt;&lt;p&gt;&lt;b&gt;Изменено&lt;/b&gt;&lt;/p&gt;&lt;ul&gt;&lt;li&gt;Проприетарный Discord Game SDK заменён собственной реализацией Discord Rich Presence, которая работает через локальный IPC и использует только Qt.&lt;/li&gt;&lt;li&gt;Публичный процесс внесения изменений теперь включает правила управления проектом и безопасности, кодекс поведения, DCO-подпись, шаблоны задач и руководство по pull request.&lt;/li&gt;&lt;li&gt;В репозитории задокументированы происхождение зависимостей и ассетов, лицензионные уведомления, CI-проверки и процедура выпуска.&lt;/li&gt;&lt;/ul&gt;</translation>
+        <source>&lt;p&gt;&lt;b&gt;This update introduces a redesigned first-run personalization flow and compact RGB/HSV controls, improves brush startup and custom dab rendering, and fixes WinTab input, transform safety, and several canvas interaction issues.&lt;/b&gt;&lt;/p&gt;&lt;p&gt;&lt;b&gt;New&lt;/b&gt;&lt;/p&gt;&lt;ul&gt;&lt;li&gt;A redesigned first-run flow for choosing appearance, editor, performance, and tablet-input settings.&lt;/li&gt;&lt;li&gt;Compact RGB and HSV channel controls in the Color panel.&lt;/li&gt;&lt;/ul&gt;&lt;p&gt;&lt;b&gt;Improved&lt;/b&gt;&lt;/p&gt;&lt;ul&gt;&lt;li&gt;Nine additional default brush presets, improved startup selection, and expanded packs by default.&lt;/li&gt;&lt;li&gt;Favorite brush parameters stored in imported and exported packs.&lt;/li&gt;&lt;li&gt;Custom dab hardness and brush cursor previews.&lt;/li&gt;&lt;li&gt;The Composer panel is now named Navigator.&lt;/li&gt;&lt;/ul&gt;&lt;p&gt;&lt;b&gt;Fixes&lt;/b&gt;&lt;/p&gt;&lt;ul&gt;&lt;li&gt;More reliable undo handling in the Brush Editor.&lt;/li&gt;&lt;li&gt;Phantom and interrupted WinTab strokes, including mouse/pen handoff across the UI and canvas.&lt;/li&gt;&lt;li&gt;Transform finalization and several issues involving selections, alpha lock, Blur, and Navigator refreshes.&lt;/li&gt;&lt;/ul&gt;</source>
+        <translation>&lt;p&gt;&lt;b&gt;Это обновление добавляет переработанную персонализацию при первом запуске и компактные регуляторы RGB/HSV, улучшает стартовую настройку кистей и отрисовку пользовательских отпечатков, а также исправляет ввод WinTab, применение трансформаций и несколько проблем взаимодействия с холстом.&lt;/b&gt;&lt;/p&gt;&lt;p&gt;&lt;b&gt;Новое&lt;/b&gt;&lt;/p&gt;&lt;ul&gt;&lt;li&gt;Переработанный первый запуск для выбора оформления, настроек редактора, производительности и планшетного ввода.&lt;/li&gt;&lt;li&gt;Компактные регуляторы каналов RGB и HSV в панели цвета.&lt;/li&gt;&lt;/ul&gt;&lt;p&gt;&lt;b&gt;Улучшено&lt;/b&gt;&lt;/p&gt;&lt;ul&gt;&lt;li&gt;Девять дополнительных стандартных кистей, улучшенный выбор кисти при запуске и раскрытые наборы по умолчанию.&lt;/li&gt;&lt;li&gt;Сохранение избранных параметров кисти в импортируемых и экспортируемых наборах.&lt;/li&gt;&lt;li&gt;Жёсткость пользовательских отпечатков и предпросмотр курсора кисти.&lt;/li&gt;&lt;li&gt;Панель Composer теперь называется «Навигатор».&lt;/li&gt;&lt;/ul&gt;&lt;p&gt;&lt;b&gt;Исправления&lt;/b&gt;&lt;/p&gt;&lt;ul&gt;&lt;li&gt;Более надёжная отмена действий в редакторе кистей.&lt;/li&gt;&lt;li&gt;Фантомные и прерывающиеся штрихи WinTab, включая переключение между мышью и пером в интерфейсе и на холсте.&lt;/li&gt;&lt;li&gt;Завершение трансформаций и несколько проблем с выделениями, блокировкой альфа-канала, Blur и обновлением Навигатора.&lt;/li&gt;&lt;/ul&gt;</translation>
+    </message>
+    <message>
+        <source>Open-source release</source>
+        <translation>Открытие исходного кода</translation>
+    </message>
+    <message>
+        <source>&lt;p&gt;&lt;b&gt;Ruwa is now open source.&lt;/b&gt; The source code and contribution process are public on a fresh repository, the release ships alongside a brand-new website, and the licensing, security, governance, CI, and release infrastructure needed for public development are complete.&lt;/p&gt;&lt;p&gt;&lt;b&gt;New&lt;/b&gt;&lt;/p&gt;&lt;ul&gt;&lt;li&gt;A public source repository at github.com/LuskusDeus/Ruwa and a new project website at accretion.pro.&lt;/li&gt;&lt;/ul&gt;&lt;p&gt;&lt;b&gt;Changed&lt;/b&gt;&lt;/p&gt;&lt;ul&gt;&lt;li&gt;The proprietary Discord Game SDK has been replaced with a first-party Discord Rich Presence implementation over local IPC using Qt only.&lt;/li&gt;&lt;li&gt;The public contribution process now includes governance, security, code of conduct, DCO sign-off, issue templates, and pull request guidance.&lt;/li&gt;&lt;li&gt;Dependency and asset provenance, licence notices, and CI checks are documented in the repository, and all outstanding licensing issues have been resolved.&lt;/li&gt;&lt;/ul&gt;&lt;p&gt;&lt;b&gt;Fixes&lt;/b&gt;&lt;/p&gt;&lt;ul&gt;&lt;li&gt;The binary installer release now packages and installs correctly.&lt;/li&gt;&lt;li&gt;Fixed an event-handling bug in the Layers panel.&lt;/li&gt;&lt;/ul&gt;</source>
+        <translation>&lt;p&gt;&lt;b&gt;Исходный код Ruwa теперь открыт.&lt;/b&gt; Исходный код и процесс внесения изменений опубликованы в новом репозитории, релиз выходит вместе с новым сайтом, а инфраструктура лицензирования, безопасности, управления проектом, CI и выпуска для публичной разработки полностью готова.&lt;/p&gt;&lt;p&gt;&lt;b&gt;Новое&lt;/b&gt;&lt;/p&gt;&lt;ul&gt;&lt;li&gt;Публичный репозиторий исходного кода на github.com/LuskusDeus/Ruwa и новый сайт проекта accretion.pro.&lt;/li&gt;&lt;/ul&gt;&lt;p&gt;&lt;b&gt;Изменено&lt;/b&gt;&lt;/p&gt;&lt;ul&gt;&lt;li&gt;Проприетарный Discord Game SDK заменён собственной реализацией Discord Rich Presence, которая работает через локальный IPC и использует только Qt.&lt;/li&gt;&lt;li&gt;Публичный процесс внесения изменений теперь включает правила управления проектом и безопасности, кодекс поведения, DCO-подпись, шаблоны задач и руководство по pull request.&lt;/li&gt;&lt;li&gt;В репозитории задокументированы происхождение зависимостей и ассетов, лицензионные уведомления и CI-проверки, а все нерешённые вопросы лицензирования устранены.&lt;/li&gt;&lt;/ul&gt;&lt;p&gt;&lt;b&gt;Исправления&lt;/b&gt;&lt;/p&gt;&lt;ul&gt;&lt;li&gt;Бинарный установщик теперь корректно собирает и устанавливает релиз.&lt;/li&gt;&lt;li&gt;Исправлена ошибка обработки событий в панели слоёв.&lt;/li&gt;&lt;/ul&gt;</translation>
     </message>
     <message>
         <source>Liquify, layer masks, and a canvas redesign</source>

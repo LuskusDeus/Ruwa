@@ -59,6 +59,36 @@ QVector<ReleaseNoteEntry> releaseNoteEntries()
     const char* ctx = "ReleaseNotesOverlay";
 
     return {
+        { QCoreApplication::translate(
+              ctx, "Personalization, colour controls, and input fixes"),
+            QStringLiteral("0.2.5-alpha"), QStringLiteral("18.07.2026"),
+            QCoreApplication::translate(ctx,
+                "<p><b>This update introduces a redesigned first-run personalization flow and "
+                "compact RGB/HSV controls, improves brush startup and custom dab rendering, and "
+                "fixes WinTab input, transform safety, and several canvas interaction "
+                "issues.</b></p>"
+                "<p><b>New</b></p>"
+                "<ul>"
+                "<li>A redesigned first-run flow for choosing appearance, editor, performance, "
+                "and tablet-input settings.</li>"
+                "<li>Compact RGB and HSV channel controls in the Color panel.</li>"
+                "</ul>"
+                "<p><b>Improved</b></p>"
+                "<ul>"
+                "<li>Nine additional default brush presets, improved startup selection, and "
+                "expanded packs by default.</li>"
+                "<li>Favorite brush parameters stored in imported and exported packs.</li>"
+                "<li>Custom dab hardness and brush cursor previews.</li>"
+                "<li>The Composer panel is now named Navigator.</li>"
+                "</ul>"
+                "<p><b>Fixes</b></p>"
+                "<ul>"
+                "<li>More reliable undo handling in the Brush Editor.</li>"
+                "<li>Phantom and interrupted WinTab strokes, including mouse/pen handoff across "
+                "the UI and canvas.</li>"
+                "<li>Transform finalization and several issues involving selections, alpha lock, "
+                "Blur, and Navigator refreshes.</li>"
+                "</ul>") },
         { QCoreApplication::translate(ctx, "Open-source release"), QStringLiteral("0.2.4-alpha"),
             QStringLiteral("16.07.2026"),
             QCoreApplication::translate(ctx,

@@ -28,7 +28,7 @@ Qt modules required: Core, Gui, Widgets, OpenGL, OpenGLWidgets, Concurrent,
 Network, LinguistTools.
 
 The GitHub Actions Windows job is intentionally a **compatibility** build using
-Qt 6.7.2 and MSVC. It does not reproduce or certify this release environment.
+Qt 6.9.2 and MSVC. It does not reproduce or certify this release environment.
 The Linux/GCC build and static-analysis jobs are informational. Official release
 packages must be built and verified locally with the pinned Qt 6.10.2/MinGW
 toolchain above.
@@ -45,11 +45,18 @@ supplies an optional pre-release suffix. CMake composes them into
 generated `RuwaBuildConfig.h`, and writes the same value to
 `build/release/generated/RuwaVersion.txt` for packaging scripts.
 
-Two release-note records must agree with that version before a release:
+Three in-tree release-note records must agree with that version before a
+release:
 
-1. **In-app release notes** — the newest entry in
+1. **Update message** — the summary card in
+   [`UpdateMessageOverlay.cpp`](src/shell/update-message/UpdateMessageOverlay.cpp).
+2. **In-app release notes** — the newest entry in
    [`ReleaseNotesOverlay.cpp`](src/shell/update-message/ReleaseNotesOverlay.cpp).
-2. **Changelog** — the top versioned section of [`CHANGELOG.md`](CHANGELOG.md).
+3. **Changelog** — the top versioned section of [`CHANGELOG.md`](CHANGELOG.md).
+
+Use the same title and introductory paragraph for the public GitHub release.
+Keep that public description concise; the categorized details remain in the
+changelog and in-app release notes.
 
 `RUWA_RELEASE_DATE` is a CMake cache variable shown on the About screen. Its
 source default tracks the latest release, but every release build sets it
@@ -181,7 +188,9 @@ Every binary package must ship the following alongside the executable:
   - [`third-party/notices/lucide/LICENSE`](third-party/notices/lucide/LICENSE)
     (ISC + Feather MIT) and
     [`third-party/notices/tabler/LICENSE`](third-party/notices/tabler/LICENSE)
-    (MIT) — for the `resources/icons` icon set.
+    (MIT) — for the Lucide/Tabler-derived portion of `resources/icons`.
+    Project-created marks and RGB/HSV mode icons are covered separately by
+    `ASSET_POLICY.md` and `REUSE.toml`.
   - [`third-party/notices/qwindowkit/LICENSE`](third-party/notices/qwindowkit/LICENSE)
     and [`third-party/notices/qwindowkit/README.txt`](third-party/notices/qwindowkit/README.txt)
     — the exact Apache-2.0 text, copyright notice, and provenance for
@@ -224,8 +233,8 @@ Compress-Archive -Path "$dist/*" -DestinationPath $archive -Force
 
 ## 5a. Create the signed small update patch
 
-Keep the existing small patch layout (for example `D:\RuwaUpdates\0.2.3`):
-`Main\Ruwa.exe` is installed as `Ruwa.exe`, while `effects`, `Shaders`, and other
+Keep the existing small patch layout under `D:\RuwaUpdates\$version`:
+`Main\Ruwa.exe` is installed as `Ruwa.exe`, while `effects`, `shaders`, and other
 top-level folders retain their paths. Create and sign the updater artifacts:
 
 ```powershell
@@ -238,16 +247,16 @@ top-level folders retain their paths. Create and sign the updater artifacts:
 
 The script prompts for the PFX password and creates exactly three release
 assets: the compressed patch, `latest.json`, and `latest.json.p7s`. Upload all
-three to the matching `v$version` GitHub release. Do not build an update manifest
-or signature manually. The one-time key setup and key-rotation rules are in
-[`docs/SECURE_UPDATES.md`](docs/SECURE_UPDATES.md).
+three to the matching `$version` GitHub release in `LuskusDeus/Ruwa-releases`.
+Do not build an update manifest or signature manually. The one-time key setup
+and key-rotation rules are in [`docs/SECURE_UPDATES.md`](docs/SECURE_UPDATES.md).
 
-## 6. Tag the release
+## 6. Tag the source release
 
 Commit the release-note changes first, then tag:
 
 ```powershell
-$tag = "v$version"
+$tag = $version
 git tag -a $tag -m "Ruwa $version"
 ```
 
@@ -261,11 +270,12 @@ Do these in order for each release:
 
 - [ ] Bump `project(VERSION)` and, when needed, `RUWA_VERSION_SUFFIX` in
       `CMakeLists.txt`.
+- [ ] Update the release summary in `UpdateMessageOverlay.cpp`.
 - [ ] Add the new version entry to `ReleaseNotesOverlay.cpp`.
 - [ ] Move the `Unreleased` items into a dated version section in `CHANGELOG.md`.
 - [ ] Set `-DRUWA_RELEASE_DATE=<yyyy-mm-dd>` at configure time.
-- [ ] Confirm the updater URL is correct for the channel (Discord Rich Presence
-      is on by default and needs no SDK).
+- [ ] Confirm the updater manifest URL and exact host allowlist are correct for
+      the release channel.
 - [ ] Confirm `cmake/RuwaUpdateTrust.cmake` contains the public fingerprint for
       the release signing key and no private key exists in the repository.
 - [ ] Clean configure + `Release` build with the pinned toolchain above.
@@ -289,7 +299,9 @@ Do these in order for each release:
       `Get-FileHash $archive -Algorithm SHA256`.
 - [ ] Create the signed patch with `scripts/New-RuwaUpdatePackage.ps1` and upload
       its archive, `latest.json`, and `latest.json.p7s` together.
-- [ ] Tag the commit with the generated `$tag` (`v$version`).
+- [ ] Verify the stable `latest.json` URL returns the newly uploaded manifest
+      and that an installed release can complete the signed update check.
+- [ ] Tag the commit with the generated `$tag` (`$version`).
 
 ## Binary release compliance status
 

@@ -4,7 +4,7 @@
   <h1>Ruwa</h1>
 
   <p><strong>A free and open-source desktop painting application for Windows.</strong></p>
-  <p>Responsive drawing, customizable brushes, non-destructive editing, and a focused creative workflow.</p>
+<p>Responsive drawing, customizable brushes, layer-based editing, and a focused creative workflow.</p>
 
   <p>
     <a href="https://github.com/LuskusDeus/Ruwa/actions/workflows/ci.yml"><img src="https://github.com/LuskusDeus/Ruwa/actions/workflows/ci.yml/badge.svg" alt="CI status"></a>
@@ -44,8 +44,9 @@ locked features.
   texture, spacing, flow, and dynamics in the focused Brush Editor.
 - **Spectral pigment mixing.** Wet brushes use Ruwa's custom pigment model for
   richer, more convincing colour mixing.
-- **Non-destructive editing.** Layer effects, adjustment layers, masks, and
-  transforms remain editable until you choose to bake the result.
+- **Non-destructive editing.** Layer effects, adjustment layers, and masks stay
+  editable, while Smart, Board, and text layers retain their source content
+  through transforms.
 - **An open-ended workspace.** Infinite canvas, Board Layers, reusable layouts,
   dockable panels, and configurable shortcuts keep tools and references close.
 - **Tablet-oriented input.** Ruwa supports stylus workflows and includes a
@@ -57,7 +58,7 @@ locked features.
 
 | Item | Detail |
 | --- | --- |
-| Current release | `0.2.4-alpha` |
+| Current release | `0.2.5-alpha` |
 | Primary platform | Windows 10/11 x64 |
 | Graphics requirement | OpenGL 4.5 |
 | Technology | C++23, Qt 6, CMake |

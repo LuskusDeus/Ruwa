@@ -108,6 +108,16 @@ SPDX-FileCopyrightText = [
 ]
 SPDX-License-Identifier = "ISC AND MIT"
 
+# Project-created functional UI glyphs.
+[[annotations]]
+path = [
+    "resources/icons/RGB.png",
+    "resources/icons/HSV.png",
+]
+precedence = "override"
+SPDX-FileCopyrightText = "2026 Ruwa contributors"
+SPDX-License-Identifier = "CC0-1.0"
+
 # Explicitly override the general icon rule for Ruwa's marks.
 [[annotations]]
 path = [

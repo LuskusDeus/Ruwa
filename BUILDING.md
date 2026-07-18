@@ -56,7 +56,7 @@ consistent, repeatable release process; the full release/packaging procedure liv
 | Target OS  | Windows 10/11 x64                             |
 
 This is the only toolchain used to produce official release packages. GitHub
-Actions deliberately uses Qt 6.7.2 with MSVC on Windows as a compatibility
+Actions deliberately uses Qt 6.9.2 with MSVC on Windows as a compatibility
 check; it does not reproduce or certify the Qt 6.10.2/MinGW release build. The
 Linux/GCC job and static-analysis jobs are informational. See
 [`RELEASE.md`](RELEASE.md) for the release procedure.
@@ -106,7 +106,7 @@ Example option syntax:
 | `RUWA_UPDATE_ALLOWED_HOSTS` | `github.com;release-assets.githubusercontent.com` | Exact HTTPS hosts allowed for manifests, signatures, redirects, and archives. |
 | `RUWA_UPDATE_SIGNER_CERT_SHA256` | empty | SHA-256 fingerprint of the trusted DER signing certificate. Normally supplied by `cmake/RuwaUpdateTrust.cmake`. |
 | `RUWA_UPDATE_MAX_ARCHIVE_BYTES` | `67108864` | Hard maximum size of a signed patch archive. |
-| `RUWA_RELEASE_DATE` | `2026-07-16` | Release date shown in the application's About screen. Release builds set this explicitly. |
+| `RUWA_RELEASE_DATE` | `2026-07-18` | Release date shown in the application's About screen and update message. Release builds set this explicitly. |
 | `RUWA_ENABLE_CLANG_TIDY` | `OFF` | Runs clang-tidy inline during compilation (Clang/GCC/MinGW drivers; skipped for MSVC). See [Static analysis](#static-analysis). |
 
 ## Static analysis

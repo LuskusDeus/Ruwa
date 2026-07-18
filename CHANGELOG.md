@@ -6,13 +6,44 @@ alpha versioning (`0.x.y-alpha`) until the first stable release.
 
 The canonical application version is composed from `project(VERSION)` and
 `RUWA_VERSION_SUFFIX` in [`CMakeLists.txt`](CMakeLists.txt). Runtime consumers
-receive that value through the generated `RuwaBuildConfig.h`; do not duplicate
-the current version in source files. The same notes are shown in-app by
+receive that value through the generated `RuwaBuildConfig.h`; do not add another
+runtime version constant. Historical entries intentionally keep their own
+version labels in
 [`ReleaseNotesOverlay`](src/shell/update-message/ReleaseNotesOverlay.cpp). Keep
 the CMake version, this file, and the newest overlay entry in sync when cutting
 a release.
 
 ## [Unreleased]
+
+## [0.2.5-alpha] — 2026-07-18 — "Personalization, colour controls, and input fixes"
+
+This update introduces a redesigned first-run personalization flow and compact
+RGB/HSV controls, improves brush startup and custom dab rendering, and fixes
+WinTab input, transform safety, and several canvas interaction issues.
+
+### Added
+- A redesigned first-run flow for choosing appearance, editor, performance, and
+  tablet-input settings.
+- Compact RGB and HSV channel controls in the Color panel.
+
+### Improved
+- Brush is now the default startup tool, brush packs start expanded, and the
+  first available brush is selected consistently.
+- The default library now includes nine additional brush presets, with refreshed
+  brush and dab assets.
+- Favorite brush parameters now survive pack import and export.
+- Custom dab hardness and brush cursor previews are smoother and more accurate.
+- The Composer panel is now named Navigator.
+
+### Fixed
+- Fixed undo handling in the Brush Editor.
+- Fixed phantom and interrupted strokes in the custom WinTab backend and
+  improved mouse/pen pointer handoff across the UI and canvas.
+- Active transforms are now safely committed before layer, selection, import,
+  or canvas-geometry changes.
+- Fixed alpha-lock handling for Lasso Fill, mirrored selection previews,
+  Navigator refresh after effect removal, and fixed-soft-brush behavior for
+  Blur.
 
 ## [0.2.4-alpha] — 2026-07-16 — "Open-source release"
 

@@ -907,25 +907,24 @@
         <translation>Welcome to the latest Ruwa.</translation>
     </message>
     <message>
-        <location filename="../src/shell/update-message/UpdateMessageOverlay.cpp" line="345"/>
-        <source>A major update. It adds the Liquify tool and layer masks, gives every canvas widget a new frosted-glass look, reworks the wet brush mechanics, and fixes a large number of UI and visual bugs.</source>
-        <translation>A major update. It adds the Liquify tool and layer masks, gives every canvas widget a new frosted-glass look, reworks the wet brush mechanics, and fixes a large number of UI and visual bugs.</translation>
+        <source>This update introduces a redesigned first-run personalization flow and compact RGB/HSV controls, improves brush startup and custom dab rendering, and fixes WinTab input, transform safety, and several canvas interaction issues.</source>
+        <translation>This update introduces a redesigned first-run personalization flow and compact RGB/HSV controls, improves brush startup and custom dab rendering, and fixes WinTab input, transform safety, and several canvas interaction issues.</translation>
     </message>
     <message>
-        <source>Liquify — a new tool for warping the canvas, with Push, Rotate CW/CCW, Bloat, and Pucker modes.</source>
-        <translation>Liquify — a new tool for warping the canvas, with Push, Rotate CW/CCW, Bloat, and Pucker modes.</translation>
+        <source>Redesigned first-run personalization for appearance, editor, performance, and tablet input.</source>
+        <translation>Redesigned first-run personalization for appearance, editor, performance, and tablet input.</translation>
     </message>
     <message>
-        <source>Layer masks. Add, edit, transform, and invert masks from the context menu.</source>
-        <translation>Layer masks. Add, edit, transform, and invert masks from the context menu.</translation>
+        <source>Compact RGB and HSV channel controls in the Color panel, with the selected mode saved in layouts.</source>
+        <translation>Compact RGB and HSV channel controls in the Color panel, with the selected mode saved in layouts.</translation>
     </message>
     <message>
-        <source>Every canvas widget redesigned with a frosted-glass look and a more reliable layout system, plus fully reworked wet brush mechanics.</source>
-        <translation>Every canvas widget redesigned with a frosted-glass look and a more reliable layout system, plus fully reworked wet brush mechanics.</translation>
+        <source>Nine new default brush presets, improved Brush Editor undo, smoother custom dabs, and more accurate cursor previews.</source>
+        <translation>Nine new default brush presets, improved Brush Editor undo, smoother custom dabs, and more accurate cursor previews.</translation>
     </message>
     <message>
-        <source>Refreshed top bar popups and Color Picker, faster floating panels, and a large number of UI and visual fixes.</source>
-        <translation>Refreshed top bar popups and Color Picker, faster floating panels, and a large number of UI and visual fixes.</translation>
+        <source>More reliable WinTab strokes and transform finalization, plus fixes for selections, alpha lock, Blur, and Navigator.</source>
+        <translation>More reliable WinTab strokes and transform finalization, plus fixes for selections, alpha lock, Blur, and Navigator.</translation>
     </message>
     <message>
         <location filename="../src/shell/update-message/UpdateMessageOverlay.cpp" line="378"/>
@@ -941,12 +940,20 @@
 <context>
     <name>ReleaseNotesOverlay</name>
     <message>
-        <source>Open-source release and first-party Discord integration</source>
-        <translation>Open-source release and first-party Discord integration</translation>
+        <source>Personalization, colour controls, and input fixes</source>
+        <translation>Personalization, colour controls, and input fixes</translation>
     </message>
     <message>
-        <source>&lt;p&gt;&lt;b&gt;Ruwa is now open source.&lt;/b&gt; This release opens the source code and contribution process, and completes the licensing, security, governance, CI, and release infrastructure needed for public development.&lt;/p&gt;&lt;p&gt;&lt;b&gt;Changed&lt;/b&gt;&lt;/p&gt;&lt;ul&gt;&lt;li&gt;The proprietary Discord Game SDK has been replaced with a first-party Discord Rich Presence implementation over local IPC using Qt only.&lt;/li&gt;&lt;li&gt;The public contribution process now includes governance, security, code of conduct, DCO sign-off, issue templates, and pull request guidance.&lt;/li&gt;&lt;li&gt;Dependency and asset provenance, licence notices, CI checks, and the release procedure are documented in the repository.&lt;/li&gt;&lt;/ul&gt;</source>
-        <translation>&lt;p&gt;&lt;b&gt;Ruwa is now open source.&lt;/b&gt; This release opens the source code and contribution process, and completes the licensing, security, governance, CI, and release infrastructure needed for public development.&lt;/p&gt;&lt;p&gt;&lt;b&gt;Changed&lt;/b&gt;&lt;/p&gt;&lt;ul&gt;&lt;li&gt;The proprietary Discord Game SDK has been replaced with a first-party Discord Rich Presence implementation over local IPC using Qt only.&lt;/li&gt;&lt;li&gt;The public contribution process now includes governance, security, code of conduct, DCO sign-off, issue templates, and pull request guidance.&lt;/li&gt;&lt;li&gt;Dependency and asset provenance, licence notices, CI checks, and the release procedure are documented in the repository.&lt;/li&gt;&lt;/ul&gt;</translation>
+        <source>&lt;p&gt;&lt;b&gt;This update introduces a redesigned first-run personalization flow and compact RGB/HSV controls, improves brush startup and custom dab rendering, and fixes WinTab input, transform safety, and several canvas interaction issues.&lt;/b&gt;&lt;/p&gt;&lt;p&gt;&lt;b&gt;New&lt;/b&gt;&lt;/p&gt;&lt;ul&gt;&lt;li&gt;A redesigned first-run flow for choosing appearance, editor, performance, and tablet-input settings.&lt;/li&gt;&lt;li&gt;Compact RGB and HSV channel controls in the Color panel.&lt;/li&gt;&lt;/ul&gt;&lt;p&gt;&lt;b&gt;Improved&lt;/b&gt;&lt;/p&gt;&lt;ul&gt;&lt;li&gt;Nine additional default brush presets, improved startup selection, and expanded packs by default.&lt;/li&gt;&lt;li&gt;Favorite brush parameters stored in imported and exported packs.&lt;/li&gt;&lt;li&gt;Custom dab hardness and brush cursor previews.&lt;/li&gt;&lt;li&gt;The Composer panel is now named Navigator.&lt;/li&gt;&lt;/ul&gt;&lt;p&gt;&lt;b&gt;Fixes&lt;/b&gt;&lt;/p&gt;&lt;ul&gt;&lt;li&gt;More reliable undo handling in the Brush Editor.&lt;/li&gt;&lt;li&gt;Phantom and interrupted WinTab strokes, including mouse/pen handoff across the UI and canvas.&lt;/li&gt;&lt;li&gt;Transform finalization and several issues involving selections, alpha lock, Blur, and Navigator refreshes.&lt;/li&gt;&lt;/ul&gt;</source>
+        <translation>&lt;p&gt;&lt;b&gt;This update introduces a redesigned first-run personalization flow and compact RGB/HSV controls, improves brush startup and custom dab rendering, and fixes WinTab input, transform safety, and several canvas interaction issues.&lt;/b&gt;&lt;/p&gt;&lt;p&gt;&lt;b&gt;New&lt;/b&gt;&lt;/p&gt;&lt;ul&gt;&lt;li&gt;A redesigned first-run flow for choosing appearance, editor, performance, and tablet-input settings.&lt;/li&gt;&lt;li&gt;Compact RGB and HSV channel controls in the Color panel.&lt;/li&gt;&lt;/ul&gt;&lt;p&gt;&lt;b&gt;Improved&lt;/b&gt;&lt;/p&gt;&lt;ul&gt;&lt;li&gt;Nine additional default brush presets, improved startup selection, and expanded packs by default.&lt;/li&gt;&lt;li&gt;Favorite brush parameters stored in imported and exported packs.&lt;/li&gt;&lt;li&gt;Custom dab hardness and brush cursor previews.&lt;/li&gt;&lt;li&gt;The Composer panel is now named Navigator.&lt;/li&gt;&lt;/ul&gt;&lt;p&gt;&lt;b&gt;Fixes&lt;/b&gt;&lt;/p&gt;&lt;ul&gt;&lt;li&gt;More reliable undo handling in the Brush Editor.&lt;/li&gt;&lt;li&gt;Phantom and interrupted WinTab strokes, including mouse/pen handoff across the UI and canvas.&lt;/li&gt;&lt;li&gt;Transform finalization and several issues involving selections, alpha lock, Blur, and Navigator refreshes.&lt;/li&gt;&lt;/ul&gt;</translation>
+    </message>
+    <message>
+        <source>Open-source release</source>
+        <translation>Open-source release</translation>
+    </message>
+    <message>
+        <source>&lt;p&gt;&lt;b&gt;Ruwa is now open source.&lt;/b&gt; The source code and contribution process are public on a fresh repository, the release ships alongside a brand-new website, and the licensing, security, governance, CI, and release infrastructure needed for public development are complete.&lt;/p&gt;&lt;p&gt;&lt;b&gt;New&lt;/b&gt;&lt;/p&gt;&lt;ul&gt;&lt;li&gt;A public source repository at github.com/LuskusDeus/Ruwa and a new project website at accretion.pro.&lt;/li&gt;&lt;/ul&gt;&lt;p&gt;&lt;b&gt;Changed&lt;/b&gt;&lt;/p&gt;&lt;ul&gt;&lt;li&gt;The proprietary Discord Game SDK has been replaced with a first-party Discord Rich Presence implementation over local IPC using Qt only.&lt;/li&gt;&lt;li&gt;The public contribution process now includes governance, security, code of conduct, DCO sign-off, issue templates, and pull request guidance.&lt;/li&gt;&lt;li&gt;Dependency and asset provenance, licence notices, and CI checks are documented in the repository, and all outstanding licensing issues have been resolved.&lt;/li&gt;&lt;/ul&gt;&lt;p&gt;&lt;b&gt;Fixes&lt;/b&gt;&lt;/p&gt;&lt;ul&gt;&lt;li&gt;The binary installer release now packages and installs correctly.&lt;/li&gt;&lt;li&gt;Fixed an event-handling bug in the Layers panel.&lt;/li&gt;&lt;/ul&gt;</source>
+        <translation>&lt;p&gt;&lt;b&gt;Ruwa is now open source.&lt;/b&gt; The source code and contribution process are public on a fresh repository, the release ships alongside a brand-new website, and the licensing, security, governance, CI, and release infrastructure needed for public development are complete.&lt;/p&gt;&lt;p&gt;&lt;b&gt;New&lt;/b&gt;&lt;/p&gt;&lt;ul&gt;&lt;li&gt;A public source repository at github.com/LuskusDeus/Ruwa and a new project website at accretion.pro.&lt;/li&gt;&lt;/ul&gt;&lt;p&gt;&lt;b&gt;Changed&lt;/b&gt;&lt;/p&gt;&lt;ul&gt;&lt;li&gt;The proprietary Discord Game SDK has been replaced with a first-party Discord Rich Presence implementation over local IPC using Qt only.&lt;/li&gt;&lt;li&gt;The public contribution process now includes governance, security, code of conduct, DCO sign-off, issue templates, and pull request guidance.&lt;/li&gt;&lt;li&gt;Dependency and asset provenance, licence notices, and CI checks are documented in the repository, and all outstanding licensing issues have been resolved.&lt;/li&gt;&lt;/ul&gt;&lt;p&gt;&lt;b&gt;Fixes&lt;/b&gt;&lt;/p&gt;&lt;ul&gt;&lt;li&gt;The binary installer release now packages and installs correctly.&lt;/li&gt;&lt;li&gt;Fixed an event-handling bug in the Layers panel.&lt;/li&gt;&lt;/ul&gt;</translation>
     </message>
     <message>
         <source>Liquify, layer masks, and a canvas redesign</source>

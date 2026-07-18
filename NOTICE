@@ -36,10 +36,12 @@ Release requirements
 licensed under a general Ruwa asset licence; see ASSET_POLICY.md and
 `LICENSES/LicenseRef-Ruwa-MyPFP.txt`.
 
-The raster icons under `resources/icons` are drawn from the Lucide (ISC, with
-MIT portions from Feather) and Tabler Icons (MIT) open-source sets. Both licences
-are permissive and require no per-icon attribution; their upstream texts are
-stored at `third-party/notices/lucide/LICENSE` and
+Except for Ruwa's project-created marks, RGB/HSV mode icons, and the documented
+`MyPFP.jpg` exception, the raster icons under `resources/icons` are drawn from
+the Lucide (ISC, with MIT portions from Feather) and Tabler Icons (MIT)
+open-source sets. Both licences are permissive and require no per-icon
+attribution; their upstream texts are stored at
+`third-party/notices/lucide/LICENSE` and
 `third-party/notices/tabler/LICENSE`. The canonical ISC, MIT, and SIL Open Font
 License 1.1 texts are stored under `LICENSES/`.
 

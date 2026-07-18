@@ -10,6 +10,7 @@
 #include "shared/style/PaintingUtils.h"
 #include "RuwaBuildConfig.h"
 
+#include <QDate>
 #include <QPainter>
 #include <QPainterPath>
 #include <QLinearGradient>
@@ -36,6 +37,14 @@
 #include <QWindow>
 #include <QtMath>
 #include <QRgba64>
+
+#if __has_include("RuwaBuildInfo.h")
+#include "RuwaBuildInfo.h"
+#endif
+
+#ifndef RUWA_RELEASE_DATE
+#define RUWA_RELEASE_DATE "unknown"
+#endif
 
 namespace ruwa::ui::widgets {
 
@@ -75,6 +84,16 @@ QString displayReleaseVersion()
         version = version.left(suffixIndex);
     }
     return version;
+}
+
+QString displayReleaseDate()
+{
+    const QString configuredDate = QString::fromUtf8(RUWA_RELEASE_DATE).trimmed();
+    const QDate date = QDate::fromString(configuredDate, Qt::ISODate);
+    if (!date.isValid()) {
+        return configuredDate.toUpper();
+    }
+    return date.toString(QStringLiteral("MMMM d, yyyy")).toUpper();
 }
 
 QColor darkenedPrimary(const ruwa::ui::core::ThemeColors& colors)
@@ -640,7 +659,7 @@ void UpdateMessageOverlay::setupUI()
         theme.scaled(TextAreaPadding), theme.scaled(TextAreaPadding));
     leftLayout->setSpacing(theme.scaled(16));
 
-    auto* dateLabel = new QLabel(QStringLiteral("JUNE 14, 2026"), leftWidget);
+    auto* dateLabel = new QLabel(displayReleaseDate(), leftWidget);
     QFont dateFont = colors.fonts.getUIFont(theme.scaledFontSize(DateFontSize));
     dateFont.setWeight(QFont::DemiBold);
     dateLabel->setFont(dateFont);
@@ -696,10 +715,10 @@ void UpdateMessageOverlay::setupUI()
 
     auto* descriptionLabel
         = new QLabel(QCoreApplication::translate("UpdateMessageOverlay",
-                         "Ruwa is now open source. The source code and contribution process are "
-                         "public on a fresh repository, the release ships alongside a brand-new "
-                         "website, and the licensing, security, governance, CI, and release "
-                         "infrastructure needed for public development are complete."),
+                         "This update introduces a redesigned first-run personalization flow and "
+                         "compact RGB/HSV controls, improves brush startup and custom dab "
+                         "rendering, and fixes WinTab input, transform safety, and several canvas "
+                         "interaction issues."),
             leftWidget);
     descriptionLabel->setWordWrap(true);
     descriptionLabel->setFont(colors.fonts.getUIFont(theme.scaledFontSize(BodyFontSize)));
@@ -715,23 +734,23 @@ void UpdateMessageOverlay::setupUI()
 
     addReleaseHighlightRow(highlightsWidget, highlightsLayout, colors, theme, ChangelogBadge::New,
         QCoreApplication::translate("UpdateMessageOverlay",
-            "A public source repository at github.com/LuskusDeus/Ruwa and a new project website at "
-            "accretion.pro."));
+            "Redesigned first-run personalization for appearance, editor, performance, and tablet "
+            "input."));
     addReleaseHighlightRow(highlightsWidget, highlightsLayout, colors, theme,
         ChangelogBadge::Updated,
         QCoreApplication::translate("UpdateMessageOverlay",
-            "The proprietary Discord Game SDK is replaced by a first-party Discord Rich Presence "
-            "implementation over local IPC, using Qt only."));
+            "Compact RGB and HSV channel controls in the Color panel, with the selected mode saved "
+            "in layouts."));
     addReleaseHighlightRow(highlightsWidget, highlightsLayout, colors, theme,
         ChangelogBadge::Improved,
         QCoreApplication::translate("UpdateMessageOverlay",
-            "A full contribution process, resolved licensing, and documented CI and release "
-            "infrastructure for public development."));
+            "Nine new default brush presets, improved Brush Editor undo, smoother custom dabs, "
+            "and more accurate cursor previews."));
     addReleaseHighlightRow(highlightsWidget, highlightsLayout, colors, theme,
         ChangelogBadge::BugFix,
         QCoreApplication::translate("UpdateMessageOverlay",
-            "The binary installer release now packages and installs correctly, and an "
-            "event-handling bug in the Layers panel is fixed."));
+            "More reliable WinTab strokes and transform finalization, plus fixes for selections, "
+            "alpha lock, Blur, and Navigator."));
 
     leftLayout->addWidget(highlightsWidget);
     leftLayout->addStretch();

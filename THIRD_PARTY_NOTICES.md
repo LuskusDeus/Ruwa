@@ -213,13 +213,31 @@ and are project-owned:
 - `resources/icons/TransparentLogo.png`
 - `resources/app.ico`
 
-All other raster icons under `resources/icons` come from the Lucide and Tabler
-icon sets (see "Lucide and Tabler icons" below), including the UI glyphs and the
-Discord/GitHub/Telegram brand-link icons, which now use Tabler's brand icons.
-
 The files are distributed under MPL-2.0 as application assets. MPL-2.0 does not
 grant trademark rights; use of the Ruwa name and marks is governed separately
 by [`TRADEMARKS.md`](TRADEMARKS.md).
+
+### Project-created functional assets
+
+The project owner states that `resources/icons/RGB.png` and
+`resources/icons/HSV.png` were drawn manually in Ruwa and are project-owned.
+They are functional UI glyphs distributed under CC0-1.0.
+
+The project owner also states that all files under `resources/brushes/` were
+created for Ruwa. This includes the five built-in dab-shape PNGs, the standard
+brush packs, their preset data, previews, and embedded custom-dab images. These
+functional assets are distributed under CC0-1.0.
+
+### Project-created artwork
+
+The project owner states that the following onboarding artwork was drawn
+manually in Ruwa without AI-generated or third-party source material:
+
+- `resources/pictures/FirstIntegrationHero.png`
+- `resources/pictures/FirstIntegrationBottom.png`
+
+The artwork is offered under CC BY 4.0. Preferred attribution is defined in
+[`ASSET_POLICY.md`](ASSET_POLICY.md).
 
 ### Generated banners
 
@@ -247,9 +265,9 @@ Upstream:
 
 ### Lucide and Tabler icons
 
-All raster icons under `resources/icons`, except the project-created assets
-listed above and `MyPFP.jpg`, are drawn from the **Lucide** and **Tabler Icons**
-open-source icon sets (rendered to PNG for Ruwa).
+All remaining raster icons under `resources/icons`, except the project-created
+marks and RGB/HSV mode icons listed above and `MyPFP.jpg`, are drawn from the
+**Lucide** and **Tabler Icons** open-source icon sets (rendered to PNG for Ruwa).
 
 Both licences are permissive and do **not** require per-icon attribution or a
 mapping of individual icons to their source. The only obligation is to include
