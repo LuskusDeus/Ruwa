@@ -439,9 +439,10 @@ private:
         const QString& fallbackPresetId, bool persistSelection, bool emitSyncSignal);
     void captureCurrentToolState();
     void restoreToolState(ToolMode tool);
-    /// Liquify uses a fixed standard soft brush (hardness 0, round) with no brush
-    /// selection — only its size and strength (flow) are user-adjustable.
-    void applyLiquifyFixedBrush();
+    /// Blur and Liquify use the same fixed standard soft brush (hardness 0, round)
+    /// and ignore brush selection — only size and strength (flow) are user-adjustable.
+    void applyFixedSoftBrush(ToolMode tool);
+    void setFixedSoftBrushStrength(ToolMode tool, qreal strength);
     /// Apply color/opacity when restoring tool state (always applies; does not sync to brush state)
     void applyBrushColorForRestore(uint8_t r, uint8_t g, uint8_t b, uint8_t a);
     /// Brush, Eraser, or Blur that currently "owns" the shared size/opacity overlay (Hand → last

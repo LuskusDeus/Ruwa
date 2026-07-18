@@ -270,10 +270,9 @@ QWidget* CanvasPanel::createContent()
         });
     connect(m_toolStateOverlay, &ruwa::ui::widgets::CanvasToolStateOverlay::blurIntensityChanged,
         this, [this](qreal intensity) {
-            auto settings = m_brushOverlay ? m_brushOverlay->brushSettings()
-                                           : ruwa::core::brushes::BrushSettingsData {};
-            settings.flow = qBound(0.0f, static_cast<float>(intensity), 1.0f);
-            applyToolStateBrushSettings(settings);
+            // Blur uses the same fixed soft brush as Liquify. Intensity changes
+            // its flow without modifying the brush selected in the pack panel.
+            setFixedSoftBrushStrength(CanvasToolMode::Blur, intensity);
         });
     connect(m_toolStateOverlay, &ruwa::ui::widgets::CanvasToolStateOverlay::smudgeIntensityChanged,
         this, [this](qreal intensity) {
@@ -291,19 +290,7 @@ QWidget* CanvasPanel::createContent()
         });
     connect(m_toolStateOverlay, &ruwa::ui::widgets::CanvasToolStateOverlay::liquifyStrengthChanged,
         this, [this](qreal strength) {
-            // Liquify uses a fixed soft brush; the strength slider only sets
-            // its flow. Store it on the liquify state and re-apply the fixed
-            // brush directly (do NOT route through the brush pack panel, which
-            // would overwrite the user's selected brush).
-            const float flow = qBound(0.0f, static_cast<float>(strength), 1.0f);
-            if (m_toolStateController) {
-                if (auto* st = m_toolStateController->stateForInstrument(CanvasToolMode::Liquify)) {
-                    st->settings.hardness = 0.0f;
-                    st->settings.flow = flow;
-                    st->valid = true;
-                }
-            }
-            applyLiquifyFixedBrush();
+            setFixedSoftBrushStrength(CanvasToolMode::Liquify, strength);
         });
     connect(m_toolStateOverlay, &ruwa::ui::widgets::CanvasToolStateOverlay::liquifyModeChanged,
         this, [this](int mode) {

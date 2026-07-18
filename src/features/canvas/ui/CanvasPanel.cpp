@@ -222,6 +222,12 @@ bool shouldSyncToolStateOverlayToolPage(CanvasPanel::ToolMode tool)
     return tool != ToolMode::Hand && tool != ToolMode::Move && tool != ToolMode::Text;
 }
 
+bool usesFixedSoftBrush(CanvasPanel::ToolMode tool)
+{
+    using ToolMode = CanvasPanel::ToolMode;
+    return tool == ToolMode::Blur || tool == ToolMode::Liquify;
+}
+
 } // namespace
 
 // ==========================================================================
@@ -402,7 +408,7 @@ void CanvasPanel::loadGlobalToolState()
         // first launch instead of only applying its settings later during GL
         // content creation.
         const ToolMode selectionTool = brushSelectionToolMode();
-        if (selectionTool != ToolMode::Liquify) {
+        if (!usesFixedSoftBrush(selectionTool)) {
             if (const ToolBrushState* state = toolBrushStateForInstrument(selectionTool)) {
                 applyBrushSelectionForTool(
                     selectionTool, state->brushId, QString(), false, false);
@@ -1745,10 +1751,10 @@ bool CanvasPanel::applyBrushSelectionForTool(ToolMode tool, const QString& reque
         return false;
     }
 
-    // Liquify can't have its brush changed: any selection request just (re)applies
-    // the fixed standard soft brush, preserving its size/strength.
-    if (tool == ToolMode::Liquify) {
-        applyLiquifyFixedBrush();
+    // Blur and Liquify ignore brush selection: any selection request just
+    // (re)applies their fixed standard soft brush, preserving size/strength.
+    if (usesFixedSoftBrush(tool)) {
+        applyFixedSoftBrush(tool);
         return true;
     }
 
@@ -1825,9 +1831,9 @@ void CanvasPanel::captureToolState(ToolMode tool)
     if (!overlayMatchesInstrument(tool)) {
         return;
     }
-    // Liquify has a fixed brush: only persist its size; keep the forced soft
-    // settings (and strength) instead of pulling the overlay's selected brush.
-    if (tool == ToolMode::Liquify) {
+    // Fixed-brush tools only persist size here; keep their forced soft settings
+    // (and strength) instead of pulling the overlay's selected brush.
+    if (usesFixedSoftBrush(tool)) {
         state->valid = true;
         state->brushSize = m_brushOverlay ? m_brushOverlay->brushSize() : 0.3;
         return;
@@ -1854,21 +1860,20 @@ void CanvasPanel::captureCurrentToolState()
     captureToolState(currentTool);
 }
 
-void CanvasPanel::applyLiquifyFixedBrush()
+void CanvasPanel::applyFixedSoftBrush(ToolMode tool)
 {
-    if (!m_glWidget)
+    if (!m_glWidget || !usesFixedSoftBrush(tool))
         return;
 
-    const ToolBrushState* st = toolBrushStateForInstrument(ToolMode::Liquify);
+    const ToolBrushState* st = toolBrushStateForInstrument(tool);
     const qreal size = (st && st->valid && st->brushSize > 0.0) ? st->brushSize : 0.3;
     const float flow = (st && st->valid) ? qBound(0.0f, st->settings.flow, 1.0f) : 1.0f;
 
     // Fixed standard soft round brush: defaults except hardness 0 and the current
-    // strength (flow). No dab shape / texture / brush selection — the warp only
-    // needs a soft circular falloff.
+    // strength (flow). No dab shape, texture, or selected brush affects the tool.
     ruwa::core::brushes::BrushSettingsData s;
     s.hardness = 0.0f;
-    s.spacing = 0.01f; // 1% — dense dabs for a smooth warp field
+    s.spacing = 0.01f; // 1%: dense dabs for a smooth effect
     s.flow = flow;
     applyBrushSettings(s);
 
@@ -1880,6 +1885,24 @@ void CanvasPanel::applyLiquifyFixedBrush()
     m_glWidget->brush().setRadius(radius);
     m_glWidget->updateBrushCursorStamp();
     updateBrushCursorOverlayRadius();
+}
+
+void CanvasPanel::setFixedSoftBrushStrength(ToolMode tool, qreal strength)
+{
+    if (!usesFixedSoftBrush(tool)) {
+        return;
+    }
+
+    const float flow = qBound(0.0f, static_cast<float>(strength), 1.0f);
+    if (ToolBrushState* state = toolBrushStateForInstrument(tool)) {
+        state->settings.hardness = 0.0f;
+        state->settings.flow = flow;
+        state->valid = true;
+    }
+    applyFixedSoftBrush(tool);
+    if (!m_toolStateController || !m_toolStateController->suppressPersistDuringRestore()) {
+        persistGlobalToolState();
+    }
 }
 
 void CanvasPanel::restoreToolState(ToolMode tool)
@@ -1910,15 +1933,15 @@ void CanvasPanel::restoreToolState(ToolMode tool)
         return;
     }
 
-    // Liquify ignores brush selection entirely: always a fixed standard soft brush.
-    if (tool == ToolMode::Liquify) {
-        applyLiquifyFixedBrush();
+    // Blur and Liquify ignore brush selection entirely.
+    if (usesFixedSoftBrush(tool)) {
+        applyFixedSoftBrush(tool);
         return;
     }
 
     if (!state->valid) {
-        // First run: no saved settings — use first brush from first pack for Brush/Blur,
-        // defaults for Eraser
+        // First run: no saved settings — use the first brush from the first pack
+        // for Brush/Smudge and defaults for Eraser.
         if (tool == ToolMode::Eraser) {
             m_brushOverlay->setBrushSize(0.3);
             m_brushOverlay->setBrushOpacity(1.0);
