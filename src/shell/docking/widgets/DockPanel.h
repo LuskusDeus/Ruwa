@@ -262,6 +262,10 @@ public:
     void setTitleTrailingWidget(QWidget* widget);
     QWidget* titleTrailingWidget() const;
 
+    /// Keep interactive title widgets visible when the panel uses floating chrome.
+    void setTitleInteractiveWidgetsVisibleWhenFloating(bool visible);
+    bool titleInteractiveWidgetsVisibleWhenFloating() const;
+
     // === Components ===
 
     DockPanelTitleBar* titleBar() const { return m_titleBar; }

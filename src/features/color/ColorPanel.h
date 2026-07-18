@@ -10,10 +10,13 @@
 #include <QWidget>
 
 namespace ruwa::ui::widgets {
+class AnimatedStackedWidget;
+class ColorChannelSlidersWidget;
 class ColorPicker;
 }
 
 class QPushButton;
+class QVBoxLayout;
 
 namespace ruwa::ui::workspace {
 
@@ -83,6 +86,7 @@ signals:
     void activeColorSlotChanged(bool isForeground);
     void activeColorChanged(const QColor& color);
     void pickerModeChanged(int mode);
+    void channelModeChanged(int mode);
     void recentColorsChanged();
 
 protected:
@@ -100,6 +104,11 @@ private:
     void updateStyles();
     void setupModeSwitcher();
     void updateModeSwitcherButtons();
+    void setupChannelSection(QVBoxLayout* parentLayout);
+    QWidget* createChannelWidget(bool rgbMode);
+    void setChannelMode(int mode);
+    void updateChannelModeButtons();
+    void updateChannelSliders();
 
 private:
     QWidget* m_contentWidget = nullptr;
@@ -109,12 +118,19 @@ private:
 
     // Mode switcher buttons (in interactive title area)
     QVector<QPushButton*> m_modeButtons;
+    QVector<QPushButton*> m_channelModeButtons;
+
+    // Independent RGB/HSV channel section below the picker
+    ruwa::ui::widgets::AnimatedStackedWidget* m_channelStack = nullptr;
+    ruwa::ui::widgets::ColorChannelSlidersWidget* m_rgbChannelSliders = nullptr;
+    ruwa::ui::widgets::ColorChannelSlidersWidget* m_hsvChannelSliders = nullptr;
 
     // Colors
     QColor m_foregroundColor = Qt::black;
     QColor m_backgroundColor = Qt::white;
     bool m_editingForeground = true; // true = FG, false = BG
     int m_pickerMode = 0;
+    int m_channelMode = 0; // 0 = HSV, 1 = RGB
 
     // Grayscale (mask edit) display mode. Remembered so it can be applied to the
     // picker when content is (re)created.

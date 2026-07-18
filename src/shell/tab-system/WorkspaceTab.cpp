@@ -2705,6 +2705,8 @@ void WorkspaceTab::connectPanelSignals()
         [this]() { RecentColorsPersistence::save(m_colorPanel->recentColors()); });
     connect(m_colorPanel, &workspace::ColorPanel::pickerModeChanged, this,
         [this]() { scheduleDockLayoutSave(); });
+    connect(m_colorPanel, &workspace::ColorPanel::channelModeChanged, this,
+        [this]() { scheduleDockLayoutSave(); });
 }
 
 // ============================================================================

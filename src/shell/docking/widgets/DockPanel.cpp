@@ -379,6 +379,18 @@ QWidget* DockPanel::titleTrailingWidget() const
     return m_titleBar ? m_titleBar->trailingWidget() : nullptr;
 }
 
+void DockPanel::setTitleInteractiveWidgetsVisibleWhenFloating(bool visible)
+{
+    if (m_titleBar) {
+        m_titleBar->setInteractiveWidgetsVisibleWhenFloating(visible);
+    }
+}
+
+bool DockPanel::titleInteractiveWidgetsVisibleWhenFloating() const
+{
+    return m_titleBar && m_titleBar->interactiveWidgetsVisibleWhenFloating();
+}
+
 void DockPanel::applySubtitleContentLayoutOptions()
 {
     if (!m_subtitleContent || !m_subtitleContent->layout()) {

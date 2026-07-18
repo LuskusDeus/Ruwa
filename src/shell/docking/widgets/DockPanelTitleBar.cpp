@@ -129,6 +129,17 @@ void DockPanelTitleBar::setTrailingWidget(QWidget* widget)
     update();
 }
 
+void DockPanelTitleBar::setInteractiveWidgetsVisibleWhenFloating(bool visible)
+{
+    if (m_interactiveWidgetsVisibleWhenFloating == visible) {
+        return;
+    }
+
+    m_interactiveWidgetsVisibleWhenFloating = visible;
+    updateInteractiveWidgetGeometries();
+    update();
+}
+
 void DockPanelTitleBar::setDrawBottomBorder(bool draw)
 {
     if (m_drawBottomBorder != draw) {
@@ -437,9 +448,13 @@ void DockPanelTitleBar::paintEvent(QPaintEvent* /*event*/)
         auto& theme = ruwa::ui::core::ThemeManager::instance();
         auto& mgr = ruwa::ui::core::WidgetStyleManager::instance();
         const int lineH = theme.scaled(kBaseHandleLineHeight);
-        const int lineW = handleLineWidthForBar(width(), kBaseHandleLineWidth, lineH, theme);
+        const QRect handleBounds
+            = m_interactiveWidgetsVisibleWhenFloating ? titleContentRect() : rect();
+        const int lineW
+            = handleLineWidthForBar(handleBounds.width(), kBaseHandleLineWidth, lineH, theme);
         const qreal handleCy = handleCenterY(m_height, slideOffset, m_scaledSlideExtra);
-        QRectF lineRect(width() / 2.0 - lineW / 2.0, handleCy - lineH / 2.0, lineW, lineH);
+        QRectF lineRect(
+            handleBounds.center().x() - lineW / 2.0, handleCy - lineH / 2.0, lineW, lineH);
         const qreal lineRadius = lineRect.height() / 2.0;
         painter.setPen(Qt::NoPen);
         painter.setBrush(mgr.colors().textMuted);
@@ -485,7 +500,8 @@ void DockPanelTitleBar::setupUI()
 
 void DockPanelTitleBar::updateInteractiveWidgetGeometries()
 {
-    const bool hideChrome = m_panel && m_panel->isFloating()
+    const bool hideChrome = !m_interactiveWidgetsVisibleWhenFloating && m_panel
+        && m_panel->isFloating()
         && handleCrossfadeOpacity(m_floatingLayoutProgress) > 0.35;
 
     auto updateHost = [this, hideChrome](
@@ -516,8 +532,10 @@ void DockPanelTitleBar::updateInteractiveWidgetGeometries()
         content->resize(size);
         host->resize(size);
 
-        const int slide
-            = titleSlideOffsetPx(m_panel, m_height, m_scaledSlideExtra, m_floatingLayoutProgress);
+        const int slide = m_interactiveWidgetsVisibleWhenFloating
+            ? 0
+            : titleSlideOffsetPx(
+                  m_panel, m_height, m_scaledSlideExtra, m_floatingLayoutProgress);
         const int y = slide + qMax(0, (m_height - size.height()) / 2);
         if (alignment == Qt::AlignLeft) {
             host->move(x, y);

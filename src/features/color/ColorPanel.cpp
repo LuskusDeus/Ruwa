@@ -2,9 +2,11 @@
 
 // ColorPanel.cpp
 #include "ColorPanel.h"
+#include "features/color/ColorChannelSlidersWidget.h"
 #include "features/color/ColorPicker.h"
 #include "features/color/RecentColorsPersistence.h"
 #include "shared/widgets/BaseAnimatedButton.h"
+#include "shared/widgets/layout/AnimatedStackedWidget.h"
 #include "shared/resources/IconProvider.h"
 #include "shared/style/WidgetStyleManager.h"
 #include "features/theme/manager/ThemeManager.h"
@@ -18,6 +20,7 @@
 #include <QPolygonF>
 #include <QSignalBlocker>
 #include <QStyleOption>
+#include <QStringList>
 #include <QtMath>
 #include <utility>
 
@@ -130,10 +133,11 @@ ColorPanel::ColorPanel(QWidget* parent)
 {
     setIconType(ruwa::ui::core::IconProvider::StandardIcon::ColorPanel);
     setMinimumPanelSize(170, 170);
-    setPreferredPanelSize(320, 240); // Compact default (Layers gets more space)
+    setPreferredPanelSize(320, 240);
     setClosable(true);
     setFloatable(true);
     setMovable(true);
+    setTitleInteractiveWidgetsVisibleWhenFloating(true);
 }
 
 ColorPanel::~ColorPanel() = default;
@@ -196,6 +200,7 @@ void ColorPanel::applyColorState(
     m_colorPicker->setForegroundColor(m_foregroundColor);
     m_colorPicker->setBackgroundColor(m_backgroundColor);
     m_updating = wasUpdating;
+    updateChannelSliders();
 }
 
 void ColorPanel::setActiveColorSlot(bool isForeground)
@@ -249,12 +254,23 @@ QWidget* ColorPanel::createContent()
 
     auto& theme = ruwa::ui::core::ThemeManager::instance();
 
-    auto* layout = new QVBoxLayout(m_contentWidget);
+    // Keep the picker and channel controls in one minimum-sized vertical flow.
+    // If the panel is shorter than the flow, the outer content widget clips its
+    // bottom instead of moving the fixed channel stack over the picker.
+    auto* viewportLayout = new QVBoxLayout(m_contentWidget);
+    viewportLayout->setContentsMargins(0, 0, 0, 0);
+    viewportLayout->setSpacing(0);
+
+    auto* flowContent = new QWidget(m_contentWidget);
+    flowContent->setSizePolicy(QSizePolicy::Expanding, QSizePolicy::Expanding);
+    auto* layout = new QVBoxLayout(flowContent);
     layout->setContentsMargins(theme.scaled(4), theme.scaled(4), theme.scaled(4), theme.scaled(4));
     layout->setSpacing(theme.scaled(6));
+    layout->setSizeConstraint(QLayout::SetMinimumSize);
+    viewportLayout->addWidget(flowContent);
 
     // === Integrated ColorPicker (embedded mode): stretches with panel size ===
-    m_colorPicker = new ruwa::ui::widgets::ColorPicker(m_contentWidget);
+    m_colorPicker = new ruwa::ui::widgets::ColorPicker(flowContent);
     m_colorPicker->setEmbeddedMode(true);
     m_colorPicker->setDualColorModeEnabled(true);
     m_colorPicker->setRecentColorsEnabled(true);
@@ -282,6 +298,9 @@ QWidget* ColorPanel::createContent()
     connect(m_colorPicker, &ruwa::ui::widgets::ColorPicker::swapColorsRequested, this,
         &ColorPanel::swapForegroundBackgroundColors);
     layout->addWidget(m_colorPicker, 1);
+
+    // Independent channel controls below the picker.
+    setupChannelSection(layout);
 
     // Mode switcher in dock title bar
     setupModeSwitcher();
@@ -352,30 +371,122 @@ void ColorPanel::setMaskEditMode(bool active)
 
 void ColorPanel::updateColorPreview()
 {
-    if (!m_colorPicker) {
-        return;
+    if (m_colorPicker) {
+        const QSignalBlocker blocker(m_colorPicker);
+        const bool wasUpdating = m_updating;
+        m_updating = true;
+        m_colorPicker->setForegroundColor(m_foregroundColor);
+        m_colorPicker->setBackgroundColor(m_backgroundColor);
+        m_colorPicker->setActiveColorSlot(m_editingForeground);
+        m_updating = wasUpdating;
     }
 
-    const QSignalBlocker blocker(m_colorPicker);
-    const bool wasUpdating = m_updating;
-    m_updating = true;
-    m_colorPicker->setForegroundColor(m_foregroundColor);
-    m_colorPicker->setBackgroundColor(m_backgroundColor);
-    m_colorPicker->setActiveColorSlot(m_editingForeground);
-    m_updating = wasUpdating;
+    updateChannelSliders();
 }
 
 void ColorPanel::updatePickerFromCurrentColor()
 {
-    if (!m_colorPicker || m_updating) {
+    if (m_updating) {
         return;
     }
 
-    m_updating = true;
-    QColor color = m_editingForeground ? m_foregroundColor : m_backgroundColor;
-    m_colorPicker->setActiveColorSlot(m_editingForeground);
-    m_colorPicker->setColor(color);
-    m_updating = false;
+    if (m_colorPicker) {
+        m_updating = true;
+        const QColor color = activeColor();
+        m_colorPicker->setActiveColorSlot(m_editingForeground);
+        m_colorPicker->setColor(color);
+        m_updating = false;
+    }
+
+    updateChannelSliders();
+}
+
+void ColorPanel::setupChannelSection(QVBoxLayout* parentLayout)
+{
+    if (!parentLayout) {
+        return;
+    }
+
+    m_channelStack
+        = new ruwa::ui::widgets::AnimatedStackedWidget(parentLayout->parentWidget());
+    m_channelStack->setObjectName(QStringLiteral("colorChannelStack"));
+    m_channelStack->setSlideOrientation(
+        ruwa::ui::widgets::AnimatedStackedWidget::SlideOrientation::Horizontal);
+    m_channelStack->setAnimationDuration(250);
+    m_channelStack->setSuspendLayoutDuringAnimation(true);
+    m_channelStack->setSizePolicy(QSizePolicy::Expanding, QSizePolicy::Fixed);
+
+    // Stack indices intentionally match m_channelMode: HSV = 0, RGB = 1.
+    m_channelStack->addWidget(createChannelWidget(false));
+    m_channelStack->addWidget(createChannelWidget(true));
+    m_channelStack->setFixedHeight(qMax(
+        m_hsvChannelSliders->sizeHint().height(), m_rgbChannelSliders->sizeHint().height()));
+    m_channelStack->setCurrentIndexWithoutAnimation(m_channelMode);
+
+    parentLayout->addWidget(m_channelStack);
+    updateChannelSliders();
+}
+
+QWidget* ColorPanel::createChannelWidget(bool rgbMode)
+{
+    using ChannelSliders = ruwa::ui::widgets::ColorChannelSlidersWidget;
+    const auto model = rgbMode ? ChannelSliders::Model::RGB : ChannelSliders::Model::HSV;
+    auto* sliders = new ChannelSliders(model, m_channelStack);
+    sliders->setObjectName(
+        rgbMode ? QStringLiteral("rgbChannelSliders") : QStringLiteral("hsvChannelSliders"));
+    sliders->setAccessibleName(rgbMode ? tr("RGB color channels") : tr("HSV color channels"));
+    sliders->setToolTip(sliders->accessibleName());
+
+    connect(sliders, &ChannelSliders::colorChanged, this, [this](const QColor& color) {
+        if (!m_updating) {
+            onColorPicked(color);
+        }
+    });
+
+    if (rgbMode) {
+        m_rgbChannelSliders = sliders;
+    } else {
+        m_hsvChannelSliders = sliders;
+    }
+    return sliders;
+}
+
+void ColorPanel::setChannelMode(int mode)
+{
+    if (mode < 0 || mode > 1) {
+        return;
+    }
+
+    const bool changed = m_channelMode != mode;
+    m_channelMode = mode;
+    if (m_channelStack && m_channelStack->activeIndex() != mode) {
+        m_channelStack->setCurrentIndex(mode);
+    }
+    updateChannelModeButtons();
+    if (changed) {
+        emit channelModeChanged(m_channelMode);
+    }
+}
+
+void ColorPanel::updateChannelModeButtons()
+{
+    for (int i = 0; i < m_channelModeButtons.size(); ++i) {
+        m_channelModeButtons[i]->setChecked(i == m_channelMode);
+        m_channelModeButtons[i]->update();
+    }
+}
+
+void ColorPanel::updateChannelSliders()
+{
+    if (!m_rgbChannelSliders || !m_hsvChannelSliders) {
+        return;
+    }
+
+    const QColor color = activeColor();
+    const QSignalBlocker rgbBlocker(m_rgbChannelSliders);
+    const QSignalBlocker hsvBlocker(m_hsvChannelSliders);
+    m_rgbChannelSliders->setColor(color);
+    m_hsvChannelSliders->setColor(color);
 }
 
 void ColorPanel::updateStyles()
@@ -390,11 +501,16 @@ void ColorPanel::updateStyles()
 
 void ColorPanel::onThemeChanged()
 {
+    auto& theme = ruwa::ui::core::ThemeManager::instance();
     if (m_colorPicker && m_colorPicker->isEmbeddedMode()) {
-        auto& theme = ruwa::ui::core::ThemeManager::instance();
         m_colorPicker->setMinimumHeight(theme.scaled(140));
     }
+    if (m_channelStack && m_rgbChannelSliders && m_hsvChannelSliders) {
+        m_channelStack->setFixedHeight(qMax(m_hsvChannelSliders->sizeHint().height(),
+            m_rgbChannelSliders->sizeHint().height()));
+    }
     updateModeSwitcherButtons();
+    updateChannelModeButtons();
     updateStyles();
     updateColorPreview();
 }
@@ -405,6 +521,7 @@ QJsonObject ColorPanel::savePanelState() const
     const int pickerMode
         = m_colorPicker ? static_cast<int>(m_colorPicker->pickerMode()) : m_pickerMode;
     state["pickerMode"] = pickerMode;
+    state["channelMode"] = m_channelMode;
     return state;
 }
 
@@ -414,19 +531,24 @@ void ColorPanel::restorePanelState(const QJsonObject& state)
         return;
     }
 
-    const int mode = state["pickerMode"].toInt(m_pickerMode);
-    if (mode < 0 || mode > 2) {
-        return;
+    const int pickerMode = state["pickerMode"].toInt(m_pickerMode);
+    if (pickerMode >= 0 && pickerMode <= 2) {
+        m_pickerMode = pickerMode;
+        if (m_colorPicker) {
+            m_colorPicker->setPickerMode(
+                static_cast<ruwa::ui::widgets::ColorPicker::PickerMode>(m_pickerMode));
+        } else {
+            emit pickerModeChanged(m_pickerMode);
+        }
     }
 
-    m_pickerMode = mode;
-    if (m_colorPicker) {
-        m_colorPicker->setPickerMode(
-            static_cast<ruwa::ui::widgets::ColorPicker::PickerMode>(m_pickerMode));
-    } else {
-        emit pickerModeChanged(m_pickerMode);
+    const int channelMode = state["channelMode"].toInt(m_channelMode);
+    if (channelMode >= 0 && channelMode <= 1) {
+        setChannelMode(channelMode);
     }
+
     updateModeSwitcherButtons();
+    updateChannelModeButtons();
 }
 
 // ============================================================================
@@ -437,6 +559,53 @@ namespace {
 
 constexpr int BASE_BTN_SIZE = 15;
 constexpr int BASE_ICON_SIZE = 10;
+
+class ChannelModeButton : public ruwa::ui::widgets::BaseAnimatedButton {
+public:
+    explicit ChannelModeButton(const QString& iconName, QWidget* parent = nullptr)
+        : BaseAnimatedButton(parent)
+        , m_iconName(iconName)
+    {
+        auto& mgr = ruwa::ui::core::WidgetStyleManager::instance();
+        const int sz = mgr.scaled(BASE_BTN_SIZE);
+        setFixedSize(sz, sz);
+        setCheckable(true);
+        setFlat(true);
+        setCursor(Qt::PointingHandCursor);
+        setFocusPolicy(Qt::NoFocus);
+        setAttribute(Qt::WA_NoSystemBackground, true);
+        setStyleSheet(QStringLiteral("QPushButton { background: transparent; border: none; }"));
+        setHoverDuration(150);
+        setActiveDuration(200);
+        connect(this, &QAbstractButton::toggled, this, &BaseAnimatedButton::setActive);
+    }
+
+protected:
+    void paintEvent(QPaintEvent*) override
+    {
+        QPainter painter(this);
+        painter.setRenderHint(QPainter::Antialiasing);
+
+        const auto& colors = ruwa::ui::core::ThemeManager::instance().colors();
+        const QColor normalColor = colors.textMuted;
+        const QColor activeColor = colors.primary;
+        const auto lerp = [](int a, int b, qreal t) { return a + qRound((b - a) * t); };
+        const QColor iconColor(lerp(normalColor.red(), activeColor.red(), activeProgress()),
+            lerp(normalColor.green(), activeColor.green(), activeProgress()),
+            lerp(normalColor.blue(), activeColor.blue(), activeProgress()));
+
+        auto& mgr = ruwa::ui::core::WidgetStyleManager::instance();
+        const int iconSize = mgr.scaled(BASE_ICON_SIZE);
+        const QRect iconRect(
+            (width() - iconSize) / 2, (height() - iconSize) / 2, iconSize, iconSize);
+        ruwa::ui::core::IconProvider::instance()
+            .getColoredIcon(m_iconName, iconColor)
+            .paint(&painter, iconRect);
+    }
+
+private:
+    QString m_iconName;
+};
 
 class PickerModeButton : public ruwa::ui::widgets::BaseAnimatedButton {
 public:
@@ -535,17 +704,17 @@ void ColorPanel::setupModeSwitcher()
     const int gap = theme.scaled(2);
     const int hPad = theme.scaled(1);
 
-    auto* container = new QWidget();
-    container->setAttribute(Qt::WA_TranslucentBackground);
-    container->setAttribute(Qt::WA_NoSystemBackground, true);
-    container->setStyleSheet(QStringLiteral("background: transparent;"));
-    container->setSizePolicy(QSizePolicy::Maximum, QSizePolicy::Fixed);
-    auto* hLayout = new QHBoxLayout(container);
-    hLayout->setContentsMargins(hPad, 0, hPad, 0);
-    hLayout->setSpacing(gap);
+    auto* pickerContainer = new QWidget();
+    pickerContainer->setAttribute(Qt::WA_TranslucentBackground);
+    pickerContainer->setAttribute(Qt::WA_NoSystemBackground, true);
+    pickerContainer->setStyleSheet(QStringLiteral("background: transparent;"));
+    pickerContainer->setSizePolicy(QSizePolicy::Maximum, QSizePolicy::Fixed);
+    auto* pickerLayout = new QHBoxLayout(pickerContainer);
+    pickerLayout->setContentsMargins(hPad, 0, hPad, 0);
+    pickerLayout->setSpacing(gap);
 
     for (int i = 0; i < 3; ++i) {
-        auto* btn = new PickerModeButton(i, container);
+        auto* btn = new PickerModeButton(i, pickerContainer);
 
         connect(btn, &QPushButton::clicked, this, [this, i]() {
             if (!m_colorPicker)
@@ -557,7 +726,7 @@ void ColorPanel::setupModeSwitcher()
         });
 
         m_modeButtons.append(btn);
-        hLayout->addWidget(btn);
+        pickerLayout->addWidget(btn);
     }
 
     // Sync when picker mode changes externally
@@ -566,8 +735,31 @@ void ColorPanel::setupModeSwitcher()
             [this]() { updateModeSwitcherButtons(); });
     }
 
+    auto* channelContainer = new QWidget();
+    channelContainer->setAttribute(Qt::WA_TranslucentBackground);
+    channelContainer->setAttribute(Qt::WA_NoSystemBackground, true);
+    channelContainer->setStyleSheet(QStringLiteral("background: transparent;"));
+    channelContainer->setSizePolicy(QSizePolicy::Maximum, QSizePolicy::Fixed);
+    auto* channelLayout = new QHBoxLayout(channelContainer);
+    channelLayout->setContentsMargins(hPad, 0, hPad, 0);
+    channelLayout->setSpacing(gap);
+
+    const QStringList channelIcons { QStringLiteral("HSV"), QStringLiteral("RGB") };
+    const QStringList channelTooltips { tr("HSV channels"), tr("RGB channels") };
+    for (int i = 0; i < channelIcons.size(); ++i) {
+        auto* btn = new ChannelModeButton(channelIcons[i], channelContainer);
+        btn->setToolTip(channelTooltips[i]);
+        btn->setAccessibleName(channelTooltips[i]);
+        connect(btn, &QPushButton::clicked, this, [this, i]() { setChannelMode(i); });
+
+        m_channelModeButtons.append(btn);
+        channelLayout->addWidget(btn);
+    }
+
     updateModeSwitcherButtons();
-    setTitleLeadingWidget(container);
+    updateChannelModeButtons();
+    setTitleLeadingWidget(pickerContainer);
+    setTitleTrailingWidget(channelContainer);
 }
 
 void ColorPanel::updateModeSwitcherButtons()
@@ -580,6 +772,7 @@ void ColorPanel::updateModeSwitcherButtons()
 
     for (int i = 0; i < m_modeButtons.size(); ++i) {
         m_modeButtons[i]->setChecked(i == currentMode);
+        m_modeButtons[i]->update();
     }
 }
 

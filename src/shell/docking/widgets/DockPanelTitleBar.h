@@ -52,6 +52,14 @@ public:
     void setTrailingWidget(QWidget* widget);
     QWidget* trailingWidget() const { return m_trailingWidget; }
 
+    /// Keep leading/trailing controls visible and stationary while the title
+    /// and icon crossfade into the floating drag handle.
+    void setInteractiveWidgetsVisibleWhenFloating(bool visible);
+    bool interactiveWidgetsVisibleWhenFloating() const
+    {
+        return m_interactiveWidgetsVisibleWhenFloating;
+    }
+
     /// When true (default), a 1px border is drawn at the bottom of the title bar.
     /// Set to false when a subtitle widget is attached so that the border moves
     /// below the subtitle instead.
@@ -123,6 +131,7 @@ private:
     QWidget* m_trailingHost = nullptr;
     QWidget* m_leadingWidget = nullptr;
     QWidget* m_trailingWidget = nullptr;
+    bool m_interactiveWidgetsVisibleWhenFloating = false;
 
     // Floating: max slide distance (theme-scaled); title shifts inside fixed bar height
     QVariantAnimation* m_floatingLayoutAnim = nullptr;

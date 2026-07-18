@@ -116,6 +116,8 @@
         <file alias="LayerMask">resources/icons/LayerMask.png</file>
         <file alias="AdjustmentLayer">resources/icons/AdjustmentLayer.png</file>
         <file alias="ColorPanel">resources/icons/ColorPanel.png</file>
+        <file alias="HSV">resources/icons/HSV.png</file>
+        <file alias="RGB">resources/icons/RGB.png</file>
         <file alias="NavigatorPanel">resources/icons/NavigatorPanel.png</file>
         <file alias="LayerEffectsPanel">resources/icons/LayerEffectsPanel.png</file>
         <file alias="LayersPanel">resources/icons/LayersPanel.png</file>
