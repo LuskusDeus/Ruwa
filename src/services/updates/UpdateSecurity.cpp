@@ -60,6 +60,12 @@ bool isValidCertificateSha256(const QString& fingerprint)
     return true;
 }
 
+bool shouldRejectUpdateArchiveContentLength(
+    int httpStatusCode, std::optional<qint64> contentLength, qint64 expectedSize)
+{
+    return httpStatusCode == 200 && contentLength && *contentLength != expectedSize;
+}
+
 bool verifyDetachedUpdateSignature(const QByteArray& content, const QByteArray& signature,
     const QString& pinnedCertificateSha256, QString* errorMessage)
 {

@@ -2827,6 +2827,23 @@ Please choose a different shortcut.</source>
         <translation>Перезапустить</translation>
     </message>
     <message>
+        <location filename="../src/features/settings/SettingsContent.cpp" line="551"/>
+        <source>The update could not be downloaded.</source>
+        <translation>Не удалось загрузить обновление.</translation>
+    </message>
+    <message>
+        <location filename="../src/features/settings/SettingsContent.cpp" line="552"/>
+        <source>The update could not be downloaded:
+%1</source>
+        <translation>Не удалось загрузить обновление:
+%1</translation>
+    </message>
+    <message>
+        <location filename="../src/features/settings/SettingsContent.cpp" line="553"/>
+        <source>Close</source>
+        <translation>Закрыть</translation>
+    </message>
+    <message>
         <location filename="../src/features/settings/SettingsContent.cpp" line="522"/>
         <source>Appearance</source>
         <translation>Внешний вид</translation>

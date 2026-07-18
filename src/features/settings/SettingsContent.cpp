@@ -540,12 +540,19 @@ void SettingsContent::createUpdatesCategory()
     connect(updateMgr, &ruwa::services::UpdateManager::downloadProgress, m_updatesSettingsWidget,
         &UpdatesSettingsWidget::setDownloadProgress);
     connect(updateMgr, &ruwa::services::UpdateManager::downloadFinished, m_updatesSettingsWidget,
-        [this](bool success, const QString&) {
+        [this](bool success, const QString& pathOrError) {
             if (!m_updatesSettingsWidget) {
                 return;
             }
             m_updatesSettingsWidget->setUpdateState(
                 success ? UpdateState::ReadyToRestart : UpdateState::UpdateAvailable);
+            if (!success) {
+                const QString message = pathOrError.isEmpty()
+                    ? tr("The update could not be downloaded.")
+                    : tr("The update could not be downloaded:\n%1").arg(pathOrError);
+                MessagePopupManager::show(this, message, { { tr("Close"), true, []() { } } }, 420,
+                    m_updatesSettingsWidget);
+            }
         });
     connect(m_updatesSettingsWidget, &UpdatesSettingsWidget::updateActionClicked, this,
         [this, updateMgr]() {

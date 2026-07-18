@@ -496,10 +496,17 @@ void UpdateManager::downloadUpdate()
         if (!m_downloadReply) {
             return;
         }
-        bool ok = false;
-        const qint64 contentLength
-            = m_downloadReply->header(QNetworkRequest::ContentLengthHeader).toLongLong(&ok);
-        if (ok && contentLength != m_latestManifest.archiveSize) {
+
+        const int httpStatusCode
+            = m_downloadReply->attribute(QNetworkRequest::HttpStatusCodeAttribute).toInt();
+        bool hasContentLength = false;
+        const qint64 reportedContentLength
+            = m_downloadReply->header(QNetworkRequest::ContentLengthHeader)
+                  .toLongLong(&hasContentLength);
+        const std::optional<qint64> contentLength
+            = hasContentLength ? std::optional<qint64>(reportedContentLength) : std::nullopt;
+        if (shouldRejectUpdateArchiveContentLength(
+                httpStatusCode, contentLength, m_latestManifest.archiveSize)) {
             m_downloadFailure
                 = QStringLiteral("Update archive size does not match the signed manifest");
             m_downloadReply->abort();
