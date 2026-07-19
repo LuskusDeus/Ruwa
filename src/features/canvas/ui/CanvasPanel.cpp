@@ -944,7 +944,7 @@ void CanvasPanel::setToolMode(ToolMode tool)
         }
         // Tablet release can leave a large stroke draining queued samples.
         // Finalize it before restoreToolState mutates the shared TileBrush.
-        m_glWidget->flushPendingFinalization();
+        m_glWidget->flushPendingStrokeFinalization();
         midStroke = false;
     }
 

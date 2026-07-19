@@ -185,6 +185,9 @@ public:
     float strokeElapsedSecondsNow() const;
     void translateActiveStroke(float dx, float dy);
     void endStroke();
+    /// Complete a released stroke's queued input, commit, and deferred readback
+    /// before callers mutate the shared brush configuration.
+    void flushPendingStrokeFinalization();
 
     // Lasso selection (UI plumbing, selection logic TBD)
     void beginLasso(
@@ -449,9 +452,6 @@ private:
     void resetSelectionPathStabilizer();
     void updateStabilizerCatchupTimer();
     void processStabilizerCatchup();
-
-    // --- Deferred finalization ---
-    void flushPendingFinalization(); // Force-complete if still active
 
     // --- Deferred transform finalization ---
     void finalizeTransform();

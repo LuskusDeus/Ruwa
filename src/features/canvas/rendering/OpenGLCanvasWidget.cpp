@@ -2494,7 +2494,7 @@ OpenGLCanvasWidget::~OpenGLCanvasWidget()
     if (m_selectionController) {
         m_selectionController->shutdown(m_selectionRenderer.get());
     }
-    flushPendingFinalization();
+    flushPendingStrokeFinalization();
     flushPendingTransformFinalization();
     m_sceneFboManager.releaseSceneFbo(this);
     if (m_backdropCapture) {
@@ -7183,7 +7183,7 @@ void OpenGLCanvasWidget::processStabilizerCatchup()
     m_stabilizerCatchupTimer.stop();
 }
 
-void OpenGLCanvasWidget::flushPendingFinalization()
+void OpenGLCanvasWidget::flushPendingStrokeFinalization()
 {
     if (m_strokeHost) {
         m_strokeHost->flushPendingFinalization();
