@@ -34,6 +34,10 @@ public:
     /// Consumes a delayed MouseMove known to have been posted by a native QCursor warp.
     bool consumeNativeCursorWarpAt(const QPoint& globalPos);
     float dispatchPressure() const;
+    /// Hardware-timestamped elapsed time for the WinTab stroke currently being
+    /// dispatched. Empty for ordinary mouse/Qt tablet input and for drivers
+    /// that do not provide a usable PK_TIME stream.
+    std::optional<float> dispatchStrokeElapsedSeconds() const;
     bool shouldIgnoreCanvasMouseMove(const QMouseEvent* event) const;
 
     /// Returns the direct WinTab position while it is the active pointer source.

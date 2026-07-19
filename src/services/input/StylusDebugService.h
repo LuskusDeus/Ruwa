@@ -29,6 +29,7 @@ public:
         Qt::MouseButtons winTabButtons = Qt::NoButton;
         bool winTabInProximity = false;
         quint64 winTabPacketSerial = 0;
+        quint64 winTabQueueOverflowCount = 0;
         QString winTabDetails;
         float qtPressure = 0.0f;
         float effectivePressure = 0.0f;

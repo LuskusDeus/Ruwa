@@ -385,9 +385,15 @@ bool CanvasCursorManager::isOverCanvas(const QPoint& globalPos) const
     // Verify the topmost widget under the cursor actually belongs to the canvas
     // subtree. Mouse-transparent on-canvas overlays (zoom info, etc.) are skipped
     // by widgetAt and fall through to the GL widget, so they still count as canvas.
-    if (QWidget* topmost = QApplication::widgetAt(globalPos)) {
-        if (!isManagedCanvasWidget(topmost)) {
-            return false;
+    // A synchronously dispatched Ruwa WinTab event has already passed the
+    // routing manager's topmost-widget test (or belongs to an active captured
+    // canvas stroke). Repeating QApplication::widgetAt here would perform
+    // another full widget-tree/window hit test for every 200-266+ Hz packet.
+    if (!ruwa::services::input::StylusInputManager::instance().isDispatchingNativeInput()) {
+        if (QWidget* topmost = QApplication::widgetAt(globalPos)) {
+            if (!isManagedCanvasWidget(topmost)) {
+                return false;
+            }
         }
     }
 

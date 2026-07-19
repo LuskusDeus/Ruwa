@@ -6,6 +6,9 @@
 #include <QPoint>
 #include <QPointF>
 
+#include <limits>
+#include <unordered_map>
+
 #ifdef Q_OS_WIN
 #ifndef NOMINMAX
 #define NOMINMAX
@@ -18,29 +21,48 @@
 
 namespace {
 
+struct PressureRange {
+    int minimum = 0;
+    int maximum = 0;
+
+    bool isValid() const { return maximum > minimum; }
+};
+
 #ifdef Q_OS_WIN
 
 using HCTX = HANDLE;
-using WTPKT = UINT;
+using WTPKT = DWORD;
 using FIX32 = DWORD;
 
 constexpr UINT WT_DEFBASE = 0x7FF0;
 constexpr UINT WT_PACKET = WT_DEFBASE + 0;
 constexpr UINT WT_PROXIMITY = WT_DEFBASE + 5;
 
-constexpr UINT WTI_DEFCONTEXT = 3;
+constexpr UINT WTI_DEFSYSCTX = 4;
+constexpr UINT WTI_INTERFACE = 1;
 constexpr UINT WTI_DEVICES = 100;
+constexpr UINT IFC_NDEVICES = 4;
+constexpr UINT DVC_NCSRTYPES = 3;
+constexpr UINT DVC_FIRSTCSR = 4;
 constexpr UINT DVC_NPRESSURE = 15;
 
 constexpr UINT CXO_SYSTEM = 0x0001;
 constexpr UINT CXO_MESSAGES = 0x0004;
 
+constexpr WTPKT PK_STATUS = 0x0002;
+constexpr WTPKT PK_TIME = 0x0004;
+constexpr WTPKT PK_CURSOR = 0x0020;
 constexpr WTPKT PK_BUTTONS = 0x0040;
 constexpr WTPKT PK_X = 0x0080;
 constexpr WTPKT PK_Y = 0x0100;
 constexpr WTPKT PK_NORMAL_PRESSURE = 0x0400;
 
-constexpr WTPKT kPacketData = PK_BUTTONS | PK_X | PK_Y | PK_NORMAL_PRESSURE;
+constexpr WTPKT kExtendedPacketData
+    = PK_STATUS | PK_TIME | PK_CURSOR | PK_BUTTONS | PK_X | PK_Y | PK_NORMAL_PRESSURE;
+constexpr WTPKT kExtendedPacketMoveMask
+    = PK_CURSOR | PK_BUTTONS | PK_X | PK_Y | PK_NORMAL_PRESSURE;
+constexpr WTPKT kBasicPacketData = PK_BUTTONS | PK_X | PK_Y | PK_NORMAL_PRESSURE;
+constexpr UINT TPS_QUEUE_ERR = 0x0002;
 
 struct AXIS {
     LONG axMin;
@@ -87,17 +109,33 @@ struct LOGCONTEXTA {
 };
 
 struct Packet {
+    UINT pkStatus;
+    DWORD pkTime;
+    UINT pkCursor;
     DWORD pkButtons;
     LONG pkX;
     LONG pkY;
     UINT pkNormalPressure;
 };
 
+struct BasicPacket {
+    DWORD pkButtons;
+    LONG pkX;
+    LONG pkY;
+    UINT pkNormalPressure;
+};
+
+static_assert(sizeof(LOGCONTEXTA) == 172, "WinTab LOGCONTEXTA ABI mismatch");
+static_assert(sizeof(Packet) == 28, "WinTab PACKET ABI mismatch");
+static_assert(sizeof(BasicPacket) == 16, "WinTab basic PACKET ABI mismatch");
+
 using WTInfoAFn = UINT(APIENTRY*)(UINT, UINT, LPVOID);
 using WTOpenAFn = HCTX(APIENTRY*)(HWND, LOGCONTEXTA*, BOOL);
 using WTCloseFn = BOOL(APIENTRY*)(HCTX);
 using WTPacketFn = BOOL(APIENTRY*)(HCTX, UINT, LPVOID);
 using WTPacketsGetFn = int(APIENTRY*)(HCTX, int, LPVOID);
+using WTQueueSizeGetFn = int(APIENTRY*)(HCTX);
+using WTQueueSizeSetFn = BOOL(APIENTRY*)(HCTX, int);
 
 // Ask WinTab for fixed-point screen coordinates. At low canvas zoom one integer
 // screen pixel maps to many document pixels, so preserving subpixel packet
@@ -124,8 +162,11 @@ struct WinTabBackend::Data {
     WTCloseFn wtClose = nullptr;
     WTPacketFn wtPacket = nullptr;
     WTPacketsGetFn wtPacketsGet = nullptr;
+    WTQueueSizeGetFn wtQueueSizeGet = nullptr;
+    WTQueueSizeSetFn wtQueueSizeSet = nullptr;
     HCTX context = nullptr;
     HWND hwnd = nullptr;
+    bool extendedPacketData = false;
 #endif
     bool available = false;
     bool penDown = false;
@@ -133,11 +174,13 @@ struct WinTabBackend::Data {
     float pressure = 0.0f;
     float smoothedPressure = 0.0f;
     int rawPressure = 0;
-    int maxPressure = 0;
+    PressureRange fallbackPressure;
+    std::unordered_map<quint32, PressureRange> pressureByCursor;
     QPointF globalPos;
     Qt::MouseButtons buttons = Qt::NoButton;
     bool inProximity = false;
     quint64 packetSerial = 0;
+    quint64 queueOverflowCount = 0;
     QString details = QStringLiteral("WinTab32.dll not loaded");
     std::vector<WinTabBackend::PenSample> pendingPackets;
 };
@@ -169,6 +212,11 @@ bool WinTabBackend::ensureLoaded()
     m_data->wtPacket = reinterpret_cast<WTPacketFn>(GetProcAddress(m_data->module, "WTPacket"));
     m_data->wtPacketsGet
         = reinterpret_cast<WTPacketsGetFn>(GetProcAddress(m_data->module, "WTPacketsGet"));
+    // Optional exports: absence must not disqualify the driver.
+    m_data->wtQueueSizeGet
+        = reinterpret_cast<WTQueueSizeGetFn>(GetProcAddress(m_data->module, "WTQueueSizeGet"));
+    m_data->wtQueueSizeSet
+        = reinterpret_cast<WTQueueSizeSetFn>(GetProcAddress(m_data->module, "WTQueueSizeSet"));
 
     m_data->available = m_data->wtInfoA && m_data->wtOpenA && m_data->wtClose && m_data->wtPacket;
     if (!m_data->available) {
@@ -218,16 +266,21 @@ bool WinTabBackend::attach(void* hwnd)
     detach();
 
     LOGCONTEXTA context {};
-    if (m_data->wtInfoA(WTI_DEFCONTEXT, 0, &context) == 0) {
-        setDetails(QStringLiteral("WTInfoA(WTI_DEFCONTEXT) failed"));
+    if (m_data->wtInfoA(WTI_DEFSYSCTX, 0, &context) == 0) {
+        setDetails(QStringLiteral("WTInfoA(WTI_DEFSYSCTX) failed"));
         return false;
     }
 
-    context.lcOptions |= CXO_MESSAGES;
-    context.lcOptions &= ~CXO_SYSTEM;
-    context.lcPktData = kPacketData;
+    // Keep the driver's system cursor context active. Ruwa still receives the
+    // same full-resolution packets through CXO_MESSAGES, while WinTab remains
+    // responsible for system-wide hover and button routing outside our HWND
+    // (for example, the Windows taskbar).
+    context.lcOptions |= CXO_MESSAGES | CXO_SYSTEM;
+    context.lcPktData = kExtendedPacketData;
     context.lcPktMode = 0;
-    context.lcMoveMask = kPacketData;
+    // PK_TIME changes for every hardware report and must not be in lcMoveMask:
+    // including it turns stationary hover into an avoidable message-rate flood.
+    context.lcMoveMask = kExtendedPacketMoveMask;
     context.lcBtnUpMask = 0xFFFFFFFFu;
     context.lcBtnDnMask = 0xFFFFFFFFu;
     context.lcMsgBase = WT_DEFBASE;
@@ -237,16 +290,115 @@ bool WinTabBackend::attach(void* hwnd)
     context.lcOutExtY = -GetSystemMetrics(SM_CYVIRTUALSCREEN) * kScreenCoordinateScale;
 
     m_data->context = m_data->wtOpenA(window, &context, TRUE);
+    m_data->extendedPacketData = m_data->context != nullptr;
+    if (!m_data->context) {
+        // PK_STATUS, PK_TIME and PK_CURSOR are standard WinTab fields, but
+        // older or incomplete implementations can still reject a context that
+        // requests them. Preserve drawing with the original minimum packet
+        // contract; only hardware timing and overflow diagnostics are lost.
+        context.lcPktData = kBasicPacketData;
+        context.lcMoveMask = kBasicPacketData;
+        m_data->context = m_data->wtOpenA(window, &context, TRUE);
+    }
     if (!m_data->context) {
         setDetails(QStringLiteral("WTOpenA failed"));
         return false;
     }
 
-    AXIS pressureAxis {};
-    if (m_data->wtInfoA(WTI_DEVICES + context.lcDevice, DVC_NPRESSURE, &pressureAxis) > 0) {
-        m_data->maxPressure = qMax(1, static_cast<int>(pressureAxis.axMax));
+    // Grow the driver's packet queue. The WinTab default is tiny (the spec
+    // suggests around 8 packets, i.e. ~30-60 ms at 133-266 Hz report rates), so
+    // any GUI-thread stall longer than that — a vsync-blocked SwapBuffers in a
+    // maximized window, one heavy frame — makes the driver silently drop the
+    // oldest packets and strokes come out faceted.
+    //
+    // CAUTION (per the WinTab spec): a failed WTQueueSizeSet leaves the context
+    // with NO queue at all — the old queue is destroyed before the new one is
+    // allocated, and both WTPacketsGet and WTPacket read from that queue. So a
+    // failure here must never be the last call: keep retrying smaller sizes,
+    // then the driver's original size, down to 1 packet as the final fallback
+    // (the pattern Qt's own WinTab path uses).
+    if (m_data->wtQueueSizeSet) {
+        const int originalQueueSize
+            = m_data->wtQueueSizeGet ? m_data->wtQueueSizeGet(m_data->context) : 0;
+        bool queueResized = false;
+        for (int queueSize = 512; queueSize >= 32; queueSize /= 2) {
+            if (m_data->wtQueueSizeSet(m_data->context, queueSize)) {
+                queueResized = true;
+                break;
+            }
+        }
+        if (!queueResized && originalQueueSize > 0) {
+            queueResized = m_data->wtQueueSizeSet(m_data->context, originalQueueSize);
+        }
+        if (!queueResized) {
+            for (int queueSize = 16; queueSize >= 1; queueSize /= 2) {
+                if (m_data->wtQueueSizeSet(m_data->context, queueSize)) {
+                    queueResized = true;
+                    break;
+                }
+            }
+        }
+        if (!queueResized) {
+            // The failed WTQueueSizeSet calls destroyed this context's queue.
+            // Reopening is the only way to recover the driver's default queue;
+            // keeping the old HCTX would leave an attached-looking backend that
+            // can never return another packet.
+            m_data->wtClose(m_data->context);
+            m_data->context = m_data->wtOpenA(window, &context, TRUE);
+            if (!m_data->context) {
+                setDetails(QStringLiteral("WinTab queue recovery reopen failed"));
+                return false;
+            }
+        }
+    }
+
+    m_data->fallbackPressure = {};
+    m_data->pressureByCursor.clear();
+
+    const auto pressureRangeForDevice = [this](UINT device) -> PressureRange {
+        AXIS pressureAxis {};
+        if (m_data->wtInfoA(WTI_DEVICES + device, DVC_NPRESSURE, &pressureAxis) == 0) {
+            return {};
+        }
+        PressureRange range { static_cast<int>(pressureAxis.axMin),
+            static_cast<int>(pressureAxis.axMax) };
+        return range.isValid() ? range : PressureRange {};
+    };
+
+    const UINT virtualDevice = std::numeric_limits<UINT>::max();
+    if (context.lcDevice != virtualDevice) {
+        m_data->fallbackPressure = pressureRangeForDevice(context.lcDevice);
     } else {
-        m_data->maxPressure = 1023;
+        // The default system context is commonly a virtual device accepting
+        // packets from every attached tablet. WTI_DEVICES + UINT(-1) is not a
+        // valid information category, so map pkCursor to the owning device's
+        // pressure axis instead. This also keeps pressure correct when two
+        // tablets with different ranges are connected.
+        UINT deviceCount = 0;
+        if (m_data->wtInfoA(WTI_INTERFACE, IFC_NDEVICES, &deviceCount) > 0) {
+            for (UINT device = 0; device < deviceCount; ++device) {
+                const PressureRange range = pressureRangeForDevice(device);
+                if (!range.isValid()) {
+                    continue;
+                }
+                if (!m_data->fallbackPressure.isValid()) {
+                    m_data->fallbackPressure = range;
+                }
+
+                UINT firstCursor = 0;
+                UINT cursorCount = 0;
+                if (m_data->wtInfoA(WTI_DEVICES + device, DVC_FIRSTCSR, &firstCursor) == 0
+                    || m_data->wtInfoA(WTI_DEVICES + device, DVC_NCSRTYPES, &cursorCount) == 0) {
+                    continue;
+                }
+                for (UINT offset = 0; offset < cursorCount; ++offset) {
+                    m_data->pressureByCursor[firstCursor + offset] = range;
+                }
+            }
+        }
+    }
+    if (!m_data->fallbackPressure.isValid()) {
+        m_data->fallbackPressure = { 0, 1023 };
     }
 
     m_data->hwnd = window;
@@ -263,6 +415,7 @@ void WinTabBackend::detach()
     }
     m_data->context = nullptr;
     m_data->hwnd = nullptr;
+    m_data->extendedPacketData = false;
 #endif
     m_data->penDown = false;
     m_data->penEngaged = false;
@@ -271,6 +424,9 @@ void WinTabBackend::detach()
     m_data->rawPressure = 0;
     m_data->buttons = Qt::NoButton;
     m_data->inProximity = false;
+    m_data->queueOverflowCount = 0;
+    m_data->pressureByCursor.clear();
+    m_data->fallbackPressure = {};
     m_data->pendingPackets.clear();
 }
 
@@ -291,145 +447,148 @@ bool WinTabBackend::handleNativeEvent(void* message)
         // be lost when WT_PACKET messages are dropped from the Windows message queue.
         constexpr int kDrainChunkSize = 64;
 
-        // Hysteresis threshold: once the pen lifts (pressure == 0), require pressure
-        // to exceed this value before re-engaging.  This filters digitiser noise that
-        // otherwise creates phantom pen-down events (tiny dots) at the end of strokes.
-        const int reEngageThreshold = qMax(3, m_data->maxPressure / 512);
+        const auto processPacket = [this](const Packet& packet, bool hasMetadata) {
+            const auto rangeIt = hasMetadata
+                ? m_data->pressureByCursor.find(packet.pkCursor)
+                : m_data->pressureByCursor.end();
+            const PressureRange& pressureRange = rangeIt != m_data->pressureByCursor.end()
+                ? rangeIt->second
+                : m_data->fallbackPressure;
+            const int pressureSpan = qMax(1, pressureRange.maximum - pressureRange.minimum);
+            const int rawPressure = static_cast<int>(packet.pkNormalPressure);
+            const float rawNorm = qBound(0.0f,
+                static_cast<float>(rawPressure - pressureRange.minimum)
+                    / static_cast<float>(pressureSpan),
+                1.0f);
+
+            const WORD buttonMask = LOWORD(packet.pkButtons);
+            Qt::MouseButtons buttons = Qt::NoButton;
+            if (buttonMask & 0x0001u)
+                buttons |= Qt::LeftButton;
+            if (buttonMask & 0x0002u)
+                buttons |= Qt::RightButton;
+            if (buttonMask & 0x0004u)
+                buttons |= Qt::MiddleButton;
+
+            const int reEngageThreshold = qMax(3, pressureSpan / 512);
+            if (m_data->penEngaged) {
+                if (rawPressure > pressureRange.minimum) {
+                    buttons |= Qt::LeftButton;
+                } else {
+                    m_data->penEngaged = false;
+                }
+            } else if (rawPressure - pressureRange.minimum > reEngageThreshold) {
+                m_data->penEngaged = true;
+                buttons |= Qt::LeftButton;
+            }
+
+            float pressure = 0.0f;
+            if (!m_data->penEngaged && rawPressure <= pressureRange.minimum) {
+                // Do not carry the previous EMA tail into a new contact while
+                // the pen remains in proximity.
+                m_data->smoothedPressure = 0.0f;
+            } else if (m_data->smoothedPressure == 0.0f && rawNorm > 0.0f) {
+                pressure = rawNorm;
+                m_data->smoothedPressure = pressure;
+            } else {
+                constexpr float kAlpha = 0.65f;
+                pressure
+                    = kAlpha * rawNorm + (1.0f - kAlpha) * m_data->smoothedPressure;
+                m_data->smoothedPressure = pressure;
+            }
+
+            if (hasMetadata && (packet.pkStatus & TPS_QUEUE_ERR) != 0) {
+                ++m_data->queueOverflowCount;
+            }
+
+            PenSample sample;
+            sample.globalPos = screenPointFromPacket(packet.pkX, packet.pkY);
+            sample.pressure = pressure;
+            sample.buttons = buttons;
+            sample.packetTimeMs = static_cast<quint32>(packet.pkTime);
+            sample.hasPacketTime = hasMetadata;
+            m_data->pendingPackets.push_back(sample);
+
+            m_data->rawPressure = rawPressure;
+            m_data->pressure = pressure;
+            m_data->globalPos = sample.globalPos;
+            m_data->buttons = buttons;
+            m_data->penDown = buttons.testFlag(Qt::LeftButton);
+            m_data->inProximity = true;
+            ++m_data->packetSerial;
+        };
+
+        const auto processBasicPacket = [&processPacket](const BasicPacket& basicPacket) {
+            Packet packet {};
+            packet.pkButtons = basicPacket.pkButtons;
+            packet.pkX = basicPacket.pkX;
+            packet.pkY = basicPacket.pkY;
+            packet.pkNormalPressure = basicPacket.pkNormalPressure;
+            processPacket(packet, false);
+        };
 
         if (m_data->wtPacketsGet) {
             bool receivedPackets = false;
             int count = 0;
-            do {
-                Packet packets[kDrainChunkSize];
-                count = m_data->wtPacketsGet(m_data->context, kDrainChunkSize, packets);
-                if (count <= 0) {
-                    break;
-                }
-
-                receivedPackets = true;
-                for (int i = 0; i < count; ++i) {
-                    const Packet& p = packets[i];
-                    const int rawPressure = static_cast<int>(p.pkNormalPressure);
-                    const float rawNorm = qBound(
-                        0.0f, static_cast<float>(rawPressure) / qMax(1, m_data->maxPressure), 1.0f);
-                    const WORD buttonMask = LOWORD(p.pkButtons);
-                    Qt::MouseButtons buttons = Qt::NoButton;
-                    if (buttonMask & 0x0001u)
-                        buttons |= Qt::LeftButton;
-                    if (buttonMask & 0x0002u)
-                        buttons |= Qt::RightButton;
-                    if (buttonMask & 0x0004u)
-                        buttons |= Qt::MiddleButton;
-
-                    // Apply hysteresis: while engaged, stay engaged until pressure
-                    // drops to zero; while disengaged, require exceeding the threshold.
-                    if (m_data->penEngaged) {
-                        if (rawPressure > 0) {
-                            buttons |= Qt::LeftButton;
-                        } else {
-                            m_data->penEngaged = false;
-                        }
-                    } else {
-                        if (rawPressure > reEngageThreshold) {
-                            m_data->penEngaged = true;
-                            buttons |= Qt::LeftButton;
-                        }
+            if (m_data->extendedPacketData) {
+                do {
+                    Packet packets[kDrainChunkSize];
+                    count = m_data->wtPacketsGet(m_data->context, kDrainChunkSize, packets);
+                    if (count <= 0) {
+                        break;
                     }
 
-                    // Light EMA smoothing to suppress pressure spikes from the
-                    // digitiser (especially visible as thickness bumps at stroke
-                    // end).  On first contact, seed with the raw value (no lag).
-                    float pressure;
-                    if (!m_data->penEngaged && m_data->smoothedPressure == 0.0f) {
-                        pressure = rawNorm;
-                    } else if (m_data->smoothedPressure == 0.0f && rawNorm > 0.0f) {
-                        pressure = rawNorm; // first sample of a new stroke
-                    } else {
-                        constexpr float kAlpha = 0.65f;
-                        pressure = kAlpha * rawNorm + (1.0f - kAlpha) * m_data->smoothedPressure;
+                    receivedPackets = true;
+                    for (int i = 0; i < count; ++i) {
+                        processPacket(packets[i], true);
                     }
-                    m_data->smoothedPressure = pressure;
+                } while (count == kDrainChunkSize);
+            } else {
+                do {
+                    BasicPacket packets[kDrainChunkSize];
+                    count = m_data->wtPacketsGet(m_data->context, kDrainChunkSize, packets);
+                    if (count <= 0) {
+                        break;
+                    }
 
-                    PenSample sample;
-                    sample.globalPos = screenPointFromPacket(p.pkX, p.pkY);
-                    sample.pressure = pressure;
-                    sample.buttons = buttons;
-                    m_data->pendingPackets.push_back(sample);
-
-                    // Keep current-state fields in sync (last packet wins, for snapshot readers)
-                    m_data->rawPressure = rawPressure;
-                    m_data->pressure = pressure;
-                    m_data->globalPos = sample.globalPos;
-                    m_data->buttons = buttons;
-                    m_data->penDown = buttons.testFlag(Qt::LeftButton);
-                    m_data->inProximity = true;
-                    ++m_data->packetSerial;
-                }
-
-                // WTPacketsGet returns at most one chunk. Keep polling while the
-                // buffer was filled so a burst larger than one chunk is not split across
-                // stale WT_PACKET notifications in the Windows message queue.
-            } while (count == kDrainChunkSize);
+                    receivedPackets = true;
+                    for (int i = 0; i < count; ++i) {
+                        processBasicPacket(packets[i]);
+                    }
+                } while (count == kDrainChunkSize);
+            }
 
             if (receivedPackets) {
-                setDetails(QStringLiteral("Receiving WT_PACKET"));
+                setDetails(m_data->queueOverflowCount > 0
+                        ? QStringLiteral("Receiving WT_PACKET (queue overflows: %1)")
+                              .arg(m_data->queueOverflowCount)
+                        : QStringLiteral("Receiving WT_PACKET"));
                 return true;
             }
         }
 
         // Fallback: WTPacketsGet not available — read the single packet by serial number
         Packet packet {};
-        if (!m_data->wtPacket(m_data->context, static_cast<UINT>(msg->wParam), &packet)) {
-            setDetails(QStringLiteral("WTPacket failed"));
+        BasicPacket basicPacket {};
+        void* packetData = m_data->extendedPacketData ? static_cast<void*>(&packet)
+                                                      : static_cast<void*>(&basicPacket);
+        if (!m_data->wtPacket(m_data->context, static_cast<UINT>(msg->wParam), packetData)) {
+            // Expected for stale WT_PACKET messages after WTPacketsGet drained
+            // the referenced serial and every older packet.
+            if (!m_data->wtPacketsGet) {
+                setDetails(QStringLiteral("WTPacket failed"));
+            }
             return false;
         }
-        m_data->rawPressure = static_cast<int>(packet.pkNormalPressure);
-        const float rawNorm = qBound(
-            0.0f, static_cast<float>(m_data->rawPressure) / qMax(1, m_data->maxPressure), 1.0f);
-        m_data->globalPos = screenPointFromPacket(packet.pkX, packet.pkY);
-        const WORD buttonMask = LOWORD(packet.pkButtons);
-        Qt::MouseButtons buttons = Qt::NoButton;
-        if (buttonMask & 0x0001u)
-            buttons |= Qt::LeftButton;
-        if (buttonMask & 0x0002u)
-            buttons |= Qt::RightButton;
-        if (buttonMask & 0x0004u)
-            buttons |= Qt::MiddleButton;
-
-        if (m_data->penEngaged) {
-            if (m_data->rawPressure > 0) {
-                buttons |= Qt::LeftButton;
-            } else {
-                m_data->penEngaged = false;
-            }
+        if (m_data->extendedPacketData) {
+            processPacket(packet, true);
         } else {
-            if (m_data->rawPressure > reEngageThreshold) {
-                m_data->penEngaged = true;
-                buttons |= Qt::LeftButton;
-            }
+            processBasicPacket(basicPacket);
         }
-
-        // EMA pressure smoothing (same as batch path)
-        if (m_data->smoothedPressure == 0.0f && rawNorm > 0.0f) {
-            m_data->pressure = rawNorm;
-        } else {
-            constexpr float kAlpha = 0.65f;
-            m_data->pressure = kAlpha * rawNorm + (1.0f - kAlpha) * m_data->smoothedPressure;
-        }
-        m_data->smoothedPressure = m_data->pressure;
-
-        m_data->buttons = buttons;
-        m_data->penDown = buttons.testFlag(Qt::LeftButton);
-        m_data->inProximity = true;
-        ++m_data->packetSerial;
-
-        PenSample sample;
-        sample.globalPos = m_data->globalPos;
-        sample.pressure = m_data->pressure;
-        sample.buttons = m_data->buttons;
-        m_data->pendingPackets.push_back(sample);
-
-        setDetails(QStringLiteral("Receiving WT_PACKET"));
+        setDetails(m_data->queueOverflowCount > 0
+                ? QStringLiteral("Receiving WT_PACKET (queue overflows: %1)")
+                      .arg(m_data->queueOverflowCount)
+                : QStringLiteral("Receiving WT_PACKET"));
         return true;
     }
 
@@ -529,6 +688,11 @@ bool WinTabBackend::inProximity() const
 quint64 WinTabBackend::packetSerial() const
 {
     return m_data->packetSerial;
+}
+
+quint64 WinTabBackend::queueOverflowCount() const
+{
+    return m_data->queueOverflowCount;
 }
 
 QString WinTabBackend::details() const

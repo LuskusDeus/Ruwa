@@ -3615,6 +3615,15 @@ void OpenGLCanvasWidget::continueStrokeAtElapsed(float worldX, float worldY, flo
     }
 }
 
+void OpenGLCanvasWidget::queueStrokeAtElapsed(float worldX, float worldY, float pressure,
+    float strokeElapsedSeconds, BrushStrokeHost::StrokeInputDevice inputDevice)
+{
+    if (m_strokeHost) {
+        m_strokeHost->queueStrokeAtElapsed(
+            worldX, worldY, pressure, strokeElapsedSeconds, inputDevice);
+    }
+}
+
 float OpenGLCanvasWidget::strokeElapsedSecondsNow() const
 {
     return m_strokeHost ? m_strokeHost->strokeElapsedSecondsNow() : 0.0f;
@@ -11144,14 +11153,53 @@ void OpenGLCanvasWidget::paintGL()
         = m_backdropConsumers > 0 && (m_backdropFrameCounter % kBackdropRefreshInterval == 0);
     ++m_backdropFrameCounter;
 
-    const bool needSceneForOverlay = drawTransformOverlay || drawCanvasResizeOverlay
-        || drawTextEditOverlay || drawBrushCursor || drawEyedropperCursor
-        || captureBackdropThisFrame;
+    // Most overlays genuinely consume the whole scene texture. The brush
+    // cursor samples only the pixels under its small inverted contour, so it
+    // gets a local copy after the scene has rendered directly to the target.
+    // This avoids a full-surface offscreen render + blit on every cursor frame,
+    // which is especially costly at maximized-window resolutions.
+    const bool needFullSceneForOverlay = drawTransformOverlay || drawCanvasResizeOverlay
+        || drawTextEditOverlay || drawEyedropperCursor || captureBackdropThisFrame;
+    const bool captureBrushCursorRegion = drawBrushCursor && !needFullSceneForOverlay;
 
     GLint defaultFbo = 0;
     glGetIntegerv(GL_FRAMEBUFFER_BINDING, &defaultFbo);
     GLuint sceneTarget = 0;
-    paintGL_renderSceneAndBlit(sceneTarget, defaultFbo, needSceneForOverlay, boardLayerStack);
+    paintGL_renderSceneAndBlit(
+        sceneTarget, defaultFbo, needFullSceneForOverlay, boardLayerStack);
+
+    if (captureBrushCursorRegion) {
+        const QSize surfaceSize = currentSurfacePixelSize(this);
+        const int surfaceWidth = surfaceSize.width();
+        const int surfaceHeight = surfaceSize.height();
+        m_sceneFboManager.ensureSceneFbo(this, surfaceWidth, surfaceHeight);
+        if (m_sceneFboManager.sceneFbo() && m_sceneFboManager.sceneTexture()) {
+            // The cursor shader uses linear sampling and its contour is two
+            // pixels wide. Keep a small guard band so edge texels never sample
+            // stale content from outside the copied rectangle.
+            constexpr float kCursorCapturePaddingPx = 3.0f;
+            const float captureRadius
+                = m_cursorOverlayState.brushRadius + kCursorCapturePaddingPx;
+            const int left = std::clamp(
+                static_cast<int>(std::floor(m_cursorOverlayState.brushCenterX - captureRadius)), 0,
+                surfaceWidth);
+            const int right = std::clamp(
+                static_cast<int>(std::ceil(m_cursorOverlayState.brushCenterX + captureRadius)), 0,
+                surfaceWidth);
+            const int top = std::clamp(
+                static_cast<int>(std::floor(m_cursorOverlayState.brushCenterY - captureRadius)), 0,
+                surfaceHeight);
+            const int bottom = std::clamp(
+                static_cast<int>(std::ceil(m_cursorOverlayState.brushCenterY + captureRadius)), 0,
+                surfaceHeight);
+            if (right > left && bottom > top) {
+                const int glBottom = surfaceHeight - bottom;
+                m_sceneFboManager.copyRegionFromDefaultFbo(this, defaultFbo, left, glBottom,
+                    right - left, bottom - top);
+                sceneTarget = m_sceneFboManager.sceneFbo();
+            }
+        }
+    }
 
     if (captureBackdropThisFrame && sceneTarget == m_sceneFboManager.sceneFbo()
         && m_sceneFboManager.sceneTexture()) {

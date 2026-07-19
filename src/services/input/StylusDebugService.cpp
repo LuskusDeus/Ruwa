@@ -74,6 +74,7 @@ StylusDebugService::Snapshot StylusDebugService::snapshot() const
     state.winTabButtons = m_winTabBackend->buttons();
     state.winTabInProximity = m_winTabBackend->inProximity();
     state.winTabPacketSerial = m_winTabBackend->packetSerial();
+    state.winTabQueueOverflowCount = m_winTabBackend->queueOverflowCount();
     state.winTabDetails = m_winTabBackend->details();
     state.qtPressure = m_qtPressure;
     state.effectivePressure = m_effectivePressure;
@@ -106,6 +107,7 @@ void StylusDebugService::emitStateChangedIfNeeded(const Snapshot& before)
         || before.winTabButtons != after.winTabButtons
         || before.winTabInProximity != after.winTabInProximity
         || before.winTabPacketSerial != after.winTabPacketSerial
+        || before.winTabQueueOverflowCount != after.winTabQueueOverflowCount
         || before.winTabDetails != after.winTabDetails || before.qtPressure != after.qtPressure
         || before.effectivePressure != after.effectivePressure
         || before.lastEventFromTablet != after.lastEventFromTablet

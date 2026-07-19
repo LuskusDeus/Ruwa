@@ -18,6 +18,8 @@ public:
         QPointF globalPos;
         float pressure = 0.0f;
         Qt::MouseButtons buttons = Qt::NoButton;
+        quint32 packetTimeMs = 0;
+        bool hasPacketTime = false;
     };
 
     WinTabBackend();
@@ -40,6 +42,7 @@ public:
     Qt::MouseButtons buttons() const;
     bool inProximity() const;
     quint64 packetSerial() const;
+    quint64 queueOverflowCount() const;
     QString details() const;
 
 private:

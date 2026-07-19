@@ -110,6 +110,11 @@ public:
     /// see them as a Δt≈0 burst.
     void continueStrokeAtElapsed(float worldX, float worldY, float pressure,
         float strokeElapsedSeconds, StrokeInputDevice inputDevice = StrokeInputDevice::Stylus);
+    /// Adds a timestamped sample to the existing time-budgeted input queue.
+    /// Used for recovered WinTab bursts so native event dispatch can finish
+    /// before expensive brush rasterization begins.
+    void queueStrokeAtElapsed(float worldX, float worldY, float pressure,
+        float strokeElapsedSeconds, StrokeInputDevice inputDevice = StrokeInputDevice::Stylus);
     void translateActiveStroke(float dx, float dy);
     void endStroke();
     bool isEndStrokeDraining() const { return m_endStrokeRequested; }
@@ -157,6 +162,8 @@ private:
     void scheduleQueuedStrokeInput();
     void processQueuedStrokeInputImpl(bool drainAll);
     void flushQueuedStrokeInput();
+    void addStrokeSampleAtElapsed(float worldX, float worldY, float pressure,
+        float strokeElapsedSeconds, StrokeInputDevice inputDevice, bool processImmediately);
     void continueStrokeImmediate(float worldX, float worldY, float pressure,
         float strokeElapsedSeconds, bool requestRenderAfterStep, bool isRealPenSample = true);
     // Advances the de-jittered synthetic clock and returns the nowMs to feed the

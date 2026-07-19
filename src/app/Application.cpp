@@ -249,7 +249,12 @@ void Application::setupDefaultSettings()
     format.setProfile(QSurfaceFormat::CoreProfile);
     format.setDepthBufferSize(24);
     format.setStencilBufferSize(8);
-    format.setSamples(4); // 4x MSAA Antialiasing
+    // No MSAA. This default format is what the top-level window's compositing
+    // surface gets, and everything visible is either raster UI or the canvas
+    // QOpenGLWidget which renders into its own non-multisampled FBO — so a 4x
+    // multisampled window surface would only add a full-screen resolve + 4x
+    // color bandwidth to every present, which weak GPUs pay for in frame time.
+    format.setSamples(0);
 
     QSurfaceFormat::setDefaultFormat(format);
 }

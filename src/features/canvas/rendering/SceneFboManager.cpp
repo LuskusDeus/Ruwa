@@ -105,4 +105,19 @@ void SceneFboManager::blitToDefaultFbo(
     gl->glBindFramebuffer(GL_FRAMEBUFFER, static_cast<GLuint>(defaultFbo));
 }
 
+void SceneFboManager::copyRegionFromDefaultFbo(QOpenGLFunctions_4_5_Core* gl, GLint defaultFbo,
+    int x, int y, int width, int height) const
+{
+    if (!gl || !m_sceneFbo || width <= 0 || height <= 0)
+        return;
+
+    gl->glBindFramebuffer(GL_READ_FRAMEBUFFER, static_cast<GLuint>(defaultFbo));
+    gl->glBindFramebuffer(GL_DRAW_FRAMEBUFFER, m_sceneFbo);
+    gl->glBlitFramebuffer(x, y, x + width, y + height, x, y, x + width, y + height,
+        GL_COLOR_BUFFER_BIT, GL_NEAREST);
+    gl->glBindFramebuffer(GL_READ_FRAMEBUFFER, 0);
+    gl->glBindFramebuffer(GL_DRAW_FRAMEBUFFER, 0);
+    gl->glBindFramebuffer(GL_FRAMEBUFFER, static_cast<GLuint>(defaultFbo));
+}
+
 } // namespace aether

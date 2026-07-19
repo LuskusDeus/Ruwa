@@ -491,6 +491,20 @@ void BrushStrokeHost::continueStroke(
 void BrushStrokeHost::continueStrokeAtElapsed(float worldX, float worldY, float pressure,
     float strokeElapsedSeconds, StrokeInputDevice inputDevice)
 {
+    addStrokeSampleAtElapsed(
+        worldX, worldY, pressure, strokeElapsedSeconds, inputDevice, true);
+}
+
+void BrushStrokeHost::queueStrokeAtElapsed(float worldX, float worldY, float pressure,
+    float strokeElapsedSeconds, StrokeInputDevice inputDevice)
+{
+    addStrokeSampleAtElapsed(
+        worldX, worldY, pressure, strokeElapsedSeconds, inputDevice, false);
+}
+
+void BrushStrokeHost::addStrokeSampleAtElapsed(float worldX, float worldY, float pressure,
+    float strokeElapsedSeconds, StrokeInputDevice inputDevice, bool processImmediately)
+{
     if (!m_isDrawing) {
         return;
     }
@@ -611,7 +625,11 @@ void BrushStrokeHost::continueStrokeAtElapsed(float worldX, float worldY, float 
 
     m_queuedStrokeSamples.push_back(
         { worldX, worldY, pressure, strokeElapsedSeconds, inputDevice });
-    processQueuedStrokeInput();
+    if (processImmediately) {
+        processQueuedStrokeInput();
+    } else {
+        scheduleQueuedStrokeInput();
+    }
 }
 
 void BrushStrokeHost::scheduleQueuedStrokeInput()
@@ -642,6 +660,16 @@ void BrushStrokeHost::processQueuedStrokeInputImpl(bool drainAll)
         budgetTimer.start();
     }
 
+    bool ownsGpuContext = false;
+    if (m_useGPUBrush && m_callbacks.makeCurrent) {
+        const bool alreadyCurrent
+            = m_callbacks.hasCurrentGlContext ? m_callbacks.hasCurrentGlContext() : false;
+        if (!alreadyCurrent) {
+            m_callbacks.makeCurrent();
+            ownsGpuContext = true;
+        }
+    }
+
     while (m_isDrawing && !m_queuedStrokeSamples.empty()) {
         const QueuedStrokeSample sample = m_queuedStrokeSamples.front();
         m_queuedStrokeSamples.pop_front();
@@ -657,6 +685,9 @@ void BrushStrokeHost::processQueuedStrokeInputImpl(bool drainAll)
         }
     }
 
+    if (ownsGpuContext && m_callbacks.doneCurrent) {
+        m_callbacks.doneCurrent();
+    }
     m_processingQueuedStrokeInput = false;
 
     if (m_isDrawing && processedSamples > 0 && m_callbacks.requestRender) {
@@ -917,12 +948,14 @@ void BrushStrokeHost::continueStrokeWithResolvedPoint(float worldX, float worldY
             previewUpdated = rebuildStrokePreviewFromDabs(
                 grid, paintMask, executionBackend, true, &rebuiltTiles);
         } else if (m_useGPUBrush && executionBackend) {
-            if (m_callbacks.makeCurrent) {
+            const bool hasCurrentContext
+                = m_callbacks.hasCurrentGlContext ? m_callbacks.hasCurrentGlContext() : false;
+            if (!hasCurrentContext && m_callbacks.makeCurrent) {
                 m_callbacks.makeCurrent();
             }
             m_useGPUBrush = executionBackend->stamp(*currentBrush, *grid, stabilizedPoint.x,
                 stabilizedPoint.y, paintMask, true, strokeElapsedSeconds, true);
-            if (m_callbacks.doneCurrent) {
+            if (!hasCurrentContext && m_callbacks.doneCurrent) {
                 m_callbacks.doneCurrent();
             }
         } else if (executionBackend) {
@@ -1664,7 +1697,9 @@ void BrushStrokeHost::rasterizeQuadraticStroke(TileGrid* grid, TileGrid* selecti
         = std::clamp(std::max(2, std::max(segmentsByLength, segmentsByCurvature)), 2, 64);
 
     const bool useGpuContext = (m_useGPUBrush && executionBackend);
-    if (useGpuContext && m_callbacks.makeCurrent) {
+    const bool hasCurrentContext
+        = m_callbacks.hasCurrentGlContext ? m_callbacks.hasCurrentGlContext() : false;
+    if (useGpuContext && !hasCurrentContext && m_callbacks.makeCurrent) {
         m_callbacks.makeCurrent();
     }
 
@@ -1689,7 +1724,7 @@ void BrushStrokeHost::rasterizeQuadraticStroke(TileGrid* grid, TileGrid* selecti
         startStrokeElapsedSeconds = nextElapsedSeconds;
     }
 
-    if (useGpuContext && m_callbacks.doneCurrent) {
+    if (useGpuContext && !hasCurrentContext && m_callbacks.doneCurrent) {
         m_callbacks.doneCurrent();
     }
 }
@@ -1751,7 +1786,9 @@ void BrushStrokeHost::rasterizeCatmullRomStroke(TileGrid* grid, TileGrid* select
         = std::clamp(std::max(2, std::max(segmentsByLength, segmentsByCurvature)), 2, 128);
 
     const bool useGpuContext = (m_useGPUBrush && executionBackend);
-    if (useGpuContext && m_callbacks.makeCurrent) {
+    const bool hasCurrentContext
+        = m_callbacks.hasCurrentGlContext ? m_callbacks.hasCurrentGlContext() : false;
+    if (useGpuContext && !hasCurrentContext && m_callbacks.makeCurrent) {
         m_callbacks.makeCurrent();
     }
 
@@ -1770,7 +1807,7 @@ void BrushStrokeHost::rasterizeCatmullRomStroke(TileGrid* grid, TileGrid* select
         prevElapsed = nextElapsed;
     }
 
-    if (useGpuContext && m_callbacks.doneCurrent) {
+    if (useGpuContext && !hasCurrentContext && m_callbacks.doneCurrent) {
         m_callbacks.doneCurrent();
     }
 }
@@ -1789,12 +1826,14 @@ bool BrushStrokeHost::rebuildStrokePreviewFromDabs(TileGrid* grid, TileGrid* sel
 
     const auto rebuildFullPreview = [&](size_t maxPreviewDabs) {
         if (m_useGPUBrush && executionBackend) {
-            if (m_callbacks.makeCurrent) {
+            const bool hasCurrentContext
+                = m_callbacks.hasCurrentGlContext ? m_callbacks.hasCurrentGlContext() : false;
+            if (!hasCurrentContext && m_callbacks.makeCurrent) {
                 m_callbacks.makeCurrent();
             }
             executionBackend->rebuildStrokeFromDabs(
                 *currentBrush, selectionMask, maxPreviewDabs, true);
-            if (m_callbacks.doneCurrent) {
+            if (!hasCurrentContext && m_callbacks.doneCurrent) {
                 m_callbacks.doneCurrent();
             }
         } else if (executionBackend) {
@@ -1857,12 +1896,14 @@ bool BrushStrokeHost::rebuildStrokePreviewFromDabs(TileGrid* grid, TileGrid* sel
         }
 
         if (m_useGPUBrush && executionBackend) {
-            if (m_callbacks.makeCurrent) {
+            const bool hasCurrentContext
+                = m_callbacks.hasCurrentGlContext ? m_callbacks.hasCurrentGlContext() : false;
+            if (!hasCurrentContext && m_callbacks.makeCurrent) {
                 m_callbacks.makeCurrent();
             }
             executionBackend->rebuildStrokeRangeFromDabs(
                 *currentBrush, updateStart, updateCount, selectionMask, true);
-            if (m_callbacks.doneCurrent) {
+            if (!hasCurrentContext && m_callbacks.doneCurrent) {
                 m_callbacks.doneCurrent();
             }
         } else if (executionBackend) {

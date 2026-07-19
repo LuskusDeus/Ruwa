@@ -77,6 +77,12 @@ struct StylusInputManager::State {
     bool dispatchingToCanvas = false;
     bool dispatchingSyntheticMouseEvent = false;
     float currentDispatchPressure = 0.0f;
+    float currentDispatchStrokeElapsedSeconds = 0.0f;
+    bool currentDispatchHasStrokeElapsed = false;
+    bool nativeStrokePacketClockActive = false;
+    bool nativeStrokePacketClockRejected = false;
+    quint32 nativeStrokePacketTimeBaseMs = 0;
+    quint32 nativeStrokePacketTimeLastMs = 0;
     bool hasNativeCanvasDispatch = false;
     QElapsedTimer canvasReleaseDebounce;
     bool canvasReleaseDebounceActive = false;
@@ -338,6 +344,10 @@ void StylusInputManager::initialize(QApplication* application)
     m_state->dispatchingToCanvas = false;
     m_state->dispatchingSyntheticMouseEvent = false;
     m_state->currentDispatchPressure = 0.0f;
+    m_state->currentDispatchStrokeElapsedSeconds = 0.0f;
+    m_state->currentDispatchHasStrokeElapsed = false;
+    m_state->nativeStrokePacketClockActive = false;
+    m_state->nativeStrokePacketClockRejected = false;
     m_state->hasNativeCanvasDispatch = false;
     m_state->suppressButtonsUntilRelease = false;
     m_state->hasCoalescedUiMove = false;
@@ -484,28 +494,37 @@ bool StylusInputManager::handleNativeEvent(void* message)
             continue;
         }
 
-        // Windows exposes one shared pointer for mouse and pen. Keep its physical
-        // position synchronized on every native packet, including a canvas that
-        // currently uses BlankCursor for GL rendering. BlankCursor controls only
-        // visibility; freezing QCursor here leaves a second arrow over the UI and
-        // makes the next real mouse move resume from the canvas-entry boundary.
-        syncSystemCursorFromNative(globalPos);
+        // Windows exposes one shared pointer for mouse and pen. Keep it aligned
+        // during hover/UI interaction and on the press/release boundaries.
+        // Between those boundaries a captured canvas stroke already routes and
+        // renders from WinTab coordinates while the system cursor is blank, so
+        // warping it for every hardware packet only generates redundant
+        // asynchronous WM_MOUSEMOVE traffic. The release packet synchronizes
+        // the final position before normal UI routing can resume.
+        const bool capturedCanvasStrokeMove = m_state->activeCanvasTarget
+            && previousButtons.testFlag(Qt::LeftButton)
+            && currentButtons.testFlag(Qt::LeftButton);
+        if (!capturedCanvasStrokeMove) {
+            syncSystemCursorFromNative(globalPos);
+        }
 
         const Qt::MouseButton button = changedButton(previousButtons, currentButtons);
         const Qt::MouseButtons addedButtons = currentButtons & ~previousButtons;
         const Qt::MouseButtons removedButtons = previousButtons & ~currentButtons;
-        QWidget* target = resolveMouseTarget(m_state->activeMouseTarget, globalPos);
-        QWidget* canvasTarget = resolveCanvasTarget(m_state->activeCanvasTarget, globalPos);
 
         const bool canvasCaptureActive
             = m_state->activeCanvasTarget && previousButtons != Qt::NoButton;
         const bool uiCaptureActive = (m_state->activeMouseTarget || m_state->pendingPressTarget)
             && previousButtons != Qt::NoButton;
+        QWidget* canvasTarget = nullptr;
         if (canvasCaptureActive) {
             // A stroke that began on canvas owns the complete press/move/release
-            // sequence, even after crossing over UI.
+            // sequence, even after crossing over UI. Do not run a topmost-widget
+            // lookup first: capture already makes its result irrelevant.
             canvasTarget = m_state->activeCanvasTarget;
-        } else if (uiCaptureActive) {
+        } else if (!uiCaptureActive) {
+            canvasTarget = resolveCanvasTarget(nullptr, globalPos);
+        } else {
             // Symmetrically, a press that began on a UI control must not turn into
             // a canvas stroke merely because the pen crossed the viewport.
             canvasTarget = nullptr;
@@ -539,9 +558,45 @@ bool StylusInputManager::handleNativeEvent(void* message)
 
             // Set flag and per-packet pressure so the canvas mouse handler can
             // distinguish our synthetic events from real WM_MOUSEMOVE and read
-            // the correct pressure for this specific packet (not the snapshot).
+            // the correct pressure/time for this specific packet (not the snapshot).
             m_state->dispatchingToCanvas = true;
             m_state->currentDispatchPressure = pkt.pressure;
+            m_state->currentDispatchHasStrokeElapsed = false;
+
+            const bool leftPressedNow = currentButtons.testFlag(Qt::LeftButton);
+            const bool leftWasPressed = previousButtons.testFlag(Qt::LeftButton);
+            if (leftPressedNow && !leftWasPressed) {
+                m_state->nativeStrokePacketClockRejected = false;
+                m_state->nativeStrokePacketClockActive = pkt.hasPacketTime;
+                if (pkt.hasPacketTime) {
+                    m_state->nativeStrokePacketTimeBaseMs = pkt.packetTimeMs;
+                    m_state->nativeStrokePacketTimeLastMs = pkt.packetTimeMs;
+                }
+            } else if ((leftPressedNow || leftWasPressed) && pkt.hasPacketTime
+                && m_state->nativeStrokePacketClockActive) {
+                // Unsigned subtraction intentionally handles GetTickCount-style
+                // 32-bit wraparound. A jump over one hour cannot be a normal
+                // adjacent packet; reject this driver's time stream for the
+                // remainder of the stroke instead of injecting a huge delta.
+                constexpr quint32 kMaxAdjacentPacketGapMs = 60u * 60u * 1000u;
+                const quint32 adjacentDelta
+                    = pkt.packetTimeMs - m_state->nativeStrokePacketTimeLastMs;
+                if (adjacentDelta > kMaxAdjacentPacketGapMs) {
+                    m_state->nativeStrokePacketClockActive = false;
+                    m_state->nativeStrokePacketClockRejected = true;
+                } else {
+                    m_state->nativeStrokePacketTimeLastMs = pkt.packetTimeMs;
+                }
+            }
+
+            if (m_state->nativeStrokePacketClockActive
+                && !m_state->nativeStrokePacketClockRejected && pkt.hasPacketTime) {
+                const quint32 elapsedMs
+                    = pkt.packetTimeMs - m_state->nativeStrokePacketTimeBaseMs;
+                m_state->currentDispatchStrokeElapsedSeconds
+                    = static_cast<float>(elapsedMs) / 1000.0f;
+                m_state->currentDispatchHasStrokeElapsed = true;
+            }
 
             if (previousButtons == currentButtons) {
                 sendSyntheticMouseEvent(QEvent::MouseMove, canvasTarget, globalPosF, Qt::NoButton,
@@ -587,6 +642,11 @@ bool StylusInputManager::handleNativeEvent(void* message)
             }
 
             m_state->dispatchingToCanvas = false;
+            if (leftWasPressed && !leftPressedNow) {
+                m_state->nativeStrokePacketClockActive = false;
+                m_state->nativeStrokePacketClockRejected = false;
+                m_state->currentDispatchHasStrokeElapsed = false;
+            }
             m_state->lastButtons = currentButtons;
             m_state->lastGlobalPos = globalPos;
             continue;
@@ -635,6 +695,13 @@ bool StylusInputManager::handleNativeEvent(void* message)
         // Button change — flush any coalesced move first so the target
         // receives the latest position before the press/release.
         flushCoalescedUiMove();
+
+        // Resolved lazily: only this button-change branch needs it. The canvas
+        // branch and the coalesced move-only branch above never read it, and
+        // resolveMouseTarget ends in QApplication::widgetAt — a full
+        // widget-tree hit test that is far too expensive to run for every
+        // 200-266 Hz WinTab packet of a canvas stroke.
+        QWidget* target = resolveMouseTarget(m_state->activeMouseTarget, globalPos);
 
         updateHoverTarget(m_state->hoverTarget, target);
 
@@ -719,6 +786,9 @@ bool StylusInputManager::handleNativeEvent(void* message)
         m_state->activeCanvasTarget.clear();
         m_state->lastButtons = Qt::NoButton;
         m_state->hasNativeCanvasDispatch = false;
+        m_state->nativeStrokePacketClockActive = false;
+        m_state->nativeStrokePacketClockRejected = false;
+        m_state->currentDispatchHasStrokeElapsed = false;
         m_state->canvasReleaseDebounceActive = false;
         m_state->suppressButtonsUntilRelease = false;
         m_state->uiMoveThrottleValid = false;
@@ -837,6 +907,14 @@ float StylusInputManager::dispatchPressure() const
         return m_state->currentDispatchPressure;
     }
     return 0.0f;
+}
+
+std::optional<float> StylusInputManager::dispatchStrokeElapsedSeconds() const
+{
+    if (m_state && m_state->dispatchingToCanvas && m_state->currentDispatchHasStrokeElapsed) {
+        return m_state->currentDispatchStrokeElapsedSeconds;
+    }
+    return std::nullopt;
 }
 
 bool StylusInputManager::shouldIgnoreCanvasMouseMove(const QMouseEvent* event) const

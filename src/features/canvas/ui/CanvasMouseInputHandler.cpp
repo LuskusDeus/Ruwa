@@ -35,6 +35,7 @@
 #include <algorithm>
 #include <cmath>
 #include <memory>
+#include <optional>
 
 namespace ruwa::ui::workspace {
 namespace {
@@ -1113,7 +1114,11 @@ bool CanvasMouseInputHandler::handleMouseMove(QMouseEvent* event)
         }
 
         const MousePointerSample pointerSample = sampleMousePointer(m_panel->m_glWidget, event);
-        const float currentElapsedSec = m_panel->m_glWidget->strokeElapsedSecondsNow();
+        const bool nativeDispatch = stylusInput.isDispatchingNativeInput();
+        const std::optional<float> nativeElapsed
+            = nativeDispatch ? stylusInput.dispatchStrokeElapsedSeconds() : std::nullopt;
+        const float currentElapsedSec
+            = nativeElapsed.value_or(m_panel->m_glWidget->strokeElapsedSecondsNow());
 
         // Recover intermediate OS mouse positions. Skip this only while WinTab
         // owns the pointer; its packet buffer already contains those samples.
@@ -1177,8 +1182,17 @@ bool CanvasMouseInputHandler::handleMouseMove(QMouseEvent* event)
         }
 
         aether::Vector2 worldPos = m_panel->mapToViewportWorld(event->globalPosition());
-        m_panel->m_glWidget->continueStroke(worldPos.x, worldPos.y, pointerSample.pressure,
-            strokeInputDeviceForSample(pointerSample));
+        if (nativeDispatch) {
+            // A single WT_PACKET notification can contain a large recovered
+            // burst. Feed it into BrushStrokeHost's existing time-budgeted
+            // queue so the native routing loop remains cheap and painting can
+            // interleave with rasterization.
+            m_panel->m_glWidget->queueStrokeAtElapsed(worldPos.x, worldPos.y,
+                pointerSample.pressure, currentElapsedSec, strokeInputDeviceForSample(pointerSample));
+        } else {
+            m_panel->m_glWidget->continueStroke(worldPos.x, worldPos.y, pointerSample.pressure,
+                strokeInputDeviceForSample(pointerSample));
+        }
         // This real sample becomes the left anchor for the next batch's
         // pressure interpolation.
         m_lastRealStrokePressure = pointerSample.pressure;
