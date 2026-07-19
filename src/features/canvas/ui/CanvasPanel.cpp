@@ -930,10 +930,23 @@ void CanvasPanel::setToolMode(ToolMode tool)
 
     const ToolMode previousTool = currentTool;
 
-    // Mid-stroke Brush<->Eraser switch: only change erase mode, don't touch brush params
-    const bool midStroke = m_isDrawing && m_glWidget && m_glWidget->isDrawing();
-    const bool brushEraserSwitch = CanvasToolStateController::isDrawInstrument(currentTool)
-        && CanvasToolStateController::isDrawInstrument(tool);
+    // Brush and Eraser share one paint implementation, so switching between
+    // them may safely change only erase mode while a stroke is active. Effect
+    // tools cannot: their queued samples and GPU flatten must keep the brush
+    // mode/settings with which the stroke began.
+    const bool brushEraserSwitch
+        = (currentTool == ToolMode::Brush && tool == ToolMode::Eraser)
+        || (currentTool == ToolMode::Eraser && tool == ToolMode::Brush);
+    bool midStroke = m_isDrawing && m_glWidget && m_glWidget->isDrawing();
+    if (m_glWidget && m_glWidget->isDrawing() && (!midStroke || !brushEraserSwitch)) {
+        if (midStroke) {
+            endActiveStrokeSession();
+        }
+        // Tablet release can leave a large stroke draining queued samples.
+        // Finalize it before restoreToolState mutates the shared TileBrush.
+        m_glWidget->flushPendingFinalization();
+        midStroke = false;
+    }
 
     if (!midStroke || !brushEraserSwitch) {
         // Save current tool state before switching
