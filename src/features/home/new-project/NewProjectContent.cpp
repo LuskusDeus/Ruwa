@@ -422,53 +422,52 @@ void NewProjectContent::showEvent(QShowEvent* event)
 
 void NewProjectContent::retranslateUi()
 {
-    const char* ctx = metaObject()->className();
     if (m_titleLabel)
-        m_titleLabel->setText(QCoreApplication::translate(ctx, "New Project"));
+        m_titleLabel->setText(tr("New Project"));
     if (m_projectNameField) {
-        m_projectNameField->setLabel(QCoreApplication::translate(ctx, "Name"));
-        m_projectNameField->setPlaceholder(QCoreApplication::translate(ctx, "Untitled Project"));
+        m_projectNameField->setLabel(tr("Name"));
+        m_projectNameField->setPlaceholder(tr("Untitled Project"));
         QString cur = m_projectNameField->text();
         if (cur == "Untitled Project" || cur.isEmpty())
-            m_projectNameField->setText(QCoreApplication::translate(ctx, "Untitled Project"));
+            m_projectNameField->setText(tr("Untitled Project"));
     }
     if (m_widthField)
-        m_widthField->setLabel(QCoreApplication::translate(ctx, "Width"));
+        m_widthField->setLabel(tr("Width"));
     if (m_heightField)
-        m_heightField->setLabel(QCoreApplication::translate(ctx, "Height"));
+        m_heightField->setLabel(tr("Height"));
     if (m_backgroundColorTitleLabel) {
         m_backgroundColorTitleLabel->setText(
-            settingsSectionLabel(QCoreApplication::translate(ctx, "Background Color")));
+            settingsSectionLabel(tr("Background Color")));
     }
     if (m_canvasBoundsTitleLabel) {
         m_canvasBoundsTitleLabel->setText(
-            settingsSectionLabel(QCoreApplication::translate(ctx, "Canvas")));
+            settingsSectionLabel(tr("Canvas")));
     }
     if (m_canvasBoundsSelector) {
         m_canvasBoundsSelector->setOptionText(
-            0, QCoreApplication::translate(ctx, "Classic canvas"));
+            0, tr("Classic canvas"));
         m_canvasBoundsSelector->setOptionText(
-            1, QCoreApplication::translate(ctx, "Infinite canvas"));
+            1, tr("Infinite canvas"));
     }
     if (m_bitDepthTitleLabel) {
         m_bitDepthTitleLabel->setText(
-            settingsSectionLabel(QCoreApplication::translate(ctx, "Color Depth")));
+            settingsSectionLabel(tr("Color Depth")));
     }
     if (m_bitDepthSelector) {
-        m_bitDepthSelector->setOptionText(0, QCoreApplication::translate(ctx, "8-bit"));
-        m_bitDepthSelector->setOptionText(1, QCoreApplication::translate(ctx, "16-bit"));
-        m_bitDepthSelector->setOptionText(2, QCoreApplication::translate(ctx, "32-bit float"));
+        m_bitDepthSelector->setOptionText(0, tr("8-bit"));
+        m_bitDepthSelector->setOptionText(1, tr("16-bit"));
+        m_bitDepthSelector->setOptionText(2, tr("32-bit float"));
     }
     if (m_createButton)
-        m_createButton->setText(QCoreApplication::translate(ctx, "Create Project"));
+        m_createButton->setText(tr("Create Project"));
 
     const QStringList categories
-        = { QCoreApplication::translate(ctx, "Basics"), QCoreApplication::translate(ctx, "Screen"),
-              QCoreApplication::translate(ctx, "Illustration"),
-              QCoreApplication::translate(ctx, "Comics & Manga"),
-              QCoreApplication::translate(ctx, "Print"),
-              QCoreApplication::translate(ctx, "Covers & Posters"),
-              QCoreApplication::translate(ctx, "Pixel Art") };
+        = { tr("Basics"), tr("Screen"),
+              tr("Illustration"),
+              tr("Comics & Manga"),
+              tr("Print"),
+              tr("Covers & Posters"),
+              tr("Pixel Art") };
     for (int i = 0; i < m_categoryButtons.size() && i < categories.size(); ++i)
         m_categoryButtons[i]->setText(categories[i]);
 

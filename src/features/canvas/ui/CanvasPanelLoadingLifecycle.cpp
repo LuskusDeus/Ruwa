@@ -290,6 +290,9 @@ void CanvasPanel::hideLoadingOverlayImmediately()
     if (m_stylusJoystick && m_stylusJoystick->isVisible()) {
         m_stylusJoystick->raise();
     }
+    if (m_glWidget) {
+        m_glWidget->requestBackdropUpdate();
+    }
 
     if (!m_loadingAppearanceAnimationActive) {
         setCursorManagerSuppressedByLoading(false);

@@ -25,11 +25,8 @@
 
 namespace ruwa::ui::painting {
 
-/// Alpha of the surface tint painted over the frosted backdrop (the darkening of
-/// the blurred canvas behind on-canvas overlays). Higher = darker. Reference:
-/// command palette dims its backdrop at MaxDimOpacity=0.5. Single tuning knob for
-/// all overlays — see drawFrostedBackdrop / [[overlay_frosted_backdrop]].
-inline constexpr int kFrostTintAlpha = 185;
+/// Alpha of the theme surface tint painted over canvas backdrop blur.
+inline constexpr int kBackdropTintAlpha = 112;
 
 namespace detail {
 inline constexpr int kBayer4[4][4] = {
@@ -212,27 +209,17 @@ inline void drawAttachedPopupShadow(QPainter& painter, const QRectF& bodyRect, i
     painter.drawImage(shadowBounds.topLeft(), shadowImage);
 }
 
-/// Paint a frosted-glass backdrop (the blurred canvas behind @p widget) clipped
-/// to @p clipPath, then a translucent @p tint for control legibility. Returns
-/// false when no snapshot is available yet, so the caller can fall back to a
-/// solid fill. The entire overlay is painted by a single QPainter, so the blur
-/// can never desync positionally from the widget frame while it is dragged — only
-/// the snapshot content is (invisibly) a few frames stale. See ICanvasBackdropSource.
-inline bool drawFrostedBackdrop(QPainter& painter, QWidget* widget,
+/// Paints the theme tint over a backdrop blur already composited by the canvas
+/// renderer. Returns false until the first blurred frame is available.
+inline bool drawBackdropBlurTint(QPainter& painter, QWidget* widget,
     ruwa::shared::rendering::ICanvasBackdropSource* source, const QPainterPath& clipPath,
     const QColor& tint)
 {
-    if (!source || !widget || !source->backdropAvailable()) {
-        return false;
-    }
-    const QRect globalRect(widget->mapToGlobal(QPoint(0, 0)), widget->size());
-    const QImage frost = source->sampleBackdrop(globalRect, widget->size());
-    if (frost.isNull()) {
+    if (!widget || !source || !source->backdropAvailable()) {
         return false;
     }
     painter.save();
     painter.setClipPath(clipPath);
-    painter.drawImage(widget->rect(), frost);
     painter.fillRect(widget->rect(), tint);
     painter.restore();
     return true;

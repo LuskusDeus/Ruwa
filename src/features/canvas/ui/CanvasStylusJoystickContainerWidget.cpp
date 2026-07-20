@@ -107,8 +107,9 @@ protected:
     void moveEvent(QMoveEvent* event) override
     {
         QWidget::moveEvent(event);
-        // Re-sample frost content at the new position (joystick/panel swap slide).
+        // Keep the GPU blur region synchronized with the panel-swap slide.
         if (m_backdropSource) {
+            m_backdropSource->requestBackdropUpdate();
             update();
         }
     }
@@ -140,24 +141,23 @@ protected:
         p.setPen(Qt::NoPen);
         const int radius = ruwa::ui::core::WidgetStyleManager::instance().scaled(6);
 
-        // Frosted-glass backdrop (shared blurred snapshot); solid fallback.
+        // Same-frame GPU backdrop blur; solid fallback.
         QPainterPath bgPath;
         bgPath.addRoundedRect(rect(), radius, radius);
         QColor tint = colors.surface;
-        tint.setAlpha(ruwa::ui::painting::kFrostTintAlpha);
-        if (!ruwa::ui::painting::drawFrostedBackdrop(p, this, m_backdropSource, bgPath, tint)) {
+        tint.setAlpha(ruwa::ui::painting::kBackdropTintAlpha);
+        if (!ruwa::ui::painting::drawBackdropBlurTint(
+                p, this, m_backdropSource, bgPath, tint)) {
             QColor bg = colors.surface;
             bg.setAlpha(200); // Semi-transparent to blend with canvas
             p.setBrush(bg);
             p.drawRoundedRect(rect(), radius, radius);
         }
 
-        QColor borderTopColor = colors.border;
-        QColor borderBottomColor = borderTopColor.darker(110);
-        borderTopColor.setAlphaF(borderTopColor.alphaF() * 0.5);
-        borderBottomColor.setAlphaF(borderBottomColor.alphaF() * 0.5);
+        QColor borderColor = colors.border;
+        borderColor.setAlphaF(borderColor.alphaF() * 0.5);
         ruwa::ui::painting::drawGradientBorder(
-            p, QRectF(rect()), radius, borderTopColor, borderBottomColor);
+            p, QRectF(rect()), radius, borderColor, borderColor);
 
         // Draw handle (rounded line) at top, like BrushControlOverlay
         const int handleH = ruwa::ui::core::WidgetStyleManager::instance().scaled(kHandleHeight);
@@ -314,7 +314,7 @@ void CanvasStylusJoystickContainerWidget::setBackdropSource(
         return;
     }
     m_backdropSource = source;
-    // Both painting children paint their own frost from the SAME shared snapshot.
+    // Both painting children add chrome over their own GPU blur region.
     if (m_joystick) {
         m_joystick->setBackdropSource(source);
     }
@@ -338,9 +338,9 @@ void CanvasStylusJoystickContainerWidget::moveEvent(QMoveEvent* event)
 {
     QWidget::moveEvent(event);
     // The children don't get their own moveEvent when the container relocates
-    // (their local position is unchanged), so refresh their backdrop content here
-    // — the frost stays locked to each child's chrome regardless (single painter).
+    // (their local position is unchanged), so request the shared canvas frame here.
     if (m_backdropSource) {
+        m_backdropSource->requestBackdropUpdate();
         refreshBackdropContent();
     }
 }
@@ -385,7 +385,12 @@ void CanvasStylusJoystickContainerWidget::onZoomSliderValueChanged(int value)
     emit zoomChangeRequested(zoom);
 }
 
-void CanvasStylusJoystickContainerWidget::onThemeChanged() { }
+void CanvasStylusJoystickContainerWidget::onThemeChanged()
+{
+    if (m_backdropSource) {
+        m_backdropSource->requestBackdropUpdate();
+    }
+}
 
 QRectF CanvasStylusJoystickContainerWidget::handleRect() const
 {

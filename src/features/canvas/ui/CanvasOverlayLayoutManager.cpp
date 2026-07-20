@@ -7,6 +7,7 @@
 #include "CanvasOverlayLayoutManager.h"
 #include "CanvasOverlayLayout.h"
 #include "CanvasPanel.h"
+#include "features/canvas/rendering/OpenGLCanvasWidget.h"
 
 #include "features/brush/ui/BrushControlOverlay.h"
 #include "features/canvas/ui/CanvasStylusJoystickContainerWidget.h"
@@ -169,6 +170,9 @@ void CanvasOverlayLayoutManager::setCanvasWidgetVisible(CanvasWidget widget, boo
     if (!handles.widget)
         return;
     handles.widget->setVisible(visible);
+    if (m_panel->m_glWidget) {
+        m_panel->m_glWidget->requestBackdropUpdate();
+    }
     // Showing again after a fade-out would otherwise keep the faded opacity.
     if (visible && handles.opacity) {
         handles.opacity->setOpacity(1.0);

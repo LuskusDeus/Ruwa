@@ -143,6 +143,7 @@ int singleBrushMinimumPanelWidth()
 BrushesPanel::BrushesPanel(QWidget* parent)
     : DockPanel(tr("Brushes"), parent)
 {
+    setTranslatableTitle(QT_TR_NOOP("Brushes"));
     setIconType(ruwa::ui::core::IconProvider::StandardIcon::Brushpack);
     setMinimumPanelSize(singleBrushMinimumPanelWidth(), 180);
     setPreferredPanelSize(280, 340);

@@ -101,7 +101,6 @@ void UpdatesActionButton::setState(UpdateState state)
 
 void UpdatesActionButton::updateContent()
 {
-    const char* ctx = metaObject()->className();
     auto& icons = ruwa::ui::core::IconProvider::instance();
     const auto& theme = ruwa::ui::core::ThemeManager::instance();
     const auto& colors = theme.colors();
@@ -114,14 +113,14 @@ void UpdatesActionButton::updateContent()
 
     switch (m_state) {
     case UpdateState::UpToDate:
-        m_textLabel->setText(QCoreApplication::translate(ctx, "Up to date"));
+        m_textLabel->setText(tr("Up to date"));
         m_loadingIndicator->stop();
         m_iconStack->setCurrentWidget(m_iconLabel);
         setEnabled(false);
         setCursor(Qt::ArrowCursor);
         break;
     case UpdateState::Downloading:
-        m_textLabel->setText(QCoreApplication::translate(ctx, "Downloading"));
+        m_textLabel->setText(tr("Downloading"));
         updateLoadingIndicator();
         m_loadingIndicator->start();
         m_iconStack->setCurrentWidget(m_loadingIndicator);
@@ -129,14 +128,14 @@ void UpdatesActionButton::updateContent()
         setCursor(Qt::ArrowCursor);
         break;
     case UpdateState::UpdateAvailable:
-        m_textLabel->setText(QCoreApplication::translate(ctx, "Download update"));
+        m_textLabel->setText(tr("Download update"));
         m_loadingIndicator->stop();
         m_iconStack->setCurrentWidget(m_iconLabel);
         setEnabled(true);
         setCursor(Qt::PointingHandCursor);
         break;
     case UpdateState::ReadyToRestart:
-        m_textLabel->setText(QCoreApplication::translate(ctx, "Restart to apply update"));
+        m_textLabel->setText(tr("Restart to apply update"));
         m_loadingIndicator->stop();
         m_iconStack->setCurrentWidget(m_iconLabel);
         setEnabled(true);

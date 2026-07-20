@@ -139,7 +139,7 @@ signals:
 
 protected:
     QWidget* createContent() override;
-    void changeEvent(QEvent* event) override;
+    void retranslateUi() override;
     void onThemeChanged() override;
 
 private slots:
@@ -194,7 +194,6 @@ private:
     void setupToolbar(QWidget* container);
     void applyToolbarTheme();
     void populateBlendModeCombo();
-    void retranslateUi();
     void syncLayerControls();
 
 private:

@@ -154,8 +154,17 @@ void SearchBar::setHoverProgress(qreal progress)
 
 void SearchBar::setPlaceholder(const QString& text)
 {
+    m_customPlaceholder = true;
     if (m_lineEdit) {
         m_lineEdit->setPlaceholderText(text);
+    }
+}
+
+void SearchBar::changeEvent(QEvent* event)
+{
+    QWidget::changeEvent(event);
+    if (event->type() == QEvent::LanguageChange && m_lineEdit && !m_customPlaceholder) {
+        m_lineEdit->setPlaceholderText(tr("Search projects..."));
     }
 }
 

@@ -294,15 +294,13 @@ void ShortcutsNavigatorWidget::updateThemeColors()
 
 void ShortcutsNavigatorWidget::retranslateUi()
 {
-    const char* ctx = metaObject()->className();
     if (m_openButton)
-        m_openButton->setText(QCoreApplication::translate(ctx, "Customize"));
+        m_openButton->setText(tr("Customize"));
     updateShortcutRows();
 }
 
 void ShortcutsNavigatorWidget::setupContent()
 {
-    const char* ctx = metaObject()->className();
     auto& theme = ruwa::ui::core::ThemeManager::instance();
 
     // Hide label - we only show description (shortcut count)
@@ -313,7 +311,7 @@ void ShortcutsNavigatorWidget::setupContent()
     if (m_textLayout)
         m_textLayout->setAlignment(Qt::AlignVCenter);
 
-    m_openButton = new WelcomeBannerButton(QCoreApplication::translate(ctx, "Customize"),
+    m_openButton = new WelcomeBannerButton(tr("Customize"),
         WelcomeBannerButton::ButtonStyle::Primary, this);
     m_openButton->setBannerBaseHeight(36);
 

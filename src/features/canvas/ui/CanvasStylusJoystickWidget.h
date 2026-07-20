@@ -6,6 +6,7 @@
 #include "shared/rendering/CanvasBackdropSource.h"
 
 #include <QPointF>
+#include <QRectF>
 #include <QWidget>
 
 class QMouseEvent;
@@ -35,8 +36,9 @@ public:
     void setRingRotation(qreal radians);
     qreal ringRotation() const { return m_ringRotation; }
 
-    /// Source for the frosted-glass backdrop (shared canvas-viewport blur).
+    /// Source coordinating the circular same-frame GPU blur region.
     void setBackdropSource(ruwa::shared::rendering::ICanvasBackdropSource* source);
+    QRectF backdropBlurRect() const;
 
 signals:
     /// Normalized pan vector in range [-1..1] for each axis.
@@ -91,7 +93,7 @@ private:
     QVariantAnimation* m_knobReturnAnim = nullptr;
     QTimer* m_panTimer = nullptr;
 
-    // Frosted-glass backdrop source (non-owning; nulled on source destruction).
+    // Backdrop-blur source (non-owning; nulled on source destruction).
     ruwa::shared::rendering::ICanvasBackdropSource* m_backdropSource = nullptr;
 
     static constexpr int kWidgetSizePx = 250;

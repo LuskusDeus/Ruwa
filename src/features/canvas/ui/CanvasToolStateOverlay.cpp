@@ -1211,6 +1211,9 @@ void CanvasToolStateOverlay::setAnimatedWidth(int widthValue)
         qMax(1, currentHeight - ThemeManager::instance().scaled(kPanelPaddingBase) * 2));
     updateGeometry();
     update();
+    if (m_backdropSource) {
+        m_backdropSource->requestBackdropUpdate();
+    }
 }
 
 void CanvasToolStateOverlay::animateOverlayWidth(int targetWidth)
@@ -1278,6 +1281,9 @@ void CanvasToolStateOverlay::updateOverlaySize()
         updateVisibleContentGeometry(contentWidth, contentHeight);
         updateGeometry();
         update();
+        if (m_backdropSource) {
+            m_backdropSource->requestBackdropUpdate();
+        }
         emit sizeChanged(newSize);
         return;
     }
@@ -1289,10 +1295,8 @@ void CanvasToolStateOverlay::drawBackground(QPainter& painter)
 {
     auto& mgr = WidgetStyleManager::instance();
 
-    QColor borderTopColor = mgr.colors().border;
-    QColor borderBottomColor = borderTopColor.darker(110);
-    borderTopColor.setAlphaF(borderTopColor.alphaF() * 0.5);
-    borderBottomColor.setAlphaF(borderBottomColor.alphaF() * 0.5);
+    QColor borderColor = mgr.colors().border;
+    borderColor.setAlphaF(borderColor.alphaF() * 0.5);
 
     // Capsule: rounded ends with radius = half the strip height.
     const int radius = height() / 2;
@@ -1302,10 +1306,10 @@ void CanvasToolStateOverlay::drawBackground(QPainter& painter)
 
     painter.setPen(Qt::NoPen);
 
-    // Frosted-glass backdrop (shared blurred snapshot); solid fallback until ready.
     QColor tint = mgr.colors().surface;
-    tint.setAlpha(ruwa::ui::painting::kFrostTintAlpha);
-    if (!ruwa::ui::painting::drawFrostedBackdrop(painter, this, m_backdropSource, bgPath, tint)) {
+    tint.setAlpha(ruwa::ui::painting::kBackdropTintAlpha);
+    if (!ruwa::ui::painting::drawBackdropBlurTint(
+            painter, this, m_backdropSource, bgPath, tint)) {
         QColor bgColor = mgr.colors().surface;
         bgColor.setAlpha(200);
         painter.setBrush(bgColor);
@@ -1313,7 +1317,7 @@ void CanvasToolStateOverlay::drawBackground(QPainter& painter)
     }
 
     ruwa::ui::painting::drawGradientBorder(
-        painter, rect(), radius, borderTopColor, borderBottomColor);
+        painter, rect(), radius, borderColor, borderColor);
 }
 
 void CanvasToolStateOverlay::setBackdropSource(
@@ -1329,9 +1333,9 @@ void CanvasToolStateOverlay::setBackdropSource(
 void CanvasToolStateOverlay::moveEvent(QMoveEvent* event)
 {
     QWidget::moveEvent(event);
-    // Re-sample the backdrop content at the new position (frost-to-chrome lock is
-    // automatic — single painter). Cheap; this overlay moves only on relayout.
+    // Keep the GPU blur region and QWidget chrome on the same layout tick.
     if (m_backdropSource) {
+        m_backdropSource->requestBackdropUpdate();
         update();
     }
 }
@@ -1369,6 +1373,9 @@ void CanvasToolStateOverlay::leaveEvent(QEvent* event)
 void CanvasToolStateOverlay::onThemeChanged()
 {
     applyThemeMetrics();
+    if (m_backdropSource) {
+        m_backdropSource->requestBackdropUpdate();
+    }
 }
 
 } // namespace ruwa::ui::widgets

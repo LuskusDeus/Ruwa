@@ -279,18 +279,17 @@ void WelcomeBanner::setupUI()
     m_mainLayout->setContentsMargins(0, 0, 0, 0);
     m_mainLayout->setSpacing(0);
 
-    const char* ctx = metaObject()->className();
     const auto& theme = ruwa::ui::core::ThemeManager::instance();
 
     m_titleLabel
-        = new QLabel(QCoreApplication::translate(ctx, "Digital Painting Reimagined"), this);
+        = new QLabel(tr("Digital Painting Reimagined"), this);
     m_titleLabel->setAttribute(Qt::WA_TranslucentBackground);
     m_titleLabel->setFont(
         theme.colors().fonts.getTitleFont(theme.scaledFontSize(BASE_TITLE_FONT_SIZE)));
     m_mainLayout->addWidget(m_titleLabel);
 
     m_subtitleLabel
-        = new QLabel(QCoreApplication::translate(ctx, "Free, open-source, and limitless."), this);
+        = new QLabel(tr("Free, open-source, and limitless."), this);
     m_subtitleLabel->setAttribute(Qt::WA_TranslucentBackground);
     m_subtitleLabel->setFont(
         theme.colors().fonts.getUIFont(theme.scaledFontSize(BASE_SUBTITLE_FONT_SIZE)));
@@ -303,7 +302,7 @@ void WelcomeBanner::setupUI()
     m_buttonLayout = new QHBoxLayout(m_buttonContainer);
     m_buttonLayout->setContentsMargins(0, 0, 0, 0);
 
-    m_createButton = new WelcomeBannerButton(QCoreApplication::translate(ctx, "Create Project"),
+    m_createButton = new WelcomeBannerButton(tr("Create Project"),
         WelcomeBannerButton::ButtonStyle::Primary, m_buttonContainer);
     m_createButton->setIcon(ruwa::ui::core::IconProvider::instance().getIcon(
         ruwa::ui::core::IconProvider::StandardIcon::FileNew));
@@ -311,7 +310,7 @@ void WelcomeBanner::setupUI()
         m_createButton, &WelcomeBannerButton::clicked, this, &WelcomeBanner::createProjectClicked);
     m_buttonLayout->addWidget(m_createButton);
 
-    m_openButton = new WelcomeBannerButton(QCoreApplication::translate(ctx, "Open Project"),
+    m_openButton = new WelcomeBannerButton(tr("Open Project"),
         WelcomeBannerButton::ButtonStyle::Secondary, m_buttonContainer);
     m_openButton->setIcon(ruwa::ui::core::IconProvider::instance().getIcon(
         ruwa::ui::core::IconProvider::StandardIcon::OpenedFolder));
@@ -346,18 +345,17 @@ void WelcomeBanner::changeEvent(QEvent* event)
 
 void WelcomeBanner::retranslateUi()
 {
-    const char* ctx = metaObject()->className();
     if (m_titleLabel)
-        m_titleLabel->setText(QCoreApplication::translate(ctx, "Digital Painting Reimagined"));
+        m_titleLabel->setText(tr("Digital Painting Reimagined"));
     if (m_subtitleLabel)
         m_subtitleLabel->setText(
-            QCoreApplication::translate(ctx, "Free, open-source, and limitless."));
+            tr("Free, open-source, and limitless."));
     if (m_createButton) {
-        m_createButton->setText(QCoreApplication::translate(ctx, "Create Project"));
+        m_createButton->setText(tr("Create Project"));
         m_createButton->syncSizeToText();
     }
     if (m_openButton) {
-        m_openButton->setText(QCoreApplication::translate(ctx, "Open Project"));
+        m_openButton->setText(tr("Open Project"));
         m_openButton->syncSizeToText();
     }
 }

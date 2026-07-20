@@ -16,7 +16,7 @@
 #include "features/canvas/rendering/GLTargetLayerPreviewPass.h"
 #include "features/canvas/rendering/GLTransformViewportPreviewPass.h"
 #include "features/canvas/rendering/GLViewportCompositor.h"
-#include "features/canvas/rendering/CanvasBackdropCapture.h"
+#include "features/canvas/rendering/CanvasBackdropRenderer.h"
 #include "features/canvas/rendering/LayerScreenSourceCache.h"
 #include "features/canvas/rendering/TextRetainedPayloadBuilder.h"
 #include "features/brush/rendering/DabShapeCache.h"
@@ -2497,9 +2497,9 @@ OpenGLCanvasWidget::~OpenGLCanvasWidget()
     flushPendingStrokeFinalization();
     flushPendingTransformFinalization();
     m_sceneFboManager.releaseSceneFbo(this);
-    if (m_backdropCapture) {
-        m_backdropCapture->shutdown();
-        m_backdropCapture.reset();
+    if (m_backdropRenderer) {
+        m_backdropRenderer->shutdown();
+        m_backdropRenderer.reset();
     }
     m_overlayManager.reset();
     m_selectionRenderer.reset();
@@ -9703,63 +9703,57 @@ void OpenGLCanvasWidget::paintGL_renderSceneAndBlit(GLuint& outSceneTarget, GLin
     }
 }
 
-void OpenGLCanvasWidget::paintGL_captureBackdrop(GLuint sceneTexture)
+void OpenGLCanvasWidget::setBackdropRegionProvider(BackdropRegionProvider provider)
 {
-    if (!sceneTexture)
+    m_backdropRegionProvider = std::move(provider);
+    requestRender();
+}
+
+void OpenGLCanvasWidget::paintGL_renderBackdrop(GLuint sourceFbo, GLint defaultFbo)
+{
+    if (!m_backdropRegionProvider) {
         return;
-    if (!m_backdropCapture) {
-        m_backdropCapture = std::make_unique<CanvasBackdropCapture>(
+    }
+    const std::vector<CanvasBackdropRegion> regions = m_backdropRegionProvider();
+    if (regions.empty()) {
+        return;
+    }
+    if (!m_backdropRenderer) {
+        m_backdropRenderer = std::make_unique<CanvasBackdropRenderer>(
             static_cast<QOpenGLFunctions_4_5_Core*>(this));
-        auto initResult = m_backdropCapture->initialize(m_fillShaderDir);
+        auto initResult = m_backdropRenderer->initialize(m_fillShaderDir);
         if (!initResult) {
-            m_backdropCapture.reset();
+            m_backdropRenderer.reset();
             return;
         }
     }
     const QSize surf = currentSurfacePixelSize(this);
-    m_backdropCapture->capture(sceneTexture, surf.width(), surf.height());
+    // QWidget geometry is expressed in logical pixels. resizeGL() and the
+    // internal viewport currently use those same units, whereas the native
+    // devicePixelRatio can be greater than one. Derive the conversion from the
+    // actual render surface instead of applying DPR a second time.
+    const qreal scaleX = width() > 0
+        ? static_cast<qreal>(surf.width()) / static_cast<qreal>(width())
+        : 1.0;
+    const qreal scaleY = height() > 0
+        ? static_cast<qreal>(surf.height()) / static_cast<qreal>(height())
+        : 1.0;
+    const bool available = m_backdropRenderer->render(sourceFbo, static_cast<GLuint>(defaultFbo),
+        surf.width(), surf.height(), scaleX, scaleY, regions);
+    if (available != m_backdropRendererAvailable) {
+        m_backdropRendererAvailable = available;
+        emit backdropAvailabilityChanged();
+    }
 }
 
 bool OpenGLCanvasWidget::backdropAvailable() const
 {
-    return m_backdropCapture && !m_backdropCapture->snapshot().isNull();
+    return m_backdropRendererAvailable;
 }
 
-void OpenGLCanvasWidget::addBackdropConsumer()
+void OpenGLCanvasWidget::requestBackdropUpdate()
 {
-    ++m_backdropConsumers;
-    // Idle canvases don't repaint on their own — kick one frame so the first
-    // snapshot is produced soon after a consumer attaches.
     requestRender();
-}
-
-void OpenGLCanvasWidget::removeBackdropConsumer()
-{
-    if (m_backdropConsumers > 0) {
-        --m_backdropConsumers;
-    }
-}
-
-QImage OpenGLCanvasWidget::sampleBackdrop(const QRect& globalRect, const QSize& targetSize) const
-{
-    if (!m_backdropCapture || targetSize.isEmpty()) {
-        return QImage();
-    }
-    const QImage& snap = m_backdropCapture->snapshot();
-    if (snap.isNull()) {
-        return QImage();
-    }
-    // global (logical) -> this widget local (logical) -> device px -> snapshot px.
-    const qreal dpr = devicePixelRatioF();
-    const qreal toSnap = dpr / static_cast<qreal>(m_backdropCapture->scale());
-    const QPoint localTopLeft = mapFromGlobal(globalRect.topLeft());
-    const QRectF snapRectF(localTopLeft.x() * toSnap, localTopLeft.y() * toSnap,
-        globalRect.width() * toSnap, globalRect.height() * toSnap);
-    const QRect src = snapRectF.toAlignedRect().intersected(snap.rect());
-    if (src.isEmpty()) {
-        return QImage();
-    }
-    return snap.copy(src).scaled(targetSize, Qt::IgnoreAspectRatio, Qt::SmoothTransformation);
 }
 
 void OpenGLCanvasWidget::paintGL_renderOverlays(GLuint sceneTarget)
@@ -11147,19 +11141,13 @@ void OpenGLCanvasWidget::paintGL()
         = wantBrushCursor && brushCursorOverlay && brushCursorOverlay->isInitialized();
     const bool drawEyedropperCursor = wantEyedropperCursor && eyedropperCursorOverlay
         && eyedropperCursorOverlay->isInitialized();
-    // Throttled frosted-glass backdrop capture for on-canvas overlays. Needs the
-    // scene texture, so it forces the scene FBO on the frames it actually runs.
-    const bool captureBackdropThisFrame
-        = m_backdropConsumers > 0 && (m_backdropFrameCounter % kBackdropRefreshInterval == 0);
-    ++m_backdropFrameCounter;
-
     // Most overlays genuinely consume the whole scene texture. The brush
     // cursor samples only the pixels under its small inverted contour, so it
     // gets a local copy after the scene has rendered directly to the target.
     // This avoids a full-surface offscreen render + blit on every cursor frame,
     // which is especially costly at maximized-window resolutions.
     const bool needFullSceneForOverlay = drawTransformOverlay || drawCanvasResizeOverlay
-        || drawTextEditOverlay || drawEyedropperCursor || captureBackdropThisFrame;
+        || drawTextEditOverlay || drawEyedropperCursor;
     const bool captureBrushCursorRegion = drawBrushCursor && !needFullSceneForOverlay;
 
     GLint defaultFbo = 0;
@@ -11167,6 +11155,10 @@ void OpenGLCanvasWidget::paintGL()
     GLuint sceneTarget = 0;
     paintGL_renderSceneAndBlit(
         sceneTarget, defaultFbo, needFullSceneForOverlay, boardLayerStack);
+
+    // Same-frame ROI blur for visible canvas widgets. This runs before cursor
+    // and transform chrome, matching the old backdrop's visual ordering.
+    paintGL_renderBackdrop(sceneTarget, defaultFbo);
 
     if (captureBrushCursorRegion) {
         const QSize surfaceSize = currentSurfacePixelSize(this);
@@ -11199,16 +11191,6 @@ void OpenGLCanvasWidget::paintGL()
                 sceneTarget = m_sceneFboManager.sceneFbo();
             }
         }
-    }
-
-    if (captureBackdropThisFrame && sceneTarget == m_sceneFboManager.sceneFbo()
-        && m_sceneFboManager.sceneTexture()) {
-        paintGL_captureBackdrop(m_sceneFboManager.sceneTexture());
-        // Capture rebinds its own FBOs/viewport — restore the default target.
-        const QSize surf = currentSurfacePixelSize(this);
-        glBindFramebuffer(GL_FRAMEBUFFER, static_cast<GLuint>(defaultFbo));
-        glViewport(0, 0, surf.width(), surf.height());
-        emit backdropSnapshotUpdated();
     }
 
     paintGL_renderTransformViewportPreview(layerStack, boardLayerStack, defaultFbo);

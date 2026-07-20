@@ -1873,17 +1873,16 @@ void TopBar::onLanguageChanged()
 void TopBar::retranslateUi()
 {
     // Use metaObject()->className() for correct translation context (handles namespaces)
-    const char* ctx = metaObject()->className();
     if (m_fileBtn)
-        m_fileBtn->setText(QCoreApplication::translate(ctx, "File"));
+        m_fileBtn->setText(tr("File"));
     if (m_editBtn)
-        m_editBtn->setText(QCoreApplication::translate(ctx, "Edit"));
+        m_editBtn->setText(tr("Edit"));
     if (m_viewBtn)
-        m_viewBtn->setText(QCoreApplication::translate(ctx, "View"));
+        m_viewBtn->setText(tr("View"));
     if (m_helpBtn)
-        m_helpBtn->setText(QCoreApplication::translate(ctx, "Help"));
+        m_helpBtn->setText(tr("Help"));
     if (m_layoutSwitchBtn) {
-        m_layoutSwitchBtn->setToolTip(QCoreApplication::translate(ctx, "Workspace layout"));
+        m_layoutSwitchBtn->setToolTip(tr("Workspace layout"));
     }
     if (m_layoutPresetsPopup) {
         m_layoutPresetsPopup->retranslateUi();

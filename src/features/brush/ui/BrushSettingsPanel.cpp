@@ -67,6 +67,7 @@ IconProvider::StandardIcon iconForTab(const QString& tabId)
 BrushSettingsPanel::BrushSettingsPanel(QWidget* parent)
     : DockPanel(tr("Brush Settings"), parent)
 {
+    setTranslatableTitle(QT_TR_NOOP("Brush Settings"));
     setIconType(IconProvider::StandardIcon::Settings);
     setMinimumPanelSize(220, 160);
     setPreferredPanelSize(300, 360);

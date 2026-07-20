@@ -36,6 +36,7 @@ public:
 
     /// Get the joystick widget (for cursor exclusion etc.)
     CanvasStylusJoystickWidget* joystickWidget() const { return m_joystick; }
+    QWidget* zoomPanelWidget() const { return m_zoomPanel; }
     bool hitTestInteractiveArea(const QPointF& pos) const;
     bool isJoystickInteractionActive() const;
 
@@ -54,11 +55,10 @@ public:
     /// Apply a persisted vertical order without triggering drag-swap logic.
     void setJoystickAbovePanel(bool above);
 
-    /// Source for the frosted-glass backdrop; forwarded to the joystick + zoom
-    /// panel (both paint their own blur from the shared snapshot).
+    /// Source coordinating the GPU blur regions for the joystick and zoom panel.
     void setBackdropSource(ruwa::shared::rendering::ICanvasBackdropSource* source);
 
-    /// Repaint the backdrop-painting children with the latest snapshot content.
+    /// Repaint the backdrop chrome after GPU availability changes.
     void refreshBackdropContent();
 
     // IContextMenuProvider
@@ -119,7 +119,7 @@ private:
         = true; ///< Layout: joystick on top when true, panel on top when false
     QVariantAnimation* m_swapAnim = nullptr; ///< Active joystick/panel reorder animation, if any.
 
-    // Frosted-glass backdrop source (non-owning; nulled on source destruction).
+    // Backdrop-blur source (non-owning; nulled on source destruction).
     ruwa::shared::rendering::ICanvasBackdropSource* m_backdropSource = nullptr;
 };
 

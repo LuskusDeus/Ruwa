@@ -7,7 +7,6 @@
 #include "features/theme/manager/ThemeManager.h"
 
 #include <QEvent>
-#include <QLinearGradient>
 #include <QMouseEvent>
 #include <QMoveEvent>
 #include <QPainter>
@@ -100,11 +99,19 @@ void CanvasStylusJoystickWidget::setBackdropSource(
     update();
 }
 
+QRectF CanvasStylusJoystickWidget::backdropBlurRect() const
+{
+    const QPointF center = centerPoint();
+    const qreal radius = joystickBaseRadius();
+    return QRectF(center.x() - radius, center.y() - radius, radius * 2.0, radius * 2.0);
+}
+
 void CanvasStylusJoystickWidget::moveEvent(QMoveEvent* event)
 {
     QWidget::moveEvent(event);
-    // Re-sample frost content at the new position (e.g. joystick/panel swap slide).
+    // Keep the GPU blur region synchronized with the panel-swap animation.
     if (m_backdropSource) {
+        m_backdropSource->requestBackdropUpdate();
         update();
     }
 }
@@ -297,14 +304,13 @@ void CanvasStylusJoystickWidget::paintEvent(QPaintEvent* event)
     const qreal stickR = knobRadius();
     const QPointF stickCenter = c + m_knobOffset;
 
-    // Base body: frosted-glass backdrop (shared blurred snapshot), clipped to the
-    // circular base. Solid semi-transparent fallback until the snapshot is ready.
+    // Base body: same-frame GPU backdrop blur clipped to the circular base.
     painter.setPen(Qt::NoPen);
     QPainterPath basePath;
     basePath.addEllipse(c, baseR, baseR);
     QColor baseTint = colors.surface;
-    baseTint.setAlpha(ruwa::ui::painting::kFrostTintAlpha);
-    if (!ruwa::ui::painting::drawFrostedBackdrop(
+    baseTint.setAlpha(ruwa::ui::painting::kBackdropTintAlpha);
+    if (!ruwa::ui::painting::drawBackdropBlurTint(
             painter, this, m_backdropSource, basePath, baseTint)) {
         QColor baseBg = colors.surface;
         baseBg.setAlpha(200);
@@ -312,15 +318,9 @@ void CanvasStylusJoystickWidget::paintEvent(QPaintEvent* event)
         painter.drawEllipse(c, baseR, baseR);
     }
 
-    QColor borderTop = colors.border;
-    QColor borderBottom = colors.border.darker(110);
     const QRectF bodyRect(
         c.x() - baseR + 0.5, c.y() - baseR + 0.5, baseR * 2.0 - 1.0, baseR * 2.0 - 1.0);
-    QLinearGradient bodyBorderGrad(bodyRect.topLeft(), bodyRect.bottomLeft());
-    bodyBorderGrad.setColorAt(0.0, borderTop);
-    bodyBorderGrad.setColorAt(1.0, borderBottom);
-    QPen bodyPen;
-    bodyPen.setBrush(bodyBorderGrad);
+    QPen bodyPen(colors.border);
     bodyPen.setWidthF(1.0);
     bodyPen.setCosmetic(true);
     painter.setPen(bodyPen);

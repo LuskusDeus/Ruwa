@@ -20,6 +20,7 @@ using namespace ruwa::ui::widgets;
 LayerPropertiesPanel::LayerPropertiesPanel(QWidget* parent)
     : DockPanel(tr("Layer Properties"), parent)
 {
+    setTranslatableTitle(QT_TR_NOOP("Layer Properties"));
     setIconType(ruwa::ui::core::IconProvider::StandardIcon::Settings);
     setMinimumPanelSize(180, 120);
     setPreferredPanelSize(250, 180);

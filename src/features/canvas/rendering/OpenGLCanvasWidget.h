@@ -21,6 +21,7 @@
 #include "features/canvas/stroke/BrushStrokeHost.h"
 #include "features/canvas/overlays/CursorOverlayState.h"
 #include "features/canvas/rendering/LayerCompositingBuilder.h"
+#include "features/canvas/rendering/CanvasBackdropRenderer.h"
 #include "features/canvas/rendering/SceneFboManager.h"
 #include "features/canvas/selection/CanvasSelectionController.h"
 #include "shared/undo/SelectionState.h"
@@ -84,7 +85,6 @@ namespace aether {
 class GLRenderer;
 class BrushCursorContourBuilder;
 class BrushExecutionBackend;
-class CanvasBackdropCapture;
 class CanvasOverlayManager;
 class GLSelectionRenderer;
 class LayerScreenSourceCache;
@@ -364,16 +364,16 @@ public:
         bool active, const QRectF& selectionWorldRect, bool selectingOrMoving);
     void setTextEditOverlayState(const TextEditOverlayState& state);
 
-    // --- ICanvasBackdropSource: frosted-glass backdrop for on-canvas overlays ---
+    using BackdropRegionProvider = std::function<std::vector<CanvasBackdropRegion>()>;
+    void setBackdropRegionProvider(BackdropRegionProvider provider);
+
+    // --- ICanvasBackdropSource: coordinates QWidget chrome with GPU backdrop ---
     bool backdropAvailable() const override;
-    QImage sampleBackdrop(const QRect& globalRect, const QSize& targetSize) const override;
-    void addBackdropConsumer() override;
-    void removeBackdropConsumer() override;
+    void requestBackdropUpdate() override;
 
 signals:
-    /// Emitted (throttled) after a fresh backdrop snapshot has been produced, so
-    /// overlay consumers can repaint with the new blurred content.
-    void backdropSnapshotUpdated();
+    /// Emitted once the GPU backdrop pipeline becomes ready.
+    void backdropAvailabilityChanged();
     /// Emitted when a paint stroke (not erase) is completed. Use to add color to recent palette.
     void strokePainted();
     void contentRegionChanged(const QRect& worldRect);
@@ -485,8 +485,8 @@ private:
     void paintGL_renderSceneAndBlit(GLuint& outSceneTarget, GLint defaultFbo,
         bool needSceneForOverlay, const std::vector<CompositeLayerInfo>& boardLayerStack);
     void paintGL_renderOverlays(GLuint sceneTarget);
-    /// Downsample+blur the scene texture into the backdrop snapshot (throttled).
-    void paintGL_captureBackdrop(GLuint sceneTexture);
+    /// Downsample, blur and composite the current visible QWidget regions.
+    void paintGL_renderBackdrop(GLuint sourceFbo, GLint defaultFbo);
     void paintGL_processSelectionReadback();
     void paintGL_renderLassoOverlay();
     void paintGL_renderTransformViewportPreview(const std::vector<CompositeLayerInfo>& layerStack,
@@ -890,11 +890,10 @@ private:
     // Scene FBO for cursor overlay rendering (inversion needs scene texture)
     SceneFboManager m_sceneFboManager;
 
-    // Frosted-glass backdrop snapshot for on-canvas overlays (variant C).
-    std::unique_ptr<CanvasBackdropCapture> m_backdropCapture;
-    int m_backdropConsumers = 0;
-    int m_backdropFrameCounter = 0;
-    static constexpr int kBackdropRefreshInterval = 4;
+    // Same-frame GPU backdrop-blur regions for on-canvas overlays.
+    std::unique_ptr<CanvasBackdropRenderer> m_backdropRenderer;
+    BackdropRegionProvider m_backdropRegionProvider;
+    bool m_backdropRendererAvailable = false;
     QTimer m_canvasCornerEffectTimer;
     QElapsedTimer m_canvasCornerEffectClock;
     float m_canvasCornerRadiusScreenPx = 0.0f;

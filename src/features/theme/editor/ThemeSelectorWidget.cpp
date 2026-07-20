@@ -117,8 +117,7 @@ void ThemeSelectorWidget::rebuildPreviews()
 
     if (m_showCustomThemesEntry) {
         // 6. Add separator "or"
-        const char* ctx = metaObject()->className();
-        m_separatorLabel = new QLabel(QCoreApplication::translate(ctx, "or"), m_previewContainer);
+        m_separatorLabel = new QLabel(tr("or"), m_previewContainer);
         m_separatorLabel->setAlignment(Qt::AlignCenter);
         m_separatorLabel->setAttribute(Qt::WA_TranslucentBackground);
         m_previewLayout->addWidget(m_separatorLabel);
@@ -148,11 +147,10 @@ void ThemeSelectorWidget::changeEvent(QEvent* event)
 
 void ThemeSelectorWidget::retranslateUi()
 {
-    const char* ctx = metaObject()->className();
-    setLabel(QCoreApplication::translate(ctx, "Theme"));
-    setDescription(QCoreApplication::translate(ctx, "Choose a color theme for the interface"));
+    setLabel(tr("Theme"));
+    setDescription(tr("Choose a color theme for the interface"));
     if (m_separatorLabel)
-        m_separatorLabel->setText(QCoreApplication::translate(ctx, "or"));
+        m_separatorLabel->setText(tr("or"));
     if (m_customNavigator)
         m_customNavigator->update();
     for (ThemePreviewWidget* p : m_previews) {

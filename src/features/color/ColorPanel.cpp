@@ -131,6 +131,7 @@ void ColorPreviewWidget::drawCheckerboard(QPainter& painter, const QRect& rect)
 ColorPanel::ColorPanel(QWidget* parent)
     : DockPanel(tr("Color"), parent)
 {
+    setTranslatableTitle(QT_TR_NOOP("Color"));
     setIconType(ruwa::ui::core::IconProvider::StandardIcon::ColorPanel);
     setMinimumPanelSize(170, 170);
     setPreferredPanelSize(320, 240);

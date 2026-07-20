@@ -64,9 +64,8 @@ public:
     /// Access the brush pack overlay
     BrushPackOverlay* brushPackOverlay() const { return m_brushPackOverlay; }
 
-    /// Source for the frosted-glass backdrop (canvas viewport blur). Null = solid
-    /// fallback. The overlay paints the backdrop itself (single painter, no GL/Qt
-    /// positional desync while dragged).
+    /// Source coordinating this widget's same-frame GPU blur region.
+    /// Null or unavailable source = solid fallback.
     void setBackdropSource(ruwa::shared::rendering::ICanvasBackdropSource* source);
 
     /// Canvas size for brush radius scaling (MaxBrush = 1500 * (1 - exp(-0.0003 * S)))
@@ -145,7 +144,7 @@ private:
     BrushPackOverlay* m_brushPackOverlay = nullptr;
     ruwa::ui::workspace::ToolButton* m_brushPackButton = nullptr;
 
-    // Frosted-glass backdrop source (non-owning; nulled on source destruction).
+    // Backdrop-blur source (non-owning; nulled on source destruction).
     ruwa::shared::rendering::ICanvasBackdropSource* m_backdropSource = nullptr;
 
     // Slider drag preview (real-time brush preview)

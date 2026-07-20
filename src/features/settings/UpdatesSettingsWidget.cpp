@@ -307,26 +307,23 @@ void UpdatesSettingsWidget::setRecheckInProgress(bool inProgress)
 
 void UpdatesSettingsWidget::applyState()
 {
-    const char* ctx = metaObject()->className();
     const QString versionText
         = m_updateVersion.isEmpty() ? QCoreApplication::applicationVersion() : m_updateVersion;
 
     switch (m_updateState) {
     case UpdateState::UpToDate:
-        m_titleText = QCoreApplication::translate(ctx, "You're running the latest version");
+        m_titleText = tr("You're running the latest version");
         if (m_lastCheckedMinutesAgo == 0) {
-            m_descriptionText = QCoreApplication::translate(
-                ctx, "Ruwa checks for updates automatically. Checked just now.");
+            m_descriptionText = tr("Ruwa checks for updates automatically. Checked just now.");
         } else {
-            m_descriptionText = QCoreApplication::translate(
-                ctx, "Ruwa checks for updates automatically. Last checked %1 minutes ago.")
+            m_descriptionText = tr("Ruwa checks for updates automatically. Last checked %1 minutes ago.")
                                     .arg(m_lastCheckedMinutesAgo);
         }
-        m_primaryButton->setText(QCoreApplication::translate(ctx, "View release notes"));
+        m_primaryButton->setText(tr("View release notes"));
         m_primaryButton->syncSizeToText();
         m_primaryButton->show();
         m_secondaryButton->setBaseMinimumWidth(BASE_RECHECK_MIN_WIDTH);
-        m_secondaryButton->setText(QCoreApplication::translate(ctx, "Re-check"));
+        m_secondaryButton->setText(tr("Re-check"));
         m_secondaryButton->setTrailingLoadingVisible(m_recheckInProgress);
         m_secondaryButton->setEnabled(!m_recheckInProgress);
         m_secondaryButton->setCursor(
@@ -335,21 +332,20 @@ void UpdatesSettingsWidget::applyState()
         m_secondaryButton->show();
         break;
     case UpdateState::Downloading:
-        m_titleText = QCoreApplication::translate(ctx, "Installing Ruwa %1").arg(versionText);
-        m_descriptionText = QCoreApplication::translate(ctx,
-            "Downloading components. You can keep working - we'll let you know when it's ready.");
+        m_titleText = tr("Installing Ruwa %1").arg(versionText);
+        m_descriptionText = tr("Downloading components. You can keep working - we'll let you know when it's ready.");
         m_primaryButton->hide();
         m_secondaryButton->setTrailingLoadingVisible(false);
         m_secondaryButton->hide();
         break;
     case UpdateState::UpdateAvailable:
-        m_titleText = QCoreApplication::translate(ctx, "Ruwa %1 is now available").arg(versionText);
+        m_titleText = tr("Ruwa %1 is now available").arg(versionText);
         m_descriptionText = m_releaseDescription;
-        m_primaryButton->setText(QCoreApplication::translate(ctx, "Update now"));
+        m_primaryButton->setText(tr("Update now"));
         m_primaryButton->syncSizeToText();
         m_primaryButton->show();
         m_secondaryButton->setBaseMinimumWidth(BASE_SECONDARY_DEFAULT_MIN_WIDTH);
-        m_secondaryButton->setText(QCoreApplication::translate(ctx, "What's new ->"));
+        m_secondaryButton->setText(tr("What's new ->"));
         m_secondaryButton->setTrailingLoadingVisible(false);
         m_secondaryButton->setEnabled(true);
         m_secondaryButton->setCursor(Qt::PointingHandCursor);
@@ -357,11 +353,10 @@ void UpdatesSettingsWidget::applyState()
         m_secondaryButton->show();
         break;
     case UpdateState::ReadyToRestart:
-        m_titleText = QCoreApplication::translate(ctx, "Restart Ruwa to finish updating");
-        m_descriptionText = QCoreApplication::translate(
-            ctx, "Version %1 is installed. A quick restart is needed to apply the changes.")
+        m_titleText = tr("Restart Ruwa to finish updating");
+        m_descriptionText = tr("Version %1 is installed. A quick restart is needed to apply the changes.")
                                 .arg(versionText);
-        m_primaryButton->setText(QCoreApplication::translate(ctx, "Restart now"));
+        m_primaryButton->setText(tr("Restart now"));
         m_primaryButton->syncSizeToText();
         m_primaryButton->show();
         m_secondaryButton->setTrailingLoadingVisible(false);

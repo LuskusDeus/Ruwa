@@ -325,6 +325,7 @@ bool isToolSwitchProfilingEnabled()
 ToolsPanel::ToolsPanel(QWidget* parent)
     : DockPanel(tr("Tools"), parent)
 {
+    setTranslatableTitle(QT_TR_NOOP("Tools"));
     setIconType(ruwa::ui::core::IconProvider::StandardIcon::ToolsPanel);
     setTabletTracking(true);
     auto& mgr = WidgetStyleManager::instance();

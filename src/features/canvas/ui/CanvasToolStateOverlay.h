@@ -63,7 +63,7 @@ public:
     void setToolPageIndex(int index);
     int toolPageIndex() const;
 
-    /// Source for the frosted-glass backdrop (shared canvas-viewport blur).
+    /// Source coordinating this widget's same-frame GPU blur region.
     void setBackdropSource(ruwa::shared::rendering::ICanvasBackdropSource* source);
 
     // IContextMenuProvider
@@ -175,7 +175,7 @@ private:
     int m_canvasPageSizeIndexOverride = -1;
     int m_toolPageSizeIndexOverride = -1;
 
-    // Frosted-glass backdrop source (non-owning; nulled on source destruction).
+    // Backdrop-blur source (non-owning; nulled on source destruction).
     ruwa::shared::rendering::ICanvasBackdropSource* m_backdropSource = nullptr;
 };
 

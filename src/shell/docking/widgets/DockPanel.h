@@ -336,9 +336,22 @@ protected:
     /// Called when theme changes
     virtual void onThemeChanged();
 
+    /// Called on QEvent::LanguageChange so subclasses can re-apply tr() strings
+    /// (title, tooltips, labels) live, without recreating the workspace.
+    /// The default implementation re-applies the translatable title if one was
+    /// registered via setTranslatableTitle(); overrides should call the base.
+    virtual void retranslateUi();
+
+    /// Register the panel's title as a translatable source string so the base
+    /// class can re-translate it live on language change. Pass the same literal
+    /// used with tr() in the constructor, e.g. setTranslatableTitle(QT_TR_NOOP("Color")).
+    /// Also applies the current translation immediately.
+    void setTranslatableTitle(const char* sourceText);
+
     /// Access to theme colors
     const ruwa::ui::core::ThemeColors& colors() const;
 
+    void changeEvent(QEvent* event) override;
     void showEvent(QShowEvent* event) override;
     void paintEvent(QPaintEvent* event) override;
     void resizeEvent(QResizeEvent* event) override;
@@ -376,6 +389,7 @@ private:
     // Identity
     DockPanelId m_id;
     QString m_title;
+    const char* m_titleSource = nullptr; ///< untranslated title for live retranslation
     QString m_persistentKey;
     QIcon m_icon;
     std::optional<ruwa::ui::core::IconProvider::StandardIcon> m_iconType;

@@ -72,6 +72,7 @@ signals:
 protected:
     void paintEvent(QPaintEvent* event) override;
     bool eventFilter(QObject* watched, QEvent* event) override;
+    void changeEvent(QEvent* event) override;
 
 private:
     void setupUI();
@@ -89,6 +90,9 @@ private:
     QIcon m_searchIcon;
     bool m_clickOutsideClearsFocus { false };
     bool m_appFilterInstalled { false };
+    // When false, the placeholder is the built-in default and is retranslated on
+    // language change; a caller-supplied placeholder (setPlaceholder) is left as-is.
+    bool m_customPlaceholder { false };
 
     // Animation state
     qreal m_focusProgress { 0.0 };

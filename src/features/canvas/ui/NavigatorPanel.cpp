@@ -16,6 +16,7 @@ namespace ruwa::ui::workspace {
 NavigatorPanel::NavigatorPanel(QWidget* parent)
     : DockPanel(tr("Navigator"), parent)
 {
+    setTranslatableTitle(QT_TR_NOOP("Navigator"));
     setIconType(ruwa::ui::core::IconProvider::StandardIcon::NavigatorPanel);
     setMinimumPanelSize(150, 120);
     setPreferredPanelSize(220, 180);

@@ -124,10 +124,8 @@ QStringList filterExistingCustomPaths(const QStringList& paths)
 WelcomeBannerSelectorWidget::WelcomeBannerSelectorWidget(QWidget* parent)
     : BaseSettingsWidget(QString(), QString(), parent)
 {
-    const char* ctx = metaObject()->className();
-    setLabel(QCoreApplication::translate(ctx, "Welcome banner"));
-    setDescription(QCoreApplication::translate(ctx,
-        "Background for the welcome screen. Use built-in art or your own images; adjust text "
+    setLabel(tr("Welcome banner"));
+    setDescription(tr("Background for the welcome screen. Use built-in art or your own images; adjust text "
         "contrast below."));
 
     setupContent();
@@ -347,8 +345,7 @@ void WelcomeBannerSelectorWidget::rebuildPreviews()
         m_previewLayout->addWidget(preview);
     }
 
-    const char* ctx = metaObject()->className();
-    m_separatorLabel = new QLabel(QCoreApplication::translate(ctx, "or"), m_previewContainer);
+    m_separatorLabel = new QLabel(tr("or"), m_previewContainer);
     m_separatorLabel->setAlignment(Qt::AlignCenter);
     m_separatorLabel->setAttribute(Qt::WA_TranslucentBackground);
     m_previewLayout->addWidget(m_separatorLabel);
@@ -451,12 +448,11 @@ void WelcomeBannerSelectorWidget::removeCustomBannerImage(const QString& path)
 
 void WelcomeBannerSelectorWidget::onAddImageClicked()
 {
-    const char* ctx = metaObject()->className();
     const QString filter
-        = QCoreApplication::translate(ctx, "Images (*.png *.jpg *.jpeg *.webp *.bmp)");
+        = tr("Images (*.png *.jpg *.jpeg *.webp *.bmp)");
     const QStringList files = ruwa::shared::filedialog::getOpenFileNames(this,
         ruwa::shared::filedialog::category::kImage,
-        QCoreApplication::translate(ctx, "Add welcome banner image"), filter);
+        tr("Add welcome banner image"), filter);
 
     if (files.isEmpty()) {
         return;
@@ -666,31 +662,29 @@ void WelcomeBannerSelectorWidget::changeEvent(QEvent* event)
 
 void WelcomeBannerSelectorWidget::retranslateUi()
 {
-    const char* ctx = metaObject()->className();
-    setLabel(QCoreApplication::translate(ctx, "Welcome banner"));
-    setDescription(QCoreApplication::translate(ctx,
-        "Background for the welcome screen. Use built-in art or your own images; adjust text "
+    setLabel(tr("Welcome banner"));
+    setDescription(tr("Background for the welcome screen. Use built-in art or your own images; adjust text "
         "contrast below."));
 
     if (m_separatorLabel) {
-        m_separatorLabel->setText(QCoreApplication::translate(ctx, "or"));
+        m_separatorLabel->setText(tr("or"));
     }
 
     if (m_modeLabel) {
-        m_modeLabel->setText(QCoreApplication::translate(ctx, "Image selection"));
+        m_modeLabel->setText(tr("Image selection"));
     }
 
     if (m_modeSelector && m_modeSelector->optionCount() >= 2) {
-        m_modeSelector->setOptionText(0, QCoreApplication::translate(ctx, "Random"));
-        m_modeSelector->setOptionText(1, QCoreApplication::translate(ctx, "Fixed"));
+        m_modeSelector->setOptionText(0, tr("Random"));
+        m_modeSelector->setOptionText(1, tr("Fixed"));
     }
 
     if (m_textColorLabel) {
-        m_textColorLabel->setText(QCoreApplication::translate(ctx, "Banner text"));
+        m_textColorLabel->setText(tr("Banner text"));
     }
     if (m_textColorSelector && m_textColorSelector->optionCount() >= 2) {
-        m_textColorSelector->setOptionText(0, QCoreApplication::translate(ctx, "Basic"));
-        m_textColorSelector->setOptionText(1, QCoreApplication::translate(ctx, "Inverted"));
+        m_textColorSelector->setOptionText(0, tr("Basic"));
+        m_textColorSelector->setOptionText(1, tr("Inverted"));
     }
 
     if (m_addTile) {

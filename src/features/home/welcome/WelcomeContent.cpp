@@ -201,8 +201,7 @@ void WelcomeContent::setupContent()
     QHBoxLayout* headerLayout = new QHBoxLayout(headerContent);
     headerLayout->setContentsMargins(0, 0, 0, 0);
 
-    const char* ctx = metaObject()->className();
-    m_titleLabel = new QLabel(QCoreApplication::translate(ctx, "Welcome to Ruwa"), headerContent);
+    m_titleLabel = new QLabel(tr("Welcome to Ruwa"), headerContent);
     const auto& theme = ruwa::ui::core::ThemeManager::instance();
     m_titleLabel->setFont(
         theme.colors().fonts.getTitleFont(theme.scaledFontSize(BASE_TITLE_FONT_SIZE)));
@@ -271,9 +270,8 @@ void WelcomeContent::changeEvent(QEvent* event)
 
 void WelcomeContent::retranslateUi()
 {
-    const char* ctx = metaObject()->className();
     if (m_titleLabel)
-        m_titleLabel->setText(QCoreApplication::translate(ctx, "Welcome to Ruwa"));
+        m_titleLabel->setText(tr("Welcome to Ruwa"));
 }
 
 void WelcomeContent::loadRecentProjects()

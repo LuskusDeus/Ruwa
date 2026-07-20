@@ -526,34 +526,32 @@ void AboutContent::showEvent(QShowEvent* event)
 
 void AboutContent::retranslateUi()
 {
-    const char* ctx = metaObject()->className();
     const QString version = QCoreApplication::applicationVersion();
 
-    m_titleLabel->setText(QCoreApplication::translate(ctx, "About"));
+    m_titleLabel->setText(tr("About"));
     m_productTitleLabel->setText(
         version.isEmpty() ? QStringLiteral("Ruwa") : QStringLiteral("Ruwa %1").arg(version));
-    m_productSubtitleLabel->setText(QCoreApplication::translate(
-        ctx, "Non-destructive raster graphics editor with an infinite canvas."));
-    m_discordButton->setText(QCoreApplication::translate(ctx, "Discord"));
-    m_websiteButton->setText(QCoreApplication::translate(ctx, "Website"));
+    m_productSubtitleLabel->setText(tr("Non-destructive raster graphics editor with an infinite canvas."));
+    m_discordButton->setText(tr("Discord"));
+    m_websiteButton->setText(tr("Website"));
     m_discordButton->syncSizeToText();
     m_websiteButton->syncSizeToText();
-    m_programInfoTitleLabel->setText(QCoreApplication::translate(ctx, "Built with"));
+    m_programInfoTitleLabel->setText(tr("Built with"));
 
     const QStringList toolNames = { QStringLiteral("C++23"), QStringLiteral("Qt 6"),
         QStringLiteral("Qt Widgets"), QStringLiteral("OpenGL"), QStringLiteral("QWindowKit"),
         QStringLiteral("Discord RPC"), QStringLiteral("Qt Concurrent"),
         QStringLiteral("Qt Network"), QStringLiteral("CMake") };
     const QStringList toolDescriptions
-        = { QCoreApplication::translate(ctx, "Core application logic"),
-              QCoreApplication::translate(ctx, "Application framework"),
-              QCoreApplication::translate(ctx, "Interface widgets"),
-              QCoreApplication::translate(ctx, "Rendering"),
-              QCoreApplication::translate(ctx, "Window integration"),
-              QCoreApplication::translate(ctx, "Discord integration"),
-              QCoreApplication::translate(ctx, "Background tasks"),
-              QCoreApplication::translate(ctx, "Network features"),
-              QCoreApplication::translate(ctx, "Build system") };
+        = { tr("Core application logic"),
+              tr("Application framework"),
+              tr("Interface widgets"),
+              tr("Rendering"),
+              tr("Window integration"),
+              tr("Discord integration"),
+              tr("Background tasks"),
+              tr("Network features"),
+              tr("Build system") };
 
     const int toolCount
         = qMin(static_cast<int>(m_toolCardTitleLabels.size()), static_cast<int>(toolNames.size()));
@@ -562,12 +560,11 @@ void AboutContent::retranslateUi()
         m_toolCardDescriptionLabels[i]->setText(toolDescriptions[i]);
     }
 
-    m_creditsTitleLabel->setText(QCoreApplication::translate(ctx, "Credits"));
-    m_developerSectionTitleLabel->setText(QCoreApplication::translate(ctx, "Developer"));
+    m_creditsTitleLabel->setText(tr("Credits"));
+    m_developerSectionTitleLabel->setText(tr("Developer"));
     m_developerNameLabel->setText(QStringLiteral("Luskus Deus"));
-    m_developerDescriptionLabel->setText(QCoreApplication::translate(
-        ctx, "Solo developer responsible for UI, rendering, tools, and core systems."));
-    m_testersTitleLabel->setText(QCoreApplication::translate(ctx, "Testers"));
+    m_developerDescriptionLabel->setText(tr("Solo developer responsible for UI, rendering, tools, and core systems."));
+    m_testersTitleLabel->setText(tr("Testers"));
 
     const QStringList testerNames = { QStringLiteral("kaixxxy"), QStringLiteral("Lozar"),
         QStringLiteral("Mikko_el"), QStringLiteral("HipaaaH!~"), QStringLiteral("Ayami"),
@@ -580,9 +577,8 @@ void AboutContent::retranslateUi()
         m_testerButtons[i]->setText(testerNames[i]);
     }
 
-    m_acknowledgementsTitleLabel->setText(QCoreApplication::translate(ctx, "Acknowledgements"));
-    m_acknowledgementsBodyLabel->setText(QCoreApplication::translate(ctx,
-        "I built Ruwa with a strong focus on aesthetics, responsiveness, and overall feel. "
+    m_acknowledgementsTitleLabel->setText(tr("Acknowledgements"));
+    m_acknowledgementsBodyLabel->setText(tr("I built Ruwa with a strong focus on aesthetics, responsiveness, and overall feel. "
         "Almost everything in the app is made from scratch, from custom message popups to a fully "
         "custom brush engine. "
         "Ruwa already has an infinite canvas and its own widget system, and in the future it is "
@@ -594,12 +590,12 @@ void AboutContent::retranslateUi()
         "trademark of The Qt Company Ltd.")
             .arg(QString::fromLatin1(qVersion())));
 
-    m_buildDetailsTitleLabel->setText(QCoreApplication::translate(ctx, "Build Details"));
-    m_versionCaptionLabel->setText(QCoreApplication::translate(ctx, "Version"));
+    m_buildDetailsTitleLabel->setText(tr("Build Details"));
+    m_versionCaptionLabel->setText(tr("Version"));
     m_versionValueLabel->setText(version.isEmpty() ? QStringLiteral("-") : version);
-    m_buildCaptionLabel->setText(QCoreApplication::translate(ctx, "Build"));
+    m_buildCaptionLabel->setText(tr("Build"));
     m_buildValueLabel->setText(QString::fromUtf8(RUWA_BUILD_NUMBER));
-    m_releaseCaptionLabel->setText(QCoreApplication::translate(ctx, "Released"));
+    m_releaseCaptionLabel->setText(tr("Released"));
     m_releaseValueLabel->setText(QString::fromUtf8(RUWA_RELEASE_DATE));
 
     QString platformName = QSysInfo::prettyProductName();
@@ -610,10 +606,10 @@ void AboutContent::retranslateUi()
     }
 
     const QLocale systemLocale = QLocale::system();
-    m_environmentTitleLabel->setText(QCoreApplication::translate(ctx, "Environment"));
-    m_platformCaptionLabel->setText(QCoreApplication::translate(ctx, "Platform"));
+    m_environmentTitleLabel->setText(tr("Environment"));
+    m_platformCaptionLabel->setText(tr("Platform"));
     m_platformValueLabel->setText(platformName.isEmpty() ? QStringLiteral("-") : platformName);
-    m_localeCaptionLabel->setText(QCoreApplication::translate(ctx, "Locale"));
+    m_localeCaptionLabel->setText(tr("Locale"));
     m_localeValueLabel->setText(systemLocale.name());
 }
 

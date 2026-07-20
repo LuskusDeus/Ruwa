@@ -335,19 +335,18 @@ void SettingsContent::changeEvent(QEvent* event)
 
 void SettingsContent::retranslateUi()
 {
-    const char* ctx = metaObject()->className();
     if (m_titleLabel)
-        m_titleLabel->setText(QCoreApplication::translate(ctx, "Settings"));
+        m_titleLabel->setText(tr("Settings"));
     if (m_searchBar)
-        m_searchBar->setPlaceholder(QCoreApplication::translate(ctx, "Search settings..."));
+        m_searchBar->setPlaceholder(tr("Search settings..."));
 
     // Update categories (order: Updates, Appearance, Editor, Shortcuts, Performance)
     if (m_categories.size() >= 5) {
-        m_categories[0]->setTitle(QCoreApplication::translate(ctx, "Updates"));
-        m_categories[1]->setTitle(QCoreApplication::translate(ctx, "Appearance"));
-        m_categories[2]->setTitle(QCoreApplication::translate(ctx, "Editor"));
-        m_categories[3]->setTitle(QCoreApplication::translate(ctx, "Keyboard Shortcuts"));
-        m_categories[4]->setTitle(QCoreApplication::translate(ctx, "Performance"));
+        m_categories[0]->setTitle(tr("Updates"));
+        m_categories[1]->setTitle(tr("Appearance"));
+        m_categories[2]->setTitle(tr("Editor"));
+        m_categories[3]->setTitle(tr("Keyboard Shortcuts"));
+        m_categories[4]->setTitle(tr("Performance"));
     }
 
     if (m_updatesSettingsWidget) {
@@ -362,64 +361,60 @@ void SettingsContent::retranslateUi()
 
     // Appearance
     if (m_uiScaleChoice) {
-        m_uiScaleChoice->setLabel(QCoreApplication::translate(ctx, "UI Scale"));
+        m_uiScaleChoice->setLabel(tr("UI Scale"));
         m_uiScaleChoice->setDescription(
-            QCoreApplication::translate(ctx, "Adjust the size of UI elements"));
+            tr("Adjust the size of UI elements"));
         m_uiScaleChoice->setOptions(
-            { QCoreApplication::translate(ctx, "Small"), QCoreApplication::translate(ctx, "Medium"),
-                QCoreApplication::translate(ctx, "Large") });
+            { tr("Small"), tr("Medium"),
+                tr("Large") });
     }
     if (m_languageChoice) {
-        m_languageChoice->setLabel(QCoreApplication::translate(ctx, "Language"));
-        m_languageChoice->setDescription(QCoreApplication::translate(ctx, "Interface language"));
+        m_languageChoice->setLabel(tr("Language"));
+        m_languageChoice->setDescription(tr("Interface language"));
     }
     if (m_welcomeBannerSelector) {
         m_welcomeBannerSelector->retranslateUi();
     }
     if (m_topBarTabAlignmentChoice) {
         m_topBarTabAlignmentChoice->setLabel(
-            QCoreApplication::translate(ctx, "Top bar tab alignment"));
-        m_topBarTabAlignmentChoice->setDescription(QCoreApplication::translate(
-            ctx, "Place the tab strip at the left of the title bar or centered in the free space"));
-        m_topBarTabAlignmentChoice->setOptions({ QCoreApplication::translate(ctx, "Left"),
-            QCoreApplication::translate(ctx, "Center") });
+            tr("Top bar tab alignment"));
+        m_topBarTabAlignmentChoice->setDescription(tr("Place the tab strip at the left of the title bar or centered in the free space"));
+        m_topBarTabAlignmentChoice->setOptions({ tr("Left"),
+            tr("Center") });
     }
 
     // Editor
     if (m_autoSaveChoice) {
-        m_autoSaveChoice->setLabel(QCoreApplication::translate(ctx, "Auto-Save"));
-        m_autoSaveChoice->setDescription(QCoreApplication::translate(
-            ctx, "Automatically save your work at the selected interval"));
-        m_autoSaveChoice->setOptions({ QCoreApplication::translate(ctx, "Off"),
-            QCoreApplication::translate(ctx, "2 min"), QCoreApplication::translate(ctx, "5 min"),
-            QCoreApplication::translate(ctx, "10 min") });
+        m_autoSaveChoice->setLabel(tr("Auto-Save"));
+        m_autoSaveChoice->setDescription(tr("Automatically save your work at the selected interval"));
+        m_autoSaveChoice->setOptions({ tr("Off"),
+            tr("2 min"), tr("5 min"),
+            tr("10 min") });
     }
     if (m_quickshapesToggle) {
-        m_quickshapesToggle->setLabel(QCoreApplication::translate(ctx, "Quick Shapes"));
-        m_quickshapesToggle->setDescription(QCoreApplication::translate(
-            ctx, "Hold stroke to morph into straight line, circle, triangle, or square"));
+        m_quickshapesToggle->setLabel(tr("Quick Shapes"));
+        m_quickshapesToggle->setDescription(tr("Hold stroke to morph into straight line, circle, triangle, or square"));
     }
 
     // Performance
     if (m_undoMemoryChoice) {
-        m_undoMemoryChoice->setLabel(QCoreApplication::translate(ctx, "Undo Memory Limit"));
+        m_undoMemoryChoice->setLabel(tr("Undo Memory Limit"));
         m_undoMemoryChoice->setDescription(
-            QCoreApplication::translate(ctx, "Maximum memory available for undo history"));
-        m_undoMemoryChoice->setOptions({ QCoreApplication::translate(ctx, "300 MB"),
-            QCoreApplication::translate(ctx, "1 GB"), QCoreApplication::translate(ctx, "3 GB"),
-            QCoreApplication::translate(ctx, "8 GB") });
+            tr("Maximum memory available for undo history"));
+        m_undoMemoryChoice->setOptions({ tr("300 MB"),
+            tr("1 GB"), tr("3 GB"),
+            tr("8 GB") });
     }
     if (m_tabletBackendChoice) {
-        m_tabletBackendChoice->setLabel(QCoreApplication::translate(ctx, "Tablet Input Backend"));
-        m_tabletBackendChoice->setDescription(QCoreApplication::translate(
-            ctx, "Choose the stylus input backend. Restart is required to apply this setting."));
-        m_tabletBackendChoice->setOptions({ QCoreApplication::translate(ctx, "WinTab (Qt)"),
-            QCoreApplication::translate(ctx, "Windows Ink"),
-            QCoreApplication::translate(ctx, "WinTab (Ruwa)") });
+        m_tabletBackendChoice->setLabel(tr("Tablet Input Backend"));
+        m_tabletBackendChoice->setDescription(tr("Choose the stylus input backend. Restart is required to apply this setting."));
+        m_tabletBackendChoice->setOptions({ tr("WinTab (Qt)"),
+            tr("Windows Ink"),
+            tr("WinTab (Ruwa)") });
     }
 
     if (m_resetButton)
-        m_resetButton->setText(QCoreApplication::translate(ctx, "Reset all"));
+        m_resetButton->setText(tr("Reset all"));
 }
 
 void SettingsContent::onResetSettingsClicked()

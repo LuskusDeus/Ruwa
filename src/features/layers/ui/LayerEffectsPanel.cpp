@@ -63,6 +63,7 @@ private:
 LayerEffectsPanel::LayerEffectsPanel(QWidget* parent)
     : DockPanel(tr("Layer Effects"), parent)
 {
+    setTranslatableTitle(QT_TR_NOOP("Layer Effects"));
     setIconType(ruwa::ui::core::IconProvider::StandardIcon::LayerEffectsPanel);
     setMinimumPanelSize(220, 180);
     setPreferredPanelSize(300, 360);

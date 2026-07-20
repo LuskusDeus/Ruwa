@@ -220,13 +220,12 @@ QStringList CommandInputWidget::displayedKeyParts() const
 
 QStringList CommandInputWidget::currentParts() const
 {
-    const char* ctx = metaObject()->className();
     if (m_recording) {
-        return { QCoreApplication::translate(ctx, "Press shortcut...") };
+        return { tr("Press shortcut...") };
     }
     QStringList parts = displayedKeyParts();
     if (parts.isEmpty()) {
-        parts = { QCoreApplication::translate(ctx, "Click to assign") };
+        parts = { tr("Click to assign") };
     }
     return parts;
 }
@@ -436,7 +435,6 @@ bool CommandInputWidget::eventFilter(QObject* watched, QEvent* event)
 
 void CommandInputWidget::drawContentLayer(QPainter& painter, const QRectF& rect)
 {
-    const char* ctx = metaObject()->className();
     auto& theme = ThemeManager::instance();
     auto& mgr = WidgetStyleManager::instance();
     const auto& colors = theme.colors();
@@ -473,11 +471,11 @@ void CommandInputWidget::drawContentLayer(QPainter& painter, const QRectF& rect)
 
     QStringList parts;
     if (m_recording) {
-        parts = { QCoreApplication::translate(ctx, "Press shortcut...") };
+        parts = { tr("Press shortcut...") };
     } else {
         parts = displayedKeyParts();
         if (parts.isEmpty()) {
-            parts = { QCoreApplication::translate(ctx, "Click to assign") };
+            parts = { tr("Click to assign") };
             textColor = colors.textMuted;
         }
     }

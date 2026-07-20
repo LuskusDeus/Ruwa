@@ -44,8 +44,8 @@ const int BASE_NO_RESULTS_FONT_SIZE = 10;
 const int BASE_EMPTY_STATE_FONT_SIZE = 12;
 const int BASE_ASCII_ART_FONT_SIZE = 9;
 
-constexpr const char* kNoRecentProjectsMessage
-    = "It seems you haven't opened any projects recently";
+constexpr const char* kNoRecentProjectsMessage = QT_TRANSLATE_NOOP(
+    "ruwa::ui::widgets::RecentProjectsWidget", "It seems you haven't opened any projects recently");
 
 constexpr const char* kNoRecentProjectsAsciiArt
     = "           __..--''``\\--....___   _..,_\n"
@@ -191,9 +191,8 @@ bool RecentProjectsWidget::eventFilter(QObject* watched, QEvent* event)
 
 void RecentProjectsWidget::retranslateUi()
 {
-    const char* ctx = metaObject()->className();
     if (m_titleLabel)
-        m_titleLabel->setText(QCoreApplication::translate(ctx, "Recent Projects"));
+        m_titleLabel->setText(tr("Recent Projects"));
     // Reload to refresh relative dates (formatRelativeDate), "No projects found", and empty state
     // message
     reloadFromManager();
@@ -213,8 +212,7 @@ void RecentProjectsWidget::setupUI()
     headerLayout->setSpacing(0);
 
     // Title
-    const char* ctx = metaObject()->className();
-    m_titleLabel = new QLabel(QCoreApplication::translate(ctx, "Recent Projects"), m_headerWidget);
+    m_titleLabel = new QLabel(tr("Recent Projects"), m_headerWidget);
     const auto& theme = ruwa::ui::core::ThemeManager::instance();
     m_titleLabel->setFont(
         theme.colors().fonts.getTitleFont(theme.scaledFontSize(BASE_TITLE_FONT_SIZE)));
@@ -436,7 +434,7 @@ void RecentProjectsWidget::rebuildListView()
         } else {
             // Search returned no results
             QLabel* noResultsLabel
-                = new QLabel(QCoreApplication::translate(ctx, "No projects found"), m_listContent);
+                = new QLabel(tr("No projects found"), m_listContent);
             QFont font = noResultsLabel->font();
             font.setPointSize(theme.scaledFontSize(BASE_NO_RESULTS_FONT_SIZE));
             noResultsLabel->setFont(font);
@@ -545,7 +543,7 @@ void RecentProjectsWidget::rebuildGridView()
         } else {
             // Search returned no results
             QLabel* noResultsLabel
-                = new QLabel(QCoreApplication::translate(ctx, "No projects found"), m_gridContent);
+                = new QLabel(tr("No projects found"), m_gridContent);
             QFont font = noResultsLabel->font();
             font.setPointSize(theme.scaledFontSize(BASE_NO_RESULTS_FONT_SIZE));
             noResultsLabel->setFont(font);

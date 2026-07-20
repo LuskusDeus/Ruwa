@@ -497,7 +497,6 @@ void WelcomeBannerCropOverlay::setupUI()
 
     const auto& theme = ruwa::ui::core::ThemeManager::instance();
     const auto& colors = theme.colors();
-    const char* ctx = metaObject()->className();
 
     m_card = new CropCardFrame(this);
     m_cardOpacityEffect = new QGraphicsOpacityEffect(m_card);
@@ -510,7 +509,7 @@ void WelcomeBannerCropOverlay::setupUI()
     layout->setSpacing(theme.scaled(CardSpacing));
 
     auto* title = new QLabel(
-        QCoreApplication::translate(ctx, "Choose the area to show on the banner"), m_card);
+        tr("Choose the area to show on the banner"), m_card);
     QFont titleFont = colors.fonts.getUIFont(theme.scaledFontSize(TitleFontSize));
     titleFont.setWeight(QFont::DemiBold);
     title->setFont(titleFont);
@@ -519,8 +518,7 @@ void WelcomeBannerCropOverlay::setupUI()
     layout->addWidget(title);
 
     auto* hint = new QLabel(
-        QCoreApplication::translate(
-            ctx, "Drag to move, drag the corners to resize. The frame keeps the banner's shape."),
+        tr("Drag to move, drag the corners to resize. The frame keeps the banner's shape."),
         m_card);
     hint->setWordWrap(true);
     hint->setFont(colors.fonts.getUIFont(theme.scaledFontSize(HintFontSize)));
@@ -540,13 +538,13 @@ void WelcomeBannerCropOverlay::setupUI()
     buttonRow->setSpacing(theme.scaled(ButtonSpacing));
     buttonRow->addStretch();
 
-    auto* cancelButton = new WelcomeBannerButton(QCoreApplication::translate(ctx, "Cancel"),
+    auto* cancelButton = new WelcomeBannerButton(tr("Cancel"),
         WelcomeBannerButton::ButtonStyle::Secondary, m_card);
     connect(cancelButton, &WelcomeBannerButton::clicked, this,
         [this]() { animateOutThen(false, QRectF()); });
     buttonRow->addWidget(cancelButton);
 
-    auto* confirmButton = new WelcomeBannerButton(QCoreApplication::translate(ctx, "Use this area"),
+    auto* confirmButton = new WelcomeBannerButton(tr("Use this area"),
         WelcomeBannerButton::ButtonStyle::Primary, m_card);
     connect(confirmButton, &WelcomeBannerButton::clicked, this,
         [this]() { animateOutThen(true, m_cropArea ? m_cropArea->normalizedCrop() : QRectF()); });

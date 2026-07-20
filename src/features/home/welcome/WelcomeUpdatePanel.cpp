@@ -101,14 +101,13 @@ WelcomeUpdatePanel::WelcomeUpdatePanel(QWidget* parent)
 
 void WelcomeUpdatePanel::setupUI()
 {
-    const char* ctx = metaObject()->className();
     const auto& theme = ruwa::ui::core::ThemeManager::instance();
 
     m_mainLayout = new QVBoxLayout(this);
     m_mainLayout->setContentsMargins(0, 0, 0, 0);
     m_mainLayout->setSpacing(0);
 
-    m_eyebrowLabel = new QLabel(QCoreApplication::translate(ctx, "UPDATE AVAILABLE"), this);
+    m_eyebrowLabel = new QLabel(tr("UPDATE AVAILABLE"), this);
     m_eyebrowLabel->setAttribute(Qt::WA_TranslucentBackground);
     QFont eyebrowFont
         = theme.colors().fonts.getUIFont(theme.scaledFontSize(BASE_EYEBROW_FONT_SIZE));
@@ -138,14 +137,14 @@ void WelcomeUpdatePanel::setupUI()
     m_buttonLayout = new QHBoxLayout(m_buttonContainer);
     m_buttonLayout->setContentsMargins(0, 0, 0, 0);
 
-    m_updateButton = new WelcomeBannerButton(QCoreApplication::translate(ctx, "Update"),
+    m_updateButton = new WelcomeBannerButton(tr("Update"),
         WelcomeBannerButton::ButtonStyle::Primary, m_buttonContainer);
     m_updateButton->setSizeScale(BUTTON_SIZE_SCALE);
     connect(
         m_updateButton, &WelcomeBannerButton::clicked, this, &WelcomeUpdatePanel::updateRequested);
     m_buttonLayout->addWidget(m_updateButton);
 
-    m_dismissButton = new WelcomeBannerButton(QCoreApplication::translate(ctx, "No thanks"),
+    m_dismissButton = new WelcomeBannerButton(tr("No thanks"),
         WelcomeBannerButton::ButtonStyle::Secondary, m_buttonContainer);
     m_dismissButton->setSizeScale(BUTTON_SIZE_SCALE);
     m_dismissButton->setSecondaryIdleShadowAlpha(16);
@@ -219,27 +218,26 @@ void WelcomeUpdatePanel::changeEvent(QEvent* event)
 
 void WelcomeUpdatePanel::retranslateUi()
 {
-    const char* ctx = metaObject()->className();
 
     if (m_eyebrowLabel) {
-        m_eyebrowLabel->setText(QCoreApplication::translate(ctx, "UPDATE AVAILABLE"));
+        m_eyebrowLabel->setText(tr("UPDATE AVAILABLE"));
     }
     if (m_titleLabel) {
         m_titleLabel->setText(m_updateVersion.isEmpty()
-                ? QCoreApplication::translate(ctx, "A new version of Ruwa is ready")
-                : QCoreApplication::translate(ctx, "Ruwa %1 is ready").arg(m_updateVersion));
+                ? tr("A new version of Ruwa is ready")
+                : tr("Ruwa %1 is ready").arg(m_updateVersion));
     }
     if (m_descriptionLabel) {
         m_descriptionLabel->setText(m_releaseDescription.isEmpty()
-                ? QCoreApplication::translate(ctx, "Update to get the latest features and fixes.")
+                ? tr("Update to get the latest features and fixes.")
                 : m_releaseDescription);
     }
     if (m_updateButton) {
-        m_updateButton->setText(QCoreApplication::translate(ctx, "Update"));
+        m_updateButton->setText(tr("Update"));
         m_updateButton->syncSizeToText();
     }
     if (m_dismissButton) {
-        m_dismissButton->setText(QCoreApplication::translate(ctx, "No thanks"));
+        m_dismissButton->setText(tr("No thanks"));
         m_dismissButton->syncSizeToText();
     }
 }

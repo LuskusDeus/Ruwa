@@ -11,7 +11,6 @@
 #include "shared/undo/UndoManager.h"
 #include "shared/resources/IconProvider.h"
 #include "features/theme/manager/ThemeManager.h"
-#include "shared/i18n/TranslationManager.h"
 #include "shared/style/WidgetStyleManager.h"
 #include "shared/widgets/BaseAnimatedButton.h"
 #include "shared/widgets/inputs/AnimatedComboBox.h"
@@ -1463,8 +1462,6 @@ LayersPanel::LayersPanel(QWidget* parent)
         [this](const LayerId&) { syncLayerControls(); });
     connect(
         &m_layerModel, &LayerModel::layerDataChanged, this, &LayersPanel::onModelLayerDataChanged);
-    connect(&ruwa::ui::core::TranslationManager::instance(),
-        &ruwa::ui::core::TranslationManager::languageChanged, this, &LayersPanel::retranslateUi);
 }
 
 LayersPanel::~LayersPanel() = default;
@@ -1720,14 +1717,6 @@ void LayersPanel::retranslateUi()
     if (m_btnDelete)
         m_btnDelete->setToolTip(tr("Delete Layer"));
     syncLayerControls();
-}
-
-void LayersPanel::changeEvent(QEvent* event)
-{
-    DockPanel::changeEvent(event);
-    if (event->type() == QEvent::LanguageChange) {
-        retranslateUi();
-    }
 }
 
 void LayersPanel::applyToolbarTheme()

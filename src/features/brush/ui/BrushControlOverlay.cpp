@@ -492,11 +492,9 @@ void BrushControlOverlay::paintEvent(QPaintEvent* event)
 void BrushControlOverlay::moveEvent(QMoveEvent* event)
 {
     QWidget::moveEvent(event);
-    // The frosted backdrop is sampled at the widget's position, so re-sample on
-    // every move (incl. the layout engine's eased drag) to keep its CONTENT
-    // correct. The frost stays locked to the chrome regardless (single painter),
-    // so there is never positional desync — this only refreshes what shows.
+    // Keep the GPU blur region and QWidget chrome on the same eased-drag tick.
     if (m_backdropSource) {
+        m_backdropSource->requestBackdropUpdate();
         update();
     }
 }
@@ -506,10 +504,8 @@ void BrushControlOverlay::drawBackground(QPainter& painter)
     auto& mgr = WidgetStyleManager::instance();
     auto& theme = ThemeManager::instance();
 
-    QColor borderTopColor = mgr.colors().border;
-    QColor borderBottomColor = borderTopColor.darker(110);
-    borderTopColor.setAlphaF(borderTopColor.alphaF() * 0.5);
-    borderBottomColor.setAlphaF(borderBottomColor.alphaF() * 0.5);
+    QColor borderColor = mgr.colors().border;
+    borderColor.setAlphaF(borderColor.alphaF() * 0.5);
 
     int radius = theme.scaled(BaseCornerRadius);
 
@@ -518,19 +514,18 @@ void BrushControlOverlay::drawBackground(QPainter& painter)
 
     painter.setPen(Qt::NoPen);
 
-    // Frosted-glass backdrop (shared blurred snapshot); solid fallback until ready.
     QColor tint = mgr.colors().surface;
-    tint.setAlpha(ruwa::ui::painting::kFrostTintAlpha);
-    if (!ruwa::ui::painting::drawFrostedBackdrop(painter, this, m_backdropSource, bgPath, tint)) {
+    tint.setAlpha(ruwa::ui::painting::kBackdropTintAlpha);
+    if (!ruwa::ui::painting::drawBackdropBlurTint(
+            painter, this, m_backdropSource, bgPath, tint)) {
         QColor bgColor = mgr.colors().surface;
         bgColor.setAlpha(200); // Match stylus joystick / zoom panel overlay
         painter.setBrush(bgColor);
         painter.drawPath(bgPath);
     }
 
-    // Gradient border
     ruwa::ui::painting::drawGradientBorder(
-        painter, rect(), radius, borderTopColor, borderBottomColor);
+        painter, rect(), radius, borderColor, borderColor);
 }
 
 void BrushControlOverlay::drawHandle(QPainter& painter, const QRectF& rect)
@@ -553,6 +548,9 @@ void BrushControlOverlay::drawHandle(QPainter& painter, const QRectF& rect)
 void BrushControlOverlay::onThemeChanged()
 {
     updateSize();
+    if (m_backdropSource) {
+        m_backdropSource->requestBackdropUpdate();
+    }
     update();
 }
 

@@ -19,6 +19,8 @@
 #include "features/canvas/ui/CanvasToolStateOverlay.h"
 #include "features/canvas/ui/CanvasZoomInfoOverlay.h"
 #include "features/canvas/ui/CanvasStylusJoystickContainerWidget.h"
+#include "features/canvas/ui/CanvasStylusJoystickWidget.h"
+#include "features/theme/manager/ThemeManager.h"
 #include "features/export/ExportAreaController.h"
 #include "features/selection/SelectionActionPopup.h"
 #include "features/settings/SettingsManager.h"
@@ -26,7 +28,9 @@
 #include "shell/top-bar/OverlayContainer.h"
 #include "shared/widgets/overlays/ConfirmationPopup.h"
 #include "shared/undo/UndoManager.h"
+#include "shared/style/WidgetStyleManager.h"
 
+#include <QGraphicsOpacityEffect>
 #include <QOpenGLWidget>
 #include <QList>
 #include <QPoint>
@@ -36,6 +40,7 @@
 #include <QWidget>
 
 #include <cmath>
+#include <vector>
 
 namespace ruwa::ui::workspace {
 
@@ -175,14 +180,79 @@ bool CanvasPanel::createGLContent()
             hasFiniteDocumentBounds()));
         applyBrushSettings({});
 
-        // Frosted-glass backdrop: the brush overlay paints the blurred canvas
-        // behind itself from the GL widget's throttled snapshot. Refresh the
-        // overlay when a new snapshot lands; drop the source if the GL widget
-        // dies first so sampleBackdrop() never touches a dangling pointer.
+        // Same-frame GPU backdrop blur. Geometry is sampled from the real
+        // widgets immediately before paintGL, so layout animation and blur use
+        // one positional source of truth.
+        m_glWidget->setBackdropRegionProvider([this]() {
+            std::vector<aether::CanvasBackdropRegion> regions;
+            if (!m_glWidget || !m_contentWidget) {
+                return regions;
+            }
+
+            const auto appendRegion = [this, &regions](QWidget* widget, const QRectF& localRect,
+                                          qreal cornerRadius, qreal opacity) {
+                if (!widget || localRect.isEmpty() || opacity <= 0.001
+                    || !widget->isVisibleTo(m_contentWidget)) {
+                    return;
+                }
+                const QPoint integralTopLeft(
+                    static_cast<int>(std::floor(localRect.x())),
+                    static_cast<int>(std::floor(localRect.y())));
+                // The overlay and OpenGL canvas are siblings, not ancestors of
+                // one another. Convert through their real common ancestor.
+                const QPoint contentPoint
+                    = widget->mapTo(m_contentWidget, integralTopLeft);
+                const QPoint mapped
+                    = m_glWidget->mapFrom(m_contentWidget, contentPoint);
+                const QPointF fractionalOffset(localRect.x() - integralTopLeft.x(),
+                    localRect.y() - integralTopLeft.y());
+                regions.push_back({ QRectF(QPointF(mapped) + fractionalOffset, localRect.size()),
+                    cornerRadius, opacity });
+            };
+            const auto effectOpacity = [](const QGraphicsOpacityEffect* effect) {
+                return effect ? effect->opacity() : 1.0;
+            };
+
+            if (m_brushOverlay) {
+                appendRegion(m_brushOverlay, QRectF(m_brushOverlay->rect()),
+                    ruwa::ui::core::ThemeManager::instance().scaled(10),
+                    effectOpacity(m_brushOverlayOpacity));
+            }
+            if (m_toolStateOverlay) {
+                appendRegion(m_toolStateOverlay, QRectF(m_toolStateOverlay->rect()),
+                    m_toolStateOverlay->height() / 2.0, effectOpacity(m_toolStateOverlayOpacity));
+            }
+            if (m_stylusJoystick) {
+                const qreal opacity = effectOpacity(m_stylusJoystickOpacity);
+                if (auto* joystick = m_stylusJoystick->joystickWidget()) {
+                    const QRectF localRect = joystick->backdropBlurRect();
+                    appendRegion(joystick, localRect, localRect.width() / 2.0, opacity);
+                }
+                if (QWidget* zoomPanel = m_stylusJoystick->zoomPanelWidget()) {
+                    appendRegion(zoomPanel, QRectF(zoomPanel->rect()),
+                        ruwa::ui::core::WidgetStyleManager::instance().scaled(6), opacity);
+                }
+            }
+            return regions;
+        });
+        const auto syncBackdropOpacity = [this](QGraphicsOpacityEffect* effect) {
+            if (!effect) {
+                return;
+            }
+            connect(effect, &QGraphicsOpacityEffect::opacityChanged, m_glWidget,
+                [this]() {
+                    if (m_glWidget) {
+                        m_glWidget->requestBackdropUpdate();
+                    }
+                });
+        };
+        syncBackdropOpacity(m_brushOverlayOpacity);
+        syncBackdropOpacity(m_stylusJoystickOpacity);
+        syncBackdropOpacity(m_toolStateOverlayOpacity);
+
         if (m_brushOverlay) {
             m_brushOverlay->setBackdropSource(m_glWidget);
-            m_glWidget->addBackdropConsumer();
-            connect(m_glWidget, &aether::OpenGLCanvasWidget::backdropSnapshotUpdated,
+            connect(m_glWidget, &aether::OpenGLCanvasWidget::backdropAvailabilityChanged,
                 m_brushOverlay, QOverload<>::of(&QWidget::update));
             connect(m_glWidget, &QObject::destroyed, m_brushOverlay, [this]() {
                 if (m_brushOverlay) {
@@ -192,8 +262,7 @@ bool CanvasPanel::createGLContent()
         }
         if (m_stylusJoystick) {
             m_stylusJoystick->setBackdropSource(m_glWidget);
-            m_glWidget->addBackdropConsumer();
-            connect(m_glWidget, &aether::OpenGLCanvasWidget::backdropSnapshotUpdated,
+            connect(m_glWidget, &aether::OpenGLCanvasWidget::backdropAvailabilityChanged,
                 m_stylusJoystick,
                 &ruwa::ui::widgets::CanvasStylusJoystickContainerWidget::refreshBackdropContent);
             connect(m_glWidget, &QObject::destroyed, m_stylusJoystick, [this]() {
@@ -204,8 +273,7 @@ bool CanvasPanel::createGLContent()
         }
         if (m_toolStateOverlay) {
             m_toolStateOverlay->setBackdropSource(m_glWidget);
-            m_glWidget->addBackdropConsumer();
-            connect(m_glWidget, &aether::OpenGLCanvasWidget::backdropSnapshotUpdated,
+            connect(m_glWidget, &aether::OpenGLCanvasWidget::backdropAvailabilityChanged,
                 m_toolStateOverlay, QOverload<>::of(&QWidget::update));
             connect(m_glWidget, &QObject::destroyed, m_toolStateOverlay, [this]() {
                 if (m_toolStateOverlay) {

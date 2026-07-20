@@ -8,6 +8,8 @@
 #include "shell/docking/core/DockContainerWidget.h"
 #include "features/theme/manager/ThemeManager.h"
 
+#include <QCoreApplication>
+#include <QEvent>
 #include <QVBoxLayout>
 #include <QPainter>
 #include <QPainterPath>
@@ -632,6 +634,32 @@ const ruwa::ui::core::ThemeColors& DockPanel::colors() const
 void DockPanel::onThemeChanged()
 {
     // Subclasses can override
+}
+
+void DockPanel::setTranslatableTitle(const char* sourceText)
+{
+    m_titleSource = sourceText;
+    if (m_titleSource) {
+        // Use the most-derived class name as the translation context so the
+        // string resolves against the same context lupdate extracted it under
+        // (the subclass where tr()/QT_TR_NOOP appears).
+        setTitle(QCoreApplication::translate(metaObject()->className(), m_titleSource));
+    }
+}
+
+void DockPanel::retranslateUi()
+{
+    if (m_titleSource) {
+        setTitle(QCoreApplication::translate(metaObject()->className(), m_titleSource));
+    }
+}
+
+void DockPanel::changeEvent(QEvent* event)
+{
+    QFrame::changeEvent(event);
+    if (event && event->type() == QEvent::LanguageChange) {
+        retranslateUi();
+    }
 }
 
 void DockPanel::handleThemeChanged()

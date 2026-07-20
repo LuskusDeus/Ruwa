@@ -90,15 +90,14 @@ void HomePageSidebar::changeEvent(QEvent* event)
 
 void HomePageSidebar::retranslateUi()
 {
-    const char* ctx = metaObject()->className();
     if (m_buttons.contains(Section::Home))
-        m_buttons[Section::Home]->setText(QCoreApplication::translate(ctx, "Home"));
+        m_buttons[Section::Home]->setText(tr("Home"));
     if (m_buttons.contains(Section::NewProject))
-        m_buttons[Section::NewProject]->setText(QCoreApplication::translate(ctx, "New Project"));
+        m_buttons[Section::NewProject]->setText(tr("New Project"));
     if (m_buttons.contains(Section::Settings))
-        m_buttons[Section::Settings]->setText(QCoreApplication::translate(ctx, "Settings"));
+        m_buttons[Section::Settings]->setText(tr("Settings"));
     if (m_buttons.contains(Section::About))
-        m_buttons[Section::About]->setText(QCoreApplication::translate(ctx, "About"));
+        m_buttons[Section::About]->setText(tr("About"));
 }
 
 void HomePageSidebar::paintEvent(QPaintEvent* event)
@@ -139,14 +138,13 @@ void HomePageSidebar::createNavigationButtons()
         = iconProvider.getIcon(ruwa::ui::core::IconProvider::StandardIcon::TransparentLogoIcon);
 
     // Create buttons with icons (use translate for correct context)
-    const char* ctx = metaObject()->className();
-    SidebarButton* homeBtn = new SidebarButton(QCoreApplication::translate(ctx, "Home"), homeIcon);
+    SidebarButton* homeBtn = new SidebarButton(tr("Home"), homeIcon);
     SidebarButton* newProjectBtn
-        = new SidebarButton(QCoreApplication::translate(ctx, "New Project"), newProjectIcon);
+        = new SidebarButton(tr("New Project"), newProjectIcon);
     SidebarButton* settingsBtn
-        = new SidebarButton(QCoreApplication::translate(ctx, "Settings"), settingsIcon);
+        = new SidebarButton(tr("Settings"), settingsIcon);
     SidebarButton* aboutBtn
-        = new SidebarButton(QCoreApplication::translate(ctx, "About"), aboutIcon);
+        = new SidebarButton(tr("About"), aboutIcon);
 
     m_buttons[Section::Home] = homeBtn;
     m_buttons[Section::NewProject] = newProjectBtn;
