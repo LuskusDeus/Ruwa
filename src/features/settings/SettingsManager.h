@@ -77,6 +77,9 @@ public:
     void syncWelcomeBannerDisplayedImageKey(const QString& key);
     int brushDisplayColorIndex(const QString& brushId);
     void setBrushDisplayColorIndex(const QString& brushId, int colorIndex);
+    bool isBrushFavorite(const QString& brushId);
+    QSet<QString> favoriteBrushIds();
+    void setBrushFavorite(const QString& brushId, bool favorite);
 
     // === EDITOR SETTERS ===
     void setAutoSaveInterval(int minutes); // 0=Off, 2=2min, 5=5min, 10=10min
@@ -105,6 +108,7 @@ signals:
     void welcomeBannerBackgroundSettingsChanged();
     void welcomeBannerDisplayedImageKeyChanged(const QString& key);
     void brushDisplayColorChanged(const QString& brushId, int colorIndex);
+    void brushFavoriteChanged(const QString& brushId, bool favorite);
 
 private:
     SettingsManager();
@@ -126,6 +130,7 @@ private:
     void savePerformance(QSettings& settings);
     void saveWindowState(QSettings& settings);
     void saveBrushDisplayColorsAsync();
+    void saveBrushFavoritesAsync();
 
 public:
     bool isFirstRunIntegrationCompleted() const;
@@ -137,6 +142,7 @@ signals:
 private:
     AppSettings m_settings;
     QAtomicInteger<quint64> m_brushDisplayColorSaveSerial { 0 };
+    QAtomicInteger<quint64> m_brushFavoriteSaveSerial { 0 };
     QAtomicInteger<quint64> m_saveSerial { 0 };
     bool m_loaded { false };
 };

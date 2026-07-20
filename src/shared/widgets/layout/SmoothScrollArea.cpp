@@ -160,6 +160,33 @@ void SmoothScrollArea::setWidget(QWidget* widget)
     refreshContentLayout();
 }
 
+void SmoothScrollArea::setOrientation(Qt::Orientation orientation)
+{
+    if (m_orientation == orientation) {
+        return;
+    }
+
+    m_scrollAnimation->stop();
+    cancelStylusSwipe();
+    m_orientation = orientation;
+    m_currentScrollValue = 0;
+    m_targetScrollValue = 0;
+    m_maxScroll = 0;
+
+    if (m_orientation == Qt::Horizontal) {
+        m_contentWidthFixedToViewport = false;
+        if (m_contentWidget) {
+            m_contentWidget->setMinimumWidth(0);
+            m_contentWidget->setMaximumWidth(QWIDGETSIZE_MAX);
+        }
+    }
+    if (m_contentWidget) {
+        m_contentWidget->move(0, 0);
+    }
+
+    refreshContentLayout();
+}
+
 void SmoothScrollArea::refreshScrollGeometry()
 {
     refreshContentLayout();
@@ -250,6 +277,10 @@ void SmoothScrollArea::setContentWidthFixedToViewport(bool fixed)
 {
     if (m_contentWidthFixedToViewport != fixed) {
         m_contentWidthFixedToViewport = fixed;
+        if (!fixed && m_contentWidget) {
+            m_contentWidget->setMinimumWidth(0);
+            m_contentWidget->setMaximumWidth(QWIDGETSIZE_MAX);
+        }
         refreshContentLayout();
     }
 }
@@ -285,7 +316,9 @@ void SmoothScrollArea::beginStylusSwipe(const QPoint& globalPos)
     m_stylusSwipeVelocity = 0.0;
     m_stylusSwipeTimer.start();
     m_stylusSwipeLastSampleMs = 0;
-    m_verticalScrollBar->showAnimated();
+    if (m_orientation == Qt::Vertical) {
+        m_verticalScrollBar->showAnimated();
+    }
 }
 
 void SmoothScrollArea::updateStylusSwipe(const QPoint& globalPos)
@@ -294,19 +327,25 @@ void SmoothScrollArea::updateStylusSwipe(const QPoint& globalPos)
         return;
     }
 
-    const int dragDeltaY = globalPos.y() - m_stylusSwipeStartGlobalPos.y();
-    setScrollValue(m_stylusSwipeStartScrollValue - dragDeltaY);
+    const int dragDelta = m_orientation == Qt::Horizontal
+        ? globalPos.x() - m_stylusSwipeStartGlobalPos.x()
+        : globalPos.y() - m_stylusSwipeStartGlobalPos.y();
+    setScrollValue(m_stylusSwipeStartScrollValue - dragDelta);
 
     const qint64 nowMs = m_stylusSwipeTimer.elapsed();
     const qint64 dtMs = qMax<qint64>(1, nowMs - m_stylusSwipeLastSampleMs);
-    const int stepDeltaY = globalPos.y() - m_stylusSwipeLastGlobalPos.y();
-    const qreal instantVelocity = (-stepDeltaY * 1000.0) / dtMs;
+    const int stepDelta = m_orientation == Qt::Horizontal
+        ? globalPos.x() - m_stylusSwipeLastGlobalPos.x()
+        : globalPos.y() - m_stylusSwipeLastGlobalPos.y();
+    const qreal instantVelocity = (-stepDelta * 1000.0) / dtMs;
     m_stylusSwipeVelocity = (m_stylusSwipeVelocity * (1.0 - kStylusSwipeVelocityBlend))
         + (instantVelocity * kStylusSwipeVelocityBlend);
 
     m_stylusSwipeLastGlobalPos = globalPos;
     m_stylusSwipeLastSampleMs = nowMs;
-    m_verticalScrollBar->showAnimated();
+    if (m_orientation == Qt::Vertical) {
+        m_verticalScrollBar->showAnimated();
+    }
 }
 
 void SmoothScrollArea::endStylusSwipe(const QPoint& globalPos)
@@ -337,7 +376,9 @@ void SmoothScrollArea::endStylusSwipe(const QPoint& globalPos)
     m_scrollAnimation->setStartValue(m_currentScrollValue);
     m_scrollAnimation->setEndValue(m_targetScrollValue);
     m_scrollAnimation->start();
-    m_verticalScrollBar->showAnimated();
+    if (m_orientation == Qt::Vertical) {
+        m_verticalScrollBar->showAnimated();
+    }
 }
 
 void SmoothScrollArea::cancelStylusSwipe()
@@ -459,10 +500,18 @@ void SmoothScrollArea::wheelEvent(QWheelEvent* event)
 
     int delta = 0;
     if (!event->pixelDelta().isNull()) {
-        delta = -event->pixelDelta().y();
+        delta = m_orientation == Qt::Horizontal ? -event->pixelDelta().x()
+                                                : -event->pixelDelta().y();
+        if (delta == 0 && m_orientation == Qt::Horizontal) {
+            delta = -event->pixelDelta().y();
+        }
     }
     if (delta == 0) {
-        delta = -event->angleDelta().y();
+        delta = m_orientation == Qt::Horizontal ? -event->angleDelta().x()
+                                                : -event->angleDelta().y();
+        if (delta == 0 && m_orientation == Qt::Horizontal) {
+            delta = -event->angleDelta().y();
+        }
     }
     if (delta == 0) {
         event->accept();
@@ -483,7 +532,9 @@ void SmoothScrollArea::wheelEvent(QWheelEvent* event)
     m_scrollAnimation->setEndValue(m_targetScrollValue);
     m_scrollAnimation->start();
 
-    m_verticalScrollBar->showAnimated();
+    if (m_orientation == Qt::Vertical) {
+        m_verticalScrollBar->showAnimated();
+    }
     event->accept();
 }
 
@@ -505,60 +556,88 @@ void SmoothScrollArea::updateScrollRange()
 
     const QSize widgetSizeHint = m_contentWidget->sizeHint();
 
-    int contentWidth = m_contentWidthFixedToViewport ? m_viewport->width() : widgetSizeHint.width();
-    if (contentWidth <= 0) {
-        contentWidth = m_contentWidget->width();
-    }
-    if (contentWidth <= 0) {
-        contentWidth = m_viewport->width();
-    }
-
     QSize layoutSizeHint;
-    int contentHeight = 0;
     if (m_contentWidget->layout()) {
         auto* contentLayout = m_contentWidget->layout();
         contentLayout->invalidate();
         contentLayout->activate();
         layoutSizeHint = contentLayout->sizeHint();
+    }
 
-        if (contentWidth > 0 && contentLayout->hasHeightForWidth()) {
-            contentHeight = contentLayout->totalHeightForWidth(contentWidth);
+    if (m_orientation == Qt::Horizontal) {
+        int contentWidth = qMax(widgetSizeHint.width(), layoutSizeHint.width());
+        if (contentWidth <= 0) {
+            contentWidth = m_contentWidget->width();
         }
+        contentWidth = qMax(contentWidth, m_viewport->width());
 
+        int contentHeight = qMax(widgetSizeHint.height(), layoutSizeHint.height());
         if (contentHeight <= 0) {
-            contentHeight = layoutSizeHint.height();
+            contentHeight = m_contentWidget->height();
         }
-    }
+        contentHeight = qMax(contentHeight, m_viewport->height());
 
-    if (contentWidth > 0 && contentHeight <= 0 && m_contentWidget->hasHeightForWidth()) {
-        contentHeight = m_contentWidget->heightForWidth(contentWidth);
-    }
-    if (contentHeight <= 0) {
-        contentHeight = widgetSizeHint.height();
-    }
-    if (contentHeight <= 0) {
-        contentHeight = m_contentWidget->height();
-    }
+        const QSize desiredContentSize(qMax(0, contentWidth), qMax(0, contentHeight));
+        if (m_contentWidget->size() != desiredContentSize) {
+            m_contentWidget->resize(desiredContentSize);
+        }
 
-    if (!m_contentWidthFixedToViewport && layoutSizeHint.width() > 0) {
-        contentWidth = layoutSizeHint.width();
-    }
-    if (contentWidth <= 0) {
-        contentWidth = m_viewport->width();
-    }
+        m_maxScroll = qMax(0, contentWidth - m_viewport->width());
+        m_verticalScrollBar->setRange(0, m_maxScroll);
+        m_verticalScrollBar->setPageStep(m_viewport->width());
+        m_verticalScrollBar->setSingleStep(qMax(20, m_viewport->width() / 10));
+    } else {
+        int contentWidth
+            = m_contentWidthFixedToViewport ? m_viewport->width() : widgetSizeHint.width();
+        if (contentWidth <= 0) {
+            contentWidth = m_contentWidget->width();
+        }
+        if (contentWidth <= 0) {
+            contentWidth = m_viewport->width();
+        }
 
-    const int viewportHeight = m_viewport->height();
-    const int widgetHeight = qMax(contentHeight, viewportHeight);
-    const QSize desiredContentSize(qMax(0, contentWidth), qMax(0, widgetHeight));
-    if (m_contentWidget->size() != desiredContentSize) {
-        m_contentWidget->resize(desiredContentSize);
+        int contentHeight = 0;
+        if (m_contentWidget->layout()) {
+            auto* contentLayout = m_contentWidget->layout();
+
+            if (contentWidth > 0 && contentLayout->hasHeightForWidth()) {
+                contentHeight = contentLayout->totalHeightForWidth(contentWidth);
+            }
+
+            if (contentHeight <= 0) {
+                contentHeight = layoutSizeHint.height();
+            }
+        }
+
+        if (contentWidth > 0 && contentHeight <= 0 && m_contentWidget->hasHeightForWidth()) {
+            contentHeight = m_contentWidget->heightForWidth(contentWidth);
+        }
+        if (contentHeight <= 0) {
+            contentHeight = widgetSizeHint.height();
+        }
+        if (contentHeight <= 0) {
+            contentHeight = m_contentWidget->height();
+        }
+
+        if (!m_contentWidthFixedToViewport && layoutSizeHint.width() > 0) {
+            contentWidth = layoutSizeHint.width();
+        }
+        if (contentWidth <= 0) {
+            contentWidth = m_viewport->width();
+        }
+
+        const int viewportHeight = m_viewport->height();
+        const int widgetHeight = qMax(contentHeight, viewportHeight);
+        const QSize desiredContentSize(qMax(0, contentWidth), qMax(0, widgetHeight));
+        if (m_contentWidget->size() != desiredContentSize) {
+            m_contentWidget->resize(desiredContentSize);
+        }
+
+        m_maxScroll = qMax(0, contentHeight - viewportHeight);
+        m_verticalScrollBar->setRange(0, m_maxScroll);
+        m_verticalScrollBar->setPageStep(viewportHeight);
+        m_verticalScrollBar->setSingleStep(qMax(20, viewportHeight / 10));
     }
-
-    m_maxScroll = qMax(0, contentHeight - viewportHeight);
-
-    m_verticalScrollBar->setRange(0, m_maxScroll);
-    m_verticalScrollBar->setPageStep(viewportHeight);
-    m_verticalScrollBar->setSingleStep(qMax(20, viewportHeight / 10));
 
     const int clampedTarget = qBound(0, m_targetScrollValue, m_maxScroll);
     if (clampedTarget != m_targetScrollValue) {
@@ -620,7 +699,9 @@ void SmoothScrollArea::onStepScrollRequested(int delta)
     m_scrollAnimation->setEndValue(m_targetScrollValue);
     m_scrollAnimation->start();
 
-    m_verticalScrollBar->showAnimated();
+    if (m_orientation == Qt::Vertical) {
+        m_verticalScrollBar->showAnimated();
+    }
 }
 
 void SmoothScrollArea::flushHoverStates()
@@ -637,21 +718,30 @@ void SmoothScrollArea::syncContentPosition(int previousScrollValue, bool updateH
         return;
     }
 
-    m_contentWidget->move(0, -m_currentScrollValue);
+    if (m_orientation == Qt::Horizontal) {
+        m_contentWidget->move(-m_currentScrollValue, 0);
+    } else {
+        m_contentWidget->move(0, -m_currentScrollValue);
+    }
 
     if (m_viewport) {
         const int delta = m_currentScrollValue - previousScrollValue;
-        const int exposedHeight = qMin(qAbs(delta), m_viewport->height());
+        const int viewportExtent = m_orientation == Qt::Horizontal ? m_viewport->width()
+                                                                  : m_viewport->height();
+        const int exposedExtent = qMin(qAbs(delta), viewportExtent);
 
-        if (exposedHeight <= 0) {
+        if (exposedExtent <= 0 || exposedExtent >= viewportExtent) {
             m_viewport->update();
-        } else if (exposedHeight >= m_viewport->height()) {
-            m_viewport->update();
+        } else if (m_orientation == Qt::Horizontal && delta > 0) {
+            m_viewport->update(
+                m_viewport->width() - exposedExtent, 0, exposedExtent, m_viewport->height());
+        } else if (m_orientation == Qt::Horizontal) {
+            m_viewport->update(0, 0, exposedExtent, m_viewport->height());
         } else if (delta > 0) {
             m_viewport->update(
-                0, m_viewport->height() - exposedHeight, m_viewport->width(), exposedHeight);
+                0, m_viewport->height() - exposedExtent, m_viewport->width(), exposedExtent);
         } else {
-            m_viewport->update(0, 0, m_viewport->width(), exposedHeight);
+            m_viewport->update(0, 0, m_viewport->width(), exposedExtent);
         }
     }
 
@@ -674,6 +764,18 @@ void SmoothScrollArea::scheduleHoverStateUpdate()
 
 void SmoothScrollArea::updateGeometry()
 {
+    if (m_orientation == Qt::Horizontal) {
+        m_viewport->setGeometry(rect());
+        m_verticalScrollBar->setGeometry(
+            width(), 0, static_cast<int>(kScrollBarWidth), height());
+
+        if (m_contentWidget && m_contentWidget->layout()) {
+            m_contentWidget->layout()->invalidate();
+            m_contentWidget->layout()->activate();
+        }
+        return;
+    }
+
     // Reserved column width is animated (0..kScrollBarWidth) so the viewport shifts
     // smoothly. The bar itself keeps its fixed width and slides in from the right edge.
     const int reserved = qRound(m_scrollBarReserveExtent);
@@ -708,6 +810,14 @@ void SmoothScrollArea::setScrollBarReserveExtent(qreal extent)
 
 void SmoothScrollArea::updateScrollBarVisibility()
 {
+    if (m_orientation == Qt::Horizontal) {
+        m_scrollBarReserved = false;
+        m_reserveAnimation->stop();
+        setScrollBarReserveExtent(0.0);
+        m_verticalScrollBar->hideAnimated();
+        return;
+    }
+
     const bool shouldReserve = m_scrollBarAlwaysReserved
         || (m_scrollBarPolicy == Qt::ScrollBarAlwaysOn)
         || (m_scrollBarPolicy == Qt::ScrollBarAsNeeded && m_maxScroll > 0);

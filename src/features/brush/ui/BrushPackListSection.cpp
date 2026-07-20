@@ -38,8 +38,10 @@ using namespace ruwa::ui::core;
 
 namespace {
 
-constexpr int kBrushButtonWidth = 108;
-constexpr int kBrushButtonHeight = 36;
+constexpr int kStrokePreviewReferenceWidth = 108;
+constexpr int kStrokePreviewReferenceHeight = 36;
+constexpr int kStrokePreviewRenderInset = 3;
+constexpr int kStrokePreviewSupersampling = 2;
 constexpr int kExpandAnimationMinMs = 170;
 constexpr int kExpandAnimationMaxMs = 320;
 constexpr qreal kExpandAnimationMsPerPixel = 0.85;
@@ -50,6 +52,7 @@ constexpr auto kKeySeparatorBefore = "separatorBefore";
 
 enum BrushRowContextAction : int {
     CtxOpenInEditor = 1,
+    CtxToggleFavorite = 2,
     CtxBrushColorBase = 100,
 };
 
@@ -207,8 +210,8 @@ public:
     {
         setCursor(Qt::PointingHandCursor);
         setFocusPolicy(Qt::NoFocus);
-        setFixedSize(ThemeManager::instance().scaled(kBrushButtonWidth),
-            ThemeManager::instance().scaled(kBrushButtonHeight));
+        const int buttonSize = ThemeManager::instance().scaled(kBrushListButtonBaseSize);
+        setFixedSize(buttonSize, buttonSize);
         setHoverDuration(130);
         setActiveDuration(170);
 
@@ -279,6 +282,19 @@ public:
         openEditor.insert(
             QStringLiteral("standardIcon"), static_cast<int>(IconProvider::StandardIcon::Edit));
         actions.append(openEditor);
+
+        const bool favorite
+            = ruwa::core::SettingsManager::instance().isBrushFavorite(m_brush.id);
+        QVariantMap toggleFavorite;
+        toggleFavorite.insert(QStringLiteral("id"), CtxToggleFavorite);
+        toggleFavorite.insert(QStringLiteral("text"),
+            favorite ? QCoreApplication::translate(
+                           "BrushPackListSection", "Remove from favorites")
+                     : QCoreApplication::translate("BrushPackListSection", "Add to favorites"));
+        toggleFavorite.insert(QStringLiteral("danger"), false);
+        toggleFavorite.insert(QLatin1String(kKeyChecked), favorite);
+        toggleFavorite.insert(QLatin1String(kKeySeparatorBefore), true);
+        actions.append(toggleFavorite);
         ctx.insert(QStringLiteral("simpleActions"), QVariant::fromValue(actions));
 
         QVariantList colorActions;
@@ -305,6 +321,12 @@ public:
             if (m_openEditorCallback && !m_brush.id.isEmpty()) {
                 m_openEditorCallback(m_brush.id);
             }
+            return;
+        }
+
+        if (actionId == CtxToggleFavorite) {
+            auto& settings = ruwa::core::SettingsManager::instance();
+            settings.setBrushFavorite(m_brush.id, !settings.isBrushFavorite(m_brush.id));
             return;
         }
 
@@ -339,9 +361,9 @@ protected:
         fillColor
             = ThemeColors::interpolate(fillColor, colors.surfaceHover(), hoverProgress() * 0.32);
         QColor activeFill = ThemeColors::interpolate(colors.surfaceHover(),
-            ThemeColors::adjustBrightness(colors.primary, colors.isDark ? 0.54 : 1.85),
-            colors.isDark ? 0.26 : 0.18);
-        fillColor = ThemeColors::interpolate(fillColor, activeFill, activeProgress() * 0.92);
+            ThemeColors::adjustBrightness(colors.primary, colors.isDark ? 0.62 : 1.60),
+            colors.isDark ? 0.42 : 0.30);
+        fillColor = ThemeColors::interpolate(fillColor, activeFill, activeProgress());
         painter.setPen(Qt::NoPen);
         painter.setBrush(fillColor);
         painter.drawRoundedRect(rowRect, radius, radius);
@@ -351,6 +373,7 @@ protected:
         drawPreview(painter, previewRect, radius, colors);
         drawPreviewColorWash(painter, rowRect, radius, colors);
         drawDisplayColorBorderAccent(painter, rowRect, radius, colors);
+        drawSelectionBorder(painter, rowRect, radius, colors);
 
         const int leftOffset = ThemeManager::instance().scaled(10);
         QRect textRect(leftOffset, ThemeManager::instance().scaled(12),
@@ -370,9 +393,43 @@ protected:
         painter.drawText(textRect, Qt::AlignLeft | Qt::AlignBottom,
             painter.fontMetrics().elidedText(
                 translatedBrushText(m_brush.name), Qt::ElideRight, textRect.width()));
+
+        if (ruwa::core::SettingsManager::instance().isBrushFavorite(m_brush.id)) {
+            QFont favoriteFont = painter.font();
+            favoriteFont.setPixelSize(ThemeManager::instance().scaled(10));
+            favoriteFont.setWeight(QFont::DemiBold);
+            painter.setFont(favoriteFont);
+            QColor favoriteColor = ThemeColors::interpolate(colors.textMuted, colors.primary, 0.82);
+            favoriteColor.setAlpha(220);
+            painter.setPen(favoriteColor);
+            painter.drawText(QRect(0, ThemeManager::instance().scaled(5),
+                                 width() - ThemeManager::instance().scaled(7),
+                                 ThemeManager::instance().scaled(14)),
+                Qt::AlignRight | Qt::AlignTop, QStringLiteral("\u2605"));
+        }
     }
 
 private:
+    void drawSelectionBorder(
+        QPainter& painter, const QRectF& rect, qreal radius, const ThemeColors& colors)
+    {
+        if (activeProgress() <= 0.0) {
+            return;
+        }
+
+        QColor borderColor = ThemeColors::adjustBrightness(
+            colors.primary, colors.isDark ? 1.18 : 0.82);
+        borderColor.setAlpha(220);
+
+        painter.save();
+        painter.setOpacity(activeProgress());
+        painter.setPen(QPen(borderColor, 1.25));
+        painter.setBrush(Qt::NoBrush);
+        painter.drawRoundedRect(rect.adjusted(1.0, 1.0, -1.0, -1.0),
+            qMax<qreal>(0.0, radius - 1.0), qMax<qreal>(0.0, radius - 1.0));
+        painter.restore();
+    }
+
     void drawDisplayColorBackgroundAccent(
         QPainter& painter, const QRectF& rect, qreal radius, const ThemeColors& colors)
     {
@@ -539,13 +596,23 @@ private:
     void drawPreview(QPainter& painter, const QRectF& rect, qreal radius,
         const ruwa::ui::core::ThemeColors& colors)
     {
-        const int previewWidth = qMax(1, static_cast<int>(rect.width()));
-        const int previewHeight = qMax(1, static_cast<int>(rect.height()));
-        QColor previewColor
-            = ThemeColors::interpolate(colors.textMuted, colors.primary, activeProgress());
+        // Preserve the original row preview proportions for the brush engine.
+        // Rendering that geometry at 2x and reducing it in QPainter improves
+        // edge quality without changing the stroke radius or taper ratios.
+        const int referenceWidth = qMax(1,
+            ThemeManager::instance().scaled(kStrokePreviewReferenceWidth)
+                - kStrokePreviewRenderInset);
+        const int referenceHeight = qMax(1,
+            ThemeManager::instance().scaled(kStrokePreviewReferenceHeight)
+                - kStrokePreviewRenderInset);
+        const int previewWidth = referenceWidth * kStrokePreviewSupersampling;
+        const int previewHeight = referenceHeight * kStrokePreviewSupersampling;
+        const qreal previewColorStrength = 0.76 + activeProgress() * 0.24;
+        QColor previewColor = ThemeColors::interpolate(
+            colors.textMuted, colors.primary, previewColorStrength);
         previewColor = ThemeColors::interpolate(previewColor,
             ThemeColors::adjustBrightness(colors.primary, colors.isDark ? 1.18 : 0.94),
-            activeProgress() * 0.65);
+            0.28 + activeProgress() * 0.52);
         requestPreview(previewColor, previewWidth, previewHeight);
         if (m_previewImage.isNull()) {
             return;
@@ -556,10 +623,17 @@ private:
         clipPath.addRoundedRect(rect, radius, radius);
         painter.setClipPath(clipPath);
 
-        const qreal previewOpacity = (colors.isDark ? 0.46 : 0.40) + hoverProgress() * 0.10
-            + activeProgress() * (colors.isDark ? 0.38 : 0.34);
+        const qreal previewOpacity = (colors.isDark ? 0.74 : 0.68) + hoverProgress() * 0.08
+            + activeProgress() * (colors.isDark ? 0.18 : 0.20);
         painter.setOpacity(previewOpacity);
-        painter.drawImage(rect.toRect(), m_previewImage);
+        const QRectF sourceRect(m_previewImage.width() * 0.5, 0.0,
+            m_previewImage.width() * 0.5, m_previewImage.height());
+        QSizeF drawnSize = sourceRect.size();
+        drawnSize.scale(rect.size(), Qt::KeepAspectRatio);
+        QRectF drawnRect(QPointF(), drawnSize);
+        drawnRect.moveCenter(rect.center());
+        painter.setRenderHint(QPainter::SmoothPixmapTransform);
+        painter.drawImage(drawnRect, m_previewImage, sourceRect);
         painter.setOpacity(1.0);
 
         QLinearGradient fade(rect.topLeft(), rect.topRight());
@@ -567,9 +641,9 @@ private:
         QColor fadeMid = colors.surface;
         QColor fadeEnd = colors.surface;
         const int startAlpha
-            = qRound((colors.isDark ? 246 : 236) - activeProgress() * (colors.isDark ? 34 : 28));
+            = qRound((colors.isDark ? 218 : 214) - activeProgress() * (colors.isDark ? 48 : 44));
         const int midAlpha
-            = qRound((colors.isDark ? 178 : 138) - activeProgress() * (colors.isDark ? 48 : 40));
+            = qRound((colors.isDark ? 145 : 112) - activeProgress() * (colors.isDark ? 65 : 52));
         fadeStart.setAlpha(startAlpha);
         fadeMid.setAlpha(midAlpha);
         fadeEnd.setAlpha(0);
@@ -740,6 +814,15 @@ bool BrushPackListSection::updateBrushDisplayColorIndex(const QString& brushId, 
     return true;
 }
 
+bool BrushPackListSection::updateBrushFavorite(const QString& brushId)
+{
+    if (QWidget* widget = m_brushRows.value(brushId, nullptr)) {
+        widget->update();
+        return true;
+    }
+    return false;
+}
+
 bool BrushPackListSection::updateBrushName(const QString& brushId, const QString& newName)
 {
     bool found = false;
@@ -792,10 +875,14 @@ void BrushPackListSection::rebuildBrushRows()
     rows.reserve(m_pack.brushes.size());
     for (const BrushListBrushData& brush : m_pack.brushes) {
         auto* rowButton = new PackBrushRowButton(brush, m_contentContainer);
+        const QString sourcePackId = brush.packId.isEmpty() ? m_pack.id : brush.packId;
         rowButton->setOpenEditorCallback(
-            [this](const QString& brushId) { emit brushEditorRequested(m_pack.id, brushId); });
+            [this, sourcePackId](
+                const QString& brushId) { emit brushEditorRequested(sourcePackId, brushId); });
         connect(rowButton, &QAbstractButton::clicked, this,
-            [this, brushId = brush.id]() { emit brushActivated(m_pack.id, brushId); });
+            [this, sourcePackId, brushId = brush.id]() {
+                emit brushActivated(sourcePackId, brushId);
+            });
         rows.append(rowButton);
         m_brushRows.insert(brush.id, rowButton);
     }

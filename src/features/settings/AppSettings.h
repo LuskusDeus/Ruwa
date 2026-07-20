@@ -12,6 +12,7 @@
 #include <QUuid>
 #include <QHash>
 #include <QRectF>
+#include <QSet>
 #include <cstdint>
 
 namespace ruwa::core {
@@ -47,6 +48,8 @@ struct AppSettings {
         int welcomeBannerTextColorMode = 0;
         /// Brush panel row accent color indices by brush id. 0 = default.
         QHash<QString, int> brushDisplayColorIndices;
+        /// Brush ids marked as favorites. Stored globally, independent of panel layouts.
+        QSet<QString> favoriteBrushIds;
     } appearance;
 
     // === EDITOR ===

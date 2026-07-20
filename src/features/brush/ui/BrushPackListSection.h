@@ -24,8 +24,11 @@ class AnimatedFlowWidget;
 
 namespace ruwa::ui::workspace {
 
+inline constexpr int kBrushListButtonBaseSize = 80;
+
 struct BrushListBrushData {
     QString id;
+    QString packId;
     QString name;
     ruwa::core::brushes::BrushSettingsData settings;
     int displayColorIndex = 0;
@@ -63,6 +66,7 @@ public:
     bool updateBrushSettings(
         const QString& brushId, const ruwa::core::brushes::BrushSettingsData& settings);
     bool updateBrushDisplayColorIndex(const QString& brushId, int colorIndex);
+    bool updateBrushFavorite(const QString& brushId);
     /// Update the displayed name of a single brush row in place (repaint only,
     /// preview untouched). Returns true if the brush exists in this section.
     bool updateBrushName(const QString& brushId, const QString& newName);

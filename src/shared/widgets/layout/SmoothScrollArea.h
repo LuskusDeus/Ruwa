@@ -42,6 +42,12 @@ public:
     void setWidget(QWidget* widget);
     QWidget* widget() const { return m_contentWidget; }
 
+    /// Select the scrolling axis. Vertical remains the default for existing users.
+    /// Horizontal mode uses the same smooth wheel and stylus-swipe machinery but
+    /// intentionally has no visible scrollbar.
+    void setOrientation(Qt::Orientation orientation);
+    Qt::Orientation orientation() const { return m_orientation; }
+
     /// Viewport widget (the visible area where content is clipped)
     QWidget* viewport() const { return m_viewport; }
 
@@ -149,6 +155,7 @@ private:
     bool m_scrollBarTransparentTrack { false };
     bool m_refreshingLayout { false };
     bool m_userScrollingEnabled { true };
+    Qt::Orientation m_orientation { Qt::Vertical };
 
     QPropertyAnimation* m_scrollAnimation { nullptr };
     QPropertyAnimation* m_reserveAnimation { nullptr };

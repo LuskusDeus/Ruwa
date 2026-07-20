@@ -9,7 +9,16 @@
 
 #include "shell/docking/widgets/DockPanel.h"
 
+#include <QHash>
+#include <QStringList>
+
 class QWidget;
+class QHBoxLayout;
+
+namespace ruwa::ui::widgets {
+class BaseAnimatedButton;
+class SmoothScrollArea;
+}
 
 namespace ruwa::ui::workspace {
 
@@ -34,8 +43,22 @@ protected:
     void restorePanelState(const QJsonObject& state) override;
 
 private:
+    void setupFilterBar();
+    void rebuildFilterButtons(const QStringList& packIds, const QStringList& packNames);
+    void activateFilter(const QString& filterId);
+    void updateFilterSelection();
+    void revealActiveFilter();
+
     CanvasPanel* m_canvasPanel = nullptr;
     BrushesPanelContent* m_contentWidget = nullptr;
+    widgets::SmoothScrollArea* m_filterScrollArea = nullptr;
+    QWidget* m_filterContent = nullptr;
+    QHBoxLayout* m_filterLayout = nullptr;
+    QHash<QString, widgets::BaseAnimatedButton*> m_filterButtons;
+    QStringList m_packFilterIds;
+    QStringList m_packFilterNames;
+    QString m_activeFilterId;
+    bool m_filterBarInitializing = false;
     QJsonObject m_pendingPanelState;
 };
 
