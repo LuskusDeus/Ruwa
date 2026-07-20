@@ -122,9 +122,9 @@ public slots:
     void onWindowStateChanged(Qt::WindowState state);
 
     /// Sync panel visibility state from active workspace (for menu checkmarks)
-    void setPanelsVisibilityState(bool toolsVisible, bool brushesVisible, bool layersVisible,
-        bool layerPropertiesVisible, bool layerEffectsVisible, bool colorVisible,
-        bool navigatorVisible = true);
+    void setPanelsVisibilityState(bool toolsVisible, bool brushesVisible,
+        bool brushSettingsVisible, bool layersVisible, bool layerPropertiesVisible,
+        bool layerEffectsVisible, bool colorVisible, bool navigatorVisible = true);
 
     /// Sync canvas widgets visibility state from active workspace (for menu checkmarks)
     void setCanvasWidgetsVisibilityState(const CanvasWidgetVisibility& visibility);
@@ -172,6 +172,7 @@ signals:
     // Panels visibility (View → Panels submenu)
     void panelsToolsVisibilityChanged(bool visible);
     void panelsBrushesVisibilityChanged(bool visible);
+    void panelsBrushSettingsVisibilityChanged(bool visible);
     void panelsLayersVisibilityChanged(bool visible);
     void panelsLayerPropertiesVisibilityChanged(bool visible);
     void panelsLayerEffectsVisibilityChanged(bool visible);
@@ -288,6 +289,7 @@ private:
 
     bool m_panelsToolsVisible = true;
     bool m_panelsBrushesVisible = true;
+    bool m_panelsBrushSettingsVisible = true;
     bool m_panelsLayersVisible = true;
     bool m_panelsLayerPropertiesVisible = true;
     bool m_panelsLayerEffectsVisible = false;

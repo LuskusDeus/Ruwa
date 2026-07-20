@@ -58,6 +58,7 @@ class LayerPropertiesPanel;
 class LayerEffectsPanel;
 class ToolsPanel;
 class BrushesPanel;
+class BrushSettingsPanel;
 class ColorPanel;
 class CanvasPanel;
 class NavigatorPanel;
@@ -76,7 +77,7 @@ namespace ruwa::ui::tabs {
  * Uses custom DockingSystem instead of QMainWindow's dock system.
  *
  * Layout:
- * - Left dock: Tools and Brushes panels
+ * - Left dock: Tools, Brushes, and Brush Settings panels
  * - Right dock: Layers, Layer Properties, Color panels
  * - Center: Canvas panel
  * - Top: Toolbar
@@ -245,6 +246,7 @@ public:
     workspace::LayerEffectsPanel* layerEffectsPanel() const { return m_layerEffectsPanel; }
     workspace::ToolsPanel* toolsPanel() const { return m_toolsPanel; }
     workspace::BrushesPanel* brushesPanel() const { return m_brushesPanel; }
+    workspace::BrushSettingsPanel* brushSettingsPanel() const { return m_brushSettingsPanel; }
     workspace::ColorPanel* colorPanel() const { return m_colorPanel; }
     workspace::CanvasPanel* canvasPanel() const { return m_canvasPanel; }
     workspace::NavigatorPanel* navigatorPanel() const { return m_navigatorPanel; }
@@ -279,6 +281,7 @@ public:
     /// Set panel visibility (called from View → Panels menu)
     void setToolsPanelVisible(bool visible);
     void setBrushesPanelVisible(bool visible);
+    void setBrushSettingsPanelVisible(bool visible);
     void setLayersPanelVisible(bool visible);
     void setLayerPropertiesPanelVisible(bool visible);
     void setLayerEffectsPanelVisible(bool visible);
@@ -291,6 +294,7 @@ public:
     /// Current panel visibility (for syncing TopBar menu state)
     bool isToolsPanelVisible() const;
     bool isBrushesPanelVisible() const;
+    bool isBrushSettingsPanelVisible() const;
     bool isLayersPanelVisible() const;
     bool isLayerPropertiesPanelVisible() const;
     bool isLayerEffectsPanelVisible() const;
@@ -476,6 +480,7 @@ private:
     workspace::LayerEffectsPanel* m_layerEffectsPanel = nullptr;
     workspace::ToolsPanel* m_toolsPanel = nullptr;
     workspace::BrushesPanel* m_brushesPanel = nullptr;
+    workspace::BrushSettingsPanel* m_brushSettingsPanel = nullptr;
     workspace::ColorPanel* m_colorPanel = nullptr;
     workspace::NavigatorPanel* m_navigatorPanel = nullptr;
 
@@ -496,6 +501,7 @@ private:
     // Saved panel placements (for restore after hide)
     std::optional<docking::PanelPlacement> m_savedToolsPlacement;
     std::optional<docking::PanelPlacement> m_savedBrushesPlacement;
+    std::optional<docking::PanelPlacement> m_savedBrushSettingsPlacement;
     std::optional<docking::PanelPlacement> m_savedLayersPlacement;
     std::optional<docking::PanelPlacement> m_savedLayerPropertiesPlacement;
     std::optional<docking::PanelPlacement> m_savedLayerEffectsPlacement;

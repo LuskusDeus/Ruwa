@@ -620,9 +620,10 @@ void MainWindow::connectSignals()
         m_tabCoordinator, &TabSystemCoordinator::workspacePanelVisibilityChanged, this, [this]() {
             if (auto* ws = activeWorkspaceTab()) {
                 m_topBar->setPanelsVisibilityState(ws->isToolsPanelVisible(),
-                    ws->isBrushesPanelVisible(), ws->isLayersPanelVisible(),
-                    ws->isLayerPropertiesPanelVisible(), ws->isLayerEffectsPanelVisible(),
-                    ws->isColorPanelVisible(), ws->isNavigatorPanelVisible());
+                    ws->isBrushesPanelVisible(), ws->isBrushSettingsPanelVisible(),
+                    ws->isLayersPanelVisible(), ws->isLayerPropertiesPanelVisible(),
+                    ws->isLayerEffectsPanelVisible(), ws->isColorPanelVisible(),
+                    ws->isNavigatorPanelVisible());
                 m_topBar->setCanvasWidgetsVisibilityState(ws->canvasWidgetVisibility());
             }
         });
@@ -647,6 +648,11 @@ void MainWindow::connectSignals()
         if (auto* ws = activeWorkspaceTab())
             ws->setBrushesPanelVisible(visible);
     });
+    connect(m_topBar, &widgets::TopBar::panelsBrushSettingsVisibilityChanged, this,
+        [this](bool visible) {
+            if (auto* ws = activeWorkspaceTab())
+                ws->setBrushSettingsPanelVisible(visible);
+        });
     connect(m_topBar, &widgets::TopBar::panelsLayersVisibilityChanged, this, [this](bool visible) {
         if (auto* ws = activeWorkspaceTab())
             ws->setLayersPanelVisible(visible);
@@ -971,9 +977,10 @@ void MainWindow::onActiveTabChanged(ruwa::core::BaseTab* newTab)
             &MainWindow::updateWindowTitleForActiveTab);
         if (auto* ws = qobject_cast<ruwa::ui::tabs::WorkspaceTab*>(newTab)) {
             m_topBar->setPanelsVisibilityState(ws->isToolsPanelVisible(),
-                ws->isBrushesPanelVisible(), ws->isLayersPanelVisible(),
-                ws->isLayerPropertiesPanelVisible(), ws->isLayerEffectsPanelVisible(),
-                ws->isColorPanelVisible(), ws->isNavigatorPanelVisible());
+                ws->isBrushesPanelVisible(), ws->isBrushSettingsPanelVisible(),
+                ws->isLayersPanelVisible(), ws->isLayerPropertiesPanelVisible(),
+                ws->isLayerEffectsPanelVisible(), ws->isColorPanelVisible(),
+                ws->isNavigatorPanelVisible());
             m_topBar->setCanvasWidgetsVisibilityState(ws->canvasWidgetVisibility());
         }
     } else {

@@ -32,6 +32,7 @@ public:
     explicit BrushesPanel(QWidget* parent = nullptr);
     ~BrushesPanel() override;
     void setCanvasPanel(CanvasPanel* canvasPanel);
+    void openBrushEditorForBrush(const QString& brushId);
 
 signals:
     void panelStateChanged();

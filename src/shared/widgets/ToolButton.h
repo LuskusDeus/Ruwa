@@ -21,7 +21,7 @@ class ToolButton : public ruwa::ui::widgets::BaseAnimatedButton {
 
 public:
     enum class Mode { Toggle, Action };
-    enum class ChromeStyle { Toolbar, Overlay, Surface };
+    enum class ChromeStyle { Toolbar, Overlay, Surface, PrimaryHover };
 
     explicit ToolButton(QWidget* parent = nullptr);
     explicit ToolButton(Mode mode, QWidget* parent = nullptr);

@@ -867,8 +867,10 @@ void BrushSettingsWidget::applyStyles()
     const QString starCheckedColor = colors.primary.name(QColor::HexArgb);
     const QString starUncheckedColor = colors.textDisabled().name(QColor::HexArgb);
     const QString starHoverColor = colors.textMuted.name(QColor::HexArgb);
-    const int nameColumnWidth = theme.scaled(134);
-    const int valueColumnWidth = theme.scaled(176);
+    // Keep every row aligned while leaving the majority of a compact dock to
+    // the interactive control. 88 px fits the common two-word setting names
+    // at the row font size without wasting the space needed by segmented inputs.
+    const int nameColumnWidth = theme.scaled(88);
 
     QFont starFont = font();
     starFont.setPixelSize(theme.scaled(12));
@@ -908,7 +910,9 @@ void BrushSettingsWidget::applyStyles()
         row.nameLabel->setStyleSheet(labelStyle);
         row.nameLabel->setFont(rowFont);
         row.nameLabel->setFixedWidth(nameColumnWidth);
-        row.slider->setMinimumSize(valueColumnWidth, theme.scaled(22));
+        // The fixed label column is the only horizontal alignment constraint;
+        // the control keeps shrinking with a narrow quick-settings dock.
+        row.slider->setMinimumSize(0, theme.scaled(22));
         row.slider->setMaximumHeight(theme.scaled(22));
         row.slider->setSizePolicy(QSizePolicy::Expanding, QSizePolicy::Fixed);
         applyStarStyle(row.starButton);
@@ -932,7 +936,7 @@ void BrushSettingsWidget::applyStyles()
         row.nameLabel->setFixedWidth(nameColumnWidth);
         if (row.combo) {
             row.combo->setFixedHeight(theme.scaled(24));
-            row.combo->setMinimumSize(valueColumnWidth, theme.scaled(22));
+            row.combo->setMinimumSize(0, theme.scaled(22));
             row.combo->setMaximumHeight(theme.scaled(24));
             row.combo->setPopupMaxHeight(
                 theme.scaled(row.key == QStringLiteral("stroke.blendMode") ? 320 : 360));
@@ -942,7 +946,7 @@ void BrushSettingsWidget::applyStyles()
         }
         if (row.imageSelector) {
             row.imageSelector->setFixedHeight(theme.scaled(34));
-            row.imageSelector->setMinimumSize(valueColumnWidth, theme.scaled(34));
+            row.imageSelector->setMinimumSize(0, theme.scaled(34));
             row.imageSelector->setMaximumHeight(theme.scaled(34));
             row.imageSelector->setPopupMinWidth(theme.scaled(318));
             row.imageSelector->setPopupCardSize(QSize(theme.scaled(142), theme.scaled(104)));
@@ -958,7 +962,7 @@ void BrushSettingsWidget::applyStyles()
         row.nameLabel->setFont(rowFont);
         row.nameLabel->setFixedWidth(nameColumnWidth);
         if (row.selector) {
-            row.selector->setMinimumSize(valueColumnWidth, theme.scaled(32));
+            row.selector->setMinimumSize(0, theme.scaled(32));
             row.selector->setMaximumHeight(theme.scaled(32));
             row.selector->setSizePolicy(QSizePolicy::Expanding, QSizePolicy::Fixed);
         }
@@ -974,7 +978,7 @@ void BrushSettingsWidget::applyStyles()
         if (row.infoLabel) {
             row.infoLabel->setStyleSheet(dynamicInfoStyle);
             row.infoLabel->setFont(rowFont);
-            row.infoLabel->setMinimumWidth(valueColumnWidth);
+            row.infoLabel->setMinimumWidth(0);
             row.infoLabel->setSizePolicy(QSizePolicy::Expanding, QSizePolicy::Preferred);
         }
         applyStarStyle(row.starButton);

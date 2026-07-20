@@ -51,6 +51,7 @@ public:
     void showAllPacks();
     void showFavoriteBrushes();
     void showPack(const QString& packId);
+    void openBrushEditor(const QString& packId, const QString& brushId);
 
 signals:
     void brushSelected(const QString& brushId);
@@ -105,7 +106,6 @@ private:
     void scheduleScrollRestore(const QString& pageKey);
     void applyPendingScrollRestore(const QString& pageKey);
     void notifyStateChanged();
-    void openBrushEditor(const QString& packId, const QString& brushId);
     QString brushNameForSelection(const QString& packId, const QString& brushId) const;
 
 private:

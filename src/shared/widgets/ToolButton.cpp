@@ -238,11 +238,19 @@ void ToolButton::paintEvent(QPaintEvent* event)
 
     // Hover state (only when not active)
     if (enabled && hoverProgress() > 0 && activeProgress() < 1.0) {
-        QColor hoverColor
-            = m_chromeStyle == ChromeStyle::Overlay ? colors.overlay(0.06) : colors.surfaceHover();
-        qreal hoverAlpha = hoverColor.alphaF() * hoverProgress() * (1.0 - activeProgress());
-        if (m_chromeStyle == ChromeStyle::Surface) {
-            hoverAlpha *= m_chromeOpacity;
+        QColor hoverColor;
+        qreal hoverAlpha = 0.0;
+        if (m_chromeStyle == ChromeStyle::PrimaryHover) {
+            hoverColor = colors.primary;
+            hoverAlpha = (colors.isDark ? 0.14 : 0.10) * hoverProgress()
+                * (1.0 - activeProgress());
+        } else {
+            hoverColor = m_chromeStyle == ChromeStyle::Overlay ? colors.overlay(0.06)
+                                                               : colors.surfaceHover();
+            hoverAlpha = hoverColor.alphaF() * hoverProgress() * (1.0 - activeProgress());
+            if (m_chromeStyle == ChromeStyle::Surface) {
+                hoverAlpha *= m_chromeOpacity;
+            }
         }
         hoverColor.setAlphaF(hoverAlpha);
         painter.setBrush(hoverColor);
@@ -251,11 +259,18 @@ void ToolButton::paintEvent(QPaintEvent* event)
 
     // Pressed overlay for non-checked buttons
     if (enabled && m_pressFeedback && m_isPressed && activeProgress() < 1.0) {
-        QColor pressColor
-            = m_chromeStyle == ChromeStyle::Overlay ? colors.overlay(0.10) : colors.surfaceHover();
-        qreal pressAlpha = pressColor.alphaF() * 1.5 * (1.0 - activeProgress());
-        if (m_chromeStyle == ChromeStyle::Surface) {
-            pressAlpha *= m_chromeOpacity;
+        QColor pressColor;
+        qreal pressAlpha = 0.0;
+        if (m_chromeStyle == ChromeStyle::PrimaryHover) {
+            pressColor = colors.primary;
+            pressAlpha = (colors.isDark ? 0.22 : 0.17) * (1.0 - activeProgress());
+        } else {
+            pressColor = m_chromeStyle == ChromeStyle::Overlay ? colors.overlay(0.10)
+                                                               : colors.surfaceHover();
+            pressAlpha = pressColor.alphaF() * 1.5 * (1.0 - activeProgress());
+            if (m_chromeStyle == ChromeStyle::Surface) {
+                pressAlpha *= m_chromeOpacity;
+            }
         }
         pressColor.setAlphaF(qBound(0.0, pressAlpha, 1.0));
         painter.setBrush(pressColor);
@@ -281,7 +296,10 @@ void ToolButton::paintEvent(QPaintEvent* event)
         };
 
         // Enabled appearance (active-interpolated) ...
-        const QColor normalColor = m_mutedNormalIcon ? colors.textMuted : colors.text;
+        QColor normalColor = m_mutedNormalIcon ? colors.textMuted : colors.text;
+        if (m_chromeStyle == ChromeStyle::PrimaryHover) {
+            normalColor = lerpColor(normalColor, colors.primary, hoverProgress());
+        }
         const QColor activeColor = colors.textOnPrimary();
         const QColor enabledColor = lerpColor(normalColor, activeColor, activeProgress());
 

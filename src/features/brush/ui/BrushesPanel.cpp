@@ -6,6 +6,7 @@
 
 #include "features/brush/ui/BrushesPanel.h"
 
+#include "features/brush/manager/BrushManager.h"
 #include "features/brush/ui/BrushPackListSection.h"
 #include "features/brush/ui/BrushesPanelContent.h"
 #include "features/theme/manager/ThemeColors.h"
@@ -161,6 +162,19 @@ void BrushesPanel::setCanvasPanel(CanvasPanel* canvasPanel)
     m_canvasPanel = canvasPanel;
     if (m_contentWidget) {
         m_contentWidget->setCanvasPanel(canvasPanel);
+    }
+}
+
+void BrushesPanel::openBrushEditorForBrush(const QString& brushId)
+{
+    if (!m_contentWidget || brushId.isEmpty()) {
+        return;
+    }
+
+    const QString presetId
+        = ruwa::core::brushes::BrushManager::instance().presetIdForBrush(brushId);
+    if (!presetId.isEmpty()) {
+        m_contentWidget->openBrushEditor(presetId, brushId);
     }
 }
 

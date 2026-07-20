@@ -23,6 +23,7 @@
 #include "shared/widgets/inputs/PositionInputField.h"
 #include "features/tools/ToolsPanel.h"
 #include "features/brush/ui/BrushesPanel.h"
+#include "features/brush/ui/BrushSettingsPanel.h"
 #include "features/color/ColorPanel.h"
 #include "features/color/RecentColorsPersistence.h"
 #include "features/canvas/ui/CanvasPanel.h"
@@ -1849,6 +1850,7 @@ void WorkspaceTab::setupPanels()
         m_waitingForAsyncProjectData || static_cast<bool>(m_pendingProjectData));
     m_toolsPanel = new workspace::ToolsPanel();
     m_brushesPanel = new workspace::BrushesPanel();
+    m_brushSettingsPanel = new workspace::BrushSettingsPanel();
     m_layersPanel = new workspace::LayersPanel();
     // Stamp the per-document tile format before any layer/grid is created so new
     // content grids adopt it (masks stay RGBA8). For loaded projects m_settings
@@ -1915,6 +1917,7 @@ void WorkspaceTab::setupPanels()
     m_canvasPanel->setPersistentKey(QStringLiteral("canvas"));
     m_toolsPanel->setPersistentKey(QStringLiteral("tools"));
     m_brushesPanel->setPersistentKey(QStringLiteral("brushes"));
+    m_brushSettingsPanel->setPersistentKey(QStringLiteral("brush-settings"));
     m_layersPanel->setPersistentKey(QStringLiteral("layers"));
     m_layerPropertiesPanel->setPersistentKey(QStringLiteral("layer-properties"));
     m_layerEffectsPanel->setPersistentKey(QStringLiteral("layer-effects"));
@@ -1923,11 +1926,16 @@ void WorkspaceTab::setupPanels()
 
     m_navigatorPanel->setCanvasPanel(m_canvasPanel);
     m_brushesPanel->setCanvasPanel(m_canvasPanel);
+    m_brushSettingsPanel->setCanvasPanel(m_canvasPanel);
+    connect(m_brushSettingsPanel, &workspace::BrushSettingsPanel::brushEditorRequested,
+        m_brushesPanel, &workspace::BrushesPanel::openBrushEditorForBrush);
     {
         m_toolsPanel->setCurrentTool(toToolsPanelTool(m_canvasPanel->toolMode()));
     }
     m_brushesPanel->setUserHorizontalDockedWidth(220);
     m_brushesPanel->setUserVerticalDockedHeight(234);
+    m_brushSettingsPanel->setUserHorizontalDockedWidth(220);
+    m_brushSettingsPanel->setUserVerticalDockedHeight(280);
     if (!m_workspaceColorStateInitialized) {
         m_workspaceColorState.foreground = m_canvasPanel->currentBrushColor();
         m_workspaceColorState.background = m_settings.backgroundColor;
@@ -1951,6 +1959,7 @@ void WorkspaceTab::setupPanels()
     m_dockManager->registerPanel(m_canvasPanel);
     m_dockManager->registerPanel(m_toolsPanel);
     m_dockManager->registerPanel(m_brushesPanel);
+    m_dockManager->registerPanel(m_brushSettingsPanel);
     m_dockManager->registerPanel(m_layersPanel);
     m_dockManager->registerPanel(m_layerPropertiesPanel);
     m_dockManager->registerPanel(m_layerEffectsPanel);
@@ -1981,6 +1990,10 @@ void WorkspaceTab::setupDefaultLayout()
 
     // Add brushes under tools
     m_dockManager->addPanelRelativeTo(m_brushesPanel, m_toolsPanel, DockPosition::Bottom);
+
+    // Add favorite settings under the brush list.
+    m_dockManager->addPanelRelativeTo(
+        m_brushSettingsPanel, m_brushesPanel, DockPosition::Bottom);
 
     // Add layers on right
     m_dockManager->addPanel(m_layersPanel, DockPosition::Right);
@@ -3812,6 +3825,7 @@ void WorkspaceTab::resetDockLayout()
 
     m_savedToolsPlacement.reset();
     m_savedBrushesPlacement.reset();
+    m_savedBrushSettingsPlacement.reset();
     m_savedLayersPlacement.reset();
     m_savedLayerPropertiesPlacement.reset();
     m_savedColorPlacement.reset();
@@ -4003,6 +4017,28 @@ void WorkspaceTab::setBrushesPanelVisible(bool visible)
     }
 }
 
+void WorkspaceTab::setBrushSettingsPanelVisible(bool visible)
+{
+    if (!m_brushSettingsPanel || !m_dockManager)
+        return;
+    if (visible && m_brushSettingsPanel->isHidden()) {
+        if (m_savedBrushSettingsPlacement) {
+            applyPanelPlacement(m_brushSettingsPanel, *m_savedBrushSettingsPlacement);
+        } else if (m_brushesPanel && !m_brushesPanel->isHidden()) {
+            m_dockManager->addPanelRelativeTo(
+                m_brushSettingsPanel, m_brushesPanel, docking::DockPosition::Bottom);
+        } else {
+            m_dockManager->showPanel(m_brushSettingsPanel, docking::DockPosition::Left);
+        }
+    } else if (!visible && !m_brushSettingsPanel->isHidden()) {
+        if (m_dockContainer) {
+            m_savedBrushSettingsPlacement
+                = m_dockContainer->getPanelPlacement(m_brushSettingsPanel);
+        }
+        m_dockManager->closePanel(m_brushSettingsPanel);
+    }
+}
+
 void WorkspaceTab::setLayersPanelVisible(bool visible)
 {
     if (!m_layersPanel || !m_dockManager)
@@ -4129,6 +4165,11 @@ bool WorkspaceTab::isToolsPanelVisible() const
 bool WorkspaceTab::isBrushesPanelVisible() const
 {
     return m_brushesPanel && !m_brushesPanel->isHidden();
+}
+
+bool WorkspaceTab::isBrushSettingsPanelVisible() const
+{
+    return m_brushSettingsPanel && !m_brushSettingsPanel->isHidden();
 }
 
 bool WorkspaceTab::isLayersPanelVisible() const

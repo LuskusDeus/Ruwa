@@ -602,11 +602,13 @@ void TopBar::onWindowStateChanged(Qt::WindowState state)
     update();
 }
 
-void TopBar::setPanelsVisibilityState(bool toolsVisible, bool brushesVisible, bool layersVisible,
-    bool layerPropertiesVisible, bool layerEffectsVisible, bool colorVisible, bool navigatorVisible)
+void TopBar::setPanelsVisibilityState(bool toolsVisible, bool brushesVisible,
+    bool brushSettingsVisible, bool layersVisible, bool layerPropertiesVisible,
+    bool layerEffectsVisible, bool colorVisible, bool navigatorVisible)
 {
     m_panelsToolsVisible = toolsVisible;
     m_panelsBrushesVisible = brushesVisible;
+    m_panelsBrushSettingsVisible = brushSettingsVisible;
     m_panelsLayersVisible = layersVisible;
     m_panelsLayerPropertiesVisible = layerPropertiesVisible;
     m_panelsLayerEffectsVisible = layerEffectsVisible;
@@ -757,6 +759,16 @@ MenuItem TopBar::buildPanelsMenuItem()
         emit panelsBrushesVisibilityChanged(checked);
     };
 
+    MenuItem brushSettingsItem;
+    brushSettingsItem.text = tr("Brush Settings");
+    brushSettingsItem.enabled = true;
+    brushSettingsItem.isToggle = true;
+    brushSettingsItem.checked = m_panelsBrushSettingsVisible;
+    brushSettingsItem.toggleAction = [this](bool checked) {
+        m_panelsBrushSettingsVisible = checked;
+        emit panelsBrushSettingsVisibilityChanged(checked);
+    };
+
     MenuItem layersItem;
     layersItem.text = tr("Layers");
     layersItem.enabled = true;
@@ -807,8 +819,8 @@ MenuItem TopBar::buildPanelsMenuItem()
         emit panelsNavigatorVisibilityChanged(checked);
     };
 
-    panelsItem.submenu = { toolsItem, brushesItem, layersItem, layerPropsItem, layerEffectsItem,
-        colorItem, navigatorItem };
+    panelsItem.submenu = { toolsItem, brushesItem, brushSettingsItem, layersItem, layerPropsItem,
+        layerEffectsItem, colorItem, navigatorItem };
     return panelsItem;
 }
 
