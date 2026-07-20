@@ -110,6 +110,15 @@ void ToolButton::setChromeInsets(int left, int top, int right, int bottom)
     update();
 }
 
+void ToolButton::setCircularChrome(bool circular)
+{
+    if (m_circularChrome == circular) {
+        return;
+    }
+    m_circularChrome = circular;
+    update();
+}
+
 void ToolButton::setBorderVisible(bool visible)
 {
     if (m_borderVisible == visible) {
@@ -205,12 +214,13 @@ void ToolButton::paintEvent(QPaintEvent* event)
 
     const auto& colors = ThemeManager::instance().colors();
     auto& mgr = WidgetStyleManager::instance();
-    int radius = mgr.scaled(m_baseRadius);
     const bool enabled = isEnabled();
 
     QRectF rect
         = this->rect().adjusted(mgr.scaled(m_baseInsetLeft) + 0.5, mgr.scaled(m_baseInsetTop) + 0.5,
             -mgr.scaled(m_baseInsetRight) - 0.5, -mgr.scaled(m_baseInsetBottom) - 0.5);
+    const qreal radius = m_circularChrome ? qMin(rect.width(), rect.height()) * 0.5
+                                          : mgr.scaled(m_baseRadius);
 
     // Background layer
     painter.setPen(Qt::NoPen);

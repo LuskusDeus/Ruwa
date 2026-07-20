@@ -155,7 +155,7 @@ protected:
     void leaveEvent(QEvent* event) override;
 
 private slots:
-    void onHexEditingFinished();
+    void onHexTextChanged(const QString& digits);
     void onThemeChanged();
     void onShowAnimationFinished();
     void onHideAnimationFinished();

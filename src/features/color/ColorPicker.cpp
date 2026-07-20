@@ -228,7 +228,7 @@ void ColorPicker::setupUI()
     m_hexInput->setGraphicsEffect(hexOpacity);
     hexOpacity->setOpacity(0.0);
 
-    connect(m_hexInput, &QLineEdit::editingFinished, this, &ColorPicker::onHexEditingFinished);
+    connect(m_hexInput, &QLineEdit::textChanged, this, &ColorPicker::onHexTextChanged);
 
     m_colorSlotSwitch = new ColorSlotSwitchWidget(this);
     m_colorSlotSwitch->setFixedSize(theme.scaled(ColorSwitchWidth), theme.scaled(HexInputHeight));
@@ -487,6 +487,9 @@ void ColorPicker::setEmbeddedMode(bool embedded)
     if (m_embeddedMode == embedded)
         return;
     m_embeddedMode = embedded;
+    if (m_hexInput) {
+        m_hexInput->setCopyButtonVisible(embedded);
+    }
     if (embedded) {
         setAttribute(Qt::WA_TranslucentBackground, false);
         setShowProgress(1.0);
@@ -748,39 +751,39 @@ void ColorPicker::updateHexInput()
     m_hexInput->setHex(m_currentColor.name(QColor::HexRgb));
 }
 
-void ColorPicker::onHexEditingFinished()
+void ColorPicker::onHexTextChanged(const QString& digits)
 {
-    QString text = m_hexInput->hexWithHash();
+    if (digits.length() != 6 && digits.length() != 3)
+        return;
 
-    if (text.length() == 7 || text.length() == 4) {
-        QColor color(text);
-        if (color.isValid()) {
-            m_hexInput->blockSignals(true);
+    const QColor color(QStringLiteral("#") + digits);
+    if (!color.isValid())
+        return;
 
-            m_hue = color.hueF();
-            m_saturation = color.saturationF();
-            m_value = color.valueF();
-            if (m_hue < 0)
-                m_hue = 0.0;
+    m_hue = color.hueF();
+    m_saturation = color.saturationF();
+    m_value = color.valueF();
+    if (m_hue < 0)
+        m_hue = 0.0;
 
-            m_currentColor = QColor::fromHsvF(m_hue, m_saturation, m_value);
-            if (m_alphaSliderEnabled) {
-                m_currentColor.setAlphaF(m_alpha);
-            }
-            if (m_dualColorMode) {
-                if (m_editingForeground) {
-                    m_foregroundColor = m_currentColor;
-                } else {
-                    m_backgroundColor = m_currentColor;
-                }
-                updateDualModeControls();
-            }
-            emit colorChanged(m_currentColor);
-            update();
-
-            m_hexInput->blockSignals(false);
-        }
+    QColor nextColor = QColor::fromHsvF(m_hue, m_saturation, m_value);
+    if (m_alphaSliderEnabled) {
+        nextColor.setAlphaF(m_alpha);
     }
+    if (nextColor == m_currentColor)
+        return;
+
+    m_currentColor = nextColor;
+    if (m_dualColorMode) {
+        if (m_editingForeground) {
+            m_foregroundColor = m_currentColor;
+        } else {
+            m_backgroundColor = m_currentColor;
+        }
+        updateDualModeControls();
+    }
+    emit colorChanged(m_currentColor);
+    update();
 }
 
 // ============================================================================

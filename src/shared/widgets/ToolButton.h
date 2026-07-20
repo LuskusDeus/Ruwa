@@ -34,6 +34,7 @@ public:
     void setChromeStyle(ChromeStyle style);
     void setChromeOpacity(qreal opacity);
     void setChromeInsets(int left, int top, int right, int bottom);
+    void setCircularChrome(bool circular);
     void setBorderVisible(bool visible);
     void setColorizeIcon(bool colorize);
     void setMutedNormalIcon(bool muted);
@@ -72,6 +73,7 @@ private:
     int m_baseInsetRight = 0;
     int m_baseInsetBottom = 0;
     qreal m_chromeOpacity = 1.0;
+    bool m_circularChrome = false;
     int m_iconSize = 20;
     bool m_borderVisible = false;
     bool m_colorizeIcon = true;

@@ -3,7 +3,9 @@
 // HexColorInput.cpp
 #include "HexColorInput.h"
 #include "features/theme/manager/ThemeManager.h"
+#include "shared/resources/IconProvider.h"
 #include "shared/style/PaintingUtils.h"
+#include "shared/widgets/ToolButton.h"
 
 #include <QPainter>
 #include <QPainterPath>
@@ -31,6 +33,27 @@ HexColorInput::HexColorInput(QWidget* parent)
     m_hoverAnimation->setDuration(180);
     m_hoverAnimation->setEasingCurve(QEasingCurve::OutCubic);
 
+    m_copyButton = new ruwa::ui::workspace::ToolButton(
+        ruwa::ui::workspace::ToolButton::Mode::Action, this);
+    m_copyButton->setBaseSquareSize(BaseCopyButtonSize, BaseCopyIconSize);
+    m_copyButton->setIconType(ruwa::ui::core::IconProvider::StandardIcon::Duplicate);
+    m_copyButton->setChromeStyle(ruwa::ui::workspace::ToolButton::ChromeStyle::PrimaryHover);
+    m_copyButton->setCircularChrome(true);
+    m_copyButton->setBorderVisible(false);
+    m_copyButton->setMutedNormalIcon(true);
+    m_copyButton->setFocusPolicy(Qt::NoFocus);
+    m_copyButton->setToolTip(tr("Copy HEX color"));
+    m_copyButton->setAccessibleName(tr("Copy HEX color"));
+    m_copyButton->hide();
+
+    connect(m_copyButton, &QAbstractButton::clicked, this, [this]() {
+        const QString hex = hexWithHash();
+        if (hex.isEmpty())
+            return;
+        if (auto* clipboard = QGuiApplication::clipboard())
+            clipboard->setText(hex);
+    });
+
     connect(&ruwa::ui::core::ThemeManager::instance(), &ruwa::ui::core::ThemeManager::themeChanged,
         this, &HexColorInput::onThemeChanged);
 
@@ -57,6 +80,17 @@ QString HexColorInput::hexWithHash() const
     return QStringLiteral("#") + digits.toUpper();
 }
 
+void HexColorInput::setCopyButtonVisible(bool visible)
+{
+    if (!m_copyButton || m_copyButtonVisible == visible)
+        return;
+
+    m_copyButtonVisible = visible;
+    m_copyButton->setVisible(visible);
+    updateMargins();
+    positionCopyButton();
+}
+
 void HexColorInput::setHoverProgress(qreal p)
 {
     m_hoverProgress = qBound(0.0, p, 1.0);
@@ -67,6 +101,7 @@ void HexColorInput::onThemeChanged()
 {
     applyPalette();
     updateMargins();
+    positionCopyButton();
     update();
 }
 
@@ -94,6 +129,7 @@ void HexColorInput::resizeEvent(QResizeEvent* event)
 {
     QLineEdit::resizeEvent(event);
     updateMargins();
+    positionCopyButton();
 }
 
 int HexColorInput::hashSlotWidth() const
@@ -108,7 +144,11 @@ int HexColorInput::hashLeftPadding() const
 
 int HexColorInput::rightPadding() const
 {
-    return ruwa::ui::core::ThemeManager::instance().scaled(BaseRightPad);
+    auto& theme = ruwa::ui::core::ThemeManager::instance();
+    if (m_copyButtonVisible) {
+        return theme.scaled(BaseCopyRightPad + BaseCopyButtonSize + BaseCopyTextGap);
+    }
+    return theme.scaled(BaseRightPad);
 }
 
 void HexColorInput::updateMargins()
@@ -117,6 +157,17 @@ void HexColorInput::updateMargins()
     const int gap = theme.scaled(BaseHashTextGap);
     // Reserve left side for the '#' glyph; right padding balances the text area.
     setTextMargins(hashLeftPadding() + hashSlotWidth() + gap, 0, rightPadding(), 0);
+}
+
+void HexColorInput::positionCopyButton()
+{
+    if (!m_copyButton)
+        return;
+
+    auto& theme = ruwa::ui::core::ThemeManager::instance();
+    const int rightPad = theme.scaled(BaseCopyRightPad);
+    m_copyButton->move(width() - rightPad - m_copyButton->width(),
+        (height() - m_copyButton->height()) / 2);
 }
 
 void HexColorInput::applyPalette()
