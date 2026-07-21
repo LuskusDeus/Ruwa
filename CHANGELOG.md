@@ -15,6 +15,43 @@ a release.
 
 ## [Unreleased]
 
+## [0.2.6-alpha] — 2026-07-21 — "Brush favorites, live settings, and smoother drawing"
+
+This update makes brushes faster to organize and tune with favorites, pack
+filters, and a new Brush Settings panel, improves WinTab stroke smoothness and
+canvas performance, and restores crisp live blur across canvas widgets.
+
+### Added
+- Favorite brushes, available from each brush's context menu and collected in
+  their own filter. Favorites persist across sessions.
+- Pack filters in the Brushes panel for quickly switching between favorites,
+  all brushes, and individual brush packs.
+- A dockable Brush Settings panel with a live dab preview, direct access to the
+  full Brush Editor, and responsive controls for the current brush's starred
+  settings.
+- A one-click action for copying the current HEX color from the Color panel.
+
+### Improved
+- Brush rows now use clearer selection styling, favorite markers, and sharper
+  supersampled stroke previews.
+- Valid three- and six-digit HEX values now update the selected color as they
+  are typed.
+- WinTab packet buffering, hardware timing, multi-device pressure ranges, and
+  event routing now produce smoother strokes and behave better during heavy
+  frames.
+- Reduced canvas frame cost in maximized windows by removing redundant surface
+  multisampling and limiting brush-cursor capture to the region it needs.
+
+### Reworked
+- Canvas-widget blur is now composited from same-frame canvas regions on the
+  GPU, keeping the Brush Control, tool-state indicator, and stylus joystick
+  sharp and synchronized while they move or fade.
+
+### Fixed
+- Smudge and other effect strokes are fully finalized before switching tools,
+  preventing queued samples from being committed with the next tool's state.
+- Fixed stale, smeared, or missing frosted-glass backgrounds on canvas widgets.
+
 ## [0.2.5-alpha] — 2026-07-18 — "Personalization, colour controls, and input fixes"
 
 This update introduces a redesigned first-run personalization flow and compact

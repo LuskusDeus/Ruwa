@@ -106,7 +106,7 @@ Example option syntax:
 | `RUWA_UPDATE_ALLOWED_HOSTS` | `github.com;release-assets.githubusercontent.com` | Exact HTTPS hosts allowed for manifests, signatures, redirects, and archives. |
 | `RUWA_UPDATE_SIGNER_CERT_SHA256` | empty | SHA-256 fingerprint of the trusted DER signing certificate. Normally supplied by `cmake/RuwaUpdateTrust.cmake`. |
 | `RUWA_UPDATE_MAX_ARCHIVE_BYTES` | `67108864` | Hard maximum size of a signed patch archive. |
-| `RUWA_RELEASE_DATE` | `2026-07-18` | Release date shown in the application's About screen and update message. Release builds set this explicitly. |
+| `RUWA_RELEASE_DATE` | `2026-07-21` | Release date shown in the application's About screen and update message. Release builds set this explicitly. |
 | `RUWA_ENABLE_CLANG_TIDY` | `OFF` | Runs clang-tidy inline during compilation (Clang/GCC/MinGW drivers; skipped for MSVC). See [Static analysis](#static-analysis). |
 
 ## Static analysis

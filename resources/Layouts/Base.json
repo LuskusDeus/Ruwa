@@ -3,7 +3,7 @@
     "brushOverlayPosNormalizedX": 0,
     "brushOverlayPosNormalizedY": 0.49924585218702866,
     "description": "",
-    "dockState": "eyJmbG9hdGluZyI6W10sImxheW91dFRyZWUiOnsiaGFzUm9vdCI6dHJ1ZSwicm9vdCI6eyJhbmNob3IiOiJub25lIiwiYW5jaG9yZWRTaXplIjowLCJjaGlsZHJlbiI6W3siYW5jaG9yIjoibGVmdCIsImFuY2hvcmVkU2l6ZSI6MzA0LCJjaGlsZHJlbiI6W3siYW5jaG9yIjoidG9wIiwiYW5jaG9yZWRTaXplIjoxODAsInBhbmVsSWQiOiJjb21wb3NlciIsInBhbmVsVGl0bGUiOiJOYXZpZ2F0b3IiLCJ0eXBlIjoibGVhZiJ9LHsiYW5jaG9yIjoibm9uZSIsImFuY2hvcmVkU2l6ZSI6MCwicGFuZWxJZCI6InRvb2xzIiwicGFuZWxUaXRsZSI6IlRvb2xzIiwidHlwZSI6ImxlYWYifSx7ImFuY2hvciI6Im5vbmUiLCJhbmNob3JlZFNpemUiOjAsInBhbmVsSWQiOiJicnVzaGVzIiwicGFuZWxUaXRsZSI6IkJydXNoZXMiLCJ0eXBlIjoibGVhZiJ9LHsiYW5jaG9yIjoiYm90dG9tIiwiYW5jaG9yZWRTaXplIjoyODAsInBhbmVsSWQiOiJicnVzaC1zZXR0aW5ncyIsInBhbmVsVGl0bGUiOiJCcnVzaCBTZXR0aW5ncyIsInR5cGUiOiJsZWFmIn1dLCJkaXJlY3Rpb24iOiJ2ZXJ0aWNhbCIsInNpemVzIjpbMTgwLDI1MCwzMDMsMjgwXSwidHlwZSI6InNwbGl0In0seyJhbmNob3IiOiJub25lIiwiYW5jaG9yZWRTaXplIjowLCJwYW5lbElkIjoiY2FudmFzIiwicGFuZWxUaXRsZSI6IkNhbnZhcyIsInR5cGUiOiJsZWFmIn0seyJhbmNob3IiOiJyaWdodCIsImFuY2hvcmVkU2l6ZSI6MzAwLCJjaGlsZHJlbiI6W3siYW5jaG9yIjoidG9wIiwiYW5jaG9yZWRTaXplIjozNTksInBhbmVsSWQiOiJjb2xvciIsInBhbmVsVGl0bGUiOiJDb2xvciIsInR5cGUiOiJsZWFmIn0seyJhbmNob3IiOiJub25lIiwiYW5jaG9yZWRTaXplIjowLCJwYW5lbElkIjoibGF5ZXJzIiwicGFuZWxUaXRsZSI6IkxheWVycyIsInR5cGUiOiJsZWFmIn0seyJhbmNob3IiOiJib3R0b20iLCJhbmNob3JlZFNpemUiOjI4NSwicGFuZWxJZCI6ImxheWVyLWVmZmVjdHMiLCJwYW5lbFRpdGxlIjoiTGF5ZXIgRWZmZWN0cyIsInR5cGUiOiJsZWFmIn1dLCJkaXJlY3Rpb24iOiJ2ZXJ0aWNhbCIsInNpemVzIjpbMzU5LDM2OSwyODVdLCJ0eXBlIjoic3BsaXQifV0sImRpcmVjdGlvbiI6Imhvcml6b250YWwiLCJzaXplcyI6WzMwNCwxODgyLDMwMF0sInR5cGUiOiJzcGxpdCJ9LCJ2ZXJzaW9uIjoxfSwicGFuZWxTdGF0ZXMiOnsiYnJ1c2hlcyI6eyJmZWF0dXJlcyI6MzEsInN0YXRlIjowLCJ0aXRsZSI6IkJydXNoZXMiLCJ1c2VyRmxvYXRpbmdIZWlnaHQiOi0xLCJ1c2VyRmxvYXRpbmdXaWR0aCI6LTEsInVzZXJIb3Jpem9udGFsRG9ja2VkV2lkdGgiOjMwNCwidXNlclZlcnRpY2FsRG9ja2VkSGVpZ2h0Ijo0ODksInZpc2libGUiOnRydWV9LCJjYW52YXMiOnsiZmVhdHVyZXMiOjI4LCJzdGF0ZSI6MCwidGl0bGUiOiJDYW52YXMiLCJ1c2VyRmxvYXRpbmdIZWlnaHQiOi0xLCJ1c2VyRmxvYXRpbmdXaWR0aCI6LTEsInVzZXJIb3Jpem9udGFsRG9ja2VkV2lkdGgiOjE4ODIsInVzZXJWZXJ0aWNhbERvY2tlZEhlaWdodCI6LTEsInZpc2libGUiOnRydWV9LCJjb2xvciI6eyJjdXN0b21TdGF0ZSI6eyJwaWNrZXJNb2RlIjoyfSwiZmVhdHVyZXMiOjMxLCJzdGF0ZSI6MCwidGl0bGUiOiJDb2xvciIsInVzZXJGbG9hdGluZ0hlaWdodCI6LTEsInVzZXJGbG9hdGluZ1dpZHRoIjotMSwidXNlckhvcml6b250YWxEb2NrZWRXaWR0aCI6MzAwLCJ1c2VyVmVydGljYWxEb2NrZWRIZWlnaHQiOjM1OSwidmlzaWJsZSI6dHJ1ZX0sImNvbXBvc2VyIjp7ImZlYXR1cmVzIjozMSwic3RhdGUiOjAsInRpdGxlIjoiTmF2aWdhdG9yIiwidXNlckZsb2F0aW5nSGVpZ2h0IjotMSwidXNlckZsb2F0aW5nV2lkdGgiOi0xLCJ1c2VySG9yaXpvbnRhbERvY2tlZFdpZHRoIjozMDQsInVzZXJWZXJ0aWNhbERvY2tlZEhlaWdodCI6MTgwLCJ2aXNpYmxlIjp0cnVlfSwibGF5ZXItZWZmZWN0cyI6eyJmZWF0dXJlcyI6MzEsInN0YXRlIjowLCJ0aXRsZSI6IkxheWVyIEVmZmVjdHMiLCJ1c2VyRmxvYXRpbmdIZWlnaHQiOi0xLCJ1c2VyRmxvYXRpbmdXaWR0aCI6LTEsInVzZXJIb3Jpem9udGFsRG9ja2VkV2lkdGgiOjMyMCwidXNlclZlcnRpY2FsRG9ja2VkSGVpZ2h0IjoyODUsInZpc2libGUiOnRydWV9LCJsYXllci1wcm9wZXJ0aWVzIjp7ImZlYXR1cmVzIjozMSwic3RhdGUiOjIsInRpdGxlIjoiTGF5ZXIgUHJvcGVydGllcyIsInVzZXJGbG9hdGluZ0hlaWdodCI6LTEsInVzZXJGbG9hdGluZ1dpZHRoIjotMSwidXNlckhvcml6b250YWxEb2NrZWRXaWR0aCI6MzIwLCJ1c2VyVmVydGljYWxEb2NrZWRIZWlnaHQiOi0xLCJ2aXNpYmxlIjpmYWxzZX0sImxheWVycyI6eyJmZWF0dXJlcyI6MzEsInN0YXRlIjowLCJ0aXRsZSI6IkxheWVycyIsInVzZXJGbG9hdGluZ0hlaWdodCI6LTEsInVzZXJGbG9hdGluZ1dpZHRoIjotMSwidXNlckhvcml6b250YWxEb2NrZWRXaWR0aCI6MzAwLCJ1c2VyVmVydGljYWxEb2NrZWRIZWlnaHQiOjM2OSwidmlzaWJsZSI6dHJ1ZX0sInRvb2xzIjp7ImZlYXR1cmVzIjozMCwic3RhdGUiOjAsInRpdGxlIjoiVG9vbHMiLCJ1c2VyRmxvYXRpbmdIZWlnaHQiOi0xLCJ1c2VyRmxvYXRpbmdXaWR0aCI6LTEsInVzZXJIb3Jpem9udGFsRG9ja2VkV2lkdGgiOjMwNCwidXNlclZlcnRpY2FsRG9ja2VkSGVpZ2h0IjozNDQsInZpc2libGUiOnRydWV9LCJicnVzaC1zZXR0aW5ncyI6eyJmZWF0dXJlcyI6MzEsInN0YXRlIjowLCJ0aXRsZSI6IkJydXNoIFNldHRpbmdzIiwidXNlckZsb2F0aW5nSGVpZ2h0IjotMSwidXNlckZsb2F0aW5nV2lkdGgiOi0xLCJ1c2VySG9yaXpvbnRhbERvY2tlZFdpZHRoIjozMDQsInVzZXJWZXJ0aWNhbERvY2tlZEhlaWdodCI6MjgwLCJ2aXNpYmxlIjp0cnVlfX0sInZlcnNpb24iOjF9",
+    "dockState": "eyJmbG9hdGluZyI6W10sImxheW91dFRyZWUiOnsiaGFzUm9vdCI6dHJ1ZSwicm9vdCI6eyJhbmNob3IiOiJub25lIiwiYW5jaG9yZWRTaXplIjowLCJjaGlsZHJlbiI6W3siYW5jaG9yIjoibGVmdCIsImFuY2hvcmVkU2l6ZSI6MjY3LCJjaGlsZHJlbiI6W3siYW5jaG9yIjoibm9uZSIsImFuY2hvcmVkU2l6ZSI6MCwiY2hpbGRyZW4iOlt7ImFuY2hvciI6ImxlZnQiLCJhbmNob3JlZFNpemUiOjU3LCJwYW5lbElkIjoidG9vbHMiLCJwYW5lbFRpdGxlIjoiVG9vbHMiLCJ0eXBlIjoibGVhZiJ9LHsiYW5jaG9yIjoibm9uZSIsImFuY2hvcmVkU2l6ZSI6MCwiY2hpbGRyZW4iOlt7ImFuY2hvciI6InRvcCIsImFuY2hvcmVkU2l6ZSI6MjI3LCJwYW5lbElkIjoiY29tcG9zZXIiLCJwYW5lbFRpdGxlIjoiTmF2aWdhdG9yIiwidHlwZSI6ImxlYWYifSx7ImFuY2hvciI6Im5vbmUiLCJhbmNob3JlZFNpemUiOjAsInBhbmVsSWQiOiJicnVzaGVzIiwicGFuZWxUaXRsZSI6IkJydXNoZXMiLCJ0eXBlIjoibGVhZiJ9XSwiZGlyZWN0aW9uIjoidmVydGljYWwiLCJzaXplcyI6WzIyNyw1MDBdLCJ0eXBlIjoic3BsaXQifV0sImRpcmVjdGlvbiI6Imhvcml6b250YWwiLCJzaXplcyI6WzU3LDIwNF0sInR5cGUiOiJzcGxpdCJ9LHsiYW5jaG9yIjoiYm90dG9tIiwiYW5jaG9yZWRTaXplIjoyODAsInBhbmVsSWQiOiJicnVzaC1zZXR0aW5ncyIsInBhbmVsVGl0bGUiOiJCcnVzaCBTZXR0aW5ncyIsInR5cGUiOiJsZWFmIn1dLCJkaXJlY3Rpb24iOiJ2ZXJ0aWNhbCIsInNpemVzIjpbNzMzLDI4Nl0sInR5cGUiOiJzcGxpdCJ9LHsiYW5jaG9yIjoibm9uZSIsImFuY2hvcmVkU2l6ZSI6MCwicGFuZWxJZCI6ImNhbnZhcyIsInBhbmVsVGl0bGUiOiJDYW52YXMiLCJ0eXBlIjoibGVhZiJ9LHsiYW5jaG9yIjoicmlnaHQiLCJhbmNob3JlZFNpemUiOjI4NywiY2hpbGRyZW4iOlt7ImFuY2hvciI6InRvcCIsImFuY2hvcmVkU2l6ZSI6MzU5LCJwYW5lbElkIjoiY29sb3IiLCJwYW5lbFRpdGxlIjoiQ29sb3IiLCJ0eXBlIjoibGVhZiJ9LHsiYW5jaG9yIjoibm9uZSIsImFuY2hvcmVkU2l6ZSI6MCwicGFuZWxJZCI6ImxheWVycyIsInBhbmVsVGl0bGUiOiJMYXllcnMiLCJ0eXBlIjoibGVhZiJ9LHsiYW5jaG9yIjoiYm90dG9tIiwiYW5jaG9yZWRTaXplIjoyODUsInBhbmVsSWQiOiJsYXllci1lZmZlY3RzIiwicGFuZWxUaXRsZSI6IkxheWVyIEVmZmVjdHMiLCJ0eXBlIjoibGVhZiJ9XSwiZGlyZWN0aW9uIjoidmVydGljYWwiLCJzaXplcyI6WzM1OSwzNjksMjg1XSwidHlwZSI6InNwbGl0In1dLCJkaXJlY3Rpb24iOiJob3Jpem9udGFsIiwic2l6ZXMiOlsyNjcsMTkzMiwyODddLCJ0eXBlIjoic3BsaXQifSwidmVyc2lvbiI6MX0sInBhbmVsU3RhdGVzIjp7ImJydXNoZXMiOnsiZmVhdHVyZXMiOjMxLCJzdGF0ZSI6MCwidGl0bGUiOiJCcnVzaGVzIiwidXNlckZsb2F0aW5nSGVpZ2h0IjotMSwidXNlckZsb2F0aW5nV2lkdGgiOi0xLCJ1c2VySG9yaXpvbnRhbERvY2tlZFdpZHRoIjoyNjcsInVzZXJWZXJ0aWNhbERvY2tlZEhlaWdodCI6NTAwLCJ2aXNpYmxlIjp0cnVlfSwiY2FudmFzIjp7ImZlYXR1cmVzIjoyOCwic3RhdGUiOjAsInRpdGxlIjoiQ2FudmFzIiwidXNlckZsb2F0aW5nSGVpZ2h0IjotMSwidXNlckZsb2F0aW5nV2lkdGgiOi0xLCJ1c2VySG9yaXpvbnRhbERvY2tlZFdpZHRoIjoxOTMyLCJ1c2VyVmVydGljYWxEb2NrZWRIZWlnaHQiOi0xLCJ2aXNpYmxlIjp0cnVlfSwiY29sb3IiOnsiY3VzdG9tU3RhdGUiOnsicGlja2VyTW9kZSI6Mn0sImZlYXR1cmVzIjozMSwic3RhdGUiOjAsInRpdGxlIjoiQ29sb3IiLCJ1c2VyRmxvYXRpbmdIZWlnaHQiOi0xLCJ1c2VyRmxvYXRpbmdXaWR0aCI6LTEsInVzZXJIb3Jpem9udGFsRG9ja2VkV2lkdGgiOjI4NywidXNlclZlcnRpY2FsRG9ja2VkSGVpZ2h0IjozNTksInZpc2libGUiOnRydWV9LCJjb21wb3NlciI6eyJmZWF0dXJlcyI6MzEsInN0YXRlIjowLCJ0aXRsZSI6Ik5hdmlnYXRvciIsInVzZXJGbG9hdGluZ0hlaWdodCI6MTg0LCJ1c2VyRmxvYXRpbmdXaWR0aCI6MjI0LCJ1c2VySG9yaXpvbnRhbERvY2tlZFdpZHRoIjoyNjcsInVzZXJWZXJ0aWNhbERvY2tlZEhlaWdodCI6MjI3LCJ2aXNpYmxlIjp0cnVlfSwibGF5ZXItZWZmZWN0cyI6eyJmZWF0dXJlcyI6MzEsInN0YXRlIjowLCJ0aXRsZSI6IkxheWVyIEVmZmVjdHMiLCJ1c2VyRmxvYXRpbmdIZWlnaHQiOi0xLCJ1c2VyRmxvYXRpbmdXaWR0aCI6LTEsInVzZXJIb3Jpem9udGFsRG9ja2VkV2lkdGgiOjI4NywidXNlclZlcnRpY2FsRG9ja2VkSGVpZ2h0IjoyODUsInZpc2libGUiOnRydWV9LCJsYXllci1wcm9wZXJ0aWVzIjp7ImZlYXR1cmVzIjozMSwic3RhdGUiOjIsInRpdGxlIjoiTGF5ZXIgUHJvcGVydGllcyIsInVzZXJGbG9hdGluZ0hlaWdodCI6LTEsInVzZXJGbG9hdGluZ1dpZHRoIjotMSwidXNlckhvcml6b250YWxEb2NrZWRXaWR0aCI6MzIwLCJ1c2VyVmVydGljYWxEb2NrZWRIZWlnaHQiOi0xLCJ2aXNpYmxlIjpmYWxzZX0sImxheWVycyI6eyJmZWF0dXJlcyI6MzEsInN0YXRlIjowLCJ0aXRsZSI6IkxheWVycyIsInVzZXJGbG9hdGluZ0hlaWdodCI6LTEsInVzZXJGbG9hdGluZ1dpZHRoIjotMSwidXNlckhvcml6b250YWxEb2NrZWRXaWR0aCI6Mjg3LCJ1c2VyVmVydGljYWxEb2NrZWRIZWlnaHQiOjM2OSwidmlzaWJsZSI6dHJ1ZX0sInRvb2xzIjp7ImZlYXR1cmVzIjozMCwic3RhdGUiOjAsInRpdGxlIjoiVG9vbHMiLCJ1c2VyRmxvYXRpbmdIZWlnaHQiOjI1NCwidXNlckZsb2F0aW5nV2lkdGgiOjYwLCJ1c2VySG9yaXpvbnRhbERvY2tlZFdpZHRoIjoyNjcsInVzZXJWZXJ0aWNhbERvY2tlZEhlaWdodCI6MjUwLCJ2aXNpYmxlIjp0cnVlfSwiYnJ1c2gtc2V0dGluZ3MiOnsiZmVhdHVyZXMiOjMxLCJzdGF0ZSI6MCwidGl0bGUiOiJCcnVzaCBTZXR0aW5ncyIsInVzZXJGbG9hdGluZ0hlaWdodCI6LTEsInVzZXJGbG9hdGluZ1dpZHRoIjotMSwidXNlckhvcml6b250YWxEb2NrZWRXaWR0aCI6MjY3LCJ1c2VyVmVydGljYWxEb2NrZWRIZWlnaHQiOjI4MCwidmlzaWJsZSI6dHJ1ZX19LCJ2ZXJzaW9uIjoxfQ==",
     "id": "{60a9c439-276b-4917-8530-fe9747b4bb2e}",
     "isBuiltIn": false,
     "joystickVisible": true,
@@ -15,28 +15,52 @@
             "children": [
                 {
                     "anchor": "left",
-                    "anchoredSize": 304,
+                    "anchoredSize": 267,
                     "children": [
                         {
-                            "anchor": "top",
-                            "anchoredSize": 180,
-                            "panelId": "composer",
-                            "panelTitle": "Navigator",
-                            "type": "leaf"
-                        },
-                        {
                             "anchor": "none",
                             "anchoredSize": 0,
-                            "panelId": "tools",
-                            "panelTitle": "Tools",
-                            "type": "leaf"
-                        },
-                        {
-                            "anchor": "none",
-                            "anchoredSize": 0,
-                            "panelId": "brushes",
-                            "panelTitle": "Brushes",
-                            "type": "leaf"
+                            "children": [
+                                {
+                                    "anchor": "left",
+                                    "anchoredSize": 57,
+                                    "panelId": "tools",
+                                    "panelTitle": "Tools",
+                                    "type": "leaf"
+                                },
+                                {
+                                    "anchor": "none",
+                                    "anchoredSize": 0,
+                                    "children": [
+                                        {
+                                            "anchor": "top",
+                                            "anchoredSize": 227,
+                                            "panelId": "composer",
+                                            "panelTitle": "Navigator",
+                                            "type": "leaf"
+                                        },
+                                        {
+                                            "anchor": "none",
+                                            "anchoredSize": 0,
+                                            "panelId": "brushes",
+                                            "panelTitle": "Brushes",
+                                            "type": "leaf"
+                                        }
+                                    ],
+                                    "direction": "vertical",
+                                    "sizes": [
+                                        227,
+                                        500
+                                    ],
+                                    "type": "split"
+                                }
+                            ],
+                            "direction": "horizontal",
+                            "sizes": [
+                                57,
+                                204
+                            ],
+                            "type": "split"
                         },
                         {
                             "anchor": "bottom",
@@ -48,10 +72,8 @@
                     ],
                     "direction": "vertical",
                     "sizes": [
-                        180,
-                        250,
-                        303,
-                        280
+                        733,
+                        286
                     ],
                     "type": "split"
                 },
@@ -64,7 +86,7 @@
                 },
                 {
                     "anchor": "right",
-                    "anchoredSize": 300,
+                    "anchoredSize": 287,
                     "children": [
                         {
                             "anchor": "top",
@@ -99,9 +121,9 @@
             ],
             "direction": "horizontal",
             "sizes": [
-                304,
-                1882,
-                300
+                267,
+                1932,
+                287
             ],
             "type": "split"
         },

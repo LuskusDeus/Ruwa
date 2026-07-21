@@ -56,12 +56,44 @@ struct ReleaseNoteEntry {
 
 QVector<ReleaseNoteEntry> releaseNoteEntries()
 {
-    const char* ctx = "ReleaseNotesOverlay";
-
     return {
-        { QCoreApplication::translate(ctx, "Personalization, colour controls, and input fixes"),
+        { QCoreApplication::translate(
+              "ReleaseNotesOverlay", "Brush favorites, live settings, and smoother drawing"),
+            QStringLiteral("0.2.6-alpha"), QStringLiteral("21.07.2026"),
+            QCoreApplication::translate("ReleaseNotesOverlay",
+                "<p><b>This update makes brushes faster to organize and tune with favorites, "
+                "pack filters, and a new Brush Settings panel, improves WinTab stroke "
+                "smoothness and canvas performance, and restores crisp live blur across canvas "
+                "widgets.</b></p>"
+                "<p><b>New</b></p>"
+                "<ul>"
+                "<li>Favorite brushes with a dedicated filter, persistence across sessions, and "
+                "quick context-menu actions.</li>"
+                "<li>Pack filters for switching between favorites, all brushes, and individual "
+                "packs.</li>"
+                "<li>A dockable Brush Settings panel with a live dab preview and responsive "
+                "controls for starred brush settings.</li>"
+                "<li>One-click HEX color copying in the Color panel.</li>"
+                "</ul>"
+                "<p><b>Improved</b></p>"
+                "<ul>"
+                "<li>Sharper brush previews, clearer selection styling, and favorite "
+                "markers.</li>"
+                "<li>Live color updates while entering valid three- or six-digit HEX values.</li>"
+                "<li>Smoother WinTab strokes, more reliable multi-device pressure, and lower "
+                "canvas frame cost in maximized windows.</li>"
+                "</ul>"
+                "<p><b>Fixes</b></p>"
+                "<ul>"
+                "<li>Canvas widgets now use sharp, same-frame GPU blur that stays synchronized "
+                "while controls move or fade.</li>"
+                "<li>Smudge and other effect strokes are finalized safely before switching "
+                "tools.</li>"
+                "</ul>") },
+        { QCoreApplication::translate(
+              "ReleaseNotesOverlay", "Personalization, colour controls, and input fixes"),
             QStringLiteral("0.2.5-alpha"), QStringLiteral("18.07.2026"),
-            QCoreApplication::translate(ctx,
+            QCoreApplication::translate("ReleaseNotesOverlay",
                 "<p><b>This update introduces a redesigned first-run personalization flow and "
                 "compact RGB/HSV controls, improves brush startup and custom dab rendering, and "
                 "fixes WinTab input, transform safety, and several canvas interaction "
@@ -88,9 +120,9 @@ QVector<ReleaseNoteEntry> releaseNoteEntries()
                 "<li>Transform finalization and several issues involving selections, alpha lock, "
                 "Blur, and Navigator refreshes.</li>"
                 "</ul>") },
-        { QCoreApplication::translate(ctx, "Open-source release"), QStringLiteral("0.2.4-alpha"),
-            QStringLiteral("16.07.2026"),
-            QCoreApplication::translate(ctx,
+        { QCoreApplication::translate("ReleaseNotesOverlay", "Open-source release"),
+            QStringLiteral("0.2.4-alpha"), QStringLiteral("16.07.2026"),
+            QCoreApplication::translate("ReleaseNotesOverlay",
                 "<p><b>Ruwa is now open source.</b> The source code and contribution process are "
                 "public on a fresh repository, the release ships alongside a brand-new website, "
                 "and the licensing, security, governance, CI, and release infrastructure needed "
@@ -115,10 +147,10 @@ QVector<ReleaseNoteEntry> releaseNoteEntries()
                 "<li>The binary installer release now packages and installs correctly.</li>"
                 "<li>Fixed an event-handling bug in the Layers panel.</li>"
                 "</ul>") },
-        { QCoreApplication::translate(
-              ctx, "Non-destructive effects, adjustment layers, and deeper colour"),
+        { QCoreApplication::translate("ReleaseNotesOverlay",
+              "Non-destructive effects, adjustment layers, and deeper colour"),
             QStringLiteral("0.2.3-alpha"), QStringLiteral("14.07.2026"),
-            QCoreApplication::translate(ctx,
+            QCoreApplication::translate("ReleaseNotesOverlay",
                 "<p><b>A major update. It introduces a non-destructive effects system with "
                 "real-time previews, adds adjustment layers and pixel-perfect layer picking, and "
                 "rebuilds the tile core so documents can use any colour depth from 8-bit to 32-bit "
@@ -170,9 +202,10 @@ QVector<ReleaseNoteEntry> releaseNoteEntries()
                 "display.</li>"
                 "<li>Text layers no longer turn low-poly after a warp or free transform.</li>"
                 "</ul>") },
-        { QCoreApplication::translate(ctx, "Liquify, layer masks, and a canvas redesign"),
+        { QCoreApplication::translate(
+              "ReleaseNotesOverlay", "Liquify, layer masks, and a canvas redesign"),
             QStringLiteral("0.2.0-alpha"), QStringLiteral("14.06.2026"),
-            QCoreApplication::translate(ctx,
+            QCoreApplication::translate("ReleaseNotesOverlay",
                 "<p><b>A major update. It introduces the Liquify tool and layer masks, gives every "
                 "canvas widget a new frosted-glass look backed by a much more reliable layout "
                 "system, and completely reworks the wet brush mechanics.</b> It also refreshes the "
@@ -214,9 +247,10 @@ QVector<ReleaseNoteEntry> releaseNoteEntries()
                 "panels.</li>"
                 "<li>A large number of additional visual fixes across the application.</li>"
                 "</ul>") },
-        { QCoreApplication::translate(ctx, "Default brush and brush editor fixes"),
+        { QCoreApplication::translate(
+              "ReleaseNotesOverlay", "Default brush and brush editor fixes"),
             QStringLiteral("0.1.75-alpha"), QStringLiteral("09.06.2026"),
-            QCoreApplication::translate(ctx,
+            QCoreApplication::translate("ReleaseNotesOverlay",
                 "<p><b>This update fixes a number of bugs with the default brush presets and the "
                 "brush editor.</b></p>"
                 "<p><b>Fixes</b></p>"
@@ -224,9 +258,9 @@ QVector<ReleaseNoteEntry> releaseNoteEntries()
                 "<li>Fixed bugs with the default brush presets.</li>"
                 "<li>Fixed bugs in the brush editor.</li>"
                 "</ul>") },
-        { QCoreApplication::translate(ctx, "Wet brushes and reworked input"),
+        { QCoreApplication::translate("ReleaseNotesOverlay", "Wet brushes and reworked input"),
             QStringLiteral("0.1.7-alpha"), QStringLiteral("07.06.2026"),
-            QCoreApplication::translate(ctx,
+            QCoreApplication::translate("ReleaseNotesOverlay",
                 "<p><b>This update adds wet brushes, completely reworks the input system so "
                 "drawing feels far better, completes the Deform transform, and greatly expands the "
                 "set of default brushes.</b> Theme switching is now much faster, the stabilizer no "
@@ -255,9 +289,10 @@ QVector<ReleaseNoteEntry> releaseNoteEntries()
                 "<li>A large number of additional visual and performance fixes across the "
                 "application.</li>"
                 "</ul>") },
-        { QCoreApplication::translate(ctx, "Smudge, deform, and shortcut presets"),
+        { QCoreApplication::translate(
+              "ReleaseNotesOverlay", "Smudge, deform, and shortcut presets"),
             QStringLiteral("0.1.6-alpha"), QStringLiteral("28.05.2026"),
-            QCoreApplication::translate(ctx,
+            QCoreApplication::translate("ReleaseNotesOverlay",
                 "<p><b>This update reworks the Smudge tool, introduces an early Deform transform, "
                 "and adds shortcut presets.</b> The brush cursor now follows the shape of the "
                 "current dab, the Color panel and Keyboard Shortcuts tab have been redesigned, and "
@@ -286,9 +321,10 @@ QVector<ReleaseNoteEntry> releaseNoteEntries()
                 "<li>Fixed visual bugs in Lasso Fill and the transform preview.</li>"
                 "<li>A large number of additional bug fixes across the application.</li>"
                 "</ul>") },
-        { QCoreApplication::translate(ctx, "Color, multi-layer transform, and alt-copy"),
+        { QCoreApplication::translate(
+              "ReleaseNotesOverlay", "Color, multi-layer transform, and alt-copy"),
             QStringLiteral("0.1.5-alpha"), QStringLiteral("14.05.2026"),
-            QCoreApplication::translate(ctx,
+            QCoreApplication::translate("ReleaseNotesOverlay",
                 "<p><b>This update expands brush color control, makes multi-layer work much more "
                 "complete, and adds alt-copy for faster layer duplication.</b> It also fully "
                 "reworks the brush stabilizer and includes bug fixes, an early ABR parser, a zoom "
@@ -313,9 +349,10 @@ QVector<ReleaseNoteEntry> releaseNoteEntries()
                 "<ul>"
                 "<li>Fixed bugs across the application.</li>"
                 "</ul>") },
-        { QCoreApplication::translate(ctx, "Text tool, Auto Snap, and brush sharing"),
+        { QCoreApplication::translate(
+              "ReleaseNotesOverlay", "Text tool, Auto Snap, and brush sharing"),
             QStringLiteral("0.1.4-alpha"), QStringLiteral("03.05.2026"),
-            QCoreApplication::translate(ctx,
+            QCoreApplication::translate("ReleaseNotesOverlay",
                 "<p><b>This update introduces a fully featured Text tool, Auto Snap for precise "
                 "canvas placement, and brush sharing through the brush editor.</b> Brush dynamics "
                 "have been reworked with new input sources, and the About section has been "
@@ -346,9 +383,9 @@ QVector<ReleaseNoteEntry> releaseNoteEntries()
                 "<ul>"
                 "<li>Fixed a large number of bugs across the application.</li>"
                 "</ul>") },
-        { QCoreApplication::translate(ctx, "Layers, dabs, and smoother canvas"),
+        { QCoreApplication::translate("ReleaseNotesOverlay", "Layers, dabs, and smoother canvas"),
             QStringLiteral("0.1.3-alpha"), QStringLiteral("25.04.2026"),
-            QCoreApplication::translate(ctx,
+            QCoreApplication::translate("ReleaseNotesOverlay",
                 "<p><b>This update improves the layer workflow, adds custom image dabs for "
                 "brushes, and makes canvas interaction smoother.</b> It also introduces the in-app "
                 "release notes panel and refreshes the first-launch experience for new users.</p>"
@@ -375,9 +412,9 @@ QVector<ReleaseNoteEntry> releaseNoteEntries()
                 "<ul>"
                 "<li>Stabilization settings are now saved for lasso-like tools.</li>"
                 "</ul>") },
-        { QCoreApplication::translate(ctx, "Brush engine foundations"),
+        { QCoreApplication::translate("ReleaseNotesOverlay", "Brush engine foundations"),
             QStringLiteral("0.1.2-alpha"), QStringLiteral("06.04.2026"),
-            QCoreApplication::translate(ctx,
+            QCoreApplication::translate("ReleaseNotesOverlay",
                 "<p><b>This update expands brush control and adds faster access to brush "
                 "selection.</b> Brush parameters can now use curves, while the new panel and About "
                 "section add more structure around the drawing workspace.</p>"
@@ -398,9 +435,9 @@ QVector<ReleaseNoteEntry> releaseNoteEntries()
                 "<ul>"
                 "<li>Fixed a large number of bugs and optimization issues.</li>"
                 "</ul>") },
-        { QCoreApplication::translate(ctx, "Brush workspace refresh"),
+        { QCoreApplication::translate("ReleaseNotesOverlay", "Brush workspace refresh"),
             QStringLiteral("0.1.1-alpha"), QStringLiteral("02.04.2026"),
-            QCoreApplication::translate(ctx,
+            QCoreApplication::translate("ReleaseNotesOverlay",
                 "<p><b>This update refreshes the brush panels and brush editor, and reworks Lasso "
                 "Fill for infinite areas.</b> It also includes a round of bug fixes across the "
                 "application.</p>"
@@ -417,9 +454,9 @@ QVector<ReleaseNoteEntry> releaseNoteEntries()
                 "<ul>"
                 "<li>Fixed many bugs across the application.</li>"
                 "</ul>") },
-        { QCoreApplication::translate(ctx, "Infinite canvas preview"),
+        { QCoreApplication::translate("ReleaseNotesOverlay", "Infinite canvas preview"),
             QStringLiteral("0.1.0-alpha"), QStringLiteral("27.03.2026"),
-            QCoreApplication::translate(ctx,
+            QCoreApplication::translate("ReleaseNotesOverlay",
                 "<p><b>This update brings a cleaner UI style, infinite canvas support, and new "
                 "canvas actions.</b> It also expands customization, context menus, transforms, "
                 "brush options, and project setup.</p>"
@@ -455,9 +492,9 @@ QVector<ReleaseNoteEntry> releaseNoteEntries()
                 "<ul>"
                 "<li>Various bug fixes.</li>"
                 "</ul>") },
-        { QCoreApplication::translate(ctx, "Export and tablet polish"),
+        { QCoreApplication::translate("ReleaseNotesOverlay", "Export and tablet polish"),
             QStringLiteral("0.0.9-alpha"), QStringLiteral("19.03.2026"),
-            QCoreApplication::translate(ctx,
+            QCoreApplication::translate("ReleaseNotesOverlay",
                 "<p><b>This update adds image export and improves several tablet, mask, color, and "
                 "workspace systems.</b> It also softens workspace visuals and includes small "
                 "fixes.</p>"
@@ -484,9 +521,9 @@ QVector<ReleaseNoteEntry> releaseNoteEntries()
                 "<ul>"
                 "<li>Small fixes.</li>"
                 "</ul>") },
-        { QCoreApplication::translate(ctx, "Tools and tablet backend"),
+        { QCoreApplication::translate("ReleaseNotesOverlay", "Tools and tablet backend"),
             QStringLiteral("0.0.8-alpha"), QStringLiteral("13.03.2026"),
-            QCoreApplication::translate(ctx,
+            QCoreApplication::translate("ReleaseNotesOverlay",
                 "<p><b>This update improves the layer panel, adds a custom Windows WinTab backend, "
                 "and reorganizes tools into folders.</b> Flood Fill performance and transform "
                 "snapping were also improved.</p>"
@@ -513,9 +550,9 @@ QVector<ReleaseNoteEntry> releaseNoteEntries()
                 "<li>Fixed visual bugs in the layer panel.</li>"
                 "<li>Minor bug fixes.</li>"
                 "</ul>") },
-        { QCoreApplication::translate(ctx, "Async app flow"), QStringLiteral("0.0.7-alpha"),
-            QStringLiteral("10.03.2026"),
-            QCoreApplication::translate(ctx,
+        { QCoreApplication::translate("ReleaseNotesOverlay", "Async app flow"),
+            QStringLiteral("0.0.7-alpha"), QStringLiteral("10.03.2026"),
+            QCoreApplication::translate("ReleaseNotesOverlay",
                 "<p><b>This update moves a significant part of the app to asynchronous behavior "
                 "and rewrites the update manager.</b> It also addresses Flood Fill issues and "
                 "improves pressure detection.</p>"
@@ -537,9 +574,9 @@ QVector<ReleaseNoteEntry> releaseNoteEntries()
                 "improved in future updates.</li>"
                 "<li>Minor bug fixes.</li>"
                 "</ul>") },
-        { QCoreApplication::translate(ctx, "Fill and quick shapes"), QStringLiteral("0.0.6-alpha"),
-            QStringLiteral("09.03.2026"),
-            QCoreApplication::translate(ctx,
+        { QCoreApplication::translate("ReleaseNotesOverlay", "Fill and quick shapes"),
+            QStringLiteral("0.0.6-alpha"), QStringLiteral("09.03.2026"),
+            QCoreApplication::translate("ReleaseNotesOverlay",
                 "<p><b>This update reworks Flood Fill and Quick Shapes, and adds Smart Fill for "
                 "semi-transparent pixels.</b> It also includes minor bug fixes.</p>"
                 "<p><b>New</b></p>"
@@ -560,9 +597,9 @@ QVector<ReleaseNoteEntry> releaseNoteEntries()
                 "<ul>"
                 "<li>Fixed minor bugs.</li>"
                 "</ul>") },
-        { QCoreApplication::translate(ctx, "Layout reliability pass"),
+        { QCoreApplication::translate("ReleaseNotesOverlay", "Layout reliability pass"),
             QStringLiteral("0.0.51-alpha"), QStringLiteral("07.03.2026"),
-            QCoreApplication::translate(ctx,
+            QCoreApplication::translate("ReleaseNotesOverlay",
                 "<p><b>This update focuses on layout reliability, stylus interaction, and brush "
                 "stabilization.</b> It also adds Brush Feather and stylus swipe scrolling for "
                 "lists.</p>"
@@ -585,9 +622,9 @@ QVector<ReleaseNoteEntry> releaseNoteEntries()
                 "existing ones - it mainly prevents them from happening again. A complete "
                 "reinstall is recommended.</li>"
                 "</ul>") },
-        { QCoreApplication::translate(ctx, "Layer workflow update"), QStringLiteral("0.0.5-alpha"),
-            QStringLiteral("06.03.2026"),
-            QCoreApplication::translate(ctx,
+        { QCoreApplication::translate("ReleaseNotesOverlay", "Layer workflow update"),
+            QStringLiteral("0.0.5-alpha"), QStringLiteral("06.03.2026"),
+            QCoreApplication::translate("ReleaseNotesOverlay",
                 "<p><b>The biggest update so far.</b> This update expands layer operations, "
                 "selection-mask undo, canvas navigation, and layout serialization.</p>"
                 "<p><b>New</b></p>"
@@ -608,9 +645,9 @@ QVector<ReleaseNoteEntry> releaseNoteEntries()
                 "<li>Fixed layout serialization for the canvas and floating panels.</li>"
                 "<li>Various small fixes.</li>"
                 "</ul>") },
-        { QCoreApplication::translate(ctx, "Lightweight updates"), QStringLiteral("0.0.4-alpha"),
-            QStringLiteral("01.03.2026"),
-            QCoreApplication::translate(ctx,
+        { QCoreApplication::translate("ReleaseNotesOverlay", "Lightweight updates"),
+            QStringLiteral("0.0.4-alpha"), QStringLiteral("01.03.2026"),
+            QCoreApplication::translate("ReleaseNotesOverlay",
                 "<p><b>This update adds direct website downloads and lightweight app updates "
                 "through Settings.</b> It also includes a rename, small quality-of-life changes, "
                 "and bug fixes.</p>"
@@ -635,9 +672,9 @@ QVector<ReleaseNoteEntry> releaseNoteEntries()
                 "<ul>"
                 "<li>Fixed bugs.</li>"
                 "</ul>") },
-        { QCoreApplication::translate(ctx, "Camera tools"), QStringLiteral("0.0.3-alpha"),
-            QStringLiteral("26.02.2026"),
-            QCoreApplication::translate(ctx,
+        { QCoreApplication::translate("ReleaseNotesOverlay", "Camera tools"),
+            QStringLiteral("0.0.3-alpha"), QStringLiteral("26.02.2026"),
+            QCoreApplication::translate("ReleaseNotesOverlay",
                 "<p><b>This update adds camera capture tools and expands brush settings.</b> It "
                 "also refreshes the default brush list and fixes small issues.</p>"
                 "<p><b>New</b></p>"
@@ -657,9 +694,9 @@ QVector<ReleaseNoteEntry> releaseNoteEntries()
                 "<ul>"
                 "<li>Fixed small bugs and issues.</li>"
                 "</ul>") },
-        { QCoreApplication::translate(ctx, "Stability and functionality"),
+        { QCoreApplication::translate("ReleaseNotesOverlay", "Stability and functionality"),
             QStringLiteral("0.0.2-alpha"), QStringLiteral("24.02.2026"),
-            QCoreApplication::translate(ctx,
+            QCoreApplication::translate("ReleaseNotesOverlay",
                 "<p><b>This update fixes bugs that were seriously affecting the app and adds new "
                 "functionality.</b></p>"
                 "<p><b>New</b></p>"
@@ -670,9 +707,9 @@ QVector<ReleaseNoteEntry> releaseNoteEntries()
                 "<ul>"
                 "<li>Fixed bugs that were seriously affecting the app.</li>"
                 "</ul>") },
-        { QCoreApplication::translate(ctx, "Public testing"), QStringLiteral("0.0.1-alpha"),
-            QStringLiteral("24.02.2026"),
-            QCoreApplication::translate(ctx,
+        { QCoreApplication::translate("ReleaseNotesOverlay", "Public testing"),
+            QStringLiteral("0.0.1-alpha"), QStringLiteral("24.02.2026"),
+            QCoreApplication::translate("ReleaseNotesOverlay",
                 "<p><b>Ruwa is now available for anyone who wants to download it and help test "
                 "it.</b></p>"
                 "<p><b>Available</b></p>"
@@ -1037,13 +1074,11 @@ void ReleaseNotesOverlay::setupAnimations()
 
 void ReleaseNotesOverlay::updateTexts()
 {
-    const char* ctx = "ReleaseNotesOverlay";
-
     if (m_titleLabel) {
-        m_titleLabel->setText(QCoreApplication::translate(ctx, "Release notes"));
+        m_titleLabel->setText(QCoreApplication::translate("ReleaseNotesOverlay", "Release notes"));
     }
     if (m_closeButton) {
-        m_closeButton->setText(QCoreApplication::translate(ctx, "Close"));
+        m_closeButton->setText(QCoreApplication::translate("ReleaseNotesOverlay", "Close"));
         m_closeButton->syncSizeToText();
     }
 

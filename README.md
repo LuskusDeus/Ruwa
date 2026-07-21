@@ -40,8 +40,9 @@ locked features.
 
 ## Highlights
 
-- **Customizable brushes.** Start with an included preset or tune shape,
-  texture, spacing, flow, and dynamics in the focused Brush Editor.
+- **Customizable brushes.** Organize presets with favorites and pack filters,
+  tune starred controls in the dockable Brush Settings panel, or open the full
+  Brush Editor for shape, texture, spacing, flow, and dynamics.
 - **Spectral pigment mixing.** Wet brushes use Ruwa's custom pigment model for
   richer, more convincing colour mixing.
 - **Non-destructive editing.** Layer effects, adjustment layers, and masks stay
@@ -58,7 +59,7 @@ locked features.
 
 | Item | Detail |
 | --- | --- |
-| Current release | `0.2.5-alpha` |
+| Current release | `0.2.6-alpha` |
 | Primary platform | Windows 10/11 x64 |
 | Graphics requirement | OpenGL 4.5 |
 | Technology | C++23, Qt 6, CMake |

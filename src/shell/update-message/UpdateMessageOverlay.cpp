@@ -698,8 +698,8 @@ void UpdateMessageOverlay::setupUI()
             .arg(darkenedPrimary(colors).name()));
     heroTextLayout->addWidget(statusLabel);
 
-    auto* heroTitleLabel = new QLabel(
-        QCoreApplication::translate("UpdateMessageOverlay", "Welcome to the latest Ruwa."),
+    auto* heroTitleLabel = new QLabel(QCoreApplication::translate("UpdateMessageOverlay",
+                                          "Brush favorites, live settings, and smoother drawing."),
         heroText);
     QFont heroTitleFont = colors.fonts.getUIFont(theme.scaledFontSize(HeroTitleFontSize));
     heroTitleFont.setWeight(QFont::DemiBold);
@@ -715,10 +715,9 @@ void UpdateMessageOverlay::setupUI()
 
     auto* descriptionLabel
         = new QLabel(QCoreApplication::translate("UpdateMessageOverlay",
-                         "This update introduces a redesigned first-run personalization flow and "
-                         "compact RGB/HSV controls, improves brush startup and custom dab "
-                         "rendering, and fixes WinTab input, transform safety, and several canvas "
-                         "interaction issues."),
+                         "This update makes brushes faster to organize and tune, improves WinTab "
+                         "stroke smoothness and canvas performance, and restores crisp live blur "
+                         "across canvas widgets."),
             leftWidget);
     descriptionLabel->setWordWrap(true);
     descriptionLabel->setFont(colors.fonts.getUIFont(theme.scaledFontSize(BodyFontSize)));
@@ -734,23 +733,22 @@ void UpdateMessageOverlay::setupUI()
 
     addReleaseHighlightRow(highlightsWidget, highlightsLayout, colors, theme, ChangelogBadge::New,
         QCoreApplication::translate("UpdateMessageOverlay",
-            "Redesigned first-run personalization for appearance, editor, performance, and tablet "
-            "input."));
+            "Favorite brushes, pack filters, and a dockable Brush Settings panel for live access "
+            "to starred controls."));
     addReleaseHighlightRow(highlightsWidget, highlightsLayout, colors, theme,
         ChangelogBadge::Updated,
         QCoreApplication::translate("UpdateMessageOverlay",
-            "Compact RGB and HSV channel controls in the Color panel, with the selected mode saved "
-            "in layouts."));
+            "Live updates from valid HEX input and one-click color copying in the Color panel."));
     addReleaseHighlightRow(highlightsWidget, highlightsLayout, colors, theme,
         ChangelogBadge::Improved,
         QCoreApplication::translate("UpdateMessageOverlay",
-            "Nine new default brush presets, improved Brush Editor undo, smoother custom dabs, "
-            "and more accurate cursor previews."));
+            "Smoother WinTab strokes and lower canvas frame cost, especially in maximized "
+            "windows."));
     addReleaseHighlightRow(highlightsWidget, highlightsLayout, colors, theme,
         ChangelogBadge::BugFix,
         QCoreApplication::translate("UpdateMessageOverlay",
-            "More reliable WinTab strokes and transform finalization, plus fixes for selections, "
-            "alpha lock, Blur, and Navigator."));
+            "Sharp same-frame blur for canvas widgets and safe Smudge finalization when switching "
+            "tools."));
 
     leftLayout->addWidget(highlightsWidget);
     leftLayout->addStretch();

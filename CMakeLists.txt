@@ -3,7 +3,7 @@
 cmake_minimum_required(VERSION 3.16)
 
 project(Ruwa
-    VERSION 0.2.5
+    VERSION 0.2.6
     LANGUAGES CXX C
 )
 
@@ -136,7 +136,7 @@ ruwa_register_static_analysis_targets(Ruwa)
 set(RUWA_BUILD_INFO_DIR "${CMAKE_CURRENT_BINARY_DIR}/generated")
 set(RUWA_BUILD_INFO_HEADER "${RUWA_BUILD_INFO_DIR}/RuwaBuildInfo.h")
 set(RUWA_BUILD_COUNTER_FILE "${CMAKE_CURRENT_BINARY_DIR}/RuwaBuildNumber.txt")
-set(RUWA_RELEASE_DATE "2026-07-18" CACHE STRING "Release date shown in Ruwa About")
+set(RUWA_RELEASE_DATE "2026-07-21" CACHE STRING "Release date shown in Ruwa About")
 set(RUWA_BUILD_INFO_SCRIPT "${CMAKE_CURRENT_BINARY_DIR}/UpdateRuwaBuildInfo.cmake")
 option(RUWA_ENABLE_UPDATES "Enable signed built-in update checks and patch downloads" ON)
 set(RUWA_UPDATE_MANIFEST_URL
