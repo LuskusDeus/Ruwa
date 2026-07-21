@@ -934,8 +934,7 @@ void CanvasPanel::setToolMode(ToolMode tool)
     // them may safely change only erase mode while a stroke is active. Effect
     // tools cannot: their queued samples and GPU flatten must keep the brush
     // mode/settings with which the stroke began.
-    const bool brushEraserSwitch
-        = (currentTool == ToolMode::Brush && tool == ToolMode::Eraser)
+    const bool brushEraserSwitch = (currentTool == ToolMode::Brush && tool == ToolMode::Eraser)
         || (currentTool == ToolMode::Eraser && tool == ToolMode::Brush);
     bool midStroke = m_isDrawing && m_glWidget && m_glWidget->isDrawing();
     if (m_glWidget && m_glWidget->isDrawing() && (!midStroke || !brushEraserSwitch)) {

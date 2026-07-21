@@ -283,13 +283,11 @@ public:
             QStringLiteral("standardIcon"), static_cast<int>(IconProvider::StandardIcon::Edit));
         actions.append(openEditor);
 
-        const bool favorite
-            = ruwa::core::SettingsManager::instance().isBrushFavorite(m_brush.id);
+        const bool favorite = ruwa::core::SettingsManager::instance().isBrushFavorite(m_brush.id);
         QVariantMap toggleFavorite;
         toggleFavorite.insert(QStringLiteral("id"), CtxToggleFavorite);
         toggleFavorite.insert(QStringLiteral("text"),
-            favorite ? QCoreApplication::translate(
-                           "BrushPackListSection", "Remove from favorites")
+            favorite ? QCoreApplication::translate("BrushPackListSection", "Remove from favorites")
                      : QCoreApplication::translate("BrushPackListSection", "Add to favorites"));
         toggleFavorite.insert(QStringLiteral("danger"), false);
         toggleFavorite.insert(QLatin1String(kKeyChecked), favorite);
@@ -417,16 +415,16 @@ private:
             return;
         }
 
-        QColor borderColor = ThemeColors::adjustBrightness(
-            colors.primary, colors.isDark ? 1.18 : 0.82);
+        QColor borderColor
+            = ThemeColors::adjustBrightness(colors.primary, colors.isDark ? 1.18 : 0.82);
         borderColor.setAlpha(220);
 
         painter.save();
         painter.setOpacity(activeProgress());
         painter.setPen(QPen(borderColor, 1.25));
         painter.setBrush(Qt::NoBrush);
-        painter.drawRoundedRect(rect.adjusted(1.0, 1.0, -1.0, -1.0),
-            qMax<qreal>(0.0, radius - 1.0), qMax<qreal>(0.0, radius - 1.0));
+        painter.drawRoundedRect(rect.adjusted(1.0, 1.0, -1.0, -1.0), qMax<qreal>(0.0, radius - 1.0),
+            qMax<qreal>(0.0, radius - 1.0));
         painter.restore();
     }
 
@@ -608,8 +606,8 @@ private:
         const int previewWidth = referenceWidth * kStrokePreviewSupersampling;
         const int previewHeight = referenceHeight * kStrokePreviewSupersampling;
         const qreal previewColorStrength = 0.76 + activeProgress() * 0.24;
-        QColor previewColor = ThemeColors::interpolate(
-            colors.textMuted, colors.primary, previewColorStrength);
+        QColor previewColor
+            = ThemeColors::interpolate(colors.textMuted, colors.primary, previewColorStrength);
         previewColor = ThemeColors::interpolate(previewColor,
             ThemeColors::adjustBrightness(colors.primary, colors.isDark ? 1.18 : 0.94),
             0.28 + activeProgress() * 0.52);
@@ -626,8 +624,8 @@ private:
         const qreal previewOpacity = (colors.isDark ? 0.74 : 0.68) + hoverProgress() * 0.08
             + activeProgress() * (colors.isDark ? 0.18 : 0.20);
         painter.setOpacity(previewOpacity);
-        const QRectF sourceRect(m_previewImage.width() * 0.5, 0.0,
-            m_previewImage.width() * 0.5, m_previewImage.height());
+        const QRectF sourceRect(m_previewImage.width() * 0.5, 0.0, m_previewImage.width() * 0.5,
+            m_previewImage.height());
         QSizeF drawnSize = sourceRect.size();
         drawnSize.scale(rect.size(), Qt::KeepAspectRatio);
         QRectF drawnRect(QPointF(), drawnSize);
@@ -876,11 +874,11 @@ void BrushPackListSection::rebuildBrushRows()
     for (const BrushListBrushData& brush : m_pack.brushes) {
         auto* rowButton = new PackBrushRowButton(brush, m_contentContainer);
         const QString sourcePackId = brush.packId.isEmpty() ? m_pack.id : brush.packId;
-        rowButton->setOpenEditorCallback(
-            [this, sourcePackId](
-                const QString& brushId) { emit brushEditorRequested(sourcePackId, brushId); });
-        connect(rowButton, &QAbstractButton::clicked, this,
-            [this, sourcePackId, brushId = brush.id]() {
+        rowButton->setOpenEditorCallback([this, sourcePackId](const QString& brushId) {
+            emit brushEditorRequested(sourcePackId, brushId);
+        });
+        connect(
+            rowButton, &QAbstractButton::clicked, this, [this, sourcePackId, brushId = brush.id]() {
                 emit brushActivated(sourcePackId, brushId);
             });
         rows.append(rowButton);

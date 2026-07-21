@@ -24,7 +24,7 @@ class QEvent;
 namespace ruwa::ui::widgets {
 class AnimatedStackedWidget;
 class SmoothScrollArea;
-}
+} // namespace ruwa::ui::widgets
 
 namespace ruwa::ui::windows {
 class BrushEditorWindow;
@@ -95,8 +95,7 @@ private:
     void ensurePageBuilt(const QString& pageKey);
     void rebuildBuiltPages();
     void rebuildPage(const QString& pageKey);
-    void addPackSection(
-        const QString& pageKey, FilterPage& page, const BrushListPackData& pack,
+    void addPackSection(const QString& pageKey, FilterPage& page, const BrushListPackData& pack,
         bool forceExpanded = false);
     void clearPage(FilterPage& page);
     void ensureSelection();

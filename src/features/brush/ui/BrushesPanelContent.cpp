@@ -33,7 +33,7 @@ constexpr int kPanelStateVersion = 2;
 constexpr auto kFavoritesSectionId = "__brush_favorites__";
 constexpr auto kFavoritesPageKey = "__favorites_filter__";
 constexpr auto kAllPageKey = "__all_filter__";
-}
+} // namespace
 
 BrushesPanelContent::BrushesPanelContent(QWidget* parent)
     : QWidget(parent)
@@ -48,8 +48,7 @@ BrushesPanelContent::BrushesPanelContent(QWidget* parent)
     rootLayout->setSpacing(0);
 
     m_pageStack = new widgets::AnimatedStackedWidget(this);
-    m_pageStack->setSlideOrientation(
-        widgets::AnimatedStackedWidget::SlideOrientation::Horizontal);
+    m_pageStack->setSlideOrientation(widgets::AnimatedStackedWidget::SlideOrientation::Horizontal);
     m_pageStack->setAnimationDuration(250);
     m_pageStack->setAnimationEasing(QEasingCurve::InOutCubic);
     m_pageStack->setInterruptEasing(QEasingCurve::OutCubic);
@@ -217,8 +216,7 @@ void BrushesPanelContent::reloadFromManager()
     ensurePageBuilt(currentPageKey());
     if (auto pageIt = m_filterPages.find(currentPageKey());
         pageIt != m_filterPages.end() && pageIt->container) {
-        m_pageStack->setCurrentIndexWithoutAnimation(
-            m_pageStack->indexOf(pageIt->container));
+        m_pageStack->setCurrentIndexWithoutAnimation(m_pageStack->indexOf(pageIt->container));
         scheduleScrollRestore(currentPageKey());
     }
     emit packFiltersChanged(packFilterIds(), packFilterNames());
@@ -362,8 +360,7 @@ void BrushesPanelContent::onManagerBrushRenamed(const QString& brushId, const QS
         if (auto* section = page.sections.value(sourcePackId, nullptr)) {
             section->updateBrushName(brushId, newName);
         }
-        if (auto* favorites
-            = page.sections.value(QLatin1String(kFavoritesSectionId), nullptr)) {
+        if (auto* favorites = page.sections.value(QLatin1String(kFavoritesSectionId), nullptr)) {
             favorites->updateBrushName(brushId, newName);
         }
     }
@@ -465,8 +462,7 @@ void BrushesPanelContent::onThemeChanged()
         if (!page.scrollLayout) {
             continue;
         }
-        page.scrollLayout->setContentsMargins(
-            outerMargin, outerMargin, outerMargin, outerMargin);
+        page.scrollLayout->setContentsMargins(outerMargin, outerMargin, outerMargin, outerMargin);
         page.scrollLayout->setSpacing(spacing);
     }
 
@@ -599,8 +595,7 @@ void BrushesPanelContent::syncFilterPages()
     auto currentIt = m_filterPages.find(currentPageKey());
     if (currentIt != m_filterPages.end() && currentIt->container
         && (stackStructureChanged || m_pageStack->currentWidget() != currentIt->container)) {
-        m_pageStack->setCurrentIndexWithoutAnimation(
-            m_pageStack->indexOf(currentIt->container));
+        m_pageStack->setCurrentIndexWithoutAnimation(m_pageStack->indexOf(currentIt->container));
     }
 }
 
@@ -636,13 +631,12 @@ void BrushesPanelContent::createFilterPage(const QString& pageKey, int stackInde
     page.scrollContent->setStyleSheet(QStringLiteral("background: transparent;"));
     page.scrollLayout = new QVBoxLayout(page.scrollContent);
     const int outerMargin = ruwa::ui::core::ThemeManager::instance().scaled(8);
-    page.scrollLayout->setContentsMargins(
-        outerMargin, outerMargin, outerMargin, outerMargin);
+    page.scrollLayout->setContentsMargins(outerMargin, outerMargin, outerMargin, outerMargin);
     page.scrollLayout->setSpacing(ruwa::ui::core::ThemeManager::instance().scaled(8));
     page.scrollArea->setWidget(page.scrollContent);
 
-    connect(page.scrollArea, &widgets::SmoothScrollArea::scrolled, this,
-        [this, pageKey](int value) {
+    connect(
+        page.scrollArea, &widgets::SmoothScrollArea::scrolled, this, [this, pageKey](int value) {
             if (m_pendingScrollRestoreKeys.contains(pageKey)) {
                 return;
             }
@@ -657,9 +651,8 @@ void BrushesPanelContent::createFilterPage(const QString& pageKey, int stackInde
 void BrushesPanelContent::switchToView(ViewMode viewMode, const QString& packId)
 {
     const QString oldPageKey = currentPageKey();
-    if (auto oldPageIt = m_filterPages.find(oldPageKey);
-        oldPageIt != m_filterPages.end() && oldPageIt->scrollArea
-        && !m_pendingScrollRestoreKeys.contains(oldPageKey)) {
+    if (auto oldPageIt = m_filterPages.find(oldPageKey); oldPageIt != m_filterPages.end()
+        && oldPageIt->scrollArea && !m_pendingScrollRestoreKeys.contains(oldPageKey)) {
         m_pageScrollValues.insert(oldPageKey, oldPageIt->scrollArea->scrollValue());
     }
 
@@ -740,8 +733,7 @@ void BrushesPanelContent::rebuildPage(const QString& pageKey)
     };
 
     if (m_packs.isEmpty()) {
-        addEmptyState(
-            tr("No brush packs"), tr("Create or restore packs to populate this panel."));
+        addEmptyState(tr("No brush packs"), tr("Create or restore packs to populate this panel."));
     } else if (pageKey == QLatin1String(kFavoritesPageKey)) {
         BrushListPackData favorites;
         favorites.id = QLatin1String(kFavoritesSectionId);
@@ -757,8 +749,8 @@ void BrushesPanelContent::rebuildPage(const QString& pageKey)
         }
 
         if (favorites.brushes.isEmpty()) {
-            addEmptyState(tr("No favorite brushes"),
-                tr("Use a brush context menu to add it to favorites."));
+            addEmptyState(
+                tr("No favorite brushes"), tr("Use a brush context menu to add it to favorites."));
         } else {
             addPackSection(pageKey, page, favorites, true);
         }
@@ -782,8 +774,8 @@ void BrushesPanelContent::rebuildPage(const QString& pageKey)
     }
 }
 
-void BrushesPanelContent::addPackSection(const QString& pageKey, FilterPage& page,
-    const BrushListPackData& pack, bool forceExpanded)
+void BrushesPanelContent::addPackSection(
+    const QString& pageKey, FilterPage& page, const BrushListPackData& pack, bool forceExpanded)
 {
     auto* section = new BrushPackListSection(page.scrollContent);
     section->setPackData(pack);
@@ -892,8 +884,7 @@ void BrushesPanelContent::applyPendingScrollRestore(const QString& pageKey)
     }
 
     auto pageIt = m_filterPages.find(pageKey);
-    if (pageIt == m_filterPages.end() || !pageIt->scrollArea
-        || !pageIt->scrollArea->viewport()) {
+    if (pageIt == m_filterPages.end() || !pageIt->scrollArea || !pageIt->scrollArea->viewport()) {
         return;
     }
     if (pageIt->scrollArea->viewport()->width() <= 0

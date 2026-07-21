@@ -219,8 +219,8 @@ void ToolButton::paintEvent(QPaintEvent* event)
     QRectF rect
         = this->rect().adjusted(mgr.scaled(m_baseInsetLeft) + 0.5, mgr.scaled(m_baseInsetTop) + 0.5,
             -mgr.scaled(m_baseInsetRight) - 0.5, -mgr.scaled(m_baseInsetBottom) - 0.5);
-    const qreal radius = m_circularChrome ? qMin(rect.width(), rect.height()) * 0.5
-                                          : mgr.scaled(m_baseRadius);
+    const qreal radius
+        = m_circularChrome ? qMin(rect.width(), rect.height()) * 0.5 : mgr.scaled(m_baseRadius);
 
     // Background layer
     painter.setPen(Qt::NoPen);
@@ -252,8 +252,7 @@ void ToolButton::paintEvent(QPaintEvent* event)
         qreal hoverAlpha = 0.0;
         if (m_chromeStyle == ChromeStyle::PrimaryHover) {
             hoverColor = colors.primary;
-            hoverAlpha = (colors.isDark ? 0.14 : 0.10) * hoverProgress()
-                * (1.0 - activeProgress());
+            hoverAlpha = (colors.isDark ? 0.14 : 0.10) * hoverProgress() * (1.0 - activeProgress());
         } else {
             hoverColor = m_chromeStyle == ChromeStyle::Overlay ? colors.overlay(0.06)
                                                                : colors.surfaceHover();

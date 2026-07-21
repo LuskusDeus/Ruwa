@@ -508,8 +508,7 @@ void WelcomeBannerCropOverlay::setupUI()
     layout->setContentsMargins(margin, margin, margin, margin);
     layout->setSpacing(theme.scaled(CardSpacing));
 
-    auto* title = new QLabel(
-        tr("Choose the area to show on the banner"), m_card);
+    auto* title = new QLabel(tr("Choose the area to show on the banner"), m_card);
     QFont titleFont = colors.fonts.getUIFont(theme.scaledFontSize(TitleFontSize));
     titleFont.setWeight(QFont::DemiBold);
     title->setFont(titleFont);
@@ -538,14 +537,14 @@ void WelcomeBannerCropOverlay::setupUI()
     buttonRow->setSpacing(theme.scaled(ButtonSpacing));
     buttonRow->addStretch();
 
-    auto* cancelButton = new WelcomeBannerButton(tr("Cancel"),
-        WelcomeBannerButton::ButtonStyle::Secondary, m_card);
+    auto* cancelButton = new WelcomeBannerButton(
+        tr("Cancel"), WelcomeBannerButton::ButtonStyle::Secondary, m_card);
     connect(cancelButton, &WelcomeBannerButton::clicked, this,
         [this]() { animateOutThen(false, QRectF()); });
     buttonRow->addWidget(cancelButton);
 
-    auto* confirmButton = new WelcomeBannerButton(tr("Use this area"),
-        WelcomeBannerButton::ButtonStyle::Primary, m_card);
+    auto* confirmButton = new WelcomeBannerButton(
+        tr("Use this area"), WelcomeBannerButton::ButtonStyle::Primary, m_card);
     connect(confirmButton, &WelcomeBannerButton::clicked, this,
         [this]() { animateOutThen(true, m_cropArea ? m_cropArea->normalizedCrop() : QRectF()); });
     buttonRow->addWidget(confirmButton);

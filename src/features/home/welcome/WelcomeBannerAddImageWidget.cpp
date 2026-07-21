@@ -126,8 +126,7 @@ void WelcomeBannerAddImageWidget::drawContentLayer(QPainter& painter, const QRec
     QFont nameFont = font();
     nameFont.setPointSize(mgr.scaledFontSize(8));
     painter.setFont(nameFont);
-    painter.drawText(
-        nameRect, Qt::AlignLeft | Qt::AlignVCenter, tr("Add image"));
+    painter.drawText(nameRect, Qt::AlignLeft | Qt::AlignVCenter, tr("Add image"));
 }
 
 void WelcomeBannerAddImageWidget::mousePressEvent(QMouseEvent* event)

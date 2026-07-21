@@ -84,8 +84,7 @@ void CanvasBackdropRenderer::shutdown()
     m_initialized = false;
 }
 
-bool CanvasBackdropRenderer::createColorTarget(
-    int width, int height, GLuint& fbo, GLuint& texture)
+bool CanvasBackdropRenderer::createColorTarget(int width, int height, GLuint& fbo, GLuint& texture)
 {
     m_gl->glGenTextures(1, &texture);
     m_gl->glBindTexture(GL_TEXTURE_2D, texture);
@@ -98,10 +97,8 @@ bool CanvasBackdropRenderer::createColorTarget(
 
     m_gl->glGenFramebuffers(1, &fbo);
     m_gl->glBindFramebuffer(GL_FRAMEBUFFER, fbo);
-    m_gl->glFramebufferTexture2D(
-        GL_FRAMEBUFFER, GL_COLOR_ATTACHMENT0, GL_TEXTURE_2D, texture, 0);
-    const bool complete
-        = m_gl->glCheckFramebufferStatus(GL_FRAMEBUFFER) == GL_FRAMEBUFFER_COMPLETE;
+    m_gl->glFramebufferTexture2D(GL_FRAMEBUFFER, GL_COLOR_ATTACHMENT0, GL_TEXTURE_2D, texture, 0);
+    const bool complete = m_gl->glCheckFramebufferStatus(GL_FRAMEBUFFER) == GL_FRAMEBUFFER_COMPLETE;
     m_gl->glBindTexture(GL_TEXTURE_2D, 0);
     return complete;
 }
@@ -125,8 +122,7 @@ void CanvasBackdropRenderer::releaseTarget(RegionTarget& target)
     target = {};
 }
 
-bool CanvasBackdropRenderer::ensureTarget(
-    RegionTarget& target, int captureWidth, int captureHeight)
+bool CanvasBackdropRenderer::ensureTarget(RegionTarget& target, int captureWidth, int captureHeight)
 {
     const int requiredBlurWidth
         = roundedCapacity((captureWidth + kDownsampleScale - 1) / kDownsampleScale);
@@ -150,12 +146,15 @@ bool CanvasBackdropRenderer::ensureTarget(
 
     bool ok = createColorTarget(
         target.halfWidth, target.halfHeight, target.halfFbo, target.halfTexture);
-    ok = ok && createColorTarget(target.quarterWidth, target.quarterHeight, target.quarterFbo,
-                   target.quarterTexture);
-    ok = ok && createColorTarget(
-                   target.blurWidth, target.blurHeight, target.blurAFbo, target.blurATexture);
-    ok = ok && createColorTarget(
-                   target.blurWidth, target.blurHeight, target.blurBFbo, target.blurBTexture);
+    ok = ok
+        && createColorTarget(
+            target.quarterWidth, target.quarterHeight, target.quarterFbo, target.quarterTexture);
+    ok = ok
+        && createColorTarget(
+            target.blurWidth, target.blurHeight, target.blurAFbo, target.blurATexture);
+    ok = ok
+        && createColorTarget(
+            target.blurWidth, target.blurHeight, target.blurBFbo, target.blurBTexture);
     if (!ok) {
         releaseTarget(target);
     }
@@ -187,14 +186,12 @@ bool CanvasBackdropRenderer::render(GLuint sourceFbo, GLuint defaultFbo, int sur
             continue;
         }
 
-        const int left
-            = static_cast<int>(std::floor(region.rect.x() * logicalToSurfaceScaleX));
-        const int top
-            = static_cast<int>(std::floor(region.rect.y() * logicalToSurfaceScaleY));
-        const int right = static_cast<int>(std::ceil(
-            (region.rect.x() + region.rect.width()) * logicalToSurfaceScaleX));
-        const int bottom = static_cast<int>(std::ceil(
-            (region.rect.y() + region.rect.height()) * logicalToSurfaceScaleY));
+        const int left = static_cast<int>(std::floor(region.rect.x() * logicalToSurfaceScaleX));
+        const int top = static_cast<int>(std::floor(region.rect.y() * logicalToSurfaceScaleY));
+        const int right = static_cast<int>(
+            std::ceil((region.rect.x() + region.rect.width()) * logicalToSurfaceScaleX));
+        const int bottom = static_cast<int>(
+            std::ceil((region.rect.y() + region.rect.height()) * logicalToSurfaceScaleY));
         const QRect targetRect(left, top, right - left, bottom - top);
         const QRect clippedTarget = targetRect.intersected(surfaceRect);
         if (clippedTarget.isEmpty()) {
@@ -202,9 +199,8 @@ bool CanvasBackdropRenderer::render(GLuint sourceFbo, GLuint defaultFbo, int sur
         }
 
         const QRect captureRect = targetRect
-                                      .adjusted(-kCapturePaddingDevicePx,
-                                          -kCapturePaddingDevicePx, kCapturePaddingDevicePx,
-                                          kCapturePaddingDevicePx)
+                                      .adjusted(-kCapturePaddingDevicePx, -kCapturePaddingDevicePx,
+                                          kCapturePaddingDevicePx, kCapturePaddingDevicePx)
                                       .intersected(surfaceRect);
         const std::size_t targetIndex = prepared.size();
         RegionTarget& target = m_targets[targetIndex];
@@ -215,8 +211,7 @@ bool CanvasBackdropRenderer::render(GLuint sourceFbo, GLuint defaultFbo, int sur
         PreparedRegion item;
         item.captureRect = captureRect;
         item.targetRect = clippedTarget;
-        const qreal cornerScale
-            = std::min(logicalToSurfaceScaleX, logicalToSurfaceScaleY);
+        const qreal cornerScale = std::min(logicalToSurfaceScaleX, logicalToSurfaceScaleY);
         item.cornerRadius
             = static_cast<float>(std::max<qreal>(0.0, region.cornerRadius * cornerScale));
         item.opacity = static_cast<float>(std::clamp<qreal>(region.opacity, 0.0, 1.0));
@@ -224,10 +219,9 @@ bool CanvasBackdropRenderer::render(GLuint sourceFbo, GLuint defaultFbo, int sur
 
         const float captureWidth = static_cast<float>(captureRect.width());
         const float captureHeight = static_cast<float>(captureRect.height());
-        item.sourceUvMinX
-            = static_cast<float>(clippedTarget.x() - captureRect.x()) / captureWidth;
-        item.sourceUvMaxX = static_cast<float>(clippedTarget.x() + clippedTarget.width()
-                                - captureRect.x())
+        item.sourceUvMinX = static_cast<float>(clippedTarget.x() - captureRect.x()) / captureWidth;
+        item.sourceUvMaxX
+            = static_cast<float>(clippedTarget.x() + clippedTarget.width() - captureRect.x())
             / captureWidth;
         item.sourceUvMinY = static_cast<float>(captureRect.y() + captureRect.height()
                                 - clippedTarget.y() - clippedTarget.height())
@@ -251,8 +245,7 @@ bool CanvasBackdropRenderer::render(GLuint sourceFbo, GLuint defaultFbo, int sur
     // into the default framebuffer. This prevents overlap feedback.
     for (const PreparedRegion& item : prepared) {
         RegionTarget& target = m_targets[item.targetIndex];
-        const int sourceBottom
-            = surfaceHeight - item.captureRect.y() - item.captureRect.height();
+        const int sourceBottom = surfaceHeight - item.captureRect.y() - item.captureRect.height();
         const int sourceTop = surfaceHeight - item.captureRect.y();
 
         m_gl->glBindFramebuffer(GL_READ_FRAMEBUFFER, sourceFbo);
@@ -304,10 +297,8 @@ bool CanvasBackdropRenderer::render(GLuint sourceFbo, GLuint defaultFbo, int sur
         m_gl->glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
         m_compositeProgram->use();
         m_compositeProgram->setUniform("uSource", 0);
-        m_compositeProgram->setUniform(
-            "uSourceUvMin", item.sourceUvMinX, item.sourceUvMinY);
-        m_compositeProgram->setUniform(
-            "uSourceUvMax", item.sourceUvMaxX, item.sourceUvMaxY);
+        m_compositeProgram->setUniform("uSourceUvMin", item.sourceUvMinX, item.sourceUvMinY);
+        m_compositeProgram->setUniform("uSourceUvMax", item.sourceUvMaxX, item.sourceUvMaxY);
         m_compositeProgram->setUniform("uRectSize", static_cast<float>(item.targetRect.width()),
             static_cast<float>(item.targetRect.height()));
         m_compositeProgram->setUniform("uCornerRadius", item.cornerRadius);

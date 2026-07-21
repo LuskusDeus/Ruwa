@@ -311,8 +311,8 @@ void ShortcutsNavigatorWidget::setupContent()
     if (m_textLayout)
         m_textLayout->setAlignment(Qt::AlignVCenter);
 
-    m_openButton = new WelcomeBannerButton(tr("Customize"),
-        WelcomeBannerButton::ButtonStyle::Primary, this);
+    m_openButton
+        = new WelcomeBannerButton(tr("Customize"), WelcomeBannerButton::ButtonStyle::Primary, this);
     m_openButton->setBannerBaseHeight(36);
 
     auto& icons = theme.icons();

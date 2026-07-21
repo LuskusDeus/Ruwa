@@ -76,12 +76,11 @@ BrushSettingsPanel::BrushSettingsPanel(QWidget* parent)
     setMovable(true);
 
     auto& manager = BrushManager::instance();
-    connect(&manager, &BrushManager::starredSettingsChanged, this,
-        [this](const QString& brushId) {
-            if (brushId == m_currentBrushId) {
-                rebuildSettings();
-            }
-        });
+    connect(&manager, &BrushManager::starredSettingsChanged, this, [this](const QString& brushId) {
+        if (brushId == m_currentBrushId) {
+            rebuildSettings();
+        }
+    });
     connect(&manager, &BrushManager::brushSettingsUpdated, this,
         [this](const QString&, const QString& brushId, const BrushSettingsData& settings) {
             if (brushId != m_currentBrushId) {
@@ -106,11 +105,10 @@ BrushSettingsPanel::BrushSettingsPanel(QWidget* parent)
     connect(&manager, &BrushManager::brushRemoved, this,
         [this](const QString&, const QString& brushId) {
             if (brushId == m_currentBrushId) {
-                setCurrentBrush(m_canvasPanel
-                        ? m_canvasPanel->selectedBrushIdForCurrentContext()
-                        : QString());
+                setCurrentBrush(
+                    m_canvasPanel ? m_canvasPanel->selectedBrushIdForCurrentContext() : QString());
             }
-    });
+        });
     connect(&manager, &BrushManager::dataReset, this, [this]() {
         m_currentBrushId
             = m_canvasPanel ? m_canvasPanel->selectedBrushIdForCurrentContext() : QString();
@@ -145,8 +143,7 @@ void BrushSettingsPanel::setCanvasPanel(CanvasPanel* canvasPanel)
         });
     }
 
-    setCurrentBrush(
-        m_canvasPanel ? m_canvasPanel->selectedBrushIdForCurrentContext() : QString());
+    setCurrentBrush(m_canvasPanel ? m_canvasPanel->selectedBrushIdForCurrentContext() : QString());
 }
 
 QWidget* BrushSettingsPanel::createContent()
@@ -323,8 +320,7 @@ void BrushSettingsPanel::rebuildSettings()
     }
     m_currentSettings = *settings;
 
-    const auto* module
-        = BrushEngineRegistry::instance().moduleOrPixelFallback(brush->engineId);
+    const auto* module = BrushEngineRegistry::instance().moduleOrPixelFallback(brush->engineId);
     if (!module) {
         updateEmptyState(tr("This brush engine does not expose editable settings."));
         refreshScrollGeometry();
@@ -369,11 +365,11 @@ void BrushSettingsPanel::rebuildSettings()
         const int iconSize = theme.scaled(12);
         const QColor iconTint = WidgetStyleManager::instance().colors().textMuted;
         const auto iconType = iconForTab(QLatin1String(tab.id));
-        QPixmap iconPixmap
-            = IconProvider::instance().getColoredIcon(iconType, iconTint).pixmap(iconSize, iconSize);
+        QPixmap iconPixmap = IconProvider::instance()
+                                 .getColoredIcon(iconType, iconTint)
+                                 .pixmap(iconSize, iconSize);
         if (iconPixmap.isNull()) {
-            iconPixmap
-                = IconProvider::instance().getPixmap(iconType, QSize(iconSize, iconSize));
+            iconPixmap = IconProvider::instance().getPixmap(iconType, QSize(iconSize, iconSize));
         }
         categoryIconLabel->setPixmap(iconPixmap);
         categoryIconLabel->setFixedSize(iconSize, iconSize);
@@ -444,8 +440,7 @@ void BrushSettingsPanel::applySectionEdit(BrushSettingsWidget* editedSection)
     const auto appliedSettings = manager.brushSettings(m_currentBrushId);
     m_currentSettings = appliedSettings.value_or(updated);
     refreshSectionValues(m_currentSettings);
-    if (m_canvasPanel
-        && m_canvasPanel->selectedBrushIdForCurrentContext() == m_currentBrushId) {
+    if (m_canvasPanel && m_canvasPanel->selectedBrushIdForCurrentContext() == m_currentBrushId) {
         m_canvasPanel->reapplyCurrentToolState();
     }
 }
@@ -463,22 +458,20 @@ void BrushSettingsPanel::updateHeader()
     if (!m_currentBrushId.isEmpty()) {
         auto& manager = BrushManager::instance();
         if (const auto brush = manager.brushData(m_currentBrushId)) {
-            brushName
-                = QCoreApplication::translate("QObject", brush->name.toUtf8().constData());
+            brushName = QCoreApplication::translate("QObject", brush->name.toUtf8().constData());
             presetId = manager.presetIdForBrush(m_currentBrushId);
             brushSettings = manager.brushSettings(m_currentBrushId);
             for (const auto& preset : manager.presets()) {
                 if (preset.id == presetId) {
-                    presetName = QCoreApplication::translate(
-                        "QObject", preset.name.toUtf8().constData());
+                    presetName
+                        = QCoreApplication::translate("QObject", preset.name.toUtf8().constData());
                     break;
                 }
             }
         }
     }
 
-    const bool hasBrush
-        = !brushName.isEmpty() && !presetId.isEmpty() && !presetName.isEmpty();
+    const bool hasBrush = !brushName.isEmpty() && !presetId.isEmpty() && !presetName.isEmpty();
     m_headerCaptionLabel->setText(hasBrush ? presetName : tr("Brush pack"));
     m_headerCaptionLabel->setToolTip(hasBrush ? presetName : QString());
     m_brushNameLabel->setText(hasBrush ? brushName : tr("No active brush"));
@@ -496,16 +489,14 @@ void BrushSettingsPanel::updateHeader()
     captionFont.setPixelSize(theme.scaled(9));
     captionFont.setWeight(QFont::Medium);
     m_headerCaptionLabel->setFont(captionFont);
-    m_headerCaptionLabel->setStyleSheet(
-        QStringLiteral("color: %1; background: transparent;")
+    m_headerCaptionLabel->setStyleSheet(QStringLiteral("color: %1; background: transparent;")
             .arg(colors.textMuted.name(QColor::HexArgb)));
 
     QFont nameFont = m_brushNameLabel->font();
     nameFont.setPixelSize(theme.scaled(11));
     nameFont.setWeight(QFont::DemiBold);
     m_brushNameLabel->setFont(nameFont);
-    m_brushNameLabel->setStyleSheet(
-        QStringLiteral("color: %1; background: transparent;")
+    m_brushNameLabel->setStyleSheet(QStringLiteral("color: %1; background: transparent;")
             .arg((hasBrush ? colors.text : colors.textMuted).name(QColor::HexArgb)));
 }
 
@@ -528,8 +519,7 @@ void BrushSettingsPanel::updateEmptyState(const QString& text)
     m_emptyLabel = new QLabel(text, m_scrollContent);
     m_emptyLabel->setWordWrap(true);
     m_emptyLabel->setAlignment(Qt::AlignCenter);
-    m_emptyLabel->setStyleSheet(
-        QStringLiteral("color: %1; background: transparent;")
+    m_emptyLabel->setStyleSheet(QStringLiteral("color: %1; background: transparent;")
             .arg(WidgetStyleManager::instance().colors().textMuted.name(QColor::HexArgb)));
     m_scrollLayout->addStretch();
     m_scrollLayout->addWidget(m_emptyLabel);

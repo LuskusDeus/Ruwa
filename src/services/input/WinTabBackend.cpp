@@ -59,8 +59,7 @@ constexpr WTPKT PK_NORMAL_PRESSURE = 0x0400;
 
 constexpr WTPKT kExtendedPacketData
     = PK_STATUS | PK_TIME | PK_CURSOR | PK_BUTTONS | PK_X | PK_Y | PK_NORMAL_PRESSURE;
-constexpr WTPKT kExtendedPacketMoveMask
-    = PK_CURSOR | PK_BUTTONS | PK_X | PK_Y | PK_NORMAL_PRESSURE;
+constexpr WTPKT kExtendedPacketMoveMask = PK_CURSOR | PK_BUTTONS | PK_X | PK_Y | PK_NORMAL_PRESSURE;
 constexpr WTPKT kBasicPacketData = PK_BUTTONS | PK_X | PK_Y | PK_NORMAL_PRESSURE;
 constexpr UINT TPS_QUEUE_ERR = 0x0002;
 
@@ -448,9 +447,8 @@ bool WinTabBackend::handleNativeEvent(void* message)
         constexpr int kDrainChunkSize = 64;
 
         const auto processPacket = [this](const Packet& packet, bool hasMetadata) {
-            const auto rangeIt = hasMetadata
-                ? m_data->pressureByCursor.find(packet.pkCursor)
-                : m_data->pressureByCursor.end();
+            const auto rangeIt = hasMetadata ? m_data->pressureByCursor.find(packet.pkCursor)
+                                             : m_data->pressureByCursor.end();
             const PressureRange& pressureRange = rangeIt != m_data->pressureByCursor.end()
                 ? rangeIt->second
                 : m_data->fallbackPressure;
@@ -492,8 +490,7 @@ bool WinTabBackend::handleNativeEvent(void* message)
                 m_data->smoothedPressure = pressure;
             } else {
                 constexpr float kAlpha = 0.65f;
-                pressure
-                    = kAlpha * rawNorm + (1.0f - kAlpha) * m_data->smoothedPressure;
+                pressure = kAlpha * rawNorm + (1.0f - kAlpha) * m_data->smoothedPressure;
                 m_data->smoothedPressure = pressure;
             }
 

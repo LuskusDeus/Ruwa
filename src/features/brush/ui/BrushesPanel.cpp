@@ -57,8 +57,8 @@ public:
         buttonFont.setWeight(QFont::Medium);
         const int width = QFontMetrics(buttonFont).horizontalAdvance(translatedFilterText(m_text))
             + ThemeManager::instance().scaled(18);
-        setFixedSize(qMax(ThemeManager::instance().scaled(34), width),
-            ThemeManager::instance().scaled(24));
+        setFixedSize(
+            qMax(ThemeManager::instance().scaled(34), width), ThemeManager::instance().scaled(24));
     }
 
     void setSelected(bool selected) { setActive(selected); }
@@ -78,8 +78,7 @@ protected:
         painter.setPen(Qt::NoPen);
         if (hoverProgress() > 0.001 && active < 0.999) {
             QColor hoverFill = colors.overlay(0.06);
-            hoverFill.setAlphaF(
-                hoverFill.alphaF() * hoverProgress() * (1.0 - active));
+            hoverFill.setAlphaF(hoverFill.alphaF() * hoverProgress() * (1.0 - active));
             painter.setBrush(hoverFill);
             painter.drawRoundedRect(buttonRect, radius, radius);
         }
@@ -95,10 +94,9 @@ protected:
         buttonFont.setPixelSize(ThemeManager::instance().scaled(10));
         buttonFont.setWeight(QFont::Medium);
         painter.setFont(buttonFont);
-        const QColor idleText = ThemeColors::interpolate(
-            colors.textMuted, colors.text, hoverProgress() * 0.32);
-        const QColor textColor
-            = ThemeColors::interpolate(idleText, colors.textOnPrimary(), active);
+        const QColor idleText
+            = ThemeColors::interpolate(colors.textMuted, colors.text, hoverProgress() * 0.32);
+        const QColor textColor = ThemeColors::interpolate(idleText, colors.textOnPrimary(), active);
         painter.setPen(textColor);
         painter.drawText(rect(), Qt::AlignCenter, translatedFilterText(m_text));
     }
@@ -269,8 +267,7 @@ void BrushesPanel::setupFilterBar()
     rebuildFilterButtons(m_packFilterIds, m_packFilterNames);
 }
 
-void BrushesPanel::rebuildFilterButtons(
-    const QStringList& packIds, const QStringList& packNames)
+void BrushesPanel::rebuildFilterButtons(const QStringList& packIds, const QStringList& packNames)
 {
     m_packFilterIds = packIds;
     m_packFilterNames = packNames;

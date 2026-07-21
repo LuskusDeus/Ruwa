@@ -433,8 +433,7 @@ void RecentProjectsWidget::rebuildListView()
             QTimer::singleShot(0, this, &RecentProjectsWidget::updateEmptyStateMinHeight);
         } else {
             // Search returned no results
-            QLabel* noResultsLabel
-                = new QLabel(tr("No projects found"), m_listContent);
+            QLabel* noResultsLabel = new QLabel(tr("No projects found"), m_listContent);
             QFont font = noResultsLabel->font();
             font.setPointSize(theme.scaledFontSize(BASE_NO_RESULTS_FONT_SIZE));
             noResultsLabel->setFont(font);
@@ -542,8 +541,7 @@ void RecentProjectsWidget::rebuildGridView()
             QTimer::singleShot(0, this, &RecentProjectsWidget::updateEmptyStateMinHeight);
         } else {
             // Search returned no results
-            QLabel* noResultsLabel
-                = new QLabel(tr("No projects found"), m_gridContent);
+            QLabel* noResultsLabel = new QLabel(tr("No projects found"), m_gridContent);
             QFont font = noResultsLabel->font();
             font.setPointSize(theme.scaledFontSize(BASE_NO_RESULTS_FONT_SIZE));
             noResultsLabel->setFont(font);

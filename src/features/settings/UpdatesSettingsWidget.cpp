@@ -316,8 +316,9 @@ void UpdatesSettingsWidget::applyState()
         if (m_lastCheckedMinutesAgo == 0) {
             m_descriptionText = tr("Ruwa checks for updates automatically. Checked just now.");
         } else {
-            m_descriptionText = tr("Ruwa checks for updates automatically. Last checked %1 minutes ago.")
-                                    .arg(m_lastCheckedMinutesAgo);
+            m_descriptionText
+                = tr("Ruwa checks for updates automatically. Last checked %1 minutes ago.")
+                      .arg(m_lastCheckedMinutesAgo);
         }
         m_primaryButton->setText(tr("View release notes"));
         m_primaryButton->syncSizeToText();
@@ -333,7 +334,8 @@ void UpdatesSettingsWidget::applyState()
         break;
     case UpdateState::Downloading:
         m_titleText = tr("Installing Ruwa %1").arg(versionText);
-        m_descriptionText = tr("Downloading components. You can keep working - we'll let you know when it's ready.");
+        m_descriptionText = tr(
+            "Downloading components. You can keep working - we'll let you know when it's ready.");
         m_primaryButton->hide();
         m_secondaryButton->setTrailingLoadingVisible(false);
         m_secondaryButton->hide();
@@ -354,8 +356,9 @@ void UpdatesSettingsWidget::applyState()
         break;
     case UpdateState::ReadyToRestart:
         m_titleText = tr("Restart Ruwa to finish updating");
-        m_descriptionText = tr("Version %1 is installed. A quick restart is needed to apply the changes.")
-                                .arg(versionText);
+        m_descriptionText
+            = tr("Version %1 is installed. A quick restart is needed to apply the changes.")
+                  .arg(versionText);
         m_primaryButton->setText(tr("Restart now"));
         m_primaryButton->syncSizeToText();
         m_primaryButton->show();

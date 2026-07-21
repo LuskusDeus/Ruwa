@@ -1188,7 +1188,8 @@ bool CanvasMouseInputHandler::handleMouseMove(QMouseEvent* event)
             // queue so the native routing loop remains cheap and painting can
             // interleave with rasterization.
             m_panel->m_glWidget->queueStrokeAtElapsed(worldPos.x, worldPos.y,
-                pointerSample.pressure, currentElapsedSec, strokeInputDeviceForSample(pointerSample));
+                pointerSample.pressure, currentElapsedSec,
+                strokeInputDeviceForSample(pointerSample));
         } else {
             m_panel->m_glWidget->continueStroke(worldPos.x, worldPos.y, pointerSample.pressure,
                 strokeInputDeviceForSample(pointerSample));

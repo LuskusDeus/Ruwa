@@ -531,7 +531,8 @@ void AboutContent::retranslateUi()
     m_titleLabel->setText(tr("About"));
     m_productTitleLabel->setText(
         version.isEmpty() ? QStringLiteral("Ruwa") : QStringLiteral("Ruwa %1").arg(version));
-    m_productSubtitleLabel->setText(tr("Non-destructive raster graphics editor with an infinite canvas."));
+    m_productSubtitleLabel->setText(
+        tr("Non-destructive raster graphics editor with an infinite canvas."));
     m_discordButton->setText(tr("Discord"));
     m_websiteButton->setText(tr("Website"));
     m_discordButton->syncSizeToText();
@@ -543,15 +544,9 @@ void AboutContent::retranslateUi()
         QStringLiteral("Discord RPC"), QStringLiteral("Qt Concurrent"),
         QStringLiteral("Qt Network"), QStringLiteral("CMake") };
     const QStringList toolDescriptions
-        = { tr("Core application logic"),
-              tr("Application framework"),
-              tr("Interface widgets"),
-              tr("Rendering"),
-              tr("Window integration"),
-              tr("Discord integration"),
-              tr("Background tasks"),
-              tr("Network features"),
-              tr("Build system") };
+        = { tr("Core application logic"), tr("Application framework"), tr("Interface widgets"),
+              tr("Rendering"), tr("Window integration"), tr("Discord integration"),
+              tr("Background tasks"), tr("Network features"), tr("Build system") };
 
     const int toolCount
         = qMin(static_cast<int>(m_toolCardTitleLabels.size()), static_cast<int>(toolNames.size()));
@@ -563,7 +558,8 @@ void AboutContent::retranslateUi()
     m_creditsTitleLabel->setText(tr("Credits"));
     m_developerSectionTitleLabel->setText(tr("Developer"));
     m_developerNameLabel->setText(QStringLiteral("Luskus Deus"));
-    m_developerDescriptionLabel->setText(tr("Solo developer responsible for UI, rendering, tools, and core systems."));
+    m_developerDescriptionLabel->setText(
+        tr("Solo developer responsible for UI, rendering, tools, and core systems."));
     m_testersTitleLabel->setText(tr("Testers"));
 
     const QStringList testerNames = { QStringLiteral("kaixxxy"), QStringLiteral("Lozar"),
@@ -578,7 +574,8 @@ void AboutContent::retranslateUi()
     }
 
     m_acknowledgementsTitleLabel->setText(tr("Acknowledgements"));
-    m_acknowledgementsBodyLabel->setText(tr("I built Ruwa with a strong focus on aesthetics, responsiveness, and overall feel. "
+    m_acknowledgementsBodyLabel->setText(tr(
+        "I built Ruwa with a strong focus on aesthetics, responsiveness, and overall feel. "
         "Almost everything in the app is made from scratch, from custom message popups to a fully "
         "custom brush engine. "
         "Ruwa already has an infinite canvas and its own widget system, and in the future it is "

@@ -516,16 +516,14 @@ void BrushControlOverlay::drawBackground(QPainter& painter)
 
     QColor tint = mgr.colors().surface;
     tint.setAlpha(ruwa::ui::painting::kBackdropTintAlpha);
-    if (!ruwa::ui::painting::drawBackdropBlurTint(
-            painter, this, m_backdropSource, bgPath, tint)) {
+    if (!ruwa::ui::painting::drawBackdropBlurTint(painter, this, m_backdropSource, bgPath, tint)) {
         QColor bgColor = mgr.colors().surface;
         bgColor.setAlpha(200); // Match stylus joystick / zoom panel overlay
         painter.setBrush(bgColor);
         painter.drawPath(bgPath);
     }
 
-    ruwa::ui::painting::drawGradientBorder(
-        painter, rect(), radius, borderColor, borderColor);
+    ruwa::ui::painting::drawGradientBorder(painter, rect(), radius, borderColor, borderColor);
 }
 
 void BrushControlOverlay::drawHandle(QPainter& painter, const QRectF& rect)

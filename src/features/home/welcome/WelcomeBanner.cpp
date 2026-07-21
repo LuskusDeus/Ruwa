@@ -281,15 +281,13 @@ void WelcomeBanner::setupUI()
 
     const auto& theme = ruwa::ui::core::ThemeManager::instance();
 
-    m_titleLabel
-        = new QLabel(tr("Digital Painting Reimagined"), this);
+    m_titleLabel = new QLabel(tr("Digital Painting Reimagined"), this);
     m_titleLabel->setAttribute(Qt::WA_TranslucentBackground);
     m_titleLabel->setFont(
         theme.colors().fonts.getTitleFont(theme.scaledFontSize(BASE_TITLE_FONT_SIZE)));
     m_mainLayout->addWidget(m_titleLabel);
 
-    m_subtitleLabel
-        = new QLabel(tr("Free, open-source, and limitless."), this);
+    m_subtitleLabel = new QLabel(tr("Free, open-source, and limitless."), this);
     m_subtitleLabel->setAttribute(Qt::WA_TranslucentBackground);
     m_subtitleLabel->setFont(
         theme.colors().fonts.getUIFont(theme.scaledFontSize(BASE_SUBTITLE_FONT_SIZE)));
@@ -302,16 +300,16 @@ void WelcomeBanner::setupUI()
     m_buttonLayout = new QHBoxLayout(m_buttonContainer);
     m_buttonLayout->setContentsMargins(0, 0, 0, 0);
 
-    m_createButton = new WelcomeBannerButton(tr("Create Project"),
-        WelcomeBannerButton::ButtonStyle::Primary, m_buttonContainer);
+    m_createButton = new WelcomeBannerButton(
+        tr("Create Project"), WelcomeBannerButton::ButtonStyle::Primary, m_buttonContainer);
     m_createButton->setIcon(ruwa::ui::core::IconProvider::instance().getIcon(
         ruwa::ui::core::IconProvider::StandardIcon::FileNew));
     connect(
         m_createButton, &WelcomeBannerButton::clicked, this, &WelcomeBanner::createProjectClicked);
     m_buttonLayout->addWidget(m_createButton);
 
-    m_openButton = new WelcomeBannerButton(tr("Open Project"),
-        WelcomeBannerButton::ButtonStyle::Secondary, m_buttonContainer);
+    m_openButton = new WelcomeBannerButton(
+        tr("Open Project"), WelcomeBannerButton::ButtonStyle::Secondary, m_buttonContainer);
     m_openButton->setIcon(ruwa::ui::core::IconProvider::instance().getIcon(
         ruwa::ui::core::IconProvider::StandardIcon::OpenedFolder));
     m_openButton->setSecondaryIdleShadowAlpha(16);
@@ -348,8 +346,7 @@ void WelcomeBanner::retranslateUi()
     if (m_titleLabel)
         m_titleLabel->setText(tr("Digital Painting Reimagined"));
     if (m_subtitleLabel)
-        m_subtitleLabel->setText(
-            tr("Free, open-source, and limitless."));
+        m_subtitleLabel->setText(tr("Free, open-source, and limitless."));
     if (m_createButton) {
         m_createButton->setText(tr("Create Project"));
         m_createButton->syncSizeToText();

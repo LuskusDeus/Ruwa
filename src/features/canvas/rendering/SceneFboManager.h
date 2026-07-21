@@ -54,8 +54,8 @@ public:
     /// Copy a small GL-coordinate region from the default framebuffer into the
     /// same region of the scene texture. Used by local sampling overlays that
     /// do not justify a full-surface offscreen render.
-    void copyRegionFromDefaultFbo(QOpenGLFunctions_4_5_Core* gl, GLint defaultFbo, int x, int y,
-        int width, int height) const;
+    void copyRegionFromDefaultFbo(
+        QOpenGLFunctions_4_5_Core* gl, GLint defaultFbo, int x, int y, int width, int height) const;
 
 private:
     GLuint m_sceneFbo = 0;

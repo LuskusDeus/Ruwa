@@ -33,8 +33,8 @@ HexColorInput::HexColorInput(QWidget* parent)
     m_hoverAnimation->setDuration(180);
     m_hoverAnimation->setEasingCurve(QEasingCurve::OutCubic);
 
-    m_copyButton = new ruwa::ui::workspace::ToolButton(
-        ruwa::ui::workspace::ToolButton::Mode::Action, this);
+    m_copyButton
+        = new ruwa::ui::workspace::ToolButton(ruwa::ui::workspace::ToolButton::Mode::Action, this);
     m_copyButton->setBaseSquareSize(BaseCopyButtonSize, BaseCopyIconSize);
     m_copyButton->setIconType(ruwa::ui::core::IconProvider::StandardIcon::Duplicate);
     m_copyButton->setChromeStyle(ruwa::ui::workspace::ToolButton::ChromeStyle::PrimaryHover);
@@ -166,8 +166,8 @@ void HexColorInput::positionCopyButton()
 
     auto& theme = ruwa::ui::core::ThemeManager::instance();
     const int rightPad = theme.scaled(BaseCopyRightPad);
-    m_copyButton->move(width() - rightPad - m_copyButton->width(),
-        (height() - m_copyButton->height()) / 2);
+    m_copyButton->move(
+        width() - rightPad - m_copyButton->width(), (height() - m_copyButton->height()) / 2);
 }
 
 void HexColorInput::applyPalette()

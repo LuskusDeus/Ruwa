@@ -137,15 +137,15 @@ void WelcomeUpdatePanel::setupUI()
     m_buttonLayout = new QHBoxLayout(m_buttonContainer);
     m_buttonLayout->setContentsMargins(0, 0, 0, 0);
 
-    m_updateButton = new WelcomeBannerButton(tr("Update"),
-        WelcomeBannerButton::ButtonStyle::Primary, m_buttonContainer);
+    m_updateButton = new WelcomeBannerButton(
+        tr("Update"), WelcomeBannerButton::ButtonStyle::Primary, m_buttonContainer);
     m_updateButton->setSizeScale(BUTTON_SIZE_SCALE);
     connect(
         m_updateButton, &WelcomeBannerButton::clicked, this, &WelcomeUpdatePanel::updateRequested);
     m_buttonLayout->addWidget(m_updateButton);
 
-    m_dismissButton = new WelcomeBannerButton(tr("No thanks"),
-        WelcomeBannerButton::ButtonStyle::Secondary, m_buttonContainer);
+    m_dismissButton = new WelcomeBannerButton(
+        tr("No thanks"), WelcomeBannerButton::ButtonStyle::Secondary, m_buttonContainer);
     m_dismissButton->setSizeScale(BUTTON_SIZE_SCALE);
     m_dismissButton->setSecondaryIdleShadowAlpha(16);
     connect(m_dismissButton, &WelcomeBannerButton::clicked, this, &WelcomeUpdatePanel::dismissed);

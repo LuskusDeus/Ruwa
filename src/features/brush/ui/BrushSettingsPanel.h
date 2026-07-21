@@ -21,7 +21,7 @@ namespace ruwa::ui::widgets {
 class BaseStyledPanel;
 class BrushSettingsWidget;
 class SmoothScrollArea;
-}
+} // namespace ruwa::ui::widgets
 
 namespace ruwa::ui::workspace {
 

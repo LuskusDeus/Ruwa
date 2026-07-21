@@ -436,22 +436,17 @@ void NewProjectContent::retranslateUi()
     if (m_heightField)
         m_heightField->setLabel(tr("Height"));
     if (m_backgroundColorTitleLabel) {
-        m_backgroundColorTitleLabel->setText(
-            settingsSectionLabel(tr("Background Color")));
+        m_backgroundColorTitleLabel->setText(settingsSectionLabel(tr("Background Color")));
     }
     if (m_canvasBoundsTitleLabel) {
-        m_canvasBoundsTitleLabel->setText(
-            settingsSectionLabel(tr("Canvas")));
+        m_canvasBoundsTitleLabel->setText(settingsSectionLabel(tr("Canvas")));
     }
     if (m_canvasBoundsSelector) {
-        m_canvasBoundsSelector->setOptionText(
-            0, tr("Classic canvas"));
-        m_canvasBoundsSelector->setOptionText(
-            1, tr("Infinite canvas"));
+        m_canvasBoundsSelector->setOptionText(0, tr("Classic canvas"));
+        m_canvasBoundsSelector->setOptionText(1, tr("Infinite canvas"));
     }
     if (m_bitDepthTitleLabel) {
-        m_bitDepthTitleLabel->setText(
-            settingsSectionLabel(tr("Color Depth")));
+        m_bitDepthTitleLabel->setText(settingsSectionLabel(tr("Color Depth")));
     }
     if (m_bitDepthSelector) {
         m_bitDepthSelector->setOptionText(0, tr("8-bit"));
@@ -461,13 +456,8 @@ void NewProjectContent::retranslateUi()
     if (m_createButton)
         m_createButton->setText(tr("Create Project"));
 
-    const QStringList categories
-        = { tr("Basics"), tr("Screen"),
-              tr("Illustration"),
-              tr("Comics & Manga"),
-              tr("Print"),
-              tr("Covers & Posters"),
-              tr("Pixel Art") };
+    const QStringList categories = { tr("Basics"), tr("Screen"), tr("Illustration"),
+        tr("Comics & Manga"), tr("Print"), tr("Covers & Posters"), tr("Pixel Art") };
     for (int i = 0; i < m_categoryButtons.size() && i < categories.size(); ++i)
         m_categoryButtons[i]->setText(categories[i]);
 

@@ -18,7 +18,7 @@ class QHBoxLayout;
 namespace ruwa::ui::widgets {
 class BaseAnimatedButton;
 class SmoothScrollArea;
-}
+} // namespace ruwa::ui::widgets
 
 namespace ruwa::ui::workspace {
 

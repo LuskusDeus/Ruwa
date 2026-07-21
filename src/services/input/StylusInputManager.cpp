@@ -502,8 +502,7 @@ bool StylusInputManager::handleNativeEvent(void* message)
         // asynchronous WM_MOUSEMOVE traffic. The release packet synchronizes
         // the final position before normal UI routing can resume.
         const bool capturedCanvasStrokeMove = m_state->activeCanvasTarget
-            && previousButtons.testFlag(Qt::LeftButton)
-            && currentButtons.testFlag(Qt::LeftButton);
+            && previousButtons.testFlag(Qt::LeftButton) && currentButtons.testFlag(Qt::LeftButton);
         if (!capturedCanvasStrokeMove) {
             syncSystemCursorFromNative(globalPos);
         }
@@ -589,10 +588,9 @@ bool StylusInputManager::handleNativeEvent(void* message)
                 }
             }
 
-            if (m_state->nativeStrokePacketClockActive
-                && !m_state->nativeStrokePacketClockRejected && pkt.hasPacketTime) {
-                const quint32 elapsedMs
-                    = pkt.packetTimeMs - m_state->nativeStrokePacketTimeBaseMs;
+            if (m_state->nativeStrokePacketClockActive && !m_state->nativeStrokePacketClockRejected
+                && pkt.hasPacketTime) {
+                const quint32 elapsedMs = pkt.packetTimeMs - m_state->nativeStrokePacketTimeBaseMs;
                 m_state->currentDispatchStrokeElapsedSeconds
                     = static_cast<float>(elapsedMs) / 1000.0f;
                 m_state->currentDispatchHasStrokeElapsed = true;

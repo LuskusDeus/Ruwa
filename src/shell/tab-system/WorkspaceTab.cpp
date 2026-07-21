@@ -1992,8 +1992,7 @@ void WorkspaceTab::setupDefaultLayout()
     m_dockManager->addPanelRelativeTo(m_brushesPanel, m_toolsPanel, DockPosition::Bottom);
 
     // Add favorite settings under the brush list.
-    m_dockManager->addPanelRelativeTo(
-        m_brushSettingsPanel, m_brushesPanel, DockPosition::Bottom);
+    m_dockManager->addPanelRelativeTo(m_brushSettingsPanel, m_brushesPanel, DockPosition::Bottom);
 
     // Add layers on right
     m_dockManager->addPanel(m_layersPanel, DockPosition::Right);

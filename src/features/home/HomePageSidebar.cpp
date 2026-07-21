@@ -139,12 +139,9 @@ void HomePageSidebar::createNavigationButtons()
 
     // Create buttons with icons (use translate for correct context)
     SidebarButton* homeBtn = new SidebarButton(tr("Home"), homeIcon);
-    SidebarButton* newProjectBtn
-        = new SidebarButton(tr("New Project"), newProjectIcon);
-    SidebarButton* settingsBtn
-        = new SidebarButton(tr("Settings"), settingsIcon);
-    SidebarButton* aboutBtn
-        = new SidebarButton(tr("About"), aboutIcon);
+    SidebarButton* newProjectBtn = new SidebarButton(tr("New Project"), newProjectIcon);
+    SidebarButton* settingsBtn = new SidebarButton(tr("Settings"), settingsIcon);
+    SidebarButton* aboutBtn = new SidebarButton(tr("About"), aboutIcon);
 
     m_buttons[Section::Home] = homeBtn;
     m_buttons[Section::NewProject] = newProjectBtn;

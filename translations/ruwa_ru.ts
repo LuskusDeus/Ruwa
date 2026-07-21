@@ -1,4 +1,6 @@
 <?xml version="1.0" encoding="utf-8"?>
+<!-- SPDX-License-Identifier: MPL-2.0 -->
+
 <!DOCTYPE TS>
 <TS version="2.1" language="ru">
 <context>

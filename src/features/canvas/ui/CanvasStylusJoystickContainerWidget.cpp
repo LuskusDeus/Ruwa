@@ -146,8 +146,7 @@ protected:
         bgPath.addRoundedRect(rect(), radius, radius);
         QColor tint = colors.surface;
         tint.setAlpha(ruwa::ui::painting::kBackdropTintAlpha);
-        if (!ruwa::ui::painting::drawBackdropBlurTint(
-                p, this, m_backdropSource, bgPath, tint)) {
+        if (!ruwa::ui::painting::drawBackdropBlurTint(p, this, m_backdropSource, bgPath, tint)) {
             QColor bg = colors.surface;
             bg.setAlpha(200); // Semi-transparent to blend with canvas
             p.setBrush(bg);
@@ -156,8 +155,7 @@ protected:
 
         QColor borderColor = colors.border;
         borderColor.setAlphaF(borderColor.alphaF() * 0.5);
-        ruwa::ui::painting::drawGradientBorder(
-            p, QRectF(rect()), radius, borderColor, borderColor);
+        ruwa::ui::painting::drawGradientBorder(p, QRectF(rect()), radius, borderColor, borderColor);
 
         // Draw handle (rounded line) at top, like BrushControlOverlay
         const int handleH = ruwa::ui::core::WidgetStyleManager::instance().scaled(kHandleHeight);

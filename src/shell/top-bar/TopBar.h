@@ -122,9 +122,9 @@ public slots:
     void onWindowStateChanged(Qt::WindowState state);
 
     /// Sync panel visibility state from active workspace (for menu checkmarks)
-    void setPanelsVisibilityState(bool toolsVisible, bool brushesVisible,
-        bool brushSettingsVisible, bool layersVisible, bool layerPropertiesVisible,
-        bool layerEffectsVisible, bool colorVisible, bool navigatorVisible = true);
+    void setPanelsVisibilityState(bool toolsVisible, bool brushesVisible, bool brushSettingsVisible,
+        bool layersVisible, bool layerPropertiesVisible, bool layerEffectsVisible,
+        bool colorVisible, bool navigatorVisible = true);
 
     /// Sync canvas widgets visibility state from active workspace (for menu checkmarks)
     void setCanvasWidgetsVisibilityState(const CanvasWidgetVisibility& visibility);

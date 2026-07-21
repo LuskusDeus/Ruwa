@@ -125,8 +125,9 @@ WelcomeBannerSelectorWidget::WelcomeBannerSelectorWidget(QWidget* parent)
     : BaseSettingsWidget(QString(), QString(), parent)
 {
     setLabel(tr("Welcome banner"));
-    setDescription(tr("Background for the welcome screen. Use built-in art or your own images; adjust text "
-        "contrast below."));
+    setDescription(
+        tr("Background for the welcome screen. Use built-in art or your own images; adjust text "
+           "contrast below."));
 
     setupContent();
 
@@ -448,11 +449,9 @@ void WelcomeBannerSelectorWidget::removeCustomBannerImage(const QString& path)
 
 void WelcomeBannerSelectorWidget::onAddImageClicked()
 {
-    const QString filter
-        = tr("Images (*.png *.jpg *.jpeg *.webp *.bmp)");
-    const QStringList files = ruwa::shared::filedialog::getOpenFileNames(this,
-        ruwa::shared::filedialog::category::kImage,
-        tr("Add welcome banner image"), filter);
+    const QString filter = tr("Images (*.png *.jpg *.jpeg *.webp *.bmp)");
+    const QStringList files = ruwa::shared::filedialog::getOpenFileNames(
+        this, ruwa::shared::filedialog::category::kImage, tr("Add welcome banner image"), filter);
 
     if (files.isEmpty()) {
         return;
@@ -663,8 +662,9 @@ void WelcomeBannerSelectorWidget::changeEvent(QEvent* event)
 void WelcomeBannerSelectorWidget::retranslateUi()
 {
     setLabel(tr("Welcome banner"));
-    setDescription(tr("Background for the welcome screen. Use built-in art or your own images; adjust text "
-        "contrast below."));
+    setDescription(
+        tr("Background for the welcome screen. Use built-in art or your own images; adjust text "
+           "contrast below."));
 
     if (m_separatorLabel) {
         m_separatorLabel->setText(tr("or"));

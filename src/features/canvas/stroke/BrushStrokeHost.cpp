@@ -491,15 +491,13 @@ void BrushStrokeHost::continueStroke(
 void BrushStrokeHost::continueStrokeAtElapsed(float worldX, float worldY, float pressure,
     float strokeElapsedSeconds, StrokeInputDevice inputDevice)
 {
-    addStrokeSampleAtElapsed(
-        worldX, worldY, pressure, strokeElapsedSeconds, inputDevice, true);
+    addStrokeSampleAtElapsed(worldX, worldY, pressure, strokeElapsedSeconds, inputDevice, true);
 }
 
 void BrushStrokeHost::queueStrokeAtElapsed(float worldX, float worldY, float pressure,
     float strokeElapsedSeconds, StrokeInputDevice inputDevice)
 {
-    addStrokeSampleAtElapsed(
-        worldX, worldY, pressure, strokeElapsedSeconds, inputDevice, false);
+    addStrokeSampleAtElapsed(worldX, worldY, pressure, strokeElapsedSeconds, inputDevice, false);
 }
 
 void BrushStrokeHost::addStrokeSampleAtElapsed(float worldX, float worldY, float pressure,

@@ -9732,12 +9732,10 @@ void OpenGLCanvasWidget::paintGL_renderBackdrop(GLuint sourceFbo, GLint defaultF
     // internal viewport currently use those same units, whereas the native
     // devicePixelRatio can be greater than one. Derive the conversion from the
     // actual render surface instead of applying DPR a second time.
-    const qreal scaleX = width() > 0
-        ? static_cast<qreal>(surf.width()) / static_cast<qreal>(width())
-        : 1.0;
-    const qreal scaleY = height() > 0
-        ? static_cast<qreal>(surf.height()) / static_cast<qreal>(height())
-        : 1.0;
+    const qreal scaleX
+        = width() > 0 ? static_cast<qreal>(surf.width()) / static_cast<qreal>(width()) : 1.0;
+    const qreal scaleY
+        = height() > 0 ? static_cast<qreal>(surf.height()) / static_cast<qreal>(height()) : 1.0;
     const bool available = m_backdropRenderer->render(sourceFbo, static_cast<GLuint>(defaultFbo),
         surf.width(), surf.height(), scaleX, scaleY, regions);
     if (available != m_backdropRendererAvailable) {
@@ -11153,8 +11151,7 @@ void OpenGLCanvasWidget::paintGL()
     GLint defaultFbo = 0;
     glGetIntegerv(GL_FRAMEBUFFER_BINDING, &defaultFbo);
     GLuint sceneTarget = 0;
-    paintGL_renderSceneAndBlit(
-        sceneTarget, defaultFbo, needFullSceneForOverlay, boardLayerStack);
+    paintGL_renderSceneAndBlit(sceneTarget, defaultFbo, needFullSceneForOverlay, boardLayerStack);
 
     // Same-frame ROI blur for visible canvas widgets. This runs before cursor
     // and transform chrome, matching the old backdrop's visual ordering.
@@ -11170,8 +11167,7 @@ void OpenGLCanvasWidget::paintGL()
             // pixels wide. Keep a small guard band so edge texels never sample
             // stale content from outside the copied rectangle.
             constexpr float kCursorCapturePaddingPx = 3.0f;
-            const float captureRadius
-                = m_cursorOverlayState.brushRadius + kCursorCapturePaddingPx;
+            const float captureRadius = m_cursorOverlayState.brushRadius + kCursorCapturePaddingPx;
             const int left = std::clamp(
                 static_cast<int>(std::floor(m_cursorOverlayState.brushCenterX - captureRadius)), 0,
                 surfaceWidth);
@@ -11186,8 +11182,8 @@ void OpenGLCanvasWidget::paintGL()
                 surfaceHeight);
             if (right > left && bottom > top) {
                 const int glBottom = surfaceHeight - bottom;
-                m_sceneFboManager.copyRegionFromDefaultFbo(this, defaultFbo, left, glBottom,
-                    right - left, bottom - top);
+                m_sceneFboManager.copyRegionFromDefaultFbo(
+                    this, defaultFbo, left, glBottom, right - left, bottom - top);
                 sceneTarget = m_sceneFboManager.sceneFbo();
             }
         }

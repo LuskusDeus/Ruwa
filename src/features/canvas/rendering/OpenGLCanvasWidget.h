@@ -182,7 +182,8 @@ public:
         float strokeElapsedSeconds,
         BrushStrokeHost::StrokeInputDevice inputDevice
         = BrushStrokeHost::StrokeInputDevice::Stylus);
-    void queueStrokeAtElapsed(float worldX, float worldY, float pressure, float strokeElapsedSeconds,
+    void queueStrokeAtElapsed(float worldX, float worldY, float pressure,
+        float strokeElapsedSeconds,
         BrushStrokeHost::StrokeInputDevice inputDevice
         = BrushStrokeHost::StrokeInputDevice::Stylus);
     float strokeElapsedSecondsNow() const;

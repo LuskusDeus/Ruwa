@@ -1308,16 +1308,14 @@ void CanvasToolStateOverlay::drawBackground(QPainter& painter)
 
     QColor tint = mgr.colors().surface;
     tint.setAlpha(ruwa::ui::painting::kBackdropTintAlpha);
-    if (!ruwa::ui::painting::drawBackdropBlurTint(
-            painter, this, m_backdropSource, bgPath, tint)) {
+    if (!ruwa::ui::painting::drawBackdropBlurTint(painter, this, m_backdropSource, bgPath, tint)) {
         QColor bgColor = mgr.colors().surface;
         bgColor.setAlpha(200);
         painter.setBrush(bgColor);
         painter.drawPath(bgPath);
     }
 
-    ruwa::ui::painting::drawGradientBorder(
-        painter, rect(), radius, borderColor, borderColor);
+    ruwa::ui::painting::drawGradientBorder(painter, rect(), radius, borderColor, borderColor);
 }
 
 void CanvasToolStateOverlay::setBackdropSource(

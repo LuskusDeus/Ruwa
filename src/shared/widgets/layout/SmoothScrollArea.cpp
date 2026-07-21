@@ -500,15 +500,15 @@ void SmoothScrollArea::wheelEvent(QWheelEvent* event)
 
     int delta = 0;
     if (!event->pixelDelta().isNull()) {
-        delta = m_orientation == Qt::Horizontal ? -event->pixelDelta().x()
-                                                : -event->pixelDelta().y();
+        delta
+            = m_orientation == Qt::Horizontal ? -event->pixelDelta().x() : -event->pixelDelta().y();
         if (delta == 0 && m_orientation == Qt::Horizontal) {
             delta = -event->pixelDelta().y();
         }
     }
     if (delta == 0) {
-        delta = m_orientation == Qt::Horizontal ? -event->angleDelta().x()
-                                                : -event->angleDelta().y();
+        delta
+            = m_orientation == Qt::Horizontal ? -event->angleDelta().x() : -event->angleDelta().y();
         if (delta == 0 && m_orientation == Qt::Horizontal) {
             delta = -event->angleDelta().y();
         }
@@ -726,8 +726,8 @@ void SmoothScrollArea::syncContentPosition(int previousScrollValue, bool updateH
 
     if (m_viewport) {
         const int delta = m_currentScrollValue - previousScrollValue;
-        const int viewportExtent = m_orientation == Qt::Horizontal ? m_viewport->width()
-                                                                  : m_viewport->height();
+        const int viewportExtent
+            = m_orientation == Qt::Horizontal ? m_viewport->width() : m_viewport->height();
         const int exposedExtent = qMin(qAbs(delta), viewportExtent);
 
         if (exposedExtent <= 0 || exposedExtent >= viewportExtent) {
@@ -766,8 +766,7 @@ void SmoothScrollArea::updateGeometry()
 {
     if (m_orientation == Qt::Horizontal) {
         m_viewport->setGeometry(rect());
-        m_verticalScrollBar->setGeometry(
-            width(), 0, static_cast<int>(kScrollBarWidth), height());
+        m_verticalScrollBar->setGeometry(width(), 0, static_cast<int>(kScrollBarWidth), height());
 
         if (m_contentWidget && m_contentWidget->layout()) {
             m_contentWidget->layout()->invalidate();

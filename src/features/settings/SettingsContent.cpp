@@ -362,11 +362,8 @@ void SettingsContent::retranslateUi()
     // Appearance
     if (m_uiScaleChoice) {
         m_uiScaleChoice->setLabel(tr("UI Scale"));
-        m_uiScaleChoice->setDescription(
-            tr("Adjust the size of UI elements"));
-        m_uiScaleChoice->setOptions(
-            { tr("Small"), tr("Medium"),
-                tr("Large") });
+        m_uiScaleChoice->setDescription(tr("Adjust the size of UI elements"));
+        m_uiScaleChoice->setOptions({ tr("Small"), tr("Medium"), tr("Large") });
     }
     if (m_languageChoice) {
         m_languageChoice->setLabel(tr("Language"));
@@ -376,41 +373,37 @@ void SettingsContent::retranslateUi()
         m_welcomeBannerSelector->retranslateUi();
     }
     if (m_topBarTabAlignmentChoice) {
-        m_topBarTabAlignmentChoice->setLabel(
-            tr("Top bar tab alignment"));
-        m_topBarTabAlignmentChoice->setDescription(tr("Place the tab strip at the left of the title bar or centered in the free space"));
-        m_topBarTabAlignmentChoice->setOptions({ tr("Left"),
-            tr("Center") });
+        m_topBarTabAlignmentChoice->setLabel(tr("Top bar tab alignment"));
+        m_topBarTabAlignmentChoice->setDescription(
+            tr("Place the tab strip at the left of the title bar or centered in the free space"));
+        m_topBarTabAlignmentChoice->setOptions({ tr("Left"), tr("Center") });
     }
 
     // Editor
     if (m_autoSaveChoice) {
         m_autoSaveChoice->setLabel(tr("Auto-Save"));
-        m_autoSaveChoice->setDescription(tr("Automatically save your work at the selected interval"));
-        m_autoSaveChoice->setOptions({ tr("Off"),
-            tr("2 min"), tr("5 min"),
-            tr("10 min") });
+        m_autoSaveChoice->setDescription(
+            tr("Automatically save your work at the selected interval"));
+        m_autoSaveChoice->setOptions({ tr("Off"), tr("2 min"), tr("5 min"), tr("10 min") });
     }
     if (m_quickshapesToggle) {
         m_quickshapesToggle->setLabel(tr("Quick Shapes"));
-        m_quickshapesToggle->setDescription(tr("Hold stroke to morph into straight line, circle, triangle, or square"));
+        m_quickshapesToggle->setDescription(
+            tr("Hold stroke to morph into straight line, circle, triangle, or square"));
     }
 
     // Performance
     if (m_undoMemoryChoice) {
         m_undoMemoryChoice->setLabel(tr("Undo Memory Limit"));
-        m_undoMemoryChoice->setDescription(
-            tr("Maximum memory available for undo history"));
-        m_undoMemoryChoice->setOptions({ tr("300 MB"),
-            tr("1 GB"), tr("3 GB"),
-            tr("8 GB") });
+        m_undoMemoryChoice->setDescription(tr("Maximum memory available for undo history"));
+        m_undoMemoryChoice->setOptions({ tr("300 MB"), tr("1 GB"), tr("3 GB"), tr("8 GB") });
     }
     if (m_tabletBackendChoice) {
         m_tabletBackendChoice->setLabel(tr("Tablet Input Backend"));
-        m_tabletBackendChoice->setDescription(tr("Choose the stylus input backend. Restart is required to apply this setting."));
-        m_tabletBackendChoice->setOptions({ tr("WinTab (Qt)"),
-            tr("Windows Ink"),
-            tr("WinTab (Ruwa)") });
+        m_tabletBackendChoice->setDescription(
+            tr("Choose the stylus input backend. Restart is required to apply this setting."));
+        m_tabletBackendChoice->setOptions(
+            { tr("WinTab (Qt)"), tr("Windows Ink"), tr("WinTab (Ruwa)") });
     }
 
     if (m_resetButton)

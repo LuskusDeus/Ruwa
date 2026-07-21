@@ -195,17 +195,14 @@ bool CanvasPanel::createGLContent()
                     || !widget->isVisibleTo(m_contentWidget)) {
                     return;
                 }
-                const QPoint integralTopLeft(
-                    static_cast<int>(std::floor(localRect.x())),
+                const QPoint integralTopLeft(static_cast<int>(std::floor(localRect.x())),
                     static_cast<int>(std::floor(localRect.y())));
                 // The overlay and OpenGL canvas are siblings, not ancestors of
                 // one another. Convert through their real common ancestor.
-                const QPoint contentPoint
-                    = widget->mapTo(m_contentWidget, integralTopLeft);
-                const QPoint mapped
-                    = m_glWidget->mapFrom(m_contentWidget, contentPoint);
-                const QPointF fractionalOffset(localRect.x() - integralTopLeft.x(),
-                    localRect.y() - integralTopLeft.y());
+                const QPoint contentPoint = widget->mapTo(m_contentWidget, integralTopLeft);
+                const QPoint mapped = m_glWidget->mapFrom(m_contentWidget, contentPoint);
+                const QPointF fractionalOffset(
+                    localRect.x() - integralTopLeft.x(), localRect.y() - integralTopLeft.y());
                 regions.push_back({ QRectF(QPointF(mapped) + fractionalOffset, localRect.size()),
                     cornerRadius, opacity });
             };
@@ -239,12 +236,11 @@ bool CanvasPanel::createGLContent()
             if (!effect) {
                 return;
             }
-            connect(effect, &QGraphicsOpacityEffect::opacityChanged, m_glWidget,
-                [this]() {
-                    if (m_glWidget) {
-                        m_glWidget->requestBackdropUpdate();
-                    }
-                });
+            connect(effect, &QGraphicsOpacityEffect::opacityChanged, m_glWidget, [this]() {
+                if (m_glWidget) {
+                    m_glWidget->requestBackdropUpdate();
+                }
+            });
         };
         syncBackdropOpacity(m_brushOverlayOpacity);
         syncBackdropOpacity(m_stylusJoystickOpacity);
