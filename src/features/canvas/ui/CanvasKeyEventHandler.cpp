@@ -11,10 +11,15 @@
 #include "commands/CommandExecutor.h"
 #include "commands/ShortcutManager.h"
 
+#include <QAbstractSpinBox>
 #include <QApplication>
 #include <QCursor>
 #include <QEvent>
 #include <QKeyEvent>
+#include <QLineEdit>
+#include <QPlainTextEdit>
+#include <QTextEdit>
+#include <QWidget>
 
 namespace ruwa::ui::workspace {
 
@@ -31,10 +36,34 @@ static int resolvePhysicalKey(const QKeyEvent* ke)
     return (physical != 0) ? physical : key;
 }
 
+static bool isTextInputWidget(const QWidget* widget)
+{
+    for (const QWidget* current = widget; current; current = current->parentWidget()) {
+        if (qobject_cast<const QLineEdit*>(current) || qobject_cast<const QTextEdit*>(current)
+            || qobject_cast<const QPlainTextEdit*>(current)
+            || qobject_cast<const QAbstractSpinBox*>(current)) {
+            return true;
+        }
+    }
+    return false;
+}
+
+static bool isTextInputEventTarget(const QObject* watched)
+{
+    const auto* targetWidget = qobject_cast<const QWidget*>(watched);
+    return isTextInputWidget(targetWidget) || isTextInputWidget(QApplication::focusWidget());
+}
+
+static bool isBrushAdjustmentCommand(const QString& commandId)
+{
+    return commandId == QLatin1String("tools.brushSizeDecrease")
+        || commandId == QLatin1String("tools.brushSizeIncrease")
+        || commandId == QLatin1String("tools.brushOpacityDecrease")
+        || commandId == QLatin1String("tools.brushOpacityIncrease");
+}
+
 bool CanvasKeyEventHandler::handleEvent(QObject* watched, QEvent* event)
 {
-    Q_UNUSED(watched);
-
     if (event->type() == QEvent::ShortcutOverride) {
         auto* ke = static_cast<QKeyEvent*>(event);
         if (ruwa::core::ShortcutManager::instance().shortcutsEnabled() && !ke->isAutoRepeat()
@@ -98,31 +127,16 @@ bool CanvasKeyEventHandler::handleEvent(QObject* watched, QEvent* event)
                 return true;
             }
 
-            const bool noMods = (mods
-                                    & (Qt::ControlModifier | Qt::ShiftModifier | Qt::AltModifier
-                                        | Qt::MetaModifier))
-                == Qt::NoModifier;
-            const bool shiftOnly = (mods
-                                       & (Qt::ControlModifier | Qt::ShiftModifier | Qt::AltModifier
-                                           | Qt::MetaModifier))
-                == Qt::ShiftModifier;
-            QString brushCmd;
-            if (physKey == Qt::Key_BracketLeft) {
-                if (noMods) {
-                    brushCmd = QStringLiteral("tools.brushSizeDecrease");
-                } else if (shiftOnly) {
-                    brushCmd = QStringLiteral("tools.brushOpacityDecrease");
+            // QShortcut uses the key produced by the active layout.  Keep brush adjustments
+            // bound to their physical keys as a fallback, but never steal input from an editor.
+            // Resolve through ShortcutManager so custom bindings and cleared shortcuts are honored.
+            if (physKey != ke->key() && !isTextInputEventTarget(watched)) {
+                const QString commandId
+                    = ruwa::core::ShortcutManager::instance().commandForKeyEvent(ke);
+                if (isBrushAdjustmentCommand(commandId)) {
+                    ruwa::core::CommandExecutor::instance().execute(commandId);
+                    return true;
                 }
-            } else if (physKey == Qt::Key_BracketRight) {
-                if (noMods) {
-                    brushCmd = QStringLiteral("tools.brushSizeIncrease");
-                } else if (shiftOnly) {
-                    brushCmd = QStringLiteral("tools.brushOpacityIncrease");
-                }
-            }
-            if (!brushCmd.isEmpty()) {
-                ruwa::core::CommandExecutor::instance().execute(brushCmd);
-                return true;
             }
 
             const bool activeSelectionInteraction = m_host->isAnySelectionInteractionActive();
