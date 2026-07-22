@@ -211,6 +211,8 @@ int toolStateOverlayPageForTool(CanvasPanel::ToolMode tool)
         return 16;
     case ToolMode::Liquify:
         return 17;
+    case ToolMode::MagicWand:
+        return 18;
     }
 
     return 0;
@@ -3925,6 +3927,7 @@ std::optional<CanvasPanel::ToolMode> CanvasPanel::toolModeForCommandId(const QSt
         { "tools.lasso-fill", ToolMode::LassoFill },
         { "tools.square-selection", ToolMode::SquareSelection },
         { "tools.circle-selection", ToolMode::CircleSelection },
+        { "tools.magic-wand", ToolMode::MagicWand },
         { "tools.move", ToolMode::Move },
         { "tools.rotate-view", ToolMode::RotateView },
         { "tools.canvas-resize", ToolMode::CanvasResize },
@@ -3950,6 +3953,7 @@ QString CanvasPanel::commandIdForToolMode(ToolMode mode)
         { ToolMode::LassoFill, "tools.lasso-fill" },
         { ToolMode::SquareSelection, "tools.square-selection" },
         { ToolMode::CircleSelection, "tools.circle-selection" },
+        { ToolMode::MagicWand, "tools.magic-wand" },
         { ToolMode::Move, "tools.move" },
         { ToolMode::RotateView, "tools.rotate-view" },
         { ToolMode::CanvasResize, "tools.canvas-resize" },

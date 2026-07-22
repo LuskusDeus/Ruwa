@@ -170,6 +170,7 @@ bool CanvasKeyEventHandler::handleEvent(QObject* watched, QEvent* event)
                 || currentTool == CanvasInputHost::ToolMode::LassoFill
                 || currentTool == CanvasInputHost::ToolMode::SquareSelection
                 || currentTool == CanvasInputHost::ToolMode::CircleSelection
+                || currentTool == CanvasInputHost::ToolMode::MagicWand
                 || currentTool == CanvasInputHost::ToolMode::Move;
             const bool blockTempHandInSelectionInteraction
                 = (ke->key() == Qt::Key_Space) && activeSelectionInteraction;

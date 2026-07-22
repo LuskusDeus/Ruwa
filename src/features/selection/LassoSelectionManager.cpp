@@ -125,6 +125,92 @@ void LassoSelectionManager::applyMaskSnapshot(std::shared_ptr<const MaskTileSnap
     }
 }
 
+void LassoSelectionManager::applyRasterSelectionMask(const MaskTileSnapshot& maskTiles,
+    LassoSelectionMode mode, uint32_t canvasWidth, uint32_t canvasHeight)
+{
+    if (mode == LassoSelectionMode::Replace) {
+        m_regions.clear();
+        m_mask.clear();
+        m_edges.clear();
+        setMaskHasSoftAlpha(false);
+        mode = LassoSelectionMode::Add;
+    } else if (mode == LassoSelectionMode::Subtract && m_mask.empty()) {
+        return;
+    }
+
+    if (maskTiles.empty()) {
+        invalidateMaskSnapshotCache();
+        return;
+    }
+
+    invalidateMaskSnapshotCache();
+    if (mode == LassoSelectionMode::Add) {
+        for (const auto& [key, incoming] : maskTiles) {
+            if (incoming.size() != TILE_BYTE_SIZE) {
+                continue;
+            }
+
+            TileData& tile = m_mask.getOrCreateTile(key);
+            for (uint32_t y = 0; y < TILE_SIZE; ++y) {
+                for (uint32_t x = 0; x < TILE_SIZE; ++x) {
+                    const uint32_t idx = (y * TILE_SIZE + x) * TILE_CHANNELS;
+                    const uint8_t next = std::max(tile.pixels()[idx + 3], incoming[idx + 3]);
+                    if (next != tile.pixels()[idx + 3]) {
+                        tile.setPixel(x, y, next, next, next, next);
+                    }
+                }
+            }
+        }
+    } else {
+        std::vector<TileKey> emptyTiles;
+        for (auto& [key, tile] : m_mask.tiles()) {
+            const auto incomingIt = maskTiles.find(key);
+            if (incomingIt == maskTiles.end() || incomingIt->second.size() != TILE_BYTE_SIZE) {
+                continue;
+            }
+
+            const auto& incoming = incomingIt->second;
+            for (uint32_t y = 0; y < TILE_SIZE; ++y) {
+                for (uint32_t x = 0; x < TILE_SIZE; ++x) {
+                    const uint32_t idx = (y * TILE_SIZE + x) * TILE_CHANNELS;
+                    const uint8_t current = tile.pixels()[idx + 3];
+                    const uint8_t amount = incoming[idx + 3];
+                    const uint8_t next
+                        = amount >= current ? 0 : static_cast<uint8_t>(current - amount);
+                    if (next != current) {
+                        tile.setPixel(x, y, next, next, next, next);
+                    }
+                }
+            }
+            if (tile.isEmpty()) {
+                emptyTiles.push_back(key);
+            }
+        }
+        for (const TileKey& key : emptyTiles) {
+            m_mask.removeTile(key);
+        }
+    }
+
+    if (m_mask.empty()) {
+        m_regions.clear();
+        m_edges.clear();
+        setMaskHasSoftAlpha(false);
+        return;
+    }
+
+    // Raster selections cannot be faithfully represented as polygons. Keep one
+    // full-document marker so the existing hasSelection()/undo plumbing remains
+    // authoritative while pixels and edges come from the mask itself.
+    m_regions.clear();
+    m_regions.push_back({ { Vector2(0.0f, 0.0f), Vector2(static_cast<float>(canvasWidth), 0.0f),
+                              Vector2(static_cast<float>(canvasWidth),
+                                  static_cast<float>(canvasHeight)),
+                              Vector2(0.0f, static_cast<float>(canvasHeight)) },
+        LassoSelectionMode::Add });
+    markMaskSoftAlphaUnknown();
+    rebuildEdges(canvasWidth, canvasHeight);
+}
+
 void LassoSelectionManager::invalidateMaskSnapshotCache() const noexcept
 {
     m_cachedMaskSnapshot.reset();

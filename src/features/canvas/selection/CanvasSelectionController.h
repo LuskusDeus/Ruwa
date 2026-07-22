@@ -104,6 +104,9 @@ public:
     void updateCircleSelection(float worldX, float worldY);
     void endCircleSelection(bool addSelection, bool subtractSelection);
 
+    bool selectContiguousArea(
+        int worldX, int worldY, bool addSelection, bool subtractSelection);
+
     void translateActiveSelection(float dx, float dy);
     void clearSelectionMask();
     void selectActiveLayerContent();

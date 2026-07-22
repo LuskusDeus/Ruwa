@@ -316,7 +316,7 @@ static const QList<QList<ToolsPanel::Tool>> TOOL_GROUPS = {
     { ToolsPanel::Tool::Brush, ToolsPanel::Tool::Eraser, ToolsPanel::Tool::Fill,
         ToolsPanel::Tool::Eyedropper, ToolsPanel::Tool::Blur }, // Drawing
     { ToolsPanel::Tool::Move, ToolsPanel::Tool::SquareSelection,
-        ToolsPanel::Tool::Lasso }, // Selection and movement
+        ToolsPanel::Tool::Lasso, ToolsPanel::Tool::MagicWand }, // Selection and movement
     { ToolsPanel::Tool::Text, ToolsPanel::Tool::CanvasResize } // Other
 };
 
@@ -434,6 +434,7 @@ QWidget* ToolsPanel::createContent()
     addGroupTool(Tool::SquareSelection, IconProvider::StandardIcon::SquareSelection,
         tr("Square Selection (M)"));
     addGroupTool(Tool::Lasso, IconProvider::StandardIcon::Lasso, tr("Lasso (L)"));
+    addTool(Tool::MagicWand, IconProvider::StandardIcon::MagicWand, tr("Magic Wand (W)"));
     addTool(Tool::Text, IconProvider::StandardIcon::Text, tr("Text (T)"));
     addTool(Tool::RotateView, IconProvider::StandardIcon::RotateView, tr("Rotate View (R)"));
     addTool(Tool::CanvasResize, IconProvider::StandardIcon::Crop, tr("Canvas Resize"));
@@ -972,6 +973,8 @@ QString ToolsPanel::tooltipForTool(Tool tool) const
         return tr("Square Selection (M)");
     case Tool::CircleSelection:
         return tr("Circle Selection (O)");
+    case Tool::MagicWand:
+        return tr("Magic Wand (W)");
     case Tool::Move:
         return tr("Move (V)");
     case Tool::Text:
@@ -1017,6 +1020,8 @@ IconProvider::StandardIcon ToolsPanel::iconForTool(Tool tool) const
         return IconProvider::StandardIcon::SquareSelection;
     case Tool::CircleSelection:
         return IconProvider::StandardIcon::CircleSelection;
+    case Tool::MagicWand:
+        return IconProvider::StandardIcon::MagicWand;
     case Tool::Move:
         return IconProvider::StandardIcon::Move;
     case Tool::Text:

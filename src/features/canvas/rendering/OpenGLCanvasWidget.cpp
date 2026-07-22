@@ -4220,6 +4220,33 @@ void OpenGLCanvasWidget::endCircleSelection(bool addSelection, bool subtractSele
     }
 }
 
+bool OpenGLCanvasWidget::performMagicWandSelection(
+    int worldX, int worldY, bool addSelection, bool subtractSelection)
+{
+    if (!m_selectionController) {
+        return false;
+    }
+
+    SelectionState before;
+    before.layer = captureLayerSelection(m_layerModel ? m_layerModel->selectionManager() : nullptr);
+    before.lasso = captureLassoSelection(&m_selectionController->lassoSelection(),
+        effectiveDocumentBoundsWidth(), effectiveDocumentBoundsHeight());
+
+    if (!m_selectionController->selectContiguousArea(
+            worldX, worldY, addSelection, subtractSelection)) {
+        return false;
+    }
+
+    SelectionState after;
+    after.layer = before.layer;
+    after.lasso = captureLassoSelection(&m_selectionController->lassoSelection(),
+        effectiveDocumentBoundsWidth(), effectiveDocumentBoundsHeight());
+    m_ignoreSelectionChange = true;
+    pushSelectionCommand(before, after);
+    m_ignoreSelectionChange = false;
+    return true;
+}
+
 void OpenGLCanvasWidget::clearSelectionMask()
 {
     if (m_selectionController) {
@@ -7204,7 +7231,8 @@ void OpenGLCanvasWidget::pushSelectionCommand(
 {
     if (before.layer.primaryId == after.layer.primaryId
         && before.layer.selectedIds == after.layer.selectedIds
-        && before.lasso.regions == after.lasso.regions) {
+        && before.lasso.regions == after.lasso.regions
+        && before.lasso.maskTiles == after.lasso.maskTiles) {
         return;
     }
     auto* layerSel = m_layerModel ? m_layerModel->selectionManager() : nullptr;

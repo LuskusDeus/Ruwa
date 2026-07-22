@@ -171,6 +171,19 @@ inline FloodFillResult::RawTileMap snapshotSelectionMaskTiles(const TileGrid* se
     return tiles;
 }
 
+inline FloodFillResult::RawTileMap snapshotContentTiles(const TileGrid& grid)
+{
+    FloodFillResult::RawTileMap tiles;
+    const size_t bytesPerTile = tileByteSize(grid.format());
+    tiles.reserve(grid.tiles().size());
+    for (const auto& [key, tile] : grid.tiles()) {
+        std::vector<uint8_t> bytes(bytesPerTile);
+        std::memcpy(bytes.data(), tile.pixels(), bytesPerTile);
+        tiles.emplace(key, std::move(bytes));
+    }
+    return tiles;
+}
+
 inline PremultPixel samplePixel(const TileGrid& grid, int32_t x, int32_t y)
 {
     PremultPixel px;
@@ -2060,6 +2073,31 @@ FloodFillResult classicFloodFillRawTiles(const FloodFillResult::RawTileMap& sour
     return buildResultFromMaskTiles(sourceTiles, fillMaskTiles, FloodFillResult::RawTileMap {},
         FillSemanticMode::Stroke, fillR, fillG, fillB, fillA,
         selectionMaskTiles.empty() ? nullptr : &selectionMaskTiles, contentFormat);
+}
+
+FloodFillResult::RawTileMap buildMagicWandSelectionMask(
+    const TileGrid& grid, int seedX, int seedY, int canvasWidth, int canvasHeight)
+{
+    if (seedX < 0 || seedX >= canvasWidth || seedY < 0 || seedY >= canvasHeight) {
+        return {};
+    }
+
+    uint8_t seedR = 0;
+    uint8_t seedG = 0;
+    uint8_t seedB = 0;
+    uint8_t seedA = 0;
+    if (!samplePixelAt(&grid, seedX, seedY, seedR, seedG, seedB, seedA)) {
+        return {};
+    }
+
+    // floodFillRawTiles already owns the project's edge-aware contiguous-region
+    // implementation and exposes its rasterized fill mask. Run it on a snapshot
+    // with a guaranteed-different color so the live layer remains untouched.
+    const uint8_t probeR = static_cast<uint8_t>(255u - seedR);
+    const uint8_t probeA = seedA == 255 ? 254 : 255;
+    FloodFillResult result = floodFillRawTiles(snapshotContentTiles(grid), seedX, seedY, probeR,
+        seedG, seedB, probeA, {}, canvasWidth, canvasHeight, grid.format());
+    return std::move(result.fillMaskTiles);
 }
 
 namespace {

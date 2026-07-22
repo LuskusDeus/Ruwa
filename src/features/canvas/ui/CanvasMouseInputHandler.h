@@ -26,7 +26,7 @@ class CanvasPanel;
  *
  * Extracted from CanvasPanel to isolate ~500 lines of mouse-specific logic.
  * Routes events by tool mode: Hand, Zoom, RotateView, Eyedropper, Fill, Lasso,
- * SquareSelection, CircleSelection, Brush, Eraser, CanvasResize, Transform.
+ * SquareSelection, CircleSelection, MagicWand, Brush, Eraser, CanvasResize, Transform.
  */
 class CanvasMouseInputHandler {
 public:

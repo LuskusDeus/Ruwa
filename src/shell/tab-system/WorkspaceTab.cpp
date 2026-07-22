@@ -593,6 +593,8 @@ workspace::ToolsPanel::Tool toToolsPanelTool(workspace::CanvasPanel::ToolMode mo
         return workspace::ToolsPanel::Tool::SquareSelection;
     case workspace::CanvasPanel::ToolMode::CircleSelection:
         return workspace::ToolsPanel::Tool::CircleSelection;
+    case workspace::CanvasPanel::ToolMode::MagicWand:
+        return workspace::ToolsPanel::Tool::MagicWand;
     case workspace::CanvasPanel::ToolMode::Move:
         return workspace::ToolsPanel::Tool::Move;
     case workspace::CanvasPanel::ToolMode::RotateView:
@@ -2560,6 +2562,9 @@ void WorkspaceTab::connectPanelSignals()
                 break;
             case workspace::ToolsPanel::Tool::CircleSelection:
                 m_canvasPanel->setToolMode(CanvasTool::CircleSelection);
+                break;
+            case workspace::ToolsPanel::Tool::MagicWand:
+                m_canvasPanel->setToolMode(CanvasTool::MagicWand);
                 break;
             case workspace::ToolsPanel::Tool::Move:
                 m_canvasPanel->setToolMode(CanvasTool::Move);

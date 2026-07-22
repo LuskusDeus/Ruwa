@@ -10,6 +10,7 @@
 #include "features/canvas/rendering/GLTileRenderer.h"
 #include "features/selection/GLSelectionRenderer.h"
 #include "features/canvas/rendering/GLRenderer.h"
+#include "features/fill/FloodFill.h"
 #include "features/layers/model/LayerData.h"
 #include "features/layers/model/LayerModel.h"
 #include "shared/tiles/TileTypes.h"
@@ -35,6 +36,33 @@ uint32_t selectionDocumentWidth(const aether::Canvas& canvas)
 uint32_t selectionDocumentHeight(const aether::Canvas& canvas)
 {
     return selectionUsesFiniteDocumentBounds(canvas) ? canvas.height() : 0;
+}
+
+aether::MaskTileSnapshot fullCanvasSelectionMask(uint32_t width, uint32_t height)
+{
+    aether::MaskTileSnapshot mask;
+    const uint32_t tileColumns = (width + aether::TILE_SIZE - 1) / aether::TILE_SIZE;
+    const uint32_t tileRows = (height + aether::TILE_SIZE - 1) / aether::TILE_SIZE;
+    mask.reserve(static_cast<size_t>(tileColumns) * tileRows);
+    for (uint32_t tileY = 0; tileY < tileRows; ++tileY) {
+        const uint32_t validHeight
+            = std::min(aether::TILE_SIZE, height - tileY * aether::TILE_SIZE);
+        for (uint32_t tileX = 0; tileX < tileColumns; ++tileX) {
+            const uint32_t validWidth
+                = std::min(aether::TILE_SIZE, width - tileX * aether::TILE_SIZE);
+            std::vector<uint8_t> tile(aether::TILE_BYTE_SIZE, 0);
+            for (uint32_t localY = 0; localY < validHeight; ++localY) {
+                const size_t rowStart
+                    = static_cast<size_t>(localY) * aether::TILE_SIZE * aether::TILE_CHANNELS;
+                std::fill_n(tile.data() + rowStart,
+                    static_cast<size_t>(validWidth) * aether::TILE_CHANNELS, uint8_t { 255 });
+            }
+            mask.emplace(aether::TileKey { static_cast<int32_t>(tileX),
+                             static_cast<int32_t>(tileY) },
+                std::move(tile));
+        }
+    }
+    return mask;
 }
 
 } // namespace
@@ -465,6 +493,91 @@ void CanvasSelectionController::endCircleSelection(bool addSelection, bool subtr
     m_lassoPoints.clear();
     if (m_ctx.requestRender)
         m_ctx.requestRender();
+}
+
+bool CanvasSelectionController::selectContiguousArea(
+    int worldX, int worldY, bool addSelection, bool subtractSelection)
+{
+    if (!m_ctx.getCanvas || !m_ctx.getActiveLayer) {
+        return false;
+    }
+
+    const Canvas& canvas = m_ctx.getCanvas();
+    if (!selectionUsesFiniteDocumentBounds(canvas) || worldX < 0 || worldY < 0
+        || worldX >= static_cast<int>(canvas.width())
+        || worldY >= static_cast<int>(canvas.height())) {
+        return false;
+    }
+
+    auto* layer = m_ctx.getActiveLayer();
+    if (!layer || (!layer->isPixelLayer() && !layer->isBackground())) {
+        return false;
+    }
+
+    LassoSelectionMode mode = LassoSelectionMode::Replace;
+    if (subtractSelection) {
+        mode = LassoSelectionMode::Subtract;
+    } else if (addSelection) {
+        mode = LassoSelectionMode::Add;
+    }
+    if (mode == LassoSelectionMode::Subtract && m_lassoSelection.mask().empty()) {
+        return false;
+    }
+
+    MaskTileSnapshot wandMask;
+    if (layer->isBackground() && !layer->backgroundTransparent) {
+        wandMask = fullCanvasSelectionMask(canvas.width(), canvas.height());
+    } else {
+        std::shared_ptr<TileGrid> effectShapedGrid
+            = m_ctx.getEffectShapedGrid ? m_ctx.getEffectShapedGrid(layer) : nullptr;
+        const TileGrid* sourceGrid = effectShapedGrid
+            ? effectShapedGrid.get()
+            : (m_ctx.getCompositingGridForLayer
+                      ? m_ctx.getCompositingGridForLayer(layer)
+                      : nullptr);
+        TileGrid emptySource;
+        if (!sourceGrid) {
+            sourceGrid = &emptySource;
+        }
+        wandMask = buildMagicWandSelectionMask(*sourceGrid, worldX, worldY,
+            static_cast<int>(canvas.width()), static_cast<int>(canvas.height()));
+    }
+
+    auto* tileRenderer = m_ctx.getTileRenderer ? m_ctx.getTileRenderer() : nullptr;
+    if (tileRenderer) {
+        LassoSelectionManager::MaskMutationScope scope(m_lassoSelection);
+        scope.disableSoftAlphaInvalidation();
+        for (auto& [key, tile] : scope.grid().tiles()) {
+            (void) key;
+            if (tile.hasTexture()) {
+                tileRenderer->destroyTileTexture(tile);
+            }
+        }
+        scope.disableSnapshotInvalidation();
+    }
+
+    m_lassoSelection.applyRasterSelectionMask(
+        wandMask, mode, canvas.width(), canvas.height());
+    m_contentSelectionSourceLayerId = QUuid();
+
+    if (tileRenderer) {
+        LassoSelectionManager::MaskMutationScope scope(m_lassoSelection);
+        scope.disableSoftAlphaInvalidation();
+        for (auto& [key, tile] : scope.grid().tiles()) {
+            (void) key;
+            if (!tile.isDirty()) {
+                continue;
+            }
+            tileRenderer->ensureTileTexture(tile);
+            tileRenderer->uploadTileData(tile);
+        }
+        scope.disableSnapshotInvalidation();
+    }
+
+    if (m_ctx.requestRender) {
+        m_ctx.requestRender();
+    }
+    return true;
 }
 
 void CanvasSelectionController::clearSelectionMask()

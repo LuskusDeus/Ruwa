@@ -52,6 +52,21 @@ qint64 SelectionCommand::memorySize() const
     for (const auto& r : m_after.lasso.regions) {
         size += r.polygon.size() * sizeof(Vector2);
     }
+    const auto maskBytes = [](const std::shared_ptr<const MaskTileSnapshot>& snapshot) {
+        qint64 bytes = 0;
+        if (!snapshot) {
+            return bytes;
+        }
+        for (const auto& [key, tile] : *snapshot) {
+            (void) key;
+            bytes += static_cast<qint64>(tile.size());
+        }
+        return bytes;
+    };
+    size += maskBytes(m_before.lasso.maskTiles);
+    if (m_after.lasso.maskTiles != m_before.lasso.maskTiles) {
+        size += maskBytes(m_after.lasso.maskTiles);
+    }
     return size;
 }
 

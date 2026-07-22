@@ -146,6 +146,11 @@ public:
     void applyMaskSnapshot(std::shared_ptr<const MaskTileSnapshot> maskTiles,
         std::vector<LassoRegion> regions, bool softAlpha, uint32_t canvasWidth,
         uint32_t canvasHeight);
+
+    /// Combine an already-rasterized RGBA8 selection mask with the current
+    /// selection. Used by non-polygon selection tools such as Magic Wand.
+    void applyRasterSelectionMask(const MaskTileSnapshot& maskTiles, LassoSelectionMode mode,
+        uint32_t canvasWidth, uint32_t canvasHeight);
     void setMaskHasSoftAlpha(bool hasSoftAlpha) const;
     void markMaskSoftAlphaUnknown() const;
     const std::vector<LassoEdgeSegment>& edges() const { return m_edges; }

@@ -35,7 +35,8 @@ enum class CanvasToolMode {
     Blur = 14,
     Text = 15,
     Smudge = 16,
-    Liquify = 17
+    Liquify = 17,
+    MagicWand = 18
 };
 
 struct CanvasPersistedToolState {

@@ -120,6 +120,11 @@ FloodFillResult classicFloodFillRawTiles(const FloodFillResult::RawTileMap& sour
     const FloodFillResult::RawTileMap& selectionMaskTiles, int canvasWidth, int canvasHeight,
     TilePixelFormat contentFormat = kDefaultTileFormat);
 
+/// Build a read-only, contiguous selection mask using the same edge-aware
+/// region detection as the smart fill tool. The source grid is not modified.
+FloodFillResult::RawTileMap buildMagicWandSelectionMask(
+    const TileGrid& grid, int seedX, int seedY, int canvasWidth, int canvasHeight);
+
 /// Fill polygon interior with color (scanline algorithm). Returns snapshots for Undo.
 ///
 /// If `selectionMask` is non-null the result is gated by the selection mask

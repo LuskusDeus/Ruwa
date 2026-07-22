@@ -56,7 +56,8 @@ public:
         Blur,
         Smudge,
         Liquify,
-        Text
+        Text,
+        MagicWand
     };
     Q_ENUM(Tool)
 

@@ -57,6 +57,7 @@ public:
         LassoFill,
         SquareSelection,
         CircleSelection,
+        MagicWand,
         RotateView,
         CanvasResize,
         Crop,

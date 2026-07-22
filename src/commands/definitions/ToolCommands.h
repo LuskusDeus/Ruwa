@@ -120,6 +120,13 @@ public:
     void execute(const CommandContext& ctx, const QVariantMap& args = {}) override;
 };
 
+class ToolMagicWandCommand : public Command {
+public:
+    CommandInfo info() const override;
+    bool canExecute(const CommandContext& ctx) const override;
+    void execute(const CommandContext& ctx, const QVariantMap& args = {}) override;
+};
+
 class ToolMoveCommand : public Command {
 public:
     CommandInfo info() const override;

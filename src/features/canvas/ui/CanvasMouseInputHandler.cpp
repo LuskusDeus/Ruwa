@@ -689,6 +689,16 @@ bool CanvasMouseInputHandler::handleMousePress(QMouseEvent* event)
             event->accept();
             return true;
         }
+        if (m_host->currentInputTool() == CanvasPanel::ToolMode::MagicWand) {
+            const aether::Vector2 worldPos
+                = m_panel->mapToViewportWorld(event->globalPosition());
+            const bool addSelection = event->modifiers().testFlag(Qt::ShiftModifier);
+            const bool subtractSelection = event->modifiers().testFlag(Qt::AltModifier);
+            glWidget->performMagicWandSelection(static_cast<int>(std::floor(worldPos.x)),
+                static_cast<int>(std::floor(worldPos.y)), addSelection, subtractSelection);
+            event->accept();
+            return true;
+        }
         if (m_host->currentInputTool() == CanvasPanel::ToolMode::Brush
             || m_host->currentInputTool() == CanvasPanel::ToolMode::Blur
             || m_host->currentInputTool() == CanvasPanel::ToolMode::Smudge

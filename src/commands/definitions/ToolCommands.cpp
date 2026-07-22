@@ -447,6 +447,32 @@ void ToolCircleSelectionCommand::execute(const CommandContext& ctx, const QVaria
 }
 
 // ======================================================================================
+//   M A G I C   W A N D
+// ======================================================================================
+
+CommandInfo ToolMagicWandCommand::info() const
+{
+    return CommandInfo { .id = "tools.magic-wand",
+        .title = "Magic Wand",
+        .category = "Tools",
+        .description = "Select a contiguous region of similar color",
+        .aliases = { "magic-wand", "wand", "contiguous-selection", "w" },
+        .defaultShortcut = QKeySequence(Qt::Key_W),
+        .icon = QIcon() };
+}
+
+bool ToolMagicWandCommand::canExecute(const CommandContext& ctx) const
+{
+    return canExecuteToolSwitchCommand(ctx);
+}
+
+void ToolMagicWandCommand::execute(const CommandContext& ctx, const QVariantMap& args)
+{
+    Q_UNUSED(args);
+    executeToolCommand(ctx, ruwa::ui::workspace::ToolsPanel::Tool::MagicWand);
+}
+
+// ======================================================================================
 //   M O V E
 // ======================================================================================
 
@@ -874,6 +900,7 @@ void registerToolCommands(CommandRegistry& registry)
     registry.registerCommand(std::make_unique<ToolLassoFillCommand>());
     registry.registerCommand(std::make_unique<ToolSquareSelectionCommand>());
     registry.registerCommand(std::make_unique<ToolCircleSelectionCommand>());
+    registry.registerCommand(std::make_unique<ToolMagicWandCommand>());
     registry.registerCommand(std::make_unique<ToolMoveCommand>());
     registry.registerCommand(std::make_unique<ToolRotateViewCommand>());
     registry.registerCommand(std::make_unique<ToolCanvasResizeCommand>());

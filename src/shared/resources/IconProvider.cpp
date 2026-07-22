@@ -169,6 +169,8 @@ QString IconProvider::getStandardIconName(StandardIcon icon) const
         return "SquareSelection";
     case StandardIcon::CircleSelection:
         return "CircleSelection";
+    case StandardIcon::MagicWand:
+        return "MagicWand";
     case StandardIcon::RotateView:
         return "RotateView";
     case StandardIcon::CanvasResize:

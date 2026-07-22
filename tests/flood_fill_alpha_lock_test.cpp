@@ -20,6 +20,19 @@ FloodFillResult::RawTileMap singlePixelMask()
     return maskTiles;
 }
 
+uint8_t rawMaskAlphaAt(const FloodFillResult::RawTileMap& mask, uint32_t x, uint32_t y)
+{
+    const TileKey key { static_cast<int32_t>(x / TILE_SIZE),
+        static_cast<int32_t>(y / TILE_SIZE) };
+    const auto it = mask.find(key);
+    if (it == mask.end()) {
+        return 0;
+    }
+    const uint32_t localX = x % TILE_SIZE;
+    const uint32_t localY = y % TILE_SIZE;
+    return it->second[(localY * TILE_SIZE + localX) * TILE_CHANNELS + 3];
+}
+
 } // namespace
 
 TEST_CASE("Masked fill preserves destination alpha when alpha lock is enabled",
@@ -77,4 +90,36 @@ TEST_CASE("Alpha-locked masked fill cannot create opaque content",
 
     REQUIRE(result.pixelsFilled == 0);
     REQUIRE(grid.empty());
+}
+
+TEST_CASE("Magic Wand mask selects only the connected matching-color region",
+    "[fill][selection][magic-wand]")
+{
+    TileGrid grid;
+    TileData& tile = grid.getOrCreateTile(TileKey { 0, 0 });
+    tile.setPixel(0, 0, 255, 0, 0, 255);
+    tile.setPixel(1, 0, 255, 0, 0, 255);
+    tile.setPixel(2, 0, 0, 0, 255, 255);
+
+    const auto mask = buildMagicWandSelectionMask(grid, 0, 0, 3, 1);
+
+    REQUIRE(rawMaskAlphaAt(mask, 0, 0) == 255);
+    REQUIRE(rawMaskAlphaAt(mask, 1, 0) == 255);
+    REQUIRE(rawMaskAlphaAt(mask, 2, 0) == 0);
+}
+
+TEST_CASE("Magic Wand mask can select transparent space around opaque content",
+    "[fill][selection][magic-wand][transparent]")
+{
+    TileGrid grid;
+    grid.getOrCreateTile(TileKey { 0, 0 }).setPixel(1, 1, 0, 0, 0, 255);
+
+    const auto mask = buildMagicWandSelectionMask(grid, 0, 0, 3, 3);
+
+    for (uint32_t y = 0; y < 3; ++y) {
+        for (uint32_t x = 0; x < 3; ++x) {
+            const uint8_t expected = (x == 1 && y == 1) ? 0 : 255;
+            REQUIRE(rawMaskAlphaAt(mask, x, y) == expected);
+        }
+    }
 }

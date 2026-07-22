@@ -45,7 +45,7 @@ constexpr int kControlSpacingBase = 6;
 constexpr int kSliderMinWidthBase = 180;
 constexpr int kCanvasPlaceholderMinWidthBase = 320;
 constexpr int kToolPlaceholderMinWidthBase = 260;
-constexpr int kToolPageCount = 18;
+constexpr int kToolPageCount = 19;
 constexpr int kParameterSliderHeightBase = 28;
 constexpr int kBrushParameterGroupSpacingBase = 10;
 constexpr int kSliderSurfaceOpacityPercent = 58;
@@ -65,6 +65,7 @@ constexpr int kClassicFillToolPageIndex = 13;
 constexpr int kBlurToolPageIndex = 14;
 constexpr int kSmudgeToolPageIndex = 16;
 constexpr int kLiquifyToolPageIndex = 17;
+constexpr int kMagicWandToolPageIndex = 18;
 
 QSize pageHint(QWidget* page)
 {
@@ -780,10 +781,11 @@ qreal CanvasToolStateOverlay::sliderValueToUnit(int value)
 
 void CanvasToolStateOverlay::setupUi()
 {
-    const QStringList toolNames
-        = { tr("Hand"), tr("Brush"), tr("Eraser"), tr("Fill"), tr("Eyedropper"), tr("Lasso"),
-              tr("Lasso Fill"), tr("Square Selection"), tr("Circle Selection"), tr("Move"),
-              tr("Rotate View"), tr("Canvas Resize"), tr("Zoom"), tr("Classic Fill"), tr("Blur") };
+    const QStringList toolNames = { tr("Hand"), tr("Brush"), tr("Eraser"), tr("Fill"),
+        tr("Eyedropper"), tr("Lasso"), tr("Lasso Fill"), tr("Square Selection"),
+        tr("Circle Selection"), tr("Move"), tr("Rotate View"), tr("Canvas Resize"), tr("Zoom"),
+        tr("Classic Fill"), tr("Blur"), tr("Text"), tr("Smudge"), tr("Liquify"),
+        tr("Magic Wand") };
 
     auto* rootLayout = new QVBoxLayout(this);
     rootLayout->setContentsMargins(0, 0, 0, 0);
@@ -878,7 +880,7 @@ void CanvasToolStateOverlay::setupUi()
         } else if (i == kFillToolPageIndex || i == kEyedropperToolPageIndex
             || i == kSquareSelectionToolPageIndex || i == kCircleSelectionToolPageIndex
             || i == kRotateViewToolPageIndex || i == kZoomToolPageIndex
-            || i == kClassicFillToolPageIndex) {
+            || i == kClassicFillToolPageIndex || i == kMagicWandToolPageIndex) {
             m_toolContentStack->addWidget(createToolPlaceholderPage(nullptr, m_toolContentStack));
         } else {
             m_toolContentStack->addWidget(createToolContentPage(toolName, m_toolContentStack));

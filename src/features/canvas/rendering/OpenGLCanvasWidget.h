@@ -238,6 +238,8 @@ public:
     {
         return m_selectionController && m_selectionController->isCircleSelectionActive();
     }
+    bool performMagicWandSelection(
+        int worldX, int worldY, bool addSelection = false, bool subtractSelection = false);
     void translateActiveSelection(float dx, float dy);
     void clearSelectionMask();
     void selectActiveLayerContent();

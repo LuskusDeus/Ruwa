@@ -70,6 +70,7 @@
         <file alias="Hand">resources/icons/Hand.png</file>
         <file alias="SquareSelection">resources/icons/SquareSelection.png</file>
         <file alias="CircleSelection">resources/icons/CircleSelection.png</file>
+        <file alias="MagicWand">resources/icons/MagicWand.png</file>
         <file alias="RotateView">resources/icons/RotateView.png</file>
         <file alias="Folder">resources/icons/Folder.png</file>
         <file alias="Remove">resources/icons/Remove.png</file>
