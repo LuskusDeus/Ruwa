@@ -136,7 +136,7 @@ void BrushSettingsPanel::setCanvasPanel(CanvasPanel* canvasPanel)
     m_canvasPanel = canvasPanel;
     if (m_canvasPanel) {
         connect(m_canvasPanel.data(), &CanvasPanel::brushSelectionContextChanged, this,
-            [this](CanvasPanel::ToolMode, const QString& brushId) { setCurrentBrush(brushId); });
+            [this](ToolId, const QString& brushId) { setCurrentBrush(brushId); });
         connect(m_canvasPanel.data(), &QObject::destroyed, this, [this]() {
             m_canvasPanel = nullptr;
             setCurrentBrush({});

@@ -8,6 +8,7 @@
 #define RUWA_UI_WORKSPACE_CANVASPANELTYPES_H
 
 #include "features/brush/manager/BrushSettings.h"
+#include "shared/types/ToolId.h"
 
 #include <QColor>
 #include <QString>
@@ -16,28 +17,6 @@
 #include <cstdint>
 
 namespace ruwa::ui::workspace {
-
-enum class CanvasToolMode {
-    Hand = 0,
-    Brush = 1,
-    Eraser = 2,
-    Fill = 3,
-    Eyedropper = 4,
-    Lasso = 5,
-    LassoFill = 6,
-    SquareSelection = 7,
-    CircleSelection = 8,
-    Move = 9,
-    RotateView = 10,
-    CanvasResize = 11,
-    Zoom = 12,
-    ClassicFill = 13,
-    Blur = 14,
-    Text = 15,
-    Smudge = 16,
-    Liquify = 17,
-    MagicWand = 18
-};
 
 struct CanvasPersistedToolState {
     QString brushId;
@@ -56,8 +35,8 @@ struct CanvasToolBrushStateSnapshot {
 };
 
 struct CanvasToolStateSnapshot {
-    int currentTool = static_cast<int>(CanvasToolMode::Brush);
-    int lastDrawTool = static_cast<int>(CanvasToolMode::Brush);
+    int currentTool = persistentValueForToolId(ToolId::Brush);
+    int lastDrawTool = persistentValueForToolId(ToolId::Brush);
     QRgb currentColorRgba = QColor(0, 0, 0, 255).rgba();
     qreal lassoStabilization = 0.0;
     qreal lassoFillStabilization = 0.0;
@@ -84,7 +63,7 @@ struct CanvasToolBrushState {
 
 struct CanvasTemporaryToolHold {
     bool active = false;
-    CanvasToolMode previousTool = CanvasToolMode::Hand;
+    ToolId previousTool = ToolId::Hand;
     int heldKey = 0;
     Qt::MouseButton heldButton = Qt::NoButton;
     bool toolWasUsed = false;

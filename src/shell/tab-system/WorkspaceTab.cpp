@@ -7,7 +7,6 @@
 #include "features/layers/model/LayerModel.h"
 #include "features/effects/EffectCoverageResolver.h"
 #include "features/transform/TransformState.h"
-#include "platform/Platform.h"
 #include "features/project/ProjectSerializer.h"
 #include "features/project/RecentProjectsManager.h"
 #include "features/project/ThumbnailCache.h"
@@ -561,52 +560,6 @@ void setUiDragActive(bool active)
     } else if (const QCursor* cursor = qApp->overrideCursor();
         cursor && cursor->shape() == Qt::SizeAllCursor) {
         qApp->restoreOverrideCursor();
-    }
-}
-
-workspace::ToolsPanel::Tool toToolsPanelTool(workspace::CanvasPanel::ToolMode mode)
-{
-    switch (mode) {
-    case workspace::CanvasPanel::ToolMode::Hand:
-        return workspace::ToolsPanel::Tool::Hand;
-    case workspace::CanvasPanel::ToolMode::Brush:
-        return workspace::ToolsPanel::Tool::Brush;
-    case workspace::CanvasPanel::ToolMode::Blur:
-        return workspace::ToolsPanel::Tool::Blur;
-    case workspace::CanvasPanel::ToolMode::Smudge:
-        return workspace::ToolsPanel::Tool::Smudge;
-    case workspace::CanvasPanel::ToolMode::Liquify:
-        return workspace::ToolsPanel::Tool::Liquify;
-    case workspace::CanvasPanel::ToolMode::Eraser:
-        return workspace::ToolsPanel::Tool::Eraser;
-    case workspace::CanvasPanel::ToolMode::Fill:
-        return workspace::ToolsPanel::Tool::Fill;
-    case workspace::CanvasPanel::ToolMode::ClassicFill:
-        return workspace::ToolsPanel::Tool::ClassicFill;
-    case workspace::CanvasPanel::ToolMode::Eyedropper:
-        return workspace::ToolsPanel::Tool::Eyedropper;
-    case workspace::CanvasPanel::ToolMode::Lasso:
-        return workspace::ToolsPanel::Tool::Lasso;
-    case workspace::CanvasPanel::ToolMode::LassoFill:
-        return workspace::ToolsPanel::Tool::LassoFill;
-    case workspace::CanvasPanel::ToolMode::SquareSelection:
-        return workspace::ToolsPanel::Tool::SquareSelection;
-    case workspace::CanvasPanel::ToolMode::CircleSelection:
-        return workspace::ToolsPanel::Tool::CircleSelection;
-    case workspace::CanvasPanel::ToolMode::MagicWand:
-        return workspace::ToolsPanel::Tool::MagicWand;
-    case workspace::CanvasPanel::ToolMode::Move:
-        return workspace::ToolsPanel::Tool::Move;
-    case workspace::CanvasPanel::ToolMode::RotateView:
-        return workspace::ToolsPanel::Tool::RotateView;
-    case workspace::CanvasPanel::ToolMode::CanvasResize:
-        return workspace::ToolsPanel::Tool::CanvasResize;
-    case workspace::CanvasPanel::ToolMode::Zoom:
-        return workspace::ToolsPanel::Tool::Zoom;
-    case workspace::CanvasPanel::ToolMode::Text:
-        return workspace::ToolsPanel::Tool::Text;
-    default:
-        return workspace::ToolsPanel::Tool::Hand;
     }
 }
 
@@ -1932,7 +1885,7 @@ void WorkspaceTab::setupPanels()
     connect(m_brushSettingsPanel, &workspace::BrushSettingsPanel::brushEditorRequested,
         m_brushesPanel, &workspace::BrushesPanel::openBrushEditorForBrush);
     {
-        m_toolsPanel->setCurrentTool(toToolsPanelTool(m_canvasPanel->toolMode()));
+        m_toolsPanel->setActiveTool(m_canvasPanel->toolMode());
     }
     m_brushesPanel->setUserHorizontalDockedWidth(220);
     m_brushesPanel->setUserVerticalDockedHeight(234);
@@ -2422,9 +2375,9 @@ void WorkspaceTab::connectPanelSignals()
     connect(m_canvasPanel, &workspace::CanvasPanel::stylusJoystickPositionChanged, this,
         [this](const QPoint&) { scheduleDockLayoutSave(); });
     connect(m_canvasPanel, &workspace::CanvasPanel::toolModeChanged, this,
-        [this](workspace::CanvasPanel::ToolMode tool) {
+        [this](workspace::ToolId tool) {
             if (m_toolsPanel) {
-                m_toolsPanel->setCurrentTool(toToolsPanelTool(tool));
+                m_toolsPanel->setActiveTool(tool);
             }
             syncCanvasColorFromWorkspaceState();
         });
@@ -2520,93 +2473,10 @@ void WorkspaceTab::connectPanelSignals()
         });
 
     // Tool selection
-    connect(m_toolsPanel, &workspace::ToolsPanel::toolChanged, this,
-        [this](workspace::ToolsPanel::Tool tool) {
-            using CanvasTool = workspace::CanvasPanel::ToolMode;
-            switch (tool) {
-            case workspace::ToolsPanel::Tool::Hand:
-                m_canvasPanel->setToolMode(CanvasTool::Hand);
-                break;
-            case workspace::ToolsPanel::Tool::Brush:
-                m_canvasPanel->setToolMode(CanvasTool::Brush);
-                break;
-            case workspace::ToolsPanel::Tool::Blur:
-                m_canvasPanel->setToolMode(CanvasTool::Blur);
-                break;
-            case workspace::ToolsPanel::Tool::Smudge:
-                m_canvasPanel->setToolMode(CanvasTool::Smudge);
-                break;
-            case workspace::ToolsPanel::Tool::Liquify:
-                m_canvasPanel->setToolMode(CanvasTool::Liquify);
-                break;
-            case workspace::ToolsPanel::Tool::Eraser:
-                m_canvasPanel->setToolMode(CanvasTool::Eraser);
-                break;
-            case workspace::ToolsPanel::Tool::Fill:
-                m_canvasPanel->setToolMode(CanvasTool::Fill);
-                break;
-            case workspace::ToolsPanel::Tool::ClassicFill:
-                m_canvasPanel->setToolMode(CanvasTool::ClassicFill);
-                break;
-            case workspace::ToolsPanel::Tool::Eyedropper:
-                m_canvasPanel->setToolMode(CanvasTool::Eyedropper);
-                break;
-            case workspace::ToolsPanel::Tool::Lasso:
-                m_canvasPanel->setToolMode(CanvasTool::Lasso);
-                break;
-            case workspace::ToolsPanel::Tool::LassoFill:
-                m_canvasPanel->setToolMode(CanvasTool::LassoFill);
-                break;
-            case workspace::ToolsPanel::Tool::SquareSelection:
-                m_canvasPanel->setToolMode(CanvasTool::SquareSelection);
-                break;
-            case workspace::ToolsPanel::Tool::CircleSelection:
-                m_canvasPanel->setToolMode(CanvasTool::CircleSelection);
-                break;
-            case workspace::ToolsPanel::Tool::MagicWand:
-                m_canvasPanel->setToolMode(CanvasTool::MagicWand);
-                break;
-            case workspace::ToolsPanel::Tool::Move:
-                m_canvasPanel->setToolMode(CanvasTool::Move);
-                break;
-            case workspace::ToolsPanel::Tool::RotateView:
-                m_canvasPanel->setToolMode(CanvasTool::RotateView);
-                break;
-            case workspace::ToolsPanel::Tool::CanvasResize:
-                m_canvasPanel->setToolMode(CanvasTool::CanvasResize);
-                break;
-            case workspace::ToolsPanel::Tool::Zoom:
-                m_canvasPanel->setToolMode(CanvasTool::Zoom);
-                break;
-            case workspace::ToolsPanel::Tool::Text:
-                m_canvasPanel->setToolMode(CanvasTool::Text);
-                break;
-            }
-        });
-
-    // Action tools (Camera: copy canvas to clipboard)
-    connect(m_toolsPanel, &workspace::ToolsPanel::actionToolActivated, this,
-        [this](workspace::ToolsPanel::Tool tool) {
-            if (tool == workspace::ToolsPanel::Tool::Camera && m_canvasPanel) {
-                const QImage image = m_canvasPanel->exportCanvasImage();
-                if (!image.isNull()) {
-                    constexpr int max8K = 7680;
-                    if (image.width() > max8K || image.height() > max8K) {
-                        const QString errMsg = QCoreApplication::translate("MessagePopupManager",
-                            "Image resolution exceeds 8K (7680×4320). Maximum dimension: 7680 px.");
-                        ruwa::ui::widgets::MessagePopupManager::show(this, errMsg,
-                            { { QCoreApplication::translate("MessagePopupManager", "OK"), false,
-                                []() { } } },
-                            320);
-                    } else {
-                        std::unique_ptr<ruwa::platform::Platform> platform(
-                            ruwa::platform::Platform::create());
-                        if (platform) {
-                            platform->copyImageToClipboard(image);
-                        }
-                        ruwa::ui::widgets::MessagePopupManager::showImageCopied(this, image);
-                    }
-                }
+    connect(m_toolsPanel, &workspace::ToolsPanel::toolRequested, this,
+        [this](workspace::ToolId tool) {
+            if (m_canvasPanel) {
+                m_canvasPanel->setToolMode(tool);
             }
         });
 
@@ -2836,9 +2706,9 @@ ruwa::core::serialization::ProjectData WorkspaceTab::toProjectData() const
     }
 
     if (m_canvasPanel) {
-        data.currentTool = static_cast<int>(m_canvasPanel->toolMode());
+        data.currentTool = workspace::persistentValueForToolId(m_canvasPanel->toolMode());
         const auto brushState
-            = m_canvasPanel->persistedToolState(workspace::CanvasPanel::ToolMode::Brush);
+            = m_canvasPanel->persistedToolState(workspace::ToolId::Brush);
         data.brushToolState.brushId = brushState.brushId;
         data.brushToolState.brushSize = brushState.brushSize;
         data.brushToolState.brushOpacity = brushState.brushOpacity;
@@ -2846,7 +2716,7 @@ ruwa::core::serialization::ProjectData WorkspaceTab::toProjectData() const
         data.brushToolState.valid = brushState.valid;
 
         const auto eraserState
-            = m_canvasPanel->persistedToolState(workspace::CanvasPanel::ToolMode::Eraser);
+            = m_canvasPanel->persistedToolState(workspace::ToolId::Eraser);
         data.eraserToolState.brushId = eraserState.brushId;
         data.eraserToolState.brushSize = eraserState.brushSize;
         data.eraserToolState.brushOpacity = eraserState.brushOpacity;
@@ -2854,7 +2724,7 @@ ruwa::core::serialization::ProjectData WorkspaceTab::toProjectData() const
         data.eraserToolState.valid = eraserState.valid;
 
         const auto blurState
-            = m_canvasPanel->persistedToolState(workspace::CanvasPanel::ToolMode::Blur);
+            = m_canvasPanel->persistedToolState(workspace::ToolId::Blur);
         data.blurToolState.brushId = blurState.brushId;
         data.blurToolState.brushSize = blurState.brushSize;
         data.blurToolState.brushOpacity = blurState.brushOpacity;
@@ -2862,7 +2732,7 @@ ruwa::core::serialization::ProjectData WorkspaceTab::toProjectData() const
         data.blurToolState.valid = blurState.valid;
 
         const auto smudgeState
-            = m_canvasPanel->persistedToolState(workspace::CanvasPanel::ToolMode::Smudge);
+            = m_canvasPanel->persistedToolState(workspace::ToolId::Smudge);
         data.smudgeToolState.brushId = smudgeState.brushId;
         data.smudgeToolState.brushSize = smudgeState.brushSize;
         data.smudgeToolState.brushOpacity = smudgeState.brushOpacity;
@@ -2974,7 +2844,7 @@ bool WorkspaceTab::fromProjectDataStructure(const ruwa::core::serialization::Pro
         brushState.brushOpacity = data.brushToolState.brushOpacity;
         brushState.color = QColor::fromRgba(data.brushToolState.colorRgba);
         brushState.valid = data.brushToolState.valid;
-        m_canvasPanel->setPersistedToolState(workspace::CanvasPanel::ToolMode::Brush, brushState);
+        m_canvasPanel->setPersistedToolState(workspace::ToolId::Brush, brushState);
 
         workspace::CanvasPanel::PersistedToolState eraserState;
         eraserState.brushId = data.eraserToolState.brushId;
@@ -2982,7 +2852,7 @@ bool WorkspaceTab::fromProjectDataStructure(const ruwa::core::serialization::Pro
         eraserState.brushOpacity = data.eraserToolState.brushOpacity;
         eraserState.color = QColor::fromRgba(data.eraserToolState.colorRgba);
         eraserState.valid = data.eraserToolState.valid;
-        m_canvasPanel->setPersistedToolState(workspace::CanvasPanel::ToolMode::Eraser, eraserState);
+        m_canvasPanel->setPersistedToolState(workspace::ToolId::Eraser, eraserState);
 
         workspace::CanvasPanel::PersistedToolState blurState;
         blurState.brushId = data.blurToolState.brushId;
@@ -2990,7 +2860,7 @@ bool WorkspaceTab::fromProjectDataStructure(const ruwa::core::serialization::Pro
         blurState.brushOpacity = data.blurToolState.brushOpacity;
         blurState.color = QColor::fromRgba(data.blurToolState.colorRgba);
         blurState.valid = data.blurToolState.valid;
-        m_canvasPanel->setPersistedToolState(workspace::CanvasPanel::ToolMode::Blur, blurState);
+        m_canvasPanel->setPersistedToolState(workspace::ToolId::Blur, blurState);
 
         workspace::CanvasPanel::PersistedToolState smudgeState;
         smudgeState.brushId = data.smudgeToolState.brushId;
@@ -2998,21 +2868,18 @@ bool WorkspaceTab::fromProjectDataStructure(const ruwa::core::serialization::Pro
         smudgeState.brushOpacity = data.smudgeToolState.brushOpacity;
         smudgeState.color = QColor::fromRgba(data.smudgeToolState.colorRgba);
         smudgeState.valid = data.smudgeToolState.valid;
-        m_canvasPanel->setPersistedToolState(workspace::CanvasPanel::ToolMode::Smudge, smudgeState);
+        m_canvasPanel->setPersistedToolState(workspace::ToolId::Smudge, smudgeState);
 
         if (data.version >= 19) {
             m_canvasPanel->setLassoStabilization(data.lassoStabilization);
             m_canvasPanel->setLassoFillStabilization(data.lassoFillStabilization);
         }
     }
-    if (m_toolsPanel) {
-        int canvasTool = qBound(
-            0, data.currentTool, static_cast<int>(workspace::CanvasPanel::ToolMode::Smudge));
-        if (m_canvasPanel) {
-            m_canvasPanel->setToolMode(static_cast<workspace::CanvasPanel::ToolMode>(canvasTool));
-        }
-        m_toolsPanel->setCurrentTool(
-            toToolsPanelTool(static_cast<workspace::CanvasPanel::ToolMode>(canvasTool)));
+    if (m_canvasPanel) {
+        const workspace::ToolId tool
+            = workspace::toolIdFromPersistentValue(data.currentTool).value_or(
+                workspace::ToolId::Brush);
+        m_canvasPanel->setToolMode(tool);
     }
     if (m_canvasPanel) {
         // Project files saved before per-tool color support may not have valid
@@ -3080,14 +2947,11 @@ bool WorkspaceTab::fromProjectDataTiles(const ruwa::core::serialization::Project
     if (loadedAnyTiles) {
         model->notifyBulkLayerContentChanged();
     }
-    if (m_toolsPanel) {
-        int canvasTool = qBound(
-            0, data.currentTool, static_cast<int>(workspace::CanvasPanel::ToolMode::Smudge));
-        if (m_canvasPanel) {
-            m_canvasPanel->setToolMode(static_cast<workspace::CanvasPanel::ToolMode>(canvasTool));
-        }
-        m_toolsPanel->setCurrentTool(
-            toToolsPanelTool(static_cast<workspace::CanvasPanel::ToolMode>(canvasTool)));
+    if (m_canvasPanel) {
+        const workspace::ToolId tool
+            = workspace::toolIdFromPersistentValue(data.currentTool).value_or(
+                workspace::ToolId::Brush);
+        m_canvasPanel->setToolMode(tool);
     }
     if (m_canvasPanel) {
         m_canvasPanel->reapplyCurrentToolState();
@@ -3267,10 +3131,10 @@ WorkspaceTab::ProjectSaveSnapshot WorkspaceTab::captureProjectSaveSnapshot() con
     }
 
     if (m_canvasPanel) {
-        snapshot.currentTool = static_cast<int>(m_canvasPanel->toolMode());
+        snapshot.currentTool = workspace::persistentValueForToolId(m_canvasPanel->toolMode());
 
         const auto brushState
-            = m_canvasPanel->persistedToolState(workspace::CanvasPanel::ToolMode::Brush);
+            = m_canvasPanel->persistedToolState(workspace::ToolId::Brush);
         snapshot.brushToolState.brushId = brushState.brushId;
         snapshot.brushToolState.brushSize = brushState.brushSize;
         snapshot.brushToolState.brushOpacity = brushState.brushOpacity;
@@ -3278,7 +3142,7 @@ WorkspaceTab::ProjectSaveSnapshot WorkspaceTab::captureProjectSaveSnapshot() con
         snapshot.brushToolState.valid = brushState.valid;
 
         const auto eraserState
-            = m_canvasPanel->persistedToolState(workspace::CanvasPanel::ToolMode::Eraser);
+            = m_canvasPanel->persistedToolState(workspace::ToolId::Eraser);
         snapshot.eraserToolState.brushId = eraserState.brushId;
         snapshot.eraserToolState.brushSize = eraserState.brushSize;
         snapshot.eraserToolState.brushOpacity = eraserState.brushOpacity;
@@ -3286,7 +3150,7 @@ WorkspaceTab::ProjectSaveSnapshot WorkspaceTab::captureProjectSaveSnapshot() con
         snapshot.eraserToolState.valid = eraserState.valid;
 
         const auto blurState
-            = m_canvasPanel->persistedToolState(workspace::CanvasPanel::ToolMode::Blur);
+            = m_canvasPanel->persistedToolState(workspace::ToolId::Blur);
         snapshot.blurToolState.brushId = blurState.brushId;
         snapshot.blurToolState.brushSize = blurState.brushSize;
         snapshot.blurToolState.brushOpacity = blurState.brushOpacity;
@@ -3294,7 +3158,7 @@ WorkspaceTab::ProjectSaveSnapshot WorkspaceTab::captureProjectSaveSnapshot() con
         snapshot.blurToolState.valid = blurState.valid;
 
         const auto smudgeStateSnap
-            = m_canvasPanel->persistedToolState(workspace::CanvasPanel::ToolMode::Smudge);
+            = m_canvasPanel->persistedToolState(workspace::ToolId::Smudge);
         snapshot.smudgeToolState.brushId = smudgeStateSnap.brushId;
         snapshot.smudgeToolState.brushSize = smudgeStateSnap.brushSize;
         snapshot.smudgeToolState.brushOpacity = smudgeStateSnap.brushOpacity;

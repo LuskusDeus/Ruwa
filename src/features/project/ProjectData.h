@@ -176,7 +176,7 @@ struct ProjectData {
     QUuid selectedLayerId;
 
     // Workspace tool/color state
-    int currentTool = 0; // workspace::CanvasPanel::ToolMode as int
+    int currentTool = 0; // workspace::ToolId as int
     ToolState brushToolState;
     ToolState eraserToolState;
     ToolState blurToolState;

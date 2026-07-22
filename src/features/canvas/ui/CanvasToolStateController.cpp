@@ -11,6 +11,7 @@
 #include <QMutex>
 #include <QMutexLocker>
 #include <QSettings>
+#include <QThreadPool>
 #include <QTimer>
 #include <QtConcurrent>
 
@@ -93,7 +94,7 @@ void CanvasToolStateController::loadRuntimeState()
     m_brushEraserActive = loaded.brushEraserActive;
 }
 
-void CanvasToolStateController::setLastDrawTool(CanvasToolMode tool)
+void CanvasToolStateController::setLastDrawTool(ToolId tool)
 {
     if (isDrawInstrument(tool)) {
         m_lastDrawTool = tool;
@@ -129,45 +130,45 @@ bool CanvasToolStateController::setBrushEraserActive(bool active)
     return true;
 }
 
-bool CanvasToolStateController::shouldEraseForTool(CanvasToolMode tool) const
+bool CanvasToolStateController::shouldEraseForTool(ToolId tool) const
 {
     return shouldEraseForTool(tool, m_brushEraserActive);
 }
 
-CanvasToolMode CanvasToolStateController::overlayInstrumentMode() const
+ToolId CanvasToolStateController::overlayInstrumentMode() const
 {
     return overlayInstrumentMode(m_currentTool, m_lastDrawTool);
 }
 
-bool CanvasToolStateController::overlayMatchesInstrument(CanvasToolMode tool) const
+bool CanvasToolStateController::overlayMatchesInstrument(ToolId tool) const
 {
     return overlayMatchesInstrument(tool, m_currentTool, m_lastDrawTool);
 }
 
-CanvasToolBrushState* CanvasToolStateController::stateForInstrument(CanvasToolMode tool)
+CanvasToolBrushState* CanvasToolStateController::stateForInstrument(ToolId tool)
 {
-    if (tool == CanvasToolMode::Liquify) {
+    if (tool == ToolId::Liquify) {
         return &m_liquifyState;
     }
     return stateForInstrument(tool, m_brushState, m_eraserState, m_blurState, m_smudgeState);
 }
 
-const CanvasToolBrushState* CanvasToolStateController::stateForInstrument(CanvasToolMode tool) const
+const CanvasToolBrushState* CanvasToolStateController::stateForInstrument(ToolId tool) const
 {
-    if (tool == CanvasToolMode::Liquify) {
+    if (tool == ToolId::Liquify) {
         return &m_liquifyState;
     }
     return stateForInstrument(tool, m_brushState, m_eraserState, m_blurState, m_smudgeState);
 }
 
-CanvasPersistedToolState CanvasToolStateController::persistedState(CanvasToolMode tool) const
+CanvasPersistedToolState CanvasToolStateController::persistedState(ToolId tool) const
 {
     const CanvasToolBrushState* state = stateForInstrument(tool);
     return state ? persistedStateFromToolState(*state) : CanvasPersistedToolState {};
 }
 
 void CanvasToolStateController::setPersistedState(
-    CanvasToolMode tool, const CanvasPersistedToolState& state)
+    ToolId tool, const CanvasPersistedToolState& state)
 {
     if (CanvasToolBrushState* target = stateForInstrument(tool)) {
         applyPersistedToolState(*target, state);
@@ -235,23 +236,23 @@ void CanvasToolStateController::flushQueuedSnapshotNoWait()
     const CanvasToolStateSnapshot snapshot = m_pendingSnapshot;
     m_syncPending = false;
 
-    QtConcurrent::run([snapshot]() { writeSnapshot(snapshot); });
+    QThreadPool::globalInstance()->start([snapshot]() { writeSnapshot(snapshot); });
 }
 
-bool CanvasToolStateController::isDrawInstrument(CanvasToolMode tool)
+bool CanvasToolStateController::isDrawInstrument(ToolId tool)
 {
-    return tool == CanvasToolMode::Brush || tool == CanvasToolMode::Eraser
-        || tool == CanvasToolMode::Blur || tool == CanvasToolMode::Smudge
-        || tool == CanvasToolMode::Liquify;
+    return tool == ToolId::Brush || tool == ToolId::Eraser
+        || tool == ToolId::Blur || tool == ToolId::Smudge
+        || tool == ToolId::Liquify;
 }
 
-bool CanvasToolStateController::shouldEraseForTool(CanvasToolMode tool, bool brushEraserActive)
+bool CanvasToolStateController::shouldEraseForTool(ToolId tool, bool brushEraserActive)
 {
-    return tool == CanvasToolMode::Eraser || (tool == CanvasToolMode::Brush && brushEraserActive);
+    return tool == ToolId::Eraser || (tool == ToolId::Brush && brushEraserActive);
 }
 
-CanvasToolMode CanvasToolStateController::overlayInstrumentMode(
-    CanvasToolMode currentTool, CanvasToolMode lastDrawTool)
+ToolId CanvasToolStateController::overlayInstrumentMode(
+    ToolId currentTool, ToolId lastDrawTool)
 {
     if (isDrawInstrument(currentTool)) {
         return currentTool;
@@ -259,48 +260,48 @@ CanvasToolMode CanvasToolStateController::overlayInstrumentMode(
     if (isDrawInstrument(lastDrawTool)) {
         return lastDrawTool;
     }
-    return CanvasToolMode::Brush;
+    return ToolId::Brush;
 }
 
 bool CanvasToolStateController::overlayMatchesInstrument(
-    CanvasToolMode tool, CanvasToolMode currentTool, CanvasToolMode lastDrawTool)
+    ToolId tool, ToolId currentTool, ToolId lastDrawTool)
 {
     return isDrawInstrument(tool) && overlayInstrumentMode(currentTool, lastDrawTool) == tool;
 }
 
-CanvasToolBrushState* CanvasToolStateController::stateForInstrument(CanvasToolMode tool,
+CanvasToolBrushState* CanvasToolStateController::stateForInstrument(ToolId tool,
     CanvasToolBrushState& brush, CanvasToolBrushState& eraser, CanvasToolBrushState& blur,
     CanvasToolBrushState& smudge)
 {
-    if (tool == CanvasToolMode::Eraser) {
+    if (tool == ToolId::Eraser) {
         return &eraser;
     }
-    if (tool == CanvasToolMode::Blur) {
+    if (tool == ToolId::Blur) {
         return &blur;
     }
-    if (tool == CanvasToolMode::Smudge) {
+    if (tool == ToolId::Smudge) {
         return &smudge;
     }
-    if (tool == CanvasToolMode::Brush) {
+    if (tool == ToolId::Brush) {
         return &brush;
     }
     return nullptr;
 }
 
-const CanvasToolBrushState* CanvasToolStateController::stateForInstrument(CanvasToolMode tool,
+const CanvasToolBrushState* CanvasToolStateController::stateForInstrument(ToolId tool,
     const CanvasToolBrushState& brush, const CanvasToolBrushState& eraser,
     const CanvasToolBrushState& blur, const CanvasToolBrushState& smudge)
 {
-    if (tool == CanvasToolMode::Eraser) {
+    if (tool == ToolId::Eraser) {
         return &eraser;
     }
-    if (tool == CanvasToolMode::Blur) {
+    if (tool == ToolId::Blur) {
         return &blur;
     }
-    if (tool == CanvasToolMode::Smudge) {
+    if (tool == ToolId::Smudge) {
         return &smudge;
     }
-    if (tool == CanvasToolMode::Brush) {
+    if (tool == ToolId::Brush) {
         return &brush;
     }
     return nullptr;
@@ -349,16 +350,16 @@ CanvasLoadedToolState CanvasToolStateController::loadPersistedState()
         loaded.smudge = loaded.brush;
     }
 
-    const int minTool = static_cast<int>(CanvasToolMode::Hand);
-    const int maxTool = static_cast<int>(CanvasToolMode::MagicWand);
     const int storedTool
-        = settings.value("currentTool", static_cast<int>(CanvasToolMode::Brush)).toInt();
-    loaded.currentTool = static_cast<CanvasToolMode>(qBound(minTool, storedTool, maxTool));
+        = settings.value("currentTool", persistentValueForToolId(ToolId::Brush)).toInt();
+    loaded.currentTool = toolIdFromPersistentValue(storedTool).value_or(ToolId::Brush);
 
     const int storedLastDraw
-        = settings.value("lastDrawTool", static_cast<int>(CanvasToolMode::Brush)).toInt();
-    const auto asLastDraw = static_cast<CanvasToolMode>(storedLastDraw);
-    loaded.lastDrawTool = isDrawInstrument(asLastDraw) ? asLastDraw : CanvasToolMode::Brush;
+        = settings.value("lastDrawTool", persistentValueForToolId(ToolId::Brush)).toInt();
+    const ToolId storedLastDrawTool
+        = toolIdFromPersistentValue(storedLastDraw).value_or(ToolId::Brush);
+    loaded.lastDrawTool
+        = isDrawInstrument(storedLastDrawTool) ? storedLastDrawTool : ToolId::Brush;
     if (isDrawInstrument(loaded.currentTool)) {
         loaded.lastDrawTool = loaded.currentTool;
     }
@@ -372,13 +373,13 @@ CanvasLoadedToolState CanvasToolStateController::loadPersistedState()
     loaded.brushEraserActive = settings.value("brushEraserActive", false).toBool();
 
     const CanvasToolBrushState* activeState = nullptr;
-    if (loaded.currentTool == CanvasToolMode::Brush && loaded.brush.valid) {
+    if (loaded.currentTool == ToolId::Brush && loaded.brush.valid) {
         activeState = &loaded.brush;
-    } else if (loaded.currentTool == CanvasToolMode::Eraser && loaded.eraser.valid) {
+    } else if (loaded.currentTool == ToolId::Eraser && loaded.eraser.valid) {
         activeState = &loaded.eraser;
-    } else if (loaded.currentTool == CanvasToolMode::Blur && loaded.blur.valid) {
+    } else if (loaded.currentTool == ToolId::Blur && loaded.blur.valid) {
         activeState = &loaded.blur;
-    } else if (loaded.currentTool == CanvasToolMode::Smudge && loaded.smudge.valid) {
+    } else if (loaded.currentTool == ToolId::Smudge && loaded.smudge.valid) {
         activeState = &loaded.smudge;
     }
     if (activeState) {
@@ -391,15 +392,15 @@ CanvasLoadedToolState CanvasToolStateController::loadPersistedState()
     return loaded;
 }
 
-CanvasToolStateSnapshot CanvasToolStateController::buildSnapshot(CanvasToolMode currentTool,
-    CanvasToolMode lastDrawTool, const QColor& currentColor, qreal lassoStabilization,
+CanvasToolStateSnapshot CanvasToolStateController::buildSnapshot(ToolId currentTool,
+    ToolId lastDrawTool, const QColor& currentColor, qreal lassoStabilization,
     qreal lassoFillStabilization, bool brushEraserActive, const CanvasToolBrushState& brush,
     const CanvasToolBrushState& eraser, const CanvasToolBrushState& blur,
     const CanvasToolBrushState& smudge)
 {
     CanvasToolStateSnapshot snapshot;
-    snapshot.currentTool = static_cast<int>(currentTool);
-    snapshot.lastDrawTool = static_cast<int>(lastDrawTool);
+    snapshot.currentTool = persistentValueForToolId(currentTool);
+    snapshot.lastDrawTool = persistentValueForToolId(lastDrawTool);
     snapshot.currentColorRgba = currentColor.rgba();
     snapshot.lassoStabilization = qBound(0.0, lassoStabilization, 1.0);
     snapshot.lassoFillStabilization = qBound(0.0, lassoFillStabilization, 1.0);

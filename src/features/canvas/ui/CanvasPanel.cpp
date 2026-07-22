@@ -86,6 +86,7 @@
 #include <QFontMetricsF>
 #include <QPainterPath>
 #include <QTransform>
+#include <array>
 #include <functional>
 
 #include <algorithm>
@@ -106,6 +107,32 @@ constexpr int kToolStateOverlayCanvasInteractivePage = 0;
 constexpr int kToolStateOverlayCanvasPlaceholderPage = 1;
 constexpr qint64 kTemporaryMoveToolUndoCooldownMs = 700;
 QPointer<CanvasPanel> g_activeCanvasPanel;
+
+struct ToolCommandBinding {
+    ToolId tool;
+    const char* commandId;
+};
+
+constexpr std::array kToolCommandBindings {
+    ToolCommandBinding { ToolId::Hand, "tools.hand" },
+    ToolCommandBinding { ToolId::Brush, "tools.brush" },
+    ToolCommandBinding { ToolId::Blur, "tools.blur" },
+    ToolCommandBinding { ToolId::Smudge, "tools.smudge" },
+    ToolCommandBinding { ToolId::Eraser, "tools.eraser" },
+    ToolCommandBinding { ToolId::Fill, "tools.fill" },
+    ToolCommandBinding { ToolId::ClassicFill, "tools.classic-fill" },
+    ToolCommandBinding { ToolId::Eyedropper, "tools.eyedropper" },
+    ToolCommandBinding { ToolId::Lasso, "tools.lasso" },
+    ToolCommandBinding { ToolId::LassoFill, "tools.lasso-fill" },
+    ToolCommandBinding { ToolId::SquareSelection, "tools.square-selection" },
+    ToolCommandBinding { ToolId::CircleSelection, "tools.circle-selection" },
+    ToolCommandBinding { ToolId::MagicWand, "tools.magic-wand" },
+    ToolCommandBinding { ToolId::Move, "tools.move" },
+    ToolCommandBinding { ToolId::RotateView, "tools.rotate-view" },
+    ToolCommandBinding { ToolId::CanvasResize, "tools.canvas-resize" },
+    ToolCommandBinding { ToolId::Zoom, "tools.zoom" },
+    ToolCommandBinding { ToolId::Text, "tools.text" },
+};
 
 bool isCanvasActivationEventType(QEvent::Type type)
 {
@@ -170,64 +197,14 @@ bool isToolSwitchProfilingEnabled()
     return enabled;
 }
 
-int toolStateOverlayPageForTool(CanvasPanel::ToolMode tool)
+bool shouldSyncToolStateOverlayToolPage(ToolId tool)
 {
-    using ToolMode = CanvasPanel::ToolMode;
-
-    switch (tool) {
-    case ToolMode::Hand:
-        return 0;
-    case ToolMode::Brush:
-        return 1;
-    case ToolMode::Eraser:
-        return 2;
-    case ToolMode::Fill:
-        return 3;
-    case ToolMode::Eyedropper:
-        return 4;
-    case ToolMode::Lasso:
-        return 5;
-    case ToolMode::LassoFill:
-        return 6;
-    case ToolMode::SquareSelection:
-        return 7;
-    case ToolMode::CircleSelection:
-        return 8;
-    case ToolMode::Move:
-        return 9;
-    case ToolMode::RotateView:
-        return 10;
-    case ToolMode::CanvasResize:
-        return 11;
-    case ToolMode::Zoom:
-        return 12;
-    case ToolMode::ClassicFill:
-        return 13;
-    case ToolMode::Blur:
-        return 14;
-    case ToolMode::Text:
-        return 15;
-    case ToolMode::Smudge:
-        return 16;
-    case ToolMode::Liquify:
-        return 17;
-    case ToolMode::MagicWand:
-        return 18;
-    }
-
-    return 0;
+    return tool != ToolId::Hand && tool != ToolId::Move && tool != ToolId::Text;
 }
 
-bool shouldSyncToolStateOverlayToolPage(CanvasPanel::ToolMode tool)
+bool usesFixedSoftBrush(ToolId tool)
 {
-    using ToolMode = CanvasPanel::ToolMode;
-    return tool != ToolMode::Hand && tool != ToolMode::Move && tool != ToolMode::Text;
-}
-
-bool usesFixedSoftBrush(CanvasPanel::ToolMode tool)
-{
-    using ToolMode = CanvasPanel::ToolMode;
-    return tool == ToolMode::Blur || tool == ToolMode::Liquify;
+    return tool == ToolId::Blur || tool == ToolId::Liquify;
 }
 
 } // namespace
@@ -280,9 +257,9 @@ CanvasPanel::CanvasPanel(const QSize& canvasSize, const QRect& exportFrame, QWid
         = [this](const QString& fallbackPresetId, bool onlyRemovedBrush,
               const QString& removedBrushId = QString()) {
               bool anyUpdated = false;
-              const ToolMode activeTool = brushSelectionToolMode();
+              const ToolId activeTool = brushSelectionToolMode();
               const auto syncTool = [this, &fallbackPresetId, &anyUpdated, activeTool,
-                                        onlyRemovedBrush, &removedBrushId](ToolMode tool) {
+                                        onlyRemovedBrush, &removedBrushId](ToolId tool) {
                   ToolBrushState* state = toolBrushStateForInstrument(tool);
                   if (!state || state->brushId.isEmpty()) {
                       return;
@@ -303,10 +280,10 @@ CanvasPanel::CanvasPanel(const QSize& canvasSize, const QRect& exportFrame, QWid
                   anyUpdated |= previousBrushId != state->brushId;
               };
 
-              syncTool(ToolMode::Brush);
-              syncTool(ToolMode::Eraser);
-              syncTool(ToolMode::Blur);
-              syncTool(ToolMode::Smudge);
+              syncTool(ToolId::Brush);
+              syncTool(ToolId::Eraser);
+              syncTool(ToolId::Blur);
+              syncTool(ToolId::Smudge);
 
               if (anyUpdated) {
                   persistGlobalToolState();
@@ -409,7 +386,7 @@ void CanvasPanel::loadGlobalToolState()
         // is attached. This makes the first brush a real canonical selection on
         // first launch instead of only applying its settings later during GL
         // content creation.
-        const ToolMode selectionTool = brushSelectionToolMode();
+        const ToolId selectionTool = brushSelectionToolMode();
         if (!usesFixedSoftBrush(selectionTool)) {
             if (const ToolBrushState* state = toolBrushStateForInstrument(selectionTool)) {
                 applyBrushSelectionForTool(selectionTool, state->brushId, QString(), false, false);
@@ -420,11 +397,11 @@ void CanvasPanel::loadGlobalToolState()
 
 void CanvasPanel::persistGlobalToolState()
 {
-    const ToolMode currentTool = toolMode();
+    const ToolId currentTool = toolMode();
     if (CanvasToolStateController::isDrawInstrument(currentTool)) {
         captureToolState(currentTool);
     } else if (m_brushOverlay) {
-        const ToolMode inst = overlayInstrumentMode();
+        const ToolId inst = overlayInstrumentMode();
         if (CanvasToolStateController::isDrawInstrument(inst)) {
             captureToolState(inst);
         }
@@ -454,7 +431,7 @@ void CanvasPanel::syncToolStateOverlayContent()
         m_toolStateOverlay->setRedoAvailable(false);
     }
 
-    const auto syncToolPageParameters = [this](ToolMode tool, int pageIndex) {
+    const auto syncToolPageParameters = [this](ToolId tool) {
         if (!m_toolStateOverlay) {
             return;
         }
@@ -462,29 +439,26 @@ void CanvasPanel::syncToolStateOverlayContent()
         const ToolBrushState* state = toolBrushStateForInstrument(tool);
         const auto settings
             = (state && state->valid) ? state->settings : ruwa::core::brushes::BrushSettingsData {};
-        if (tool == ToolMode::Blur || tool == ToolMode::Smudge || tool == ToolMode::Liquify) {
-            m_toolStateOverlay->setToolPageIntensityValue(pageIndex, settings.flow);
-            if (tool == ToolMode::Smudge) {
-                m_toolStateOverlay->setToolPageWetMixValue(pageIndex, settings.wetMix);
+        if (tool == ToolId::Blur || tool == ToolId::Smudge || tool == ToolId::Liquify) {
+            m_toolStateOverlay->setToolIntensityValue(tool, settings.flow);
+            if (tool == ToolId::Smudge) {
+                m_toolStateOverlay->setToolWetMixValue(tool, settings.wetMix);
             }
         } else {
-            m_toolStateOverlay->setToolPageParameterValues(
-                pageIndex, settings.hardness, settings.flow);
+            m_toolStateOverlay->setToolParameterValues(tool, settings.hardness, settings.flow);
         }
     };
-    syncToolPageParameters(ToolMode::Brush, toolStateOverlayPageForTool(ToolMode::Brush));
-    syncToolPageParameters(ToolMode::Eraser, toolStateOverlayPageForTool(ToolMode::Eraser));
+    syncToolPageParameters(ToolId::Brush);
+    syncToolPageParameters(ToolId::Eraser);
     m_toolStateOverlay->setBrushEraserMode(isBrushEraserActive());
-    syncToolPageParameters(ToolMode::Blur, toolStateOverlayPageForTool(ToolMode::Blur));
-    syncToolPageParameters(ToolMode::Smudge, toolStateOverlayPageForTool(ToolMode::Smudge));
-    syncToolPageParameters(ToolMode::Liquify, toolStateOverlayPageForTool(ToolMode::Liquify));
+    syncToolPageParameters(ToolId::Blur);
+    syncToolPageParameters(ToolId::Smudge);
+    syncToolPageParameters(ToolId::Liquify);
     if (m_toolStateController) {
         m_toolStateOverlay->setToolPageLiquifyMode(m_toolStateController->liquifyToolMode());
     }
-    m_toolStateOverlay->setToolPageStabilizationValue(
-        toolStateOverlayPageForTool(ToolMode::Lasso), lassoStabilization());
-    m_toolStateOverlay->setToolPageStabilizationValue(
-        toolStateOverlayPageForTool(ToolMode::LassoFill), lassoFillStabilization());
+    m_toolStateOverlay->setToolStabilizationValue(ToolId::Lasso, lassoStabilization());
+    m_toolStateOverlay->setToolStabilizationValue(ToolId::LassoFill, lassoFillStabilization());
     const QSize targetCanvasResizeSize = m_canvasResizePreviewSize.isValid()
         ? m_canvasResizePreviewSize
         : (m_canvasResizeController ? m_canvasResizeController->targetCanvasSize() : m_canvasSize);
@@ -497,9 +471,9 @@ void CanvasPanel::syncToolStateOverlayContent()
         m_toolStateOverlay->setCanvasFlipStates(false, false);
     }
 
-    const ToolMode currentTool = toolMode();
+    const ToolId currentTool = toolMode();
     if (shouldSyncToolStateOverlayToolPage(currentTool)) {
-        m_toolStateOverlay->setToolPageIndex(toolStateOverlayPageForTool(currentTool));
+        m_toolStateOverlay->setActiveTool(currentTool);
     }
 
     if (isTransformActive()) {
@@ -519,12 +493,12 @@ void CanvasPanel::syncToolStateOverlayContent()
     m_toolStateOverlay->setCanvasPageIndex(kToolStateOverlayCanvasInteractivePage);
 }
 
-CanvasPanel::ToolBrushState* CanvasPanel::toolBrushStateForInstrument(ToolMode tool)
+CanvasPanel::ToolBrushState* CanvasPanel::toolBrushStateForInstrument(ToolId tool)
 {
     return m_toolStateController ? m_toolStateController->stateForInstrument(tool) : nullptr;
 }
 
-const CanvasPanel::ToolBrushState* CanvasPanel::toolBrushStateForInstrument(ToolMode tool) const
+const CanvasPanel::ToolBrushState* CanvasPanel::toolBrushStateForInstrument(ToolId tool) const
 {
     return m_toolStateController ? m_toolStateController->stateForInstrument(tool) : nullptr;
 }
@@ -785,7 +759,7 @@ void CanvasPanel::setBrushEraserActive(bool active)
 
     // The toggle only affects the Brush tool; apply the erase mode immediately
     // when it is the active tool so the next dab reflects the new state.
-    if (toolMode() == ToolMode::Brush) {
+    if (toolMode() == ToolId::Brush) {
         setEraseMode(shouldEraseForTool(toolMode()));
     }
 
@@ -796,7 +770,7 @@ void CanvasPanel::setBrushEraserActive(bool active)
     persistGlobalToolState();
 }
 
-bool CanvasPanel::shouldEraseForTool(ToolMode tool) const
+bool CanvasPanel::shouldEraseForTool(ToolId tool) const
 {
     return m_toolStateController && m_toolStateController->shouldEraseForTool(tool);
 }
@@ -825,9 +799,9 @@ void CanvasPanel::setLiquifyMode(bool liquify)
     }
 }
 
-void CanvasPanel::setToolMode(ToolMode tool)
+void CanvasPanel::setToolMode(ToolId tool)
 {
-    const ToolMode currentTool = toolMode();
+    const ToolId currentTool = toolMode();
     const bool profileToolSwitch = isToolSwitchProfilingEnabled();
     QElapsedTimer totalTimer;
     QElapsedTimer stepTimer;
@@ -855,17 +829,17 @@ void CanvasPanel::setToolMode(ToolMode tool)
     // Position picking survives switches to/from the Hand tool (so the user
     // can still pan while lining up a pick) but is cancelled by any other
     // tool switch.
-    if (m_positionPickerActive && currentTool != ToolMode::Hand && tool != ToolMode::Hand) {
+    if (m_positionPickerActive && currentTool != ToolId::Hand && tool != ToolId::Hand) {
         cancelPositionPicking();
     }
 
     if (m_textEditingController && m_textEditingController->isEditing()
-        && currentTool == ToolMode::Text && tool != ToolMode::Text) {
+        && currentTool == ToolId::Text && tool != ToolId::Text) {
         m_textEditingController->commit();
     }
     logStep("text-edit-commit");
 
-    if (m_isLassoFillSelecting && tool != ToolMode::LassoFill) {
+    if (m_isLassoFillSelecting && tool != ToolId::LassoFill) {
         m_isLassoFillSelecting = false;
         if (m_glWidget)
             m_glWidget->cancelLassoFill();
@@ -874,12 +848,12 @@ void CanvasPanel::setToolMode(ToolMode tool)
     }
     logStep("cancel-lasso-fill");
 
-    if (m_glWidget && tool != ToolMode::Fill) {
+    if (m_glWidget && tool != ToolId::Fill) {
         m_glWidget->cancelFillPreview();
     }
     logStep("cancel-fill-preview");
 
-    if (currentTool == ToolMode::CanvasResize && tool != ToolMode::CanvasResize) {
+    if (currentTool == ToolId::CanvasResize && tool != ToolId::CanvasResize) {
         if (m_canvasResizeController) {
             m_canvasResizeController->clearOverlay(true);
         }
@@ -888,7 +862,7 @@ void CanvasPanel::setToolMode(ToolMode tool)
     logStep("canvas-resize-exit");
 
     // Move-only transform commits when switching away from Move tool.
-    if (currentTool == ToolMode::Move && tool != ToolMode::Move && m_glWidget
+    if (currentTool == ToolId::Move && tool != ToolId::Move && m_glWidget
         && m_glWidget->isTransformActive() && m_glWidget->isMoveOnlyTransform()) {
         confirmTransform();
     }
@@ -900,9 +874,9 @@ void CanvasPanel::setToolMode(ToolMode tool)
         m_tabletActive = false;
         m_glWidget->endStroke();
         setEraseMode(shouldEraseForTool(currentTool));
-        setBlurMode(currentTool == ToolMode::Blur);
-        setSmudgeMode(currentTool == ToolMode::Smudge);
-        setLiquifyMode(currentTool == ToolMode::Liquify);
+        setBlurMode(currentTool == ToolId::Blur);
+        setSmudgeMode(currentTool == ToolId::Smudge);
+        setLiquifyMode(currentTool == ToolId::Liquify);
         emit canvasContentChanged();
     }
     logStep("quick-shape-exit");
@@ -910,13 +884,13 @@ void CanvasPanel::setToolMode(ToolMode tool)
     // If a temporary tool hold is active and another tool is set externally,
     // cancel the hold
     if (m_tempToolHold.active) {
-        std::optional<ToolMode> expectedTool;
+        std::optional<ToolId> expectedTool;
         if (m_tempToolHold.shiftSpaceCombo) {
-            expectedTool = ToolMode::RotateView;
+            expectedTool = ToolId::RotateView;
         } else if (m_tempToolHold.heldButton != Qt::NoButton) {
             expectedTool = (m_tempToolHold.heldButton == Qt::MiddleButton
                                || m_tempToolHold.heldButton == Qt::RightButton)
-                ? std::optional<ToolMode>(ToolMode::Eraser)
+                ? std::optional<ToolId>(ToolId::Eraser)
                 : std::nullopt;
         } else {
             expectedTool = toolModeForKey(m_tempToolHold.heldKey);
@@ -930,14 +904,14 @@ void CanvasPanel::setToolMode(ToolMode tool)
     logStep("temp-tool-hold");
     hideBrushQuickPopup();
 
-    const ToolMode previousTool = currentTool;
+    const ToolId previousTool = currentTool;
 
     // Brush and Eraser share one paint implementation, so switching between
     // them may safely change only erase mode while a stroke is active. Effect
     // tools cannot: their queued samples and GPU flatten must keep the brush
     // mode/settings with which the stroke began.
-    const bool brushEraserSwitch = (currentTool == ToolMode::Brush && tool == ToolMode::Eraser)
-        || (currentTool == ToolMode::Eraser && tool == ToolMode::Brush);
+    const bool brushEraserSwitch = (currentTool == ToolId::Brush && tool == ToolId::Eraser)
+        || (currentTool == ToolId::Eraser && tool == ToolId::Brush);
     bool midStroke = m_isDrawing && m_glWidget && m_glWidget->isDrawing();
     if (m_glWidget && m_glWidget->isDrawing() && (!midStroke || !brushEraserSwitch)) {
         if (midStroke) {
@@ -964,9 +938,9 @@ void CanvasPanel::setToolMode(ToolMode tool)
         m_toolStateController->setCurrentTool(tool);
     }
     setEraseMode(shouldEraseForTool(tool));
-    setBlurMode(tool == ToolMode::Blur);
-    setSmudgeMode(tool == ToolMode::Smudge);
-    setLiquifyMode(tool == ToolMode::Liquify);
+    setBlurMode(tool == ToolId::Blur);
+    setSmudgeMode(tool == ToolId::Smudge);
+    setLiquifyMode(tool == ToolId::Liquify);
     syncToolStateOverlayContent();
     logStep("set-current-tool");
 
@@ -1094,7 +1068,7 @@ bool CanvasPanel::isTransformActive() const
 
 void CanvasPanel::setBrushColor(uint8_t r, uint8_t g, uint8_t b, uint8_t a)
 {
-    const ToolMode targetTool = overlayInstrumentMode();
+    const ToolId targetTool = overlayInstrumentMode();
     ToolBrushState* target = toolBrushStateForInstrument(targetTool);
     if (!target) {
         return;
@@ -1159,12 +1133,12 @@ void CanvasPanel::applyBrushColorForRestore(uint8_t r, uint8_t g, uint8_t b, uin
     }
 }
 
-CanvasPanel::ToolMode CanvasPanel::overlayInstrumentMode() const
+ToolId CanvasPanel::overlayInstrumentMode() const
 {
-    return m_toolStateController ? m_toolStateController->overlayInstrumentMode() : ToolMode::Brush;
+    return m_toolStateController ? m_toolStateController->overlayInstrumentMode() : ToolId::Brush;
 }
 
-bool CanvasPanel::overlayMatchesInstrument(CanvasPanel::ToolMode tool) const
+bool CanvasPanel::overlayMatchesInstrument(ToolId tool) const
 {
     return m_toolStateController && m_toolStateController->overlayMatchesInstrument(tool);
 }
@@ -1188,7 +1162,7 @@ qreal CanvasPanel::brushSizeNormalized() const
         state && state->valid) {
         return state->brushSize;
     }
-    const ToolMode inst = overlayInstrumentMode();
+    const ToolId inst = overlayInstrumentMode();
     if (const ToolBrushState* state = toolBrushStateForInstrument(inst); state && state->valid) {
         return state->brushSize;
     }
@@ -1211,7 +1185,7 @@ QColor CanvasPanel::currentBrushColor() const
     return m_toolStateController ? m_toolStateController->currentColor() : QColor(0, 0, 0, 255);
 }
 
-CanvasPanel::ToolMode CanvasPanel::brushSelectionToolMode() const
+ToolId CanvasPanel::brushSelectionToolMode() const
 {
     return overlayInstrumentMode();
 }
@@ -1225,8 +1199,7 @@ void CanvasPanel::setLassoStabilization(qreal stabilization)
         m_glWidget->setLassoStabilization(static_cast<float>(lassoStabilization()));
     }
     if (m_toolStateOverlay) {
-        m_toolStateOverlay->setToolPageStabilizationValue(
-            toolStateOverlayPageForTool(ToolMode::Lasso), lassoStabilization());
+        m_toolStateOverlay->setToolStabilizationValue(ToolId::Lasso, lassoStabilization());
     }
 }
 
@@ -1239,12 +1212,12 @@ void CanvasPanel::setLassoFillStabilization(qreal stabilization)
         m_glWidget->setLassoFillStabilization(static_cast<float>(lassoFillStabilization()));
     }
     if (m_toolStateOverlay) {
-        m_toolStateOverlay->setToolPageStabilizationValue(
-            toolStateOverlayPageForTool(ToolMode::LassoFill), lassoFillStabilization());
+        m_toolStateOverlay->setToolStabilizationValue(
+            ToolId::LassoFill, lassoFillStabilization());
     }
 }
 
-CanvasPanel::PersistedToolState CanvasPanel::persistedToolState(ToolMode tool) const
+CanvasPanel::PersistedToolState CanvasPanel::persistedToolState(ToolId tool) const
 {
     PersistedToolState snapshot = m_toolStateController
         ? m_toolStateController->persistedState(tool)
@@ -1260,7 +1233,7 @@ CanvasPanel::PersistedToolState CanvasPanel::persistedToolState(ToolMode tool) c
     return snapshot;
 }
 
-void CanvasPanel::setPersistedToolState(ToolMode tool, const PersistedToolState& state)
+void CanvasPanel::setPersistedToolState(ToolId tool, const PersistedToolState& state)
 {
     if (m_toolStateController) {
         m_toolStateController->setPersistedState(tool, state);
@@ -1269,32 +1242,32 @@ void CanvasPanel::setPersistedToolState(ToolMode tool, const PersistedToolState&
 
 void CanvasPanel::reapplyCurrentToolState()
 {
-    const ToolMode currentTool = toolMode();
+    const ToolId currentTool = toolMode();
     if (CanvasToolStateController::isDrawInstrument(currentTool)) {
         restoreToolState(currentTool);
         return;
     }
-    const ToolMode inst = overlayInstrumentMode();
-    if (inst == ToolMode::Eraser && m_toolStateController
+    const ToolId inst = overlayInstrumentMode();
+    if (inst == ToolId::Eraser && m_toolStateController
         && m_toolStateController->eraserState().valid) {
-        restoreToolState(ToolMode::Eraser);
-    } else if (inst == ToolMode::Blur && m_toolStateController
+        restoreToolState(ToolId::Eraser);
+    } else if (inst == ToolId::Blur && m_toolStateController
         && m_toolStateController->blurState().valid) {
-        restoreToolState(ToolMode::Blur);
-    } else if (inst == ToolMode::Smudge && m_toolStateController
+        restoreToolState(ToolId::Blur);
+    } else if (inst == ToolId::Smudge && m_toolStateController
         && m_toolStateController->smudgeState().valid) {
-        restoreToolState(ToolMode::Smudge);
-    } else if (inst == ToolMode::Brush && m_toolStateController
+        restoreToolState(ToolId::Smudge);
+    } else if (inst == ToolId::Brush && m_toolStateController
         && m_toolStateController->brushState().valid) {
-        restoreToolState(ToolMode::Brush);
+        restoreToolState(ToolId::Brush);
     } else if (m_toolStateController && m_toolStateController->eraserState().valid) {
-        restoreToolState(ToolMode::Eraser);
+        restoreToolState(ToolId::Eraser);
     } else if (m_toolStateController && m_toolStateController->blurState().valid) {
-        restoreToolState(ToolMode::Blur);
+        restoreToolState(ToolId::Blur);
     } else if (m_toolStateController && m_toolStateController->smudgeState().valid) {
-        restoreToolState(ToolMode::Smudge);
+        restoreToolState(ToolId::Smudge);
     } else if (m_toolStateController && m_toolStateController->brushState().valid) {
-        restoreToolState(ToolMode::Brush);
+        restoreToolState(ToolId::Brush);
     }
 }
 
@@ -1316,11 +1289,11 @@ void CanvasPanel::showBrushQuickPopup(const QPoint& globalPos)
     // The quick popup edits brush size/opacity and swaps brushes, so it only
     // makes sense for the painting tools that use a brush.
     switch (toolMode()) {
-    case CanvasToolMode::Brush:
-    case CanvasToolMode::Eraser:
-    case CanvasToolMode::Smudge:
-    case CanvasToolMode::Blur:
-    case CanvasToolMode::Liquify:
+    case ToolId::Brush:
+    case ToolId::Eraser:
+    case ToolId::Smudge:
+    case ToolId::Blur:
+    case ToolId::Liquify:
         break;
     default:
         return;
@@ -1345,7 +1318,7 @@ bool CanvasPanel::isBrushQuickPopupVisible() const
 
 void CanvasPanel::emitBrushSelectionContextChanged()
 {
-    const ToolMode tool = brushSelectionToolMode();
+    const ToolId tool = brushSelectionToolMode();
     emit brushSelectionContextChanged(tool, persistedToolState(tool).brushId);
 }
 
@@ -1698,22 +1671,21 @@ void CanvasPanel::applyBrushSettings(const ruwa::core::brushes::BrushSettingsDat
         m_brushOverlay->setBrushSettings(settings);
     }
     if (m_toolStateOverlay) {
-        const ToolMode instrument = overlayInstrumentMode();
+        const ToolId instrument = overlayInstrumentMode();
         if (CanvasToolStateController::isDrawInstrument(instrument)) {
             if (ToolBrushState* state = toolBrushStateForInstrument(instrument)) {
                 state->settings = settings;
                 state->valid = true;
             }
-            if (instrument == ToolMode::Blur || instrument == ToolMode::Smudge
-                || instrument == ToolMode::Liquify) {
-                const int pageIndex = toolStateOverlayPageForTool(instrument);
-                m_toolStateOverlay->setToolPageIntensityValue(pageIndex, settings.flow);
-                if (instrument == ToolMode::Smudge) {
-                    m_toolStateOverlay->setToolPageWetMixValue(pageIndex, settings.wetMix);
+            if (instrument == ToolId::Blur || instrument == ToolId::Smudge
+                || instrument == ToolId::Liquify) {
+                m_toolStateOverlay->setToolIntensityValue(instrument, settings.flow);
+                if (instrument == ToolId::Smudge) {
+                    m_toolStateOverlay->setToolWetMixValue(instrument, settings.wetMix);
                 }
             } else {
-                m_toolStateOverlay->setToolPageParameterValues(
-                    toolStateOverlayPageForTool(instrument), settings.hardness, settings.flow);
+                m_toolStateOverlay->setToolParameterValues(
+                    instrument, settings.hardness, settings.flow);
             }
         }
     }
@@ -1765,7 +1737,7 @@ QString CanvasPanel::resolveBrushSelectionId(
     return {};
 }
 
-bool CanvasPanel::applyBrushSelectionForTool(ToolMode tool, const QString& requestedBrushId,
+bool CanvasPanel::applyBrushSelectionForTool(ToolId tool, const QString& requestedBrushId,
     const QString& fallbackPresetId, bool persistSelection, bool emitSyncSignal)
 {
     ToolBrushState* state = toolBrushStateForInstrument(tool);
@@ -1840,7 +1812,7 @@ bool CanvasPanel::applyBrushSelectionForTool(ToolMode tool, const QString& reque
     return !resolvedBrushId.isEmpty();
 }
 
-void CanvasPanel::captureToolState(ToolMode tool)
+void CanvasPanel::captureToolState(ToolId tool)
 {
     ToolBrushState* state = toolBrushStateForInstrument(tool);
     if (!state) {
@@ -1875,14 +1847,14 @@ void CanvasPanel::captureToolState(ToolMode tool)
 
 void CanvasPanel::captureCurrentToolState()
 {
-    const ToolMode currentTool = toolMode();
+    const ToolId currentTool = toolMode();
     if (!CanvasToolStateController::isDrawInstrument(currentTool)) {
         return;
     }
     captureToolState(currentTool);
 }
 
-void CanvasPanel::applyFixedSoftBrush(ToolMode tool)
+void CanvasPanel::applyFixedSoftBrush(ToolId tool)
 {
     if (!m_glWidget || !usesFixedSoftBrush(tool))
         return;
@@ -1909,7 +1881,7 @@ void CanvasPanel::applyFixedSoftBrush(ToolMode tool)
     updateBrushCursorOverlayRadius();
 }
 
-void CanvasPanel::setFixedSoftBrushStrength(ToolMode tool, qreal strength)
+void CanvasPanel::setFixedSoftBrushStrength(ToolId tool, qreal strength)
 {
     if (!usesFixedSoftBrush(tool)) {
         return;
@@ -1927,7 +1899,7 @@ void CanvasPanel::setFixedSoftBrushStrength(ToolMode tool, qreal strength)
     }
 }
 
-void CanvasPanel::restoreToolState(ToolMode tool)
+void CanvasPanel::restoreToolState(ToolId tool)
 {
     if (!m_brushOverlay)
         return;
@@ -1964,7 +1936,7 @@ void CanvasPanel::restoreToolState(ToolMode tool)
     if (!state->valid) {
         // First run: no saved settings — use the first brush from the first pack
         // for Brush/Smudge and defaults for Eraser.
-        if (tool == ToolMode::Eraser) {
+        if (tool == ToolId::Eraser) {
             m_brushOverlay->setBrushSize(0.3);
             m_brushOverlay->setBrushOpacity(1.0);
             if (m_glWidget) {
@@ -2093,8 +2065,8 @@ bool CanvasPanel::startTextLayerEditing(const ruwa::core::layers::LayerId& id)
     }
 
     commitTransformBeforeDocumentMutation();
-    if (toolMode() != ToolMode::Text) {
-        setToolMode(ToolMode::Text);
+    if (toolMode() != ToolId::Text) {
+        setToolMode(ToolId::Text);
     }
     return m_textEditingController->startExistingLayer(id);
 }
@@ -2966,11 +2938,11 @@ void CanvasPanel::endActiveStrokeSession()
         releaseMouse();
     }
     m_glWidget->endStroke();
-    const ToolMode currentTool = toolMode();
+    const ToolId currentTool = toolMode();
     setEraseMode(shouldEraseForTool(currentTool));
-    setBlurMode(currentTool == ToolMode::Blur);
-    setSmudgeMode(currentTool == ToolMode::Smudge);
-    setLiquifyMode(currentTool == ToolMode::Liquify);
+    setBlurMode(currentTool == ToolId::Blur);
+    setSmudgeMode(currentTool == ToolId::Smudge);
+    setLiquifyMode(currentTool == ToolId::Liquify);
     emit canvasContentChanged();
 }
 
@@ -3015,7 +2987,7 @@ bool CanvasPanel::isTransformInputActive() const
     return m_glWidget && m_glWidget->isTransformActive();
 }
 
-void CanvasPanel::beginTemporaryToolHoldFromButton(Qt::MouseButton heldButton, ToolMode tool)
+void CanvasPanel::beginTemporaryToolHoldFromButton(Qt::MouseButton heldButton, ToolId tool)
 {
     if (m_tempToolHold.active) {
         return;
@@ -3441,13 +3413,13 @@ void CanvasPanel::updateCursorManagerOverlay()
         return;
 
     const bool transformActive = m_glWidget && m_glWidget->isTransformActive();
-    const ToolMode currentTool = toolMode();
+    const ToolId currentTool = toolMode();
     if (!transformActive) {
         m_transformDragCursorValid = false;
     }
     const bool useBrush
         = !transformActive && CanvasToolStateController::isDrawInstrument(currentTool);
-    const bool useEyedropper = !transformActive && (currentTool == ToolMode::Eyedropper);
+    const bool useEyedropper = !transformActive && (currentTool == ToolId::Eyedropper);
     m_cursorManager->setUseGLBrushCursor(useBrush);
     m_cursorManager->setUseGLEyedropperCursor(useEyedropper);
     m_cursorManager->setActiveOverlay(nullptr);
@@ -3468,8 +3440,8 @@ void CanvasPanel::updateToolCursor()
 {
     if (!isInteractionEnabled())
         return;
-    const ToolMode currentTool = toolMode();
-    if (m_positionPickerActive && currentTool != ToolMode::Hand) {
+    const ToolId currentTool = toolMode();
+    if (m_positionPickerActive && currentTool != ToolId::Hand) {
         // Picking mode shows a plain crosshair over the canvas for every tool
         // except Hand — Hand keeps its own open/closed-hand cursor below so
         // panning while picking still reads as panning.
@@ -3490,7 +3462,7 @@ void CanvasPanel::updateToolCursor()
         }
         return;
     }
-    if (currentTool == ToolMode::Hand) {
+    if (currentTool == ToolId::Hand) {
         if (m_cursorManager) {
             m_cursorManager->setRequestedCursor(Qt::OpenHandCursor);
             m_cursorManager->refreshCursorPosition();
@@ -3499,7 +3471,7 @@ void CanvasPanel::updateToolCursor()
         }
         return;
     }
-    if (currentTool == ToolMode::Move) {
+    if (currentTool == ToolId::Move) {
         if (m_cursorManager) {
             m_cursorManager->setRequestedCursor(Qt::SizeAllCursor);
             m_cursorManager->refreshCursorPosition();
@@ -3508,7 +3480,7 @@ void CanvasPanel::updateToolCursor()
         }
         return;
     }
-    if (currentTool == ToolMode::CanvasResize && m_canvasResizeController) {
+    if (currentTool == ToolId::CanvasResize && m_canvasResizeController) {
         const QPoint pos = QCursor::pos();
         const Qt::CursorShape cursor = m_canvasResizeController->cursorForPosition(pos);
         if (m_cursorManager) {
@@ -3535,7 +3507,7 @@ void CanvasPanel::updateToolCursor()
         }
         m_cursorManager->setRequestedCursor(cursor);
         m_cursorManager->updateCursorPosition(pos);
-    } else if (currentTool == ToolMode::RotateView) {
+    } else if (currentTool == ToolId::RotateView) {
         const auto rotCursor = m_isRotatingView ? Qt::ClosedHandCursor : Qt::CrossCursor;
         if (m_cursorManager) {
             m_cursorManager->setRequestedCursor(rotCursor);
@@ -3543,7 +3515,7 @@ void CanvasPanel::updateToolCursor()
         } else {
             setCursor(rotCursor);
         }
-    } else if (currentTool == ToolMode::Text) {
+    } else if (currentTool == ToolId::Text) {
         if (m_cursorManager) {
             m_cursorManager->setRequestedCursor(Qt::IBeamCursor);
             m_cursorManager->refreshCursorPosition();
@@ -3607,12 +3579,12 @@ std::optional<Qt::CursorShape> CanvasPanel::resolveCursorForPosition(const QPoin
     }
 
     // Keep hover cursor resolution in one place for cursor-manager driven updates.
-    const ToolMode currentTool = toolMode();
-    if (currentTool == ToolMode::CanvasResize && !m_glWidget->isTransformActive()
+    const ToolId currentTool = toolMode();
+    if (currentTool == ToolId::CanvasResize && !m_glWidget->isTransformActive()
         && m_canvasResizeController) {
         return m_canvasResizeController->cursorForPosition(globalPos);
     }
-    if (currentTool == ToolMode::Text && !m_glWidget->isTransformActive()) {
+    if (currentTool == ToolId::Text && !m_glWidget->isTransformActive()) {
         return Qt::IBeamCursor;
     }
 
@@ -3699,7 +3671,7 @@ void CanvasPanel::endTemporaryTool()
 
     const bool wasUsed = m_tempToolHold.toolWasUsed;
     const bool alwaysRevert = m_tempToolHold.alwaysRevert;
-    const ToolMode previousTool = m_tempToolHold.previousTool;
+    const ToolId previousTool = m_tempToolHold.previousTool;
     resetTemporaryMoveToolUndoCooldown();
     m_tempToolHold = {};
     updateTemporaryToolHoldPolling();
@@ -3716,7 +3688,7 @@ void CanvasPanel::endTemporaryTool()
 void CanvasPanel::noteUndoForTemporaryMoveTool()
 {
     if (!m_tempToolHold.active || m_tempToolHold.heldKey != Qt::Key_Control
-        || m_tempToolHold.previousTool == ToolMode::Move || toolMode() != ToolMode::Move) {
+        || m_tempToolHold.previousTool == ToolId::Move || toolMode() != ToolId::Move) {
         return;
     }
 
@@ -3732,7 +3704,7 @@ bool CanvasPanel::temporaryMoveToolUndoCooldownActive()
 
     const bool temporaryCtrlMove = m_tempToolHold.active
         && m_tempToolHold.heldKey == Qt::Key_Control
-        && m_tempToolHold.previousTool != ToolMode::Move && toolMode() == ToolMode::Move;
+        && m_tempToolHold.previousTool != ToolId::Move && toolMode() == ToolId::Move;
     if (!temporaryCtrlMove || !m_temporaryMoveToolUndoCooldownTimer.isValid()
         || m_temporaryMoveToolUndoCooldownTimer.elapsed() >= kTemporaryMoveToolUndoCooldownMs) {
         resetTemporaryMoveToolUndoCooldown();
@@ -3868,17 +3840,17 @@ bool CanvasPanel::isTemporaryToolHoldKeyPressed() const
     }
 }
 
-std::optional<CanvasPanel::ToolMode> CanvasPanel::toolModeForKey(int key) const
+std::optional<ToolId> CanvasPanel::toolModeForKey(int key) const
 {
     // Space is always temporary Hand (pan), regardless of shortcut config
     if (key == Qt::Key_Space)
-        return ToolMode::Hand;
+        return ToolId::Hand;
     // Alt is always temporary Eyedropper (pipette), regardless of shortcut config
     if (key == Qt::Key_Alt)
-        return ToolMode::Eyedropper;
+        return ToolId::Eyedropper;
     // Ctrl is always temporary Move (pan), regardless of shortcut config
     if (key == Qt::Key_Control)
-        return ToolMode::Move;
+        return ToolId::Move;
 
     // Look up command mapped to this key via ShortcutManager
     const auto& sm = ruwa::core::ShortcutManager::instance();
@@ -3889,7 +3861,7 @@ std::optional<CanvasPanel::ToolMode> CanvasPanel::toolModeForKey(int key) const
     return toolModeForCommandId(cmdId);
 }
 
-std::optional<CanvasPanel::ToolMode> CanvasPanel::toolModeForKeyEvent(const QKeyEvent* event) const
+std::optional<ToolId> CanvasPanel::toolModeForKeyEvent(const QKeyEvent* event) const
 {
     if (!event)
         return std::nullopt;
@@ -3897,11 +3869,11 @@ std::optional<CanvasPanel::ToolMode> CanvasPanel::toolModeForKeyEvent(const QKey
     const int key = event->key();
     // Modifier keys are layout-independent, handle them directly
     if (key == Qt::Key_Space)
-        return ToolMode::Hand;
+        return ToolId::Hand;
     if (key == Qt::Key_Alt)
-        return ToolMode::Eyedropper;
+        return ToolId::Eyedropper;
     if (key == Qt::Key_Control)
-        return ToolMode::Move;
+        return ToolId::Move;
 
     // Layout-independent lookup via ShortcutManager
     const auto& sm = ruwa::core::ShortcutManager::instance();
@@ -3912,55 +3884,24 @@ std::optional<CanvasPanel::ToolMode> CanvasPanel::toolModeForKeyEvent(const QKey
     return toolModeForCommandId(cmdId);
 }
 
-std::optional<CanvasPanel::ToolMode> CanvasPanel::toolModeForCommandId(const QString& cmdId)
+std::optional<ToolId> CanvasPanel::toolModeForCommandId(const QString& cmdId)
 {
-    static const QHash<QString, ToolMode> map = {
-        { "tools.hand", ToolMode::Hand },
-        { "tools.brush", ToolMode::Brush },
-        { "tools.blur", ToolMode::Blur },
-        { "tools.smudge", ToolMode::Smudge },
-        { "tools.eraser", ToolMode::Eraser },
-        { "tools.fill", ToolMode::Fill },
-        { "tools.classic-fill", ToolMode::ClassicFill },
-        { "tools.eyedropper", ToolMode::Eyedropper },
-        { "tools.lasso", ToolMode::Lasso },
-        { "tools.lasso-fill", ToolMode::LassoFill },
-        { "tools.square-selection", ToolMode::SquareSelection },
-        { "tools.circle-selection", ToolMode::CircleSelection },
-        { "tools.magic-wand", ToolMode::MagicWand },
-        { "tools.move", ToolMode::Move },
-        { "tools.rotate-view", ToolMode::RotateView },
-        { "tools.canvas-resize", ToolMode::CanvasResize },
-        { "tools.zoom", ToolMode::Zoom },
-        { "tools.text", ToolMode::Text },
-    };
-    auto it = map.find(cmdId);
-    return it != map.end() ? std::optional<ToolMode>(*it) : std::nullopt;
+    for (const ToolCommandBinding& binding : kToolCommandBindings) {
+        if (cmdId == QLatin1String(binding.commandId)) {
+            return binding.tool;
+        }
+    }
+    return std::nullopt;
 }
 
-QString CanvasPanel::commandIdForToolMode(ToolMode mode)
+QString CanvasPanel::commandIdForToolMode(ToolId mode)
 {
-    static const QHash<ToolMode, QString> map = {
-        { ToolMode::Hand, "tools.hand" },
-        { ToolMode::Brush, "tools.brush" },
-        { ToolMode::Blur, "tools.blur" },
-        { ToolMode::Smudge, "tools.smudge" },
-        { ToolMode::Eraser, "tools.eraser" },
-        { ToolMode::Fill, "tools.fill" },
-        { ToolMode::ClassicFill, "tools.classic-fill" },
-        { ToolMode::Eyedropper, "tools.eyedropper" },
-        { ToolMode::Lasso, "tools.lasso" },
-        { ToolMode::LassoFill, "tools.lasso-fill" },
-        { ToolMode::SquareSelection, "tools.square-selection" },
-        { ToolMode::CircleSelection, "tools.circle-selection" },
-        { ToolMode::MagicWand, "tools.magic-wand" },
-        { ToolMode::Move, "tools.move" },
-        { ToolMode::RotateView, "tools.rotate-view" },
-        { ToolMode::CanvasResize, "tools.canvas-resize" },
-        { ToolMode::Zoom, "tools.zoom" },
-        { ToolMode::Text, "tools.text" },
-    };
-    return map.value(mode);
+    for (const ToolCommandBinding& binding : kToolCommandBindings) {
+        if (binding.tool == mode) {
+            return QString::fromLatin1(binding.commandId);
+        }
+    }
+    return {};
 }
 
 } // namespace ruwa::ui::workspace

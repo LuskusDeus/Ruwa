@@ -237,9 +237,9 @@ bool CanvasMouseInputHandler::isPaintingLikeTool() const
     if (!m_host)
         return false;
     const auto tool = m_host->currentInputTool();
-    return tool == CanvasPanel::ToolMode::Brush || tool == CanvasPanel::ToolMode::Eraser
-        || tool == CanvasPanel::ToolMode::Blur || tool == CanvasPanel::ToolMode::Smudge
-        || tool == CanvasPanel::ToolMode::Liquify;
+    return tool == ToolId::Brush || tool == ToolId::Eraser
+        || tool == ToolId::Blur || tool == ToolId::Smudge
+        || tool == ToolId::Liquify;
 }
 
 bool CanvasMouseInputHandler::beginBrushSizeAdjust(QMouseEvent* event)
@@ -348,7 +348,7 @@ bool CanvasMouseInputHandler::handleMousePress(QMouseEvent* event)
     }
 
     if (m_panel->isPositionPickerActive()) {
-        const bool handToolActive = m_host->currentInputTool() == CanvasPanel::ToolMode::Hand;
+        const bool handToolActive = m_host->currentInputTool() == ToolId::Hand;
         if (event->button() == Qt::LeftButton && !handToolActive) {
             const aether::Vector2 worldPos = m_panel->mapToWorld(event->globalPosition());
             m_panel->commitPositionPicking(QPointF(worldPos.x, worldPos.y));
@@ -382,7 +382,7 @@ bool CanvasMouseInputHandler::handleMousePress(QMouseEvent* event)
         return beginBrushSizeAdjust(event);
     }
 
-    const bool keepTextEditorFocus = m_host->currentInputTool() == CanvasPanel::ToolMode::Text
+    const bool keepTextEditorFocus = m_host->currentInputTool() == ToolId::Text
         && m_panel->m_textEditingController && m_panel->m_textEditingController->isEditing();
     if (!keepTextEditorFocus) {
         m_panel->setFocus();
@@ -471,7 +471,7 @@ bool CanvasMouseInputHandler::handleMousePress(QMouseEvent* event)
             m_panel->m_tempToolHold.toolWasUsed = true;
         }
 
-        if (m_host->currentInputTool() == CanvasPanel::ToolMode::CanvasResize) {
+        if (m_host->currentInputTool() == ToolId::CanvasResize) {
             auto& cam = glWidget->viewport().camera();
             if (m_panel->m_canvasResizeAwaitingRotationReset) {
                 if (cam.isAnimating()) {
@@ -501,7 +501,7 @@ bool CanvasMouseInputHandler::handleMousePress(QMouseEvent* event)
             }
         }
 
-        if (m_host->currentInputTool() == CanvasPanel::ToolMode::Hand) {
+        if (m_host->currentInputTool() == ToolId::Hand) {
             m_panel->m_isPanning = true;
             m_panel->m_panButton = Qt::LeftButton;
             m_panel->m_lastMousePos = event->globalPosition();
@@ -510,7 +510,7 @@ bool CanvasMouseInputHandler::handleMousePress(QMouseEvent* event)
             event->accept();
             return true;
         }
-        if (m_host->currentInputTool() == CanvasPanel::ToolMode::Move) {
+        if (m_host->currentInputTool() == ToolId::Move) {
             // Move tool: move layer/selection content only (no pan)
             const bool pickLayerByContent = event->modifiers().testFlag(Qt::ControlModifier);
             if (pickLayerByContent && m_panel->m_layerModel) {
@@ -548,13 +548,13 @@ bool CanvasMouseInputHandler::handleMousePress(QMouseEvent* event)
             event->accept();
             return true;
         }
-        if (m_host->currentInputTool() == CanvasPanel::ToolMode::Text) {
+        if (m_host->currentInputTool() == ToolId::Text) {
             const aether::Vector2 worldPos = m_panel->mapToWorld(event->globalPosition().toPoint());
             handleTextToolPress(worldPos);
             event->accept();
             return true;
         }
-        if (m_host->currentInputTool() == CanvasPanel::ToolMode::Zoom) {
+        if (m_host->currentInputTool() == ToolId::Zoom) {
             glWidget->viewport().camera().stopAnimation();
             m_panel->m_isZoomDragging = true;
             m_panel->m_zoomDragStartPos = localPos;
@@ -565,7 +565,7 @@ bool CanvasMouseInputHandler::handleMousePress(QMouseEvent* event)
             event->accept();
             return true;
         }
-        if (m_host->currentInputTool() == CanvasPanel::ToolMode::RotateView) {
+        if (m_host->currentInputTool() == ToolId::RotateView) {
             m_panel->m_isRotatingView = true;
             const QPoint widgetPos = glWidget->mapFromGlobal(event->globalPosition().toPoint());
             const QPoint center = glWidget->rect().center();
@@ -575,7 +575,7 @@ bool CanvasMouseInputHandler::handleMousePress(QMouseEvent* event)
             event->accept();
             return true;
         }
-        if (m_host->currentInputTool() == CanvasPanel::ToolMode::Eyedropper) {
+        if (m_host->currentInputTool() == ToolId::Eyedropper) {
             aether::Vector2 worldPos = m_panel->mapToWorld(event->globalPosition());
             const int px = static_cast<int>(std::floor(worldPos.x));
             const int py = static_cast<int>(std::floor(worldPos.y));
@@ -616,7 +616,7 @@ bool CanvasMouseInputHandler::handleMousePress(QMouseEvent* event)
             event->accept();
             return true;
         }
-        if (m_host->currentInputTool() == CanvasPanel::ToolMode::Fill) {
+        if (m_host->currentInputTool() == ToolId::Fill) {
             const aether::Vector2 worldPos = m_panel->mapToWorld(event->globalPosition().toPoint());
             if (event->button() == Qt::LeftButton) {
                 const int px = static_cast<int>(std::floor(worldPos.x));
@@ -626,7 +626,7 @@ bool CanvasMouseInputHandler::handleMousePress(QMouseEvent* event)
             event->accept();
             return true;
         }
-        if (m_host->currentInputTool() == CanvasPanel::ToolMode::ClassicFill) {
+        if (m_host->currentInputTool() == ToolId::ClassicFill) {
             const aether::Vector2 worldPos = m_panel->mapToWorld(event->globalPosition().toPoint());
             if (event->button() == Qt::LeftButton) {
                 const int px = static_cast<int>(std::floor(worldPos.x));
@@ -636,7 +636,7 @@ bool CanvasMouseInputHandler::handleMousePress(QMouseEvent* event)
             event->accept();
             return true;
         }
-        if (m_host->currentInputTool() == CanvasPanel::ToolMode::LassoFill) {
+        if (m_host->currentInputTool() == ToolId::LassoFill) {
             ruwa::services::input::StylusInputManager::resetMouseMoveHistory();
             aether::Vector2 worldPos = m_panel->mapToViewportWorld(event->globalPosition());
             m_panel->m_isLassoFillSelecting = true;
@@ -647,7 +647,7 @@ bool CanvasMouseInputHandler::handleMousePress(QMouseEvent* event)
             event->accept();
             return true;
         }
-        if (m_host->currentInputTool() == CanvasPanel::ToolMode::Lasso) {
+        if (m_host->currentInputTool() == ToolId::Lasso) {
             ruwa::services::input::StylusInputManager::resetMouseMoveHistory();
             aether::Vector2 worldPos = m_panel->mapToViewportWorld(event->globalPosition());
             m_panel->m_isLassoSelecting = true;
@@ -661,7 +661,7 @@ bool CanvasMouseInputHandler::handleMousePress(QMouseEvent* event)
             event->accept();
             return true;
         }
-        if (m_host->currentInputTool() == CanvasPanel::ToolMode::SquareSelection) {
+        if (m_host->currentInputTool() == ToolId::SquareSelection) {
             ruwa::services::input::StylusInputManager::resetMouseMoveHistory();
             aether::Vector2 worldPos = m_panel->mapToViewportWorld(event->globalPosition());
             m_panel->m_isRectSelecting = true;
@@ -675,7 +675,7 @@ bool CanvasMouseInputHandler::handleMousePress(QMouseEvent* event)
             event->accept();
             return true;
         }
-        if (m_host->currentInputTool() == CanvasPanel::ToolMode::CircleSelection) {
+        if (m_host->currentInputTool() == ToolId::CircleSelection) {
             ruwa::services::input::StylusInputManager::resetMouseMoveHistory();
             aether::Vector2 worldPos = m_panel->mapToViewportWorld(event->globalPosition());
             m_panel->m_isCircleSelecting = true;
@@ -689,7 +689,7 @@ bool CanvasMouseInputHandler::handleMousePress(QMouseEvent* event)
             event->accept();
             return true;
         }
-        if (m_host->currentInputTool() == CanvasPanel::ToolMode::MagicWand) {
+        if (m_host->currentInputTool() == ToolId::MagicWand) {
             const aether::Vector2 worldPos
                 = m_panel->mapToViewportWorld(event->globalPosition());
             const bool addSelection = event->modifiers().testFlag(Qt::ShiftModifier);
@@ -699,11 +699,11 @@ bool CanvasMouseInputHandler::handleMousePress(QMouseEvent* event)
             event->accept();
             return true;
         }
-        if (m_host->currentInputTool() == CanvasPanel::ToolMode::Brush
-            || m_host->currentInputTool() == CanvasPanel::ToolMode::Blur
-            || m_host->currentInputTool() == CanvasPanel::ToolMode::Smudge
-            || m_host->currentInputTool() == CanvasPanel::ToolMode::Liquify
-            || m_host->currentInputTool() == CanvasPanel::ToolMode::Eraser) {
+        if (m_host->currentInputTool() == ToolId::Brush
+            || m_host->currentInputTool() == ToolId::Blur
+            || m_host->currentInputTool() == ToolId::Smudge
+            || m_host->currentInputTool() == ToolId::Liquify
+            || m_host->currentInputTool() == ToolId::Eraser) {
             if (m_panel->m_tabletActive) {
                 // An authoritative real-mouse press means the tablet is no longer
                 // active (missed TabletRelease). Reset the flag so the mouse can
@@ -844,7 +844,7 @@ bool CanvasMouseInputHandler::handleMouseMove(QMouseEvent* event)
         return true;
     }
 
-    const bool keepTextEditorFocus = m_host->currentInputTool() == CanvasPanel::ToolMode::Text
+    const bool keepTextEditorFocus = m_host->currentInputTool() == ToolId::Text
         && m_panel->m_textEditingController && m_panel->m_textEditingController->isEditing();
     if (!keepTextEditorFocus && !m_host->hasInputFocus() && m_host->isCursorOverCanvas()) {
         m_panel->setFocus();
@@ -866,7 +866,7 @@ bool CanvasMouseInputHandler::handleMouseMove(QMouseEvent* event)
                 glWidget->canvasContentFlipVertical()));
         }
     }
-    if (m_host->currentInputTool() == CanvasPanel::ToolMode::CanvasResize && glWidget
+    if (m_host->currentInputTool() == ToolId::CanvasResize && glWidget
         && !glWidget->isTransformActive() && m_panel->m_canvasResizeController && cursorManager) {
         cursorManager->setRequestedCursor(
             m_panel->m_canvasResizeController->cursorForPosition(globalPos));
@@ -886,7 +886,7 @@ bool CanvasMouseInputHandler::handleMouseMove(QMouseEvent* event)
 
     if (m_pendingMoveToolContentHit) {
         if (!(event->buttons() & Qt::LeftButton)
-            || m_host->currentInputTool() != CanvasPanel::ToolMode::Move || !m_panel->m_layerModel
+            || m_host->currentInputTool() != ToolId::Move || !m_panel->m_layerModel
             || !glWidget) {
             clearPendingMoveToolContentHit();
             return false;
@@ -957,7 +957,7 @@ bool CanvasMouseInputHandler::handleMouseMove(QMouseEvent* event)
         event->accept();
         return true;
     }
-    if (m_textSelecting && m_panel->toolMode() == CanvasPanel::ToolMode::Text
+    if (m_textSelecting && m_panel->toolMode() == ToolId::Text
         && m_panel->m_textEditingController && m_panel->m_textEditingController->isEditing()
         && (event->buttons() & Qt::LeftButton)) {
         const aether::Vector2 worldPos = m_panel->mapToWorld(globalPos);
@@ -1418,7 +1418,7 @@ bool CanvasMouseInputHandler::handleMouseDoubleClick(QMouseEvent* event)
     if (!glWidget || !glWidget->isInitialized() || event->button() != Qt::LeftButton) {
         return false;
     }
-    if (m_host->currentInputTool() == CanvasPanel::ToolMode::Zoom) {
+    if (m_host->currentInputTool() == ToolId::Zoom) {
         auto& cam = glWidget->viewport().camera();
         const float currentZoom = cam.zoom();
         if (currentZoom > 0.0f) {
@@ -1433,7 +1433,7 @@ bool CanvasMouseInputHandler::handleMouseDoubleClick(QMouseEvent* event)
         event->accept();
         return true;
     }
-    if (m_host->currentInputTool() == CanvasPanel::ToolMode::RotateView) {
+    if (m_host->currentInputTool() == ToolId::RotateView) {
         auto& cam = glWidget->viewport().camera();
         cam.setRotationSmooth(0.0f);
         m_panel->requestRender();

@@ -8,10 +8,10 @@
 #include "commands/CommandRegistry.h"
 #include "commands/CommandContext.h"
 #include "shell/tab-system/WorkspaceTab.h"
-#include "features/tools/ToolsPanel.h"
 #include "features/canvas/ui/CanvasPanel.h"
 #include "features/brush/ui/BrushSizeCurve.h"
 #include "features/color/ColorPanel.h"
+#include "shared/types/ToolId.h"
 namespace ruwa::core::commands {
 
 namespace {
@@ -37,19 +37,19 @@ bool canExecuteToolSwitchCommand(const CommandContext& ctx)
     return true;
 }
 
-void executeToolCommand(const CommandContext& ctx, ruwa::ui::workspace::ToolsPanel::Tool tool)
+void executeToolCommand(const CommandContext& ctx, ruwa::ui::workspace::ToolId tool)
 {
     auto* workspaceTab = ctx.activeWorkspaceTab();
     if (!workspaceTab) {
         return;
     }
 
-    auto* toolsPanel = workspaceTab->toolsPanel();
-    if (!toolsPanel) {
+    auto* canvasPanel = workspaceTab->canvasPanel();
+    if (!canvasPanel) {
         return;
     }
 
-    toolsPanel->setCurrentTool(tool);
+    canvasPanel->setToolMode(tool);
 }
 
 ruwa::ui::workspace::CanvasPanel* activeCanvasPanel(const CommandContext& ctx)
@@ -103,7 +103,7 @@ bool ToolHandCommand::canExecute(const CommandContext& ctx) const
 void ToolHandCommand::execute(const CommandContext& ctx, const QVariantMap& args)
 {
     Q_UNUSED(args);
-    executeToolCommand(ctx, ruwa::ui::workspace::ToolsPanel::Tool::Hand);
+    executeToolCommand(ctx, ruwa::ui::workspace::ToolId::Hand);
 }
 
 // ======================================================================================
@@ -129,7 +129,7 @@ bool ToolBrushCommand::canExecute(const CommandContext& ctx) const
 void ToolBrushCommand::execute(const CommandContext& ctx, const QVariantMap& args)
 {
     Q_UNUSED(args);
-    executeToolCommand(ctx, ruwa::ui::workspace::ToolsPanel::Tool::Brush);
+    executeToolCommand(ctx, ruwa::ui::workspace::ToolId::Brush);
 }
 
 // ======================================================================================
@@ -155,7 +155,7 @@ bool ToolBlurCommand::canExecute(const CommandContext& ctx) const
 void ToolBlurCommand::execute(const CommandContext& ctx, const QVariantMap& args)
 {
     Q_UNUSED(args);
-    executeToolCommand(ctx, ruwa::ui::workspace::ToolsPanel::Tool::Blur);
+    executeToolCommand(ctx, ruwa::ui::workspace::ToolId::Blur);
 }
 
 // ======================================================================================
@@ -181,7 +181,7 @@ bool ToolSmudgeCommand::canExecute(const CommandContext& ctx) const
 void ToolSmudgeCommand::execute(const CommandContext& ctx, const QVariantMap& args)
 {
     Q_UNUSED(args);
-    executeToolCommand(ctx, ruwa::ui::workspace::ToolsPanel::Tool::Smudge);
+    executeToolCommand(ctx, ruwa::ui::workspace::ToolId::Smudge);
 }
 
 // ======================================================================================
@@ -207,7 +207,7 @@ bool ToolTextCommand::canExecute(const CommandContext& ctx) const
 void ToolTextCommand::execute(const CommandContext& ctx, const QVariantMap& args)
 {
     Q_UNUSED(args);
-    executeToolCommand(ctx, ruwa::ui::workspace::ToolsPanel::Tool::Text);
+    executeToolCommand(ctx, ruwa::ui::workspace::ToolId::Text);
 }
 
 // ======================================================================================
@@ -233,7 +233,7 @@ bool ToolEraserCommand::canExecute(const CommandContext& ctx) const
 void ToolEraserCommand::execute(const CommandContext& ctx, const QVariantMap& args)
 {
     Q_UNUSED(args);
-    executeToolCommand(ctx, ruwa::ui::workspace::ToolsPanel::Tool::Eraser);
+    executeToolCommand(ctx, ruwa::ui::workspace::ToolId::Eraser);
 }
 
 // ======================================================================================
@@ -291,7 +291,7 @@ bool ToolFillCommand::canExecute(const CommandContext& ctx) const
 void ToolFillCommand::execute(const CommandContext& ctx, const QVariantMap& args)
 {
     Q_UNUSED(args);
-    executeToolCommand(ctx, ruwa::ui::workspace::ToolsPanel::Tool::Fill);
+    executeToolCommand(ctx, ruwa::ui::workspace::ToolId::Fill);
 }
 
 CommandInfo ToolClassicFillCommand::info() const
@@ -313,7 +313,7 @@ bool ToolClassicFillCommand::canExecute(const CommandContext& ctx) const
 void ToolClassicFillCommand::execute(const CommandContext& ctx, const QVariantMap& args)
 {
     Q_UNUSED(args);
-    executeToolCommand(ctx, ruwa::ui::workspace::ToolsPanel::Tool::ClassicFill);
+    executeToolCommand(ctx, ruwa::ui::workspace::ToolId::ClassicFill);
 }
 
 // ======================================================================================
@@ -339,7 +339,7 @@ bool ToolEyedropperCommand::canExecute(const CommandContext& ctx) const
 void ToolEyedropperCommand::execute(const CommandContext& ctx, const QVariantMap& args)
 {
     Q_UNUSED(args);
-    executeToolCommand(ctx, ruwa::ui::workspace::ToolsPanel::Tool::Eyedropper);
+    executeToolCommand(ctx, ruwa::ui::workspace::ToolId::Eyedropper);
 }
 
 // ======================================================================================
@@ -365,7 +365,7 @@ bool ToolLassoCommand::canExecute(const CommandContext& ctx) const
 void ToolLassoCommand::execute(const CommandContext& ctx, const QVariantMap& args)
 {
     Q_UNUSED(args);
-    executeToolCommand(ctx, ruwa::ui::workspace::ToolsPanel::Tool::Lasso);
+    executeToolCommand(ctx, ruwa::ui::workspace::ToolId::Lasso);
 }
 
 // ======================================================================================
@@ -391,7 +391,7 @@ bool ToolLassoFillCommand::canExecute(const CommandContext& ctx) const
 void ToolLassoFillCommand::execute(const CommandContext& ctx, const QVariantMap& args)
 {
     Q_UNUSED(args);
-    executeToolCommand(ctx, ruwa::ui::workspace::ToolsPanel::Tool::LassoFill);
+    executeToolCommand(ctx, ruwa::ui::workspace::ToolId::LassoFill);
 }
 
 // ======================================================================================
@@ -417,7 +417,7 @@ bool ToolSquareSelectionCommand::canExecute(const CommandContext& ctx) const
 void ToolSquareSelectionCommand::execute(const CommandContext& ctx, const QVariantMap& args)
 {
     Q_UNUSED(args);
-    executeToolCommand(ctx, ruwa::ui::workspace::ToolsPanel::Tool::SquareSelection);
+    executeToolCommand(ctx, ruwa::ui::workspace::ToolId::SquareSelection);
 }
 
 // ======================================================================================
@@ -443,7 +443,7 @@ bool ToolCircleSelectionCommand::canExecute(const CommandContext& ctx) const
 void ToolCircleSelectionCommand::execute(const CommandContext& ctx, const QVariantMap& args)
 {
     Q_UNUSED(args);
-    executeToolCommand(ctx, ruwa::ui::workspace::ToolsPanel::Tool::CircleSelection);
+    executeToolCommand(ctx, ruwa::ui::workspace::ToolId::CircleSelection);
 }
 
 // ======================================================================================
@@ -469,7 +469,7 @@ bool ToolMagicWandCommand::canExecute(const CommandContext& ctx) const
 void ToolMagicWandCommand::execute(const CommandContext& ctx, const QVariantMap& args)
 {
     Q_UNUSED(args);
-    executeToolCommand(ctx, ruwa::ui::workspace::ToolsPanel::Tool::MagicWand);
+    executeToolCommand(ctx, ruwa::ui::workspace::ToolId::MagicWand);
 }
 
 // ======================================================================================
@@ -495,7 +495,7 @@ bool ToolMoveCommand::canExecute(const CommandContext& ctx) const
 void ToolMoveCommand::execute(const CommandContext& ctx, const QVariantMap& args)
 {
     Q_UNUSED(args);
-    executeToolCommand(ctx, ruwa::ui::workspace::ToolsPanel::Tool::Move);
+    executeToolCommand(ctx, ruwa::ui::workspace::ToolId::Move);
 }
 
 // ======================================================================================
@@ -521,7 +521,7 @@ bool ToolRotateViewCommand::canExecute(const CommandContext& ctx) const
 void ToolRotateViewCommand::execute(const CommandContext& ctx, const QVariantMap& args)
 {
     Q_UNUSED(args);
-    executeToolCommand(ctx, ruwa::ui::workspace::ToolsPanel::Tool::RotateView);
+    executeToolCommand(ctx, ruwa::ui::workspace::ToolId::RotateView);
 }
 
 // ======================================================================================
@@ -547,7 +547,7 @@ bool ToolCanvasResizeCommand::canExecute(const CommandContext& ctx) const
 void ToolCanvasResizeCommand::execute(const CommandContext& ctx, const QVariantMap& args)
 {
     Q_UNUSED(args);
-    executeToolCommand(ctx, ruwa::ui::workspace::ToolsPanel::Tool::CanvasResize);
+    executeToolCommand(ctx, ruwa::ui::workspace::ToolId::CanvasResize);
 }
 
 // ======================================================================================
@@ -573,7 +573,7 @@ bool ToolZoomCommand::canExecute(const CommandContext& ctx) const
 void ToolZoomCommand::execute(const CommandContext& ctx, const QVariantMap& args)
 {
     Q_UNUSED(args);
-    executeToolCommand(ctx, ruwa::ui::workspace::ToolsPanel::Tool::Zoom);
+    executeToolCommand(ctx, ruwa::ui::workspace::ToolId::Zoom);
 }
 
 // ======================================================================================

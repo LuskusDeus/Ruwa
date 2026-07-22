@@ -106,7 +106,6 @@ class CanvasPanel : public ruwa::ui::docking::DockPanel, public CanvasInputHost 
     Q_OBJECT
 
 public:
-    using ToolMode = CanvasToolMode;
     using PersistedToolState = CanvasPersistedToolState;
 
     enum TransformContextActionId { TransformActionModeClassic = 1, TransformActionModeDeform = 2 };
@@ -212,10 +211,10 @@ public:
     void setStylusJoystickPositionFromNormalized(const QPointF& norm);
     bool stylusJoystickAbovePanel() const;
     void setPendingStylusJoystickAbovePanel(bool above);
-    PersistedToolState persistedToolState(ToolMode tool) const;
-    void setPersistedToolState(ToolMode tool, const PersistedToolState& state);
+    PersistedToolState persistedToolState(ToolId tool) const;
+    void setPersistedToolState(ToolId tool, const PersistedToolState& state);
     void reapplyCurrentToolState();
-    ToolMode brushSelectionToolMode() const;
+    ToolId brushSelectionToolMode() const;
     bool selectBrushForCurrentContext(const QString& brushId);
     QString selectedBrushIdForCurrentContext() const;
     void showBrushQuickPopup(const QPoint& globalPos);
@@ -282,10 +281,10 @@ public:
     void setBlurMode(bool blur);
     void setSmudgeMode(bool smudge);
     void setLiquifyMode(bool liquify);
-    void setToolMode(ToolMode tool) override;
-    ToolMode toolMode() const
+    void setToolMode(ToolId tool) override;
+    ToolId toolMode() const
     {
-        return m_toolStateController ? m_toolStateController->currentTool() : ToolMode::Brush;
+        return m_toolStateController ? m_toolStateController->currentTool() : ToolId::Brush;
     }
     qreal lassoStabilization() const
     {
@@ -388,8 +387,8 @@ signals:
     void canvasContentRegionChanged(const QRect& worldRect);
     void canvasContentTilesChanged(const QList<QPoint>& tilePositions);
     void fillProcessingLayerChanged(const ruwa::core::layers::LayerId& id);
-    void toolModeChanged(ToolMode tool);
-    void brushSelectionContextChanged(ToolMode tool, const QString& brushId);
+    void toolModeChanged(ToolId tool);
+    void brushSelectionContextChanged(ToolId tool, const QString& brushId);
     void transformModeChanged(bool active);
     void colorPicked(const QColor& color);
     /// Emitted when a paint stroke (not erase) completes. Use to add brush color to recent palette.
@@ -433,26 +432,26 @@ private:
     void scheduleInitialBrushOverlayPlacement();
     void loadGlobalToolState();
     void persistGlobalToolState();
-    void captureToolState(ToolMode tool);
+    void captureToolState(ToolId tool);
     void applyBrushSettings(const ruwa::core::brushes::BrushSettingsData& settings);
     void applyToolStateBrushSettings(const ruwa::core::brushes::BrushSettingsData& settings);
     QString resolveBrushSelectionId(
         const QString& requestedBrushId, const QString& fallbackPresetId = QString()) const;
-    bool applyBrushSelectionForTool(ToolMode tool, const QString& requestedBrushId,
+    bool applyBrushSelectionForTool(ToolId tool, const QString& requestedBrushId,
         const QString& fallbackPresetId, bool persistSelection, bool emitSyncSignal);
     void captureCurrentToolState();
-    void restoreToolState(ToolMode tool);
+    void restoreToolState(ToolId tool);
     /// Blur and Liquify use the same fixed standard soft brush (hardness 0, round)
     /// and ignore brush selection — only size and strength (flow) are user-adjustable.
-    void applyFixedSoftBrush(ToolMode tool);
-    void setFixedSoftBrushStrength(ToolMode tool, qreal strength);
+    void applyFixedSoftBrush(ToolId tool);
+    void setFixedSoftBrushStrength(ToolId tool, qreal strength);
     /// Apply color/opacity when restoring tool state (always applies; does not sync to brush state)
     void applyBrushColorForRestore(uint8_t r, uint8_t g, uint8_t b, uint8_t a);
     /// Brush, Eraser, or Blur that currently "owns" the shared size/opacity overlay (Hand → last
     /// draw tool).
-    ToolMode overlayInstrumentMode() const;
+    ToolId overlayInstrumentMode() const;
     void emitBrushSelectionContextChanged();
-    bool overlayMatchesInstrument(ToolMode tool) const;
+    bool overlayMatchesInstrument(ToolId tool) const;
     void updateCursorManagerOverlay();
     void updateBrushCursorOverlayRadius();
     std::optional<Qt::CursorShape> resolveCursorForPosition(const QPoint& globalPos) const;
@@ -467,7 +466,7 @@ private:
     void publishEffectiveExportFrameIfChanged();
     void setCursorManagerSuppressedByLoading(bool suppressed);
     void syncToolStateOverlayContent();
-    ToolMode currentInputTool() const override { return toolMode(); }
+    ToolId currentInputTool() const override { return toolMode(); }
     aether::OpenGLCanvasWidget* inputGlWidget() const override { return m_glWidget; }
     CanvasCursorManager* inputCursorManager() const override { return m_cursorManager; }
     bool hasInputFocus() const override { return hasFocus(); }
@@ -518,7 +517,7 @@ private:
         if (m_tempToolHold.active)
             m_tempToolHold.toolWasUsed = true;
     }
-    void beginTemporaryToolHoldFromButton(Qt::MouseButton heldButton, ToolMode tool) override;
+    void beginTemporaryToolHoldFromButton(Qt::MouseButton heldButton, ToolId tool) override;
     void endTemporaryTool() override;
     bool finalizeTemporaryToolHoldForKeyRelease(int key) override;
     void setPendingTemporaryToolKey(int key, bool alwaysRevert) override;
@@ -529,22 +528,22 @@ private:
     void noteUndoForTemporaryMoveTool() override;
     bool temporaryMoveToolUndoCooldownActive();
     void resetTemporaryMoveToolUndoCooldown();
-    std::optional<ToolMode> inputToolModeForKey(int key) const override
+    std::optional<ToolId> inputToolModeForKey(int key) const override
     {
         return toolModeForKey(key);
     }
-    std::optional<ToolMode> inputToolModeForKeyEvent(const QKeyEvent* event) const override
+    std::optional<ToolId> inputToolModeForKeyEvent(const QKeyEvent* event) const override
     {
         return toolModeForKeyEvent(event);
     }
-    QString commandIdForInputToolMode(ToolMode mode) const override
+    QString commandIdForInputToolMode(ToolId mode) const override
     {
         return commandIdForToolMode(mode);
     }
-    std::optional<ToolMode> toolModeForKey(int key) const;
-    std::optional<ToolMode> toolModeForKeyEvent(const QKeyEvent* event) const;
-    static std::optional<ToolMode> toolModeForCommandId(const QString& cmdId);
-    static QString commandIdForToolMode(ToolMode mode);
+    std::optional<ToolId> toolModeForKey(int key) const;
+    std::optional<ToolId> toolModeForKeyEvent(const QKeyEvent* event) const;
+    static std::optional<ToolId> toolModeForCommandId(const QString& cmdId);
+    static QString commandIdForToolMode(ToolId mode);
     QPointF mapWorldToPanel(const aether::Vector2& worldPos) const;
     void ensureSelectionActionPopup();
     void updateSelectionActionPopup(bool forceShow = false) override;
@@ -724,11 +723,11 @@ private:
 
     /// Whether the given tool should erase right now (Eraser tool, or Brush tool
     /// with the eraser-brush state active).
-    bool shouldEraseForTool(ToolMode tool) const override;
+    bool shouldEraseForTool(ToolId tool) const override;
     void setBrushEraserActive(bool active);
 
-    ToolBrushState* toolBrushStateForInstrument(ToolMode tool);
-    const ToolBrushState* toolBrushStateForInstrument(ToolMode tool) const;
+    ToolBrushState* toolBrushStateForInstrument(ToolId tool);
+    const ToolBrushState* toolBrushStateForInstrument(ToolId tool) const;
 
     TemporaryToolHold m_tempToolHold;
 

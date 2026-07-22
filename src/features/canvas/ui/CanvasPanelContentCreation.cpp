@@ -142,7 +142,7 @@ QWidget* CanvasPanel::createContent()
     m_brushOverlay->setHasFiniteDocumentBounds(hasFiniteDocumentBounds());
     qreal initialOverlaySize = 0.3;
     qreal initialOverlayOpacity = static_cast<qreal>(brushAlpha()) / 255.0;
-    const ToolMode initInst = overlayInstrumentMode();
+    const ToolId initInst = overlayInstrumentMode();
     if (const ToolBrushState* initState = toolBrushStateForInstrument(initInst);
         initState && initState->valid) {
         initialOverlaySize = initState->brushSize;
@@ -272,7 +272,7 @@ QWidget* CanvasPanel::createContent()
         this, [this](qreal intensity) {
             // Blur uses the same fixed soft brush as Liquify. Intensity changes
             // its flow without modifying the brush selected in the pack panel.
-            setFixedSoftBrushStrength(CanvasToolMode::Blur, intensity);
+            setFixedSoftBrushStrength(ToolId::Blur, intensity);
         });
     connect(m_toolStateOverlay, &ruwa::ui::widgets::CanvasToolStateOverlay::smudgeIntensityChanged,
         this, [this](qreal intensity) {
@@ -290,7 +290,7 @@ QWidget* CanvasPanel::createContent()
         });
     connect(m_toolStateOverlay, &ruwa::ui::widgets::CanvasToolStateOverlay::liquifyStrengthChanged,
         this,
-        [this](qreal strength) { setFixedSoftBrushStrength(CanvasToolMode::Liquify, strength); });
+        [this](qreal strength) { setFixedSoftBrushStrength(ToolId::Liquify, strength); });
     connect(m_toolStateOverlay, &ruwa::ui::widgets::CanvasToolStateOverlay::liquifyModeChanged,
         this, [this](int mode) {
             if (m_toolStateController) {

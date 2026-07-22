@@ -4,6 +4,7 @@
 #define RUWA_UI_WORKSPACE_TOOLGROUPPOPUP_H
 
 #include "shared/resources/IconProvider.h"
+#include "shared/types/ToolId.h"
 
 #include <QList>
 #include <QPointer>
@@ -27,7 +28,7 @@ public:
     enum class LayoutMode { Vertical, Horizontal };
 
     struct Item {
-        int toolId = -1;
+        ToolId tool = ToolId::Brush;
         ruwa::ui::core::IconProvider::StandardIcon iconType
             = ruwa::ui::core::IconProvider::StandardIcon::Hand;
         QString tooltip;
@@ -37,7 +38,7 @@ public:
     ~ToolGroupPopup() override;
 
     void setItems(const QList<Item>& items);
-    void setCurrentToolId(int toolId);
+    void setActiveTool(ToolId tool);
     void setSide(Side side);
     void setLayoutMode(LayoutMode mode);
     void showFor(QWidget* anchor, bool animate = true);
@@ -49,7 +50,7 @@ public:
     void setPopupOpacity(qreal opacity);
 
 signals:
-    void toolSelected(int toolId);
+    void toolSelected(ToolId tool);
     void hidden();
 
 protected:

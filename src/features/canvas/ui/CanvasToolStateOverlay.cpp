@@ -45,27 +45,11 @@ constexpr int kControlSpacingBase = 6;
 constexpr int kSliderMinWidthBase = 180;
 constexpr int kCanvasPlaceholderMinWidthBase = 320;
 constexpr int kToolPlaceholderMinWidthBase = 260;
-constexpr int kToolPageCount = 19;
 constexpr int kParameterSliderHeightBase = 28;
 constexpr int kBrushParameterGroupSpacingBase = 10;
 constexpr int kSliderSurfaceOpacityPercent = 58;
 constexpr int kSliderTrackOpacityPercent = 0;
 constexpr int kSliderFillOpacityPercent = 85;
-constexpr int kBrushToolPageIndex = 1;
-constexpr int kEraserToolPageIndex = 2;
-constexpr int kFillToolPageIndex = 3;
-constexpr int kEyedropperToolPageIndex = 4;
-constexpr int kLassoToolPageIndex = 5;
-constexpr int kLassoFillToolPageIndex = 6;
-constexpr int kSquareSelectionToolPageIndex = 7;
-constexpr int kCircleSelectionToolPageIndex = 8;
-constexpr int kRotateViewToolPageIndex = 10;
-constexpr int kZoomToolPageIndex = 12;
-constexpr int kClassicFillToolPageIndex = 13;
-constexpr int kBlurToolPageIndex = 14;
-constexpr int kSmudgeToolPageIndex = 16;
-constexpr int kLiquifyToolPageIndex = 17;
-constexpr int kMagicWandToolPageIndex = 18;
 
 QSize pageHint(QWidget* page)
 {
@@ -596,17 +580,18 @@ void CanvasToolStateOverlay::setRedoAvailable(bool available)
     }
 }
 
-void CanvasToolStateOverlay::setToolPageParameterValues(int pageIndex, qreal hardness, qreal flow)
+void CanvasToolStateOverlay::setToolParameterValues(
+    workspace::ToolId tool, qreal hardness, qreal flow)
 {
     const int hardnessValue = qRound(qBound(0.0, hardness, 1.0) * 100.0);
     const int flowValue = qRound(qBound(0.0, flow, 1.0) * 100.0);
 
     ProgressHandleSlider* hardnessSlider = nullptr;
     ProgressHandleSlider* flowSlider = nullptr;
-    if (pageIndex == kBrushToolPageIndex) {
+    if (tool == workspace::ToolId::Brush) {
         hardnessSlider = m_brushHardnessSlider;
         flowSlider = m_brushFlowSlider;
-    } else if (pageIndex == kEraserToolPageIndex) {
+    } else if (tool == workspace::ToolId::Eraser) {
         hardnessSlider = m_eraserHardnessSlider;
         flowSlider = m_eraserFlowSlider;
     } else {
@@ -625,14 +610,14 @@ void CanvasToolStateOverlay::setToolPageParameterValues(int pageIndex, qreal har
     syncSlider(flowSlider, flowValue);
 }
 
-void CanvasToolStateOverlay::setToolPageIntensityValue(int pageIndex, qreal intensity)
+void CanvasToolStateOverlay::setToolIntensityValue(workspace::ToolId tool, qreal intensity)
 {
     ProgressHandleSlider* slider = nullptr;
-    if (pageIndex == kBlurToolPageIndex) {
+    if (tool == workspace::ToolId::Blur) {
         slider = m_blurIntensitySlider;
-    } else if (pageIndex == kSmudgeToolPageIndex) {
+    } else if (tool == workspace::ToolId::Smudge) {
         slider = m_smudgeIntensitySlider;
-    } else if (pageIndex == kLiquifyToolPageIndex) {
+    } else if (tool == workspace::ToolId::Liquify) {
         slider = m_liquifyStrengthSlider;
     } else {
         return;
@@ -646,9 +631,9 @@ void CanvasToolStateOverlay::setToolPageIntensityValue(int pageIndex, qreal inte
     slider->setValue(qRound(qBound(0.0, intensity, 1.0) * 100.0));
 }
 
-void CanvasToolStateOverlay::setToolPageWetMixValue(int pageIndex, qreal wetMix)
+void CanvasToolStateOverlay::setToolWetMixValue(workspace::ToolId tool, qreal wetMix)
 {
-    if (pageIndex != kSmudgeToolPageIndex || !m_smudgeWetMixSlider) {
+    if (tool != workspace::ToolId::Smudge || !m_smudgeWetMixSlider) {
         return;
     }
     const QSignalBlocker blocker(m_smudgeWetMixSlider);
@@ -664,12 +649,13 @@ void CanvasToolStateOverlay::setToolPageLiquifyMode(int mode)
     m_liquifyModeButtons[mode]->setChecked(true);
 }
 
-void CanvasToolStateOverlay::setToolPageStabilizationValue(int pageIndex, qreal stabilization)
+void CanvasToolStateOverlay::setToolStabilizationValue(
+    workspace::ToolId tool, qreal stabilization)
 {
     ProgressHandleSlider* slider = nullptr;
-    if (pageIndex == kLassoToolPageIndex) {
+    if (tool == workspace::ToolId::Lasso) {
         slider = m_lassoStabilizationSlider;
-    } else if (pageIndex == kLassoFillToolPageIndex) {
+    } else if (tool == workspace::ToolId::LassoFill) {
         slider = m_lassoFillStabilizationSlider;
     } else {
         return;
@@ -704,8 +690,24 @@ void CanvasToolStateOverlay::setCanvasResizeInfo(const QSize& oldSize, const QSi
     update();
 }
 
-void CanvasToolStateOverlay::setToolPageIndex(int index)
+void CanvasToolStateOverlay::addToolPage(workspace::ToolId tool, QWidget* page)
 {
+    if (!m_toolContentStack || !page || m_toolPageIndices.contains(tool)) {
+        return;
+    }
+
+    m_toolPageIndices.insert(tool, m_toolContentStack->count());
+    m_toolContentStack->addWidget(page);
+}
+
+int CanvasToolStateOverlay::pageIndexForTool(workspace::ToolId tool) const
+{
+    return m_toolPageIndices.value(tool, -1);
+}
+
+void CanvasToolStateOverlay::setActiveTool(workspace::ToolId tool)
+{
+    const int index = pageIndexForTool(tool);
     if (!m_toolContentStack || index < 0 || index >= m_toolContentStack->count()) {
         return;
     }
@@ -781,12 +783,6 @@ qreal CanvasToolStateOverlay::sliderValueToUnit(int value)
 
 void CanvasToolStateOverlay::setupUi()
 {
-    const QStringList toolNames = { tr("Hand"), tr("Brush"), tr("Eraser"), tr("Fill"),
-        tr("Eyedropper"), tr("Lasso"), tr("Lasso Fill"), tr("Square Selection"),
-        tr("Circle Selection"), tr("Move"), tr("Rotate View"), tr("Canvas Resize"), tr("Zoom"),
-        tr("Classic Fill"), tr("Blur"), tr("Text"), tr("Smudge"), tr("Liquify"),
-        tr("Magic Wand") };
-
     auto* rootLayout = new QVBoxLayout(this);
     rootLayout->setContentsMargins(0, 0, 0, 0);
     rootLayout->setSpacing(0);
@@ -847,45 +843,46 @@ void CanvasToolStateOverlay::setupUi()
     m_toolContentStack->setSuspendLayoutDuringAnimation(true);
     m_toolContentStack->setAnimationDuration(220);
     m_toolContentStack->setSizePolicy(QSizePolicy::Fixed, QSizePolicy::Fixed);
-    for (int i = 0; i < kToolPageCount; ++i) {
-        const QString toolName = i < toolNames.size() ? toolNames[i] : tr("Tool");
-        if (i == kBrushToolPageIndex) {
-            m_toolContentStack->addWidget(createBrushSettingsPage(toolName, &m_brushHardnessSlider,
-                &m_brushFlowSlider, &m_brushEraserToggleButton, m_toolContentStack));
-        } else if (i == kEraserToolPageIndex) {
-            m_toolContentStack->addWidget(createBrushSettingsPage(toolName, &m_eraserHardnessSlider,
-                &m_eraserFlowSlider, nullptr, m_toolContentStack));
-        } else if (i == kBlurToolPageIndex) {
-            m_toolContentStack->addWidget(
-                createSingleParameterPage(toolName, QObject::tr("Intensity:"),
-                    QObject::tr("intensity"), &m_blurIntensitySlider, m_toolContentStack));
-        } else if (i == kSmudgeToolPageIndex) {
-            m_toolContentStack->addWidget(createSmudgeSettingsPage(
-                toolName, &m_smudgeIntensitySlider, &m_smudgeWetMixSlider, m_toolContentStack));
-        } else if (i == kLiquifyToolPageIndex) {
-            m_toolContentStack->addWidget(createLiquifySettingsPage(
-                toolName, &m_liquifyStrengthSlider, m_liquifyModeButtons, m_toolContentStack));
-        } else if (i == kLassoToolPageIndex) {
-            m_toolContentStack->addWidget(
-                createSingleParameterPage(toolName, QObject::tr("Stabilization:"),
-                    QObject::tr("stabilization"), &m_lassoStabilizationSlider, m_toolContentStack));
-        } else if (i == kLassoFillToolPageIndex) {
-            m_toolContentStack->addWidget(createSingleParameterPage(toolName,
-                QObject::tr("Stabilization:"), QObject::tr("stabilization"),
-                &m_lassoFillStabilizationSlider, m_toolContentStack));
-        } else if (i == 11) {
-            m_toolContentStack->addWidget(
-                createCanvasResizeInfoPage(&m_canvasResizeOldSizeValueLabel,
-                    &m_canvasResizeNewSizeValueLabel, m_toolContentStack));
-        } else if (i == kFillToolPageIndex || i == kEyedropperToolPageIndex
-            || i == kSquareSelectionToolPageIndex || i == kCircleSelectionToolPageIndex
-            || i == kRotateViewToolPageIndex || i == kZoomToolPageIndex
-            || i == kClassicFillToolPageIndex || i == kMagicWandToolPageIndex) {
-            m_toolContentStack->addWidget(createToolPlaceholderPage(nullptr, m_toolContentStack));
-        } else {
-            m_toolContentStack->addWidget(createToolContentPage(toolName, m_toolContentStack));
-        }
-    }
+    const auto addPlaceholderPage = [this](workspace::ToolId tool) {
+        addToolPage(tool, createToolPlaceholderPage(nullptr, m_toolContentStack));
+    };
+
+    addToolPage(workspace::ToolId::Hand, createToolContentPage(tr("Hand"), m_toolContentStack));
+    addToolPage(workspace::ToolId::Brush,
+        createBrushSettingsPage(tr("Brush"), &m_brushHardnessSlider, &m_brushFlowSlider,
+            &m_brushEraserToggleButton, m_toolContentStack));
+    addToolPage(workspace::ToolId::Eraser,
+        createBrushSettingsPage(tr("Eraser"), &m_eraserHardnessSlider, &m_eraserFlowSlider,
+            nullptr, m_toolContentStack));
+    addPlaceholderPage(workspace::ToolId::Fill);
+    addPlaceholderPage(workspace::ToolId::Eyedropper);
+    addToolPage(workspace::ToolId::Lasso,
+        createSingleParameterPage(tr("Lasso"), tr("Stabilization:"), tr("stabilization"),
+            &m_lassoStabilizationSlider, m_toolContentStack));
+    addToolPage(workspace::ToolId::LassoFill,
+        createSingleParameterPage(tr("Lasso Fill"), tr("Stabilization:"), tr("stabilization"),
+            &m_lassoFillStabilizationSlider, m_toolContentStack));
+    addPlaceholderPage(workspace::ToolId::SquareSelection);
+    addPlaceholderPage(workspace::ToolId::CircleSelection);
+    addToolPage(workspace::ToolId::Move, createToolContentPage(tr("Move"), m_toolContentStack));
+    addPlaceholderPage(workspace::ToolId::RotateView);
+    addToolPage(workspace::ToolId::CanvasResize,
+        createCanvasResizeInfoPage(&m_canvasResizeOldSizeValueLabel,
+            &m_canvasResizeNewSizeValueLabel, m_toolContentStack));
+    addPlaceholderPage(workspace::ToolId::Zoom);
+    addPlaceholderPage(workspace::ToolId::ClassicFill);
+    addToolPage(workspace::ToolId::Blur,
+        createSingleParameterPage(tr("Blur"), tr("Intensity:"), tr("intensity"),
+            &m_blurIntensitySlider, m_toolContentStack));
+    addToolPage(workspace::ToolId::Text, createToolContentPage(tr("Text"), m_toolContentStack));
+    addToolPage(workspace::ToolId::Smudge,
+        createSmudgeSettingsPage(
+            tr("Smudge"), &m_smudgeIntensitySlider, &m_smudgeWetMixSlider, m_toolContentStack));
+    addToolPage(workspace::ToolId::Liquify,
+        createLiquifySettingsPage(
+            tr("Liquify"), &m_liquifyStrengthSlider, m_liquifyModeButtons, m_toolContentStack));
+    addPlaceholderPage(workspace::ToolId::MagicWand);
+    Q_ASSERT(m_toolPageIndices.size() == static_cast<qsizetype>(workspace::kToolIds.size()));
 
     m_rightSeparator = createSectionSeparator(m_interactivePage);
 

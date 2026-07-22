@@ -6,9 +6,11 @@
 
 #include "shell/context-menu/IContextMenuProvider.h"
 #include "shared/rendering/CanvasBackdropSource.h"
+#include "shared/types/ToolId.h"
 
 #include <QElapsedTimer>
 #include <QEvent>
+#include <QMap>
 #include <QPainter>
 #include <QPropertyAnimation>
 #include <QSize>
@@ -51,17 +53,17 @@ public:
     void setBrushEraserMode(bool enabled);
     void setUndoAvailable(bool available);
     void setRedoAvailable(bool available);
-    void setToolPageParameterValues(int pageIndex, qreal hardness, qreal flow);
-    void setToolPageIntensityValue(int pageIndex, qreal intensity);
-    void setToolPageWetMixValue(int pageIndex, qreal wetMix);
+    void setToolParameterValues(
+        ruwa::ui::workspace::ToolId tool, qreal hardness, qreal flow);
+    void setToolIntensityValue(ruwa::ui::workspace::ToolId tool, qreal intensity);
+    void setToolWetMixValue(ruwa::ui::workspace::ToolId tool, qreal wetMix);
     void setToolPageLiquifyMode(int mode);
 
     static constexpr int kLiquifyModeCount = 5;
-    void setToolPageStabilizationValue(int pageIndex, qreal stabilization);
+    void setToolStabilizationValue(ruwa::ui::workspace::ToolId tool, qreal stabilization);
     void setCanvasResizeInfo(const QSize& oldSize, const QSize& newSize);
 
-    void setToolPageIndex(int index);
-    int toolPageIndex() const;
+    void setActiveTool(ruwa::ui::workspace::ToolId tool);
 
     /// Source coordinating this widget's same-frame GPU blur region.
     void setBackdropSource(ruwa::shared::rendering::ICanvasBackdropSource* source);
@@ -117,6 +119,9 @@ private:
         void (CanvasToolStateOverlay::*changeSignal)(qreal));
     bool shouldEmitParameterSliderUpdate(QElapsedTimer& timer, bool force);
     static qreal sliderValueToUnit(int value);
+    void addToolPage(ruwa::ui::workspace::ToolId tool, QWidget* page);
+    int pageIndexForTool(ruwa::ui::workspace::ToolId tool) const;
+    int toolPageIndex() const;
 
     // Match CanvasStylusJoystickContainerWidget zoom panel (anonymous kPanelHeight, kHandleHeight,
     // …)
@@ -135,6 +140,7 @@ private:
     QWidget* m_rightSection = nullptr;
     QWidget* m_toolViewport = nullptr;
     AnimatedStackedWidget* m_toolContentStack = nullptr;
+    QMap<ruwa::ui::workspace::ToolId, int> m_toolPageIndices;
     Separator* m_leftSeparator = nullptr;
     Separator* m_rightSeparator = nullptr;
     QLabel* m_canvasPlaceholderLabel = nullptr;

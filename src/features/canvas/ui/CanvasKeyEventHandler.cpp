@@ -138,7 +138,7 @@ bool CanvasKeyEventHandler::handleEvent(QObject* watched, QEvent* event)
                 const bool blockInTransform = m_host->isTransformInputActive();
                 const bool blockInSelection = m_host->isAnySelectionInteractionActive();
                 if (!blockInTransform && !blockInSelection
-                    && m_host->currentInputTool() != CanvasInputHost::ToolMode::RotateView) {
+                    && m_host->currentInputTool() != ToolId::RotateView) {
                     if (spaceWithShift) {
                         m_host->setPendingTemporaryToolKey(Qt::Key_Space, true);
                         ruwa::core::CommandExecutor::instance().execute(
@@ -165,21 +165,22 @@ bool CanvasKeyEventHandler::handleEvent(QObject* watched, QEvent* event)
             }
 
             const bool isTempToolKey = (ke->key() == Qt::Key_Space || ke->key() == Qt::Key_Alt);
-            const CanvasInputHost::ToolMode currentTool = m_host->currentInputTool();
-            const bool selectionToolActive = currentTool == CanvasInputHost::ToolMode::Lasso
-                || currentTool == CanvasInputHost::ToolMode::LassoFill
-                || currentTool == CanvasInputHost::ToolMode::SquareSelection
-                || currentTool == CanvasInputHost::ToolMode::CircleSelection
-                || currentTool == CanvasInputHost::ToolMode::MagicWand
-                || currentTool == CanvasInputHost::ToolMode::Move;
+            const ToolId currentTool = m_host->currentInputTool();
+            // Lasso Fill deliberately remains available for the temporary Eyedropper:
+            // unlike selection tools, it does not use Alt as a subtract modifier.
+            const bool blocksTemporaryEyedropper = currentTool == ToolId::Lasso
+                || currentTool == ToolId::SquareSelection
+                || currentTool == ToolId::CircleSelection
+                || currentTool == ToolId::MagicWand
+                || currentTool == ToolId::Move;
             const bool blockTempHandInSelectionInteraction
                 = (ke->key() == Qt::Key_Space) && activeSelectionInteraction;
             const bool blockTempEyedropperInTransform
                 = (ke->key() == Qt::Key_Alt) && m_host->isTransformInputActive();
-            const bool blockTempEyedropperInSelection
-                = (ke->key() == Qt::Key_Alt) && selectionToolActive;
+            const bool blockTempEyedropperForTool
+                = (ke->key() == Qt::Key_Alt) && blocksTemporaryEyedropper;
             if (isTempToolKey && !ke->isAutoRepeat() && !blockTempHandInSelectionInteraction
-                && !blockTempEyedropperInTransform && !blockTempEyedropperInSelection
+                && !blockTempEyedropperInTransform && !blockTempEyedropperForTool
                 && !m_host->temporaryToolHoldActive() && m_host->inputGlWidget()
                 && m_host->hasInputFocusOrCursorOverCanvas()) {
                 auto toolOpt = m_host->inputToolModeForKey(ke->key());

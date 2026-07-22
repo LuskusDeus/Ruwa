@@ -965,7 +965,7 @@ void TextEditingController::updateFormattingPopup(bool animateShow)
     }
 
     const QTextCursor cursor = m_editor->textCursor();
-    if (!cursor.hasSelection() || m_panel->toolMode() != CanvasPanel::ToolMode::Text) {
+    if (!cursor.hasSelection() || m_panel->toolMode() != ToolId::Text) {
         hideFormattingPopup(true);
         return;
     }

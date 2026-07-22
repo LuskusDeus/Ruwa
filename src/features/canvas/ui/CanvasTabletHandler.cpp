@@ -148,7 +148,7 @@ void CanvasTabletHandler::handleTabletEvent(QTabletEvent* event)
         return Qt::NoButton;
     };
     const auto beginTemporaryStylusToolHold
-        = [&](Qt::MouseButton heldButton, CanvasPanel::ToolMode tool) {
+        = [&](Qt::MouseButton heldButton, ToolId tool) {
               m_host->beginTemporaryToolHoldFromButton(heldButton, tool);
           };
     const auto endTemporaryStylusToolHold = [&](Qt::MouseButton heldButton) {
@@ -223,24 +223,24 @@ void CanvasTabletHandler::handleTabletEvent(QTabletEvent* event)
         // RightButton / MiddleButton only (no pen touch): temporary switch to Eraser
         if ((tabletButton == Qt::RightButton || tabletButton == Qt::MiddleButton)
             && !tabletButtons.testFlag(Qt::LeftButton)) {
-            beginTemporaryStylusToolHold(tabletButton, CanvasPanel::ToolMode::Eraser);
+            beginTemporaryStylusToolHold(tabletButton, ToolId::Eraser);
             event->accept();
             return;
         }
 
         if (tabletButton == Qt::LeftButton) {
             // Pen touch while holding side button: switch to eraser BEFORE starting stroke
-            if ((m_host->currentInputTool() == CanvasPanel::ToolMode::Brush
-                    || m_host->currentInputTool() == CanvasPanel::ToolMode::Blur
-                    || m_host->currentInputTool() == CanvasPanel::ToolMode::Smudge
-                    || m_host->currentInputTool() == CanvasPanel::ToolMode::Liquify
-                    || m_host->currentInputTool() == CanvasPanel::ToolMode::Eraser)
+            if ((m_host->currentInputTool() == ToolId::Brush
+                    || m_host->currentInputTool() == ToolId::Blur
+                    || m_host->currentInputTool() == ToolId::Smudge
+                    || m_host->currentInputTool() == ToolId::Liquify
+                    || m_host->currentInputTool() == ToolId::Eraser)
                 && (tabletButtons.testFlag(Qt::RightButton)
                     || tabletButtons.testFlag(Qt::MiddleButton))
                 && !m_host->temporaryToolHoldActive()) {
                 const Qt::MouseButton sideBtn
                     = tabletButtons.testFlag(Qt::RightButton) ? Qt::RightButton : Qt::MiddleButton;
-                beginTemporaryStylusToolHold(sideBtn, CanvasPanel::ToolMode::Eraser);
+                beginTemporaryStylusToolHold(sideBtn, ToolId::Eraser);
             }
             // Mark temporary tool as used
             m_host->markTemporaryToolUsed();
@@ -263,8 +263,8 @@ void CanvasTabletHandler::handleTabletEvent(QTabletEvent* event)
             }
 
             // Hand / Move tool: panning
-            if (m_host->currentInputTool() == CanvasPanel::ToolMode::Hand
-                || m_host->currentInputTool() == CanvasPanel::ToolMode::Move) {
+            if (m_host->currentInputTool() == ToolId::Hand
+                || m_host->currentInputTool() == ToolId::Move) {
                 QPoint localPos = m_panel->mapFromGlobal(globalPosF.toPoint());
                 QMouseEvent syntheticPress(QEvent::MouseButtonPress, localPos, globalPosF.toPoint(),
                     Qt::LeftButton, tabletButtons, event->modifiers());
@@ -272,11 +272,11 @@ void CanvasTabletHandler::handleTabletEvent(QTabletEvent* event)
                 event->accept();
                 return;
             }
-            if (m_host->currentInputTool() == CanvasPanel::ToolMode::Brush
-                || m_host->currentInputTool() == CanvasPanel::ToolMode::Blur
-                || m_host->currentInputTool() == CanvasPanel::ToolMode::Smudge
-                || m_host->currentInputTool() == CanvasPanel::ToolMode::Liquify
-                || m_host->currentInputTool() == CanvasPanel::ToolMode::Eraser) {
+            if (m_host->currentInputTool() == ToolId::Brush
+                || m_host->currentInputTool() == ToolId::Blur
+                || m_host->currentInputTool() == ToolId::Smudge
+                || m_host->currentInputTool() == ToolId::Liquify
+                || m_host->currentInputTool() == ToolId::Eraser) {
                 m_host->hideBrushPackOverlayIfNotUserMoved();
                 m_host->setInputTabletActive(true);
                 m_host->setEraseMode(
@@ -294,11 +294,11 @@ void CanvasTabletHandler::handleTabletEvent(QTabletEvent* event)
             }
         }
 
-        if ((m_host->currentInputTool() == CanvasPanel::ToolMode::Brush
-                || m_host->currentInputTool() == CanvasPanel::ToolMode::Blur
-                || m_host->currentInputTool() == CanvasPanel::ToolMode::Smudge
-                || m_host->currentInputTool() == CanvasPanel::ToolMode::Liquify
-                || m_host->currentInputTool() == CanvasPanel::ToolMode::Eraser)
+        if ((m_host->currentInputTool() == ToolId::Brush
+                || m_host->currentInputTool() == ToolId::Blur
+                || m_host->currentInputTool() == ToolId::Smudge
+                || m_host->currentInputTool() == ToolId::Liquify
+                || m_host->currentInputTool() == ToolId::Eraser)
             && (tabletButton == Qt::RightButton || tabletButton == Qt::MiddleButton)) {
             // Side stylus buttons should behave like mouse buttons without delayed brush start.
             QPoint localPos = m_panel->mapFromGlobal(globalPosF.toPoint());
@@ -331,7 +331,7 @@ void CanvasTabletHandler::handleTabletEvent(QTabletEvent* event)
             if (newlyPressed.testFlag(moveTabletButton) && !m_host->temporaryToolHoldActive()) {
                 // Switch to eraser; don't end stroke — current stroke finishes on pen release,
                 // next touch will be eraser
-                beginTemporaryStylusToolHold(moveTabletButton, CanvasPanel::ToolMode::Eraser);
+                beginTemporaryStylusToolHold(moveTabletButton, ToolId::Eraser);
             }
         }
         const Qt::MouseButtons newlyReleased = prevTabletButtons & ~tabletButtons;

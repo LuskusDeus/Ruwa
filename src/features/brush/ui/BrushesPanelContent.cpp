@@ -184,7 +184,7 @@ void BrushesPanelContent::setCanvasPanel(CanvasPanel* canvasPanel)
     connect(m_canvasPanel, &CanvasPanel::toolModeChanged, this,
         [this]() { syncSelectionFromCanvas(); });
     connect(m_canvasPanel, &CanvasPanel::brushSelectionContextChanged, this,
-        [this](CanvasPanel::ToolMode, const QString&) { syncSelectionFromCanvas(); });
+        [this](ToolId, const QString&) { syncSelectionFromCanvas(); });
 
     syncSelectionFromCanvas();
 }

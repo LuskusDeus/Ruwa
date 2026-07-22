@@ -20,8 +20,8 @@ class QTimer;
 namespace ruwa::ui::workspace {
 
 struct CanvasLoadedToolState {
-    CanvasToolMode currentTool = CanvasToolMode::Brush;
-    CanvasToolMode lastDrawTool = CanvasToolMode::Brush;
+    ToolId currentTool = ToolId::Brush;
+    ToolId lastDrawTool = ToolId::Brush;
     QColor currentColor = QColor(0, 0, 0, 255);
     qreal lassoStabilization = 0.0;
     qreal lassoFillStabilization = 0.0;
@@ -39,10 +39,10 @@ public:
 
     void loadRuntimeState();
 
-    CanvasToolMode currentTool() const { return m_currentTool; }
-    void setCurrentTool(CanvasToolMode tool) { m_currentTool = tool; }
-    CanvasToolMode lastDrawTool() const { return m_lastDrawTool; }
-    void setLastDrawTool(CanvasToolMode tool);
+    ToolId currentTool() const { return m_currentTool; }
+    void setCurrentTool(ToolId tool) { m_currentTool = tool; }
+    ToolId lastDrawTool() const { return m_lastDrawTool; }
+    void setLastDrawTool(ToolId tool);
 
     QColor currentColor() const { return m_currentColor; }
     void setCurrentColor(const QColor& color);
@@ -62,19 +62,19 @@ public:
     int liquifyToolMode() const { return m_liquifyToolMode; }
     void setLiquifyToolMode(int mode) { m_liquifyToolMode = mode; }
 
-    bool shouldEraseForTool(CanvasToolMode tool) const;
-    CanvasToolMode overlayInstrumentMode() const;
-    bool overlayMatchesInstrument(CanvasToolMode tool) const;
+    bool shouldEraseForTool(ToolId tool) const;
+    ToolId overlayInstrumentMode() const;
+    bool overlayMatchesInstrument(ToolId tool) const;
 
-    CanvasToolBrushState* stateForInstrument(CanvasToolMode tool);
-    const CanvasToolBrushState* stateForInstrument(CanvasToolMode tool) const;
+    CanvasToolBrushState* stateForInstrument(ToolId tool);
+    const CanvasToolBrushState* stateForInstrument(ToolId tool) const;
     const CanvasToolBrushState& brushState() const { return m_brushState; }
     const CanvasToolBrushState& eraserState() const { return m_eraserState; }
     const CanvasToolBrushState& blurState() const { return m_blurState; }
     const CanvasToolBrushState& smudgeState() const { return m_smudgeState; }
 
-    CanvasPersistedToolState persistedState(CanvasToolMode tool) const;
-    void setPersistedState(CanvasToolMode tool, const CanvasPersistedToolState& state);
+    CanvasPersistedToolState persistedState(ToolId tool) const;
+    void setPersistedState(ToolId tool, const CanvasPersistedToolState& state);
     CanvasToolStateSnapshot buildSnapshot() const;
 
     bool suppressPersistDuringRestore() const { return m_suppressPersistDuringRestore; }
@@ -87,24 +87,24 @@ public:
     void flushQueuedSnapshot();
     void flushQueuedSnapshotNoWait();
 
-    static bool isDrawInstrument(CanvasToolMode tool);
-    static bool shouldEraseForTool(CanvasToolMode tool, bool brushEraserActive);
-    static CanvasToolMode overlayInstrumentMode(
-        CanvasToolMode currentTool, CanvasToolMode lastDrawTool);
+    static bool isDrawInstrument(ToolId tool);
+    static bool shouldEraseForTool(ToolId tool, bool brushEraserActive);
+    static ToolId overlayInstrumentMode(
+        ToolId currentTool, ToolId lastDrawTool);
     static bool overlayMatchesInstrument(
-        CanvasToolMode tool, CanvasToolMode currentTool, CanvasToolMode lastDrawTool);
-    static CanvasToolBrushState* stateForInstrument(CanvasToolMode tool,
+        ToolId tool, ToolId currentTool, ToolId lastDrawTool);
+    static CanvasToolBrushState* stateForInstrument(ToolId tool,
         CanvasToolBrushState& brush, CanvasToolBrushState& eraser, CanvasToolBrushState& blur,
         CanvasToolBrushState& smudge);
-    static const CanvasToolBrushState* stateForInstrument(CanvasToolMode tool,
+    static const CanvasToolBrushState* stateForInstrument(ToolId tool,
         const CanvasToolBrushState& brush, const CanvasToolBrushState& eraser,
         const CanvasToolBrushState& blur, const CanvasToolBrushState& smudge);
     static CanvasPersistedToolState persistedStateFromToolState(const CanvasToolBrushState& state);
     static void applyPersistedToolState(
         CanvasToolBrushState& target, const CanvasPersistedToolState& state);
     static CanvasLoadedToolState loadPersistedState();
-    static CanvasToolStateSnapshot buildSnapshot(CanvasToolMode currentTool,
-        CanvasToolMode lastDrawTool, const QColor& currentColor, qreal lassoStabilization,
+    static CanvasToolStateSnapshot buildSnapshot(ToolId currentTool,
+        ToolId lastDrawTool, const QColor& currentColor, qreal lassoStabilization,
         qreal lassoFillStabilization, bool brushEraserActive, const CanvasToolBrushState& brush,
         const CanvasToolBrushState& eraser, const CanvasToolBrushState& blur,
         const CanvasToolBrushState& smudge);
@@ -117,8 +117,8 @@ private:
     bool m_profileFlush = false;
     CanvasToolStateSnapshot m_pendingSnapshot;
 
-    CanvasToolMode m_currentTool = CanvasToolMode::Brush;
-    CanvasToolMode m_lastDrawTool = CanvasToolMode::Brush;
+    ToolId m_currentTool = ToolId::Brush;
+    ToolId m_lastDrawTool = ToolId::Brush;
     QColor m_currentColor = QColor(0, 0, 0, 255);
     qreal m_lassoStabilization = 0.0;
     qreal m_lassoFillStabilization = 0.0;

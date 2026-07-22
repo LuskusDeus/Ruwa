@@ -24,7 +24,9 @@
 #include <QResizeEvent>
 #include <QMouseEvent>
 #include <QtGlobal>
+#include <array>
 #include <functional>
+#include <optional>
 
 namespace ruwa::ui::workspace {
 
@@ -42,42 +44,117 @@ const int BASE_SPACING = 6;
 const int BASE_BORDER_RADIUS = 6;
 const int GROUP_HOLD_DELAY_MS = 350;
 
-bool isGroupRepresentative(ToolsPanel::Tool tool)
+struct ToolPresentation {
+    ToolId tool;
+    IconProvider::StandardIcon icon;
+    const char* tooltip;
+};
+
+constexpr std::array kToolPresentations {
+    ToolPresentation { ToolId::Hand, IconProvider::StandardIcon::Hand,
+        QT_TRANSLATE_NOOP("ToolsPanel", "Hand (H)") },
+    ToolPresentation { ToolId::Brush, IconProvider::StandardIcon::Brush,
+        QT_TRANSLATE_NOOP("ToolsPanel", "Brush (B)") },
+    ToolPresentation { ToolId::Eraser, IconProvider::StandardIcon::Eraser,
+        QT_TRANSLATE_NOOP("ToolsPanel", "Eraser (E)") },
+    ToolPresentation { ToolId::Fill, IconProvider::StandardIcon::SmartFillColor,
+        QT_TRANSLATE_NOOP("ToolsPanel", "Fill (G)") },
+    ToolPresentation { ToolId::ClassicFill, IconProvider::StandardIcon::FillColor,
+        QT_TRANSLATE_NOOP("ToolsPanel", "Classic Fill (Shift+G)") },
+    ToolPresentation { ToolId::Eyedropper, IconProvider::StandardIcon::Eyedropper,
+        QT_TRANSLATE_NOOP("ToolsPanel", "Eyedropper (I)") },
+    ToolPresentation { ToolId::Lasso, IconProvider::StandardIcon::Lasso,
+        QT_TRANSLATE_NOOP("ToolsPanel", "Lasso (L)") },
+    ToolPresentation { ToolId::LassoFill, IconProvider::StandardIcon::LassoFill,
+        QT_TRANSLATE_NOOP("ToolsPanel", "Lasso Fill (Shift+L)") },
+    ToolPresentation { ToolId::SquareSelection, IconProvider::StandardIcon::SquareSelection,
+        QT_TRANSLATE_NOOP("ToolsPanel", "Square Selection (M)") },
+    ToolPresentation { ToolId::CircleSelection, IconProvider::StandardIcon::CircleSelection,
+        QT_TRANSLATE_NOOP("ToolsPanel", "Circle Selection (O)") },
+    ToolPresentation { ToolId::Move, IconProvider::StandardIcon::Move,
+        QT_TRANSLATE_NOOP("ToolsPanel", "Move (V)") },
+    ToolPresentation { ToolId::RotateView, IconProvider::StandardIcon::RotateView,
+        QT_TRANSLATE_NOOP("ToolsPanel", "Rotate View (R)") },
+    ToolPresentation { ToolId::CanvasResize, IconProvider::StandardIcon::Crop,
+        QT_TRANSLATE_NOOP("ToolsPanel", "Canvas Resize") },
+    ToolPresentation { ToolId::Zoom, IconProvider::StandardIcon::Zoom,
+        QT_TRANSLATE_NOOP("ToolsPanel", "Zoom (Z)") },
+    ToolPresentation { ToolId::Blur, IconProvider::StandardIcon::Blur,
+        QT_TRANSLATE_NOOP("ToolsPanel", "Blur") },
+    ToolPresentation { ToolId::Smudge, IconProvider::StandardIcon::Smudge,
+        QT_TRANSLATE_NOOP("ToolsPanel", "Smudge") },
+    ToolPresentation { ToolId::Liquify, IconProvider::StandardIcon::Liquify,
+        QT_TRANSLATE_NOOP("ToolsPanel", "Liquify") },
+    ToolPresentation { ToolId::Text, IconProvider::StandardIcon::Text,
+        QT_TRANSLATE_NOOP("ToolsPanel", "Text (T)") },
+    ToolPresentation { ToolId::MagicWand, IconProvider::StandardIcon::MagicWand,
+        QT_TRANSLATE_NOOP("ToolsPanel", "Magic Wand (W)") },
+};
+
+constexpr bool hasCompleteToolPresentationSet()
 {
-    return tool == ToolsPanel::Tool::Blur || tool == ToolsPanel::Tool::Fill
-        || tool == ToolsPanel::Tool::Lasso
-        || tool == ToolsPanel::Tool::SquareSelection;
+    if (kToolPresentations.size() != kToolIds.size()) {
+        return false;
+    }
+    for (const ToolId tool : kToolIds) {
+        int matches = 0;
+        for (const ToolPresentation& presentation : kToolPresentations) {
+            matches += presentation.tool == tool ? 1 : 0;
+        }
+        if (matches != 1) {
+            return false;
+        }
+    }
+    return true;
+}
+static_assert(hasCompleteToolPresentationSet());
+
+const ToolPresentation& presentationForTool(ToolId tool)
+{
+    for (const ToolPresentation& presentation : kToolPresentations) {
+        if (presentation.tool == tool) {
+            return presentation;
+        }
+    }
+    return kToolPresentations.front();
 }
 
-ToolsPanel::Tool groupRepresentativeForTool(ToolsPanel::Tool tool)
+bool isGroupRepresentative(ToolId tool)
+{
+    return tool == ToolId::Blur || tool == ToolId::Fill
+        || tool == ToolId::Lasso
+        || tool == ToolId::SquareSelection;
+}
+
+ToolId groupRepresentativeForTool(ToolId tool)
 {
     switch (tool) {
-    case ToolsPanel::Tool::Smudge:
-    case ToolsPanel::Tool::Liquify:
-        return ToolsPanel::Tool::Blur;
-    case ToolsPanel::Tool::ClassicFill:
-        return ToolsPanel::Tool::Fill;
-    case ToolsPanel::Tool::LassoFill:
-        return ToolsPanel::Tool::Lasso;
-    case ToolsPanel::Tool::CircleSelection:
-        return ToolsPanel::Tool::SquareSelection;
+    case ToolId::Smudge:
+    case ToolId::Liquify:
+        return ToolId::Blur;
+    case ToolId::ClassicFill:
+        return ToolId::Fill;
+    case ToolId::LassoFill:
+        return ToolId::Lasso;
+    case ToolId::CircleSelection:
+        return ToolId::SquareSelection;
     default:
         return tool;
     }
 }
 
-QList<ToolsPanel::Tool> groupMembers(ToolsPanel::Tool representative)
+QList<ToolId> groupMembers(ToolId representative)
 {
     switch (representative) {
-    case ToolsPanel::Tool::Blur:
-        return { ToolsPanel::Tool::Blur, ToolsPanel::Tool::Smudge,
-            ToolsPanel::Tool::Liquify };
-    case ToolsPanel::Tool::Fill:
-        return { ToolsPanel::Tool::Fill, ToolsPanel::Tool::ClassicFill };
-    case ToolsPanel::Tool::Lasso:
-        return { ToolsPanel::Tool::Lasso, ToolsPanel::Tool::LassoFill };
-    case ToolsPanel::Tool::SquareSelection:
-        return { ToolsPanel::Tool::SquareSelection, ToolsPanel::Tool::CircleSelection };
+    case ToolId::Blur:
+        return { ToolId::Blur, ToolId::Smudge,
+            ToolId::Liquify };
+    case ToolId::Fill:
+        return { ToolId::Fill, ToolId::ClassicFill };
+    case ToolId::Lasso:
+        return { ToolId::Lasso, ToolId::LassoFill };
+    case ToolId::SquareSelection:
+        return { ToolId::SquareSelection, ToolId::CircleSelection };
     default:
         return { representative };
     }
@@ -310,14 +387,14 @@ private:
     int m_margin = 4;
 };
 
-// Tool groups for layout (separators between groups)
-static const QList<QList<ToolsPanel::Tool>> TOOL_GROUPS = {
-    { ToolsPanel::Tool::Hand, ToolsPanel::Tool::RotateView, ToolsPanel::Tool::Zoom }, // Navigation
-    { ToolsPanel::Tool::Brush, ToolsPanel::Tool::Eraser, ToolsPanel::Tool::Fill,
-        ToolsPanel::Tool::Eyedropper, ToolsPanel::Tool::Blur }, // Drawing
-    { ToolsPanel::Tool::Move, ToolsPanel::Tool::SquareSelection,
-        ToolsPanel::Tool::Lasso, ToolsPanel::Tool::MagicWand }, // Selection and movement
-    { ToolsPanel::Tool::Text, ToolsPanel::Tool::CanvasResize } // Other
+// ToolId groups for layout (separators between groups)
+static const QList<QList<ToolId>> TOOL_GROUPS = {
+    { ToolId::Hand, ToolId::RotateView, ToolId::Zoom }, // Navigation
+    { ToolId::Brush, ToolId::Eraser, ToolId::Fill,
+        ToolId::Eyedropper, ToolId::Blur }, // Drawing
+    { ToolId::Move, ToolId::SquareSelection,
+        ToolId::Lasso, ToolId::MagicWand }, // Selection and movement
+    { ToolId::Text, ToolId::CanvasResize } // Other
 };
 
 bool isToolSwitchProfilingEnabled()
@@ -345,10 +422,10 @@ ToolsPanel::ToolsPanel(QWidget* parent)
     setFloatable(true);
     setMovable(true);
 
-    m_groupSelections[Tool::Blur] = Tool::Blur;
-    m_groupSelections[Tool::Fill] = Tool::Fill;
-    m_groupSelections[Tool::Lasso] = Tool::Lasso;
-    m_groupSelections[Tool::SquareSelection] = Tool::SquareSelection;
+    m_groupSelections[ToolId::Blur] = ToolId::Blur;
+    m_groupSelections[ToolId::Fill] = ToolId::Fill;
+    m_groupSelections[ToolId::Lasso] = ToolId::Lasso;
+    m_groupSelections[ToolId::SquareSelection] = ToolId::SquareSelection;
 
     m_layoutAnimationTimer = new QTimer(this);
     m_layoutAnimationTimer->setInterval(16);
@@ -371,7 +448,7 @@ void ToolsPanel::setRelatedPanels(CanvasPanel* canvasPanel, LayersPanel* layersP
     m_layersPanel = layersPanel;
 }
 
-void ToolsPanel::setCurrentTool(Tool tool)
+void ToolsPanel::setActiveTool(ToolId tool)
 {
     const bool profileToolSwitch = isToolSwitchProfilingEnabled();
     QElapsedTimer timer;
@@ -379,7 +456,7 @@ void ToolsPanel::setCurrentTool(Tool tool)
         timer.start();
     }
 
-    const Tool displayTool = displayToolFor(tool);
+    const ToolId displayTool = displayToolFor(tool);
     if (isGroupRepresentative(displayTool)) {
         m_groupSelections[displayTool] = tool;
     }
@@ -390,7 +467,6 @@ void ToolsPanel::setCurrentTool(Tool tool)
             m_toolsData[displayTool].button->setChecked(true);
         }
         updateGroupButtons();
-        emit toolChanged(tool);
     } else {
         updateGroupButtons();
     }
@@ -409,36 +485,33 @@ QWidget* ToolsPanel::createContent()
     m_buttonGroup->setExclusive(true);
 
     connect(m_buttonGroup, &QButtonGroup::idClicked, this, [this](int id) {
-        Tool tool = resolveSelectedTool(static_cast<Tool>(id));
-        if (m_currentTool != tool) {
-            m_currentTool = tool;
-            const Tool displayTool = displayToolFor(tool);
-            if (isGroupRepresentative(displayTool)) {
-                m_groupSelections[displayTool] = tool;
-            }
-            updateGroupButtons();
-            emit toolChanged(tool);
-        } else {
-            updateGroupButtons();
+        const std::optional<ToolId> requestedTool = toolIdFromValue(id);
+        if (!requestedTool) {
+            return;
         }
+        const ToolId tool = resolveSelectedTool(*requestedTool);
+        if (m_currentTool == tool) {
+            updateGroupButtons();
+            return;
+        }
+        emit toolRequested(tool);
     });
 
     // Create all buttons (without adding to any layout yet)
-    addTool(Tool::Hand, IconProvider::StandardIcon::Hand, tr("Hand (H)"));
-    addTool(Tool::Brush, IconProvider::StandardIcon::Brush, tr("Brush (B)"));
-    addTool(Tool::Eraser, IconProvider::StandardIcon::Eraser, tr("Eraser (E)"));
-    addGroupTool(Tool::Fill, IconProvider::StandardIcon::SmartFillColor, tr("Fill (G)"));
-    addTool(Tool::Eyedropper, IconProvider::StandardIcon::Eyedropper, tr("Eyedropper (I)"));
-    addGroupTool(Tool::Blur, IconProvider::StandardIcon::Blur, tr("Blur"));
-    addTool(Tool::Move, IconProvider::StandardIcon::Move, tr("Move (V)"));
-    addGroupTool(Tool::SquareSelection, IconProvider::StandardIcon::SquareSelection,
-        tr("Square Selection (M)"));
-    addGroupTool(Tool::Lasso, IconProvider::StandardIcon::Lasso, tr("Lasso (L)"));
-    addTool(Tool::MagicWand, IconProvider::StandardIcon::MagicWand, tr("Magic Wand (W)"));
-    addTool(Tool::Text, IconProvider::StandardIcon::Text, tr("Text (T)"));
-    addTool(Tool::RotateView, IconProvider::StandardIcon::RotateView, tr("Rotate View (R)"));
-    addTool(Tool::CanvasResize, IconProvider::StandardIcon::Crop, tr("Canvas Resize"));
-    addTool(Tool::Zoom, IconProvider::StandardIcon::Zoom, tr("Zoom (Z)"));
+    addTool(ToolId::Hand);
+    addTool(ToolId::Brush);
+    addTool(ToolId::Eraser);
+    addGroupTool(ToolId::Fill);
+    addTool(ToolId::Eyedropper);
+    addGroupTool(ToolId::Blur);
+    addTool(ToolId::Move);
+    addGroupTool(ToolId::SquareSelection);
+    addGroupTool(ToolId::Lasso);
+    addTool(ToolId::MagicWand);
+    addTool(ToolId::Text);
+    addTool(ToolId::RotateView);
+    addTool(ToolId::CanvasResize);
+    addTool(ToolId::Zoom);
 
     m_contentCreated = true;
 
@@ -460,9 +533,9 @@ QWidget* ToolsPanel::createContent()
         m_toolsData[m_currentTool].button->setChecked(true);
     } else if (m_toolsData.contains(displayToolFor(m_currentTool))) {
         m_toolsData[displayToolFor(m_currentTool)].button->setChecked(true);
-    } else if (m_toolsData.contains(Tool::Brush)) {
-        m_toolsData[Tool::Brush].button->setChecked(true);
-        m_currentTool = Tool::Brush;
+    } else if (m_toolsData.contains(ToolId::Brush)) {
+        m_toolsData[ToolId::Brush].button->setChecked(true);
+        m_currentTool = ToolId::Brush;
     }
 
     updateIcons();
@@ -568,7 +641,7 @@ void ToolsPanel::positionLayout(bool animate)
             int visibleCount = 0;
             int buttonHeight = 0;
             int buttonWidth = 0;
-            for (Tool tool : TOOL_GROUPS[g]) {
+            for (ToolId tool : TOOL_GROUPS[g]) {
                 if (m_toolsData.contains(tool)) {
                     const QSize hint = m_toolsData[tool].button->sizeHint();
                     ++visibleCount;
@@ -584,7 +657,7 @@ void ToolsPanel::positionLayout(bool animate)
             }
 
             int visibleIndex = 0;
-            for (Tool tool : TOOL_GROUPS[g]) {
+            for (ToolId tool : TOOL_GROUPS[g]) {
                 if (!m_toolsData.contains(tool)) {
                     continue;
                 }
@@ -626,7 +699,7 @@ void ToolsPanel::positionLayout(bool animate)
         int lineHeight = 0;
         bool hasGroupButtons = false;
 
-        for (Tool tool : TOOL_GROUPS[g]) {
+        for (ToolId tool : TOOL_GROUPS[g]) {
             if (!m_toolsData.contains(tool)) {
                 continue;
             }
@@ -800,27 +873,28 @@ void ToolsPanel::resizeEvent(QResizeEvent* event)
     }
 }
 
-void ToolsPanel::addTool(Tool tool, IconProvider::StandardIcon iconType, const QString& tooltip)
+void ToolsPanel::addTool(ToolId tool)
 {
+    const ToolPresentation& presentation = presentationForTool(tool);
     auto* button = new ToolButton(m_contentWidget);
     button->setTabletTracking(true);
-    button->setToolTip(tooltip);
+    button->setToolTip(tr(presentation.tooltip));
     button->setCheckable(true);
-    button->setIconType(iconType);
+    button->setIconType(presentation.icon);
     button->setCursor(Qt::PointingHandCursor);
 
     m_buttonGroup->addButton(button, static_cast<int>(tool));
-    m_toolsData[tool] = { button, iconType };
+    m_toolsData[tool] = { button, presentation.icon };
 }
 
-void ToolsPanel::addGroupTool(
-    Tool tool, IconProvider::StandardIcon iconType, const QString& tooltip)
+void ToolsPanel::addGroupTool(ToolId tool)
 {
+    const ToolPresentation& presentation = presentationForTool(tool);
     auto* button = new GroupToolButton(m_contentWidget);
     button->setTabletTracking(true);
-    button->setToolTip(tooltip);
+    button->setToolTip(tr(presentation.tooltip));
     button->setCheckable(true);
-    button->setIconType(iconType);
+    button->setIconType(presentation.icon);
     button->setHasGroupIndicator(true);
     button->setCursor(Qt::PointingHandCursor);
     // Tools with variants handle their own right-click (the variant-selection popup).
@@ -830,12 +904,7 @@ void ToolsPanel::addGroupTool(
     button->setPopupCallback([this, tool, button]() { openToolGroupPopup(tool, button); });
 
     m_buttonGroup->addButton(button, static_cast<int>(tool));
-    m_toolsData[tool] = { button, iconType };
-}
-
-void ToolsPanel::activateActionTool(Tool tool)
-{
-    emit actionToolActivated(tool);
+    m_toolsData[tool] = { button, presentation.icon };
 }
 
 void ToolsPanel::onThemeChanged()
@@ -869,7 +938,7 @@ void ToolsPanel::updateGroupButtons()
             continue;
         }
         auto& info = m_toolsData[it.key()];
-        const Tool currentGroupTool = it.value();
+        const ToolId currentGroupTool = it.value();
         info.button->setToolTip(tooltipForTool(currentGroupTool));
         info.button->setIcon(
             ThemeManager::instance().icons().getIcon(iconForTool(currentGroupTool)));
@@ -877,7 +946,7 @@ void ToolsPanel::updateGroupButtons()
     }
 
     if (m_groupPopup && m_groupPopup->isPopupVisible()) {
-        m_groupPopup->setCurrentToolId(static_cast<int>(m_currentTool));
+        m_groupPopup->setActiveTool(m_currentTool);
     }
 }
 
@@ -888,11 +957,10 @@ void ToolsPanel::ensureGroupPopup()
     }
 
     m_groupPopup = new ToolGroupPopup();
-    connect(m_groupPopup, &ToolGroupPopup::toolSelected, this,
-        [this](int toolId) { setCurrentTool(static_cast<Tool>(toolId)); });
+    connect(m_groupPopup, &ToolGroupPopup::toolSelected, this, &ToolsPanel::toolRequested);
 }
 
-void ToolsPanel::openToolGroupPopup(Tool representativeTool, QWidget* anchor)
+void ToolsPanel::openToolGroupPopup(ToolId representativeTool, QWidget* anchor)
 {
     // A "No actions for this" menu may already be open from a prior right-click on a
     // regular tool. Since the variant popup is triggered by a separate path, dismiss
@@ -905,15 +973,15 @@ void ToolsPanel::openToolGroupPopup(Tool representativeTool, QWidget* anchor)
     m_groupPopup->setLayoutMode(resolvePopupLayoutMode(this));
 
     QList<ToolGroupPopup::Item> items;
-    const QList<Tool> tools = groupMembers(representativeTool);
-    for (Tool tool : tools) {
-        items.append(ToolGroupPopup::Item { .toolId = static_cast<int>(tool),
+    const QList<ToolId> tools = groupMembers(representativeTool);
+    for (ToolId tool : tools) {
+        items.append(ToolGroupPopup::Item { .tool = tool,
             .iconType = iconForTool(tool),
             .tooltip = tooltipForTool(tool) });
     }
 
     m_groupPopup->setItems(items);
-    m_groupPopup->setCurrentToolId(static_cast<int>(resolveSelectedTool(representativeTool)));
+    m_groupPopup->setActiveTool(resolveSelectedTool(representativeTool));
     m_groupPopup->showFor(anchor, true);
 }
 
@@ -930,112 +998,28 @@ void ToolsPanel::hideToolGroupPopup(bool immediate)
     }
 }
 
-ToolsPanel::Tool ToolsPanel::resolveSelectedTool(Tool tool) const
+ToolId ToolsPanel::resolveSelectedTool(ToolId tool) const
 {
-    const Tool representative = displayToolFor(tool);
+    const ToolId representative = displayToolFor(tool);
     if (!isGroupRepresentative(representative)) {
         return tool;
     }
     return m_groupSelections.value(representative, representative);
 }
 
-ToolsPanel::Tool ToolsPanel::displayToolFor(Tool tool) const
+ToolId ToolsPanel::displayToolFor(ToolId tool) const
 {
     return groupRepresentativeForTool(tool);
 }
 
-QString ToolsPanel::tooltipForTool(Tool tool) const
+QString ToolsPanel::tooltipForTool(ToolId tool) const
 {
-    switch (tool) {
-    case Tool::Hand:
-        return tr("Hand (H)");
-    case Tool::Brush:
-        return tr("Brush (B)");
-    case Tool::Blur:
-        return tr("Blur");
-    case Tool::Smudge:
-        return tr("Smudge");
-    case Tool::Liquify:
-        return tr("Liquify");
-    case Tool::Eraser:
-        return tr("Eraser (E)");
-    case Tool::Fill:
-        return tr("Fill (G)");
-    case Tool::ClassicFill:
-        return tr("Classic Fill (Shift+G)");
-    case Tool::Eyedropper:
-        return tr("Eyedropper (I)");
-    case Tool::Lasso:
-        return tr("Lasso (L)");
-    case Tool::LassoFill:
-        return tr("Lasso Fill (Shift+L)");
-    case Tool::SquareSelection:
-        return tr("Square Selection (M)");
-    case Tool::CircleSelection:
-        return tr("Circle Selection (O)");
-    case Tool::MagicWand:
-        return tr("Magic Wand (W)");
-    case Tool::Move:
-        return tr("Move (V)");
-    case Tool::Text:
-        return tr("Text (T)");
-    case Tool::RotateView:
-        return tr("Rotate View (R)");
-    case Tool::CanvasResize:
-        return tr("Canvas Resize");
-    case Tool::Camera:
-        return tr("Camera");
-    case Tool::Zoom:
-        return tr("Zoom (Z)");
-    }
-    return QString();
+    return tr(presentationForTool(tool).tooltip);
 }
 
-IconProvider::StandardIcon ToolsPanel::iconForTool(Tool tool) const
+IconProvider::StandardIcon ToolsPanel::iconForTool(ToolId tool) const
 {
-    switch (tool) {
-    case Tool::Hand:
-        return IconProvider::StandardIcon::Hand;
-    case Tool::Brush:
-        return IconProvider::StandardIcon::Brush;
-    case Tool::Blur:
-        return IconProvider::StandardIcon::Blur;
-    case Tool::Smudge:
-        return IconProvider::StandardIcon::Smudge;
-    case Tool::Liquify:
-        return IconProvider::StandardIcon::Liquify;
-    case Tool::Eraser:
-        return IconProvider::StandardIcon::Eraser;
-    case Tool::Fill:
-        return IconProvider::StandardIcon::SmartFillColor;
-    case Tool::ClassicFill:
-        return IconProvider::StandardIcon::FillColor;
-    case Tool::Eyedropper:
-        return IconProvider::StandardIcon::Eyedropper;
-    case Tool::Lasso:
-        return IconProvider::StandardIcon::Lasso;
-    case Tool::LassoFill:
-        return IconProvider::StandardIcon::LassoFill;
-    case Tool::SquareSelection:
-        return IconProvider::StandardIcon::SquareSelection;
-    case Tool::CircleSelection:
-        return IconProvider::StandardIcon::CircleSelection;
-    case Tool::MagicWand:
-        return IconProvider::StandardIcon::MagicWand;
-    case Tool::Move:
-        return IconProvider::StandardIcon::Move;
-    case Tool::Text:
-        return IconProvider::StandardIcon::Text;
-    case Tool::RotateView:
-        return IconProvider::StandardIcon::RotateView;
-    case Tool::CanvasResize:
-        return IconProvider::StandardIcon::Crop;
-    case Tool::Camera:
-        return IconProvider::StandardIcon::Camera;
-    case Tool::Zoom:
-        return IconProvider::StandardIcon::Zoom;
-    }
-    return IconProvider::StandardIcon::Hand;
+    return presentationForTool(tool).icon;
 }
 
 } // namespace ruwa::ui::workspace

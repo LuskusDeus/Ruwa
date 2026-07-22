@@ -31,12 +31,10 @@ class CanvasCursorManager;
 
 class CanvasInputHost {
 public:
-    using ToolMode = CanvasToolMode;
-
     virtual ~CanvasInputHost() = default;
 
-    virtual ToolMode currentInputTool() const = 0;
-    virtual void setToolMode(ToolMode tool) = 0;
+    virtual ToolId currentInputTool() const = 0;
+    virtual void setToolMode(ToolId tool) = 0;
     virtual aether::OpenGLCanvasWidget* inputGlWidget() const = 0;
     virtual CanvasCursorManager* inputCursorManager() const = 0;
 
@@ -70,14 +68,14 @@ public:
     virtual bool temporaryToolShiftSpaceCombo() const = 0;
     virtual void setTemporaryToolShiftSpaceCombo(bool enabled) = 0;
     virtual void markTemporaryToolUsed() = 0;
-    virtual void beginTemporaryToolHoldFromButton(Qt::MouseButton heldButton, ToolMode tool) = 0;
+    virtual void beginTemporaryToolHoldFromButton(Qt::MouseButton heldButton, ToolId tool) = 0;
     virtual void endTemporaryTool() = 0;
     virtual bool finalizeTemporaryToolHoldForKeyRelease(int key) = 0;
     virtual void setPendingTemporaryToolKey(int key, bool alwaysRevert) = 0;
     virtual void clearPendingTemporaryToolKey() = 0;
-    virtual std::optional<ToolMode> inputToolModeForKey(int key) const = 0;
-    virtual std::optional<ToolMode> inputToolModeForKeyEvent(const QKeyEvent* event) const = 0;
-    virtual QString commandIdForInputToolMode(ToolMode mode) const = 0;
+    virtual std::optional<ToolId> inputToolModeForKey(int key) const = 0;
+    virtual std::optional<ToolId> inputToolModeForKeyEvent(const QKeyEvent* event) const = 0;
+    virtual QString commandIdForInputToolMode(ToolId mode) const = 0;
     virtual void noteUndoForTemporaryMoveTool() = 0;
 
     virtual void setCtrlModifierPressed(bool pressed) = 0;
@@ -104,7 +102,7 @@ public:
     virtual bool isGlobalOverInputViewport(const QPoint& globalPos) const = 0;
     virtual bool isGlobalOverInputViewport(const QPointF& globalPos) const = 0;
 
-    virtual bool shouldEraseForTool(ToolMode tool) const = 0;
+    virtual bool shouldEraseForTool(ToolId tool) const = 0;
     virtual void setEraseMode(bool erase) = 0;
     virtual void showBlockedDrawMessageForSelectedLayer() = 0;
     virtual void notifyCanvasContentChanged() = 0;

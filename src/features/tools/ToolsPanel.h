@@ -6,6 +6,7 @@
 
 #include "shell/docking/widgets/DockPanel.h"
 #include "shared/resources/IconProvider.h"
+#include "shared/types/ToolId.h"
 #include "shared/widgets/ToolButton.h"
 
 #include <QList>
@@ -37,41 +38,14 @@ class ToolsPanel : public ruwa::ui::docking::DockPanel {
     Q_OBJECT
 
 public:
-    enum class Tool {
-        Hand,
-        Brush,
-        Eraser,
-        Fill,
-        ClassicFill,
-        Eyedropper,
-        Lasso,
-        LassoFill,
-        SquareSelection,
-        CircleSelection,
-        Move,
-        RotateView,
-        CanvasResize,
-        Camera,
-        Zoom,
-        Blur,
-        Smudge,
-        Liquify,
-        Text,
-        MagicWand
-    };
-    Q_ENUM(Tool)
-
     explicit ToolsPanel(QWidget* parent = nullptr);
     ~ToolsPanel() override;
 
-    Tool currentTool() const { return m_currentTool; }
-    void setCurrentTool(Tool tool);
+    void setActiveTool(ToolId tool);
     void setRelatedPanels(CanvasPanel* canvasPanel, LayersPanel* layersPanel);
-    void activateActionTool(Tool tool);
 
 signals:
-    void toolChanged(Tool tool);
-    void actionToolActivated(Tool tool);
+    void toolRequested(ToolId tool);
 
 protected:
     QWidget* createContent() override;
@@ -82,10 +56,8 @@ protected:
 private:
     enum class Orientation { Vertical, Horizontal };
 
-    void addTool(
-        Tool tool, ruwa::ui::core::IconProvider::StandardIcon iconType, const QString& tooltip);
-    void addGroupTool(
-        Tool tool, ruwa::ui::core::IconProvider::StandardIcon iconType, const QString& tooltip);
+    void addTool(ToolId tool);
+    void addGroupTool(ToolId tool);
     void updateIcons();
     void rebuildLayout(bool animate = false);
     void positionLayout(bool animate);
@@ -95,12 +67,12 @@ private:
     void updateOrientation(bool animate = true);
     void updateGroupButtons();
     void ensureGroupPopup();
-    void openToolGroupPopup(Tool representativeTool, QWidget* anchor);
+    void openToolGroupPopup(ToolId representativeTool, QWidget* anchor);
     void hideToolGroupPopup(bool immediate = true);
-    Tool resolveSelectedTool(Tool tool) const;
-    Tool displayToolFor(Tool tool) const;
-    QString tooltipForTool(Tool tool) const;
-    ruwa::ui::core::IconProvider::StandardIcon iconForTool(Tool tool) const;
+    ToolId resolveSelectedTool(ToolId tool) const;
+    ToolId displayToolFor(ToolId tool) const;
+    QString tooltipForTool(ToolId tool) const;
+    ruwa::ui::core::IconProvider::StandardIcon iconForTool(ToolId tool) const;
 
 private:
     QWidget* m_contentWidget = nullptr;
@@ -110,17 +82,17 @@ private:
         ToolButton* button;
         ruwa::ui::core::IconProvider::StandardIcon iconType;
     };
-    QMap<Tool, ToolButtonInfo> m_toolsData;
+    QMap<ToolId, ToolButtonInfo> m_toolsData;
     QList<QWidget*> m_separators;
     QMap<QWidget*, QRect> m_layoutTargets;
     QSet<QWidget*> m_layoutTrackedWidgets;
     QTimer* m_layoutAnimationTimer = nullptr;
-    QMap<Tool, Tool> m_groupSelections;
+    QMap<ToolId, ToolId> m_groupSelections;
     ToolGroupPopup* m_groupPopup = nullptr;
     CanvasPanel* m_canvasPanel = nullptr;
     LayersPanel* m_layersPanel = nullptr;
 
-    Tool m_currentTool = Tool::Brush;
+    ToolId m_currentTool = ToolId::Brush;
     Orientation m_orientation = Orientation::Vertical;
     bool m_contentCreated = false;
     bool m_layoutBoundsInitialized = false;

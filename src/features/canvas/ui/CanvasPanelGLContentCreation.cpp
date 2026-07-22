@@ -161,11 +161,11 @@ bool CanvasPanel::createGLContent()
         m_zoomInfoOverlay->stackUnder(m_loadingOverlay);
     }
     if (m_glWidget) {
-        const ToolMode currentTool = toolMode();
+    const ToolId currentTool = toolMode();
         setEraseMode(shouldEraseForTool(currentTool));
-        setBlurMode(currentTool == ToolMode::Blur);
-        setSmudgeMode(currentTool == ToolMode::Smudge);
-        setLiquifyMode(currentTool == ToolMode::Liquify);
+    setBlurMode(currentTool == ToolId::Blur);
+    setSmudgeMode(currentTool == ToolId::Smudge);
+    setLiquifyMode(currentTool == ToolId::Liquify);
         if (m_toolStateOverlay) {
             m_toolStateOverlay->setCanvasFlipStates(
                 m_glWidget->canvasContentFlipHorizontal(), m_glWidget->canvasContentFlipVertical());

@@ -88,10 +88,10 @@ void ToolGroupPopup::setItems(const QList<Item>& items)
     rebuildButtons();
 }
 
-void ToolGroupPopup::setCurrentToolId(int toolId)
+void ToolGroupPopup::setActiveTool(ToolId tool)
 {
     for (int i = 0; i < m_buttons.size(); ++i) {
-        const bool isCurrent = i < m_items.size() && m_items[i].toolId == toolId;
+        const bool isCurrent = i < m_items.size() && m_items[i].tool == tool;
         // Block the toggled signal so it doesn't trigger setActive()'s transition
         // animation, then snap the active visual state. The current tool is already
         // active when the popup opens, so it must appear selected without animating in.
@@ -365,7 +365,7 @@ bool ToolGroupPopup::triggerHoveredButtonSelection()
         return false;
     }
 
-    emit toolSelected(m_items[buttonIndex].toolId);
+    emit toolSelected(m_items[buttonIndex].tool);
     hideAnimated();
     return true;
 }
@@ -410,7 +410,7 @@ void ToolGroupPopup::rebuildButtons()
         button->setHasGroupIndicator(false);
 
         connect(button, &QAbstractButton::clicked, this, [this, item]() {
-            emit toolSelected(item.toolId);
+            emit toolSelected(item.tool);
             hideAnimated();
         });
 
