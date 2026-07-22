@@ -46,9 +46,11 @@ public:
 
     QImage image() const { return m_image; }
     bool hasImageFor(const BrushPreviewSpec& spec) const;
+    bool hasCompletedFor(const BrushPreviewSpec& spec) const;
 
 signals:
     void imageChanged();
+    void requestFinished();
 
 private:
     void armDispatchTimer();
@@ -80,6 +82,7 @@ private:
     QString m_pendingKey;
     QString m_inFlightKey;
     QString m_appliedKey;
+    QString m_completedKey;
 
     bool m_hasRequestedSpec = false;
     bool m_hasPendingSpec = false;

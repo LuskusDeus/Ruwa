@@ -173,6 +173,13 @@ void ToolButton::setEnabledProgress(qreal progress)
     update();
 }
 
+void ToolButton::finishVisualTransitions()
+{
+    BaseAnimatedButton::finishVisualTransitions();
+    m_enabledAnimation->stop();
+    setEnabledProgress(isEnabled() ? 1.0 : 0.0);
+}
+
 void ToolButton::changeEvent(QEvent* event)
 {
     BaseAnimatedButton::changeEvent(event);

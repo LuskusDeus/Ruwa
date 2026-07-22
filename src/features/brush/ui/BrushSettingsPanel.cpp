@@ -146,6 +146,28 @@ void BrushSettingsPanel::setCanvasPanel(CanvasPanel* canvasPanel)
     setCurrentBrush(m_canvasPanel ? m_canvasPanel->selectedBrushIdForCurrentContext() : QString());
 }
 
+void BrushSettingsPanel::prepareVisiblePreview()
+{
+    if (m_dabPreview) {
+        m_dabPreview->preparePreview();
+    }
+}
+
+bool BrushSettingsPanel::visiblePreviewReady() const
+{
+    return !m_dabPreview || m_dabPreview->previewReady();
+}
+
+void BrushSettingsPanel::preparePresentationSnapshot()
+{
+    if (m_openEditorButton) {
+        m_openEditorButton->finishVisualTransitions();
+    }
+    if (m_scrollArea) {
+        m_scrollArea->finishLayoutTransitions();
+    }
+}
+
 QWidget* BrushSettingsPanel::createContent()
 {
     auto& theme = ThemeManager::instance();
@@ -170,6 +192,8 @@ QWidget* BrushSettingsPanel::createContent()
 
     m_dabPreview = new DotPreviewCanvas(m_headerCard);
     m_dabPreview->setFixedSize(theme.scaled(30), theme.scaled(30));
+    m_dabPreview->setPreviewStateChangedCallback(
+        [this]() { emit visiblePreviewStateChanged(); });
 
     auto* headerText = new QWidget(m_headerCard);
     headerText->setAttribute(Qt::WA_TranslucentBackground);

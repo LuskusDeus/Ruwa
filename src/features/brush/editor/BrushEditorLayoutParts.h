@@ -19,6 +19,7 @@
 #include <QWidget>
 
 #include <functional>
+#include <utility>
 
 namespace ruwa::ui::windows::layout_internal {
 
@@ -50,6 +51,13 @@ public:
         m_previewSession->setDispatchIntervalMs(kBrushEditorPreviewFrameIntervalMs);
         connect(m_previewSession, &ruwa::core::brushes::BrushPreviewSession::imageChanged, this,
             QOverload<>::of(&AsyncBrushPreviewCanvasBase::update));
+        connect(m_previewSession, &ruwa::core::brushes::BrushPreviewSession::requestFinished, this,
+            [this]() {
+                update();
+                if (m_previewStateChanged) {
+                    m_previewStateChanged();
+                }
+            });
     }
 
     void setBrushData(const ruwa::core::brushes::BrushSettingsData& settings, qreal sizeNorm = 0.5,
@@ -85,6 +93,18 @@ public:
         }
 
         scheduleRender();
+    }
+
+    void preparePreview() { scheduleRender(); }
+
+    bool previewReady() const
+    {
+        return !m_hasBrush || !m_previewSession || m_previewSession->hasCompletedFor(currentSpec());
+    }
+
+    void setPreviewStateChangedCallback(std::function<void()> callback)
+    {
+        m_previewStateChanged = std::move(callback);
     }
 
 protected:
@@ -151,6 +171,7 @@ private:
     QColor m_color = Qt::black;
     ruwa::core::brushes::BrushPreviewSession* m_previewSession = nullptr;
     int m_strokeSegmentCountHint = 0;
+    std::function<void()> m_previewStateChanged;
 };
 
 class PreviewCanvas final : public AsyncBrushPreviewCanvasBase {

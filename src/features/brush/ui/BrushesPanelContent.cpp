@@ -261,6 +261,39 @@ void BrushesPanelContent::showPack(const QString& packId)
     switchToView(ViewMode::Pack, packId);
 }
 
+void BrushesPanelContent::prepareVisiblePreviews()
+{
+    auto pageIt = m_filterPages.find(currentPageKey());
+    if (pageIt == m_filterPages.end() || !pageIt->scrollArea
+        || !pageIt->scrollArea->viewport()) {
+        return;
+    }
+
+    QWidget* viewport = pageIt->scrollArea->viewport();
+    for (BrushPackListSection* section : std::as_const(pageIt->sections)) {
+        if (section) {
+            section->prepareVisiblePreviews(viewport);
+        }
+    }
+}
+
+bool BrushesPanelContent::visiblePreviewsReady() const
+{
+    const auto pageIt = m_filterPages.constFind(currentPageKey());
+    if (pageIt == m_filterPages.cend() || !pageIt->scrollArea
+        || !pageIt->scrollArea->viewport()) {
+        return true;
+    }
+
+    QWidget* viewport = pageIt->scrollArea->viewport();
+    for (BrushPackListSection* section : pageIt->sections) {
+        if (section && !section->visiblePreviewsReady(viewport)) {
+            return false;
+        }
+    }
+    return true;
+}
+
 QJsonObject BrushesPanelContent::saveState() const
 {
     QJsonObject state;
@@ -514,6 +547,12 @@ bool BrushesPanelContent::eventFilter(QObject* watched, QEvent* event)
         default:
             break;
         }
+    }
+
+    if (!pageKey.isEmpty()
+        && (event->type() == QEvent::Show || event->type() == QEvent::Resize
+            || event->type() == QEvent::LayoutRequest)) {
+        emit visiblePreviewStateChanged();
     }
 
     return QWidget::eventFilter(watched, event);
@@ -801,6 +840,8 @@ void BrushesPanelContent::addPackSection(
         &BrushesPanelContent::onBrushDeleteRequested);
     connect(section, &BrushPackListSection::contentGeometryChanged, this,
         [this, pageKey]() { refreshScrollGeometry(pageKey); });
+    connect(section, &BrushPackListSection::visiblePreviewStateChanged, this,
+        &BrushesPanelContent::visiblePreviewStateChanged);
 
     page.sections.insert(pack.id, section);
     page.scrollLayout->addWidget(section);

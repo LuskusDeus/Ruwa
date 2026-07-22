@@ -65,6 +65,10 @@ public:
     /// Recompute content size and scroll range (call after bulk changes inside the content widget).
     void refreshScrollGeometry();
 
+    /// Finish the animated scrollbar reservation at the geometry implied by
+    /// the current content. Intended for rendering a stable UI snapshot.
+    void finishLayoutTransitions();
+
     /// Get current scroll position
     int scrollValue() const { return m_currentScrollValue; }
     void setScrollValue(int value);
@@ -154,6 +158,7 @@ private:
     bool m_fillBackground { true };
     bool m_scrollBarTransparentTrack { false };
     bool m_refreshingLayout { false };
+    bool m_finishingLayoutTransitions { false };
     bool m_userScrollingEnabled { true };
     Qt::Orientation m_orientation { Qt::Vertical };
 

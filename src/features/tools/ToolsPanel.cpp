@@ -448,6 +448,15 @@ void ToolsPanel::setRelatedPanels(CanvasPanel* canvasPanel, LayersPanel* layersP
     m_layersPanel = layersPanel;
 }
 
+void ToolsPanel::preparePresentationSnapshot()
+{
+    for (const ToolButtonInfo& info : m_toolsData) {
+        if (info.button) {
+            info.button->finishVisualTransitions();
+        }
+    }
+}
+
 void ToolsPanel::setActiveTool(ToolId tool)
 {
     const bool profileToolSwitch = isToolSwitchProfilingEnabled();

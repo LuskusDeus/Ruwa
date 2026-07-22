@@ -70,6 +70,8 @@ public:
     void scheduleThumbnailRefresh();
     void invalidateLayerThumbnails(const QList<ruwa::core::layers::LayerId>& ids);
     void setThumbnailLoadingMode(bool active);
+    bool visibleThumbnailsReady() const;
+    void preparePresentationSnapshot();
     void setFillProcessingLayer(const ruwa::core::layers::LayerId& id);
     ruwa::core::layers::LayerData* selectedLayer() const;
     void selectLayer(const ruwa::core::layers::LayerId& id);
@@ -98,6 +100,7 @@ public:
     void addAdjustmentLayer();
 
 signals:
+    void visibleThumbnailStateChanged();
     /// Emitted before an operation invalidates the current canvas edit target.
     /// Pending operations such as transform must be committed synchronously.
     void aboutToPerformTransformIncompatibleEdit();

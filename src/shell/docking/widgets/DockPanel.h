@@ -52,6 +52,7 @@ class DockPanel : public QFrame {
     Q_PROPERTY(QString title READ title WRITE setTitle NOTIFY titleChanged)
     Q_PROPERTY(PanelState state READ state NOTIFY stateChanged)
     Q_PROPERTY(bool floating READ isFloating NOTIFY stateChanged)
+    Q_PROPERTY(qreal borderOpacity READ borderOpacity WRITE setBorderOpacity)
 
 public:
     explicit DockPanel(const QString& title, QWidget* parent = nullptr);
@@ -106,6 +107,11 @@ public:
 
     bool isTitleBarVisible() const { return m_titleBarVisible; }
     void setTitleBarVisible(bool visible);
+
+    /// Visual opacity of the panel outline only. Does not affect the panel,
+    /// its content, hit testing, or layout geometry.
+    qreal borderOpacity() const { return m_borderOpacity; }
+    void setBorderOpacity(qreal opacity);
 
     // === Size Hints ===
 
@@ -415,6 +421,7 @@ private:
     bool m_titleBarVisible = true;
     bool m_overlayAnimationSuspended = false;
     bool m_contentTransitionUpdateQueued = false;
+    qreal m_borderOpacity = 1.0;
 
     // Containers
     DockFloatingContainer* m_floatingContainer = nullptr;

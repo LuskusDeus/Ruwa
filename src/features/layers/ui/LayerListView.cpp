@@ -148,6 +148,7 @@ LayerListView::LayerListView(QWidget* parent)
         if (m_dragDrop && m_dragDrop->isDragging()) {
             m_dragDrop->refreshDropTarget(QCursor::pos());
         }
+        queueThumbnailsForActiveRows();
     });
 
     // Tree-list configuration: rows nest, so feed indent metrics and a resolver
@@ -240,6 +241,8 @@ LayerListView::LayerListView(QWidget* parent)
     m_thumbnailRenderWatcher = new QFutureWatcher<QImage>(this);
     connect(m_thumbnailRenderWatcher, &QFutureWatcher<QImage>::finished, this,
         &LayerListView::applyThumbnailRenderResult);
+    connect(m_thumbnailRenderWatcher, &QFutureWatcher<QImage>::finished, this,
+        [this]() { emit visibleThumbnailStateChanged(); });
 
     setupMouseTracking();
 }
@@ -367,6 +370,55 @@ void LayerListView::setThumbnailLoadingMode(bool active)
     }
 }
 
+bool LayerListView::visibleThumbnailsReady() const
+{
+    if (!m_scrollArea || !m_scrollArea->viewport()) {
+        return true;
+    }
+
+    for (const LayerRowWidget* row : m_activeRows) {
+        if (!row || !isRowInViewport(row)) {
+            continue;
+        }
+        const LayerData* data = row->layerData();
+        if (data && !data->isGroup() && !data->isAdjustment() && data->thumbnailDirty) {
+            return false;
+        }
+    }
+    return true;
+}
+
+void LayerListView::preparePresentationSnapshot()
+{
+    if (m_creationAnimating) {
+        if (m_creationAnim) {
+            disconnect(m_creationAnim, nullptr, this, nullptr);
+            m_creationAnim->stop();
+            m_creationAnim->deleteLater();
+            m_creationAnim = nullptr;
+        }
+        m_creationAnimating = false;
+
+        for (LayerRowWidget* row : m_activeRows) {
+            if (!row) {
+                continue;
+            }
+            row->clearMask();
+            row->setRowOpacity(1.0);
+            row->show();
+            row->setFixedHeight(scaledRowHeight(row));
+        }
+
+        m_skipNextAnimation = true;
+        rebuildRowWidgets();
+    }
+
+    syncContentHeight();
+    if (m_scrollArea) {
+        m_scrollArea->finishLayoutTransitions();
+    }
+}
+
 void LayerListView::setForcedThumbnailLoadingLayer(const LayerId& id)
 {
     if (m_forcedThumbnailLoadingLayerId == id) {
@@ -473,6 +525,8 @@ void LayerListView::resizeEvent(QResizeEvent* e)
     if (m_clipPreviewIndicator && m_contentWidget) {
         m_clipPreviewIndicator->setFixedWidth(m_contentWidget->width());
     }
+
+    queueThumbnailsForActiveRows();
 }
 
 // ============================================================================
@@ -1998,6 +2052,7 @@ void LayerListView::queueThumbnailsForActiveRows()
         row->setThumbnailLoading(shouldShowThumbnailLoading(data));
     }
     scheduleThumbnailBatch();
+    emit visibleThumbnailStateChanged();
 }
 
 void LayerListView::applyThumbnailRenderResult()

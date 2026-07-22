@@ -111,6 +111,7 @@ QString workspaceColorStateDebugString(const WorkspaceTab::WorkspaceColorState& 
 }
 
 constexpr auto kWorkspaceDockLayoutKey = "Workspace/userDockLayout";
+constexpr int kCanvasBorderAppearanceDurationMs = 220;
 constexpr auto kWorkspaceBrushOverlayPosKey = "Workspace/brushControlOverlayPos";
 constexpr auto kWorkspaceToolStateOverlayPosKey = "Workspace/toolStateOverlayPos";
 constexpr auto kWorkspaceStylusJoystickPosKey = "Workspace/stylusJoystickPos";
@@ -1361,6 +1362,33 @@ void WorkspaceTab::clearLoadingShellFadeSnapshot()
     m_loadingShellFadeSnapshotOpacity = nullptr;
 }
 
+void WorkspaceTab::requestInitialLoadingShellHide()
+{
+    // setupUI() creates the dock container after the loading shell. Keep the
+    // shell explicitly above that newly-created child while the deferred dock
+    // restore and entrance snapshot preparation settle.
+    if (m_dockContainer) {
+        m_dockContainer->setEnabled(false);
+    }
+    if (m_loadingShell) {
+        m_loadingShell->setGeometry(rect());
+        m_loadingShell->show();
+        m_loadingShell->raise();
+    }
+
+    if (!m_initialPresentationReady || !m_initialDockEntrancePreparationFinished) {
+        m_initialLoadingShellHidePending = true;
+        return;
+    }
+
+    m_initialLoadingShellHidePending = false;
+    // The side snapshots are already fully prepared behind the opaque shell.
+    // Start them now so they become visible progressively with the shell fade,
+    // independently of the later canvas appearance animation.
+    startInitialDockEntranceAnimation();
+    hideLoadingShell([this]() { startInitialCanvasAppearanceAnimation(); });
+}
+
 void WorkspaceTab::buildWorkspaceUi()
 {
     if (m_workspaceUiBuilt) {
@@ -1474,7 +1502,7 @@ void WorkspaceTab::queuePostTransitionInitialization()
     if (!m_workspaceUiBuilt) {
         if (m_suppressThemeRefreshLoadingShell) {
             buildWorkspaceUi();
-            queuePostTransitionInitialization();
+            startInitialWorkspaceWarmup();
             return;
         }
 
@@ -1484,7 +1512,8 @@ void WorkspaceTab::queuePostTransitionInitialization()
             showLoadingShell(m_pendingProjectData ? tr("Building workspace panels...")
                                                   : tr("Building workspace..."));
             buildWorkspaceUi();
-            hideLoadingShell([this]() { queuePostTransitionInitialization(); });
+            startInitialWorkspaceWarmup();
+            requestInitialLoadingShellHide();
         });
         return;
     }
@@ -1502,7 +1531,12 @@ void WorkspaceTab::queuePostTransitionInitialization()
             return;
         }
 
+        // The initial camera state must be armed before QOpenGLWidget initializes;
+        // otherwise onGLInitialized() renders one frame at the settled zoom before
+        // scheduleNewProjectAppearanceAnimation() resets it to the animation start.
+        m_canvasPanel->setDeferredAppearanceAnimation(true);
         const bool glContentCreated = m_canvasPanel->createGLContent();
+        m_pendingCanvasAppearanceAnimation = true;
         auto* model = m_layersPanel ? m_layersPanel->layerModel() : nullptr;
         if (m_canvasPanel && model) {
             m_canvasPanel->setLayerModel(model);
@@ -1521,21 +1555,45 @@ void WorkspaceTab::queuePostTransitionInitialization()
         }
 
         if (m_pendingProjectData) {
-            if (glContentCreated && m_canvasPanel) {
-                m_canvasPanel->setDeferredAppearanceAnimation(true);
-            }
-            m_pendingCanvasAppearanceAnimation = glContentCreated;
             startDeferredTileRestore();
         } else {
             if (m_canvasPanel && model) {
                 m_canvasPanel->requestRender();
-                if (glContentCreated) {
-                    m_canvasPanel->scheduleNewProjectAppearanceAnimation();
-                }
             }
             tryFinishAsyncStartup();
         }
     });
+}
+
+void WorkspaceTab::startInitialWorkspaceWarmup()
+{
+    if (m_initialWorkspaceWarmupStarted || !m_transitionFinished || !m_workspaceUiBuilt
+        || !m_initialDockLayoutRestored || !m_canvasPanel) {
+        return;
+    }
+
+    m_initialWorkspaceWarmupStarted = true;
+    queuePostTransitionInitialization();
+}
+
+void WorkspaceTab::startInitialCanvasAppearanceAnimation()
+{
+    if (m_initialCanvasAppearanceStarted || !m_canvasPanel) {
+        return;
+    }
+    m_initialCanvasAppearanceStarted = true;
+
+    if (m_pendingCanvasAppearanceAnimation) {
+        m_pendingCanvasAppearanceAnimation = false;
+        m_canvasPanel->setDeferredAppearanceAnimation(false);
+        m_canvasPanel->scheduleNewProjectAppearanceAnimation();
+    }
+
+    if (!m_pendingPromptImportPaths.isEmpty()) {
+        QStringList paths;
+        paths.swap(m_pendingPromptImportPaths);
+        m_canvasPanel->promptImportImageFiles(paths);
+    }
 }
 
 void WorkspaceTab::startDeferredTileRestore()
@@ -1731,20 +1789,6 @@ void WorkspaceTab::tryFinishAsyncStartup()
 
     flushPendingStartupImageImport();
 
-    if (!m_pendingPromptImportPaths.isEmpty()) {
-        QStringList paths;
-        paths.swap(m_pendingPromptImportPaths);
-        if (m_canvasPanel) {
-            m_canvasPanel->promptImportImageFiles(paths);
-        }
-    }
-
-    if (m_pendingCanvasAppearanceAnimation && m_canvasPanel) {
-        m_pendingCanvasAppearanceAnimation = false;
-        m_canvasPanel->setDeferredAppearanceAnimation(false);
-        m_canvasPanel->scheduleNewProjectAppearanceAnimation();
-    }
-
     if (m_layersPanel) {
         m_layersPanel->setThumbnailLoadingMode(false);
     }
@@ -1761,6 +1805,7 @@ void WorkspaceTab::tryFinishAsyncStartup()
     m_asyncStartupCompleted = true;
     m_suppressModifiedChanges = false;
     emit startupCompleted();
+    updateInitialPresentationReadiness();
 }
 
 void WorkspaceTab::setupDockSystem()
@@ -1769,6 +1814,10 @@ void WorkspaceTab::setupDockSystem()
 
     // Create dock container (replaces QMainWindow)
     m_dockContainer = new DockContainerWidget(this);
+    connect(m_dockContainer, &DockContainerWidget::panelEntranceAnimationFinished, this,
+        &WorkspaceTab::startInitialCanvasBorderAppearanceAnimation);
+    connect(m_dockContainer, &DockContainerWidget::panelEntranceAnimationCancelled, this,
+        &WorkspaceTab::restoreInitialCanvasBorderImmediately);
 
     // Create dock manager
     m_dockManager = new DockManager(this);
@@ -1970,6 +2019,8 @@ void WorkspaceTab::restoreUserDockLayout()
         syncColorPanelFromWorkspaceState();
         syncCanvasColorFromWorkspaceState();
         m_restoringWorkspaceUiState = false;
+        m_initialDockLayoutRestored = true;
+        startInitialWorkspaceWarmup();
     };
 
     QSettings settings;
@@ -2168,6 +2219,212 @@ void WorkspaceTab::restoreUserDockLayout()
     finishRestore();
 }
 
+void WorkspaceTab::updateInitialPresentationReadiness()
+{
+    if (m_initialPresentationReady || m_initialPresentationCheckQueued
+        || !m_asyncStartupCompleted || !m_initialDockLayoutRestored) {
+        return;
+    }
+
+    if (m_layersPanel && m_layersPanel->isVisible()
+        && !m_layersPanel->visibleThumbnailsReady()) {
+        return;
+    }
+
+    if (m_brushesPanel && m_brushesPanel->isVisible()) {
+        m_brushesPanel->prepareVisiblePreviews();
+        if (!m_brushesPanel->visiblePreviewsReady()) {
+            return;
+        }
+    }
+
+    if (m_brushSettingsPanel && m_brushSettingsPanel->isVisible()) {
+        m_brushSettingsPanel->prepareVisiblePreview();
+        if (!m_brushSettingsPanel->visiblePreviewReady()) {
+            return;
+        }
+    }
+
+    if (m_navigatorPanel && m_navigatorPanel->isVisible()
+        && m_navigatorPanel->contentWidget()) {
+        if (auto* navigator
+            = qobject_cast<workspace::NavigatorWidget*>(m_navigatorPanel->contentWidget())) {
+            connect(navigator, &workspace::NavigatorWidget::presentationReadyChanged, this,
+                &WorkspaceTab::updateInitialPresentationReadiness, Qt::UniqueConnection);
+            if (!navigator->presentationReady()) {
+                navigator->refreshOverview();
+                if (m_initialPresentationReady || m_initialPresentationCheckQueued) {
+                    return;
+                }
+                if (!navigator->presentationReady()) {
+                    return;
+                }
+            }
+        }
+    }
+
+    // Let the newly delivered preview images paint into their live widgets before
+    // the four side snapshots are captured. This is an event-loop handoff, not a
+    // timing heuristic: readiness above is driven by the actual producers.
+    m_initialPresentationCheckQueued = true;
+    QTimer::singleShot(0, this, [this]() {
+        m_initialPresentationCheckQueued = false;
+        if (m_initialPresentationReady) {
+            return;
+        }
+
+        if ((m_layersPanel && m_layersPanel->isVisible()
+                && !m_layersPanel->visibleThumbnailsReady())
+            || (m_brushesPanel && m_brushesPanel->isVisible()
+                && !m_brushesPanel->visiblePreviewsReady())
+            || (m_brushSettingsPanel && m_brushSettingsPanel->isVisible()
+                && !m_brushSettingsPanel->visiblePreviewReady())) {
+            updateInitialPresentationReadiness();
+            return;
+        }
+        if (m_navigatorPanel && m_navigatorPanel->isVisible()
+            && m_navigatorPanel->contentWidget()) {
+            if (auto* navigator
+                = qobject_cast<workspace::NavigatorWidget*>(m_navigatorPanel->contentWidget());
+                navigator && !navigator->presentationReady()) {
+                updateInitialPresentationReadiness();
+                return;
+            }
+        }
+
+        // The loading shell itself blocks input, so the dock no longer needs to
+        // remain disabled while its snapshots are rendered. Capturing it disabled
+        // would bake grey ToolButtons into the entrance overlay.
+        if (m_dockContainer) {
+            m_dockContainer->setEnabled(true);
+        }
+
+        // Snapshot only stable panel states. These calls finish local visual/layout
+        // transitions synchronously; they do not alter the dock geometry or delay
+        // the side entrance animation.
+        if (m_toolsPanel && m_toolsPanel->isVisible()) {
+            m_toolsPanel->preparePresentationSnapshot();
+        }
+        if (m_brushSettingsPanel && m_brushSettingsPanel->isVisible()) {
+            m_brushSettingsPanel->preparePresentationSnapshot();
+        }
+        if (m_layersPanel && m_layersPanel->isVisible()) {
+            m_layersPanel->preparePresentationSnapshot();
+        }
+
+        m_initialPresentationReady = true;
+        prepareInitialDockEntranceAnimation();
+    });
+}
+
+void WorkspaceTab::prepareInitialDockEntranceAnimation()
+{
+    if (!m_initialPresentationReady || !m_initialDockLayoutRestored
+        || m_initialDockEntranceHandled
+        || m_initialDockEntrancePreparationQueued || !m_dockContainer || !m_canvasPanel) {
+        return;
+    }
+
+    m_initialDockEntrancePreparationQueued = true;
+    QTimer::singleShot(0, this, [this]() {
+        m_initialDockEntrancePreparationQueued = false;
+        if (m_initialDockEntranceHandled || !m_dockContainer || !m_canvasPanel) {
+            return;
+        }
+
+        const bool prepared = m_dockContainer->preparePanelEntranceAnimation(m_canvasPanel);
+        m_initialDockEntrancePreparationFinished = true;
+        if (!prepared) {
+            // Animation can be globally disabled, the workspace may have no surrounding
+            // docked panels, or a snapshot may be unavailable. Keep the real UI visible.
+            m_initialDockEntranceHandled = true;
+        } else {
+            m_canvasPanel->setBorderOpacity(0.0);
+            m_initialCanvasBorderAppearanceArmed = true;
+            if (m_initialDockEntranceStartRequested) {
+                m_dockContainer->startPanelEntranceAnimation();
+                m_initialDockEntranceHandled = true;
+            }
+        }
+
+        if (m_initialLoadingShellHidePending) {
+            requestInitialLoadingShellHide();
+        } else if (m_suppressThemeRefreshLoadingShell) {
+            startInitialDockEntranceAnimation();
+            startInitialCanvasAppearanceAnimation();
+        }
+    });
+}
+
+void WorkspaceTab::startInitialDockEntranceAnimation()
+{
+    if (m_initialDockEntranceHandled) {
+        return;
+    }
+
+    m_initialDockEntranceStartRequested = true;
+    if (!m_initialDockLayoutRestored || m_initialDockEntrancePreparationQueued) {
+        return;
+    }
+
+    if (m_dockContainer && m_dockContainer->startPanelEntranceAnimation()) {
+        m_initialDockEntranceHandled = true;
+        return;
+    }
+
+    // The loading shell is not released until preparation finishes, so a missing
+    // overlay here means it was deliberately cancelled (resize/theme/layout change).
+    // Reveal the already-settled real panels instead of restarting and flashing.
+    m_initialDockEntranceHandled = true;
+}
+
+void WorkspaceTab::startInitialCanvasBorderAppearanceAnimation()
+{
+    if (!m_initialCanvasBorderAppearanceArmed || !m_canvasPanel) {
+        return;
+    }
+
+    m_initialCanvasBorderAppearanceArmed = false;
+    if (m_canvasBorderAppearanceAnimation) {
+        m_canvasBorderAppearanceAnimation->stop();
+        m_canvasBorderAppearanceAnimation->deleteLater();
+    }
+
+    m_canvasBorderAppearanceAnimation
+        = new QPropertyAnimation(m_canvasPanel, "borderOpacity", this);
+    m_canvasBorderAppearanceAnimation->setDuration(kCanvasBorderAppearanceDurationMs);
+    m_canvasBorderAppearanceAnimation->setEasingCurve(QEasingCurve::OutCubic);
+    m_canvasBorderAppearanceAnimation->setStartValue(m_canvasPanel->borderOpacity());
+    m_canvasBorderAppearanceAnimation->setEndValue(1.0);
+    connect(m_canvasBorderAppearanceAnimation, &QPropertyAnimation::finished, this, [this]() {
+        if (m_canvasPanel) {
+            m_canvasPanel->setBorderOpacity(1.0);
+        }
+        if (m_canvasBorderAppearanceAnimation) {
+            m_canvasBorderAppearanceAnimation->deleteLater();
+            m_canvasBorderAppearanceAnimation = nullptr;
+        }
+    });
+    m_canvasBorderAppearanceAnimation->start();
+}
+
+void WorkspaceTab::restoreInitialCanvasBorderImmediately()
+{
+    if (!m_initialCanvasBorderAppearanceArmed && !m_canvasBorderAppearanceAnimation) {
+        return;
+    }
+
+    m_initialCanvasBorderAppearanceArmed = false;
+    if (m_canvasBorderAppearanceAnimation) {
+        m_canvasBorderAppearanceAnimation->stop();
+        m_canvasBorderAppearanceAnimation->deleteLater();
+        m_canvasBorderAppearanceAnimation = nullptr;
+    }
+    if (m_canvasPanel) {
+        m_canvasPanel->setBorderOpacity(1.0);
+    }
+}
+
 void WorkspaceTab::scheduleDockLayoutSave()
 {
     if (!m_dockLayoutSaveTimer || m_restoringDockLayout) {
@@ -2279,6 +2536,13 @@ void WorkspaceTab::setupToolbar()
 
 void WorkspaceTab::connectPanelSignals()
 {
+    connect(m_layersPanel, &workspace::LayersPanel::visibleThumbnailStateChanged, this,
+        &WorkspaceTab::updateInitialPresentationReadiness);
+    connect(m_brushesPanel, &workspace::BrushesPanel::visiblePreviewStateChanged, this,
+        &WorkspaceTab::updateInitialPresentationReadiness);
+    connect(m_brushSettingsPanel, &workspace::BrushSettingsPanel::visiblePreviewStateChanged, this,
+        &WorkspaceTab::updateInitialPresentationReadiness);
+
     // Connect layer model to canvas (so canvas knows where to draw)
     m_canvasPanel->setLayerModel(m_layersPanel->layerModel());
     connect(m_canvasPanel, &workspace::CanvasPanel::glContentReady, this, [this]() {

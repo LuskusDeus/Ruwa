@@ -41,9 +41,13 @@ public:
 
     void setCanvasPanel(CanvasPanel* canvasPanel);
     CanvasPanel* canvasPanel() const;
+    void prepareVisiblePreview();
+    bool visiblePreviewReady() const;
+    void preparePresentationSnapshot();
 
 signals:
     void brushEditorRequested(const QString& brushId);
+    void visiblePreviewStateChanged();
 
 protected:
     QWidget* createContent() override;

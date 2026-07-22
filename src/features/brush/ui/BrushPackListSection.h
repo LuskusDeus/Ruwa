@@ -73,6 +73,8 @@ public:
 
     int contentHeight() const { return m_contentHeight; }
     void setContentHeight(int height);
+    void prepareVisiblePreviews(QWidget* viewport);
+    bool visiblePreviewsReady(QWidget* viewport) const;
 
 signals:
     void toggled(const QString& packId, bool expanded);
@@ -80,6 +82,7 @@ signals:
     void brushEditorRequested(const QString& packId, const QString& brushId);
     void brushDeleteRequested(const QString& packId, const QString& brushId);
     void contentGeometryChanged();
+    void visiblePreviewStateChanged();
 
 protected:
     void resizeEvent(QResizeEvent* event) override;

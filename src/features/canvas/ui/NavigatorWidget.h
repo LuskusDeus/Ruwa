@@ -35,8 +35,12 @@ public:
 
     void refreshOverview();
     void refreshThumbnail() { refreshOverview(); }
+    bool presentationReady() const;
     void invalidateOverviewTiles(const QList<QPoint>& tilePositions);
     void invalidateAllOverview();
+
+signals:
+    void presentationReadyChanged();
 
 protected:
     void paintEvent(QPaintEvent* event) override;

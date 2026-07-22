@@ -31,6 +31,7 @@
 #include <QVariantList>
 #include <QVBoxLayout>
 #include <functional>
+#include <utility>
 
 namespace ruwa::ui::workspace {
 
@@ -223,9 +224,68 @@ public:
             ruwa::core::brushes::BrushPreviewSession::Kind::Stroke, this);
         connect(m_previewSession, &ruwa::core::brushes::BrushPreviewSession::imageChanged, this,
             [this]() { update(); });
+        connect(m_previewSession, &ruwa::core::brushes::BrushPreviewSession::requestFinished, this,
+            [this]() {
+                update();
+                if (m_previewStateChanged) {
+                    m_previewStateChanged();
+                }
+            });
     }
 
     QString brushId() const { return m_brush.id; }
+
+    void setPreviewStateChangedCallback(std::function<void()> callback)
+    {
+        m_previewStateChanged = std::move(callback);
+    }
+
+    void preparePreview()
+    {
+        const auto& colors = WidgetStyleManager::instance().colors();
+        const int referenceWidth = qMax(1,
+            ThemeManager::instance().scaled(kStrokePreviewReferenceWidth)
+                - kStrokePreviewRenderInset);
+        const int referenceHeight = qMax(1,
+            ThemeManager::instance().scaled(kStrokePreviewReferenceHeight)
+                - kStrokePreviewRenderInset);
+        QColor previewColor = ThemeColors::interpolate(
+            colors.textMuted, colors.primary, 0.76 + activeProgress() * 0.24);
+        previewColor = ThemeColors::interpolate(previewColor,
+            ThemeColors::adjustBrightness(colors.primary, colors.isDark ? 1.18 : 0.94),
+            0.28 + activeProgress() * 0.52);
+        requestPreview(previewColor, referenceWidth * kStrokePreviewSupersampling,
+            referenceHeight * kStrokePreviewSupersampling);
+    }
+
+    bool previewReady() const
+    {
+        if (!m_previewSession) {
+            return true;
+        }
+
+        const auto& colors = WidgetStyleManager::instance().colors();
+        const int referenceWidth = qMax(1,
+            ThemeManager::instance().scaled(kStrokePreviewReferenceWidth)
+                - kStrokePreviewRenderInset);
+        const int referenceHeight = qMax(1,
+            ThemeManager::instance().scaled(kStrokePreviewReferenceHeight)
+                - kStrokePreviewRenderInset);
+        QColor previewColor = ThemeColors::interpolate(
+            colors.textMuted, colors.primary, 0.76 + activeProgress() * 0.24);
+        previewColor = ThemeColors::interpolate(previewColor,
+            ThemeColors::adjustBrightness(colors.primary, colors.isDark ? 1.18 : 0.94),
+            0.28 + activeProgress() * 0.52);
+
+        ruwa::core::brushes::BrushPreviewSpec spec;
+        spec.settings = m_brush.settings;
+        spec.sizeNorm = 0.5;
+        spec.opacityNorm = 1.0;
+        spec.color = previewColor;
+        spec.size = QSize(referenceWidth * kStrokePreviewSupersampling,
+            referenceHeight * kStrokePreviewSupersampling);
+        return m_previewSession->hasCompletedFor(spec);
+    }
 
     void setOpenEditorCallback(std::function<void(const QString&)> callback)
     {
@@ -685,6 +745,7 @@ private:
     QRgb m_previewColor = 0;
     std::function<void(const QString&)> m_openEditorCallback;
     std::function<void(const QString&)> m_deleteBrushCallback;
+    std::function<void()> m_previewStateChanged;
 };
 
 } // namespace
@@ -879,6 +940,39 @@ void BrushPackListSection::setContentHeight(int height)
     emit contentGeometryChanged();
 }
 
+void BrushPackListSection::prepareVisiblePreviews(QWidget* viewport)
+{
+    if (!m_expanded || !viewport) {
+        return;
+    }
+
+    const QRect viewportRect(QPoint(0, 0), viewport->size());
+    for (QWidget* widget : std::as_const(m_brushRows)) {
+        auto* row = static_cast<PackBrushRowButton*>(widget);
+        const QRect rowRect(row->mapTo(viewport, QPoint(0, 0)), row->size());
+        if (rowRect.intersects(viewportRect)) {
+            row->preparePreview();
+        }
+    }
+}
+
+bool BrushPackListSection::visiblePreviewsReady(QWidget* viewport) const
+{
+    if (!m_expanded || !viewport) {
+        return true;
+    }
+
+    const QRect viewportRect(QPoint(0, 0), viewport->size());
+    for (QWidget* widget : m_brushRows) {
+        const auto* row = static_cast<const PackBrushRowButton*>(widget);
+        const QRect rowRect(row->mapTo(viewport, QPoint(0, 0)), row->size());
+        if (rowRect.intersects(viewportRect) && !row->previewReady()) {
+            return false;
+        }
+    }
+    return true;
+}
+
 void BrushPackListSection::rebuildBrushRows()
 {
     m_brushRows.clear();
@@ -905,6 +999,8 @@ void BrushPackListSection::rebuildBrushRows()
         rowButton->setDeleteBrushCallback([this, sourcePackId](const QString& brushId) {
             emit brushDeleteRequested(sourcePackId, brushId);
         });
+        rowButton->setPreviewStateChangedCallback(
+            [this]() { emit visiblePreviewStateChanged(); });
         connect(
             rowButton, &QAbstractButton::clicked, this, [this, sourcePackId, brushId = brush.id]() {
                 emit brushActivated(sourcePackId, brushId);

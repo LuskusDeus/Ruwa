@@ -61,6 +61,8 @@ public:
     void setThumbnailLoadingMode(bool active);
     void setForcedThumbnailLoadingLayer(const ruwa::core::layers::LayerId& id);
     bool isThumbnailLoadingMode() const { return m_thumbnailLoadingMode; }
+    bool visibleThumbnailsReady() const;
+    void preparePresentationSnapshot();
     ruwa::core::layers::LayerModel* model() const { return m_model; }
 
     /** @brief Called by LayersPanel when drop is rejected (invalid move). Triggers ghost fade-out.
@@ -94,6 +96,7 @@ signals:
     void layerApplyEffectsRequested(const ruwa::core::layers::LayerId& id);
     void layerToggleAlphaLockRequested(const ruwa::core::layers::LayerId& id);
     void layerToggleLockRequested(const ruwa::core::layers::LayerId& id);
+    void visibleThumbnailStateChanged();
 
 protected:
     void resizeEvent(QResizeEvent* e) override;

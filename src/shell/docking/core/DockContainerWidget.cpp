@@ -3,16 +3,19 @@
 // DockContainerWidget.cpp
 #include "DockContainerWidget.h"
 #include "DockFloatingContainer.h"
+#include "shell/docking/overlay/DockPanelEntranceOverlay.h"
 #include "shell/docking/overlay/DockOverlay.h"
 #include "shell/docking/widgets/DockPanel.h"
 #include "shell/docking/layout/DockLayoutRoot.h"
 #include "shell/docking/layout/DockSplitNode.h"
 #include "shell/docking/layout/DockLeafNode.h"
 #include "features/theme/manager/ThemeManager.h"
+#include "shared/style/WidgetStyleManager.h"
 
 #include <QVBoxLayout>
 #include <QResizeEvent>
 #include <QTimer>
+
 namespace ruwa::ui::docking {
 
 // ============================================================================
@@ -67,6 +70,8 @@ DockContainerWidget::DockContainerWidget(QWidget* parent)
     // Update corner radii when layout changes
     connect(this, &DockContainerWidget::layoutChanged, this,
         &DockContainerWidget::updateAllPanelCornerRadii);
+    connect(this, &DockContainerWidget::layoutChanged, this,
+        &DockContainerWidget::cancelPanelEntranceAnimation);
 
     applyTheme(ruwa::ui::core::ThemeManager::instance().colors());
 }
@@ -605,6 +610,10 @@ void DockContainerWidget::setAnimationsEnabled(bool enabled)
 {
     m_animationsEnabled = enabled;
 
+    if (!enabled) {
+        cancelPanelEntranceAnimation();
+    }
+
     if (m_layoutRoot) {
         m_layoutRoot->setLayoutAnimationEnabled(enabled);
     }
@@ -614,9 +623,69 @@ void DockContainerWidget::setAnimationDuration(int ms)
 {
     m_animationDuration = qMax(0, ms);
 
+    if (m_animationDuration == 0) {
+        cancelPanelEntranceAnimation();
+    }
+
     if (m_layoutRoot) {
         m_layoutRoot->setLayoutAnimationDuration(ms);
     }
+}
+
+bool DockContainerWidget::preparePanelEntranceAnimation(DockPanel* stationaryPanel)
+{
+    cancelPanelEntranceAnimation();
+
+    if (!stationaryPanel || !m_animationsEnabled || m_animationDuration <= 0
+        || !ruwa::ui::core::WidgetStyleManager::instance().animationsEnabled() || !isVisible()
+        || !rect().isValid()) {
+        return false;
+    }
+
+    auto* overlay = new DockPanelEntranceOverlay(this, stationaryPanel, m_colors.background);
+    if (!overlay->isReady()) {
+        overlay->deleteLater();
+        return false;
+    }
+
+    connect(overlay, &DockPanelEntranceOverlay::finished, this, [this, overlay]() {
+        if (m_panelEntranceOverlay != overlay) {
+            return;
+        }
+        m_panelEntranceOverlay = nullptr;
+        emit panelEntranceAnimationFinished();
+    });
+
+    m_panelEntranceOverlay = overlay;
+    return true;
+}
+
+bool DockContainerWidget::startPanelEntranceAnimation()
+{
+    if (!m_animationsEnabled || m_animationDuration <= 0
+        || !ruwa::ui::core::WidgetStyleManager::instance().animationsEnabled()) {
+        cancelPanelEntranceAnimation();
+        return false;
+    }
+
+    if (!m_panelEntranceOverlay || !m_panelEntranceOverlay->isReady()) {
+        return false;
+    }
+
+    m_panelEntranceOverlay->start(m_animationDuration);
+    return true;
+}
+
+void DockContainerWidget::cancelPanelEntranceAnimation()
+{
+    if (!m_panelEntranceOverlay) {
+        return;
+    }
+
+    DockPanelEntranceOverlay* overlay = m_panelEntranceOverlay;
+    m_panelEntranceOverlay = nullptr;
+    overlay->cancel();
+    emit panelEntranceAnimationCancelled();
 }
 
 void DockContainerWidget::setContainerPadding(int padding)
@@ -676,6 +745,8 @@ void DockContainerWidget::applyTheme(const ruwa::ui::core::ThemeColors& colors)
 {
     if (m_destroying)
         return;
+
+    cancelPanelEntranceAnimation();
 
     m_colors = colors;
 

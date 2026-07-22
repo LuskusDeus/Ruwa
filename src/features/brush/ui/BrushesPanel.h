@@ -33,9 +33,12 @@ public:
     ~BrushesPanel() override;
     void setCanvasPanel(CanvasPanel* canvasPanel);
     void openBrushEditorForBrush(const QString& brushId);
+    void prepareVisiblePreviews();
+    bool visiblePreviewsReady() const;
 
 signals:
     void panelStateChanged();
+    void visiblePreviewStateChanged();
 
 protected:
     QWidget* createContent() override;

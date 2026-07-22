@@ -107,6 +107,15 @@ void NavigatorWidget::refreshOverview()
     }
     updateOverview();
     update();
+    if (presentationReady()) {
+        emit presentationReadyChanged();
+    }
+}
+
+bool NavigatorWidget::presentationReady() const
+{
+    return m_canvasPanel && m_canvasPanel->isGLContentReady() && m_overviewCache
+        && m_overviewCache->isValid() && !m_overviewCache->hasDirtyTiles();
 }
 
 void NavigatorWidget::invalidateOverviewTiles(const QList<QPoint>& tilePositions)

@@ -23,6 +23,7 @@ class DockPanel;
 class DockFloatingContainer;
 class DockOverlay;
 class DockLayoutRoot;
+class DockPanelEntranceOverlay;
 
 /**
  * @brief Main container widget for the docking system
@@ -90,6 +91,19 @@ public:
     void setAnimationDuration(int ms);
     int animationDuration() const { return m_animationDuration; }
 
+    /**
+     * Capture the settled docked panels for a visual-only entrance animation.
+     * The stationary panel (normally the canvas) remains visible and is not captured.
+     * No panel geometry or dock-layout state is changed.
+     */
+    bool preparePanelEntranceAnimation(DockPanel* stationaryPanel);
+
+    /// Start a previously prepared entrance animation.
+    bool startPanelEntranceAnimation();
+
+    /// Drop a prepared/running entrance overlay and reveal the settled panels.
+    void cancelPanelEntranceAnimation();
+
     // === Container Padding ===
 
     /// Set padding around container edges (space between panels and container border)
@@ -106,6 +120,8 @@ signals:
     void panelFloated(DockPanel* panel);
     void panelDocked(DockPanel* panel);
     void layoutChanged();
+    void panelEntranceAnimationFinished();
+    void panelEntranceAnimationCancelled();
 
 protected:
     void resizeEvent(QResizeEvent* event) override;
@@ -147,6 +163,9 @@ private:
 
     // Drag overlay
     DockOverlay* m_overlay = nullptr;
+
+    // Initial workspace appearance overlay (visual snapshots only)
+    QPointer<DockPanelEntranceOverlay> m_panelEntranceOverlay;
 
     // Theme
     ruwa::ui::core::ThemeColors m_colors;

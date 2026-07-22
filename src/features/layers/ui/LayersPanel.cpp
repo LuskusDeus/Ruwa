@@ -1538,6 +1538,8 @@ QWidget* LayersPanel::createContent()
     m_listView->setModel(&m_layerModel);
     m_listView->setSizePolicy(QSizePolicy::Expanding, QSizePolicy::Expanding);
     mainLayout->addWidget(m_listView, 1);
+    connect(m_listView, &ruwa::ui::widgets::LayerListView::visibleThumbnailStateChanged, this,
+        &LayersPanel::visibleThumbnailStateChanged);
 
     // Connect list view signals
     connect(m_listView, &ruwa::ui::widgets::LayerListView::layerSelected, this,
@@ -1810,6 +1812,18 @@ void LayersPanel::setThumbnailLoadingMode(bool active)
 {
     if (m_listView) {
         m_listView->setThumbnailLoadingMode(active);
+    }
+}
+
+bool LayersPanel::visibleThumbnailsReady() const
+{
+    return !m_listView || m_listView->visibleThumbnailsReady();
+}
+
+void LayersPanel::preparePresentationSnapshot()
+{
+    if (m_listView) {
+        m_listView->preparePresentationSnapshot();
     }
 }
 

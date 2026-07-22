@@ -43,6 +43,7 @@ public:
 
     void setActiveTool(ToolId tool);
     void setRelatedPanels(CanvasPanel* canvasPanel, LayersPanel* layersPanel);
+    void preparePresentationSnapshot();
 
 signals:
     void toolRequested(ToolId tool);

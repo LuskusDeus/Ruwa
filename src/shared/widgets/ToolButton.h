@@ -50,6 +50,7 @@ public:
     // available), avoiding an abrupt color/opacity jump.
     qreal enabledProgress() const { return m_enabledProgress; }
     void setEnabledProgress(qreal progress);
+    void finishVisualTransitions();
 
     QSize sizeHint() const override;
 

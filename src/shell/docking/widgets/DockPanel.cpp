@@ -100,6 +100,7 @@ protected:
 
         QPainter p(this);
         p.setRenderHint(QPainter::Antialiasing);
+        p.setOpacity(m_panel->borderOpacity());
 
         const QRectF panelRect(kDockPanelOuterInset, kDockPanelOuterInset,
             width() - (kDockPanelOuterInset * 2.0), height() - (kDockPanelOuterInset * 2.0));
@@ -871,6 +872,19 @@ void DockPanel::setState(PanelState state)
         }
 
         emit stateChanged(state);
+    }
+}
+
+void DockPanel::setBorderOpacity(qreal opacity)
+{
+    const qreal bounded = qBound(0.0, opacity, 1.0);
+    if (qFuzzyCompare(m_borderOpacity, bounded)) {
+        return;
+    }
+
+    m_borderOpacity = bounded;
+    if (m_borderOverlay) {
+        m_borderOverlay->update();
     }
 }
 

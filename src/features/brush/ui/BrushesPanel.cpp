@@ -177,12 +177,26 @@ void BrushesPanel::openBrushEditorForBrush(const QString& brushId)
     }
 }
 
+void BrushesPanel::prepareVisiblePreviews()
+{
+    if (m_contentWidget) {
+        m_contentWidget->prepareVisiblePreviews();
+    }
+}
+
+bool BrushesPanel::visiblePreviewsReady() const
+{
+    return !m_contentWidget || m_contentWidget->visiblePreviewsReady();
+}
+
 QWidget* BrushesPanel::createContent()
 {
     m_contentWidget = new BrushesPanelContent(this);
     m_contentWidget->setCanvasPanel(m_canvasPanel);
     connect(m_contentWidget, &BrushesPanelContent::stateChanged, this,
         &BrushesPanel::panelStateChanged);
+    connect(m_contentWidget, &BrushesPanelContent::visiblePreviewStateChanged, this,
+        &BrushesPanel::visiblePreviewStateChanged);
     connect(m_contentWidget, &BrushesPanelContent::packFiltersChanged, this,
         [this](const QStringList& packIds, const QStringList& packNames) {
             rebuildFilterButtons(packIds, packNames);

@@ -188,4 +188,13 @@ void BaseAnimatedButton::setHovered(bool hovered)
     m_hoverAnimation->start();
 }
 
+void BaseAnimatedButton::finishVisualTransitions()
+{
+    m_hoverAnimation->stop();
+    setHoverProgress(m_isHovered ? 1.0 : 0.0);
+
+    m_activeAnimation->stop();
+    setActiveProgress(m_isActive ? 1.0 : 0.0);
+}
+
 } // namespace ruwa::ui::widgets

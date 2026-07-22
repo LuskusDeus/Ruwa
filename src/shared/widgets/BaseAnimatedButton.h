@@ -59,6 +59,11 @@ public:
     /// Force hover state transition (useful for stylus-driven hover).
     void setHovered(bool hovered);
 
+    /// Complete transient visual transitions at their current logical targets.
+    /// Used before rendering a presentation snapshot so it cannot capture an
+    /// intermediate hover/selection frame.
+    void finishVisualTransitions();
+
 protected:
     /// Override these in derived classes for custom rendering
     void paintEvent(QPaintEvent* event) override = 0;

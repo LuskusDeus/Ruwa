@@ -174,6 +174,13 @@ bool BrushPreviewSession::hasImageFor(const BrushPreviewSpec& spec) const
     return key == m_appliedKey;
 }
 
+bool BrushPreviewSession::hasCompletedFor(const BrushPreviewSpec& spec) const
+{
+    const BrushPreviewSpec normalizedSpec = normalizeSpec(spec);
+    const QString key = BrushPreviewManager::instance().cacheKey(m_kind, normalizedSpec);
+    return !key.isEmpty() && key == m_completedKey;
+}
+
 void BrushPreviewSession::request(const BrushPreviewSpec& spec)
 {
     BrushPreviewManager& manager = BrushPreviewManager::instance();
@@ -188,7 +195,7 @@ void BrushPreviewSession::request(const BrushPreviewSpec& spec)
         const bool hasAppliedImage = m_hasAppliedSpec && m_appliedKey == key && !m_image.isNull();
         const bool hasQueuedRender = (m_hasPendingSpec && m_pendingKey == key)
             || (m_hasInFlightSpec && m_inFlightKey == key);
-        if (hasAppliedImage || hasQueuedRender) {
+        if (hasAppliedImage || hasQueuedRender || m_completedKey == key) {
             return;
         }
     }
@@ -229,6 +236,7 @@ void BrushPreviewSession::clear()
     m_pendingKey.clear();
     m_inFlightKey.clear();
     m_appliedKey.clear();
+    m_completedKey.clear();
 
     m_requestedSpec = BrushPreviewSpec {};
     m_pendingSpec = BrushPreviewSpec {};
@@ -303,6 +311,7 @@ void BrushPreviewSession::handleRenderFinished()
     // the preview moving in real time during fast slider drags — lagging by at
     // most one render instead of freezing on a stale frame until the user stops.
     Q_UNUSED(finishedGeneration);
+    m_completedKey = finishedKey;
     const bool canApply = !image.isNull() && m_hasRequestedSpec;
     if (canApply) {
         const bool changed = m_appliedKey != finishedKey || m_image != image || !m_hasAppliedSpec;
@@ -314,6 +323,8 @@ void BrushPreviewSession::handleRenderFinished()
             emit imageChanged();
         }
     }
+
+    emit requestFinished();
 
     armDispatchTimer();
 }
@@ -327,6 +338,7 @@ void BrushPreviewSession::handleCacheInvalidated()
     ++m_requestGeneration;
     m_hasAppliedSpec = false;
     m_appliedKey.clear();
+    m_completedKey.clear();
     m_pendingSpec = m_requestedSpec;
     m_pendingKey = m_requestedKey;
     m_pendingGeneration = m_requestGeneration;
@@ -349,11 +361,13 @@ void BrushPreviewSession::queueImageApply(
             const bool changed = m_appliedKey != key || m_image != image || !m_hasAppliedSpec;
             m_appliedSpec = spec;
             m_appliedKey = key;
+            m_completedKey = key;
             m_hasAppliedSpec = true;
             m_image = image;
             if (changed) {
                 emit imageChanged();
             }
+            emit requestFinished();
         },
         Qt::QueuedConnection);
 }

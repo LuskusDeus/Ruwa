@@ -52,11 +52,14 @@ public:
     void showFavoriteBrushes();
     void showPack(const QString& packId);
     void openBrushEditor(const QString& packId, const QString& brushId);
+    void prepareVisiblePreviews();
+    bool visiblePreviewsReady() const;
 
 signals:
     void brushSelected(const QString& brushId);
     void stateChanged();
     void packFiltersChanged(const QStringList& packIds, const QStringList& packNames);
+    void visiblePreviewStateChanged();
 
 private slots:
     void queueReload();

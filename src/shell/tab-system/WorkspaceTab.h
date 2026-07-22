@@ -380,9 +380,13 @@ private:
     void hideLoadingShell(std::function<void()> onFinished = {});
     void hideLoadingShellImmediately();
     void clearLoadingShellFadeSnapshot();
+    void requestInitialLoadingShellHide();
     void buildWorkspaceUi();
     void initializeEmptyProject();
     void queuePostTransitionInitialization();
+    void startInitialWorkspaceWarmup();
+    void updateInitialPresentationReadiness();
+    void startInitialCanvasAppearanceAnimation();
     void startDeferredTileRestore();
     void enqueuePendingTileLoads(const QList<ruwa::core::serialization::LayerEntry>& entries);
     void scheduleNextTileRestoreBatch();
@@ -397,6 +401,10 @@ private:
     void setupToolbar();
     void setupDefaultLayout();
     void restoreUserDockLayout();
+    void prepareInitialDockEntranceAnimation();
+    void startInitialDockEntranceAnimation();
+    void startInitialCanvasBorderAppearanceAnimation();
+    void restoreInitialCanvasBorderImmediately();
     void scheduleDockLayoutSave();
     void saveDockLayoutNow();
     void connectPanelSignals();
@@ -492,6 +500,7 @@ private:
     QWidget* m_loadingShell = nullptr;
     QGraphicsOpacityEffect* m_loadingShellOpacity = nullptr;
     QPropertyAnimation* m_loadingShellFadeAnimation = nullptr;
+    QPropertyAnimation* m_canvasBorderAppearanceAnimation = nullptr;
     QLabel* m_loadingShellFadeSnapshot = nullptr;
     QGraphicsOpacityEffect* m_loadingShellFadeSnapshotOpacity = nullptr;
     QLabel* m_loadingTitleLabel = nullptr;
@@ -517,6 +526,17 @@ private:
     QFutureWatcher<ruwa::ui::workspace::detail::ImportedLayerBatch>* m_startupImageImportWatcher
         = nullptr;
     bool m_restoringDockLayout = false;
+    bool m_initialDockLayoutRestored = false;
+    bool m_initialWorkspaceWarmupStarted = false;
+    bool m_initialPresentationCheckQueued = false;
+    bool m_initialPresentationReady = false;
+    bool m_initialDockEntrancePreparationQueued = false;
+    bool m_initialDockEntrancePreparationFinished = false;
+    bool m_initialDockEntranceStartRequested = false;
+    bool m_initialDockEntranceHandled = false;
+    bool m_initialLoadingShellHidePending = false;
+    bool m_initialCanvasAppearanceStarted = false;
+    bool m_initialCanvasBorderAppearanceArmed = false;
     bool m_layerCopyArmed = false;
     bool m_layerCutArmed = false;
     QList<std::shared_ptr<ruwa::core::layers::LayerData>> m_layerCutClipboard;

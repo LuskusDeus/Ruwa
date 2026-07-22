@@ -192,6 +192,24 @@ void SmoothScrollArea::refreshScrollGeometry()
     refreshContentLayout();
 }
 
+void SmoothScrollArea::finishLayoutTransitions()
+{
+    if (m_layoutRefreshTimer && m_layoutRefreshTimer->isActive()) {
+        m_layoutRefreshTimer->stop();
+    }
+
+    m_reserveAnimation->stop();
+    m_finishingLayoutTransitions = true;
+
+    // The first pass resolves the range from the final content height. The
+    // second resolves it once more after the scrollbar reservation has snapped
+    // to that range and changed the viewport width.
+    refreshContentLayout();
+    refreshContentLayout();
+
+    m_finishingLayoutTransitions = false;
+}
+
 void SmoothScrollArea::scrollTo(int value, bool animated)
 {
     if (animated) {
@@ -823,8 +841,11 @@ void SmoothScrollArea::updateScrollBarVisibility()
     const bool reserveChanged = (m_scrollBarReserved != shouldReserve);
     m_scrollBarReserved = shouldReserve;
 
-    if (reserveChanged) {
-        const qreal target = shouldReserve ? kScrollBarWidth : 0.0;
+    const qreal target = shouldReserve ? kScrollBarWidth : 0.0;
+    if (m_finishingLayoutTransitions) {
+        m_reserveAnimation->stop();
+        setScrollBarReserveExtent(target);
+    } else if (reserveChanged) {
         m_reserveAnimation->stop();
         m_reserveAnimation->setStartValue(m_scrollBarReserveExtent);
         m_reserveAnimation->setEndValue(target);
