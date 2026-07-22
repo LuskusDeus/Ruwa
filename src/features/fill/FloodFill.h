@@ -120,10 +120,20 @@ FloodFillResult classicFloodFillRawTiles(const FloodFillResult::RawTileMap& sour
     const FloodFillResult::RawTileMap& selectionMaskTiles, int canvasWidth, int canvasHeight,
     TilePixelFormat contentFormat = kDefaultTileFormat);
 
+/// Deep-copy the content tiles of a live grid for read-only background processing.
+/// The snapshot preserves the grid's native pixel format.
+FloodFillResult::RawTileMap snapshotContentTiles(const TileGrid& grid);
+
 /// Build a read-only, contiguous selection mask using the same edge-aware
 /// region detection as the smart fill tool. The source grid is not modified.
 FloodFillResult::RawTileMap buildMagicWandSelectionMask(
     const TileGrid& grid, int seedX, int seedY, int canvasWidth, int canvasHeight);
+
+/// Build a Magic Wand selection from an immutable content snapshot. This overload
+/// is suitable for worker threads and never accesses a live TileGrid.
+FloodFillResult::RawTileMap buildMagicWandSelectionMask(
+    const FloodFillResult::RawTileMap& sourceTiles, int seedX, int seedY, int canvasWidth,
+    int canvasHeight, TilePixelFormat contentFormat = kDefaultTileFormat);
 
 /// Fill polygon interior with color (scanline algorithm). Returns snapshots for Undo.
 ///

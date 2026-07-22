@@ -78,6 +78,7 @@
 #include <QEvent>
 #include <QFile>
 #include <QFileInfo>
+#include <QFutureWatcher>
 #include <QGraphicsOpacityEffect>
 #include <QHBoxLayout>
 #include <QImage>
@@ -95,6 +96,7 @@
 #include <QShowEvent>
 #include <QSet>
 #include <QThread>
+#include <QtConcurrent>
 
 #include "platform/windows/WindowsInkFeedback.h"
 #include "features/canvas/rendering/LayerCompositingBuilder.h"
@@ -110,6 +112,18 @@
 #include <vector>
 
 namespace {
+
+bool selectionStateMatches(const aether::SelectionState& lhs, const aether::SelectionState& rhs)
+{
+    return lhs.layer.primaryId == rhs.layer.primaryId
+        && lhs.layer.selectedIds == rhs.layer.selectedIds
+        && lhs.lasso.regions == rhs.lasso.regions
+        && lhs.lasso.canvasWidth == rhs.lasso.canvasWidth
+        && lhs.lasso.canvasHeight == rhs.lasso.canvasHeight
+        && lhs.lasso.maskTiles == rhs.lasso.maskTiles
+        && lhs.lasso.maskHasSoftAlpha == rhs.lasso.maskHasSoftAlpha;
+}
+
 inline int32_t floorDiv(int32_t a, int32_t b)
 {
     return (a >= 0) ? (a / b) : ((a - b + 1) / b);
@@ -4227,23 +4241,66 @@ bool OpenGLCanvasWidget::performMagicWandSelection(
         return false;
     }
 
+    const quint64 requestSequence = ++m_magicWandRequestSequence;
+
     SelectionState before;
     before.layer = captureLayerSelection(m_layerModel ? m_layerModel->selectionManager() : nullptr);
     before.lasso = captureLassoSelection(&m_selectionController->lassoSelection(),
         effectiveDocumentBoundsWidth(), effectiveDocumentBoundsHeight());
 
-    if (!m_selectionController->selectContiguousArea(
-            worldX, worldY, addSelection, subtractSelection)) {
+    auto request = m_selectionController->prepareMagicWandSelection(
+        worldX, worldY, addSelection, subtractSelection);
+    if (!request) {
         return false;
     }
 
-    SelectionState after;
-    after.layer = before.layer;
-    after.lasso = captureLassoSelection(&m_selectionController->lassoSelection(),
-        effectiveDocumentBoundsWidth(), effectiveDocumentBoundsHeight());
-    m_ignoreSelectionChange = true;
-    pushSelectionCommand(before, after);
-    m_ignoreSelectionChange = false;
+    const LassoSelectionMode mode = request->mode;
+    const uint32_t canvasWidth = request->canvasWidth;
+    const uint32_t canvasHeight = request->canvasHeight;
+    const QUuid sourceLayerId = request->sourceLayerId;
+    auto* watcher = new QFutureWatcher<MaskTileSnapshot>(this);
+    connect(watcher, &QFutureWatcher<MaskTileSnapshot>::finished, this,
+        [this, watcher, requestSequence, before = std::move(before), mode, canvasWidth,
+            canvasHeight, sourceLayerId]() mutable {
+            QFuture<MaskTileSnapshot> future = watcher->future();
+            MaskTileSnapshot wandMask = future.takeResult();
+            watcher->deleteLater();
+
+            if (requestSequence != m_magicWandRequestSequence || !m_selectionController) {
+                return;
+            }
+            const auto* currentLayer = activeLayer();
+            if (!currentLayer || currentLayer->id != sourceLayerId) {
+                return;
+            }
+
+            SelectionState current;
+            current.layer
+                = captureLayerSelection(m_layerModel ? m_layerModel->selectionManager() : nullptr);
+            current.lasso = captureLassoSelection(&m_selectionController->lassoSelection(),
+                effectiveDocumentBoundsWidth(), effectiveDocumentBoundsHeight());
+            if (!selectionStateMatches(current, before)) {
+                return;
+            }
+
+            if (!m_selectionController->applyMagicWandSelection(
+                    wandMask, mode, canvasWidth, canvasHeight)) {
+                return;
+            }
+
+            SelectionState after;
+            after.layer = before.layer;
+            after.lasso = captureLassoSelection(&m_selectionController->lassoSelection(),
+                effectiveDocumentBoundsWidth(), effectiveDocumentBoundsHeight());
+            m_ignoreSelectionChange = true;
+            pushSelectionCommand(before, after);
+            m_ignoreSelectionChange = false;
+        });
+
+    watcher->setFuture(QtConcurrent::run(
+        [request = std::move(*request)]() mutable {
+            return CanvasSelectionController::computeMagicWandSelection(std::move(request));
+        }));
     return true;
 }
 

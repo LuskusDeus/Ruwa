@@ -171,19 +171,6 @@ inline FloodFillResult::RawTileMap snapshotSelectionMaskTiles(const TileGrid* se
     return tiles;
 }
 
-inline FloodFillResult::RawTileMap snapshotContentTiles(const TileGrid& grid)
-{
-    FloodFillResult::RawTileMap tiles;
-    const size_t bytesPerTile = tileByteSize(grid.format());
-    tiles.reserve(grid.tiles().size());
-    for (const auto& [key, tile] : grid.tiles()) {
-        std::vector<uint8_t> bytes(bytesPerTile);
-        std::memcpy(bytes.data(), tile.pixels(), bytesPerTile);
-        tiles.emplace(key, std::move(bytes));
-    }
-    return tiles;
-}
-
 inline PremultPixel samplePixel(const TileGrid& grid, int32_t x, int32_t y)
 {
     PremultPixel px;
@@ -1084,8 +1071,22 @@ private:
 
 } // namespace
 
-FloodFillResult floodFill(TileGrid& grid, int seedX, int seedY, uint8_t fillR, uint8_t fillG,
-    uint8_t fillB, uint8_t fillA, const TileGrid* selectionMask, int canvasWidth, int canvasHeight)
+FloodFillResult::RawTileMap snapshotContentTiles(const TileGrid& grid)
+{
+    FloodFillResult::RawTileMap tiles;
+    const size_t bytesPerTile = tileByteSize(grid.format());
+    tiles.reserve(grid.tiles().size());
+    for (const auto& [key, tile] : grid.tiles()) {
+        std::vector<uint8_t> bytes(bytesPerTile);
+        std::memcpy(bytes.data(), tile.pixels(), bytesPerTile);
+        tiles.emplace(key, std::move(bytes));
+    }
+    return tiles;
+}
+
+static FloodFillResult floodFillImpl(TileGrid& grid, int seedX, int seedY, uint8_t fillR,
+    uint8_t fillG, uint8_t fillB, uint8_t fillA, const TileGrid* selectionMask, int canvasWidth,
+    int canvasHeight, bool maskOnly)
 {
     FloodFillResult result;
 
@@ -1831,6 +1832,14 @@ FloodFillResult floodFill(TileGrid& grid, int seedX, int seedY, uint8_t fillR, u
     interiorMaskTiles = std::move(rebuiltInteriorMaskTiles);
     softEdgeMaskTiles = std::move(rebuiltSoftEdgeMaskTiles);
 
+    if (maskOnly) {
+        // Magic Wand only needs the combined coverage mask. Avoid constructing
+        // undo before/after tiles and applying a probe fill to this throwaway grid.
+        mergeMaskTileMap(interiorMaskTiles, std::move(softEdgeMaskTiles));
+        result.fillMaskTiles = std::move(interiorMaskTiles);
+        return result;
+    }
+
     // Feed the selection mask into the per-pixel cap pass so multi-fill
     // accumulation under a soft selection cannot push alpha above the cap.
     FloodFillResult::RawTileMap bucketSelectionTiles = snapshotSelectionMaskTiles(selectionMask);
@@ -1841,6 +1850,13 @@ FloodFillResult floodFill(TileGrid& grid, int seedX, int seedY, uint8_t fillR, u
         fillG, fillB, fillA, bucketSelectionPtr);
     applyFillResultToGrid(grid, result);
     return result;
+}
+
+FloodFillResult floodFill(TileGrid& grid, int seedX, int seedY, uint8_t fillR, uint8_t fillG,
+    uint8_t fillB, uint8_t fillA, const TileGrid* selectionMask, int canvasWidth, int canvasHeight)
+{
+    return floodFillImpl(grid, seedX, seedY, fillR, fillG, fillB, fillA, selectionMask, canvasWidth,
+        canvasHeight, false);
 }
 
 FloodFillResult classicFloodFill(TileGrid& grid, int seedX, int seedY, uint8_t fillR, uint8_t fillG,
@@ -2078,25 +2094,28 @@ FloodFillResult classicFloodFillRawTiles(const FloodFillResult::RawTileMap& sour
 FloodFillResult::RawTileMap buildMagicWandSelectionMask(
     const TileGrid& grid, int seedX, int seedY, int canvasWidth, int canvasHeight)
 {
+    return buildMagicWandSelectionMask(snapshotContentTiles(grid), seedX, seedY, canvasWidth,
+        canvasHeight, grid.format());
+}
+
+FloodFillResult::RawTileMap buildMagicWandSelectionMask(
+    const FloodFillResult::RawTileMap& sourceTiles, int seedX, int seedY, int canvasWidth,
+    int canvasHeight, TilePixelFormat contentFormat)
+{
     if (seedX < 0 || seedX >= canvasWidth || seedY < 0 || seedY >= canvasHeight) {
         return {};
     }
 
-    uint8_t seedR = 0;
-    uint8_t seedG = 0;
-    uint8_t seedB = 0;
-    uint8_t seedA = 0;
-    if (!samplePixelAt(&grid, seedX, seedY, seedR, seedG, seedB, seedA)) {
-        return {};
-    }
+    const PremultPixel seed = sampleRawPixelAt(sourceTiles, seedX, seedY, contentFormat);
 
-    // floodFillRawTiles already owns the project's edge-aware contiguous-region
-    // implementation and exposes its rasterized fill mask. Run it on a snapshot
-    // with a guaranteed-different color so the live layer remains untouched.
-    const uint8_t probeR = static_cast<uint8_t>(255u - seedR);
-    const uint8_t probeA = seedA == 255 ? 254 : 255;
-    FloodFillResult result = floodFillRawTiles(snapshotContentTiles(grid), seedX, seedY, probeR,
-        seedG, seedB, probeA, {}, canvasWidth, canvasHeight, grid.format());
+    // Reuse the project's edge-aware contiguous-region implementation in its
+    // mask-only mode. A guaranteed-different probe color keeps the existing
+    // region semantics without constructing undo/result tiles or mutating content.
+    const uint8_t probeR = static_cast<uint8_t>(255u - seed.r);
+    const uint8_t probeA = seed.a == 255 ? 254 : 255;
+    TileGrid sourceGrid = rawTileMapToGrid(sourceTiles, contentFormat);
+    FloodFillResult result = floodFillImpl(sourceGrid, seedX, seedY, probeR, seed.g, seed.b, probeA,
+        nullptr, canvasWidth, canvasHeight, true);
     return std::move(result.fillMaskTiles);
 }
 

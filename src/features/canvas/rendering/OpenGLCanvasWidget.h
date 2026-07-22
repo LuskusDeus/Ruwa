@@ -238,6 +238,8 @@ public:
     {
         return m_selectionController && m_selectionController->isCircleSelectionActive();
     }
+    /// Queue a Magic Wand selection. Returns true when the request was accepted;
+    /// the selection and its undo command are applied asynchronously.
     bool performMagicWandSelection(
         int worldX, int worldY, bool addSelection = false, bool subtractSelection = false);
     void translateActiveSelection(float dx, float dy);
@@ -631,6 +633,7 @@ private:
     SelectionState m_selectionAtLassoBegin;
     SelectionState m_lastSelectionState;
     bool m_ignoreSelectionChange = false;
+    quint64 m_magicWandRequestSequence = 0;
 
     SelectionRestoreContext buildCurrentSelectionRestore();
     void pushSelectionCommand(const SelectionState& before, const SelectionState& after);

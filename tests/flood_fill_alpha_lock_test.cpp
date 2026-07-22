@@ -106,6 +106,18 @@ TEST_CASE("Magic Wand mask selects only the connected matching-color region",
     REQUIRE(rawMaskAlphaAt(mask, 0, 0) == 255);
     REQUIRE(rawMaskAlphaAt(mask, 1, 0) == 255);
     REQUIRE(rawMaskAlphaAt(mask, 2, 0) == 0);
+
+    const auto snapshotMask = buildMagicWandSelectionMask(snapshotContentTiles(grid), 0, 0, 3, 1,
+        grid.format());
+    REQUIRE(snapshotMask == mask);
+
+    TileGrid probeGrid;
+    TileData& probeTile = probeGrid.getOrCreateTile(TileKey { 0, 0 });
+    probeTile.setPixel(0, 0, 255, 0, 0, 255);
+    probeTile.setPixel(1, 0, 255, 0, 0, 255);
+    probeTile.setPixel(2, 0, 0, 0, 255, 255);
+    const auto fullFillResult = floodFill(probeGrid, 0, 0, 0, 0, 0, 254, nullptr, 3, 1);
+    REQUIRE(fullFillResult.fillMaskTiles == mask);
 }
 
 TEST_CASE("Magic Wand mask can select transparent space around opaque content",

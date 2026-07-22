@@ -495,23 +495,23 @@ void CanvasSelectionController::endCircleSelection(bool addSelection, bool subtr
         m_ctx.requestRender();
 }
 
-bool CanvasSelectionController::selectContiguousArea(
-    int worldX, int worldY, bool addSelection, bool subtractSelection)
+std::optional<MagicWandSelectionRequest> CanvasSelectionController::prepareMagicWandSelection(
+    int worldX, int worldY, bool addSelection, bool subtractSelection) const
 {
     if (!m_ctx.getCanvas || !m_ctx.getActiveLayer) {
-        return false;
+        return std::nullopt;
     }
 
     const Canvas& canvas = m_ctx.getCanvas();
     if (!selectionUsesFiniteDocumentBounds(canvas) || worldX < 0 || worldY < 0
         || worldX >= static_cast<int>(canvas.width())
         || worldY >= static_cast<int>(canvas.height())) {
-        return false;
+        return std::nullopt;
     }
 
     auto* layer = m_ctx.getActiveLayer();
     if (!layer || (!layer->isPixelLayer() && !layer->isBackground())) {
-        return false;
+        return std::nullopt;
     }
 
     LassoSelectionMode mode = LassoSelectionMode::Replace;
@@ -521,12 +521,19 @@ bool CanvasSelectionController::selectContiguousArea(
         mode = LassoSelectionMode::Add;
     }
     if (mode == LassoSelectionMode::Subtract && m_lassoSelection.mask().empty()) {
-        return false;
+        return std::nullopt;
     }
 
-    MaskTileSnapshot wandMask;
+    MagicWandSelectionRequest request;
+    request.sourceLayerId = layer->id;
+    request.seedX = worldX;
+    request.seedY = worldY;
+    request.canvasWidth = canvas.width();
+    request.canvasHeight = canvas.height();
+    request.mode = mode;
+
     if (layer->isBackground() && !layer->backgroundTransparent) {
-        wandMask = fullCanvasSelectionMask(canvas.width(), canvas.height());
+        request.selectFullCanvas = true;
     } else {
         std::shared_ptr<TileGrid> effectShapedGrid
             = m_ctx.getEffectShapedGrid ? m_ctx.getEffectShapedGrid(layer) : nullptr;
@@ -539,8 +546,30 @@ bool CanvasSelectionController::selectContiguousArea(
         if (!sourceGrid) {
             sourceGrid = &emptySource;
         }
-        wandMask = buildMagicWandSelectionMask(*sourceGrid, worldX, worldY,
-            static_cast<int>(canvas.width()), static_cast<int>(canvas.height()));
+        request.sourceFormat = sourceGrid->format();
+        request.sourceTiles = snapshotContentTiles(*sourceGrid);
+    }
+
+    return request;
+}
+
+MaskTileSnapshot CanvasSelectionController::computeMagicWandSelection(
+    MagicWandSelectionRequest request)
+{
+    if (request.selectFullCanvas) {
+        return fullCanvasSelectionMask(request.canvasWidth, request.canvasHeight);
+    }
+
+    return buildMagicWandSelectionMask(request.sourceTiles, request.seedX, request.seedY,
+        static_cast<int>(request.canvasWidth), static_cast<int>(request.canvasHeight),
+        request.sourceFormat);
+}
+
+bool CanvasSelectionController::applyMagicWandSelection(const MaskTileSnapshot& wandMask,
+    LassoSelectionMode mode, uint32_t canvasWidth, uint32_t canvasHeight)
+{
+    if (mode == LassoSelectionMode::Subtract && m_lassoSelection.mask().empty()) {
+        return false;
     }
 
     auto* tileRenderer = m_ctx.getTileRenderer ? m_ctx.getTileRenderer() : nullptr;
@@ -556,8 +585,7 @@ bool CanvasSelectionController::selectContiguousArea(
         scope.disableSnapshotInvalidation();
     }
 
-    m_lassoSelection.applyRasterSelectionMask(
-        wandMask, mode, canvas.width(), canvas.height());
+    m_lassoSelection.applyRasterSelectionMask(wandMask, mode, canvasWidth, canvasHeight);
     m_contentSelectionSourceLayerId = QUuid();
 
     if (tileRenderer) {

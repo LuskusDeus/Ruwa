@@ -10,6 +10,7 @@
 #define RUWA_FEATURES_CANVAS_SELECTION_CANVASSELECTIONCONTROLLER_H
 
 #include "shared/types/Types.h"
+#include "features/fill/FloodFill.h"
 #include "features/selection/LassoSelectionManager.h"
 
 #include <QtGui/qopengl.h>
@@ -20,6 +21,7 @@
 
 #include <functional>
 #include <memory>
+#include <optional>
 #include <vector>
 
 namespace ruwa::core::layers {
@@ -81,6 +83,20 @@ struct PendingSelectionJob {
     std::vector<TileKey> processed;
 };
 
+/// Immutable input for the CPU-heavy phase of a Magic Wand selection.
+/// It owns a deep snapshot, so it can be moved safely to a QtConcurrent worker.
+struct MagicWandSelectionRequest {
+    FloodFillResult::RawTileMap sourceTiles;
+    TilePixelFormat sourceFormat = kDefaultTileFormat;
+    QUuid sourceLayerId;
+    int seedX = 0;
+    int seedY = 0;
+    uint32_t canvasWidth = 0;
+    uint32_t canvasHeight = 0;
+    LassoSelectionMode mode = LassoSelectionMode::Replace;
+    bool selectFullCanvas = false;
+};
+
 class CanvasSelectionController {
 public:
     explicit CanvasSelectionController(const CanvasSelectionContext& ctx);
@@ -104,8 +120,11 @@ public:
     void updateCircleSelection(float worldX, float worldY);
     void endCircleSelection(bool addSelection, bool subtractSelection);
 
-    bool selectContiguousArea(
-        int worldX, int worldY, bool addSelection, bool subtractSelection);
+    std::optional<MagicWandSelectionRequest> prepareMagicWandSelection(
+        int worldX, int worldY, bool addSelection, bool subtractSelection) const;
+    static MaskTileSnapshot computeMagicWandSelection(MagicWandSelectionRequest request);
+    bool applyMagicWandSelection(const MaskTileSnapshot& wandMask, LassoSelectionMode mode,
+        uint32_t canvasWidth, uint32_t canvasHeight);
 
     void translateActiveSelection(float dx, float dy);
     void clearSelectionMask();

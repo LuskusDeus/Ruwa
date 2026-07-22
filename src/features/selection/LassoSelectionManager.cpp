@@ -128,12 +128,12 @@ void LassoSelectionManager::applyMaskSnapshot(std::shared_ptr<const MaskTileSnap
 void LassoSelectionManager::applyRasterSelectionMask(const MaskTileSnapshot& maskTiles,
     LassoSelectionMode mode, uint32_t canvasWidth, uint32_t canvasHeight)
 {
+    const bool replaceSelection = mode == LassoSelectionMode::Replace;
     if (mode == LassoSelectionMode::Replace) {
         m_regions.clear();
         m_mask.clear();
         m_edges.clear();
         setMaskHasSoftAlpha(false);
-        mode = LassoSelectionMode::Add;
     } else if (mode == LassoSelectionMode::Subtract && m_mask.empty()) {
         return;
     }
@@ -144,21 +144,50 @@ void LassoSelectionManager::applyRasterSelectionMask(const MaskTileSnapshot& mas
     }
 
     invalidateMaskSnapshotCache();
-    if (mode == LassoSelectionMode::Add) {
+    if (replaceSelection) {
+        // The destination is empty after clear(), so combining pixel-by-pixel is
+        // unnecessary. Copy each ready-made mask tile in one contiguous block.
         for (const auto& [key, incoming] : maskTiles) {
             if (incoming.size() != TILE_BYTE_SIZE) {
                 continue;
             }
 
             TileData& tile = m_mask.getOrCreateTile(key);
+            std::memcpy(tile.pixels(), incoming.data(), TILE_BYTE_SIZE);
+            tile.markDirty();
+        }
+    } else if (mode == LassoSelectionMode::Add) {
+        for (const auto& [key, incoming] : maskTiles) {
+            if (incoming.size() != TILE_BYTE_SIZE) {
+                continue;
+            }
+
+            TileData* existingTile = m_mask.getTile(key);
+            if (!existingTile) {
+                TileData& tile = m_mask.getOrCreateTile(key);
+                std::memcpy(tile.pixels(), incoming.data(), TILE_BYTE_SIZE);
+                tile.markDirty();
+                continue;
+            }
+
+            TileData& tile = *existingTile;
+            uint8_t* destination = tile.pixels();
+            bool changed = false;
             for (uint32_t y = 0; y < TILE_SIZE; ++y) {
                 for (uint32_t x = 0; x < TILE_SIZE; ++x) {
                     const uint32_t idx = (y * TILE_SIZE + x) * TILE_CHANNELS;
-                    const uint8_t next = std::max(tile.pixels()[idx + 3], incoming[idx + 3]);
-                    if (next != tile.pixels()[idx + 3]) {
-                        tile.setPixel(x, y, next, next, next, next);
+                    const uint8_t next = std::max(destination[idx + 3], incoming[idx + 3]);
+                    if (next != destination[idx + 3]) {
+                        destination[idx + 0] = next;
+                        destination[idx + 1] = next;
+                        destination[idx + 2] = next;
+                        destination[idx + 3] = next;
+                        changed = true;
                     }
                 }
+            }
+            if (changed) {
+                tile.markDirty();
             }
         }
     } else {
@@ -170,17 +199,26 @@ void LassoSelectionManager::applyRasterSelectionMask(const MaskTileSnapshot& mas
             }
 
             const auto& incoming = incomingIt->second;
+            uint8_t* destination = tile.pixels();
+            bool changed = false;
             for (uint32_t y = 0; y < TILE_SIZE; ++y) {
                 for (uint32_t x = 0; x < TILE_SIZE; ++x) {
                     const uint32_t idx = (y * TILE_SIZE + x) * TILE_CHANNELS;
-                    const uint8_t current = tile.pixels()[idx + 3];
+                    const uint8_t current = destination[idx + 3];
                     const uint8_t amount = incoming[idx + 3];
                     const uint8_t next
                         = amount >= current ? 0 : static_cast<uint8_t>(current - amount);
                     if (next != current) {
-                        tile.setPixel(x, y, next, next, next, next);
+                        destination[idx + 0] = next;
+                        destination[idx + 1] = next;
+                        destination[idx + 2] = next;
+                        destination[idx + 3] = next;
+                        changed = true;
                     }
                 }
+            }
+            if (changed) {
+                tile.markDirty();
             }
             if (tile.isEmpty()) {
                 emptyTiles.push_back(key);
