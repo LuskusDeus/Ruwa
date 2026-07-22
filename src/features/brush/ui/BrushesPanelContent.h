@@ -65,6 +65,7 @@ private slots:
     void onSectionToggled(const QString& packId, bool expanded);
     void onBrushActivated(const QString& packId, const QString& brushId);
     void onBrushEditorRequested(const QString& packId, const QString& brushId);
+    void onBrushDeleteRequested(const QString& packId, const QString& brushId);
     void onThemeChanged();
     void syncSelectionFromCanvas();
 

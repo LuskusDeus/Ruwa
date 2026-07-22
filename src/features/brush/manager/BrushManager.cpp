@@ -608,6 +608,22 @@ bool BrushManager::removeBrush(const QString& brushId)
     return false;
 }
 
+bool BrushManager::removeBrushOrPreset(const QString& brushId)
+{
+    ensureLoaded();
+
+    const QString presetId = presetIdForBrush(brushId);
+    if (presetId.isEmpty()) {
+        return false;
+    }
+
+    if (m_brushesByPreset.value(presetId).size() <= 1) {
+        return removePreset(presetId);
+    }
+
+    return removeBrush(brushId);
+}
+
 bool BrushManager::renameBrush(const QString& brushId, const QString& newName)
 {
     ensureLoaded();

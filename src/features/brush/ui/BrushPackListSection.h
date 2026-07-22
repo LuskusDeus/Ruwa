@@ -78,6 +78,7 @@ signals:
     void toggled(const QString& packId, bool expanded);
     void brushActivated(const QString& packId, const QString& brushId);
     void brushEditorRequested(const QString& packId, const QString& brushId);
+    void brushDeleteRequested(const QString& packId, const QString& brushId);
     void contentGeometryChanged();
 
 protected:

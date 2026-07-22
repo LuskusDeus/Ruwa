@@ -53,6 +53,7 @@ constexpr auto kKeySeparatorBefore = "separatorBefore";
 enum BrushRowContextAction : int {
     CtxOpenInEditor = 1,
     CtxToggleFavorite = 2,
+    CtxDeleteBrush = 3,
     CtxBrushColorBase = 100,
 };
 
@@ -231,6 +232,11 @@ public:
         m_openEditorCallback = std::move(callback);
     }
 
+    void setDeleteBrushCallback(std::function<void(const QString&)> callback)
+    {
+        m_deleteBrushCallback = std::move(callback);
+    }
+
     void setBrushDisplayColorIndex(int colorIndex)
     {
         const int clamped = qBound(0, colorIndex, maxDisplayColorIndex());
@@ -293,6 +299,17 @@ public:
         toggleFavorite.insert(QLatin1String(kKeyChecked), favorite);
         toggleFavorite.insert(QLatin1String(kKeySeparatorBefore), true);
         actions.append(toggleFavorite);
+
+        actions.append(QVariantMap { { QStringLiteral("separator"), true } });
+
+        QVariantMap deleteBrush;
+        deleteBrush.insert(QStringLiteral("id"), CtxDeleteBrush);
+        deleteBrush.insert(QStringLiteral("text"),
+            QCoreApplication::translate("BrushPackListSection", "Delete brush"));
+        deleteBrush.insert(QStringLiteral("danger"), true);
+        deleteBrush.insert(
+            QStringLiteral("standardIcon"), static_cast<int>(IconProvider::StandardIcon::Trash));
+        actions.append(deleteBrush);
         ctx.insert(QStringLiteral("simpleActions"), QVariant::fromValue(actions));
 
         QVariantList colorActions;
@@ -325,6 +342,13 @@ public:
         if (actionId == CtxToggleFavorite) {
             auto& settings = ruwa::core::SettingsManager::instance();
             settings.setBrushFavorite(m_brush.id, !settings.isBrushFavorite(m_brush.id));
+            return;
+        }
+
+        if (actionId == CtxDeleteBrush) {
+            if (m_deleteBrushCallback && !m_brush.id.isEmpty()) {
+                m_deleteBrushCallback(m_brush.id);
+            }
             return;
         }
 
@@ -660,6 +684,7 @@ private:
     int m_previewHeight = 0;
     QRgb m_previewColor = 0;
     std::function<void(const QString&)> m_openEditorCallback;
+    std::function<void(const QString&)> m_deleteBrushCallback;
 };
 
 } // namespace
@@ -876,6 +901,9 @@ void BrushPackListSection::rebuildBrushRows()
         const QString sourcePackId = brush.packId.isEmpty() ? m_pack.id : brush.packId;
         rowButton->setOpenEditorCallback([this, sourcePackId](const QString& brushId) {
             emit brushEditorRequested(sourcePackId, brushId);
+        });
+        rowButton->setDeleteBrushCallback([this, sourcePackId](const QString& brushId) {
+            emit brushDeleteRequested(sourcePackId, brushId);
         });
         connect(
             rowButton, &QAbstractButton::clicked, this, [this, sourcePackId, brushId = brush.id]() {

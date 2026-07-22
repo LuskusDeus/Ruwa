@@ -64,6 +64,9 @@ public:
 
     QString createBrush(const QString& presetId);
     bool removeBrush(const QString& brushId);
+    /// Removes a brush using the brush-editor policy: when it is the last
+    /// brush in its preset, removes the whole preset instead.
+    bool removeBrushOrPreset(const QString& brushId);
     bool renameBrush(const QString& brushId, const QString& newName);
     bool updateBrushSettings(const QString& brushId, const BrushSettingsData& settings);
     bool exportBrushesToFile(const QString& filePath, const QVector<BrushData>& brushes,

@@ -142,19 +142,24 @@
 <context>
     <name>BrushPackListSection</name>
     <message>
-        <location filename="../src/features/brush/ui/BrushPackListSection.cpp" line="280"/>
+        <location filename="../src/features/brush/ui/BrushPackListSection.cpp" line="286"/>
         <source>Open in editor</source>
         <translation>Открыть в редакторе</translation>
     </message>
     <message>
-        <location filename="../src/features/brush/ui/BrushPackListSection.cpp" line="291"/>
+        <location filename="../src/features/brush/ui/BrushPackListSection.cpp" line="296"/>
         <source>Remove from favorites</source>
         <translation>Убрать из избранного</translation>
     </message>
     <message>
-        <location filename="../src/features/brush/ui/BrushPackListSection.cpp" line="293"/>
+        <location filename="../src/features/brush/ui/BrushPackListSection.cpp" line="297"/>
         <source>Add to favorites</source>
         <translation>Добавить в избранное</translation>
+    </message>
+    <message>
+        <location filename="../src/features/brush/ui/BrushPackListSection.cpp" line="308"/>
+        <source>Delete brush</source>
+        <translation>Удалить кисть</translation>
     </message>
 </context>
 <context>
@@ -4560,7 +4565,7 @@ Ruwa использует фреймворк Qt (версия %1), динами�
 <context>
     <name>ruwa::ui::workspace::BrushPackListSection</name>
     <message>
-        <location filename="../src/features/brush/ui/BrushPackListSection.cpp" line="866"/>
+        <location filename="../src/features/brush/ui/BrushPackListSection.cpp" line="889"/>
         <source>Pack is empty</source>
         <translation>Набор пуст</translation>
     </message>

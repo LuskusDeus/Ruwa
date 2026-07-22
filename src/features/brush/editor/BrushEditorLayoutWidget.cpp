@@ -2545,17 +2545,7 @@ void BrushEditorLayoutWidget::onRemoveBrushClicked()
         return;
     const int savedScroll = currentLibraryScroll();
 
-    const auto brushes = BrushManager::instance().brushesForPreset(m_selectedPresetId);
-    if (brushes.size() <= 1) {
-        const QString removedPresetId = m_selectedPresetId;
-        if (!BrushManager::instance().removePreset(removedPresetId))
-            return;
-        loadDataFromManager();
-        restoreLibraryScroll(savedScroll);
-        return;
-    }
-
-    if (!BrushManager::instance().removeBrush(m_selectedBrushId))
+    if (!BrushManager::instance().removeBrushOrPreset(m_selectedBrushId))
         return;
     loadDataFromManager();
     restoreLibraryScroll(savedScroll);

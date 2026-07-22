@@ -142,18 +142,23 @@
 <context>
     <name>BrushPackListSection</name>
     <message>
-        <location filename="../src/features/brush/ui/BrushPackListSection.cpp" line="280"/>
+        <location filename="../src/features/brush/ui/BrushPackListSection.cpp" line="286"/>
         <source>Open in editor</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location filename="../src/features/brush/ui/BrushPackListSection.cpp" line="291"/>
+        <location filename="../src/features/brush/ui/BrushPackListSection.cpp" line="296"/>
         <source>Remove from favorites</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location filename="../src/features/brush/ui/BrushPackListSection.cpp" line="293"/>
+        <location filename="../src/features/brush/ui/BrushPackListSection.cpp" line="297"/>
         <source>Add to favorites</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location filename="../src/features/brush/ui/BrushPackListSection.cpp" line="308"/>
+        <source>Delete brush</source>
         <translation type="unfinished"></translation>
     </message>
 </context>
@@ -4547,7 +4552,7 @@ Ruwa uses the Qt framework (version %1), dynamically linked under the GNU Lesser
 <context>
     <name>ruwa::ui::workspace::BrushPackListSection</name>
     <message>
-        <location filename="../src/features/brush/ui/BrushPackListSection.cpp" line="866"/>
+        <location filename="../src/features/brush/ui/BrushPackListSection.cpp" line="889"/>
         <source>Pack is empty</source>
         <translation type="unfinished"></translation>
     </message>

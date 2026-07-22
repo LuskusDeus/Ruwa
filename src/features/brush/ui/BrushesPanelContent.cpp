@@ -454,6 +454,16 @@ void BrushesPanelContent::onBrushEditorRequested(const QString& packId, const QS
     openBrushEditor(packId, brushId);
 }
 
+void BrushesPanelContent::onBrushDeleteRequested(const QString& packId, const QString& brushId)
+{
+    if (packId.isEmpty() || brushId.isEmpty()
+        || BrushManager::instance().presetIdForBrush(brushId) != packId) {
+        return;
+    }
+
+    BrushManager::instance().removeBrushOrPreset(brushId);
+}
+
 void BrushesPanelContent::onThemeChanged()
 {
     const int outerMargin = ruwa::ui::core::ThemeManager::instance().scaled(8);
@@ -787,6 +797,8 @@ void BrushesPanelContent::addPackSection(
         &BrushesPanelContent::onBrushActivated);
     connect(section, &BrushPackListSection::brushEditorRequested, this,
         &BrushesPanelContent::onBrushEditorRequested);
+    connect(section, &BrushPackListSection::brushDeleteRequested, this,
+        &BrushesPanelContent::onBrushDeleteRequested);
     connect(section, &BrushPackListSection::contentGeometryChanged, this,
         [this, pageKey]() { refreshScrollGeometry(pageKey); });
 

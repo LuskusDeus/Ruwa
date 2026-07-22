@@ -44,13 +44,17 @@ const int GROUP_HOLD_DELAY_MS = 350;
 
 bool isGroupRepresentative(ToolsPanel::Tool tool)
 {
-    return tool == ToolsPanel::Tool::Fill || tool == ToolsPanel::Tool::Lasso
+    return tool == ToolsPanel::Tool::Blur || tool == ToolsPanel::Tool::Fill
+        || tool == ToolsPanel::Tool::Lasso
         || tool == ToolsPanel::Tool::SquareSelection;
 }
 
 ToolsPanel::Tool groupRepresentativeForTool(ToolsPanel::Tool tool)
 {
     switch (tool) {
+    case ToolsPanel::Tool::Smudge:
+    case ToolsPanel::Tool::Liquify:
+        return ToolsPanel::Tool::Blur;
     case ToolsPanel::Tool::ClassicFill:
         return ToolsPanel::Tool::Fill;
     case ToolsPanel::Tool::LassoFill:
@@ -65,6 +69,9 @@ ToolsPanel::Tool groupRepresentativeForTool(ToolsPanel::Tool tool)
 QList<ToolsPanel::Tool> groupMembers(ToolsPanel::Tool representative)
 {
     switch (representative) {
+    case ToolsPanel::Tool::Blur:
+        return { ToolsPanel::Tool::Blur, ToolsPanel::Tool::Smudge,
+            ToolsPanel::Tool::Liquify };
     case ToolsPanel::Tool::Fill:
         return { ToolsPanel::Tool::Fill, ToolsPanel::Tool::ClassicFill };
     case ToolsPanel::Tool::Lasso:
@@ -306,12 +313,11 @@ private:
 // Tool groups for layout (separators between groups)
 static const QList<QList<ToolsPanel::Tool>> TOOL_GROUPS = {
     { ToolsPanel::Tool::Hand, ToolsPanel::Tool::RotateView, ToolsPanel::Tool::Zoom }, // Navigation
-    { ToolsPanel::Tool::Brush, ToolsPanel::Tool::Blur, ToolsPanel::Tool::Smudge,
-        ToolsPanel::Tool::Liquify, ToolsPanel::Tool::Eraser, ToolsPanel::Tool::Fill,
-        ToolsPanel::Tool::Eyedropper }, // Drawing
-    { ToolsPanel::Tool::Lasso, ToolsPanel::Tool::SquareSelection, ToolsPanel::Tool::Move,
-        ToolsPanel::Tool::Text }, // Selection
-    { ToolsPanel::Tool::CanvasResize } // Other
+    { ToolsPanel::Tool::Brush, ToolsPanel::Tool::Eraser, ToolsPanel::Tool::Fill,
+        ToolsPanel::Tool::Eyedropper, ToolsPanel::Tool::Blur }, // Drawing
+    { ToolsPanel::Tool::Move, ToolsPanel::Tool::SquareSelection,
+        ToolsPanel::Tool::Lasso }, // Selection and movement
+    { ToolsPanel::Tool::Text, ToolsPanel::Tool::CanvasResize } // Other
 };
 
 bool isToolSwitchProfilingEnabled()
@@ -339,6 +345,7 @@ ToolsPanel::ToolsPanel(QWidget* parent)
     setFloatable(true);
     setMovable(true);
 
+    m_groupSelections[Tool::Blur] = Tool::Blur;
     m_groupSelections[Tool::Fill] = Tool::Fill;
     m_groupSelections[Tool::Lasso] = Tool::Lasso;
     m_groupSelections[Tool::SquareSelection] = Tool::SquareSelection;
@@ -419,16 +426,14 @@ QWidget* ToolsPanel::createContent()
     // Create all buttons (without adding to any layout yet)
     addTool(Tool::Hand, IconProvider::StandardIcon::Hand, tr("Hand (H)"));
     addTool(Tool::Brush, IconProvider::StandardIcon::Brush, tr("Brush (B)"));
-    addTool(Tool::Blur, IconProvider::StandardIcon::Blur, tr("Blur"));
-    addTool(Tool::Smudge, IconProvider::StandardIcon::Smudge, tr("Smudge"));
-    addTool(Tool::Liquify, IconProvider::StandardIcon::Liquify, tr("Liquify"));
     addTool(Tool::Eraser, IconProvider::StandardIcon::Eraser, tr("Eraser (E)"));
     addGroupTool(Tool::Fill, IconProvider::StandardIcon::SmartFillColor, tr("Fill (G)"));
     addTool(Tool::Eyedropper, IconProvider::StandardIcon::Eyedropper, tr("Eyedropper (I)"));
-    addGroupTool(Tool::Lasso, IconProvider::StandardIcon::Lasso, tr("Lasso (L)"));
+    addGroupTool(Tool::Blur, IconProvider::StandardIcon::Blur, tr("Blur"));
+    addTool(Tool::Move, IconProvider::StandardIcon::Move, tr("Move (V)"));
     addGroupTool(Tool::SquareSelection, IconProvider::StandardIcon::SquareSelection,
         tr("Square Selection (M)"));
-    addTool(Tool::Move, IconProvider::StandardIcon::Move, tr("Move (V)"));
+    addGroupTool(Tool::Lasso, IconProvider::StandardIcon::Lasso, tr("Lasso (L)"));
     addTool(Tool::Text, IconProvider::StandardIcon::Text, tr("Text (T)"));
     addTool(Tool::RotateView, IconProvider::StandardIcon::RotateView, tr("Rotate View (R)"));
     addTool(Tool::CanvasResize, IconProvider::StandardIcon::Crop, tr("Canvas Resize"));
