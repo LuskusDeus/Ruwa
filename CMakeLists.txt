@@ -237,7 +237,7 @@ target_link_libraries(Ruwa PRIVATE
 )
 
 if (WIN32)
-    target_link_libraries(Ruwa PRIVATE ole32 advapi32 crypt32)
+    target_link_libraries(Ruwa PRIVATE ole32 advapi32 crypt32 dwmapi)
 endif()
 
 # ============================================================================

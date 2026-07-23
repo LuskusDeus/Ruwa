@@ -11,6 +11,7 @@ class LinuxPlatform : public Platform {
 public:
     void disableWindowAnimations(QWidget* window) override;
     void enableWindowAnimations(QWidget* window) override;
+    void synchronizeWindowPresentation(QWidget* window) override;
     bool copyImageToClipboard(const QImage& image) override;
 };
 

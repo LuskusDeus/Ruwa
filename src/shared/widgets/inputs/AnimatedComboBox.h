@@ -3,11 +3,14 @@
 #ifndef RUWA_UI_WIDGETS_COMMON_ANIMATEDCOMBOBOX_H
 #define RUWA_UI_WIDGETS_COMMON_ANIMATEDCOMBOBOX_H
 
-#include <QWidget>
+#include <QColor>
 #include <QIcon>
+#include <QImage>
 #include <QList>
 #include <QMetaObject>
+#include <QSize>
 #include <QVariant>
+#include <QWidget>
 
 class QPropertyAnimation;
 class QGraphicsOpacityEffect;
@@ -18,6 +21,10 @@ struct AnimatedComboItem {
     QString text;
     QVariant userData;
     QIcon icon;
+    QString subtitle;
+    QImage previewImage;
+    QColor previewTint;
+    bool tintPreview = false;
     bool enabled = true;
     bool separator = false;
     bool category = false;
@@ -32,6 +39,11 @@ class AnimatedComboBox : public QWidget {
     Q_PROPERTY(qreal arrowProgress READ arrowProgress WRITE setArrowProgress)
 
 public:
+    enum class PopupPresentation {
+        List,
+        PreviewGrid,
+    };
+
     explicit AnimatedComboBox(QWidget* parent = nullptr);
     ~AnimatedComboBox() override;
 
@@ -46,6 +58,7 @@ public:
 
     int currentIndex() const { return m_currentIndex; }
     void setCurrentIndex(int index);
+    void clearCurrentSelection();
 
     QString currentText() const;
     QVariant currentData() const;
@@ -60,6 +73,17 @@ public:
 
     void setPopupMaxHeight(int height);
     int popupMaxHeight() const { return m_popupMaxHeight; }
+
+    void setPopupPresentation(PopupPresentation presentation);
+    PopupPresentation popupPresentation() const { return m_popupPresentation; }
+
+    void setPopupColumns(int columns);
+    int popupColumns() const { return m_popupColumns; }
+
+    void setPopupCardSize(const QSize& size);
+    QSize popupCardSize() const { return m_popupCardSize; }
+
+    void setItemPreviewImage(int index, const QImage& image);
 
     qreal hoverProgress() const { return m_hoverProgress; }
     void setHoverProgress(qreal progress);
@@ -108,6 +132,9 @@ private:
     QString m_placeholderText = "Select";
     int m_popupMinWidth = 180;
     int m_popupMaxHeight = 360;
+    PopupPresentation m_popupPresentation = PopupPresentation::List;
+    int m_popupColumns = 2;
+    QSize m_popupCardSize = QSize(136, 104);
 
     AnimatedComboPopup* m_popup = nullptr;
     QList<QMetaObject::Connection> m_scrollAreaPositionConnections;

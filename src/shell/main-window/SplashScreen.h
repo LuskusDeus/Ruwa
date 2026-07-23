@@ -84,6 +84,7 @@ private:
     qreal m_foregroundOpacity = 1.0;
 
     bool m_isExpanding = false;
+    bool m_hasExpanded = false;
     QRectF m_contentRect;
     QRectF m_animatedRect;
     QRectF m_startLocalRect;

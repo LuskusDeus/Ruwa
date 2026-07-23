@@ -63,7 +63,22 @@ bool brushSettingsEqual(const ruwa::core::brushes::BrushSettingsData& a,
         && a.opacityPressureMax == b.opacityPressureMax && a.sizePressureMin == b.sizePressureMin
         && a.sizePressureMax == b.sizePressureMax && a.flowPressureMin == b.flowPressureMin
         && a.flowPressureMax == b.flowPressureMax && dynamicsBindingsEqual(a.dynamics, b.dynamics)
-        && a.textureType == b.textureType && a.textureAmount == b.textureAmount
+        && a.textureMode == b.textureMode && a.textureType == b.textureType
+        && a.texturePencilDetail == b.texturePencilDetail
+        && a.texturePencilStreakStrength == b.texturePencilStreakStrength
+        && a.textureNoiseOctaves == b.textureNoiseOctaves
+        && a.textureNoiseRoughness == b.textureNoiseRoughness
+        && a.texturePerlinOctaves == b.texturePerlinOctaves
+        && a.texturePerlinPersistence == b.texturePerlinPersistence
+        && a.textureDotsSpacing == b.textureDotsSpacing
+        && a.textureDotsSize == b.textureDotsSize && a.textureDotsJitter == b.textureDotsJitter
+        && a.textureLinesSpacing == b.textureLinesSpacing
+        && a.textureLinesThickness == b.textureLinesThickness
+        && a.textureLinesAngle == b.textureLinesAngle
+        && a.textureCheckerSize == b.textureCheckerSize
+        && a.textureCheckerSoftness == b.textureCheckerSoftness
+        && a.textureCheckerRotation == b.textureCheckerRotation
+        && a.textureAmount == b.textureAmount
         && a.textureScale == b.textureScale && a.textureContrast == b.textureContrast
         && a.textureDepth == b.textureDepth && a.textureBlend == b.textureBlend
         && a.textureEdgeBoost == b.textureEdgeBoost && a.scatterPosition == b.scatterPosition

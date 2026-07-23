@@ -37,6 +37,7 @@ class PresetMenuListWidget;
 namespace ruwa::ui::windows {
 
 class BrushEditorParameterOverlay;
+class ProceduralTextureEditorWidget;
 
 class BrushEditorLayoutWidget : public QWidget {
     Q_OBJECT
@@ -84,8 +85,9 @@ private:
     void setupSignals();
     void populateSettingsTabs();
     void populateSettingsPages();
+    QWidget* createCustomTexturePage(const BrushTabDef& tabDef, const QSet<QString>& starredKeys);
     QWidget* createCustomDabPage(const BrushTabDef& tabDef, const QSet<QString>& starredKeys);
-    QWidget* createDabPlaceholderPage(ruwa::ui::core::IconProvider::StandardIcon iconType,
+    QWidget* createModePlaceholderPage(ruwa::ui::core::IconProvider::StandardIcon iconType,
         const QString& title, const QString& description, QWidget* parent) const;
     void loadDataFromManager();
     void rebuildLibraryList();
@@ -114,7 +116,10 @@ private:
     void updateToolbarState();
     void updateScaledSizes();
     void updatePreview();
+    void updateTextureControls();
     void updateDabControls();
+    void updateProceduralTextureEditorHeight();
+    void updateTextureModeStackHeight();
     void updateDabModeStackHeight();
     void updateStyles();
     void syncSettingsStackHeight();
@@ -174,6 +179,10 @@ private:
     BrushEditorParameterOverlay* m_parameterOverlay = nullptr;
 
     QVector<widgets::BrushSettingsWidget*> m_settingsPages;
+    widgets::SegmentedOptionSelector* m_textureModeSelector = nullptr;
+    widgets::AnimatedStackedWidget* m_textureModeStack = nullptr;
+    ProceduralTextureEditorWidget* m_proceduralTextureEditor = nullptr;
+    widgets::BrushSettingsWidget* m_textureSettingsWidget = nullptr;
     widgets::SegmentedOptionSelector* m_dabModeSelector = nullptr;
     widgets::AnimatedStackedWidget* m_dabModeStack = nullptr;
     widgets::ImageUploadCardWidget* m_dabImageUpload = nullptr;
@@ -191,6 +200,7 @@ private:
     BrushSettingsData m_currentSettings;
     bool m_localSettingsEditInFlight = false;
     bool m_brushNameEditInFlight = false;
+    bool m_updatingTextureControls = false;
     bool m_updatingDabControls = false;
     bool m_brushImportInProgress = false;
     bool m_managerReloadSuppressed = false;

@@ -97,6 +97,21 @@ public:
         setEndCorrectionEnabled(m_brushSettingsModel.endCorrectionEnabled);
         setEndCorrectionLength(m_brushSettingsModel.endCorrectionLength);
         setTextureType(m_brushSettingsModel.textureType);
+        setTexturePencilDetail(m_brushSettingsModel.texturePencilDetail);
+        setTexturePencilStreakStrength(m_brushSettingsModel.texturePencilStreakStrength);
+        setTextureNoiseOctaves(m_brushSettingsModel.textureNoiseOctaves);
+        setTextureNoiseRoughness(m_brushSettingsModel.textureNoiseRoughness);
+        setTexturePerlinOctaves(m_brushSettingsModel.texturePerlinOctaves);
+        setTexturePerlinPersistence(m_brushSettingsModel.texturePerlinPersistence);
+        setTextureDotsSpacing(m_brushSettingsModel.textureDotsSpacing);
+        setTextureDotsSize(m_brushSettingsModel.textureDotsSize);
+        setTextureDotsJitter(m_brushSettingsModel.textureDotsJitter);
+        setTextureLinesSpacing(m_brushSettingsModel.textureLinesSpacing);
+        setTextureLinesThickness(m_brushSettingsModel.textureLinesThickness);
+        setTextureLinesAngle(m_brushSettingsModel.textureLinesAngle);
+        setTextureCheckerSize(m_brushSettingsModel.textureCheckerSize);
+        setTextureCheckerSoftness(m_brushSettingsModel.textureCheckerSoftness);
+        setTextureCheckerRotation(m_brushSettingsModel.textureCheckerRotation);
         setTextureAmount(m_brushSettingsModel.textureAmount);
         setTextureScale(m_brushSettingsModel.textureScale);
         setTextureContrast(m_brushSettingsModel.textureContrast);
@@ -151,7 +166,6 @@ public:
         if (std::abs(m_textureAmount - nv) > 0.0001f) {
             m_textureAmount = nv;
             m_proceduralTextureTiles.clear();
-            ++m_textureRevision;
         }
     }
     void setTextureScale(float v)
@@ -160,7 +174,6 @@ public:
         if (std::abs(m_textureScale - nv) > 0.0001f) {
             m_textureScale = nv;
             m_proceduralTextureTiles.clear();
-            ++m_textureRevision;
         }
     }
     void setTextureContrast(float v)
@@ -169,7 +182,6 @@ public:
         if (std::abs(m_textureContrast - nv) > 0.0001f) {
             m_textureContrast = nv;
             m_proceduralTextureTiles.clear();
-            ++m_textureRevision;
         }
     }
     void setTextureDepth(float v)
@@ -178,7 +190,6 @@ public:
         if (std::abs(m_textureDepth - nv) > 0.0001f) {
             m_textureDepth = nv;
             m_proceduralTextureTiles.clear();
-            ++m_textureRevision;
         }
     }
     void setTextureBlend(float v)
@@ -187,18 +198,80 @@ public:
         if (std::abs(m_textureBlend - nv) > 0.0001f) {
             m_textureBlend = nv;
             m_proceduralTextureTiles.clear();
-            ++m_textureRevision;
         }
     }
     void setTextureEdgeBoost(float v) { m_textureEdgeBoost = std::clamp(v, 0.0f, 1.0f); }
     void setTextureType(int v)
     {
-        const int nv = std::clamp(v, 0, 2);
+        const int nv = std::clamp(v,
+            static_cast<int>(
+                ruwa::core::brushes::BrushSettingsData::TextureTypePencilGrain),
+            static_cast<int>(
+                ruwa::core::brushes::BrushSettingsData::TextureTypeCheckerboard));
         if (m_textureType != nv) {
             m_textureType = nv;
             m_proceduralTextureTiles.clear();
-            ++m_textureRevision;
         }
+    }
+    void setTexturePencilDetail(float v)
+    {
+        setTextureGeneratorValue(m_texturePencilDetail, v, 0.0f, 1.0f);
+    }
+    void setTexturePencilStreakStrength(float v)
+    {
+        setTextureGeneratorValue(m_texturePencilStreakStrength, v, 0.0f, 1.0f);
+    }
+    void setTextureNoiseOctaves(float v)
+    {
+        setTextureGeneratorValue(m_textureNoiseOctaves, std::round(v), 1.0f, 5.0f);
+    }
+    void setTextureNoiseRoughness(float v)
+    {
+        setTextureGeneratorValue(m_textureNoiseRoughness, v, 0.0f, 1.0f);
+    }
+    void setTexturePerlinOctaves(float v)
+    {
+        setTextureGeneratorValue(m_texturePerlinOctaves, std::round(v), 1.0f, 5.0f);
+    }
+    void setTexturePerlinPersistence(float v)
+    {
+        setTextureGeneratorValue(m_texturePerlinPersistence, v, 0.0f, 1.0f);
+    }
+    void setTextureDotsSpacing(float v)
+    {
+        setTextureGeneratorValue(m_textureDotsSpacing, v, 6.0f, 96.0f);
+    }
+    void setTextureDotsSize(float v)
+    {
+        setTextureGeneratorValue(m_textureDotsSize, v, 0.05f, 0.9f);
+    }
+    void setTextureDotsJitter(float v)
+    {
+        setTextureGeneratorValue(m_textureDotsJitter, v, 0.0f, 1.0f);
+    }
+    void setTextureLinesSpacing(float v)
+    {
+        setTextureGeneratorValue(m_textureLinesSpacing, v, 4.0f, 96.0f);
+    }
+    void setTextureLinesThickness(float v)
+    {
+        setTextureGeneratorValue(m_textureLinesThickness, v, 0.02f, 0.95f);
+    }
+    void setTextureLinesAngle(float v)
+    {
+        setTextureGeneratorValue(m_textureLinesAngle, v, 0.0f, 180.0f);
+    }
+    void setTextureCheckerSize(float v)
+    {
+        setTextureGeneratorValue(m_textureCheckerSize, v, 4.0f, 96.0f);
+    }
+    void setTextureCheckerSoftness(float v)
+    {
+        setTextureGeneratorValue(m_textureCheckerSoftness, v, 0.0f, 0.45f);
+    }
+    void setTextureCheckerRotation(float v)
+    {
+        setTextureGeneratorValue(m_textureCheckerRotation, v, 0.0f, 90.0f);
     }
     void setDabType(int v) { m_dabType = std::clamp(v, 0, 5); }
     int dabType() const { return m_dabType; }
@@ -507,21 +580,56 @@ public:
                                        : m_textureEdgeBoost;
     }
     int textureType() const { return m_textureType; }
+    float texturePencilDetail() const { return m_texturePencilDetail; }
+    float texturePencilStreakStrength() const { return m_texturePencilStreakStrength; }
+    float textureNoiseOctaves() const { return m_textureNoiseOctaves; }
+    float textureNoiseRoughness() const { return m_textureNoiseRoughness; }
+    float texturePerlinOctaves() const { return m_texturePerlinOctaves; }
+    float texturePerlinPersistence() const { return m_texturePerlinPersistence; }
+    float textureDotsSpacing() const { return m_textureDotsSpacing; }
+    float textureDotsSize() const { return m_textureDotsSize; }
+    float textureDotsJitter() const { return m_textureDotsJitter; }
+    float textureLinesSpacing() const { return m_textureLinesSpacing; }
+    float textureLinesThickness() const { return m_textureLinesThickness; }
+    float textureLinesAngle() const { return m_textureLinesAngle; }
+    float textureCheckerSize() const { return m_textureCheckerSize; }
+    float textureCheckerSoftness() const { return m_textureCheckerSoftness; }
+    float textureCheckerRotation() const { return m_textureCheckerRotation; }
     uint32_t textureRevision() const
     {
-        if (!hasDynamicTextureBinding()) {
-            return m_textureRevision;
-        }
         auto quantize = [](float value) -> uint32_t {
             return static_cast<uint32_t>(std::lround(std::clamp(value, 0.0f, 16.0f) * 1024.0f));
         };
-        uint32_t derived = m_textureRevision;
-        derived ^= quantize(textureAmount()) * 0x45d9f3bu;
-        derived ^= quantize(textureScale()) * 0x27d4eb2du;
-        derived ^= quantize(textureContrast()) * 0x165667b1u;
-        derived ^= quantize(textureDepth()) * 0x9e3779b9u;
-        derived ^= quantize(textureBlend()) * 0x85ebca6bu;
-        derived ^= quantize(textureEdgeBoost()) * 0xc2b2ae35u;
+        auto quantizeWide = [](float value) -> uint32_t {
+            return static_cast<uint32_t>(std::lround(std::clamp(value, 0.0f, 512.0f) * 256.0f));
+        };
+        uint32_t derived = 2166136261u;
+        auto mix = [&derived](uint32_t value) {
+            derived ^= value;
+            derived *= 16777619u;
+        };
+        mix(static_cast<uint32_t>(textureType()));
+        mix(quantize(texturePencilDetail()));
+        mix(quantize(texturePencilStreakStrength()));
+        mix(quantize(textureNoiseOctaves()));
+        mix(quantize(textureNoiseRoughness()));
+        mix(quantize(texturePerlinOctaves()));
+        mix(quantize(texturePerlinPersistence()));
+        mix(quantizeWide(textureDotsSpacing()));
+        mix(quantize(textureDotsSize()));
+        mix(quantize(textureDotsJitter()));
+        mix(quantizeWide(textureLinesSpacing()));
+        mix(quantize(textureLinesThickness()));
+        mix(quantizeWide(textureLinesAngle()));
+        mix(quantizeWide(textureCheckerSize()));
+        mix(quantize(textureCheckerSoftness()));
+        mix(quantizeWide(textureCheckerRotation()));
+        mix(quantize(textureAmount()));
+        mix(quantize(textureScale()));
+        mix(quantize(textureContrast()));
+        mix(quantize(textureDepth()));
+        mix(quantize(textureBlend()));
+        mix(quantize(textureEdgeBoost()));
         return derived;
     }
     const std::vector<uint8_t>& proceduralTextureTileAlpha(const TileKey& key) const
@@ -1671,6 +1779,16 @@ public:
     }
 
 private:
+    void setTextureGeneratorValue(float& target, float value, float minimum, float maximum)
+    {
+        const float normalized = std::clamp(value, minimum, maximum);
+        if (std::abs(target - normalized) <= 0.0001f) {
+            return;
+        }
+        target = normalized;
+        m_proceduralTextureTiles.clear();
+    }
+
     struct DabCoverageBounds {
         float axisAlignedExtent = 0.0f;
         float rotationInvariantExtent = 0.0f;
@@ -2181,7 +2299,7 @@ private:
         return vx0 + (vx1 - vx0) * sy;
     }
 
-    /// Type 0: Procedural — layered value noise with anisotropic streak (pencil/graphite).
+    /// Type 0: Pencil Grain — layered value noise with an anisotropic graphite streak.
     float proceduralPencilGrain(
         float worldX, float worldY, float textureScaleOverride = -1.0f) const
     {
@@ -2197,48 +2315,152 @@ private:
 
         const float streak = valueNoise(
             worldX * (f0 * 2.8f) + worldY * (f0 * 0.55f), worldY * (f0 * 0.22f), 0x7F4A21u);
-        return std::clamp(n0 * 0.50f + n1 * 0.25f + n2 * 0.10f + streak * 0.15f, 0.0f, 1.0f);
+        const float detail = texturePencilDetail();
+        const float baseWeight = 0.5f;
+        const float midWeight = 0.15f + detail * 0.2f;
+        const float highWeight = detail * 0.2f;
+        const float streakWeight = texturePencilStreakStrength() * 0.5f;
+        const float weightSum = baseWeight + midWeight + highWeight + streakWeight;
+        return std::clamp((n0 * baseWeight + n1 * midWeight + n2 * highWeight
+                              + streak * streakWeight)
+                / weightSum,
+            0.0f, 1.0f);
     }
 
-    /// Type 1: Noise — multi-octave value noise, grittier granular feel.
+    /// Type 1: Fractal Noise — configurable multi-octave value noise.
     float proceduralNoiseGrain(float worldX, float worldY, float textureScaleOverride = -1.0f) const
     {
         const float scale = std::clamp(
             textureScaleOverride > 0.0f ? textureScaleOverride : textureScale(), 0.1f, 4.0f);
-        const float f0 = 0.025f * scale;
-        const float f1 = f0 * 2.5f;
-        const float f2 = f1 * 2.2f;
-
-        const float n0 = valueNoise(worldX * f0, worldY * f0, 0xB2C4D1u);
-        const float n1 = valueNoise(worldX * f1, worldY * f1, 0x8E3A5Fu);
-        const float n2 = valueNoise(worldX * f2, worldY * f2, 0xD7F21Au);
-
-        return std::clamp(n0 * 0.55f + n1 * 0.30f + n2 * 0.15f, 0.0f, 1.0f);
+        constexpr std::array<uint32_t, 5> seeds {
+            0xB2C4D1u, 0x8E3A5Fu, 0xD7F21Au, 0x4CA591u, 0xE19B37u
+        };
+        const int octaveCount
+            = std::clamp(static_cast<int>(std::lround(textureNoiseOctaves())), 1, 5);
+        const float roughness = textureNoiseRoughness();
+        float frequency = 0.025f * scale;
+        float amplitude = 1.0f;
+        float value = 0.0f;
+        float weight = 0.0f;
+        for (int octave = 0; octave < octaveCount; ++octave) {
+            value += valueNoise(worldX * frequency, worldY * frequency, seeds[octave])
+                * amplitude;
+            weight += amplitude;
+            frequency *= 2.35f;
+            amplitude *= roughness;
+        }
+        return std::clamp(value / std::max(weight, 0.0001f), 0.0f, 1.0f);
     }
 
-    /// Type 2: Perlin — gradient noise, smoother organic blobs.
+    /// Type 2: Perlin Noise — configurable smooth gradient noise.
     float proceduralPerlinGrain(
         float worldX, float worldY, float textureScaleOverride = -1.0f) const
     {
         const float scale = std::clamp(
             textureScaleOverride > 0.0f ? textureScaleOverride : textureScale(), 0.1f, 4.0f);
-        const float f0 = 0.015f * scale;
-        const float f1 = f0 * 2.0f;
+        constexpr std::array<uint32_t, 5> seeds {
+            0x5A3C91u, 0x7B2D41u, 0xC4E137u, 0x326FA9u, 0xD9155Bu
+        };
+        const int octaveCount
+            = std::clamp(static_cast<int>(std::lround(texturePerlinOctaves())), 1, 5);
+        const float persistence = texturePerlinPersistence();
+        float frequency = 0.015f * scale;
+        float amplitude = 1.0f;
+        float value = 0.0f;
+        float weight = 0.0f;
+        for (int octave = 0; octave < octaveCount; ++octave) {
+            const float signedNoise
+                = gradientNoise(worldX * frequency, worldY * frequency, seeds[octave]) * 2.0f
+                - 1.0f;
+            value += signedNoise * amplitude;
+            weight += amplitude;
+            frequency *= 2.0f;
+            amplitude *= persistence;
+        }
+        return std::clamp(0.5f + 0.5f * value / std::max(weight, 0.0001f), 0.0f, 1.0f);
+    }
 
-        const float n0 = gradientNoise(worldX * f0, worldY * f0, 0x5A3C91u);
-        const float n1 = gradientNoise(worldX * f1, worldY * f1, 0x7B2D41u);
+    /// Type 3: Dot Grid — regularly spaced points with controllable positional jitter.
+    float proceduralDotsGrain(
+        float worldX, float worldY, float textureScaleOverride = -1.0f) const
+    {
+        const float scale = std::clamp(
+            textureScaleOverride > 0.0f ? textureScaleOverride : textureScale(), 0.1f, 4.0f);
+        const float period = textureDotsSpacing() / scale;
+        const float gridX = worldX / period;
+        const float gridY = worldY / period;
+        const int32_t cellX = static_cast<int32_t>(std::floor(gridX));
+        const int32_t cellY = static_cast<int32_t>(std::floor(gridY));
+        const float jitterAmount = textureDotsJitter() * 0.35f;
+        const float jitterX = (hash01(cellX, cellY, 0xD07A31u) - 0.5f) * 2.0f * jitterAmount;
+        const float jitterY = (hash01(cellX, cellY, 0x91C5E7u) - 0.5f) * 2.0f * jitterAmount;
+        const float localX = gridX - static_cast<float>(cellX) - 0.5f - jitterX;
+        const float localY = gridY - static_cast<float>(cellY) - 0.5f - jitterY;
+        const float distance = std::sqrt(localX * localX + localY * localY);
+        const float radius = textureDotsSize() * 0.5f;
+        const float feather = std::clamp(1.0f / period, 0.0125f, 0.12f);
+        return 1.0f - smoothstep01((distance - radius + feather) / (2.0f * feather));
+    }
 
-        return std::clamp(0.5f + n0 * 0.4f + n1 * 0.25f, 0.0f, 1.0f);
+    /// Type 4: Parallel Lines — straight repeated lines with angle and width controls.
+    float proceduralLinesGrain(
+        float worldX, float worldY, float textureScaleOverride = -1.0f) const
+    {
+        const float scale = std::clamp(
+            textureScaleOverride > 0.0f ? textureScaleOverride : textureScale(), 0.1f, 4.0f);
+        const float period = textureLinesSpacing() / scale;
+        const float radians = textureLinesAngle() * 0.01745329251994329577f;
+        const float coordinate = (worldX * std::cos(radians) + worldY * std::sin(radians))
+            / period;
+        const float phase = coordinate - std::floor(coordinate);
+        const float distance = std::min(phase, 1.0f - phase);
+        const float halfWidth = textureLinesThickness() * 0.5f;
+        const float feather = std::clamp(1.0f / period, 0.01f, 0.12f);
+        return 1.0f - smoothstep01((distance - halfWidth + feather) / (2.0f * feather));
+    }
+
+    /// Type 5: Checkerboard — rotatable cells with optional softened boundaries.
+    float proceduralCheckerGrain(
+        float worldX, float worldY, float textureScaleOverride = -1.0f) const
+    {
+        const float scale = std::clamp(
+            textureScaleOverride > 0.0f ? textureScaleOverride : textureScale(), 0.1f, 4.0f);
+        const float cellSize = textureCheckerSize() / scale;
+        const float radians = textureCheckerRotation() * 0.01745329251994329577f;
+        const float cosine = std::cos(radians);
+        const float sine = std::sin(radians);
+        const float gridX = (worldX * cosine + worldY * sine) / cellSize;
+        const float gridY = (-worldX * sine + worldY * cosine) / cellSize;
+        const int32_t cellX = static_cast<int32_t>(std::floor(gridX));
+        const int32_t cellY = static_cast<int32_t>(std::floor(gridY));
+        const float checker = ((cellX + cellY) & 1) == 0 ? 1.0f : 0.0f;
+        const float softness = textureCheckerSoftness();
+        if (softness <= 0.0001f) {
+            return checker;
+        }
+
+        const float localX = gridX - std::floor(gridX);
+        const float localY = gridY - std::floor(gridY);
+        const float edgeDistance = std::min(
+            std::min(localX, 1.0f - localX), std::min(localY, 1.0f - localY));
+        const float interior = smoothstep01(edgeDistance / softness);
+        return 0.5f + (checker - 0.5f) * interior;
     }
 
     float proceduralGrainByType(
         float worldX, float worldY, float textureScaleOverride = -1.0f) const
     {
         switch (m_textureType) {
-        case 1:
+        case ruwa::core::brushes::BrushSettingsData::TextureTypeFractalNoise:
             return proceduralNoiseGrain(worldX, worldY, textureScaleOverride);
-        case 2:
+        case ruwa::core::brushes::BrushSettingsData::TextureTypePerlinNoise:
             return proceduralPerlinGrain(worldX, worldY, textureScaleOverride);
+        case ruwa::core::brushes::BrushSettingsData::TextureTypeDots:
+            return proceduralDotsGrain(worldX, worldY, textureScaleOverride);
+        case ruwa::core::brushes::BrushSettingsData::TextureTypeLines:
+            return proceduralLinesGrain(worldX, worldY, textureScaleOverride);
+        case ruwa::core::brushes::BrushSettingsData::TextureTypeCheckerboard:
+            return proceduralCheckerGrain(worldX, worldY, textureScaleOverride);
         default:
             return proceduralPencilGrain(worldX, worldY, textureScaleOverride);
         }
@@ -3145,7 +3367,22 @@ private:
     float m_textureDepth = 1.0f;
     float m_textureBlend = 0.5f;
     float m_textureEdgeBoost = 0.0f;
-    int m_textureType = 0; // 0=Procedural, 1=Noise, 2=Perlin
+    int m_textureType = 0; // See BrushSettingsData::TextureType.
+    float m_texturePencilDetail = 0.5f;
+    float m_texturePencilStreakStrength = 0.3f;
+    float m_textureNoiseOctaves = 3.0f;
+    float m_textureNoiseRoughness = 0.55f;
+    float m_texturePerlinOctaves = 2.0f;
+    float m_texturePerlinPersistence = 0.625f;
+    float m_textureDotsSpacing = 28.0f;
+    float m_textureDotsSize = 0.3f;
+    float m_textureDotsJitter = 0.15f;
+    float m_textureLinesSpacing = 24.0f;
+    float m_textureLinesThickness = 0.22f;
+    float m_textureLinesAngle = 45.0f;
+    float m_textureCheckerSize = 24.0f;
+    float m_textureCheckerSoftness = 0.06f;
+    float m_textureCheckerRotation = 0.0f;
     int m_dabType = 0; // 0..5 — dab shape/type (0=circle, 1-5=PNG)
     std::vector<uint8_t> m_dabShapeAlpha; // PNG alpha mask for dabType 1-5
     std::vector<uint8_t> m_dabShapeSoftAlpha; // prefiltered alpha for custom-dab hardness
@@ -3158,7 +3395,6 @@ private:
     float m_dabThreshold = 0.5f;
     float m_dabCompression = 1.0f;
     int m_dabInterpolation = 0; // 0 = bilinear, 1 = nearest
-    uint32_t m_textureRevision = 1;
     float m_scatterPosition = 0.0f;
     bool m_brushFeather = false; // small edge softening (not pixel-perfect)
     float m_roundness = 1.0f; // 0..1, 1 = circle

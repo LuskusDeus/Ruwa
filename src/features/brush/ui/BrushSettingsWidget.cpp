@@ -561,7 +561,6 @@ void BrushSettingsWidget::buildRows(const QVector<BrushSettingDef>& defs)
                     QCoreApplication::translate("ruwa::core::brushes", "Select"));
                 row.imageSelector->setMinimumWidth(theme.scaled(176));
                 row.imageSelector->setFixedHeight(theme.scaled(34));
-                row.imageSelector->setPopupMinWidth(theme.scaled(318));
                 row.imageSelector->setPopupColumns(2);
                 row.imageSelector->setPopupCardSize(QSize(theme.scaled(142), theme.scaled(104)));
                 row.imageSelector->setPopupMaxHeight(theme.scaled(368));
@@ -948,7 +947,6 @@ void BrushSettingsWidget::applyStyles()
             row.imageSelector->setFixedHeight(theme.scaled(34));
             row.imageSelector->setMinimumSize(0, theme.scaled(34));
             row.imageSelector->setMaximumHeight(theme.scaled(34));
-            row.imageSelector->setPopupMinWidth(theme.scaled(318));
             row.imageSelector->setPopupCardSize(QSize(theme.scaled(142), theme.scaled(104)));
             row.imageSelector->setPopupMaxHeight(theme.scaled(368));
         }

@@ -16,6 +16,7 @@
 #define NOMINMAX
 #endif
 #include <qt_windows.h>
+#include <dwmapi.h>
 // Use custom names to avoid conflict with Windows macros SPI_GETANIMATION/SPI_SETANIMATION
 #define RUWA_SPI_GETANIMATION 0x0048
 #define RUWA_SPI_SETANIMATION 0x0049
@@ -190,6 +191,24 @@ void WindowsPlatform::enableWindowAnimations(QWidget* window)
     ai.cbSize = sizeof(ai);
     ai.iMinAnimate = 1;
     ::SystemParametersInfoW(RUWA_SPI_SETANIMATION, sizeof(ai), &ai, SPIF_SENDCHANGE);
+#else
+    Q_UNUSED(window);
+#endif
+}
+
+void WindowsPlatform::synchronizeWindowPresentation(QWidget* window)
+{
+#if defined(Q_OS_WIN)
+    if (!window || !window->isVisible()) {
+        return;
+    }
+
+    QGuiApplication::sync();
+
+    BOOL compositionEnabled = FALSE;
+    if (SUCCEEDED(::DwmIsCompositionEnabled(&compositionEnabled)) && compositionEnabled) {
+        static_cast<void>(::DwmFlush());
+    }
 #else
     Q_UNUSED(window);
 #endif

@@ -251,7 +251,7 @@ int FlowLayout::doLayout(const QRect& rect, bool testOnly) const
         }
 
         int nextX = x + item->sizeHint().width() + spaceX;
-        if (nextX - spaceX > effectiveRect.right() && lineHeight > 0) {
+        if (nextX - spaceX > effectiveRect.right() + 1 && lineHeight > 0) {
             x = effectiveRect.x();
             y = y + lineHeight + spaceY;
             nextX = x + item->sizeHint().width() + spaceX;

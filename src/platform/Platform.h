@@ -16,6 +16,7 @@ public:
 
     virtual void disableWindowAnimations(QWidget* window) = 0;
     virtual void enableWindowAnimations(QWidget* window) = 0;
+    virtual void synchronizeWindowPresentation(QWidget* window) = 0;
     virtual bool copyImageToClipboard(const QImage& image) = 0;
 };
 

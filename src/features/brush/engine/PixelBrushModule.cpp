@@ -404,8 +404,6 @@ QVector<BrushTabDef> pixelBrushTabDefinitions()
             } },
         { "texture", QT_TR_NOOP("Texture"), QT_TR_NOOP("Texture overlay on brush stamps"),
             {
-                comboDef("texture.type", QT_TR_NOOP("Type"), 0,
-                    { QT_TR_NOOP("Procedural"), QT_TR_NOOP("Noise"), QT_TR_NOOP("Perlin") }),
                 sliderDef("texture.amount", QT_TR_NOOP("Amount"), 0.0f, 0.0f, 1.0f, 0.01f, 100, 0,
                     "%", pressureTimeRandomDynamicsTarget(BrushDynamicsSettingKey::TextureAmount)),
                 sliderDef("texture.scale", QT_TR_NOOP("Scale"), 1.0f, 0.1f, 4.0f, 0.1f, 1, 1, "x",
@@ -925,7 +923,23 @@ QVariantMap PixelBrushModule::settingsToVariantMap(const BrushSettingsData& sett
         { QStringLiteral("dynamics.sizePressureMax"), settings.sizePressureMax },
         { QStringLiteral("dynamics.flowPressureMin"), settings.flowPressureMin },
         { QStringLiteral("dynamics.flowPressureMax"), settings.flowPressureMax },
+        { QStringLiteral("texture.mode"), settings.textureMode },
         { QStringLiteral("texture.type"), settings.textureType },
+        { QStringLiteral("texture.pencilDetail"), settings.texturePencilDetail },
+        { QStringLiteral("texture.pencilStreakStrength"), settings.texturePencilStreakStrength },
+        { QStringLiteral("texture.noiseOctaves"), settings.textureNoiseOctaves },
+        { QStringLiteral("texture.noiseRoughness"), settings.textureNoiseRoughness },
+        { QStringLiteral("texture.perlinOctaves"), settings.texturePerlinOctaves },
+        { QStringLiteral("texture.perlinPersistence"), settings.texturePerlinPersistence },
+        { QStringLiteral("texture.dotsSpacing"), settings.textureDotsSpacing },
+        { QStringLiteral("texture.dotsSize"), settings.textureDotsSize },
+        { QStringLiteral("texture.dotsJitter"), settings.textureDotsJitter },
+        { QStringLiteral("texture.linesSpacing"), settings.textureLinesSpacing },
+        { QStringLiteral("texture.linesThickness"), settings.textureLinesThickness },
+        { QStringLiteral("texture.linesAngle"), settings.textureLinesAngle },
+        { QStringLiteral("texture.checkerSize"), settings.textureCheckerSize },
+        { QStringLiteral("texture.checkerSoftness"), settings.textureCheckerSoftness },
+        { QStringLiteral("texture.checkerRotation"), settings.textureCheckerRotation },
         { QStringLiteral("texture.amount"), settings.textureAmount },
         { QStringLiteral("texture.scale"), settings.textureScale },
         { QStringLiteral("texture.contrast"), settings.textureContrast },
@@ -1025,8 +1039,83 @@ BrushSettingsData PixelBrushModule::settingsFromVariantMap(const QVariantMap& se
         out.dynamics = deserializeLegacyPressureBindings(
             settings.value(QStringLiteral("dynamics.pressureBindings")));
     }
+    out.textureMode = std::clamp(
+        settings.value(QStringLiteral("texture.mode"), out.textureMode).toInt(),
+        static_cast<int>(BrushSettingsData::TextureModeProcedural),
+        static_cast<int>(BrushSettingsData::TextureModeImage));
     out.textureType
-        = std::clamp(settings.value(QStringLiteral("texture.type"), out.textureType).toInt(), 0, 2);
+        = std::clamp(settings.value(QStringLiteral("texture.type"), out.textureType).toInt(),
+            static_cast<int>(BrushSettingsData::TextureTypePencilGrain),
+            static_cast<int>(BrushSettingsData::TextureTypeCheckerboard));
+    out.texturePencilDetail = clampUnit(
+        settings.value(QStringLiteral("texture.pencilDetail"), out.texturePencilDetail).toDouble(),
+        out.texturePencilDetail);
+    out.texturePencilStreakStrength = clampUnit(
+        settings
+            .value(QStringLiteral("texture.pencilStreakStrength"),
+                out.texturePencilStreakStrength)
+            .toDouble(),
+        out.texturePencilStreakStrength);
+    out.textureNoiseOctaves = std::round(clampRange(
+        static_cast<float>(
+            settings.value(QStringLiteral("texture.noiseOctaves"), out.textureNoiseOctaves)
+                .toDouble()),
+        1.0f, 5.0f));
+    out.textureNoiseRoughness = clampUnit(
+        settings.value(QStringLiteral("texture.noiseRoughness"), out.textureNoiseRoughness)
+            .toDouble(),
+        out.textureNoiseRoughness);
+    out.texturePerlinOctaves = std::round(clampRange(
+        static_cast<float>(
+            settings.value(QStringLiteral("texture.perlinOctaves"), out.texturePerlinOctaves)
+                .toDouble()),
+        1.0f, 5.0f));
+    out.texturePerlinPersistence = clampUnit(
+        settings
+            .value(QStringLiteral("texture.perlinPersistence"), out.texturePerlinPersistence)
+            .toDouble(),
+        out.texturePerlinPersistence);
+    out.textureDotsSpacing = clampRange(
+        static_cast<float>(
+            settings.value(QStringLiteral("texture.dotsSpacing"), out.textureDotsSpacing)
+                .toDouble()),
+        6.0f, 96.0f);
+    out.textureDotsSize = clampRange(
+        static_cast<float>(
+            settings.value(QStringLiteral("texture.dotsSize"), out.textureDotsSize).toDouble()),
+        0.05f, 0.9f);
+    out.textureDotsJitter = clampUnit(
+        settings.value(QStringLiteral("texture.dotsJitter"), out.textureDotsJitter).toDouble(),
+        out.textureDotsJitter);
+    out.textureLinesSpacing = clampRange(
+        static_cast<float>(
+            settings.value(QStringLiteral("texture.linesSpacing"), out.textureLinesSpacing)
+                .toDouble()),
+        4.0f, 96.0f);
+    out.textureLinesThickness = clampRange(
+        static_cast<float>(
+            settings.value(QStringLiteral("texture.linesThickness"), out.textureLinesThickness)
+                .toDouble()),
+        0.02f, 0.95f);
+    out.textureLinesAngle = clampRange(
+        static_cast<float>(
+            settings.value(QStringLiteral("texture.linesAngle"), out.textureLinesAngle).toDouble()),
+        0.0f, 180.0f);
+    out.textureCheckerSize = clampRange(
+        static_cast<float>(
+            settings.value(QStringLiteral("texture.checkerSize"), out.textureCheckerSize)
+                .toDouble()),
+        4.0f, 96.0f);
+    out.textureCheckerSoftness = clampRange(
+        static_cast<float>(
+            settings.value(QStringLiteral("texture.checkerSoftness"), out.textureCheckerSoftness)
+                .toDouble()),
+        0.0f, 0.45f);
+    out.textureCheckerRotation = clampRange(
+        static_cast<float>(
+            settings.value(QStringLiteral("texture.checkerRotation"), out.textureCheckerRotation)
+                .toDouble()),
+        0.0f, 90.0f);
     out.textureAmount
         = clampUnit(settings.value(QStringLiteral("texture.amount"), out.textureAmount).toDouble(),
             out.textureAmount);
@@ -1165,6 +1254,27 @@ BrushSettingsData PixelBrushModule::normalizeCompatibilitySettings(
     out.flow = std::clamp(out.flow, 0.0f, 1.0f);
     out.roundness = std::clamp(out.roundness, 0.0f, 1.0f);
     out.angle = normalizeAngleDegrees(out.angle);
+    out.textureMode = std::clamp(out.textureMode,
+        static_cast<int>(BrushSettingsData::TextureModeProcedural),
+        static_cast<int>(BrushSettingsData::TextureModeImage));
+    out.texturePencilDetail = std::clamp(out.texturePencilDetail, 0.0f, 1.0f);
+    out.texturePencilStreakStrength
+        = std::clamp(out.texturePencilStreakStrength, 0.0f, 1.0f);
+    out.textureNoiseOctaves
+        = std::round(std::clamp(out.textureNoiseOctaves, 1.0f, 5.0f));
+    out.textureNoiseRoughness = std::clamp(out.textureNoiseRoughness, 0.0f, 1.0f);
+    out.texturePerlinOctaves
+        = std::round(std::clamp(out.texturePerlinOctaves, 1.0f, 5.0f));
+    out.texturePerlinPersistence = std::clamp(out.texturePerlinPersistence, 0.0f, 1.0f);
+    out.textureDotsSpacing = std::clamp(out.textureDotsSpacing, 6.0f, 96.0f);
+    out.textureDotsSize = std::clamp(out.textureDotsSize, 0.05f, 0.9f);
+    out.textureDotsJitter = std::clamp(out.textureDotsJitter, 0.0f, 1.0f);
+    out.textureLinesSpacing = std::clamp(out.textureLinesSpacing, 4.0f, 96.0f);
+    out.textureLinesThickness = std::clamp(out.textureLinesThickness, 0.02f, 0.95f);
+    out.textureLinesAngle = std::clamp(out.textureLinesAngle, 0.0f, 180.0f);
+    out.textureCheckerSize = std::clamp(out.textureCheckerSize, 4.0f, 96.0f);
+    out.textureCheckerSoftness = std::clamp(out.textureCheckerSoftness, 0.0f, 0.45f);
+    out.textureCheckerRotation = std::clamp(out.textureCheckerRotation, 0.0f, 90.0f);
     out.textureAmount = std::clamp(out.textureAmount, 0.0f, 1.0f);
     out.textureScale = std::clamp(out.textureScale, 0.1f, 4.0f);
     out.textureContrast = std::clamp(out.textureContrast, 0.0f, 1.0f);
@@ -1174,7 +1284,9 @@ BrushSettingsData PixelBrushModule::normalizeCompatibilitySettings(
     out.colorHue = normalizeAngleDegrees(out.colorHue);
     out.colorLightness = std::clamp(out.colorLightness, 0.0f, 2.0f);
     out.colorSaturation = std::clamp(out.colorSaturation, 0.0f, 2.0f);
-    out.textureType = std::clamp(out.textureType, 0, 2);
+    out.textureType = std::clamp(out.textureType,
+        static_cast<int>(BrushSettingsData::TextureTypePencilGrain),
+        static_cast<int>(BrushSettingsData::TextureTypeCheckerboard));
     out.dabType = std::clamp(out.dabType, 0, 5);
     out.dabXScale = std::clamp(out.dabXScale, 0.0f, 1.0f);
     out.dabYScale = std::clamp(out.dabYScale, 0.0f, 1.0f);

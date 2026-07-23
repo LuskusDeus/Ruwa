@@ -18,6 +18,7 @@
 #include <QPropertyAnimation>
 #include <QScreen>
 #include <QTimer>
+#include <QWindow>
 namespace ruwa::core {
 
 StartupAnimationController::StartupAnimationController(QObject* parent)
@@ -43,20 +44,28 @@ void StartupAnimationController::expandSplashToWindow(ruwa::ui::windows::SplashS
         mainWindow->setGeometry(targetGeometry);
     }
 
+    // Establish the native owner relationship before MainWindow is shown for the first time.
+    // This keeps the splash above MainWindow without making either window globally topmost and
+    // avoids a one-frame stacking race during the final reveal.
+    if (QWindow* splashHandle = splash->windowHandle()) {
+        if (QWindow* mainWindowHandle = mainWindow->windowHandle()) {
+            splashHandle->setTransientParent(mainWindowHandle);
+        }
+    }
+
     // === 2. P L A T F O R M - S P E C I F I C   S E T U P ===
 
     auto* platform = ruwa::platform::Platform::create();
 
-    // Create HWND using opacity trick to avoid flash
-    // We need HWND to disable Windows animation, but don't want visible flash
+    // Keep one native MainWindow instance visible-but-transparent behind the transient splash.
+    // Hiding it here and showing it again during the handoff lets the window system expose its
+    // default surface for one frame before Qt presents the prepared backing store.
+    platform->disableWindowAnimations(mainWindow);
     mainWindow->setWindowOpacity(0.0);
+    mainWindow->setAttribute(Qt::WA_ShowWithoutActivating, true);
     mainWindow->showMaximized();
     QCoreApplication::processEvents();
-    mainWindow->hide();
-    mainWindow->setWindowOpacity(1.0); // Reset for later
-
-    // Disable platform animations for smooth transition
-    platform->disableWindowAnimations(mainWindow);
+    mainWindow->setAttribute(Qt::WA_ShowWithoutActivating, false);
 
     QWidget* topBar = mainWindow->topBar();
     QWidget* topBarClip = mainWindow->topBarClip();
@@ -119,9 +128,8 @@ void StartupAnimationController::expandSplashToWindow(ruwa::ui::windows::SplashS
 
     connect(splash, &ruwa::ui::windows::SplashScreen::expansionFinished, this,
         [this, splash, mainWindow, platform]() {
-            // Show mainWindow (it's behind splash which is still visible)
-            mainWindow->setWindowOpacity(0.0);
-            mainWindow->showMaximized();
+            const bool shouldActivateMainWindow
+                = QGuiApplication::applicationState() == Qt::ApplicationActive;
 
             QWidget* topBar = mainWindow->topBar();
             QWidget* topBarClip = mainWindow->topBarClip();
@@ -207,13 +215,22 @@ void StartupAnimationController::expandSplashToWindow(ruwa::ui::windows::SplashS
                 }
             }
 
-            // NOW safe to hide splash - overlays cover everything
-            splash->hide();
+            // Paint the complete initial state while MainWindow is still transparent, then
+            // reveal that existing native surface behind the transient splash. No second show
+            // operation or uninitialized backing-store frame is involved in the handoff.
+            mainWindow->repaint();
             mainWindow->setWindowOpacity(1.0);
+            platform->synchronizeWindowPresentation(mainWindow);
 
-            // Activate mainWindow (for keyboard focus etc)
-            mainWindow->raise();
-            mainWindow->activateWindow();
+            // NOW safe to hide splash - the main window is visible and fully painted behind it.
+            splash->hide();
+
+            // Preserve the user's application switch during startup instead of pulling Ruwa
+            // back to the foreground when the animation finishes.
+            if (shouldActivateMainWindow) {
+                mainWindow->raise();
+                mainWindow->activateWindow();
+            }
 
             if (topBarAnim) {
                 topBarAnim->start(QAbstractAnimation::DeleteWhenStopped);

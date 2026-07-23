@@ -4,6 +4,7 @@
 
 #include "features/brush/editor/BrushEditorLayoutParts.h"
 #include "features/brush/editor/BrushEditorParameterOverlay.h"
+#include "features/brush/editor/ProceduralTextureEditorWidget.h"
 
 #include "features/brush/engine/BrushEngineRegistry.h"
 #include "features/brush/ui/BrushSettingsWidget.h"
@@ -62,6 +63,7 @@ constexpr int kLibraryImportIntoPackActionId = 5;
 constexpr int kLibraryExportPackActionId = 6;
 constexpr int kLibraryExportBrushActionId = 7;
 constexpr int kBrushEditorLibraryPreviewFrameIntervalMs = 33;
+constexpr int kProceduralTextureEditorItemCount = 6;
 
 QString brushImportFileFilter()
 {
@@ -960,6 +962,32 @@ void BrushEditorLayoutWidget::commitBrushNameFromInput()
     }
 }
 
+void BrushEditorLayoutWidget::updateTextureControls()
+{
+    const QScopedValueRollback<bool> updatingTextureControlsGuard(
+        m_updatingTextureControls, true);
+
+    const bool hasBrush = !m_selectedBrushId.isEmpty();
+    const int textureMode = hasBrush
+        ? qBound(static_cast<int>(BrushSettingsData::TextureModeProcedural),
+              m_currentSettings.textureMode,
+              static_cast<int>(BrushSettingsData::TextureModeImage))
+        : static_cast<int>(BrushSettingsData::TextureModeProcedural);
+
+    if (m_textureModeSelector) {
+        m_textureModeSelector->setEnabled(hasBrush);
+        m_textureModeSelector->setCurrentIndex(textureMode, false);
+    }
+    if (m_textureModeStack) {
+        m_textureModeStack->setEnabled(hasBrush);
+        m_textureModeStack->setCurrentIndexWithoutAnimation(textureMode);
+    }
+    if (m_proceduralTextureEditor) {
+        m_proceduralTextureEditor->setEnabled(hasBrush);
+        m_proceduralTextureEditor->setSettings(m_currentSettings);
+    }
+}
+
 void BrushEditorLayoutWidget::updateDabControls()
 {
     const QScopedValueRollback<bool> updatingDabControlsGuard(m_updatingDabControls, true);
@@ -1040,6 +1068,7 @@ void BrushEditorLayoutWidget::distributeSettings()
 {
     for (auto* page : m_settingsPages)
         page->setSettings(m_currentSettings);
+    updateTextureControls();
     updateDabControls();
 }
 
@@ -1364,6 +1393,134 @@ void BrushEditorLayoutWidget::populateSettingsTabs()
         m_tabButtons.first()->setChecked(true);
 }
 
+QWidget* BrushEditorLayoutWidget::createCustomTexturePage(
+    const BrushTabDef& tabDef, const QSet<QString>& starredKeys)
+{
+    auto* page = new QWidget(m_settingsStack);
+    page->setObjectName(QStringLiteral("brush_editor_settings_page"));
+    page->setAttribute(Qt::WA_TranslucentBackground);
+
+    auto* pageLayout = new QVBoxLayout(page);
+    pageLayout->setContentsMargins(0, 0, 0, 0);
+    pageLayout->setSpacing(8);
+
+    auto* titleLabel
+        = new QLabel(QCoreApplication::translate("ruwa::core::brushes", tabDef.label), page);
+    titleLabel->setObjectName(QStringLiteral("brush_editor_section_title"));
+    pageLayout->addWidget(titleLabel);
+
+    auto* descLabel
+        = new QLabel(QCoreApplication::translate("ruwa::core::brushes", tabDef.description), page);
+    descLabel->setObjectName(QStringLiteral("brush_editor_section_caption"));
+    pageLayout->addWidget(descLabel);
+
+    QVector<widgets::SegmentedOptionSelector::Option> modeOptions;
+    modeOptions.append(
+        { tr("Procedural"), QIcon(), BrushSettingsData::TextureModeProcedural });
+    modeOptions.append({ tr("Image"), QIcon(), BrushSettingsData::TextureModeImage });
+
+    auto* modeRow = new QWidget(page);
+    modeRow->setAttribute(Qt::WA_TranslucentBackground);
+    auto* modeRowLayout = new QHBoxLayout(modeRow);
+    modeRowLayout->setContentsMargins(0, 0, 0, 0);
+    modeRowLayout->setSpacing(0);
+
+    m_textureModeSelector = new widgets::SegmentedOptionSelector(modeOptions, modeRow);
+    m_textureModeSelector->setDisplayMode(
+        widgets::SegmentedOptionSelector::DisplayMode::TextOnly);
+    m_textureModeSelector->setCurrentIndex(BrushSettingsData::TextureModeProcedural, false);
+    modeRowLayout->addStretch();
+    modeRowLayout->addWidget(m_textureModeSelector);
+    modeRowLayout->addStretch();
+    pageLayout->addWidget(modeRow);
+
+    m_textureModeStack = new widgets::AnimatedStackedWidget(page);
+    m_textureModeStack->setAnimationDuration(230);
+    m_textureModeStack->setAnimationEasing(QEasingCurve::InOutCubic);
+    m_textureModeStack->setSlideOrientation(
+        widgets::AnimatedStackedWidget::SlideOrientation::Horizontal);
+    m_textureModeStack->setSizePolicy(QSizePolicy::Preferred, QSizePolicy::Fixed);
+    pageLayout->addWidget(m_textureModeStack);
+    pageLayout->addStretch();
+
+    auto* proceduralPage = new QWidget(m_textureModeStack);
+    proceduralPage->setAttribute(Qt::WA_TranslucentBackground);
+    proceduralPage->setSizePolicy(QSizePolicy::Preferred, QSizePolicy::Fixed);
+    auto* proceduralLayout = new QVBoxLayout(proceduralPage);
+    proceduralLayout->setContentsMargins(0, 0, 0, 0);
+    proceduralLayout->setSpacing(8);
+    proceduralLayout->setSizeConstraint(QLayout::SetMinimumSize);
+
+    m_proceduralTextureEditor = new ProceduralTextureEditorWidget(proceduralPage);
+    m_proceduralTextureEditor->setEnabled(false);
+    proceduralLayout->addWidget(m_proceduralTextureEditor);
+    connect(m_proceduralTextureEditor, &ProceduralTextureEditorWidget::textureTypeChanged, this,
+        [this](int textureType) {
+            if (m_selectedBrushId.isEmpty() || m_currentSettings.textureType == textureType) {
+                return;
+            }
+            m_currentSettings.textureType = textureType;
+            m_localSettingsEditInFlight = true;
+            BrushManager::instance().updateBrushSettings(m_selectedBrushId, m_currentSettings);
+            m_localSettingsEditInFlight = false;
+            updatePreview();
+        });
+
+    m_textureSettingsWidget
+        = new widgets::BrushSettingsWidget(tabDef.settings, proceduralPage, /*starMode=*/true);
+    m_textureSettingsWidget->setStarredKeys(starredKeys);
+    m_textureSettingsWidget->setEnabled(false);
+    proceduralLayout->addWidget(m_textureSettingsWidget);
+    proceduralLayout->addStretch();
+    for (auto* typeParameterSettingsWidget :
+        m_proceduralTextureEditor->typeParameterSettingsWidgets()) {
+        typeParameterSettingsWidget->setEnabled(false);
+        m_settingsPages.append(typeParameterSettingsWidget);
+    }
+    m_settingsPages.append(m_textureSettingsWidget);
+    m_textureModeStack->addWidget(proceduralPage);
+
+    m_textureModeStack->addWidget(createModePlaceholderPage(IconProvider::StandardIcon::BasicFile,
+        tr("Coming in a future version"),
+        tr("Image-based brush textures will be available in upcoming releases of Ruwa."),
+        m_textureModeStack));
+    m_textureModeStack->setCurrentIndexWithoutAnimation(
+        BrushSettingsData::TextureModeProcedural);
+    updateProceduralTextureEditorHeight();
+    updateTextureModeStackHeight();
+
+    connect(m_textureModeSelector, &widgets::SegmentedOptionSelector::selectionChanged, this,
+        [this](int index) {
+            if (!m_textureModeStack) {
+                return;
+            }
+            m_textureModeStack->setCurrentIndex(index);
+        });
+    connect(m_textureModeStack, &widgets::AnimatedStackedWidget::currentChanged, this,
+        [this](int index) {
+            if (m_textureModeSelector && m_textureModeSelector->currentIndex() != index) {
+                m_textureModeSelector->setCurrentIndex(index, false);
+            }
+
+            if (!m_updatingTextureControls && !m_selectedBrushId.isEmpty()) {
+                const int textureMode = qBound(
+                    static_cast<int>(BrushSettingsData::TextureModeProcedural), index,
+                    static_cast<int>(BrushSettingsData::TextureModeImage));
+                if (m_currentSettings.textureMode != textureMode) {
+                    m_currentSettings.textureMode = textureMode;
+                    m_localSettingsEditInFlight = true;
+                    BrushManager::instance().updateBrushSettings(
+                        m_selectedBrushId, m_currentSettings);
+                    m_localSettingsEditInFlight = false;
+                    updatePreview();
+                }
+            }
+            syncSettingsStackHeight();
+        });
+
+    return page;
+}
+
 QWidget* BrushEditorLayoutWidget::createCustomDabPage(
     const BrushTabDef& tabDef, const QSet<QString>& starredKeys)
 {
@@ -1447,7 +1604,6 @@ QWidget* BrushEditorLayoutWidget::createCustomDabPage(
 
     m_dabPresetSelector = new widgets::ImageDropdownSelector(presetColumn);
     m_dabPresetSelector->setPlaceholderText(tr("Circle"));
-    m_dabPresetSelector->setPopupMinWidth(ThemeManager::instance().scaled(318));
     m_dabPresetSelector->setPopupColumns(2);
     m_dabPresetSelector->setPopupCardSize(
         QSize(ThemeManager::instance().scaled(142), ThemeManager::instance().scaled(104)));
@@ -1527,12 +1683,12 @@ QWidget* BrushEditorLayoutWidget::createCustomDabPage(
     imageLayout->addStretch();
     m_dabModeStack->addWidget(imagePage);
 
-    m_dabModeStack->addWidget(createDabPlaceholderPage(IconProvider::StandardIcon::Brush,
+    m_dabModeStack->addWidget(createModePlaceholderPage(IconProvider::StandardIcon::Brush,
         tr("Coming in a future version"),
         tr("Procedural dab generation will be available in upcoming releases of Ruwa."),
         m_dabModeStack));
     m_dabModeStack->addWidget(
-        createDabPlaceholderPage(IconProvider::StandardIcon::Text, tr("Coming in a future version"),
+        createModePlaceholderPage(IconProvider::StandardIcon::Text, tr("Coming in a future version"),
             tr("Text-based dab rendering will be available in upcoming releases of Ruwa."),
             m_dabModeStack));
     m_dabModeStack->setCurrentIndexWithoutAnimation(0);
@@ -1637,7 +1793,7 @@ QWidget* BrushEditorLayoutWidget::createCustomDabPage(
     return page;
 }
 
-QWidget* BrushEditorLayoutWidget::createDabPlaceholderPage(IconProvider::StandardIcon iconType,
+QWidget* BrushEditorLayoutWidget::createModePlaceholderPage(IconProvider::StandardIcon iconType,
     const QString& title, const QString& description, QWidget* parent) const
 {
     auto* page = new QWidget(parent);
@@ -1677,6 +1833,10 @@ void BrushEditorLayoutWidget::populateSettingsPages()
                           .settingsTabs;
     const QSet<QString> starred = BrushManager::instance().starredSettings(m_selectedBrushId);
     for (const auto& tabDef : tabs) {
+        if (tabDef.id != nullptr && QLatin1String(tabDef.id) == QStringLiteral("texture")) {
+            m_settingsStack->addWidget(createCustomTexturePage(tabDef, starred));
+            continue;
+        }
         if (tabDef.id != nullptr && QLatin1String(tabDef.id) == QStringLiteral("dab")) {
             m_settingsStack->addWidget(createCustomDabPage(tabDef, starred));
             continue;
@@ -1706,6 +1866,7 @@ void BrushEditorLayoutWidget::populateSettingsPages()
         m_settingsPages.append(settingsWidget);
     }
     m_settingsStack->setCurrentIndexWithoutAnimation(0);
+    updateTextureControls();
     updateDabControls();
     syncSettingsStackHeight();
 }
@@ -1715,6 +1876,7 @@ void BrushEditorLayoutWidget::onSettingsTabClicked(int index)
     if (index < 0 || index >= m_settingsStack->count())
         return;
 
+    updateTextureModeStackHeight();
     updateDabModeStackHeight();
     const int targetPageHeight = settingsPageHeight(index);
     applySettingsStackHeight(qMax(m_settingsStack->height(), targetPageHeight));
@@ -1731,6 +1893,74 @@ void BrushEditorLayoutWidget::onSettingsPageChanged(int index)
         }
     }
     syncSettingsStackHeight();
+}
+
+void BrushEditorLayoutWidget::updateProceduralTextureEditorHeight()
+{
+    if (!m_proceduralTextureEditor || !m_textureSettingsWidget) {
+        return;
+    }
+
+    QLayout* settingsLayout = m_textureSettingsWidget->layout();
+    if (!settingsLayout) {
+        return;
+    }
+    settingsLayout->activate();
+
+    const QMargins margins = settingsLayout->contentsMargins();
+    int editorHeight = margins.top() + margins.bottom();
+    int measuredItemCount = 0;
+    for (int i = 0;
+         i < settingsLayout->count() && measuredItemCount < kProceduralTextureEditorItemCount;
+         ++i) {
+        const QLayoutItem* item = settingsLayout->itemAt(i);
+        if (!item || item->isEmpty()) {
+            continue;
+        }
+
+        if (measuredItemCount > 0) {
+            editorHeight += settingsLayout->spacing();
+        }
+        editorHeight += item->sizeHint().expandedTo(item->minimumSize()).height();
+        ++measuredItemCount;
+    }
+
+    if (measuredItemCount != kProceduralTextureEditorItemCount || editorHeight <= 0) {
+        return;
+    }
+
+    m_proceduralTextureEditor->setFixedHeight(editorHeight);
+}
+
+void BrushEditorLayoutWidget::updateTextureModeStackHeight()
+{
+    if (!m_textureModeStack) {
+        return;
+    }
+
+    updateProceduralTextureEditorHeight();
+
+    int tallestPageHeight = 0;
+    for (int i = 0; i < m_textureModeStack->count(); ++i) {
+        QWidget* page = m_textureModeStack->widget(i);
+        if (!page) {
+            continue;
+        }
+
+        if (page->layout()) {
+            page->layout()->activate();
+        }
+
+        const QSize pageSize = page->sizeHint().expandedTo(page->minimumSizeHint());
+        tallestPageHeight = qMax(tallestPageHeight, pageSize.height());
+    }
+
+    if (tallestPageHeight <= 0) {
+        return;
+    }
+
+    m_textureModeStack->setFixedHeight(tallestPageHeight);
+    m_textureModeStack->updateGeometry();
 }
 
 void BrushEditorLayoutWidget::updateDabModeStackHeight()
@@ -1804,6 +2034,7 @@ void BrushEditorLayoutWidget::syncSettingsStackHeight()
 {
     if (!m_settingsStack)
         return;
+    updateTextureModeStackHeight();
     updateDabModeStackHeight();
     applySettingsStackHeight(settingsPageHeight(m_settingsStack->currentIndex()));
 }
@@ -1891,6 +2122,9 @@ void BrushEditorLayoutWidget::updateScaledSizes()
         applyScaledFont(button, theme.scaled(10), false);
         button->setMinimumHeight(theme.scaled(28));
     }
+    if (m_textureModeSelector) {
+        m_textureModeSelector->setMinimumWidth(theme.scaled(320));
+    }
     if (m_dabModeSelector) {
         m_dabModeSelector->setMinimumWidth(theme.scaled(320));
     }
@@ -1904,10 +2138,10 @@ void BrushEditorLayoutWidget::updateScaledSizes()
         m_dabPresetSelector->setFixedHeight(theme.scaled(30));
         m_dabPresetSelector->setMinimumWidth(theme.scaled(136));
         m_dabPresetSelector->setMaximumWidth(theme.scaled(136));
-        m_dabPresetSelector->setPopupMinWidth(theme.scaled(318));
         m_dabPresetSelector->setPopupCardSize(QSize(theme.scaled(142), theme.scaled(104)));
         m_dabPresetSelector->setPopupMaxHeight(theme.scaled(368));
     }
+    updateTextureModeStackHeight();
     updateDabModeStackHeight();
 }
 
@@ -2024,6 +2258,7 @@ void BrushEditorLayoutWidget::loadDataFromManager()
             page->setEnabled(false);
             page->setSettings(m_currentSettings);
         }
+        updateTextureControls();
         updateDabControls();
         if (m_brushNameInput) {
             m_brushNameEditInFlight = true;
@@ -2250,6 +2485,7 @@ void BrushEditorLayoutWidget::selectBrushInternal(const QString& brushId, bool e
         page->setStarredKeys(starred);
         page->setSettings(m_currentSettings);
     }
+    updateTextureControls();
     updateDabControls();
     if (m_brushNameInput) {
         m_brushNameEditInFlight = true;

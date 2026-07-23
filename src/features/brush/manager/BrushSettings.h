@@ -1005,7 +1005,37 @@ struct BrushSettingsData {
     BrushDynamicsModel dynamics;
 
     // ---- Texture ----
-    int textureType = 0;
+    enum TextureMode {
+        TextureModeProcedural = 0,
+        TextureModeImage = 1,
+    };
+
+    enum TextureType {
+        TextureTypePencilGrain = 0,
+        TextureTypeFractalNoise = 1,
+        TextureTypePerlinNoise = 2,
+        TextureTypeDots = 3,
+        TextureTypeLines = 4,
+        TextureTypeCheckerboard = 5,
+    };
+
+    int textureMode = TextureModeProcedural;
+    int textureType = TextureTypePencilGrain;
+    float texturePencilDetail = 0.5f;
+    float texturePencilStreakStrength = 0.3f;
+    float textureNoiseOctaves = 3.0f;
+    float textureNoiseRoughness = 0.55f;
+    float texturePerlinOctaves = 2.0f;
+    float texturePerlinPersistence = 0.625f;
+    float textureDotsSpacing = 28.0f;
+    float textureDotsSize = 0.3f;
+    float textureDotsJitter = 0.15f;
+    float textureLinesSpacing = 24.0f;
+    float textureLinesThickness = 0.22f;
+    float textureLinesAngle = 45.0f;
+    float textureCheckerSize = 24.0f;
+    float textureCheckerSoftness = 0.06f;
+    float textureCheckerRotation = 0.0f;
     float textureAmount = 0.0f;
     float textureScale = 1.0f;
     float textureContrast = 0.5f;

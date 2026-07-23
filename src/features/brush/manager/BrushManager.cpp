@@ -93,7 +93,29 @@ QVariantMap readLegacyPixelSettings(QSettings& settings)
         = settings.value(QStringLiteral("flowPressureMin"), legacy.flowPressureMin).toFloat();
     legacy.flowPressureMax
         = settings.value(QStringLiteral("flowPressureMax"), legacy.flowPressureMax).toFloat();
+    legacy.textureMode = settings.value(QStringLiteral("textureMode"), legacy.textureMode).toInt();
     legacy.textureType = settings.value(QStringLiteral("textureType"), legacy.textureType).toInt();
+    legacy.textureDotsSpacing
+        = settings.value(QStringLiteral("textureDotsSpacing"), legacy.textureDotsSpacing).toFloat();
+    legacy.textureDotsSize
+        = settings.value(QStringLiteral("textureDotsSize"), legacy.textureDotsSize).toFloat();
+    legacy.textureDotsJitter
+        = settings.value(QStringLiteral("textureDotsJitter"), legacy.textureDotsJitter).toFloat();
+    legacy.textureLinesSpacing
+        = settings.value(QStringLiteral("textureLinesSpacing"), legacy.textureLinesSpacing).toFloat();
+    legacy.textureLinesThickness
+        = settings.value(QStringLiteral("textureLinesThickness"), legacy.textureLinesThickness)
+              .toFloat();
+    legacy.textureLinesAngle
+        = settings.value(QStringLiteral("textureLinesAngle"), legacy.textureLinesAngle).toFloat();
+    legacy.textureCheckerSize
+        = settings.value(QStringLiteral("textureCheckerSize"), legacy.textureCheckerSize).toFloat();
+    legacy.textureCheckerSoftness
+        = settings.value(QStringLiteral("textureCheckerSoftness"), legacy.textureCheckerSoftness)
+              .toFloat();
+    legacy.textureCheckerRotation
+        = settings.value(QStringLiteral("textureCheckerRotation"), legacy.textureCheckerRotation)
+              .toFloat();
     legacy.textureAmount
         = settings.value(QStringLiteral("textureAmount"), legacy.textureAmount).toFloat();
     legacy.textureScale

@@ -4,6 +4,7 @@
 
 #include "features/theme/manager/ThemeManager.h"
 #include "shared/widgets/BaseAnimatedButton.h"
+#include "shared/widgets/layout/FlowLayout.h"
 #include "shared/widgets/layout/SmoothScrollArea.h"
 #include "shared/style/PaintingUtils.h"
 
@@ -21,7 +22,9 @@
 #include <QStyleOption>
 #include <QVariantAnimation>
 #include <QVBoxLayout>
+#include <QtMath>
 #include <functional>
+#include <limits>
 #include <utility>
 
 namespace ruwa::ui::widgets {
@@ -37,12 +40,91 @@ constexpr int kSlideDurationMs = 200;
 constexpr int kPopupOffset = 20;
 constexpr int kCornerRadius = 8;
 constexpr int kPopupMinVisibleHeight = 120;
+constexpr int kPreviewGridSpacing = 8;
 
 Qt::WindowFlags popupWindowFlags()
 {
     return Qt::Widget;
 }
+
+QImage tintedPreview(const AnimatedComboItem& item, const QColor& fallbackColor)
+{
+    if (item.previewImage.isNull()) {
+        return {};
+    }
+    if (!item.tintPreview) {
+        return item.previewImage;
+    }
+
+    QImage tinted(item.previewImage.size(), QImage::Format_ARGB32_Premultiplied);
+    tinted.fill(Qt::transparent);
+    QPainter painter(&tinted);
+    painter.drawImage(0, 0, item.previewImage);
+    painter.setCompositionMode(QPainter::CompositionMode_SourceIn);
+    painter.fillRect(
+        tinted.rect(), item.previewTint.isValid() ? item.previewTint : fallbackColor);
+    return tinted;
+}
 } // namespace
+
+class ComboPopupCategoryWidget final : public QWidget {
+public:
+    explicit ComboPopupCategoryWidget(const QString& text, QWidget* parent = nullptr)
+        : QWidget(parent)
+        , m_text(text)
+    {
+        setFixedHeight(18);
+        setAttribute(Qt::WA_TransparentForMouseEvents);
+        setAttribute(Qt::WA_OpaquePaintEvent);
+    }
+
+protected:
+    void paintEvent(QPaintEvent* event) override
+    {
+        Q_UNUSED(event);
+
+        QPainter painter(this);
+        painter.setRenderHint(QPainter::TextAntialiasing);
+        const auto& colors = ruwa::ui::core::ThemeManager::instance().colors();
+        painter.fillRect(rect(), colors.surfaceElevated());
+
+        QColor textColor = colors.textMuted;
+        textColor.setAlpha(180);
+        painter.setPen(textColor);
+        QFont categoryFont = font();
+        categoryFont.setPointSize(8);
+        categoryFont.setBold(true);
+        painter.setFont(categoryFont);
+        painter.drawText(
+            rect().adjusted(10, 0, -10, 0), Qt::AlignLeft | Qt::AlignVCenter, m_text.toUpper());
+    }
+
+private:
+    QString m_text;
+};
+
+class ComboPopupSeparatorWidget final : public QWidget {
+public:
+    explicit ComboPopupSeparatorWidget(QWidget* parent = nullptr)
+        : QWidget(parent)
+    {
+        setFixedHeight(kSeparatorHeight);
+        setAttribute(Qt::WA_TransparentForMouseEvents);
+        setAttribute(Qt::WA_OpaquePaintEvent);
+    }
+
+protected:
+    void paintEvent(QPaintEvent* event) override
+    {
+        Q_UNUSED(event);
+
+        QPainter painter(this);
+        const auto& colors = ruwa::ui::core::ThemeManager::instance().colors();
+        painter.fillRect(rect(), colors.surfaceElevated());
+        painter.fillRect(QRect(10, rect().center().y(), qMax(0, width() - 20), 1),
+            colors.borderSubtle());
+    }
+};
 
 class ComboPopupItemButton final : public BaseAnimatedButton {
 public:
@@ -157,6 +239,125 @@ private:
     std::function<void(int)> m_onHovered;
 };
 
+class ComboPreviewCardButton final : public BaseAnimatedButton {
+public:
+    ComboPreviewCardButton(
+        const AnimatedComboItem& item, int index, const QSize& cardSize, QWidget* parent = nullptr)
+        : BaseAnimatedButton(parent)
+        , m_item(item)
+        , m_index(index)
+    {
+        setFixedSize(cardSize);
+        setEnabled(item.enabled);
+        setCheckable(false);
+        setCursor(item.enabled ? Qt::PointingHandCursor : Qt::ArrowCursor);
+    }
+
+    int index() const { return m_index; }
+    void setSelected(bool selected) { setActive(selected); }
+    void setOnHovered(std::function<void(int)> callback)
+    {
+        m_onHovered = std::move(callback);
+    }
+
+protected:
+    void enterEvent(QEnterEvent* event) override
+    {
+        BaseAnimatedButton::enterEvent(event);
+        if (m_onHovered) {
+            m_onHovered(m_index);
+        }
+    }
+
+    void paintEvent(QPaintEvent* event) override
+    {
+        Q_UNUSED(event);
+
+        QPainter painter(this);
+        painter.setRenderHint(QPainter::Antialiasing);
+        painter.setRenderHint(QPainter::TextAntialiasing);
+        painter.setRenderHint(QPainter::SmoothPixmapTransform);
+
+        const auto& colors = ruwa::ui::core::ThemeManager::instance().colors();
+        const QRectF cardRect = rect().adjusted(0.5, 0.5, -0.5, -0.5);
+        QColor background = colors.overlayBase();
+        if (hoverProgress() > 0.0) {
+            background = ruwa::ui::core::ThemeColors::interpolate(
+                background, colors.overlayHover(), hoverProgress() * 0.35);
+        }
+        if (isPressed()) {
+            background
+                = ruwa::ui::core::ThemeColors::interpolate(background, colors.overlay(0.18), 0.7);
+        }
+        if (activeProgress() > 0.0) {
+            background = ruwa::ui::core::ThemeColors::interpolate(
+                background, colors.overlay(0.18), activeProgress());
+        }
+
+        painter.setPen(Qt::NoPen);
+        painter.setBrush(background);
+        painter.drawRoundedRect(cardRect, 12, 12);
+
+        const QColor topBorder = ruwa::ui::core::ThemeColors::interpolate(colors.borderSubtle(),
+            colors.primary, qMax(hoverProgress() * 0.45, activeProgress()));
+        QColor bottomBorder = colors.borderSubtle();
+        bottomBorder.setAlpha(bottomBorder.alpha() / 2);
+        ruwa::ui::painting::drawGradientBorder(
+            painter, cardRect, 12, topBorder, bottomBorder);
+
+        const int previewHeight = qMax(30, height() - 40);
+        const QRectF previewRect
+            = cardRect.adjusted(8, 8, -8, -(height() - previewHeight - 8));
+        const QRectF labelRect(cardRect.left() + 10, previewRect.bottom() + 8,
+            cardRect.width() - 20, cardRect.bottom() - previewRect.bottom() - 12);
+
+        painter.setBrush(colors.surfaceElevated());
+        painter.setPen(Qt::NoPen);
+        painter.drawRoundedRect(previewRect, 9, 9);
+
+        const QImage preview = tintedPreview(m_item, colors.text);
+        if (!preview.isNull()) {
+            const QImage scaled = preview.scaled(
+                previewRect.size().toSize(), Qt::KeepAspectRatio, Qt::SmoothTransformation);
+            painter.drawImage(QPointF(previewRect.center().x() - scaled.width() / 2.0,
+                                  previewRect.center().y() - scaled.height() / 2.0),
+                scaled);
+        }
+
+        QFont titleFont = font();
+        titleFont.setPixelSize(qMax(10, titleFont.pixelSize()));
+        titleFont.setWeight(activeProgress() > 0.5 ? QFont::DemiBold : QFont::Medium);
+        painter.setFont(titleFont);
+        painter.setPen(isEnabled() ? colors.text : colors.textDisabled());
+        painter.drawText(
+            labelRect.toRect(), Qt::AlignLeft | Qt::AlignTop | Qt::TextSingleLine, m_item.text);
+
+        if (!m_item.subtitle.isEmpty()) {
+            QFont subtitleFont = titleFont;
+            subtitleFont.setPixelSize(qMax(9, titleFont.pixelSize() - 1));
+            subtitleFont.setWeight(QFont::Normal);
+            painter.setFont(subtitleFont);
+            painter.setPen(colors.textMuted);
+            painter.drawText(labelRect.adjusted(0, 14, 0, 0).toRect(),
+                Qt::AlignLeft | Qt::AlignTop | Qt::TextSingleLine, m_item.subtitle);
+        }
+
+        if (activeProgress() > 0.0) {
+            painter.save();
+            painter.setOpacity(activeProgress());
+            painter.setBrush(colors.primary);
+            painter.setPen(Qt::NoPen);
+            painter.drawEllipse(QRectF(cardRect.right() - 18, cardRect.top() + 8, 10, 10));
+            painter.restore();
+        }
+    }
+
+private:
+    AnimatedComboItem m_item;
+    int m_index = -1;
+    std::function<void(int)> m_onHovered;
+};
+
 class AnimatedComboPopup final : public QWidget {
 public:
     explicit AnimatedComboPopup(QWidget* parent = nullptr)
@@ -186,6 +387,7 @@ public:
         m_contentLayout = new QVBoxLayout(m_contentWidget);
         m_contentLayout->setContentsMargins(0, 0, 0, 0);
         m_contentLayout->setSpacing(0);
+        m_contentLayout->setAlignment(Qt::AlignTop);
         m_scrollArea->setWidget(m_contentWidget);
 
         m_opacityEffect = new QGraphicsOpacityEffect(this);
@@ -207,15 +409,18 @@ public:
     }
 
     void setItems(const QList<AnimatedComboItem>& items, int selectedIndex, int minWidth,
-        const QFont& comboFont)
+        const QFont& comboFont, AnimatedComboBox::PopupPresentation presentation, int columns,
+        const QSize& cardSize)
     {
         m_items = items;
         m_selectedIndex = selectedIndex;
+        m_presentation = presentation;
+        m_columns = qMax(1, columns);
+        m_cardSize = cardSize;
         setHoveredIndex(-1);
 
         m_itemButtons.clear();
-        m_separators.clear();
-        m_categories.clear();
+        m_previewButtons.clear();
 
         while (QLayoutItem* li = m_contentLayout->takeAt(0)) {
             if (QWidget* widget = li->widget()) {
@@ -224,52 +429,12 @@ public:
             delete li;
         }
 
-        QFontMetrics fm(comboFont);
-        int widthHint = minWidth;
-        int heightHint = 0;
-
-        for (int i = 0; i < m_items.size(); ++i) {
-            const auto& item = m_items[i];
-            if (item.separator) {
-                auto* sep = new QWidget(m_contentWidget);
-                sep->setFixedHeight(kSeparatorHeight);
-                sep->setAttribute(Qt::WA_TransparentForMouseEvents);
-                m_contentLayout->addWidget(sep);
-                m_separators.append(sep);
-                heightHint += kSeparatorHeight;
-                continue;
-            }
-            if (item.category) {
-                auto* category = new QWidget(m_contentWidget);
-                category->setFixedHeight(18);
-                category->setAttribute(Qt::WA_TransparentForMouseEvents);
-                category->setProperty("comboCategoryText", item.text);
-                m_contentLayout->addWidget(category);
-                m_categories.append(category);
-                heightHint += 18;
-                continue;
-            }
-
-            auto* btn = new ComboPopupItemButton(item, i, m_contentWidget);
-            btn->setFont(comboFont);
-            btn->setSelected(i == m_selectedIndex);
-            connect(btn, &QPushButton::clicked, this, [this, i]() {
-                if (m_onItemActivated) {
-                    m_onItemActivated(i);
-                }
-            });
-            connect(btn, &QPushButton::pressed, this, [this, i]() { setHoveredIndex(i); });
-            btn->setOnHovered([this](int hovered) { setHoveredIndex(hovered); });
-            m_contentLayout->addWidget(btn);
-            m_itemButtons.append(btn);
-
-            int contentWidth = 20 + fm.horizontalAdvance(item.text) + (item.icon.isNull() ? 0 : 18);
-            widthHint = qMax(widthHint, contentWidth + 28);
-            heightHint += kRowHeight;
+        if (m_presentation == AnimatedComboBox::PopupPresentation::PreviewGrid) {
+            buildPreviewGrid(comboFont, minWidth);
+        } else {
+            buildList(comboFont, minWidth);
         }
-
-        m_popupWidth = qMax(widthHint, minWidth);
-        m_contentHeight = qMax(20, heightHint);
+        m_contentWidget->setFixedWidth(m_popupWidth - kPopupPadding * 2);
         applyHeightConstraint(m_contentHeight + kPopupPadding * 2);
     }
 
@@ -286,6 +451,9 @@ public:
         for (ComboPopupItemButton* btn : std::as_const(m_itemButtons)) {
             btn->setSelected(btn->index() == index);
         }
+        for (ComboPreviewCardButton* button : std::as_const(m_previewButtons)) {
+            button->setSelected(button->index() == index);
+        }
         ensureSelectedVisible();
         update();
     }
@@ -298,12 +466,30 @@ public:
             kPopupPadding * 2 + 1, qMin(preferredHeight(), qMax(maxHeight, kPopupPadding * 2 + 1)));
         const int viewportHeight = qMax(1, targetHeight - kPopupPadding * 2);
 
-        if (m_scrollArea) {
-            m_scrollArea->setFixedHeight(viewportHeight);
-            m_scrollArea->refreshScrollGeometry();
+        auto applyGeometry = [this, targetHeight, viewportHeight](int popupWidth) {
+            setFixedSize(popupWidth, targetHeight);
+            if (m_scrollArea) {
+                m_scrollArea->setFixedHeight(viewportHeight);
+            }
+            m_layout->invalidate();
+            m_layout->activate();
+
+            if (m_scrollArea) {
+                m_scrollArea->refreshScrollGeometry();
+                m_scrollArea->finishLayoutTransitions();
+            }
+        };
+
+        // SmoothScrollArea correctly reserves its scrollbar inside the viewport.
+        // Preview cards have a fixed column width, so the popup frame must include
+        // that actual reserve to keep the requested number of columns unobstructed.
+        applyGeometry(m_popupWidth);
+        const int scrollBarReserve
+            = m_scrollArea ? qCeil(m_scrollArea->scrollBarReserveExtent()) : 0;
+        if (scrollBarReserve > 0) {
+            applyGeometry(m_popupWidth + scrollBarReserve);
         }
 
-        setFixedSize(m_popupWidth, targetHeight);
         ensureSelectedVisible();
     }
 
@@ -382,6 +568,10 @@ public:
     }
 
     int hoveredIndex() const { return m_hoveredIndex; }
+    int currentColumnCount() const
+    {
+        return m_presentation == AnimatedComboBox::PopupPresentation::PreviewGrid ? m_columns : 1;
+    }
 
 protected:
     void leaveEvent(QEvent* event) override
@@ -425,29 +615,149 @@ protected:
         painter.setBrush(Qt::NoBrush);
         painter.drawPath(borderPath);
 
-        painter.setPen(Qt::NoPen);
-        painter.setBrush(colors.borderSubtle());
-        for (QWidget* sep : std::as_const(m_separators)) {
-            const QRect sr(sep->mapTo(this, QPoint(0, 0)), sep->size());
-            painter.drawRect(QRect(sr.left() + 10, sr.center().y(), sr.width() - 20, 1));
-        }
-
-        QColor categoryColor = colors.textMuted;
-        categoryColor.setAlpha(180);
-        painter.setPen(categoryColor);
-        QFont categoryFont = font();
-        categoryFont.setPointSize(8);
-        categoryFont.setBold(true);
-        painter.setFont(categoryFont);
-        for (QWidget* category : std::as_const(m_categories)) {
-            const QRect cr(category->mapTo(this, QPoint(0, 0)), category->size());
-            const QString text = category->property("comboCategoryText").toString();
-            painter.drawText(QRect(cr.left() + 10, cr.top(), cr.width() - 20, cr.height()),
-                Qt::AlignLeft | Qt::AlignVCenter, text.toUpper());
-        }
     }
 
 private:
+    QWidget* addCategoryWidget(const QString& text)
+    {
+        auto* category = new ComboPopupCategoryWidget(text, m_contentWidget);
+        m_contentLayout->addWidget(category);
+        return category;
+    }
+
+    QWidget* addSeparatorWidget()
+    {
+        auto* separator = new ComboPopupSeparatorWidget(m_contentWidget);
+        m_contentLayout->addWidget(separator);
+        return separator;
+    }
+
+    void buildList(const QFont& comboFont, int minWidth)
+    {
+        m_contentLayout->setSpacing(0);
+        QFontMetrics fontMetrics(comboFont);
+        int widthHint = minWidth;
+        int heightHint = 0;
+
+        for (int i = 0; i < m_items.size(); ++i) {
+            const AnimatedComboItem& item = m_items[i];
+            if (item.separator) {
+                addSeparatorWidget();
+                heightHint += kSeparatorHeight;
+                continue;
+            }
+            if (item.category) {
+                addCategoryWidget(item.text);
+                heightHint += 18;
+                continue;
+            }
+
+            auto* button = new ComboPopupItemButton(item, i, m_contentWidget);
+            button->setFont(comboFont);
+            button->setSelected(i == m_selectedIndex);
+            connect(button, &QPushButton::clicked, this, [this, i]() {
+                if (m_onItemActivated) {
+                    m_onItemActivated(i);
+                }
+            });
+            connect(button, &QPushButton::pressed, this, [this, i]() { setHoveredIndex(i); });
+            button->setOnHovered([this](int hovered) { setHoveredIndex(hovered); });
+            m_contentLayout->addWidget(button);
+            m_itemButtons.append(button);
+
+            const int contentWidth
+                = 20 + fontMetrics.horizontalAdvance(item.text) + (item.icon.isNull() ? 0 : 18);
+            widthHint = qMax(widthHint, contentWidth + 28);
+            heightHint += kRowHeight;
+        }
+
+        m_popupWidth = qMax(widthHint, minWidth);
+        m_contentHeight = qMax(20, heightHint);
+    }
+
+    void buildPreviewGrid(const QFont& comboFont, int minWidth)
+    {
+        m_contentLayout->setSpacing(6);
+        const int gridWidth = m_columns * m_cardSize.width()
+            + qMax(0, m_columns - 1) * kPreviewGridSpacing;
+        m_popupWidth = qMax(minWidth, gridWidth + kPopupPadding * 2);
+
+        QWidget* section = nullptr;
+        FlowLayout* flowLayout = nullptr;
+        int sectionItemCount = 0;
+        int contentBlockCount = 0;
+        int contentHeight = 0;
+
+        auto accountForBlock = [&contentBlockCount, &contentHeight](int height) {
+            if (contentBlockCount > 0) {
+                contentHeight += 6;
+            }
+            contentHeight += height;
+            ++contentBlockCount;
+        };
+        auto finishSection = [this, &section, &flowLayout, &sectionItemCount, &accountForBlock]() {
+            if (!section) {
+                return;
+            }
+
+            const int rows = qMax(1, (sectionItemCount + m_columns - 1) / m_columns);
+            const int sectionHeight = rows * m_cardSize.height()
+                + qMax(0, rows - 1) * kPreviewGridSpacing;
+            section->setFixedHeight(sectionHeight);
+            accountForBlock(sectionHeight);
+            section = nullptr;
+            flowLayout = nullptr;
+            sectionItemCount = 0;
+        };
+        auto beginSection = [this, gridWidth, &section, &flowLayout, &sectionItemCount]() {
+            section = new QWidget(m_contentWidget);
+            section->setAttribute(Qt::WA_TranslucentBackground);
+            section->setSizePolicy(QSizePolicy::Fixed, QSizePolicy::Fixed);
+            section->setFixedWidth(gridWidth);
+            flowLayout = new FlowLayout(section, 0, kPreviewGridSpacing, kPreviewGridSpacing);
+            m_contentLayout->addWidget(section, 0, Qt::AlignLeft | Qt::AlignTop);
+            sectionItemCount = 0;
+        };
+
+        for (int i = 0; i < m_items.size(); ++i) {
+            const AnimatedComboItem& item = m_items[i];
+            if (item.separator) {
+                finishSection();
+                addSeparatorWidget();
+                accountForBlock(kSeparatorHeight);
+                continue;
+            }
+            if (item.category) {
+                finishSection();
+                addCategoryWidget(item.text);
+                accountForBlock(18);
+                continue;
+            }
+            if (!flowLayout) {
+                beginSection();
+            }
+
+            auto* button
+                = new ComboPreviewCardButton(item, i, m_cardSize, section);
+            button->setFont(comboFont);
+            button->setSelected(i == m_selectedIndex);
+            connect(button, &QPushButton::clicked, this, [this, i]() {
+                if (m_onItemActivated) {
+                    m_onItemActivated(i);
+                }
+            });
+            connect(button, &QPushButton::pressed, this, [this, i]() { setHoveredIndex(i); });
+            button->setOnHovered([this](int hovered) { setHoveredIndex(hovered); });
+            flowLayout->addWidget(button);
+            m_previewButtons.append(button);
+            ++sectionItemCount;
+        }
+
+        finishSection();
+        m_contentLayout->activate();
+        m_contentHeight = qMax(20, contentHeight);
+    }
+
     void setHoveredIndex(int index)
     {
         if (m_hoveredIndex == index) {
@@ -466,11 +776,19 @@ private:
             return;
         }
 
-        ComboPopupItemButton* selectedButton = nullptr;
+        QWidget* selectedButton = nullptr;
         for (ComboPopupItemButton* btn : std::as_const(m_itemButtons)) {
             if (btn->index() == m_selectedIndex) {
                 selectedButton = btn;
                 break;
+            }
+        }
+        if (!selectedButton) {
+            for (ComboPreviewCardButton* button : std::as_const(m_previewButtons)) {
+                if (button->index() == m_selectedIndex) {
+                    selectedButton = button;
+                    break;
+                }
             }
         }
 
@@ -478,7 +796,7 @@ private:
             return;
         }
 
-        const int top = selectedButton->y();
+        const int top = selectedButton->mapTo(m_contentWidget, QPoint(0, 0)).y();
         const int bottom = top + selectedButton->height();
         const int scrollValue = m_scrollArea->scrollValue();
         const int viewportHeight
@@ -498,8 +816,7 @@ private:
 private:
     QList<AnimatedComboItem> m_items;
     QList<ComboPopupItemButton*> m_itemButtons;
-    QList<QWidget*> m_separators;
-    QList<QWidget*> m_categories;
+    QList<ComboPreviewCardButton*> m_previewButtons;
     QVBoxLayout* m_layout = nullptr;
     SmoothScrollArea* m_scrollArea = nullptr;
     QWidget* m_contentWidget = nullptr;
@@ -508,6 +825,10 @@ private:
     int m_hoveredIndex = -1;
     int m_popupWidth = 180;
     int m_contentHeight = 0;
+    AnimatedComboBox::PopupPresentation m_presentation
+        = AnimatedComboBox::PopupPresentation::List;
+    int m_columns = 1;
+    QSize m_cardSize;
     bool m_isVisible = false;
     bool m_isHiding = false;
     qreal m_popupOpacity = 0.0;
@@ -639,6 +960,18 @@ void AnimatedComboBox::setCurrentIndex(int index)
     update();
 }
 
+void AnimatedComboBox::clearCurrentSelection()
+{
+    if (m_currentIndex < 0) {
+        return;
+    }
+    m_currentIndex = -1;
+    if (isPopupActive()) {
+        m_popup->setSelectedIndex(-1);
+    }
+    update();
+}
+
 QString AnimatedComboBox::currentText() const
 {
     if (m_currentIndex < 0 || m_currentIndex >= m_items.size()) {
@@ -685,7 +1018,15 @@ void AnimatedComboBox::setPlaceholderText(const QString& text)
 
 void AnimatedComboBox::setPopupMinWidth(int width)
 {
-    m_popupMinWidth = qMax(120, width);
+    const int normalized = qMax(120, width);
+    if (m_popupMinWidth == normalized) {
+        return;
+    }
+    m_popupMinWidth = normalized;
+    if (isPopupActive()) {
+        syncPopupItems();
+        updatePopupPosition();
+    }
 }
 
 void AnimatedComboBox::setPopupMaxHeight(int height)
@@ -693,6 +1034,60 @@ void AnimatedComboBox::setPopupMaxHeight(int height)
     m_popupMaxHeight = qMax(kPopupMinVisibleHeight, height);
     if (isPopupActive()) {
         updatePopupPosition();
+    }
+}
+
+void AnimatedComboBox::setPopupPresentation(PopupPresentation presentation)
+{
+    if (m_popupPresentation == presentation) {
+        return;
+    }
+    m_popupPresentation = presentation;
+    if (isPopupActive()) {
+        syncPopupItems();
+        updatePopupPosition();
+    }
+    update();
+}
+
+void AnimatedComboBox::setPopupColumns(int columns)
+{
+    const int normalized = qMax(1, columns);
+    if (m_popupColumns == normalized) {
+        return;
+    }
+    m_popupColumns = normalized;
+    if (isPopupActive()) {
+        syncPopupItems();
+        updatePopupPosition();
+    }
+}
+
+void AnimatedComboBox::setPopupCardSize(const QSize& size)
+{
+    const QSize normalized(qMax(96, size.width()), qMax(80, size.height()));
+    if (m_popupCardSize == normalized) {
+        return;
+    }
+    m_popupCardSize = normalized;
+    if (isPopupActive()) {
+        syncPopupItems();
+        updatePopupPosition();
+    }
+}
+
+void AnimatedComboBox::setItemPreviewImage(int index, const QImage& image)
+{
+    if (index < 0 || index >= m_items.size() || m_items[index].previewImage == image) {
+        return;
+    }
+    m_items[index].previewImage = image;
+    if (isPopupActive()) {
+        syncPopupItems();
+        updatePopupPosition();
+    }
+    if (m_currentIndex == index) {
+        update();
     }
 }
 
@@ -776,11 +1171,30 @@ void AnimatedComboBox::paintEvent(QPaintEvent* event)
     QColor textTarget = hasValue ? colors.text : colors.textMuted;
     QColor textColor
         = ruwa::ui::core::ThemeColors::interpolate(textBase, textTarget, m_hoverProgress);
+
+    int textLeft = 10;
+    if (hasValue && m_popupPresentation == PopupPresentation::PreviewGrid) {
+        const QRectF previewRect(8, 5, 22, height() - 10);
+        p.setBrush(colors.surfaceElevated());
+        p.setPen(Qt::NoPen);
+        p.drawRoundedRect(previewRect, 6, 6);
+        const QImage preview = tintedPreview(m_items[m_currentIndex], textColor);
+        if (!preview.isNull()) {
+            const QImage scaled = preview.scaled(
+                previewRect.size().toSize(), Qt::KeepAspectRatio, Qt::SmoothTransformation);
+            p.drawImage(QPointF(previewRect.center().x() - scaled.width() / 2.0,
+                            previewRect.center().y() - scaled.height() / 2.0),
+                scaled);
+        }
+        textLeft = 36;
+    }
+
     p.setPen(textColor);
     QFont f = font();
     f.setPointSize(9);
     p.setFont(f);
-    p.drawText(QRect(10, 0, width() - 30, height()), Qt::AlignVCenter | Qt::AlignLeft, text);
+    p.drawText(QRect(textLeft, 0, width() - textLeft - 22, height()),
+        Qt::AlignVCenter | Qt::AlignLeft, text);
 
     p.save();
     const qreal arrowX = width() - 13;
@@ -854,11 +1268,15 @@ void AnimatedComboBox::keyPressEvent(QKeyEvent* event)
             return;
         }
         break;
+    case Qt::Key_Right:
     case Qt::Key_Down: {
-        const int next = isPopupActive()
-            ? nextSelectableIndex(
-                  m_popup->hoveredIndex() >= 0 ? m_popup->hoveredIndex() : m_currentIndex, +1)
-            : nextSelectableIndex(m_currentIndex, +1);
+        const int offset = event->key() == Qt::Key_Down && isPopupActive()
+            ? m_popup->currentColumnCount()
+            : 1;
+        const int from = isPopupActive() && m_popup->hoveredIndex() >= 0
+            ? m_popup->hoveredIndex()
+            : m_currentIndex;
+        const int next = nextSelectableIndex(from, offset);
         if (next >= 0) {
             setCurrentIndex(next);
             emit currentIndexChanged(next);
@@ -866,8 +1284,15 @@ void AnimatedComboBox::keyPressEvent(QKeyEvent* event)
         event->accept();
         return;
     }
+    case Qt::Key_Left:
     case Qt::Key_Up: {
-        const int prev = nextSelectableIndex(m_currentIndex, -1);
+        const int offset = event->key() == Qt::Key_Up && isPopupActive()
+            ? -m_popup->currentColumnCount()
+            : -1;
+        const int from = isPopupActive() && m_popup->hoveredIndex() >= 0
+            ? m_popup->hoveredIndex()
+            : m_currentIndex;
+        const int prev = nextSelectableIndex(from, offset);
         if (prev >= 0) {
             setCurrentIndex(prev);
             emit currentIndexChanged(prev);
@@ -993,7 +1418,24 @@ void AnimatedComboBox::togglePopup()
 
 void AnimatedComboBox::syncPopupItems()
 {
-    m_popup->setItems(m_items, m_currentIndex, qMax(m_popupMinWidth, width()), font());
+    int effectiveColumns = m_popupColumns;
+    int availableWidth = std::numeric_limits<int>::max();
+    if (window()) {
+        availableWidth = qMax(1, window()->width() - 16);
+    }
+    if (m_popupPresentation == PopupPresentation::PreviewGrid) {
+        while (effectiveColumns > 1
+            && effectiveColumns * m_popupCardSize.width()
+                    + (effectiveColumns - 1) * kPreviewGridSpacing + kPopupPadding * 2
+                > availableWidth) {
+            --effectiveColumns;
+        }
+    }
+    const int popupMinimumWidth = m_popupPresentation == PopupPresentation::PreviewGrid
+        ? qMin(m_popupMinWidth, availableWidth)
+        : qMax(m_popupMinWidth, width());
+    m_popup->setItems(m_items, m_currentIndex, popupMinimumWidth, font(),
+        m_popupPresentation, effectiveColumns, m_popupCardSize);
     m_popup->setSelectedIndex(m_currentIndex);
 }
 
@@ -1089,27 +1531,28 @@ int AnimatedComboBox::firstSelectableIndex() const
 
 int AnimatedComboBox::nextSelectableIndex(int from, int direction) const
 {
-    if (m_items.isEmpty() || (direction != -1 && direction != 1)) {
+    if (m_items.isEmpty() || direction == 0) {
         return -1;
     }
 
-    int idx = from;
-    if (idx < 0 || idx >= m_items.size()) {
-        idx = (direction > 0) ? -1 : m_items.size();
-    }
-
-    for (int step = 0; step < m_items.size(); ++step) {
-        idx += direction;
-        if (idx < 0)
-            idx = m_items.size() - 1;
-        if (idx >= m_items.size())
-            idx = 0;
-        const auto& item = m_items[idx];
+    QList<int> selectable;
+    selectable.reserve(m_items.size());
+    for (int i = 0; i < m_items.size(); ++i) {
+        const AnimatedComboItem& item = m_items[i];
         if (!item.separator && !item.category && item.enabled) {
-            return idx;
+            selectable.append(i);
         }
     }
-    return -1;
+    if (selectable.isEmpty()) {
+        return -1;
+    }
+
+    int position = selectable.indexOf(from);
+    if (position < 0) {
+        position = direction > 0 ? -1 : static_cast<int>(selectable.size());
+    }
+    position = qBound(0, position + direction, static_cast<int>(selectable.size()) - 1);
+    return selectable[position];
 }
 
 void AnimatedComboBox::animateHoverTo(qreal target)

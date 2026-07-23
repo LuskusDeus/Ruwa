@@ -43,7 +43,7 @@ void ensureSplashFontsOnce()
 } // namespace
 
 SplashScreen::SplashScreen(QWidget* parent)
-    : QWidget(parent, Qt::Window | Qt::FramelessWindowHint | Qt::WindowStaysOnTopHint)
+    : QWidget(parent, Qt::Window | Qt::FramelessWindowHint)
 {
     setAttribute(Qt::WA_TranslucentBackground);
     setAttribute(Qt::WA_DeleteOnClose);
@@ -203,6 +203,8 @@ void SplashScreen::startRectExpansion(int durationMs)
             timer->deleteLater();
             delete currentFrame;
 
+            m_animatedRect = m_targetLocalRect;
+            m_hasExpanded = true;
             m_isExpanding = false;
             emit expansionFinished();
         }
@@ -363,6 +365,11 @@ void SplashScreen::paintEvent(QPaintEvent* event)
     }
 
     const qreal chromeOpacity = m_isAppearing ? m_contentOpacity : m_foregroundOpacity;
+
+    if (m_hasExpanded) {
+        painter.fillRect(rect(), colors.background);
+        return;
+    }
 
     if (m_isExpanding) {
         qreal expandProgress = 0.0;

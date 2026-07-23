@@ -22,6 +22,15 @@ void LinuxPlatform::enableWindowAnimations(QWidget* window)
     // No-op on Linux
 }
 
+void LinuxPlatform::synchronizeWindowPresentation(QWidget* window)
+{
+    if (!window || !window->isVisible()) {
+        return;
+    }
+
+    QGuiApplication::sync();
+}
+
 bool LinuxPlatform::copyImageToClipboard(const QImage& image)
 {
     if (image.isNull()) {
