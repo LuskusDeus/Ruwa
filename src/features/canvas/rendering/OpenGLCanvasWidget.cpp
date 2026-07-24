@@ -6712,6 +6712,15 @@ bool OpenGLCanvasWidget::applyFloodFillResult(const QUuid& layerId, FloodFillRes
         TileData& tile = grid.getOrCreateTile(key);
         std::memcpy(tile.pixels(), afterIt->second.data(), aether::tileByteSize(grid.format()));
         tile.markDirty();
+        // Bump the grid's whole-grid content version too (not just the per-tile
+        // dirty flag). Overwriting a PRE-EXISTING tile via getOrCreateTile does
+        // not bump contentVersion on its own, so the layer-effect caches
+        // (LayerEffectTileCacheEntry / WholeLayerCacheEntry, both keyed on
+        // TileGrid::contentVersion) would score a false hit and re-serve the
+        // stale pre-fill effect output for that tile — the tile visibly reverts
+        // to its cached composite until a brush stroke bumps the version. Mirror
+        // the DrawCommand redo path, which does both.
+        grid.markDirty(key);
     }
 
     std::vector<TileKey> dirtyVec(affectedKeys.begin(), affectedKeys.end());

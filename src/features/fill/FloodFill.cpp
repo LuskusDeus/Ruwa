@@ -868,6 +868,10 @@ void applyFillResultToGrid(TileGrid& grid, const FloodFillResult& result)
         TileData& tile = grid.getOrCreateTile(key);
         std::memcpy(tile.pixels(), afterIt->second.data(), tileByteSize(grid.format()));
         tile.markDirty();
+        // Also bump the grid-level content version: overwriting a pre-existing
+        // tile does not, and effect caches keyed on TileGrid::contentVersion
+        // would otherwise re-serve stale effect output for it.
+        grid.markDirty(key);
     }
 }
 
