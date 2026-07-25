@@ -144,6 +144,7 @@
         <file alias="Classic Brushes/Classic Brushes.rbf">resources/brushes/StandardBrushes/Classic Brushes.rbf</file>
         <file alias="Experimental Brushes/Experimental Brushes.rbf">resources/brushes/StandardBrushes/Experimental Brushes.rbf</file>
         <file alias="Lineart Brushes/Lineart Brushes.rbf">resources/brushes/StandardBrushes/Lineart Brushes.rbf</file>
+        <file alias="Stylized Brushes/Stylized Brushes.rbf">resources/brushes/StandardBrushes/Stylized Brushes.rbf</file>
         <file alias="Wet Brushes/Wet Brushes.rbf">resources/brushes/StandardBrushes/Wet Brushes.rbf</file>
     </qresource>
     <qresource prefix="/pigments">
