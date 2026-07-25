@@ -12,6 +12,7 @@ class QHideEvent;
 class QLabel;
 class QResizeEvent;
 class QShowEvent;
+class QTimer;
 class QVBoxLayout;
 
 namespace ruwa::ui::widgets {
@@ -55,6 +56,8 @@ private:
     void retranslateUi();
     void ensureAppearanceOverlay();
     void startAppearanceAnimation();
+    void armAppearanceAnimationRetry();
+    void stopAppearanceAnimationRetry();
     void updateTheme();
     void updateContentMargins();
     void updateHeroHeight();
@@ -84,6 +87,7 @@ private:
     QLabel* m_finishDescription { nullptr };
     ruwa::ui::widgets::WelcomeBannerButton* m_finishButton { nullptr };
     QPointer<ruwa::ui::widgets::WidgetFadeInOverlay> m_appearanceOverlay;
+    QTimer* m_appearanceRetryTimer { nullptr };
     int m_contentSideMargin { 0 };
     bool m_appearanceAnimationStarted { false };
 };

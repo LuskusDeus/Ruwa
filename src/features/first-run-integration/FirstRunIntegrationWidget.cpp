@@ -48,6 +48,7 @@ constexpr int kSettingsSectionMinimumHeight = 180;
 constexpr int kFinishMinimumHeight = 320;
 constexpr int kAppearanceDelayMs = 800;
 constexpr int kAppearanceDurationMs = 933;
+constexpr int kAppearanceRetryIntervalMs = 16;
 constexpr int kImageSectionMargin = 15;
 constexpr qreal kImageSectionCornerRadius = 20.0;
 constexpr int kHeroLogoSize = 72;
@@ -326,6 +327,7 @@ bool FirstRunIntegrationWidget::eventFilter(QObject* watched, QEvent* event)
 void FirstRunIntegrationWidget::hideEvent(QHideEvent* event)
 {
     m_scrollArea->setUserScrollingEnabled(true);
+    stopAppearanceAnimationRetry();
 
     if (m_appearanceOverlay) {
         m_appearanceOverlay->close();
@@ -344,16 +346,16 @@ void FirstRunIntegrationWidget::showEvent(QShowEvent* event)
 {
     QWidget::showEvent(event);
 
-    // Startup briefly shows the main window at zero opacity to create its native
-    // handle, then hides it again. Prepare and paint the opaque overlay
-    // synchronously while the window is still invisible, so no uncovered
+    // Startup shows the main window at zero opacity to create its native handle and
+    // keeps it transparent until the splash expansion finishes. Prepare and paint the
+    // opaque overlay synchronously while the window is still invisible, so no uncovered
     // content frame can appear when the splash is removed.
     if (!m_appearanceAnimationStarted) {
         ensureAppearanceOverlay();
     }
 
     // Starting the fade remains deferred: the startup controller restores the
-    // main-window opacity later in the same call stack.
+    // main-window opacity much later, so the start is retried until then.
     QTimer::singleShot(0, this, [this]() { startAppearanceAnimation(); });
 }
 
@@ -685,8 +687,16 @@ void FirstRunIntegrationWidget::ensureAppearanceOverlay()
 
 void FirstRunIntegrationWidget::startAppearanceAnimation()
 {
-    if (m_appearanceAnimationStarted || !isVisible() || !window()->isVisible()
-        || window()->windowOpacity() <= 0.0) {
+    if (m_appearanceAnimationStarted) {
+        return;
+    }
+
+    // Startup shows the main window transparently and only reveals it once the splash
+    // expansion finishes, so the deferred start above lands while the window is still
+    // fully transparent. Wait for the reveal instead of dropping the fade: without it
+    // the opaque overlay would never be animated away and the page would stay blank.
+    if (!isVisible() || !window()->isVisible() || window()->windowOpacity() <= 0.0) {
+        armAppearanceAnimationRetry();
         return;
     }
 
@@ -695,9 +705,34 @@ void FirstRunIntegrationWidget::startAppearanceAnimation()
         return;
     }
 
+    stopAppearanceAnimationRetry();
     m_appearanceAnimationStarted = true;
+    // The overlay was prepared on the first show, before the page settled into its
+    // final layout, so the cross-fade needs an up-to-date image of the content.
+    m_appearanceOverlay->refreshTargetSnapshot();
     m_appearanceOverlay->startAnimation(
         kAppearanceDurationMs, kAppearanceDelayMs, QEasingCurve::InOutCubic);
+}
+
+void FirstRunIntegrationWidget::armAppearanceAnimationRetry()
+{
+    if (!m_appearanceRetryTimer) {
+        m_appearanceRetryTimer = new QTimer(this);
+        m_appearanceRetryTimer->setInterval(kAppearanceRetryIntervalMs);
+        connect(m_appearanceRetryTimer, &QTimer::timeout, this,
+            [this]() { startAppearanceAnimation(); });
+    }
+
+    if (!m_appearanceRetryTimer->isActive()) {
+        m_appearanceRetryTimer->start();
+    }
+}
+
+void FirstRunIntegrationWidget::stopAppearanceAnimationRetry()
+{
+    if (m_appearanceRetryTimer) {
+        m_appearanceRetryTimer->stop();
+    }
 }
 
 void FirstRunIntegrationWidget::updateTheme()

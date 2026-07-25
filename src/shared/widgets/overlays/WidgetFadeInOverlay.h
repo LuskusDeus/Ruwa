@@ -54,6 +54,14 @@ public:
     void showOverlay();
 
     /**
+     * @brief Re-capture the target snapshot used by the cross-fade
+     *
+     * Call this when the overlay was prepared before the target reached its
+     * final layout, so the fade does not reveal a stale image of the content.
+     */
+    void refreshTargetSnapshot();
+
+    /**
      * @brief Start the fade-in animation
      * @param durationMs Animation duration in milliseconds
      * @param delayMs Delay before starting animation (for cascade effects)

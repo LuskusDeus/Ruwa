@@ -54,6 +54,30 @@ void WidgetFadeInOverlay::showOverlay()
     repaint();
 }
 
+void WidgetFadeInOverlay::refreshTargetSnapshot()
+{
+    if (!m_target) {
+        return;
+    }
+
+    // The overlay is a child of the target, so it must not take part in the grab.
+    // Hiding and re-showing it happens inside a single call stack: no paint event can
+    // be delivered in between, so the uncovered target never reaches the screen.
+    const bool wasVisible = isVisible();
+    if (wasVisible) {
+        hide();
+    }
+
+    updateGeometry();
+    m_targetSnapshot = m_target->grab();
+
+    if (wasVisible) {
+        show();
+        raise();
+        repaint();
+    }
+}
+
 void WidgetFadeInOverlay::startAnimation(
     int durationMs, int delayMs, QEasingCurve::Type easingCurve)
 {
