@@ -10,6 +10,11 @@
 #include "shell/tab-system/WorkspaceTab.h"
 #include "features/canvas/ui/CanvasPanel.h"
 #include "features/layers/ui/LayersPanel.h"
+
+#include <QLineEdit>
+#include <QPlainTextEdit>
+#include <QTextEdit>
+
 namespace ruwa::core::commands {
 
 namespace {
@@ -39,6 +44,45 @@ bool widgetIsTextInput(const QWidget* widget)
             || widget->inherits("QTextEdit") || widget->inherits("QPlainTextEdit"));
 }
 
+enum class ClipboardOp { Copy, Cut, Paste };
+
+/// Cut/copy/paste are application shortcuts too, so a focused text field never
+/// gets the keystroke on its own — hand it over instead of editing the document
+/// behind the field's back. Returns true when the keystroke was consumed.
+bool routeClipboardToFocusedTextInput(QWidget* focus, ClipboardOp op)
+{
+    const auto dispatch = [op](auto* editor) {
+        switch (op) {
+        case ClipboardOp::Copy:
+            editor->copy();
+            break;
+        case ClipboardOp::Cut:
+            editor->cut();
+            break;
+        case ClipboardOp::Paste:
+            editor->paste();
+            break;
+        }
+    };
+
+    if (auto* lineEdit = qobject_cast<QLineEdit*>(focus)) {
+        dispatch(lineEdit);
+        return true;
+    }
+    if (auto* textEdit = qobject_cast<QTextEdit*>(focus)) {
+        dispatch(textEdit);
+        return true;
+    }
+    if (auto* plainTextEdit = qobject_cast<QPlainTextEdit*>(focus)) {
+        dispatch(plainTextEdit);
+        return true;
+    }
+
+    // Any other text field (spin boxes, custom editors): swallow the keystroke
+    // rather than let it cut a layer out from under someone who is typing.
+    return widgetIsTextInput(focus);
+}
+
 } // namespace
 
 CommandInfo CopyCommand::info() const
@@ -46,7 +90,8 @@ CommandInfo CopyCommand::info() const
     return CommandInfo { .id = "edit.copy",
         .title = "Copy",
         .category = "Edit",
-        .description = "Copy the current workspace selection or layer",
+        .description = "Copy the selected layer, its mask, or the pixels inside the active "
+                       "selection, depending on what is focused",
         .aliases = { "copy" },
         .defaultShortcut = QKeySequence::Copy,
         .icon = QIcon() };
@@ -61,6 +106,10 @@ void CopyCommand::execute(const CommandContext& ctx, const QVariantMap& args)
 {
     Q_UNUSED(args);
 
+    if (routeClipboardToFocusedTextInput(ctx.focusWidget(), ClipboardOp::Copy)) {
+        return;
+    }
+
     auto* workspaceTab = ctx.activeWorkspaceTab();
     if (!workspaceTab) {
         return;
@@ -73,7 +122,8 @@ CommandInfo CutCommand::info() const
     return CommandInfo { .id = "edit.cut",
         .title = "Cut",
         .category = "Edit",
-        .description = "Cut selected layers",
+        .description = "Cut the selected layer, its mask, or the pixels inside the active "
+                       "selection, depending on what is focused",
         .aliases = { "cut", "cut-layer" },
         .defaultShortcut = QKeySequence::Cut,
         .icon = QIcon() };
@@ -88,6 +138,10 @@ void CutCommand::execute(const CommandContext& ctx, const QVariantMap& args)
 {
     Q_UNUSED(args);
 
+    if (routeClipboardToFocusedTextInput(ctx.focusWidget(), ClipboardOp::Cut)) {
+        return;
+    }
+
     auto* workspaceTab = ctx.activeWorkspaceTab();
     if (!workspaceTab) {
         return;
@@ -100,7 +154,8 @@ CommandInfo PasteCommand::info() const
     return CommandInfo { .id = "edit.paste",
         .title = "Paste",
         .category = "Edit",
-        .description = "Paste into the current workspace",
+        .description = "Paste the last copy: layers, a layer mask, or copied pixels dropped onto a "
+                       "new layer in transform mode",
         .aliases = { "paste" },
         .defaultShortcut = QKeySequence::Paste,
         .icon = QIcon() };
@@ -114,6 +169,10 @@ bool PasteCommand::canExecute(const CommandContext& ctx) const
 void PasteCommand::execute(const CommandContext& ctx, const QVariantMap& args)
 {
     Q_UNUSED(args);
+
+    if (routeClipboardToFocusedTextInput(ctx.focusWidget(), ClipboardOp::Paste)) {
+        return;
+    }
 
     auto* workspaceTab = ctx.activeWorkspaceTab();
     if (!workspaceTab) {

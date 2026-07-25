@@ -133,12 +133,30 @@ private:
         const Color& backdropColor = Color::transparent());
     void ensureRenderTargets();
     void clearTexture(GLuint texture);
-    void blendPass(GLuint baseTexture, GLuint srcTexture, int blendMode, float opacity,
-        bool preserveBaseAlpha = false, bool replaceBase = false, bool srcAtop = false,
-        const Color& backdropColor = Color::transparent(), bool useGroupComposite = false,
-        GLuint groupPassThroughTexture = 0, GLuint groupSourceCoverageTexture = 0,
-        GLuint groupCoverageTexture = 0, GLuint layerMaskTexture = 0,
-        bool layerMaskLuminanceReveal = false);
+    struct BlendPassParams {
+        GLuint baseTexture = 0;
+        GLuint srcTexture = 0;
+        /// Destination. 0 = the inactive ping-pong texture, i.e. the normal
+        /// stack step (the caller then swaps); set it to write elsewhere.
+        GLuint targetTexture = 0;
+        int blendMode = 0;
+        float opacity = 1.0f;
+        bool preserveBaseAlpha = false;
+        bool replaceBase = false;
+        /// Adjustment-layer variant of replaceBase: src holds the fully effected
+        /// base, so the mask reveal scales the MIX FACTOR between base and src
+        /// (see composite.frag.glsl :: uReplaceBaseMixReveal).
+        bool replaceBaseMixReveal = false;
+        bool srcAtop = false;
+        Color backdropColor = Color::transparent();
+        bool useGroupComposite = false;
+        GLuint groupPassThroughTexture = 0;
+        GLuint groupSourceCoverageTexture = 0;
+        GLuint groupCoverageTexture = 0;
+        GLuint layerMaskTexture = 0;
+        bool layerMaskLuminanceReveal = false;
+    };
+    void blendPass(const BlendPassParams& params);
     GLuint applyLayerEffects(
         GLuint sourceTexture, const CompositeLayerInfo& layer, bool realtimeOnly);
     // Runs the layer's effect chain on `sourceTexture` at an explicit output size
@@ -158,6 +176,26 @@ private:
     // (document reach * zoom), clamped so the overscan texture stays within a
     // resource bound. 0 when the chain needs no reach.
     int layerReachScreenPixels(const CompositeLayerInfo& layer) const;
+    // Lazily allocates the adjustment-layer scratch targets (only documents that
+    // actually carry an adjustment pay the VRAM). False when unavailable.
+    bool ensureAdjustmentTargets();
+    /// True when `belowLayers` can be re-composited for an adjustment's
+    /// background-free source without conflicting with the borrowed buffers:
+    /// no nested adjustment (m_adjustmentTextures already in use) and no clipped
+    /// layer (the clip pass borrows m_clipGroupTextures). Mirrors the same guard
+    /// in GLCompositor so preview and committed render agree on the fallback.
+    bool adjustmentBelowStackSupported(const std::vector<CompositeLayerInfo>& belowLayers) const;
+    /// Re-composites `belowLayers` with a TRANSPARENT backdrop into a borrowed
+    /// ping-pong pair, so the result is the background-free content below an
+    /// adjustment — never the opaque canvas background the normal pass bakes into
+    /// every pixel. Returns 0 when the below-stack is not a simple stack (caller
+    /// then falls back to the current base).
+    GLuint recompositeBelowBgFree(const std::vector<CompositeLayerInfo>& belowLayers,
+        const SourceResolver& sourceResolver, const LayerMaskResolver& layerMaskResolver);
+    /// Re-applies the opaque canvas background under an adjustment's effected
+    /// (background-free) result, so the background itself stays unmodified.
+    /// Returns a scratch texture, or 0 when unavailable.
+    GLuint compositeOverBackdrop(GLuint srcTexture, const Color& backdropColor);
     struct GroupCompositeFrame {
         GLuint ping[2] = { 0, 0 };
         GLuint passThrough = 0;
@@ -177,6 +215,12 @@ private:
     GLuint m_emptyVao = 0;
     GLuint m_pingPongTextures[2] = { 0, 0 };
     GLuint m_clipGroupTextures[2] = { 0, 0 };
+    // Dedicated ping-pong for an adjustment's background-free recomposite of the
+    // layers below, plus the scratch its effected result is re-composited over
+    // the canvas background in. Separate from every other transient target so a
+    // group / clip isolation buffer can never be aliased. Allocated on demand.
+    GLuint m_adjustmentTextures[2] = { 0, 0 };
+    GLuint m_adjustmentBackdropTexture = 0;
     std::vector<std::unique_ptr<GroupCompositeFrame>> m_groupCompositeFrames;
     size_t m_groupCompositeDepth = 0;
     GLuint m_transparentTexture = 0;

@@ -29,9 +29,14 @@
 #include "features/brush/rendering/DabShapeCache.h"
 #include "features/canvas/rendering/OpenGLCanvasWidget.h"
 #include "shared/undo/UndoManager.h"
+#include "shared/undo/LayerAddCommand.h"
 #include "features/layers/model/LayerModel.h"
+#include "features/layers/model/LayerData.h"
 #include "features/transform/TransformState.h"
+#include "platform/Platform.h"
+#include "shared/clipboard/EditClipboard.h"
 #include "shared/tiles/TileTypes.h"
+#include "shared/tiles/TileGridClone.h"
 #include "shell/top-bar/MessagePopupManager.h"
 #include "shell/top-bar/OverlayContainer.h"
 #include "features/brush/ui/BrushControlOverlay.h"
@@ -90,6 +95,7 @@
 #include <functional>
 
 #include <algorithm>
+#include <cmath>
 #include <memory>
 #include <utility>
 
@@ -107,6 +113,27 @@ constexpr int kToolStateOverlayCanvasInteractivePage = 0;
 constexpr int kToolStateOverlayCanvasPlaceholderPage = 1;
 constexpr qint64 kTemporaryMoveToolUndoCooldownMs = 700;
 QPointer<CanvasPanel> g_activeCanvasPanel;
+
+/// Hand a copied region to the system clipboard so it can be pasted into other
+/// applications. Best effort: the in-app clipboard keeps the full-fidelity copy,
+/// so an oversized region (same 8K guard as Copy Canvas) simply stays in-app.
+void publishImageToSystemClipboard(const QImage& image)
+{
+    constexpr int kMaxClipboardDimension = 7680;
+    if (image.isNull() || image.width() > kMaxClipboardDimension
+        || image.height() > kMaxClipboardDimension) {
+        return;
+    }
+
+    std::unique_ptr<ruwa::platform::Platform> platform(ruwa::platform::Platform::create());
+    if (!platform) {
+        return;
+    }
+    // Our own write echoes back as a clipboard change; tell the edit clipboard so
+    // it does not read that as "somebody else copied something newer".
+    ruwa::shared::clipboard::EditClipboard::instance().noteOwnSystemClipboardWrite();
+    platform->copyImageToClipboard(image);
+}
 
 struct ToolCommandBinding {
     ToolId tool;
@@ -1212,8 +1239,7 @@ void CanvasPanel::setLassoFillStabilization(qreal stabilization)
         m_glWidget->setLassoFillStabilization(static_cast<float>(lassoFillStabilization()));
     }
     if (m_toolStateOverlay) {
-        m_toolStateOverlay->setToolStabilizationValue(
-            ToolId::LassoFill, lassoFillStabilization());
+        m_toolStateOverlay->setToolStabilizationValue(ToolId::LassoFill, lassoFillStabilization());
     }
 }
 
@@ -2177,6 +2203,147 @@ bool CanvasPanel::deleteSelectionContent()
     }
     updateSelectionActionPopup(true);
     return cleared;
+}
+
+bool CanvasPanel::copySelectionPixels()
+{
+    if (!m_glWidget || !m_glWidget->hasSelectionMask()) {
+        return false;
+    }
+
+    // A transform in flight owns the pixels we are about to read, so bake it in
+    // first — otherwise the copy would take the pre-transform content.
+    commitTransformBeforeDocumentMutation();
+
+    QImage flattened;
+    if (!m_glWidget->copySelectionPixelsToClipboard(&flattened)) {
+        return false;
+    }
+
+    publishImageToSystemClipboard(flattened);
+    return true;
+}
+
+bool CanvasPanel::cutSelectionPixels()
+{
+    return copySelectionPixels() && deleteSelectionContent();
+}
+
+bool CanvasPanel::canPasteClipboardPixels() const
+{
+    return m_layerModel && m_glWidget
+        && ruwa::shared::clipboard::EditClipboard::instance().pixels() != nullptr;
+}
+
+bool CanvasPanel::pasteClipboardPixelsAsLayer()
+{
+    const auto* payload = ruwa::shared::clipboard::EditClipboard::instance().pixels();
+    if (!payload || !canPasteClipboardPixels()) {
+        return false;
+    }
+    // Own the grid for the rest of the paste: a system clipboard change would
+    // drop the payload from under us.
+    const std::shared_ptr<const aether::TileGrid> pastedGrid = payload->grid;
+    const QRect pastedBounds = payload->bounds;
+
+    commitTransformBeforeDocumentMutation();
+    // A leftover selection would scope the transform we are about to enter to the
+    // selected region instead of the pasted pixels.
+    m_glWidget->clearSelectionMask();
+    updateSelectionActionPopup();
+
+    auto layer = ruwa::core::layers::LayerData::create(
+        ruwa::core::layers::LayerType::Raster, tr("Pasted"));
+    if (!layer) {
+        return false;
+    }
+    // Tiles keep their document coordinates: the paste lands exactly where the
+    // pixels were copied from, and transform mode moves it from there. Pasting
+    // into a different (usually smaller) document can leave that spot entirely
+    // off-canvas, which would look like nothing was pasted — in that case shift
+    // the copy back over the canvas. Whole tiles only, so pixels stay bit-exact;
+    // transform mode is right there for exact placement.
+    const QRect displayFrame = effectiveDisplayFrame();
+    int tileOffsetX = 0;
+    int tileOffsetY = 0;
+    if (!displayFrame.isEmpty() && !pastedBounds.isEmpty()
+        && !displayFrame.intersects(pastedBounds)) {
+        const QPoint delta = displayFrame.center() - pastedBounds.center();
+        const auto tileSpan = static_cast<double>(aether::TILE_SIZE);
+        tileOffsetX = static_cast<int>(std::lround(delta.x() / tileSpan));
+        tileOffsetY = static_cast<int>(std::lround(delta.y() / tileSpan));
+    }
+    layer->tileGrid = aether::cloneGridWithSolids(*pastedGrid, tileOffsetX, tileOffsetY);
+    layer->thumbnailDirty = true;
+    const ruwa::core::layers::LayerId pastedId = layer->id;
+
+    // Above the current layer, next to it in the same group — same placement
+    // rule as pasting a layer.
+    ruwa::core::layers::LayerId parentId;
+    int insertIndex = 0;
+    if (auto* selected = m_layerModel->selectedLayer()) {
+        if (selected->parent) {
+            parentId = selected->parent->id;
+            insertIndex = selected->indexInParent();
+        } else {
+            const auto& roots = m_layerModel->rootLayers();
+            for (int i = 0; i < roots.size(); ++i) {
+                if (roots[i].get() == selected) {
+                    insertIndex = i;
+                    break;
+                }
+            }
+        }
+    }
+
+    if (parentId.isNull()) {
+        m_layerModel->addLayer(layer, insertIndex);
+    } else {
+        m_layerModel->addLayerTo(layer, parentId, insertIndex);
+    }
+    auto* addedLayer = m_layerModel->layerById(pastedId);
+    if (!addedLayer) {
+        return false;
+    }
+    m_layerModel->setSelectedLayer(pastedId);
+
+    if (auto* undoManager = undoManagerOrNull()) {
+        // Where the layer actually landed, not where we asked for it.
+        ruwa::core::layers::LayerId addedParentId;
+        int addedIndex = -1;
+        if (addedLayer->parent) {
+            addedParentId = addedLayer->parent->id;
+            addedIndex = addedLayer->indexInParent();
+        } else {
+            const auto& roots = m_layerModel->rootLayers();
+            for (int i = 0; i < roots.size(); ++i) {
+                if (roots[i].get() == addedLayer) {
+                    addedIndex = i;
+                    break;
+                }
+            }
+        }
+
+        auto undoClone = ruwa::core::layers::LayerModel::cloneLayerTree(addedLayer, true);
+        if (undoClone) {
+            auto requestRenderFn = [this]() { requestRender(); };
+            auto onContentChangedFn = [this]() { notifyContentChanged(); };
+            undoManager->push(std::make_unique<aether::LayerAddCommand>(m_layerModel,
+                QList<std::shared_ptr<ruwa::core::layers::LayerData>> { std::move(undoClone) },
+                QList<std::pair<ruwa::core::layers::LayerId, int>> {
+                    { addedParentId, addedIndex } },
+                requestRenderFn, onContentChangedFn));
+        }
+    }
+
+    notifyContentChanged();
+    requestRender();
+
+    // Free placement before the paste is committed: Enter/click-away applies it,
+    // Esc leaves the pixels where they were copied from. Goes through the panel
+    // so the transform overlay, cursor and tool state come along.
+    enterTransformMode();
+    return true;
 }
 
 bool CanvasPanel::fillSelectionWithCurrentColor()
@@ -3740,8 +3907,8 @@ bool CanvasPanel::temporaryMoveToolUndoCooldownActive()
     }
 
     const bool temporaryCtrlMove = m_tempToolHold.active
-        && m_tempToolHold.heldKey == Qt::Key_Control
-        && m_tempToolHold.previousTool != ToolId::Move && toolMode() == ToolId::Move;
+        && m_tempToolHold.heldKey == Qt::Key_Control && m_tempToolHold.previousTool != ToolId::Move
+        && toolMode() == ToolId::Move;
     if (!temporaryCtrlMove || !m_temporaryMoveToolUndoCooldownTimer.isValid()
         || m_temporaryMoveToolUndoCooldownTimer.elapsed() >= kTemporaryMoveToolUndoCooldownMs) {
         resetTemporaryMoveToolUndoCooldown();

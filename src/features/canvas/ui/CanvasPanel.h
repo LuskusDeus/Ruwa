@@ -244,6 +244,16 @@ public:
     /// Erase the content under the active selection. Returns false when there is
     /// no selection (or a transform is in flight).
     bool deleteSelectionContent();
+    /// Copy the pixels under the active selection (edit clipboard + system
+    /// clipboard image). False when there is nothing copyable.
+    bool copySelectionPixels();
+    /// Copy the pixels under the active selection, then erase them.
+    bool cutSelectionPixels();
+    /// Whether the edit clipboard holds pixels this canvas could paste.
+    bool canPasteClipboardPixels() const;
+    /// Paste the copied pixels as a new layer above the current one, in place,
+    /// and enter transform mode so they can be placed before being committed.
+    bool pasteClipboardPixelsAsLayer();
     void importImageFilesBelowSelectedKeepingSelection(const QStringList& filePaths);
     void importImageBelowSelectedKeepingSelection(const QImage& image, const QString& layerName);
     void promptImportImageFiles(const QStringList& filePaths);

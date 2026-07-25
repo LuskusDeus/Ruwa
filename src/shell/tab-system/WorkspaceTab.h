@@ -235,6 +235,10 @@ public:
     bool importImageFilesBelowSelectedKeepingSelection(const QStringList& filePaths);
     void promptImportImageFiles(const QStringList& filePaths);
     bool copyCanvasToClipboard();
+    /// Ctrl+X / Ctrl+C / Ctrl+V routed by what is focused: the layers panel cuts
+    /// layers (or the selected layer's mask), the canvas cuts the pixels inside
+    /// the active selection. Paste reinstates whichever of those was copied last,
+    /// falling back to an image on the system clipboard.
     bool handleCutRequest();
     bool handleCopyRequest();
     bool handlePasteRequest();
@@ -396,6 +400,8 @@ private:
     void scheduleRecentProjectsThumbnailCapture();
     void tryCaptureRecentProjectThumbnail(const QString& path);
     bool isLayerClipboardTargetActive() const;
+    /// Snapshot + delete the selected layers, arming the layer paste path.
+    bool cutSelectedLayersToClipboard();
     void setupUI();
     void setupDockSystem();
     void setupPanels();

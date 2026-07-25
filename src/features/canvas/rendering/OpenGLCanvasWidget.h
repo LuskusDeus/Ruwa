@@ -250,6 +250,12 @@ public:
     bool selectionBoundsWorld(QRectF& outBounds) const;
     bool fillSelectionWithColor(const QColor& color);
     bool clearSelectionContent();
+    /// Lift the pixels under the active selection out of the active raster layer
+    /// into the edit clipboard; the layer itself is left untouched. Fills
+    /// @p outFlattenedImage (when non-null) with the same region as an image for
+    /// the system clipboard. False when there is no selection, the active layer
+    /// is not a plain raster layer, or the region is empty.
+    bool copySelectionPixelsToClipboard(QImage* outFlattenedImage = nullptr);
     /// Clear all pixels in a raster layer (undoable). Layer must be visible, unlocked, raster.
     bool clearLayerPixelContent(const QUuid& layerId);
     /// Bake generated pixel layer to raster (transform applied). Returns false if layer is missing

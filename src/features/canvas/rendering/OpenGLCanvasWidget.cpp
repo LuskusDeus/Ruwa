@@ -54,6 +54,7 @@
 #include "shared/undo/SelectionState.h"
 #include "shared/undo/SelectionCommand.h"
 #include "shared/undo/LayerAddCommand.h"
+#include "shared/clipboard/EditClipboard.h"
 #include "shared/tiles/TileGrid.h"
 #include "shared/tiles/TilePixelAccess.h"
 #include "shared/types/GeometryHelpers.h"
@@ -116,8 +117,7 @@ namespace {
 bool selectionStateMatches(const aether::SelectionState& lhs, const aether::SelectionState& rhs)
 {
     return lhs.layer.primaryId == rhs.layer.primaryId
-        && lhs.layer.selectedIds == rhs.layer.selectedIds
-        && lhs.lasso.regions == rhs.lasso.regions
+        && lhs.layer.selectedIds == rhs.layer.selectedIds && lhs.lasso.regions == rhs.lasso.regions
         && lhs.lasso.canvasWidth == rhs.lasso.canvasWidth
         && lhs.lasso.canvasHeight == rhs.lasso.canvasHeight
         && lhs.lasso.maskTiles == rhs.lasso.maskTiles
@@ -127,6 +127,53 @@ bool selectionStateMatches(const aether::SelectionState& lhs, const aether::Sele
 inline int32_t floorDiv(int32_t a, int32_t b)
 {
     return (a >= 0) ? (a / b) : ((a - b + 1) / b);
+}
+
+/// Flatten a document-space region of a tile grid into an image, for handing the
+/// copied selection to the system clipboard. Tile pixels are premultiplied, and
+/// float formats are clamped to 8 bit — the full-fidelity copy stays in the tile
+/// grid on the edit clipboard.
+QImage imageFromTileGridRegion(const aether::TileGrid& grid, const QRect& bounds)
+{
+    if (bounds.isEmpty()) {
+        return {};
+    }
+
+    QImage image(bounds.width(), bounds.height(), QImage::Format_ARGB32_Premultiplied);
+    if (image.isNull()) {
+        return {};
+    }
+    image.fill(Qt::transparent);
+
+    const auto toByte
+        = [](float v) { return static_cast<int>(std::lround(std::clamp(v, 0.0f, 1.0f) * 255.0f)); };
+
+    for (const auto& [key, tile] : grid.tiles()) {
+        const int tileOriginX = key.x * static_cast<int>(aether::TILE_SIZE);
+        const int tileOriginY = key.y * static_cast<int>(aether::TILE_SIZE);
+        for (uint32_t localY = 0; localY < aether::TILE_SIZE; ++localY) {
+            const int docY = tileOriginY + static_cast<int>(localY);
+            if (docY < bounds.top() || docY > bounds.bottom()) {
+                continue;
+            }
+            auto* scanLine = reinterpret_cast<QRgb*>(image.scanLine(docY - bounds.top()));
+            for (uint32_t localX = 0; localX < aether::TILE_SIZE; ++localX) {
+                const int docX = tileOriginX + static_cast<int>(localX);
+                if (docX < bounds.left() || docX > bounds.right()) {
+                    continue;
+                }
+                float c[4];
+                aether::readTilePixelF(tile, localX, localY, c);
+                if (c[3] <= 0.0f) {
+                    continue;
+                }
+                scanLine[docX - bounds.left()]
+                    = qRgba(toByte(c[0]), toByte(c[1]), toByte(c[2]), toByte(c[3]));
+            }
+        }
+    }
+
+    return image.convertToFormat(QImage::Format_ARGB32);
 }
 
 constexpr int kAutoFlipAnimationDurationMs
@@ -4297,10 +4344,9 @@ bool OpenGLCanvasWidget::performMagicWandSelection(
             m_ignoreSelectionChange = false;
         });
 
-    watcher->setFuture(QtConcurrent::run(
-        [request = std::move(*request)]() mutable {
-            return CanvasSelectionController::computeMagicWandSelection(std::move(request));
-        }));
+    watcher->setFuture(QtConcurrent::run([request = std::move(*request)]() mutable {
+        return CanvasSelectionController::computeMagicWandSelection(std::move(request));
+    }));
     return true;
 }
 
@@ -4637,6 +4683,91 @@ bool OpenGLCanvasWidget::doClearSelectionContent()
     if (m_layerModel)
         m_layerModel->notifyLayerDataChanged(layer->id);
     requestRender();
+    return true;
+}
+
+bool OpenGLCanvasWidget::copySelectionPixelsToClipboard(QImage* outFlattenedImage)
+{
+    if (!m_selectionController || !hasSelectionMask())
+        return false;
+    // Reading the layer's own tiles means only plain raster layers qualify: a
+    // generated pixel layer (smart/board/text) would need its transform baked in
+    // first, which a copy has no business doing.
+    auto* layer = activeLayer();
+    if (!layer || !layer->isRaster() || !layer->tileGrid || layer->tileGrid->empty())
+        return false;
+
+    // Content pixels, even when the mask is the active paint target: what paste
+    // produces is a layer, not a mask.
+    const auto& sourceGrid = *layer->tileGrid;
+    const auto& selectionMask = m_selectionController->lassoSelection().mask();
+    const bool clipToCanvas = hasFiniteDocumentBounds();
+    const int canvasW = static_cast<int>(m_canvas.width());
+    const int canvasH = static_cast<int>(m_canvas.height());
+
+    auto copied = std::make_shared<TileGrid>();
+    copied->setFormat(sourceGrid.format());
+
+    int minX = std::numeric_limits<int>::max();
+    int minY = std::numeric_limits<int>::max();
+    int maxX = std::numeric_limits<int>::min();
+    int maxY = std::numeric_limits<int>::min();
+
+    for (const auto& [key, maskTile] : selectionMask.tiles()) {
+        const TileData* srcTile = sourceGrid.getTile(key);
+        if (!srcTile)
+            continue;
+
+        TileData* dstTile = nullptr;
+        for (uint32_t localY = 0; localY < TILE_SIZE; ++localY) {
+            const int worldY = key.y * static_cast<int>(TILE_SIZE) + static_cast<int>(localY);
+            if (clipToCanvas && (worldY < 0 || worldY >= canvasH))
+                continue;
+            for (uint32_t localX = 0; localX < TILE_SIZE; ++localX) {
+                const int worldX = key.x * static_cast<int>(TILE_SIZE) + static_cast<int>(localX);
+                if (clipToCanvas && (worldX < 0 || worldX >= canvasW))
+                    continue;
+
+                float coverage[4];
+                aether::readTilePixelF(maskTile, localX, localY, coverage);
+                if (coverage[3] <= 0.0f)
+                    continue;
+
+                float src[4];
+                aether::readTilePixelF(*srcTile, localX, localY, src);
+                if (src[3] <= 0.0f && src[0] <= 0.0f && src[1] <= 0.0f && src[2] <= 0.0f)
+                    continue;
+
+                // Premultiplied throughout, so partial coverage is a plain scale.
+                const float out[4] = { src[0] * coverage[3], src[1] * coverage[3],
+                    src[2] * coverage[3], src[3] * coverage[3] };
+                if (out[3] <= 0.0f)
+                    continue;
+
+                if (!dstTile)
+                    dstTile = &copied->getOrCreateTile(key);
+                aether::writeTilePixelF(*dstTile, localX, localY, out);
+
+                minX = std::min(minX, worldX);
+                minY = std::min(minY, worldY);
+                maxX = std::max(maxX, worldX);
+                maxY = std::max(maxY, worldY);
+            }
+        }
+
+        if (dstTile)
+            copied->markDirty(key);
+    }
+
+    copied->pruneEmpty();
+    if (copied->empty() || minX > maxX || minY > maxY)
+        return false;
+
+    const QRect bounds(QPoint(minX, minY), QPoint(maxX, maxY));
+    if (outFlattenedImage)
+        *outFlattenedImage = imageFromTileGridRegion(*copied, bounds);
+
+    ruwa::shared::clipboard::EditClipboard::instance().setPixels(std::move(copied), bounds);
     return true;
 }
 

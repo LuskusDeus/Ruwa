@@ -29,6 +29,7 @@
 #include "features/canvas/ui/CanvasPanelHelpers.h"
 #include "features/canvas/ui/NavigatorPanel.h"
 #include "features/canvas/ui/NavigatorWidget.h"
+#include "shared/clipboard/EditClipboard.h"
 #include "shared/undo/UndoManager.h"
 #include "shared/tiles/TileTypes.h"
 #include "shared/tiles/TileFormat.h"
@@ -2246,13 +2247,12 @@ void WorkspaceTab::restoreUserDockLayout()
 
 void WorkspaceTab::updateInitialPresentationReadiness()
 {
-    if (m_initialPresentationReady || m_initialPresentationCheckQueued
-        || !m_asyncStartupCompleted || !m_initialDockLayoutRestored) {
+    if (m_initialPresentationReady || m_initialPresentationCheckQueued || !m_asyncStartupCompleted
+        || !m_initialDockLayoutRestored) {
         return;
     }
 
-    if (m_layersPanel && m_layersPanel->isVisible()
-        && !m_layersPanel->visibleThumbnailsReady()) {
+    if (m_layersPanel && m_layersPanel->isVisible() && !m_layersPanel->visibleThumbnailsReady()) {
         return;
     }
 
@@ -2270,8 +2270,7 @@ void WorkspaceTab::updateInitialPresentationReadiness()
         }
     }
 
-    if (m_navigatorPanel && m_navigatorPanel->isVisible()
-        && m_navigatorPanel->contentWidget()) {
+    if (m_navigatorPanel && m_navigatorPanel->isVisible() && m_navigatorPanel->contentWidget()) {
         if (auto* navigator
             = qobject_cast<workspace::NavigatorWidget*>(m_navigatorPanel->contentWidget())) {
             connect(navigator, &workspace::NavigatorWidget::presentationReadyChanged, this,
@@ -2344,8 +2343,7 @@ void WorkspaceTab::updateInitialPresentationReadiness()
 
 void WorkspaceTab::prepareInitialDockEntranceAnimation()
 {
-    if (!m_initialPresentationReady || !m_initialDockLayoutRestored
-        || m_initialDockEntranceHandled
+    if (!m_initialPresentationReady || !m_initialDockLayoutRestored || m_initialDockEntranceHandled
         || m_initialDockEntrancePreparationQueued || !m_dockContainer || !m_canvasPanel) {
         return;
     }
@@ -2762,8 +2760,8 @@ void WorkspaceTab::connectPanelSignals()
         });
 
     // Tool selection
-    connect(m_toolsPanel, &workspace::ToolsPanel::toolRequested, this,
-        [this](workspace::ToolId tool) {
+    connect(
+        m_toolsPanel, &workspace::ToolsPanel::toolRequested, this, [this](workspace::ToolId tool) {
             if (m_canvasPanel) {
                 m_canvasPanel->setToolMode(tool);
             }
@@ -2998,32 +2996,28 @@ ruwa::core::serialization::ProjectData WorkspaceTab::toProjectData() const
 
     if (m_canvasPanel) {
         data.currentTool = workspace::persistentValueForToolId(m_canvasPanel->toolMode());
-        const auto brushState
-            = m_canvasPanel->persistedToolState(workspace::ToolId::Brush);
+        const auto brushState = m_canvasPanel->persistedToolState(workspace::ToolId::Brush);
         data.brushToolState.brushId = brushState.brushId;
         data.brushToolState.brushSize = brushState.brushSize;
         data.brushToolState.brushOpacity = brushState.brushOpacity;
         data.brushToolState.colorRgba = brushState.color.rgba();
         data.brushToolState.valid = brushState.valid;
 
-        const auto eraserState
-            = m_canvasPanel->persistedToolState(workspace::ToolId::Eraser);
+        const auto eraserState = m_canvasPanel->persistedToolState(workspace::ToolId::Eraser);
         data.eraserToolState.brushId = eraserState.brushId;
         data.eraserToolState.brushSize = eraserState.brushSize;
         data.eraserToolState.brushOpacity = eraserState.brushOpacity;
         data.eraserToolState.colorRgba = eraserState.color.rgba();
         data.eraserToolState.valid = eraserState.valid;
 
-        const auto blurState
-            = m_canvasPanel->persistedToolState(workspace::ToolId::Blur);
+        const auto blurState = m_canvasPanel->persistedToolState(workspace::ToolId::Blur);
         data.blurToolState.brushId = blurState.brushId;
         data.blurToolState.brushSize = blurState.brushSize;
         data.blurToolState.brushOpacity = blurState.brushOpacity;
         data.blurToolState.colorRgba = blurState.color.rgba();
         data.blurToolState.valid = blurState.valid;
 
-        const auto smudgeState
-            = m_canvasPanel->persistedToolState(workspace::ToolId::Smudge);
+        const auto smudgeState = m_canvasPanel->persistedToolState(workspace::ToolId::Smudge);
         data.smudgeToolState.brushId = smudgeState.brushId;
         data.smudgeToolState.brushSize = smudgeState.brushSize;
         data.smudgeToolState.brushOpacity = smudgeState.brushOpacity;
@@ -3167,9 +3161,8 @@ bool WorkspaceTab::fromProjectDataStructure(const ruwa::core::serialization::Pro
         }
     }
     if (m_canvasPanel) {
-        const workspace::ToolId tool
-            = workspace::toolIdFromPersistentValue(data.currentTool).value_or(
-                workspace::ToolId::Brush);
+        const workspace::ToolId tool = workspace::toolIdFromPersistentValue(data.currentTool)
+                                           .value_or(workspace::ToolId::Brush);
         m_canvasPanel->setToolMode(tool);
     }
     if (m_canvasPanel) {
@@ -3239,9 +3232,8 @@ bool WorkspaceTab::fromProjectDataTiles(const ruwa::core::serialization::Project
         model->notifyBulkLayerContentChanged();
     }
     if (m_canvasPanel) {
-        const workspace::ToolId tool
-            = workspace::toolIdFromPersistentValue(data.currentTool).value_or(
-                workspace::ToolId::Brush);
+        const workspace::ToolId tool = workspace::toolIdFromPersistentValue(data.currentTool)
+                                           .value_or(workspace::ToolId::Brush);
         m_canvasPanel->setToolMode(tool);
     }
     if (m_canvasPanel) {
@@ -3424,32 +3416,28 @@ WorkspaceTab::ProjectSaveSnapshot WorkspaceTab::captureProjectSaveSnapshot() con
     if (m_canvasPanel) {
         snapshot.currentTool = workspace::persistentValueForToolId(m_canvasPanel->toolMode());
 
-        const auto brushState
-            = m_canvasPanel->persistedToolState(workspace::ToolId::Brush);
+        const auto brushState = m_canvasPanel->persistedToolState(workspace::ToolId::Brush);
         snapshot.brushToolState.brushId = brushState.brushId;
         snapshot.brushToolState.brushSize = brushState.brushSize;
         snapshot.brushToolState.brushOpacity = brushState.brushOpacity;
         snapshot.brushToolState.colorRgba = brushState.color.rgba();
         snapshot.brushToolState.valid = brushState.valid;
 
-        const auto eraserState
-            = m_canvasPanel->persistedToolState(workspace::ToolId::Eraser);
+        const auto eraserState = m_canvasPanel->persistedToolState(workspace::ToolId::Eraser);
         snapshot.eraserToolState.brushId = eraserState.brushId;
         snapshot.eraserToolState.brushSize = eraserState.brushSize;
         snapshot.eraserToolState.brushOpacity = eraserState.brushOpacity;
         snapshot.eraserToolState.colorRgba = eraserState.color.rgba();
         snapshot.eraserToolState.valid = eraserState.valid;
 
-        const auto blurState
-            = m_canvasPanel->persistedToolState(workspace::ToolId::Blur);
+        const auto blurState = m_canvasPanel->persistedToolState(workspace::ToolId::Blur);
         snapshot.blurToolState.brushId = blurState.brushId;
         snapshot.blurToolState.brushSize = blurState.brushSize;
         snapshot.blurToolState.brushOpacity = blurState.brushOpacity;
         snapshot.blurToolState.colorRgba = blurState.color.rgba();
         snapshot.blurToolState.valid = blurState.valid;
 
-        const auto smudgeStateSnap
-            = m_canvasPanel->persistedToolState(workspace::ToolId::Smudge);
+        const auto smudgeStateSnap = m_canvasPanel->persistedToolState(workspace::ToolId::Smudge);
         snapshot.smudgeToolState.brushId = smudgeStateSnap.brushId;
         snapshot.smudgeToolState.brushSize = smudgeStateSnap.brushSize;
         snapshot.smudgeToolState.brushOpacity = smudgeStateSnap.brushOpacity;
@@ -3819,10 +3807,26 @@ bool WorkspaceTab::isLayerClipboardTargetActive() const
 
 bool WorkspaceTab::handleCutRequest()
 {
-    if (!m_layersPanel || !isLayerClipboardTargetActive()) {
-        return false;
+    // Layers panel focused/hovered: the mask thumbnail being the paint target
+    // means the mask is what the keystroke is about, not the whole layer.
+    if (m_layersPanel && isLayerClipboardTargetActive()) {
+        if (m_layersPanel->selectedLayerMaskIsPaintTarget()) {
+            return m_layersPanel->cutSelectedLayerMask();
+        }
+        return cutSelectedLayersToClipboard();
     }
-    if (!m_layersPanel->selectedLayer()) {
+
+    // Canvas: the pixels inside the active selection.
+    if (m_canvasPanel && m_canvasPanel->cutSelectionPixels()) {
+        return true;
+    }
+
+    return false;
+}
+
+bool WorkspaceTab::cutSelectedLayersToClipboard()
+{
+    if (!m_layersPanel || !m_layersPanel->selectedLayer()) {
         return false;
     }
 
@@ -3841,27 +3845,46 @@ bool WorkspaceTab::handleCutRequest()
     m_layerCopyArmed = false;
     m_layerCutArmed = true;
     m_layerCutClipboard = std::move(snapshots);
+    ruwa::shared::clipboard::EditClipboard::instance().markLayersCopied();
     return true;
 }
 
 bool WorkspaceTab::handleCopyRequest()
 {
-    if (!m_layersPanel) {
-        m_layerCopyArmed = false;
-        return false;
+    if (m_layersPanel && isLayerClipboardTargetActive()) {
+        if (m_layersPanel->selectedLayerMaskIsPaintTarget()) {
+            m_layerCopyArmed = false;
+            return m_layersPanel->copySelectedLayerMask();
+        }
+
+        m_layerCopyArmed = m_layersPanel->selectedLayer() != nullptr;
+        if (m_layerCopyArmed) {
+            m_layerCutArmed = false;
+            m_layerCutClipboard.clear();
+            ruwa::shared::clipboard::EditClipboard::instance().markLayersCopied();
+        }
+        return m_layerCopyArmed;
     }
 
-    const bool hasSelectedLayer = m_layersPanel->selectedLayer() != nullptr;
-    m_layerCopyArmed = isLayerClipboardTargetActive() && hasSelectedLayer;
-    if (m_layerCopyArmed) {
-        m_layerCutArmed = false;
-        m_layerCutClipboard.clear();
-    }
-    return m_layerCopyArmed;
+    m_layerCopyArmed = false;
+    return m_canvasPanel && m_canvasPanel->copySelectionPixels();
 }
 
 bool WorkspaceTab::handlePasteRequest()
 {
+    // Whatever was copied last wins, wherever it was copied from.
+    switch (ruwa::shared::clipboard::EditClipboard::instance().kind()) {
+    case ruwa::shared::clipboard::EditClipboard::Kind::Mask:
+        // Nothing else to try: a mask on the clipboard means the keystroke was
+        // about masks, even when the current layer cannot take one.
+        return m_layersPanel && m_layersPanel->pasteMaskToSelectedLayer();
+    case ruwa::shared::clipboard::EditClipboard::Kind::Pixels:
+        return m_canvasPanel && m_canvasPanel->pasteClipboardPixelsAsLayer();
+    case ruwa::shared::clipboard::EditClipboard::Kind::Layers:
+    case ruwa::shared::clipboard::EditClipboard::Kind::None:
+        break;
+    }
+
     if (m_layerCutArmed && m_layersPanel
         && m_layersPanel->pasteLayerSnapshots(m_layerCutClipboard)) {
         return true;

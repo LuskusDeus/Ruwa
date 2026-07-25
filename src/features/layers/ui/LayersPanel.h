@@ -84,6 +84,16 @@ public:
     bool deleteSelectedLayerMask();
     /// Whether the selected layer's mask (not its pixels) is the active paint target.
     bool selectedLayerMaskIsPaintTarget() const;
+    /// Put the selected layer's mask on the edit clipboard. Returns false when the
+    /// layer carries no mask.
+    bool copySelectedLayerMask();
+    /// Copy the selected layer's mask, then drop it from the layer (undoable).
+    bool cutSelectedLayerMask();
+    /// Whether the clipboard holds a mask the selected layer could take.
+    bool canPasteMaskToSelectedLayer() const;
+    /// Give the selected layer the mask sitting on the clipboard, replacing any
+    /// mask it already has (undoable).
+    bool pasteMaskToSelectedLayer();
     bool duplicateSelectedLayers();
     bool mergeSelectedLayerDown();
     bool mergeVisibleLayers();

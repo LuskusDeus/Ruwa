@@ -4,8 +4,11 @@
 #include "LayersPanel.h"
 
 #include "features/layers/model/BlendModeUtils.h"
+#include "shared/clipboard/EditClipboard.h"
+#include "shared/tiles/TileGridClone.h"
 #include "shared/undo/AddMaskCommand.h"
 #include "shared/undo/RemoveMaskCommand.h"
+#include "shared/undo/SetMaskCommand.h"
 #include "shared/undo/LayerAddCommand.h"
 #include "shared/undo/LayerPropertyCommand.h"
 #include "shared/undo/LayerRemoveCommand.h"
@@ -3432,6 +3435,80 @@ bool LayersPanel::selectedLayerMaskIsPaintTarget() const
 {
     auto* layer = m_layerModel.selectedLayer();
     return layer && layer->hasMask() && layer->maskEditActive;
+}
+
+bool LayersPanel::copySelectedLayerMask()
+{
+    auto* layer = m_layerModel.selectedLayer();
+    if (!layer || !layer->hasMask()) {
+        return false;
+    }
+
+    auto grid = aether::cloneGridWithSolids(*layer->maskTileGrid());
+    if (!grid) {
+        return false;
+    }
+
+    ruwa::shared::clipboard::EditClipboard::instance().setMask(
+        std::move(grid), layer->maskEnabled, layer->maskLinked);
+    return true;
+}
+
+bool LayersPanel::cutSelectedLayerMask()
+{
+    return copySelectedLayerMask() && deleteSelectedLayerMask();
+}
+
+bool LayersPanel::canPasteMaskToSelectedLayer() const
+{
+    if (!ruwa::shared::clipboard::EditClipboard::instance().mask()) {
+        return false;
+    }
+    // Same targets "Add mask" accepts: masks live on ordinary raster layers.
+    auto* layer = m_layerModel.selectedLayer();
+    return layer && layer->isRaster() && !layer->isBackground();
+}
+
+bool LayersPanel::pasteMaskToSelectedLayer()
+{
+    const auto* payload = ruwa::shared::clipboard::EditClipboard::instance().mask();
+    if (!payload || !canPasteMaskToSelectedLayer()) {
+        return false;
+    }
+
+    aether::SetMaskCommand::MaskState after;
+    after.grid = payload->grid;
+    after.enabled = payload->enabled;
+    after.linked = payload->linked;
+    // The pasted mask becomes the paint target so it can be adjusted right away,
+    // matching what adding a mask does.
+    after.editActive = true;
+
+    emit aboutToPerformTransformIncompatibleEdit();
+
+    auto* layer = m_layerModel.selectedLayer();
+    if (!layer) {
+        return false;
+    }
+    aether::SetMaskCommand::MaskState before = aether::SetMaskCommand::captureState(layer);
+    aether::SetMaskCommand::applyState(layer, after);
+
+    if (m_pushUndoFn) {
+        m_pushUndoFn(std::make_unique<aether::SetMaskCommand>(&m_layerModel, layer->id,
+            std::move(before), std::move(after), m_requestRenderFn, m_onContentChangedFn));
+    }
+
+    // Rebuilds the canvas layer stack (mask in) and recomposites.
+    m_layerModel.notifyLayerDataChanged(layer->id);
+    syncLayerControls();
+    scheduleThumbnailRefresh();
+    if (m_requestRenderFn) {
+        m_requestRenderFn();
+    }
+    if (m_onContentChangedFn) {
+        m_onContentChangedFn();
+    }
+    return true;
 }
 
 void LayersPanel::addLayer()
