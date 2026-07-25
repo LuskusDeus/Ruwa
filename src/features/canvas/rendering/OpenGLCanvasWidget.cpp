@@ -4344,6 +4344,25 @@ void OpenGLCanvasWidget::selectActiveLayerContent()
     }
 }
 
+void OpenGLCanvasWidget::selectActiveLayerMask()
+{
+    if (m_selectionController) {
+        SelectionState before;
+        before.layer
+            = captureLayerSelection(m_layerModel ? m_layerModel->selectionManager() : nullptr);
+        before.lasso = captureLassoSelection(&m_selectionController->lassoSelection(),
+            effectiveDocumentBoundsWidth(), effectiveDocumentBoundsHeight());
+        m_selectionController->selectActiveLayerMask();
+        SelectionState after;
+        after.layer = before.layer;
+        after.lasso = captureLassoSelection(&m_selectionController->lassoSelection(),
+            effectiveDocumentBoundsWidth(), effectiveDocumentBoundsHeight());
+        m_ignoreSelectionChange = true;
+        pushSelectionCommand(before, after);
+        m_ignoreSelectionChange = false;
+    }
+}
+
 bool OpenGLCanvasWidget::doFillSelectionWithColor(const QColor& color)
 {
     if (!m_selectionController)

@@ -9,7 +9,37 @@
 #include "commands/CommandRegistry.h"
 #include "shell/tab-system/WorkspaceTab.h"
 #include "features/canvas/ui/CanvasPanel.h"
+#include "features/layers/ui/LayersPanel.h"
 namespace ruwa::core::commands {
+
+namespace {
+
+/// True when \a widget is \a container or one of its descendants — i.e. the
+/// container holds keyboard focus.
+bool widgetIsWithin(const QWidget* widget, const QWidget* container)
+{
+    if (!widget || !container) {
+        return false;
+    }
+    for (const QWidget* w = widget; w; w = w->parentWidget()) {
+        if (w == container) {
+            return true;
+        }
+    }
+    return false;
+}
+
+/// Delete is registered as an application shortcut, so it fires even while a
+/// text field has focus (inline layer rename, search boxes). Deleting a layer
+/// out from under a rename is never what the keystroke meant.
+bool widgetIsTextInput(const QWidget* widget)
+{
+    return widget
+        && (widget->inherits("QLineEdit") || widget->inherits("QAbstractSpinBox")
+            || widget->inherits("QTextEdit") || widget->inherits("QPlainTextEdit"));
+}
+
+} // namespace
 
 CommandInfo CopyCommand::info() const
 {
@@ -142,6 +172,52 @@ void FillSelectionCommand::execute(const CommandContext& ctx, const QVariantMap&
     }
 }
 
+CommandInfo ContextualDeleteCommand::info() const
+{
+    return CommandInfo { .id = "edit.delete",
+        .title = "Delete",
+        .category = "Edit",
+        .description
+        = "Delete the selected layer, its mask, or the pixels inside the active selection, "
+          "depending on what is focused",
+        .aliases = { "delete", "erase" },
+        .defaultShortcut = QKeySequence(Qt::Key_Delete),
+        .icon = QIcon() };
+}
+
+bool ContextualDeleteCommand::canExecute(const CommandContext& ctx) const
+{
+    return ctx.activeWorkspaceTab() != nullptr;
+}
+
+void ContextualDeleteCommand::execute(const CommandContext& ctx, const QVariantMap& args)
+{
+    Q_UNUSED(args);
+
+    QWidget* focus = ctx.focusWidget();
+    if (widgetIsTextInput(focus)) {
+        return;
+    }
+
+    // Focus decides the domain first: the layers panel owns layer/mask deletion,
+    // everything else (in practice the canvas) owns pixel deletion.
+    auto* layersPanel = ctx.activeLayersPanel();
+    if (layersPanel && widgetIsWithin(focus, layersPanel)) {
+        if (layersPanel->selectedLayerMaskIsPaintTarget()) {
+            layersPanel->deleteSelectedLayerMask();
+        } else {
+            layersPanel->deleteSelectedLayers();
+        }
+        return;
+    }
+
+    // No selection → deliberately a no-op rather than falling back to deleting
+    // the layer, which is what made the old Delete binding feel unpredictable.
+    if (auto* canvasPanel = ctx.activeCanvasPanel()) {
+        canvasPanel->deleteSelectionContent();
+    }
+}
+
 void registerEditCommands(CommandRegistry& registry)
 {
     registry.registerCommand(std::make_unique<CutCommand>());
@@ -149,6 +225,7 @@ void registerEditCommands(CommandRegistry& registry)
     registry.registerCommand(std::make_unique<PasteCommand>());
     registry.registerCommand(std::make_unique<DeselectCommand>());
     registry.registerCommand(std::make_unique<FillSelectionCommand>());
+    registry.registerCommand(std::make_unique<ContextualDeleteCommand>());
 }
 
 } // namespace ruwa::core::commands

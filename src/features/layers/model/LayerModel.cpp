@@ -1993,8 +1993,46 @@ LayerId LayerModel::inferClipBaseForIndex(const QList<LayerData*>& flat, int lay
     return LayerId();
 }
 
+LayerModel::ClippingBatch::ClippingBatch(LayerModel& model)
+    : m_model(model)
+{
+    m_model.beginClippingBatch();
+}
+
+LayerModel::ClippingBatch::~ClippingBatch()
+{
+    m_model.endClippingBatch();
+}
+
+void LayerModel::beginClippingBatch()
+{
+    ++m_clippingBatchDepth;
+}
+
+void LayerModel::endClippingBatch()
+{
+    if (m_clippingBatchDepth <= 0) {
+        return;
+    }
+    if (--m_clippingBatchDepth > 0) {
+        return;
+    }
+    if (m_clippingRefreshPending) {
+        m_clippingRefreshPending = false;
+        refreshClippingConsistency();
+    }
+}
+
 bool LayerModel::refreshClippingConsistency()
 {
+    // Mid-batch the tree is in a transient state (some layers moved, their clip
+    // bases not yet) — validating there would unclip layers permanently. Defer
+    // to the end of the batch, where the final layout is judged once.
+    if (m_clippingBatchDepth > 0) {
+        m_clippingRefreshPending = true;
+        return false;
+    }
+
     bool anyChanged = false;
     const QList<LayerData*> flat = allLayersFlattened();
     if (flat.isEmpty()) {

@@ -2053,6 +2053,28 @@ void CanvasPanel::selectLayerContent(const ruwa::core::layers::LayerId& id)
     updateSelectionActionPopup(true);
 }
 
+void CanvasPanel::selectLayerMaskContent(const ruwa::core::layers::LayerId& id)
+{
+    if (!m_layerModel || id.isNull()) {
+        return;
+    }
+
+    auto* layer = m_layerModel->layerById(id);
+    if (!layer || !layer->hasMask()) {
+        return;
+    }
+
+    commitTransformBeforeDocumentMutation();
+    if (m_layerModel->selectedLayerId() != id) {
+        m_layerModel->setSelectedLayer(id);
+    }
+
+    if (m_glWidget) {
+        m_glWidget->selectActiveLayerMask();
+    }
+    updateSelectionActionPopup(true);
+}
+
 bool CanvasPanel::startTextLayerEditing(const ruwa::core::layers::LayerId& id)
 {
     if (!m_layerModel || !m_textEditingController || id.isNull()) {
@@ -2140,6 +2162,21 @@ void CanvasPanel::clearSelectionMask()
     }
     m_glWidget->clearSelectionMask();
     updateSelectionActionPopup();
+}
+
+bool CanvasPanel::deleteSelectionContent()
+{
+    if (!m_glWidget || !m_glWidget->hasSelectionMask()) {
+        return false;
+    }
+
+    commitTransformBeforeDocumentMutation();
+    const bool cleared = m_glWidget->clearSelectionContent();
+    if (cleared) {
+        emit canvasContentChanged();
+    }
+    updateSelectionActionPopup(true);
+    return cleared;
 }
 
 bool CanvasPanel::fillSelectionWithCurrentColor()

@@ -5,6 +5,7 @@
 
 #include "features/layers/model/BlendModeUtils.h"
 #include "shared/undo/AddMaskCommand.h"
+#include "shared/undo/RemoveMaskCommand.h"
 #include "shared/undo/LayerAddCommand.h"
 #include "shared/undo/LayerPropertyCommand.h"
 #include "shared/undo/LayerRemoveCommand.h"
@@ -958,13 +959,20 @@ public:
             return;
         }
 
-        for (const auto& move : m_moves) {
-            LayerData* oldParent
-                = move.oldParentId.isNull() ? nullptr : m_layerModel->layerById(move.oldParentId);
-            m_layerModel->moveLayer(move.layerId, oldParent, move.oldIndex);
-        }
+        {
+            // One clipping check for the whole restore: moving the layers back out
+            // one by one would otherwise unclip them the moment a clipped layer
+            // leaves the group before its base does.
+            LayerModel::ClippingBatch clippingBatch(*m_layerModel);
+            for (const auto& move : m_moves) {
+                LayerData* oldParent = move.oldParentId.isNull()
+                    ? nullptr
+                    : m_layerModel->layerById(move.oldParentId);
+                m_layerModel->moveLayer(move.layerId, oldParent, move.oldIndex);
+            }
 
-        m_layerModel->removeLayer(m_groupLayer->id);
+            m_layerModel->removeLayer(m_groupLayer->id);
+        }
 
         if (m_requestRender)
             m_requestRender();
@@ -1548,6 +1556,8 @@ QWidget* LayersPanel::createContent()
         &LayersPanel::onLayerPaintTargetSelected);
     connect(m_listView, &ruwa::ui::widgets::LayerListView::layerContentSelectionRequested, this,
         &LayersPanel::onLayerContentSelectionRequested);
+    connect(m_listView, &ruwa::ui::widgets::LayerListView::layerMaskSelectionRequested, this,
+        &LayersPanel::onLayerMaskSelectionRequested);
     connect(m_listView, &ruwa::ui::widgets::LayerListView::layerTextEditRequested, this,
         &LayersPanel::onLayerTextEditRequested);
     connect(m_listView, &ruwa::ui::widgets::LayerListView::layerExpandToggled, this,
@@ -2484,6 +2494,21 @@ void LayersPanel::onLayerContentSelectionRequested(const LayerId& id)
     emit layerContentSelectionRequested(id);
 }
 
+void LayersPanel::onLayerMaskSelectionRequested(const LayerId& id)
+{
+    auto* layer = m_layerModel.layerById(id);
+    if (!layer || !layer->hasMask()) {
+        return;
+    }
+
+    emit aboutToPerformTransformIncompatibleEdit();
+    if (m_layerModel.selectedLayerId() != id) {
+        m_layerModel.setSelectedLayer(id);
+    }
+    syncLayerControls();
+    emit layerMaskSelectionRequested(id);
+}
+
 void LayersPanel::onLayerTextEditRequested(const LayerId& id)
 {
     emit aboutToPerformTransformIncompatibleEdit();
@@ -2709,8 +2734,11 @@ void LayersPanel::onLayerDragDropped(const LayerId& id, int dropInsertIndex, int
         if (willMove) {
             emit aboutToPerformTransformIncompatibleEdit();
         }
-        for (int i = 0; i < layersToMove.size(); ++i) {
-            m_layerModel.moveLayer(layersToMove[i], nullptr, i);
+        {
+            LayerModel::ClippingBatch clippingBatch(m_layerModel);
+            for (int i = 0; i < layersToMove.size(); ++i) {
+                m_layerModel.moveLayer(layersToMove[i], nullptr, i);
+            }
         }
         return;
     }
@@ -2787,43 +2815,50 @@ void LayersPanel::onLayerDragDropped(const LayerId& id, int dropInsertIndex, int
     //
     // For each layer we re-read anchorLayer's live index so we stay correct
     // regardless of move direction (up or down) and after each tree mutation.
+    //
+    // The clipping batch keeps the whole drop atomic for clip validation: a
+    // clipped layer entering a group ahead of its base is a transient state, not
+    // a reason to drop its clip flag.
     bool anyMoved = false;
     bool transformCommitted = false;
-    for (int i = 0; i < layersToMove.size(); ++i) {
-        const LayerId& moveId = layersToMove[i];
+    {
+        LayerModel::ClippingBatch clippingBatch(m_layerModel);
+        for (int i = 0; i < layersToMove.size(); ++i) {
+            const LayerId& moveId = layersToMove[i];
 
-        // Base insert position: right after the anchor (or at 0 if no anchor).
-        int liveIndex;
-        if (anchorLayer) {
-            int anchorIdx = currentIndexOf(anchorLayer);
-            liveIndex = (anchorIdx >= 0) ? anchorIdx + 1 : 0;
-        } else {
-            liveIndex = 0;
-        }
-        // Each subsequent layer is inserted one slot after the previous one.
-        liveIndex += i;
-
-        // When the source layer is in the same parent and sits above the
-        // insertion point, extracting it shifts later siblings down by 1.
-        auto* sourceLayer = m_layerModel.layerById(moveId);
-        if (sourceLayer && sourceLayer->parent == targetParent) {
-            int srcIdx = currentIndexOf(sourceLayer);
-            if (srcIdx >= 0 && srcIdx < liveIndex) {
-                liveIndex--;
+            // Base insert position: right after the anchor (or at 0 if no anchor).
+            int liveIndex;
+            if (anchorLayer) {
+                int anchorIdx = currentIndexOf(anchorLayer);
+                liveIndex = (anchorIdx >= 0) ? anchorIdx + 1 : 0;
+            } else {
+                liveIndex = 0;
             }
-        }
+            // Each subsequent layer is inserted one slot after the previous one.
+            liveIndex += i;
 
-        const int sourceIndex = sourceLayer
-            ? (sourceLayer->parent ? sourceLayer->indexInParent()
-                                   : rootLayerIndex(m_layerModel, sourceLayer))
-            : -1;
-        if (!transformCommitted && sourceLayer
-            && (sourceLayer->parent != targetParent || sourceIndex != liveIndex)) {
-            emit aboutToPerformTransformIncompatibleEdit();
-            transformCommitted = true;
-        }
-        if (m_layerModel.moveLayer(moveId, targetParent, liveIndex)) {
-            anyMoved = true;
+            // When the source layer is in the same parent and sits above the
+            // insertion point, extracting it shifts later siblings down by 1.
+            auto* sourceLayer = m_layerModel.layerById(moveId);
+            if (sourceLayer && sourceLayer->parent == targetParent) {
+                int srcIdx = currentIndexOf(sourceLayer);
+                if (srcIdx >= 0 && srcIdx < liveIndex) {
+                    liveIndex--;
+                }
+            }
+
+            const int sourceIndex = sourceLayer
+                ? (sourceLayer->parent ? sourceLayer->indexInParent()
+                                       : rootLayerIndex(m_layerModel, sourceLayer))
+                : -1;
+            if (!transformCommitted && sourceLayer
+                && (sourceLayer->parent != targetParent || sourceIndex != liveIndex)) {
+                emit aboutToPerformTransformIncompatibleEdit();
+                transformCommitted = true;
+            }
+            if (m_layerModel.moveLayer(moveId, targetParent, liveIndex)) {
+                anyMoved = true;
+            }
         }
     }
 
@@ -3356,6 +3391,47 @@ void LayersPanel::onAddMask()
     if (m_requestRenderFn) {
         m_requestRenderFn();
     }
+}
+
+bool LayersPanel::deleteSelectedLayerMask()
+{
+    auto* layer = m_layerModel.selectedLayer();
+    if (!layer || !layer->hasMask()) {
+        return false;
+    }
+
+    emit aboutToPerformTransformIncompatibleEdit();
+
+    // Snapshot first — the command captures the mask as it stands now.
+    std::unique_ptr<aether::RemoveMaskCommand> cmd;
+    if (m_pushUndoFn) {
+        cmd = std::make_unique<aether::RemoveMaskCommand>(
+            &m_layerModel, layer->id, m_requestRenderFn, m_onContentChangedFn);
+    }
+
+    layer->clearMask(); // also forces maskEditActive = false
+
+    if (cmd) {
+        m_pushUndoFn(std::move(cmd));
+    }
+
+    // Rebuilds the canvas layer stack (mask out) and recomposites.
+    m_layerModel.notifyLayerDataChanged(layer->id);
+    syncLayerControls();
+    scheduleThumbnailRefresh();
+    if (m_requestRenderFn) {
+        m_requestRenderFn();
+    }
+    if (m_onContentChangedFn) {
+        m_onContentChangedFn();
+    }
+    return true;
+}
+
+bool LayersPanel::selectedLayerMaskIsPaintTarget() const
+{
+    auto* layer = m_layerModel.selectedLayer();
+    return layer && layer->hasMask() && layer->maskEditActive;
 }
 
 void LayersPanel::addLayer()

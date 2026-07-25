@@ -12,6 +12,7 @@
 #include <QColor>
 #include <QFont>
 #include <QImage>
+#include <QPainterPath>
 #include <QPropertyAnimation>
 #include <QLineEdit>
 #include <QPixmap>
@@ -184,6 +185,7 @@ signals:
     void paintTargetClicked(
         const ruwa::core::layers::LayerId& id, bool maskTarget, Qt::KeyboardModifiers mods);
     void thumbnailCtrlClicked(const ruwa::core::layers::LayerId& id);
+    void maskThumbnailCtrlClicked(const ruwa::core::layers::LayerId& id);
     void textEditRequested(const ruwa::core::layers::LayerId& id);
     void doubleClicked(const ruwa::core::layers::LayerId& id);
     void expandToggled(const ruwa::core::layers::LayerId& id);
@@ -229,6 +231,7 @@ private:
     void drawExpandArrow(QPainter& p, const QRect& r);
     void drawThumbnail(QPainter& p, const QRect& r);
     void drawMaskThumbnail(QPainter& p, const QRect& r);
+    void drawCtrlGlowOverlay(QPainter& p, const QRect& r, const QPainterPath& clip);
     void drawName(QPainter& p, const QRect& r);
     void drawMeta(QPainter& p, const QRect& r);
     void drawAlphaLockButton(QPainter& p, const QRect& r);
@@ -284,7 +287,7 @@ private:
     void updateRightExpandButtonsGeometry();
     void updateThumbnailLoadingIndicator();
     void animateThumbnailCtrlGlow(bool in);
-    void triggerThumbnailClickFlash();
+    void triggerThumbnailClickFlash(bool onMaskThumbnail);
     void updateThumbnailCtrlGlowState();
 
 private:
@@ -313,6 +316,10 @@ private:
     qreal m_effectiveVisibilityProgress = 1.0;
     qreal m_thumbnailCtrlGlowProgress = 0.0;
     qreal m_thumbnailClickFlashProgress = 0.0;
+    // Which preview the ctrl-glow / click flash belongs to: the layer thumbnail
+    // (false) or the mask thumbnail (true). Only one can be hovered at a time,
+    // so both slots share a single pair of animations.
+    bool m_ctrlGlowTargetsMask = false;
     qreal m_childDisclosureProgress = 0.0;
     qreal m_maskRevealProgress = 0.0;
     int m_lastKnownDepth = -1;

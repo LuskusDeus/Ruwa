@@ -80,6 +80,10 @@ public:
     bool pasteLayerSnapshots(
         const QList<std::shared_ptr<ruwa::core::layers::LayerData>>& snapshots);
     bool deleteSelectedLayers();
+    /// Drop the selected layer's mask without baking it into the pixels (undoable).
+    bool deleteSelectedLayerMask();
+    /// Whether the selected layer's mask (not its pixels) is the active paint target.
+    bool selectedLayerMaskIsPaintTarget() const;
     bool duplicateSelectedLayers();
     bool mergeSelectedLayerDown();
     bool mergeVisibleLayers();
@@ -106,6 +110,7 @@ signals:
     void aboutToPerformTransformIncompatibleEdit();
     void layerSelected(const ruwa::core::layers::LayerId& id);
     void layerContentSelectionRequested(const ruwa::core::layers::LayerId& id);
+    void layerMaskSelectionRequested(const ruwa::core::layers::LayerId& id);
     void layerTextEditRequested(const ruwa::core::layers::LayerId& id);
     void layerVisibilityChanged(const ruwa::core::layers::LayerId& id, bool visible);
     void layerLockChanged(const ruwa::core::layers::LayerId& id, bool locked);
@@ -150,6 +155,7 @@ private slots:
     void onLayerPaintTargetSelected(
         const ruwa::core::layers::LayerId& id, bool maskTarget, Qt::KeyboardModifiers modifiers);
     void onLayerContentSelectionRequested(const ruwa::core::layers::LayerId& id);
+    void onLayerMaskSelectionRequested(const ruwa::core::layers::LayerId& id);
     void onLayerTextEditRequested(const ruwa::core::layers::LayerId& id);
     void onLayerExpandToggled(const ruwa::core::layers::LayerId& id);
     void onLayerVisibilityToggled(const ruwa::core::layers::LayerId& id);

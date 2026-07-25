@@ -116,7 +116,10 @@ CommandInfo DeleteSelectedLayersCommand::info() const
         .category = "Layers",
         .description = "Delete currently selected layers",
         .aliases = { "layer-delete", "delete-layer", "remove-layer" },
-        .defaultShortcut = QKeySequence(Qt::Key_Delete),
+        // Del is owned by edit.delete, which routes to this command only while the
+        // layers panel holds focus. This one stays unconditional for the palette,
+        // menus and any user-assigned shortcut.
+        .defaultShortcut = QKeySequence(),
         .icon = QIcon() };
 }
 

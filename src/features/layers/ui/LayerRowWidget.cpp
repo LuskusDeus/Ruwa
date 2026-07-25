@@ -1631,12 +1631,13 @@ void LayerRowWidget::animateThumbnailCtrlGlow(bool in)
     m_thumbnailCtrlGlowAnim->start();
 }
 
-void LayerRowWidget::triggerThumbnailClickFlash()
+void LayerRowWidget::triggerThumbnailClickFlash(bool onMaskThumbnail)
 {
     if (!m_thumbnailClickFlashAnim) {
         return;
     }
 
+    m_ctrlGlowTargetsMask = onMaskThumbnail;
     m_thumbnailClickFlashAnim->stop();
     setThumbnailClickFlashProgress(1.0);
     m_thumbnailClickFlashAnim->setStartValue(1.0);
@@ -1646,8 +1647,14 @@ void LayerRowWidget::triggerThumbnailClickFlash()
 
 void LayerRowWidget::updateThumbnailCtrlGlowState()
 {
-    const bool show
-        = underMouse() && m_data && !m_data->isAdjustment() && m_hoveredZone == HitZone::Thumbnail;
+    const bool overContent
+        = m_data && !m_data->isAdjustment() && m_hoveredZone == HitZone::Thumbnail;
+    // The mask preview offers the same gesture, loading the mask as the selection.
+    const bool overMask = m_data && hasMaskThumbnail() && m_hoveredZone == HitZone::MaskThumbnail;
+    const bool show = underMouse() && (overContent || overMask);
+    if (show) {
+        m_ctrlGlowTargetsMask = overMask;
+    }
     animateThumbnailCtrlGlow(show);
 }
 
@@ -1834,8 +1841,16 @@ void LayerRowWidget::mouseReleaseEvent(QMouseEvent* e)
         closeRightExpandMenu();
         if (zone == HitZone::Thumbnail && !m_data->isAdjustment()
             && (e->modifiers() & Qt::ControlModifier)) {
-            triggerThumbnailClickFlash();
+            triggerThumbnailClickFlash(false);
             emit thumbnailCtrlClicked(m_data->id);
+            break;
+        }
+        // Same gesture on the mask preview loads the mask itself as the pixel
+        // selection instead of the layer's content.
+        if (zone == HitZone::MaskThumbnail && hasMaskThumbnail()
+            && (e->modifiers() & Qt::ControlModifier)) {
+            triggerThumbnailClickFlash(true);
+            emit maskThumbnailCtrlClicked(m_data->id);
             break;
         }
         // Clicking either preview of a masked layer selects where to paint
@@ -2281,40 +2296,8 @@ void LayerRowWidget::drawThumbnail(QPainter& p, const QRect& r)
     }
     p.restore();
 
-    const qreal glowMix = isAdjustment
-        ? 0.0
-        : qBound<qreal>(0.0, m_thumbnailCtrlGlowProgress + m_thumbnailClickFlashProgress, 1.0);
-    if (glowMix > 0.0) {
-        const auto& tm = ThemeManager::instance();
-
-        QColor accentA = ThemeColors::adjustBrightness(c.primary, c.isDark ? 1.10 : 0.96);
-        QColor accentB = ThemeColors::adjustBrightness(c.primary, c.isDark ? 1.20 : 1.02);
-        accentA.setAlphaF(
-            (0.20 * m_thumbnailCtrlGlowProgress) + (0.18 * m_thumbnailClickFlashProgress));
-        accentB.setAlphaF(
-            (0.34 * m_thumbnailCtrlGlowProgress) + (0.40 * m_thumbnailClickFlashProgress));
-
-        QRectF borderRect = QRectF(r).adjusted(0.5, 0.5, -0.5, -0.5);
-        QLinearGradient glowGrad(borderRect.topLeft(), borderRect.bottomRight());
-        glowGrad.setColorAt(0.0, accentA);
-        glowGrad.setColorAt(1.0, accentB);
-
-        QPen glowPen;
-        glowPen.setBrush(glowGrad);
-        glowPen.setWidthF(qMax(1.5, static_cast<qreal>(tm.scaled(2)) * 0.75));
-        glowPen.setCosmetic(true);
-        p.setPen(glowPen);
-        p.setBrush(Qt::NoBrush);
-        p.drawRoundedRect(borderRect, 3, 3);
-
-        if (m_thumbnailClickFlashProgress > 0.0) {
-            QColor flash = c.text;
-            flash.setAlphaF(0.16 * m_thumbnailClickFlashProgress);
-            p.save();
-            p.setClipPath(thumbClip);
-            p.fillRect(r, flash);
-            p.restore();
-        }
+    if (!isAdjustment && !m_ctrlGlowTargetsMask) {
+        drawCtrlGlowOverlay(p, r, thumbClip);
     }
 
     // Thumbnail border (skip for groups — no background)
@@ -2323,6 +2306,47 @@ void LayerRowWidget::drawThumbnail(QPainter& p, const QRect& r)
         p.setPen(QPen(thumbBorder, 0.5));
         p.setBrush(Qt::NoBrush);
         p.drawRoundedRect(QRectF(r).adjusted(0.25, 0.25, -0.25, -0.25), 3, 3);
+    }
+}
+
+// Accent ring (+ click flash) marking the Ctrl+click "load as selection" gesture.
+// Shared by both previews; m_ctrlGlowTargetsMask decides which one owns it.
+void LayerRowWidget::drawCtrlGlowOverlay(QPainter& p, const QRect& r, const QPainterPath& clip)
+{
+    const qreal glowMix
+        = qBound<qreal>(0.0, m_thumbnailCtrlGlowProgress + m_thumbnailClickFlashProgress, 1.0);
+    if (glowMix <= 0.0) {
+        return;
+    }
+
+    const auto& tm = ThemeManager::instance();
+    const auto& c = tm.colors();
+
+    QColor accentA = ThemeColors::adjustBrightness(c.primary, c.isDark ? 1.10 : 0.96);
+    QColor accentB = ThemeColors::adjustBrightness(c.primary, c.isDark ? 1.20 : 1.02);
+    accentA.setAlphaF((0.20 * m_thumbnailCtrlGlowProgress) + (0.18 * m_thumbnailClickFlashProgress));
+    accentB.setAlphaF((0.34 * m_thumbnailCtrlGlowProgress) + (0.40 * m_thumbnailClickFlashProgress));
+
+    QRectF borderRect = QRectF(r).adjusted(0.5, 0.5, -0.5, -0.5);
+    QLinearGradient glowGrad(borderRect.topLeft(), borderRect.bottomRight());
+    glowGrad.setColorAt(0.0, accentA);
+    glowGrad.setColorAt(1.0, accentB);
+
+    QPen glowPen;
+    glowPen.setBrush(glowGrad);
+    glowPen.setWidthF(qMax(1.5, static_cast<qreal>(tm.scaled(2)) * 0.75));
+    glowPen.setCosmetic(true);
+    p.setPen(glowPen);
+    p.setBrush(Qt::NoBrush);
+    p.drawRoundedRect(borderRect, 3, 3);
+
+    if (m_thumbnailClickFlashProgress > 0.0) {
+        QColor flash = c.text;
+        flash.setAlphaF(0.16 * m_thumbnailClickFlashProgress);
+        p.save();
+        p.setClipPath(clip);
+        p.fillRect(r, flash);
+        p.restore();
     }
 }
 
@@ -2360,6 +2384,10 @@ void LayerRowWidget::drawMaskThumbnail(QPainter& p, const QRect& r)
     p.setPen(QPen(thumbBorder, 0.5));
     p.setBrush(Qt::NoBrush);
     p.drawRoundedRect(QRectF(r).adjusted(0.25, 0.25, -0.25, -0.25), 3, 3);
+
+    if (m_ctrlGlowTargetsMask) {
+        drawCtrlGlowOverlay(p, r, clip);
+    }
 }
 
 void LayerRowWidget::drawName(QPainter& p, const QRect& r)

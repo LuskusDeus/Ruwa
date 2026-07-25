@@ -2774,6 +2774,8 @@ void WorkspaceTab::connectPanelSignals()
         m_canvasPanel, &workspace::CanvasPanel::commitTransformBeforeDocumentMutation);
     connect(m_layersPanel, &workspace::LayersPanel::layerContentSelectionRequested, m_canvasPanel,
         &workspace::CanvasPanel::selectLayerContent);
+    connect(m_layersPanel, &workspace::LayersPanel::layerMaskSelectionRequested, m_canvasPanel,
+        &workspace::CanvasPanel::selectLayerMaskContent);
     connect(m_layersPanel, &workspace::LayersPanel::layerTextEditRequested, m_canvasPanel,
         &workspace::CanvasPanel::startTextLayerEditing);
     connect(m_layersPanel, &workspace::LayersPanel::deleteLayerRequested, this, [this]() {

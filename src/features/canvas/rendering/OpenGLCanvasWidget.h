@@ -245,6 +245,7 @@ public:
     void translateActiveSelection(float dx, float dy);
     void clearSelectionMask();
     void selectActiveLayerContent();
+    void selectActiveLayerMask();
     bool hasSelectionMask() const;
     bool selectionBoundsWorld(QRectF& outBounds) const;
     bool fillSelectionWithColor(const QColor& color);

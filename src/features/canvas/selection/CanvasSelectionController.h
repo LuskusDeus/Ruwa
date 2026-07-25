@@ -129,6 +129,10 @@ public:
     void translateActiveSelection(float dx, float dy);
     void clearSelectionMask();
     void selectActiveLayerContent();
+    /// Loads the active layer's mask into the selection: coverage = the mask's
+    /// reveal value, so partially revealed (gray) areas become partially
+    /// selected. No-op when the layer carries no mask.
+    void selectActiveLayerMask();
 
     bool hasSelectionMask() const;
     bool selectionBoundsWorld(QRectF& outBounds) const;

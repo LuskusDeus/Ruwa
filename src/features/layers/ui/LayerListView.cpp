@@ -866,6 +866,17 @@ void LayerListView::onRowThumbnailCtrlClicked(const LayerId& id)
     emit layerContentSelectionRequested(id);
 }
 
+void LayerListView::onRowMaskThumbnailCtrlClicked(const LayerId& id)
+{
+    if (m_settlingDrag || !m_model)
+        return;
+
+    for (auto* row : m_activeRows) {
+        row->closeRightExpandMenu();
+    }
+    emit layerMaskSelectionRequested(id);
+}
+
 void LayerListView::onRowTextEditRequested(const LayerId& id)
 {
     if (m_settlingDrag || m_dragActive || !m_model)
@@ -2161,6 +2172,8 @@ void LayerListView::connectRowSignals(LayerRowWidget* row)
         row, &LayerRowWidget::paintTargetClicked, this, &LayerListView::onRowPaintTargetClicked);
     connect(row, &LayerRowWidget::thumbnailCtrlClicked, this,
         &LayerListView::onRowThumbnailCtrlClicked);
+    connect(row, &LayerRowWidget::maskThumbnailCtrlClicked, this,
+        &LayerListView::onRowMaskThumbnailCtrlClicked);
     connect(row, &LayerRowWidget::textEditRequested, this, &LayerListView::onRowTextEditRequested);
     connect(row, &LayerRowWidget::doubleClicked, this, &LayerListView::onRowDoubleClicked);
     connect(row, &LayerRowWidget::expandToggled, this, &LayerListView::onRowExpandToggled);

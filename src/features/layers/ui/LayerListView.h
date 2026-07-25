@@ -74,6 +74,7 @@ signals:
     void layerPaintTargetSelected(
         const ruwa::core::layers::LayerId& id, bool maskTarget, Qt::KeyboardModifiers mods);
     void layerContentSelectionRequested(const ruwa::core::layers::LayerId& id);
+    void layerMaskSelectionRequested(const ruwa::core::layers::LayerId& id);
     void layerTextEditRequested(const ruwa::core::layers::LayerId& id);
     void layerExpandToggled(const ruwa::core::layers::LayerId& id);
     void layerVisibilityToggled(const ruwa::core::layers::LayerId& id);
@@ -114,6 +115,7 @@ private slots:
     void onRowPaintTargetClicked(
         const ruwa::core::layers::LayerId& id, bool maskTarget, Qt::KeyboardModifiers mods);
     void onRowThumbnailCtrlClicked(const ruwa::core::layers::LayerId& id);
+    void onRowMaskThumbnailCtrlClicked(const ruwa::core::layers::LayerId& id);
     void onRowTextEditRequested(const ruwa::core::layers::LayerId& id);
     void onRowDoubleClicked(const ruwa::core::layers::LayerId& id);
     void onRowExpandToggled(const ruwa::core::layers::LayerId& id);

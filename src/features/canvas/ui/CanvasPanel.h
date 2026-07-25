@@ -224,6 +224,8 @@ public:
     // Layer model integration
     void setLayerModel(ruwa::core::layers::LayerModel* model);
     void selectLayerContent(const ruwa::core::layers::LayerId& id);
+    /// Load a layer's mask into the pixel selection (grays stay partially selected).
+    void selectLayerMaskContent(const ruwa::core::layers::LayerId& id);
     bool startTextLayerEditing(const ruwa::core::layers::LayerId& id);
     /// Clear raster layer pixels (GL). No-op if GL not ready or layer not editable.
     bool clearLayerPixelContent(const ruwa::core::layers::LayerId& id);
@@ -239,6 +241,9 @@ public:
     bool fillLayerMaskFromActiveSelection(const ruwa::core::layers::LayerId& id);
     void clearSelectionMask();
     bool fillSelectionWithCurrentColor();
+    /// Erase the content under the active selection. Returns false when there is
+    /// no selection (or a transform is in flight).
+    bool deleteSelectionContent();
     void importImageFilesBelowSelectedKeepingSelection(const QStringList& filePaths);
     void importImageBelowSelectedKeepingSelection(const QImage& image, const QString& layerName);
     void promptImportImageFiles(const QStringList& filePaths);

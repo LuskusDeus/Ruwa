@@ -245,6 +245,24 @@ public:
     void notifyBulkLayerContentChanged();
     bool applyClippingToSelection(const LayerId& baseLayerId);
     bool applyQuickClippingMaskToSelection();
+    /** @brief RAII guard that defers clipping-consistency validation until the
+     * whole structural edit is finished.
+     *
+     * Multi-step edits (drag&drop of several layers, grouping undo) move layers
+     * one at a time. Halfway through, a clipped layer can legitimately sit next
+     * to a base that has not been moved yet — validating there would drop the
+     * clip flag permanently. Wrap the whole sequence so the check runs once, on
+     * the final layout. */
+    class ClippingBatch {
+    public:
+        explicit ClippingBatch(LayerModel& model);
+        ~ClippingBatch();
+        ClippingBatch(const ClippingBatch&) = delete;
+        ClippingBatch& operator=(const ClippingBatch&) = delete;
+
+    private:
+        LayerModel& m_model;
+    };
     /** @brief Whether a clip base exists below \a layerId in the visible layer list
      * (flattenedLayers / panel order). */
     bool hasQuickClippingMaskTargetBelow(const LayerId& layerId) const;
@@ -425,6 +443,8 @@ private:
 
     bool isSamePosition(LayerData* layer, LayerData* newParent, int newIndex) const;
     bool refreshClippingConsistency();
+    void beginClippingBatch();
+    void endClippingBatch();
     LayerId inferClipBaseForIndex(const QList<LayerData*>& flat, int layerIndex) const;
     QString nextDefaultLayerName();
     void rebuildDefaultLayerCounter();
@@ -448,6 +468,8 @@ private:
 private:
     QList<std::shared_ptr<LayerData>> m_rootLayers;
     QHash<LayerId, LayerId> m_clipParentByLayer;
+    int m_clippingBatchDepth = 0;
+    bool m_clippingRefreshPending = false;
     int m_nextDefaultLayerNumber = 1;
     aether::TilePixelFormat m_documentTileFormat = aether::kDefaultTileFormat;
 

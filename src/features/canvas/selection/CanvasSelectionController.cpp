@@ -723,6 +723,122 @@ void CanvasSelectionController::selectActiveLayerContent()
         m_ctx.requestRender();
 }
 
+void CanvasSelectionController::selectActiveLayerMask()
+{
+    clearSelectionMask();
+
+    auto* layer = m_ctx.getActiveLayer ? m_ctx.getActiveLayer() : nullptr;
+    if (!layer || !layer->hasMask())
+        return;
+    const TileGrid* maskSource = layer->maskTileGrid();
+    if (!maskSource)
+        return;
+
+    if (!m_ctx.getCanvas)
+        return;
+    const Canvas& canvas = m_ctx.getCanvas();
+    const int canvasW = static_cast<int>(canvas.width());
+    const int canvasH = static_cast<int>(canvas.height());
+    if (canvasW <= 0 || canvasH <= 0)
+        return;
+
+    // Selection coverage mirrors what the compositor reveals through the mask:
+    // reveal = lum(premultiplied rgb) + (1 - a), so mid-grays stay mid-coverage
+    // instead of collapsing to fully in/out.
+    auto revealToCoverage = [](uint8_t pr, uint8_t pg, uint8_t pb, uint8_t a) -> uint8_t {
+        const float lum = (0.299f * pr + 0.587f * pg + 0.114f * pb) / 255.0f;
+        const float reveal = qBound(0.0f, lum + (1.0f - static_cast<float>(a) / 255.0f), 1.0f);
+        return static_cast<uint8_t>(qBound(0, static_cast<int>(reveal * 255.0f + 0.5f), 255));
+    };
+
+    // Tiles the mask never allocated read as its default fill — a reveal-all
+    // mask (transparent default) therefore selects everything outside the
+    // painted tiles, a hide-all mask (opaque black) selects nothing there.
+    uint8_t dr = 0, dg = 0, db = 0, da = 0;
+    maskSource->defaultFill(dr, dg, db, da);
+    const uint8_t defaultCoverage = revealToCoverage(dr, dg, db, da);
+
+    LassoSelectionManager::MaskMutationScope maskScope(m_lassoSelection);
+    // Soft-alpha state is set explicitly below via setMaskHasSoftAlpha().
+    maskScope.disableSoftAlphaInvalidation();
+    TileGrid& maskGrid = maskScope.grid();
+    bool hasMaskContent = false;
+    bool hasSoftAlpha = (defaultCoverage > 0 && defaultCoverage < 255);
+
+    const int tileSize = static_cast<int>(TILE_SIZE);
+    auto stampTile = [&](const TileKey& key, const TileData* srcTile) {
+        const int baseX = key.x * tileSize;
+        const int baseY = key.y * tileSize;
+        if (!srcTile && defaultCoverage == 0)
+            return;
+
+        TileData* dstTile = nullptr;
+        for (uint32_t localY = 0; localY < TILE_SIZE; ++localY) {
+            const int y = baseY + static_cast<int>(localY);
+            if (y < 0 || y >= canvasH)
+                continue;
+            for (uint32_t localX = 0; localX < TILE_SIZE; ++localX) {
+                const int x = baseX + static_cast<int>(localX);
+                if (x < 0 || x >= canvasW)
+                    continue;
+
+                uint8_t coverage = defaultCoverage;
+                if (srcTile) {
+                    uint8_t pr = 0, pg = 0, pb = 0, a = 0;
+                    srcTile->getPixel(localX, localY, pr, pg, pb, a);
+                    coverage = revealToCoverage(pr, pg, pb, a);
+                }
+                if (coverage == 0)
+                    continue;
+                if (coverage < 255)
+                    hasSoftAlpha = true;
+                if (!dstTile)
+                    dstTile = &maskGrid.getOrCreateTile(key);
+                dstTile->setPixel(localX, localY, coverage, coverage, coverage, coverage);
+                hasMaskContent = true;
+            }
+        }
+    };
+
+    if (defaultCoverage == 0) {
+        // Only the painted tiles can contribute — skip the empty document area.
+        for (const auto& [key, srcTile] : maskSource->tiles()) {
+            stampTile(key, &srcTile);
+        }
+    } else {
+        const int lastTileX = (canvasW - 1) / tileSize;
+        const int lastTileY = (canvasH - 1) / tileSize;
+        for (int tileY = 0; tileY <= lastTileY; ++tileY) {
+            for (int tileX = 0; tileX <= lastTileX; ++tileX) {
+                const TileKey key { tileX, tileY };
+                stampTile(key, maskSource->getTile(key));
+            }
+        }
+    }
+
+    if (!hasMaskContent) {
+        m_lassoSelection.clear();
+        if (m_ctx.requestRender)
+            m_ctx.requestRender();
+        return;
+    }
+
+    std::vector<Vector2> fullCanvasPolygon;
+    fullCanvasPolygon.emplace_back(0.0f, 0.0f);
+    fullCanvasPolygon.emplace_back(static_cast<float>(canvasW), 0.0f);
+    fullCanvasPolygon.emplace_back(static_cast<float>(canvasW), static_cast<float>(canvasH));
+    fullCanvasPolygon.emplace_back(0.0f, static_cast<float>(canvasH));
+    m_lassoSelection.addRegion(fullCanvasPolygon, LassoSelectionMode::Replace);
+    // Deliberately not tagged as a content selection: the soft coverage comes
+    // from the mask, not from this layer's own alpha, so painting must not
+    // preserve-alpha against it.
+    m_lassoSelection.setMaskHasSoftAlpha(hasSoftAlpha);
+    m_lassoSelection.rebuildEdgesFromMask(
+        selectionDocumentWidth(canvas), selectionDocumentHeight(canvas));
+    if (m_ctx.requestRender)
+        m_ctx.requestRender();
+}
+
 bool CanvasSelectionController::hasSelectionMask() const
 {
     return m_lassoSelection.hasSelection() && !m_lassoSelection.mask().empty();

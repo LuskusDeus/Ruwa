@@ -53,6 +53,20 @@ public:
     void execute(const CommandContext& ctx, const QVariantMap& args = {}) override;
 };
 
+/**
+ * @brief Context-sensitive Delete: what it removes depends on where focus is.
+ *
+ * Layers panel focused → the selected layer, or just its mask when the mask
+ * thumbnail is the active paint target. Anywhere else (normally the canvas) →
+ * the pixels under an active selection, and nothing at all without one.
+ */
+class ContextualDeleteCommand : public Command {
+public:
+    CommandInfo info() const override;
+    bool canExecute(const CommandContext& ctx) const override;
+    void execute(const CommandContext& ctx, const QVariantMap& args = {}) override;
+};
+
 void registerEditCommands(CommandRegistry& registry);
 
 } // namespace ruwa::core::commands
