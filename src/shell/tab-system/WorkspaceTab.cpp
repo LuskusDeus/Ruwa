@@ -1755,19 +1755,44 @@ void WorkspaceTab::scheduleRecentProjectsThumbnailCapture()
     }
 
     m_initialThumbnailCaptureScheduled = true;
-    QPointer<WorkspaceTab> tabGuard(this);
     const QString path = m_filePath;
+    QPointer<WorkspaceTab> tabGuard(this);
     QTimer::singleShot(600, this, [tabGuard, path]() {
-        if (!tabGuard || !tabGuard->canvasPanel()) {
-            return;
+        if (tabGuard) {
+            tabGuard->tryCaptureRecentProjectThumbnail(path);
         }
-        const QImage thumb = tabGuard->canvasPanel()->getFullCanvasThumbnail(256);
-        if (thumb.isNull()) {
-            return;
-        }
-        ruwa::core::serialization::ThumbnailCache::instance().save(path, thumb, 256);
-        ruwa::core::serialization::RecentProjectsManager::instance().notifyThumbnailsUpdated();
     });
+}
+
+void WorkspaceTab::tryCaptureRecentProjectThumbnail(const QString& path)
+{
+    if (!canvasPanel()) {
+        return;
+    }
+
+    // getFullCanvasThumbnail() -> grabCanvasImage() temporarily hijacks the live camera and
+    // ends with setZoom(prevZoom), which clears the camera's animating flag. If that lands
+    // while the startup zoom-in appearance animation is still running, the frame-swap
+    // completion handler reads isAnimating()==false and freezes the zoom mid-flight (the
+    // canvas stays zoomed out, and the motion stops abruptly). New/empty projects have no
+    // file path and never reach scheduleRecentProjectsThumbnailCapture(), which is why only
+    // existing projects were affected. Defer the grab until the animation has settled.
+    if (canvasPanel()->isLoadingAppearanceAnimationActive()) {
+        QPointer<WorkspaceTab> tabGuard(this);
+        QTimer::singleShot(120, this, [tabGuard, path]() {
+            if (tabGuard) {
+                tabGuard->tryCaptureRecentProjectThumbnail(path);
+            }
+        });
+        return;
+    }
+
+    const QImage thumb = canvasPanel()->getFullCanvasThumbnail(256);
+    if (thumb.isNull()) {
+        return;
+    }
+    ruwa::core::serialization::ThumbnailCache::instance().save(path, thumb, 256);
+    ruwa::core::serialization::RecentProjectsManager::instance().notifyThumbnailsUpdated();
 }
 
 void WorkspaceTab::tryFinishAsyncStartup()

@@ -394,6 +394,7 @@ private:
     void tryFinishAsyncStartup();
     void flushPendingStartupImageImport();
     void scheduleRecentProjectsThumbnailCapture();
+    void tryCaptureRecentProjectThumbnail(const QString& path);
     bool isLayerClipboardTargetActive() const;
     void setupUI();
     void setupDockSystem();

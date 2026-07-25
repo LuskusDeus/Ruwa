@@ -347,6 +347,13 @@ public:
         return m_interactionEnabled && !m_loadingAppearanceAnimationActive;
     }
 
+    /// True while the startup zoom-in appearance animation is still running. Callers that
+    /// hijack the live camera (e.g. grabCanvasImage for thumbnails) must not do so during
+    /// this window: grabCanvasImage's setZoom() clears the camera's animating flag, which
+    /// the frame-swap completion handler then reads as "animation finished" and freezes the
+    /// zoom mid-flight.
+    bool isLoadingAppearanceAnimationActive() const { return m_loadingAppearanceAnimationActive; }
+
     /// Reset overlay widgets (brush control, tool state strip, stylus joystick) to default
     /// positions and visibility. Used when applying default/startup layout or reset layout.
     void resetCanvasOverlaysToDefault();
