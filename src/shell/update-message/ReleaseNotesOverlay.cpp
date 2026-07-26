@@ -58,6 +58,50 @@ QVector<ReleaseNoteEntry> releaseNoteEntries()
 {
     return {
         { QCoreApplication::translate(
+              "ReleaseNotesOverlay", "Magic Wand, procedural textures, and smarter selections"),
+            QStringLiteral("0.2.7-alpha"), QStringLiteral("25.07.2026"),
+            QCoreApplication::translate("ReleaseNotesOverlay",
+                "<p><b>This update adds a Magic Wand selection tool and a procedural texture "
+                "editor for brushes, extends copy, paste, and Delete to layer masks and selection "
+                "pixels, reorganizes the tool bar, and gives the workspace an animated "
+                "entrance.</b></p>"
+                "<p><b>New</b></p>"
+                "<ul>"
+                "<li>Magic Wand (W). Selects a contiguous region of similar color on the active "
+                "layer, with add and subtract modifiers, and computes large selections in the "
+                "background.</li>"
+                "<li>A procedural texture editor in the Brush Editor with six generators — pencil "
+                "grain, fractal noise, Perlin noise, dots, lines, and checkerboard — each with a "
+                "live preview.</li>"
+                "<li>Copy, cut, and paste for layer masks and for the pixels inside a selection. "
+                "Pasted pixels land as a new layer in place and go straight into transform "
+                "mode.</li>"
+                "<li>Ctrl+click a mask thumbnail to load that mask as a selection, and a "
+                "contextual Delete that removes the layer, its mask, or the selected pixels "
+                "depending on focus.</li>"
+                "<li>Brush deletion from the Brushes panel, a new Stylized Brushes pack, and an "
+                "animated entrance for the whole workspace on startup.</li>"
+                "</ul>"
+                "<p><b>Improved</b></p>"
+                "<ul>"
+                "<li>Reorganized tool groups: Blur, Smudge, and Liquify now share one slot, and "
+                "the bar is split into navigation, drawing, selection, and other.</li>"
+                "<li>Adjustment layers are now applied in screen-space compositing, so they stay "
+                "correct during strokes, transforms, and lasso fill.</li>"
+                "<li>Alt picks a color with the eyedropper while Lasso Fill is active.</li>"
+                "</ul>"
+                "<p><b>Fixes</b></p>"
+                "<ul>"
+                "<li>Layer drag and drop no longer drops clipping masks partway through a "
+                "multi-layer move.</li>"
+                "<li>Copy, paste, Delete, and the [ and ] brush shortcuts no longer act on the "
+                "document while a text field has focus.</li>"
+                "<li>The first-run tab no longer starts blank, and the startup zoom-in animation "
+                "no longer freezes when opening an existing project.</li>"
+                "<li>Fill now refreshes layer-effect caches on commit, so tiles on layers with "
+                "effects no longer revert.</li>"
+                "</ul>") },
+        { QCoreApplication::translate(
               "ReleaseNotesOverlay", "Brush favorites, live settings, and smoother drawing"),
             QStringLiteral("0.2.6-alpha"), QStringLiteral("21.07.2026"),
             QCoreApplication::translate("ReleaseNotesOverlay",

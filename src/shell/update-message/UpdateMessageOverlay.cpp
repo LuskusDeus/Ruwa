@@ -699,7 +699,8 @@ void UpdateMessageOverlay::setupUI()
     heroTextLayout->addWidget(statusLabel);
 
     auto* heroTitleLabel = new QLabel(QCoreApplication::translate("UpdateMessageOverlay",
-                                          "Brush favorites, live settings, and smoother drawing."),
+                                          "Magic Wand, procedural textures, and smarter "
+                                          "selections."),
         heroText);
     QFont heroTitleFont = colors.fonts.getUIFont(theme.scaledFontSize(HeroTitleFontSize));
     heroTitleFont.setWeight(QFont::DemiBold);
@@ -715,9 +716,9 @@ void UpdateMessageOverlay::setupUI()
 
     auto* descriptionLabel
         = new QLabel(QCoreApplication::translate("UpdateMessageOverlay",
-                         "This update makes brushes faster to organize and tune, improves WinTab "
-                         "stroke smoothness and canvas performance, and restores crisp live blur "
-                         "across canvas widgets."),
+                         "This update adds a Magic Wand selection tool and procedural brush "
+                         "textures, extends copy, paste, and Delete to masks and selection "
+                         "pixels, and gives the workspace an animated entrance."),
             leftWidget);
     descriptionLabel->setWordWrap(true);
     descriptionLabel->setFont(colors.fonts.getUIFont(theme.scaledFontSize(BodyFontSize)));
@@ -733,22 +734,23 @@ void UpdateMessageOverlay::setupUI()
 
     addReleaseHighlightRow(highlightsWidget, highlightsLayout, colors, theme, ChangelogBadge::New,
         QCoreApplication::translate("UpdateMessageOverlay",
-            "Favorite brushes, pack filters, and a dockable Brush Settings panel for live access "
-            "to starred controls."));
+            "Magic Wand selection and a procedural texture editor with six brush pattern "
+            "generators."));
     addReleaseHighlightRow(highlightsWidget, highlightsLayout, colors, theme,
         ChangelogBadge::Updated,
         QCoreApplication::translate("UpdateMessageOverlay",
-            "Live updates from valid HEX input and one-click color copying in the Color panel."));
+            "Copy, paste, and Delete now work on layer masks and on the pixels inside a "
+            "selection."));
     addReleaseHighlightRow(highlightsWidget, highlightsLayout, colors, theme,
         ChangelogBadge::Improved,
         QCoreApplication::translate("UpdateMessageOverlay",
-            "Smoother WinTab strokes and lower canvas frame cost, especially in maximized "
-            "windows."));
+            "Reorganized tool groups, adjustment layers in live previews, and an animated "
+            "workspace entrance."));
     addReleaseHighlightRow(highlightsWidget, highlightsLayout, colors, theme,
         ChangelogBadge::BugFix,
         QCoreApplication::translate("UpdateMessageOverlay",
-            "Sharp same-frame blur for canvas widgets and safe Smudge finalization when switching "
-            "tools."));
+            "Clipping masks survive layer moves, and shortcuts no longer edit the document while "
+            "you type."));
 
     leftLayout->addWidget(highlightsWidget);
     leftLayout->addStretch();

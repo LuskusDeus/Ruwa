@@ -15,6 +15,57 @@ a release.
 
 ## [Unreleased]
 
+## [0.2.7-alpha] — 2026-07-25 — "Magic Wand, procedural textures, and smarter selections"
+
+This update adds a Magic Wand selection tool and a procedural texture editor for
+brushes, extends copy, cut, paste, and Delete to layer masks and selection
+pixels, reorganizes the tool bar into clearer groups, and gives the workspace an
+animated entrance on startup.
+
+### Added
+- A Magic Wand selection tool (`W`) that selects a contiguous region of similar
+  colour on the active layer. It follows the layer's effect-processed shape,
+  supports add and subtract modifiers, and computes large selections in the
+  background instead of blocking the canvas.
+- A procedural texture editor in the Brush Editor with six generators — pencil
+  grain, fractal noise, Perlin noise, dots, lines, and checkerboard — each with
+  its own parameters and a live preview. The Texture tab now has a mode
+  selector; image-based textures are announced there as a future addition.
+- Copy, cut, and paste for layer masks and for the pixels inside a canvas
+  selection. Pasted pixels arrive as a new `Pasted` layer at their original
+  document position and go straight into transform mode.
+- Ctrl+click on a mask thumbnail loads that mask as a canvas selection.
+- A contextual `Delete`: it removes the selected layer or its mask when the
+  Layers panel has focus, and the pixels inside the active selection on the
+  canvas. The separate delete-layer command no longer binds `Delete` by default.
+- Brush deletion directly from the Brushes panel.
+- A new `Stylized Brushes` default brush pack.
+- An animated workspace entrance: docked panels slide into their final places on
+  startup and hand over to the real layout without a visible seam.
+
+### Improved
+- Tool groups were reorganized. Blur, Smudge, and Liquify now share one grouped
+  slot, and the bar is split into navigation, drawing, selection and movement,
+  and everything else.
+- Adjustment layers are now applied in screen-space compositing as well, so they
+  stay correct during brush strokes, transform previews, and lasso fill.
+- Alt now activates the eyedropper while Lasso Fill is the active tool.
+
+### Fixed
+- Layer drag & drop and group undo no longer drop clipping masks partway through
+  a multi-layer move.
+- Copy, cut, paste, and Delete no longer edit the document while a text field
+  (inline layer rename, search fields) has focus; the keystroke goes to the
+  field instead.
+- The `[` and `]` brush size and opacity shortcuts no longer swallow typed
+  characters in text input.
+- The first-run integration tab no longer stays blank at startup until it is
+  recreated.
+- The startup zoom-in appearance animation no longer freezes mid-flight when an
+  existing project's recent-projects thumbnail is captured.
+- Fill and lasso fill now refresh layer-effect caches on commit, so tiles on
+  layers with effects no longer revert to a stale cached composite.
+
 ## [0.2.6-alpha] — 2026-07-21 — "Brush favorites, live settings, and smoother drawing"
 
 This update makes brushes faster to organize and tune with favorites, pack

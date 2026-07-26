@@ -54,7 +54,7 @@ Prepare the same compact directory layout used by existing Ruwa updates. For
 example:
 
 ```text
-D:\RuwaUpdates\0.2.6-alpha\
+D:\RuwaUpdates\0.2.7-alpha\
 |-- Main\Ruwa.exe
 |-- effects\...
 |-- shaders\...
@@ -65,10 +65,10 @@ kept. Then run:
 
 ```powershell
 & .\scripts\New-RuwaUpdatePackage.ps1 `
-  -Version 0.2.6-alpha `
-  -SourceDirectory "D:\RuwaUpdates\0.2.6-alpha" `
+  -Version 0.2.7-alpha `
+  -SourceDirectory "D:\RuwaUpdates\0.2.7-alpha" `
   -SigningKeyPath "D:\RuwaSecrets\ruwa-update-signing.pfx" `
-  -Description "Ruwa 0.2.6-alpha"
+  -Description "Ruwa 0.2.7-alpha"
 ```
 
 The command prompts for the PFX password, validates the patch, creates a ZIP,
@@ -79,7 +79,7 @@ the resulting signature, and checks that the PFX matches the fingerprint in
 Upload all three generated files to the matching version release in
 `LuskusDeus/Ruwa-releases`:
 
-- `Ruwa-0.2.6-alpha-win64.patch.zip`
+- `Ruwa-0.2.7-alpha-win64.patch.zip`
 - `latest.json`
 - `latest.json.p7s`
 
