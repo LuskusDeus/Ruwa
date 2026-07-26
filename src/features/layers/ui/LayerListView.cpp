@@ -296,7 +296,7 @@ void LayerListView::setModel(LayerModel* model)
                 if (changedLayer) {
                     // Re-apply data so row-level animations/state (clip offset, depth, etc.)
                     // react to property changes, not just repaint.
-                    it.value()->setLayerData(changedLayer);
+                    applyRowLayerData(it.value(), changedLayer);
                 } else {
                     it.value()->update();
                 }
@@ -311,8 +311,16 @@ void LayerListView::setModel(LayerModel* model)
                     }
                     auto descendantIt = m_rowMap.find(descendant->id);
                     if (descendantIt != m_rowMap.end() && descendantIt.value()) {
-                        descendantIt.value()->setLayerData(descendant);
+                        applyRowLayerData(descendantIt.value(), descendant);
                     }
+                }
+            }
+
+            // Layers clipped to this one follow its visibility (contextual hiding),
+            // so their rows must re-evaluate too — the model only reports the base.
+            if (changedLayer) {
+                for (LayerData* clipped : m_model->layersClippedTo(id)) {
+                    refreshRowsForSubtree(clipped);
                 }
             }
         });
@@ -1824,6 +1832,42 @@ void LayerListView::forceContentHeightImmediate(int height)
 // Rebuild
 // ============================================================================
 
+void LayerListView::applyRowLayerData(LayerRowWidget* row, LayerData* data)
+{
+    if (!row) {
+        return;
+    }
+    // Resolved here rather than inside the row: a root layer cannot reach its
+    // siblings (and therefore its clip base) through LayerData alone.
+    row->setClipBaseHidden(data && m_model && m_model->isHiddenByClipBase(data));
+    row->setLayerData(data);
+}
+
+void LayerListView::refreshRowsForSubtree(LayerData* layer)
+{
+    if (!layer) {
+        return;
+    }
+    auto it = m_rowMap.find(layer->id);
+    if (it != m_rowMap.end() && it.value()) {
+        applyRowLayerData(it.value(), layer);
+    }
+    if (!layer->hasChildren()) {
+        return;
+    }
+    QList<LayerData*> descendants;
+    layer->flatten(descendants, false);
+    for (LayerData* descendant : descendants) {
+        if (!descendant) {
+            continue;
+        }
+        auto descendantIt = m_rowMap.find(descendant->id);
+        if (descendantIt != m_rowMap.end() && descendantIt.value()) {
+            applyRowLayerData(descendantIt.value(), descendant);
+        }
+    }
+}
+
 void LayerListView::rebuildRowWidgets()
 {
     m_rebuilding = true;
@@ -1894,7 +1938,7 @@ void LayerListView::rebuildRowWidgets()
             newEntryIds.insert(layer->id);
         }
 
-        row->setLayerData(layer);
+        applyRowLayerData(row, layer);
         row->setThumbnailLoading(shouldShowThumbnailLoading(layer));
         m_activeRows.append(row);
         layoutEntries.append({ layer->id, row });

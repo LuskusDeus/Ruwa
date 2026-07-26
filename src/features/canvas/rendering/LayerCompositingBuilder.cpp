@@ -405,6 +405,16 @@ std::vector<CompositeLayerInfo> LayerCompositingBuilder::buildLayerStackRecursiv
             continue;
         }
 
+        // A clipping mask lives and dies with its base: hiding the base hides the
+        // whole clip group, exactly like hiding a group hides its children. The
+        // layer keeps its own `visible` flag (open eye in the panel) — only the
+        // composited result follows the base. Without this the clipped layer would
+        // reach the compositor with no base to clip against and either render
+        // unclipped (viewport) or clip against whatever sits below the base
+        // (document tiles).
+        const bool hiddenByClipBase = ruwa::core::layers::isHiddenByClipBaseInSiblings(layers, i);
+        const bool layerVisible = layerData->visible && !hiddenByClipBase;
+
         const bool isFillPreviewTarget = fillPreview && fillPreview->active && layerData->isRaster()
             && layerData->id == fillPreview->targetLayerId
             && (fillPreview->maskTarget
@@ -424,7 +434,7 @@ std::vector<CompositeLayerInfo> LayerCompositingBuilder::buildLayerStackRecursiv
                 info.liveEffectEditGeneration = layerData->liveEffectEditGeneration;
                 info.opacity = static_cast<float>(layerData->opacity);
                 info.blendMode = static_cast<int>(layerData->blendMode);
-                info.visible = layerData->visible;
+                info.visible = layerVisible;
                 info.clippedToBelow = layerData->clippedToBelow;
                 info.tileGrid = compositingGridForLayer(layerData.get());
                 info.externalClipMaskGrid = fillPreview->previewContentGrid;
@@ -449,7 +459,7 @@ std::vector<CompositeLayerInfo> LayerCompositingBuilder::buildLayerStackRecursiv
             groupInfo.liveEffectEditGeneration = layerData->liveEffectEditGeneration;
             groupInfo.opacity = static_cast<float>(layerData->opacity);
             groupInfo.blendMode = static_cast<int>(layerData->blendMode);
-            groupInfo.visible = layerData->visible;
+            groupInfo.visible = layerVisible;
             groupInfo.isGroup = true;
             groupInfo.clippedToBelow = layerData->clippedToBelow;
             groupInfo.forceIsolation = true;
@@ -556,7 +566,7 @@ std::vector<CompositeLayerInfo> LayerCompositingBuilder::buildLayerStackRecursiv
                 info.liveEffectEditGeneration = layerData->liveEffectEditGeneration;
                 info.opacity = static_cast<float>(layerData->opacity);
                 info.blendMode = static_cast<int>(layerData->blendMode);
-                info.visible = layerData->visible;
+                info.visible = layerVisible;
                 info.clippedToBelow = layerData->clippedToBelow;
                 info.tileGrid = compositingGridForLayer(layerData.get());
                 info.externalClipMaskGrid = strokeBuffer; // primary clip = stroke
@@ -616,7 +626,7 @@ std::vector<CompositeLayerInfo> LayerCompositingBuilder::buildLayerStackRecursiv
             strokePreviewGroup.liveEffectEditGeneration = layerData->liveEffectEditGeneration;
             strokePreviewGroup.opacity = static_cast<float>(layerData->opacity);
             strokePreviewGroup.blendMode = static_cast<int>(layerData->blendMode);
-            strokePreviewGroup.visible = layerData->visible;
+            strokePreviewGroup.visible = layerVisible;
             strokePreviewGroup.isGroup = true;
             strokePreviewGroup.clippedToBelow = layerData->clippedToBelow;
             strokePreviewGroup.forceIsolation = true;
@@ -707,7 +717,7 @@ std::vector<CompositeLayerInfo> LayerCompositingBuilder::buildLayerStackRecursiv
             }
             info.opacity = static_cast<float>(layerData->opacity);
             info.blendMode = static_cast<int>(layerData->blendMode);
-            info.visible = layerData->visible;
+            info.visible = layerVisible;
             info.isGroup = layerData->isGroup();
             info.forceIsolation = layerData->isGroupIsolated();
             info.isAdjustment = layerData->isAdjustment();

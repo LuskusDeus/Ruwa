@@ -1475,6 +1475,67 @@ bool LayerModel::unclipLayerFromBelow(const LayerId& layerId)
     return true;
 }
 
+const LayerData* LayerModel::clipBaseFor(const LayerData* layer) const
+{
+    if (!layer || !layer->clippedToBelow) {
+        return nullptr;
+    }
+    const QList<std::shared_ptr<LayerData>>& siblings
+        = layer->parent ? layer->parent->children : m_rootLayers;
+    for (int i = 0; i < siblings.size(); ++i) {
+        if (siblings[i].get() == layer) {
+            return clipBaseInSiblings(siblings, i);
+        }
+    }
+    return nullptr;
+}
+
+bool LayerModel::isHiddenByClipBase(const LayerData* layer) const
+{
+    // Walk self + ancestors: a clipped GROUP whose base is hidden takes its own
+    // children down with it, and those children are not clipped themselves.
+    for (const LayerData* current = layer; current; current = current->parent) {
+        if (!current->clippedToBelow) {
+            continue;
+        }
+        if (const LayerData* base = clipBaseFor(current); base && !base->visible) {
+            return true;
+        }
+    }
+    return false;
+}
+
+QList<LayerData*> LayerModel::layersClippedTo(const LayerId& layerId) const
+{
+    QList<LayerData*> clipped;
+    const auto* base = layerById(layerId);
+    if (!base || base->clippedToBelow) {
+        return clipped;
+    }
+    const QList<std::shared_ptr<LayerData>>& siblings
+        = base->parent ? base->parent->children : m_rootLayers;
+    int index = -1;
+    for (int i = 0; i < siblings.size(); ++i) {
+        if (siblings[i].get() == base) {
+            index = i;
+            break;
+        }
+    }
+    if (index < 0) {
+        return clipped;
+    }
+    // The clip group is the contiguous run of clipped siblings directly above
+    // the base (lists are ordered top-first, so that is index - 1 downwards).
+    for (int i = index - 1; i >= 0; --i) {
+        LayerData* candidate = siblings[i].get();
+        if (!candidate || !candidate->clippedToBelow) {
+            break;
+        }
+        clipped.append(candidate);
+    }
+    return clipped;
+}
+
 QList<LayerId> LayerModel::duplicateSelectedLayers()
 {
     QList<LayerId> addedIds;

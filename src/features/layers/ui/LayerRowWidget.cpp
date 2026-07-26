@@ -763,7 +763,7 @@ void LayerRowWidget::setLayerData(LayerData* data)
         m_lastKnownClipped = clipped;
 
         const bool visible = m_data->visible;
-        const bool effectivelyVisible = isEffectivelyVisible(m_data);
+        const bool effectivelyVisible = isEffectivelyVisible(m_data) && !m_clipBaseHidden;
         if (!hadData) {
             if (m_opacityAnim) {
                 m_opacityAnim->stop();
@@ -791,6 +791,7 @@ void LayerRowWidget::setLayerData(LayerData* data)
         m_lastKnownDepth = -1;
         m_clipOffsetProgress = 0.0;
         m_lastKnownClipped = false;
+        m_clipBaseHidden = false;
         m_visibilityProgress = 1.0;
         m_effectiveVisibilityProgress = 1.0;
         m_lastKnownVisible = true;
@@ -811,6 +812,19 @@ void LayerRowWidget::setLayerData(LayerData* data)
     } else {
         updateThumbnailLoadingIndicator();
     }
+    update();
+}
+
+void LayerRowWidget::setClipBaseHidden(bool hidden)
+{
+    // Only the flag is stored here; the dim animation is driven by setLayerData,
+    // which the owning view always calls right after this (see
+    // LayerListView::applyRowLayerData). Animating here as well would fight with
+    // the snap in setLayerData's resting branch.
+    if (m_clipBaseHidden == hidden) {
+        return;
+    }
+    m_clipBaseHidden = hidden;
     update();
 }
 

@@ -270,6 +270,18 @@ public:
     bool clipLayerToBelow(const LayerId& layerId);
     /** @brief Unclip the given layer (swipe right-to-left, reserved for future). */
     bool unclipLayerFromBelow(const LayerId& layerId);
+    /** @brief The layer \a layer is clipped onto (nearest non-clipped sibling below),
+     * or nullptr when it is not clipped / has no base. */
+    const LayerData* clipBaseFor(const LayerData* layer) const;
+    /** @brief Whether \a layer is contextually hidden because it (or one of its
+     * ancestors) is clipped to a hidden base.
+     *
+     * Hiding a clip base takes its whole clip group with it, the same way hiding
+     * a group takes its children. The clipped layers keep their own `visible`
+     * flag (open eye), they just stop rendering and dim in the panel. */
+    bool isHiddenByClipBase(const LayerData* layer) const;
+    /** @brief The contiguous run of layers clipped onto \a layerId (its clip group). */
+    QList<LayerData*> layersClippedTo(const LayerId& layerId) const;
     /** @brief Duplicate selected layers. Returns IDs of newly added layers. */
     QList<LayerId> duplicateSelectedLayers();
     bool toggleVisibilityForSelection();

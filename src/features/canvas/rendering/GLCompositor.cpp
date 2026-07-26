@@ -301,13 +301,24 @@ GLuint GLCompositor::compositeLayerStack(const TileKey& key,
     size_t idx = 0;
     while (idx < layers.size()) {
         const auto& layer = layers[idx];
+        // A skipped non-clipped layer stops being a clip base: layers clipped to
+        // it must clip against nothing, not against whatever was left in
+        // activeClipBaseTex from further below (that is what made a clip group
+        // with a hidden — or fully transparent — base render against an
+        // unrelated layer).
         if (!layer.visible) {
+            if (!layer.clippedToBelow) {
+                activeClipBaseTex = transparentTex;
+            }
             ++idx;
             continue;
         }
 
         float effectiveOpacity = layer.opacity * parentOpacity;
         if (effectiveOpacity <= 0.0f) {
+            if (!layer.clippedToBelow) {
+                activeClipBaseTex = transparentTex;
+            }
             ++idx;
             continue;
         }

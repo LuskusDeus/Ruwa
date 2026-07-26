@@ -81,6 +81,13 @@ public:
 
     // --- Data ---
     void setLayerData(ruwa::core::layers::LayerData* data);
+    /** @brief Contextual hiding by a clipping base (self or an ancestor is clipped
+     * to a hidden layer). The row dims like a hidden group's children while the
+     * eye button keeps showing the layer's own visible flag. Resolved by the owning
+     * view (LayerModel::isHiddenByClipBase) because a root layer cannot reach its
+     * siblings through LayerData alone. */
+    void setClipBaseHidden(bool hidden);
+    bool isClipBaseHidden() const { return m_clipBaseHidden; }
     /** Set pixmap to display when row has no data (e.g. during removal animation) */
     void setRemovalSnapshot(const QPixmap& pixmap);
     const QPixmap& removalSnapshot() const { return m_removalSnapshot; }
@@ -322,6 +329,7 @@ private:
     bool m_ctrlGlowTargetsMask = false;
     qreal m_childDisclosureProgress = 0.0;
     qreal m_maskRevealProgress = 0.0;
+    bool m_clipBaseHidden = false;
     int m_lastKnownDepth = -1;
     bool m_lastKnownClipped = false;
     bool m_lastKnownVisible = true;

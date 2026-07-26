@@ -65,14 +65,17 @@ bool computeExportLayerBoundsRecursive(
         outMaxY = std::max(outMaxY, maxY);
     };
 
-    for (const auto& layerPtr : layers) {
-        const auto* layer = layerPtr.get();
+    for (int i = 0; i < layers.size(); ++i) {
+        const auto* layer = layers[i].get();
         if (!layer) {
             continue;
         }
 
-        const bool visible
-            = parentVisible && layer->visible && layer->opacity > 0.0 && !layer->isExportExcluded();
+        // A clip group disappears together with its base, so a layer clipped to a
+        // hidden base contributes no pixels (see isHiddenByClipBaseInSiblings).
+        const bool visible = parentVisible && layer->visible && layer->opacity > 0.0
+            && !layer->isExportExcluded()
+            && !ruwa::core::layers::isHiddenByClipBaseInSiblings(layers, i);
 
         if (visible) {
             const aether::TileGrid* grid
@@ -118,13 +121,14 @@ bool computeNavigatorLayerBoundsRecursive(
         outMaxY = std::max(outMaxY, maxY);
     };
 
-    for (const auto& layerPtr : layers) {
-        const auto* layer = layerPtr.get();
+    for (int i = 0; i < layers.size(); ++i) {
+        const auto* layer = layers[i].get();
         if (!layer) {
             continue;
         }
 
-        const bool visible = parentVisible && layer->visible && layer->opacity > 0.0;
+        const bool visible = parentVisible && layer->visible && layer->opacity > 0.0
+            && !ruwa::core::layers::isHiddenByClipBaseInSiblings(layers, i);
 
         if (visible && !layer->isBackground()) {
             const aether::TileGrid* grid

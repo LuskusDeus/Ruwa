@@ -156,6 +156,11 @@ private slots:
 
 private:
     void rebuildRowWidgets();
+    /** @brief Bind layer data to a row, including the contextual clip-base hiding
+     * flag (which only the model can resolve). */
+    void applyRowLayerData(LayerRowWidget* row, ruwa::core::layers::LayerData* data);
+    /** @brief Re-apply row data for a layer and everything nested inside it. */
+    void refreshRowsForSubtree(ruwa::core::layers::LayerData* layer);
     void syncSelectionState();
     void connectRowSignals(LayerRowWidget* row);
     void scheduleThumbnailBatch();

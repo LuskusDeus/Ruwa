@@ -3064,6 +3064,24 @@ void OpenGLCanvasWidget::onLayerDataChanged(const QUuid& id)
             } else {
                 m_canvas.dirtyManager().onStructureChanged();
             }
+            // Layers clipped to this one are composited as part of its clip group
+            // and follow its visibility (a hidden base hides the whole group), so
+            // their own tiles must recomposite as well — they can reach past the
+            // base's tiles and would otherwise keep stale pixels.
+            const auto clippedLayers = m_layerModel->layersClippedTo(id);
+            for (auto* clipped : clippedLayers) {
+                m_canvas.dirtyManager().onLayerPropertyChanged(clipped->id);
+                if (!clipped->hasChildren()) {
+                    continue;
+                }
+                QList<ruwa::core::layers::LayerData*> descendants;
+                clipped->flatten(descendants, false);
+                for (auto* descendant : descendants) {
+                    if (descendant) {
+                        m_canvas.dirtyManager().onLayerPropertyChanged(descendant->id);
+                    }
+                }
+            }
             if (layerAffectsBoardComposition(layer) || m_boardCompositionLayerIds.contains(id)) {
                 invalidateBoardCompositionCache();
             }

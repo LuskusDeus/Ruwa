@@ -986,6 +986,61 @@ struct LayerData : public std::enable_shared_from_this<LayerData> {
     }
 };
 
+// ============================================================================
+// Clipping helpers (sibling-list based)
+// ============================================================================
+//
+// A clipped layer and its clip base are always siblings, so both queries work
+// on one sibling list. Root layers have no parent pointer, so callers that
+// start from a bare LayerData* must obtain the list from LayerModel (see
+// LayerModel::clipBaseFor / isHiddenByClipBase).
+
+/**
+ * @brief The layer that the sibling at \a index is clipped onto.
+ *
+ * The clip base is the nearest sibling BELOW (higher index — the lists are
+ * ordered top-first) that is not itself clipped. Mirrors
+ * LayerModel::inferClipBaseForIndex. Returns nullptr when the layer is not
+ * clipped or no base exists.
+ */
+inline const LayerData* clipBaseInSiblings(
+    const QList<std::shared_ptr<LayerData>>& siblings, int index)
+{
+    if (index < 0 || index >= siblings.size()) {
+        return nullptr;
+    }
+    const LayerData* layer = siblings[index].get();
+    if (!layer || !layer->clippedToBelow) {
+        return nullptr;
+    }
+    for (int i = index + 1; i < siblings.size(); ++i) {
+        const LayerData* below = siblings[i].get();
+        if (!below || below->isBackground()) {
+            continue;
+        }
+        if (!below->clippedToBelow) {
+            return below;
+        }
+    }
+    return nullptr;
+}
+
+/**
+ * @brief Whether the sibling at \a index is contextually hidden by its clip base.
+ *
+ * A clipping mask is defined by its base: hiding the base takes the whole clip
+ * group with it (Photoshop semantics). This is "contextual" hiding, exactly
+ * like a group's children — the layer's own `visible` flag stays untouched, so
+ * the eye icon stays open and only the rendered result and the row's dimming
+ * follow the base.
+ */
+inline bool isHiddenByClipBaseInSiblings(
+    const QList<std::shared_ptr<LayerData>>& siblings, int index)
+{
+    const LayerData* base = clipBaseInSiblings(siblings, index);
+    return base && !base->visible;
+}
+
 } // namespace ruwa::core::layers
 
 #endif // RUWA_CORE_LAYERS_LAYERDATA_H

@@ -291,17 +291,31 @@ GLuint GLViewportCompositor::compositeLayerStack(const std::vector<CompositeLaye
     const LayerMaskResolver& layerMaskResolver, const Color& backdropColor)
 {
     size_t index = 0;
+    // Set when a potential clip base was skipped (hidden / fully transparent):
+    // the clip group above it then has nothing to clip against and must be
+    // skipped as a whole rather than composite unclipped over the canvas.
+    bool clipBaseOrphaned = false;
     while (index < layers.size()) {
         const auto& layer = layers[index];
         if (!layer.visible) {
+            clipBaseOrphaned = clipBaseOrphaned || !layer.clippedToBelow;
             ++index;
             continue;
         }
 
         const float effectiveOpacity = layer.opacity * parentOpacity;
         if (effectiveOpacity <= 0.0f) {
+            clipBaseOrphaned = clipBaseOrphaned || !layer.clippedToBelow;
             ++index;
             continue;
+        }
+
+        if (layer.clippedToBelow && !useSrcAtop && clipBaseOrphaned) {
+            ++index;
+            continue;
+        }
+        if (!layer.clippedToBelow) {
+            clipBaseOrphaned = false;
         }
 
         const bool isClipBase = !useSrcAtop && !layer.clippedToBelow && (index + 1 < layers.size())
