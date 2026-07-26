@@ -18,6 +18,7 @@
 #define AETHER_ENGINE_OPENGL_GLTRANSFORMRENDERER_H
 
 #include "shared/types/Result.h"
+#include "shared/rendering/GLPixelPackBuffer.h"
 #include "shared/tiles/TileTypes.h"
 #include "shared/tiles/TileGrid.h"
 #include "features/transform/TransformState.h"
@@ -179,9 +180,8 @@ private:
     GLuint m_tempTex = 0;
     TilePixelFormat m_tempTexFormat = kDefaultTileFormat;
 
-    // PBO for async readback
-    GLuint m_pbo = 0;
-    size_t m_pboSize = 0;
+    // Persistently mapped staging buffer for async readback.
+    GLPixelPackBuffer m_readbackPbo;
 
     std::vector<Vector2> m_cachedDeformTargets;
     std::unordered_map<TileKey, DeformTileBatch, TileKeyHash> m_cachedDeformTileBatches;

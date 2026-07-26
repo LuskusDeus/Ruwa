@@ -327,23 +327,17 @@ GLuint GLTransformViewportPreviewPass::render(GLuint sourceAtlasTexture, int32_t
     const GLint matLoc = m_gl->glGetUniformLocation(m_program->handle(), "uInverseTransform");
     m_gl->glUniformMatrix3fv(matLoc, 1, GL_FALSE, inverseTransform.data());
 
-    m_gl->glActiveTexture(GL_TEXTURE0);
-    m_gl->glBindTexture(GL_TEXTURE_2D, sourceAtlasTexture);
-    m_gl->glActiveTexture(GL_TEXTURE1);
-    m_gl->glBindTexture(GL_TEXTURE_2D, targetBaseTexture);
-    m_gl->glActiveTexture(GL_TEXTURE2);
-    m_gl->glBindTexture(GL_TEXTURE_2D, selectionMaskAtlasTexture);
+    m_gl->glBindTextureUnit(0, sourceAtlasTexture);
+    m_gl->glBindTextureUnit(1, targetBaseTexture);
+    m_gl->glBindTextureUnit(2, selectionMaskAtlasTexture);
 
     m_gl->glBindVertexArray(m_emptyVao);
     m_gl->glDrawArrays(GL_TRIANGLES, 0, 6);
     m_gl->glBindVertexArray(0);
 
-    m_gl->glActiveTexture(GL_TEXTURE2);
-    m_gl->glBindTexture(GL_TEXTURE_2D, 0);
-    m_gl->glActiveTexture(GL_TEXTURE1);
-    m_gl->glBindTexture(GL_TEXTURE_2D, 0);
-    m_gl->glActiveTexture(GL_TEXTURE0);
-    m_gl->glBindTexture(GL_TEXTURE_2D, 0);
+    m_gl->glBindTextureUnit(2, 0);
+    m_gl->glBindTextureUnit(1, 0);
+    m_gl->glBindTextureUnit(0, 0);
 
     return m_outputTexture;
 }
@@ -472,23 +466,17 @@ GLuint GLTransformViewportPreviewPass::renderFromScreenSource(GLuint sourceScree
     const GLint matLoc = m_gl->glGetUniformLocation(m_program->handle(), "uInverseTransform");
     m_gl->glUniformMatrix3fv(matLoc, 1, GL_FALSE, inverseTransform.data());
 
-    m_gl->glActiveTexture(GL_TEXTURE0);
-    m_gl->glBindTexture(GL_TEXTURE_2D, sourceScreenTexture);
-    m_gl->glActiveTexture(GL_TEXTURE1);
-    m_gl->glBindTexture(GL_TEXTURE_2D, targetBaseTexture);
-    m_gl->glActiveTexture(GL_TEXTURE2);
-    m_gl->glBindTexture(GL_TEXTURE_2D, selectionMaskAtlasTexture);
+    m_gl->glBindTextureUnit(0, sourceScreenTexture);
+    m_gl->glBindTextureUnit(1, targetBaseTexture);
+    m_gl->glBindTextureUnit(2, selectionMaskAtlasTexture);
 
     m_gl->glBindVertexArray(m_emptyVao);
     m_gl->glDrawArrays(GL_TRIANGLES, 0, 6);
     m_gl->glBindVertexArray(0);
 
-    m_gl->glActiveTexture(GL_TEXTURE2);
-    m_gl->glBindTexture(GL_TEXTURE_2D, 0);
-    m_gl->glActiveTexture(GL_TEXTURE1);
-    m_gl->glBindTexture(GL_TEXTURE_2D, 0);
-    m_gl->glActiveTexture(GL_TEXTURE0);
-    m_gl->glBindTexture(GL_TEXTURE_2D, 0);
+    m_gl->glBindTextureUnit(2, 0);
+    m_gl->glBindTextureUnit(1, 0);
+    m_gl->glBindTextureUnit(0, 0);
 
     return m_outputTexture;
 }
@@ -558,10 +546,8 @@ GLuint GLTransformViewportPreviewPass::renderDeformMeshPass(GLuint sourceTexture
         m_deformBaseProgram->setUniform("uFlipH", flipH ? 1 : 0);
         m_deformBaseProgram->setUniform("uFlipV", flipV ? 1 : 0);
 
-        m_gl->glActiveTexture(GL_TEXTURE1);
-        m_gl->glBindTexture(GL_TEXTURE_2D, targetBaseTexture);
-        m_gl->glActiveTexture(GL_TEXTURE2);
-        m_gl->glBindTexture(GL_TEXTURE_2D, selectionMaskAtlasTexture);
+        m_gl->glBindTextureUnit(1, targetBaseTexture);
+        m_gl->glBindTextureUnit(2, selectionMaskAtlasTexture);
 
         m_gl->glBindVertexArray(m_emptyVao);
         m_gl->glDrawArrays(GL_TRIANGLES, 0, 6);
@@ -625,8 +611,7 @@ GLuint GLTransformViewportPreviewPass::renderDeformMeshPass(GLuint sourceTexture
         m_gl->glUniform2fv(controlPointsLoc, count, cpData.data());
     }
 
-    m_gl->glActiveTexture(GL_TEXTURE0);
-    m_gl->glBindTexture(GL_TEXTURE_2D, sourceTexture);
+    m_gl->glBindTextureUnit(0, sourceTexture);
     // Generate mip levels for the source once per source-texture identity.
     // During an interactive drag the source content does not change (only
     // lattice control points do), so regenerating the mip pyramid every
@@ -639,8 +624,7 @@ GLuint GLTransformViewportPreviewPass::renderDeformMeshPass(GLuint sourceTexture
         m_gl->glBindSampler(0, m_deformMeshSampler);
     }
     if (useMask) {
-        m_gl->glActiveTexture(GL_TEXTURE2);
-        m_gl->glBindTexture(GL_TEXTURE_2D, selectionMaskAtlasTexture);
+        m_gl->glBindTextureUnit(2, selectionMaskAtlasTexture);
     }
 
     m_gl->glBindVertexArray(m_deformMeshVao);
@@ -651,13 +635,10 @@ GLuint GLTransformViewportPreviewPass::renderDeformMeshPass(GLuint sourceTexture
         m_gl->glBindSampler(0, 0);
     }
     if (useMask) {
-        m_gl->glActiveTexture(GL_TEXTURE2);
-        m_gl->glBindTexture(GL_TEXTURE_2D, 0);
-        m_gl->glActiveTexture(GL_TEXTURE1);
-        m_gl->glBindTexture(GL_TEXTURE_2D, 0);
+        m_gl->glBindTextureUnit(2, 0);
+        m_gl->glBindTextureUnit(1, 0);
     }
-    m_gl->glActiveTexture(GL_TEXTURE0);
-    m_gl->glBindTexture(GL_TEXTURE_2D, 0);
+    m_gl->glBindTextureUnit(0, 0);
 
     return m_outputTexture;
 }

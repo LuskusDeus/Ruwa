@@ -96,10 +96,8 @@ void GLTileRenderer::uploadTileData(TileData& tile)
         return;
     }
 
-    m_gl->glBindTexture(GL_TEXTURE_2D, tile.textureId());
-    m_gl->glTexSubImage2D(GL_TEXTURE_2D, 0, 0, 0, TILE_SIZE, TILE_SIZE, GL_RGBA,
+    m_gl->glTextureSubImage2D(tile.textureId(), 0, 0, 0, TILE_SIZE, TILE_SIZE, GL_RGBA,
         tileGLPixelType(tile.format()), static_cast<const TileData&>(tile).pixels());
-    m_gl->glBindTexture(GL_TEXTURE_2D, 0);
 
     tile.clearDirty();
 }
@@ -276,8 +274,7 @@ bool GLTileRenderer::drawTileQuad(const TileKey& key, const TileData& tile,
     m_tileProgram->setUniform("uSampleMinUV", sampleMinX, sampleMinY);
     m_tileProgram->setUniform("uSampleMaxUV", sampleMaxX, sampleMaxY);
 
-    m_gl->glActiveTexture(GL_TEXTURE0);
-    m_gl->glBindTexture(GL_TEXTURE_2D, tile.textureId());
+    m_gl->glBindTextureUnit(0, tile.textureId());
 
     m_gl->glDrawArrays(GL_TRIANGLES, 0, 6);
     return true;

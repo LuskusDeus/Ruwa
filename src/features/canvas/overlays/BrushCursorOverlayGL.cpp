@@ -244,8 +244,7 @@ void BrushCursorOverlayGL::drawCircle(float cx, float cy, float radius, int segm
     m_gl->glUseProgram(m_invertProgram);
     m_gl->glUniformMatrix4fv(m_locInvertMVP, 1, GL_FALSE, mvp.data());
     m_gl->glUniform4f(m_locInvertColor, 0, 0, 0, 0.95f);
-    m_gl->glActiveTexture(GL_TEXTURE0);
-    m_gl->glBindTexture(GL_TEXTURE_2D, sceneTextureId);
+    m_gl->glBindTextureUnit(0, sceneTextureId);
     m_gl->glUniform1i(m_locInvertSceneTexture, 0);
     m_gl->glUniform2f(m_locInvertViewportSize, vpW, vpH);
 
@@ -318,8 +317,7 @@ void BrushCursorOverlayGL::drawPolygonStroke(float cx, float cy, float scale, fl
     m_gl->glUseProgram(m_invertProgram);
     m_gl->glUniformMatrix4fv(m_locInvertMVP, 1, GL_FALSE, mvp.data());
     m_gl->glUniform4f(m_locInvertColor, 0, 0, 0, 0.95f);
-    m_gl->glActiveTexture(GL_TEXTURE0);
-    m_gl->glBindTexture(GL_TEXTURE_2D, sceneTextureId);
+    m_gl->glBindTextureUnit(0, sceneTextureId);
     m_gl->glUniform1i(m_locInvertSceneTexture, 0);
     m_gl->glUniform2f(m_locInvertViewportSize, vpW, vpH);
 
@@ -351,8 +349,7 @@ void BrushCursorOverlayGL::drawRing(float cx, float cy, float outerRadius, float
     m_gl->glUseProgram(m_invertProgram);
     m_gl->glUniformMatrix4fv(m_locInvertMVP, 1, GL_FALSE, mvp.data());
     m_gl->glUniform4f(m_locInvertColor, 0, 0, 0, 0.95f);
-    m_gl->glActiveTexture(GL_TEXTURE0);
-    m_gl->glBindTexture(GL_TEXTURE_2D, sceneTextureId);
+    m_gl->glBindTextureUnit(0, sceneTextureId);
     m_gl->glUniform1i(m_locInvertSceneTexture, 0);
     m_gl->glUniform2f(m_locInvertViewportSize, vpW, vpH);
 
@@ -374,8 +371,7 @@ void BrushCursorOverlayGL::drawRing(float cx, float cy, float outerRadius, float
     m_gl->glBlendFunc(GL_ONE, GL_ZERO);
     m_gl->glUseProgram(m_passthroughProgram);
     m_gl->glUniformMatrix4fv(m_locPassthroughMVP, 1, GL_FALSE, mvp.data());
-    m_gl->glActiveTexture(GL_TEXTURE0);
-    m_gl->glBindTexture(GL_TEXTURE_2D, sceneTextureId);
+    m_gl->glBindTextureUnit(0, sceneTextureId);
     m_gl->glUniform1i(m_locPassthroughSceneTexture, 0);
     m_gl->glUniform2f(m_locPassthroughViewportSize, vpW, vpH);
 

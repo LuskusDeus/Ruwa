@@ -146,7 +146,6 @@ GLuint PluginGLLayerEffectPass::render(const aether::GLLayerEffectRenderContext&
         m_gl->glDisable(GL_SCISSOR_TEST);
         m_gl->glBindSampler(0, 0);
         m_gl->glUseProgram(0);
-        m_gl->glActiveTexture(GL_TEXTURE0);
     }
 
     m_gpu->endInvocation();

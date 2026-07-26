@@ -1144,45 +1144,31 @@ void GLCompositor::blendPass(const BlendPassParams& p)
     tileWorldOrigin(p.key, tileOriginX, tileOriginY);
     m_compositeProgram->setUniform("uTileWorldOrigin", tileOriginX, tileOriginY);
 
-    m_gl->glActiveTexture(GL_TEXTURE0);
-    m_gl->glBindTexture(GL_TEXTURE_2D, p.baseTex);
+    m_gl->glBindTextureUnit(0, p.baseTex);
 
-    m_gl->glActiveTexture(GL_TEXTURE1);
-    m_gl->glBindTexture(GL_TEXTURE_2D, p.srcTex);
+    m_gl->glBindTextureUnit(1, p.srcTex);
 
-    m_gl->glActiveTexture(GL_TEXTURE2);
-    m_gl->glBindTexture(GL_TEXTURE_2D, p.useClipMask ? p.clipMaskTex : 0);
+    m_gl->glBindTextureUnit(2, p.useClipMask ? p.clipMaskTex : 0);
 
-    m_gl->glActiveTexture(GL_TEXTURE3);
-    m_gl->glBindTexture(GL_TEXTURE_2D, p.useProgrammaticBlendBase ? p.programmaticBlendBaseTex : 0);
+    m_gl->glBindTextureUnit(3, p.useProgrammaticBlendBase ? p.programmaticBlendBaseTex : 0);
 
-    m_gl->glActiveTexture(GL_TEXTURE4);
-    m_gl->glBindTexture(GL_TEXTURE_2D, p.useClipMask2 ? p.clipMaskTex2 : 0);
+    m_gl->glBindTextureUnit(4, p.useClipMask2 ? p.clipMaskTex2 : 0);
 
-    m_gl->glActiveTexture(GL_TEXTURE5);
-    m_gl->glBindTexture(GL_TEXTURE_2D, p.useGroupComposite ? p.groupPassThroughTex : 0);
-    m_gl->glActiveTexture(GL_TEXTURE6);
-    m_gl->glBindTexture(GL_TEXTURE_2D, p.useGroupComposite ? p.groupCoverageTex : 0);
-    m_gl->glActiveTexture(GL_TEXTURE7);
-    m_gl->glBindTexture(GL_TEXTURE_2D, p.useGroupComposite ? p.groupSourceCoverageTex : 0);
+    m_gl->glBindTextureUnit(5, p.useGroupComposite ? p.groupPassThroughTex : 0);
+    m_gl->glBindTextureUnit(6, p.useGroupComposite ? p.groupCoverageTex : 0);
+    m_gl->glBindTextureUnit(7, p.useGroupComposite ? p.groupSourceCoverageTex : 0);
 
     m_gl->glBindVertexArray(m_emptyVAO);
     m_gl->glDrawArrays(GL_TRIANGLES, 0, 6);
     m_gl->glBindVertexArray(0);
     ++m_lastCompositeDrawCalls;
 
-    m_gl->glActiveTexture(GL_TEXTURE7);
-    m_gl->glBindTexture(GL_TEXTURE_2D, 0);
-    m_gl->glActiveTexture(GL_TEXTURE6);
-    m_gl->glBindTexture(GL_TEXTURE_2D, 0);
-    m_gl->glActiveTexture(GL_TEXTURE5);
-    m_gl->glBindTexture(GL_TEXTURE_2D, 0);
-    m_gl->glActiveTexture(GL_TEXTURE4);
-    m_gl->glBindTexture(GL_TEXTURE_2D, 0);
-    m_gl->glActiveTexture(GL_TEXTURE3);
-    m_gl->glBindTexture(GL_TEXTURE_2D, 0);
-    m_gl->glActiveTexture(GL_TEXTURE2);
-    m_gl->glBindTexture(GL_TEXTURE_2D, 0);
+    m_gl->glBindTextureUnit(7, 0);
+    m_gl->glBindTextureUnit(6, 0);
+    m_gl->glBindTextureUnit(5, 0);
+    m_gl->glBindTextureUnit(4, 0);
+    m_gl->glBindTextureUnit(3, 0);
+    m_gl->glBindTextureUnit(2, 0);
     m_gl->glActiveTexture(GL_TEXTURE0);
 }
 

@@ -477,8 +477,7 @@ void LassoOverlay::flushBatchWithMask(const std::array<float, 16>& vpMatrix, GLu
     m_gl->glUniform1f(m_locAlphaInside, alphaInside);
     m_gl->glUniform1f(m_locAlphaOutside, alphaOutside);
 
-    m_gl->glActiveTexture(GL_TEXTURE0);
-    m_gl->glBindTexture(GL_TEXTURE_2D, maskTexture);
+    m_gl->glBindTextureUnit(0, maskTexture);
 
     m_gl->glBindVertexArray(m_vao);
     m_gl->glBindBuffer(GL_ARRAY_BUFFER, m_vbo);

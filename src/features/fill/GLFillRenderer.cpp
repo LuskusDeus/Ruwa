@@ -712,8 +712,7 @@ void GLFillRenderer::blitGridToTexture(const TileGrid& grid, GLTileRenderer* til
             m_blitProgram->setUniform("uTileOrigin", static_cast<float>(worldX - originX),
                 static_cast<float>(worldY - originY));
 
-            m_gl->glActiveTexture(GL_TEXTURE0);
-            m_gl->glBindTexture(GL_TEXTURE_2D, tilePtr->textureId());
+            m_gl->glBindTextureUnit(0, tilePtr->textureId());
             m_gl->glDrawArrays(GL_TRIANGLES, 0, 6);
         }
     }
@@ -910,10 +909,8 @@ GpuFillResult GLFillRenderer::fillInternal(TileGrid& layerGrid, GLTileRenderer* 
         uploadCounters(counters);
         resetDispatchBuffer();
 
-        m_gl->glActiveTexture(GL_TEXTURE0);
-        m_gl->glBindTexture(GL_TEXTURE_2D, m_sourceTex);
-        m_gl->glActiveTexture(GL_TEXTURE1);
-        m_gl->glBindTexture(GL_TEXTURE_2D, m_selectionTex);
+        m_gl->glBindTextureUnit(0, m_sourceTex);
+        m_gl->glBindTextureUnit(1, m_selectionTex);
 
         configureFloodUniforms(
             m_initProgram.get(), window, localSeedX, localSeedY, threshold, seedMode);
@@ -936,10 +933,8 @@ GpuFillResult GLFillRenderer::fillInternal(TileGrid& layerGrid, GLTileRenderer* 
             m_gl->glBindBufferBase(GL_SHADER_STORAGE_BUFFER, 1, 0);
             m_gl->glBindBufferBase(GL_SHADER_STORAGE_BUFFER, 3, 0);
             m_gl->glBindImageTexture(0, 0, 0, GL_FALSE, 0, GL_READ_ONLY, GL_R32UI);
-            m_gl->glActiveTexture(GL_TEXTURE1);
-            m_gl->glBindTexture(GL_TEXTURE_2D, 0);
-            m_gl->glActiveTexture(GL_TEXTURE0);
-            m_gl->glBindTexture(GL_TEXTURE_2D, 0);
+            m_gl->glBindTextureUnit(1, 0);
+            m_gl->glBindTextureUnit(0, 0);
             outCounters = counters;
             return true;
         }
@@ -1003,10 +998,8 @@ GpuFillResult GLFillRenderer::fillInternal(TileGrid& layerGrid, GLTileRenderer* 
         m_gl->glBindBufferBase(GL_SHADER_STORAGE_BUFFER, 3, 0);
         m_gl->glBindBufferBase(GL_SHADER_STORAGE_BUFFER, 4, 0);
         m_gl->glBindImageTexture(0, 0, 0, GL_FALSE, 0, GL_READ_ONLY, GL_R32UI);
-        m_gl->glActiveTexture(GL_TEXTURE1);
-        m_gl->glBindTexture(GL_TEXTURE_2D, 0);
-        m_gl->glActiveTexture(GL_TEXTURE0);
-        m_gl->glBindTexture(GL_TEXTURE_2D, 0);
+        m_gl->glBindTextureUnit(1, 0);
+        m_gl->glBindTextureUnit(0, 0);
         m_gl->glMemoryBarrier(GL_FRAMEBUFFER_BARRIER_BIT | GL_SHADER_IMAGE_ACCESS_BARRIER_BIT);
 
         outCounters = counters;

@@ -9,6 +9,7 @@
 
 #include "shared/types/Result.h"
 #include "shared/types/Types.h"
+#include "shared/rendering/GLPixelPackBuffer.h"
 #include "shared/tiles/TileGrid.h"
 #include "features/selection/LassoSelectionManager.h"
 
@@ -72,8 +73,8 @@ private:
 
     GLuint m_emptyVAO = 0;
 
-    GLuint m_pbo = 0;
-    size_t m_pboSize = 0;
+    // Persistently mapped staging buffer for async readback.
+    GLPixelPackBuffer m_readbackPbo;
 
     bool m_initialized = false;
 };

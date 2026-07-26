@@ -401,6 +401,7 @@ static const QString kMaskBaseFrag = QStringLiteral(
 
 GLTransformRenderer::GLTransformRenderer(QOpenGLFunctions_4_5_Core* gl)
     : m_gl(gl)
+    , m_readbackPbo(gl)
 {
 }
 
@@ -530,11 +531,7 @@ void GLTransformRenderer::shutdown()
         m_gl->glDeleteTextures(1, &m_tempTex);
         m_tempTex = 0;
     }
-    if (m_pbo) {
-        m_gl->glDeleteBuffers(1, &m_pbo);
-        m_pbo = 0;
-        m_pboSize = 0;
-    }
+    m_readbackPbo.destroy();
 
     m_cachedDeformTargets.clear();
     m_cachedDeformTileBatches.clear();
@@ -1105,21 +1102,17 @@ GLuint GLTransformRenderer::renderTransformedTile(
     }
 
     // Bind atlas
-    m_gl->glActiveTexture(GL_TEXTURE0);
-    m_gl->glBindTexture(GL_TEXTURE_2D, m_atlasTexture);
+    m_gl->glBindTextureUnit(0, m_atlasTexture);
     if (useMask) {
-        m_gl->glActiveTexture(GL_TEXTURE1);
-        m_gl->glBindTexture(GL_TEXTURE_2D, m_maskAtlasTexture);
+        m_gl->glBindTextureUnit(1, m_maskAtlasTexture);
         m_gl->glActiveTexture(GL_TEXTURE0);
     }
 
     if (useForwardMesh) {
         if (!drawForwardDeformTile(destKey, useMask, preserveMaskedSource)) {
-            m_gl->glActiveTexture(GL_TEXTURE0);
-            m_gl->glBindTexture(GL_TEXTURE_2D, 0);
+            m_gl->glBindTextureUnit(0, 0);
             if (useMask) {
-                m_gl->glActiveTexture(GL_TEXTURE1);
-                m_gl->glBindTexture(GL_TEXTURE_2D, 0);
+                m_gl->glBindTextureUnit(1, 0);
                 m_gl->glActiveTexture(GL_TEXTURE0);
             }
             m_gl->glBindFramebuffer(GL_FRAMEBUFFER, prevFBO);
@@ -1133,11 +1126,9 @@ GLuint GLTransformRenderer::renderTransformedTile(
     }
 
     // Restore state (useMask was set above)
-    m_gl->glActiveTexture(GL_TEXTURE0);
-    m_gl->glBindTexture(GL_TEXTURE_2D, 0);
+    m_gl->glBindTextureUnit(0, 0);
     if (useMask) {
-        m_gl->glActiveTexture(GL_TEXTURE1);
-        m_gl->glBindTexture(GL_TEXTURE_2D, 0);
+        m_gl->glBindTextureUnit(1, 0);
         m_gl->glActiveTexture(GL_TEXTURE0);
     }
     m_gl->glBindFramebuffer(GL_FRAMEBUFFER, prevFBO);
@@ -1223,11 +1214,9 @@ std::unordered_set<TileKey, TileKeyHash> GLTransformRenderer::applyGPU(const Tra
         }
     }
 
-    m_gl->glActiveTexture(GL_TEXTURE0);
-    m_gl->glBindTexture(GL_TEXTURE_2D, m_atlasTexture);
+    m_gl->glBindTextureUnit(0, m_atlasTexture);
     if (useMask) {
-        m_gl->glActiveTexture(GL_TEXTURE1);
-        m_gl->glBindTexture(GL_TEXTURE_2D, m_maskAtlasTexture);
+        m_gl->glBindTextureUnit(1, m_maskAtlasTexture);
         m_gl->glActiveTexture(GL_TEXTURE0);
     }
     m_gl->glBindVertexArray(m_emptyVAO);
@@ -1250,11 +1239,9 @@ std::unordered_set<TileKey, TileKeyHash> GLTransformRenderer::applyGPU(const Tra
             if (!tile.hasTexture()) {
                 tileRenderer->ensureTileTexture(tile);
                 // ensureTileTexture unbinds GL_TEXTURE0 — re-bind atlas
-                m_gl->glActiveTexture(GL_TEXTURE0);
-                m_gl->glBindTexture(GL_TEXTURE_2D, m_atlasTexture);
+                m_gl->glBindTextureUnit(0, m_atlasTexture);
                 if (useMask) {
-                    m_gl->glActiveTexture(GL_TEXTURE1);
-                    m_gl->glBindTexture(GL_TEXTURE_2D, m_maskAtlasTexture);
+                    m_gl->glBindTextureUnit(1, m_maskAtlasTexture);
                     m_gl->glActiveTexture(GL_TEXTURE0);
                 }
             }
@@ -1296,11 +1283,9 @@ std::unordered_set<TileKey, TileKeyHash> GLTransformRenderer::applyGPU(const Tra
     }
 
     m_gl->glBindVertexArray(0);
-    m_gl->glActiveTexture(GL_TEXTURE0);
-    m_gl->glBindTexture(GL_TEXTURE_2D, 0);
+    m_gl->glBindTextureUnit(0, 0);
     if (useMask) {
-        m_gl->glActiveTexture(GL_TEXTURE1);
-        m_gl->glBindTexture(GL_TEXTURE_2D, 0);
+        m_gl->glBindTextureUnit(1, 0);
         m_gl->glActiveTexture(GL_TEXTURE0);
     }
     m_gl->glBindFramebuffer(GL_FRAMEBUFFER, prevFBO);
@@ -1328,38 +1313,26 @@ GLsync GLTransformRenderer::startAsyncReadback(TileGrid& grid, const std::vector
     const size_t bytesPerTile = tileByteSize(fmt);
     const GLenum pixelType = tileGLPixelType(fmt);
 
-    size_t totalBytes = keys.size() * bytesPerTile;
-
-    if (!m_pbo)
-        m_gl->glGenBuffers(1, &m_pbo);
-
-    if (m_pboSize < totalBytes) {
-        m_gl->glBindBuffer(GL_PIXEL_PACK_BUFFER, m_pbo);
-        m_gl->glBufferData(
-            GL_PIXEL_PACK_BUFFER, static_cast<GLsizeiptr>(totalBytes), nullptr, GL_STREAM_READ);
-        m_pboSize = totalBytes;
-    } else {
-        m_gl->glBindBuffer(GL_PIXEL_PACK_BUFFER, m_pbo);
+    if (!m_readbackPbo.reserve(keys.size() * bytesPerTile)) {
+        return nullptr;
     }
 
-    m_gl->glBindFramebuffer(GL_FRAMEBUFFER, m_fbo);
+    // glGetTextureSubImage packs from the texture object directly: m_fbo is not
+    // bound at all here any more, so this no longer resets the caller's
+    // framebuffer binding to 0 on the way out.
+    m_readbackPbo.beginPacking();
 
     size_t offset = 0;
     for (const auto& key : keys) {
         TileData* tile = grid.getTile(key);
-        if (!tile || !tile->hasTexture()) {
-            offset += bytesPerTile;
-            continue;
+        if (tile && tile->hasTexture()) {
+            m_readbackPbo.packTextureLevel(
+                tile->textureId(), TILE_SIZE, TILE_SIZE, GL_RGBA, pixelType, offset);
         }
-        m_gl->glFramebufferTexture2D(
-            GL_FRAMEBUFFER, GL_COLOR_ATTACHMENT0, GL_TEXTURE_2D, tile->textureId(), 0);
-        m_gl->glReadPixels(
-            0, 0, TILE_SIZE, TILE_SIZE, GL_RGBA, pixelType, reinterpret_cast<void*>(offset));
         offset += bytesPerTile;
     }
 
-    m_gl->glBindBuffer(GL_PIXEL_PACK_BUFFER, 0);
-    m_gl->glBindFramebuffer(GL_FRAMEBUFFER, 0);
+    m_readbackPbo.endPacking();
 
     GLsync fence = m_gl->glFenceSync(GL_SYNC_GPU_COMMANDS_COMPLETE, 0);
     m_gl->glFlush();
@@ -1386,24 +1359,26 @@ void GLTransformRenderer::finishReadback(
     m_gl->glClientWaitSync(fence, GL_SYNC_FLUSH_COMMANDS_BIT, 500000000ULL);
     m_gl->glDeleteSync(fence);
 
-    m_gl->glBindBuffer(GL_PIXEL_PACK_BUFFER, m_pbo);
-    const uint8_t* mapped
-        = static_cast<const uint8_t*>(m_gl->glMapBuffer(GL_PIXEL_PACK_BUFFER, GL_READ_ONLY));
-
-    if (mapped) {
-        const size_t bytesPerTile = tileByteSize(grid.format());
-        size_t offset = 0;
-        for (const auto& key : keys) {
-            TileData* tile = grid.getTile(key);
-            if (tile) {
-                std::memcpy(tile->pixels(), mapped + offset, bytesPerTile);
-            }
-            offset += bytesPerTile;
-        }
-        m_gl->glUnmapBuffer(GL_PIXEL_PACK_BUFFER);
+    // The staging buffer stays mapped: copying out is a plain memcpy.
+    const uint8_t* mapped = m_readbackPbo.data();
+    if (!mapped) {
+        return;
     }
 
-    m_gl->glBindBuffer(GL_PIXEL_PACK_BUFFER, 0);
+    const size_t bytesPerTile = tileByteSize(grid.format());
+    const size_t capacity = m_readbackPbo.capacity();
+    size_t offset = 0;
+    for (const auto& key : keys) {
+        // Guards against a grid whose format changed between start and finish.
+        if (offset + bytesPerTile > capacity) {
+            break;
+        }
+        TileData* tile = grid.getTile(key);
+        if (tile) {
+            std::memcpy(tile->pixels(), mapped + offset, bytesPerTile);
+        }
+        offset += bytesPerTile;
+    }
 }
 
 void GLTransformRenderer::deleteFence(GLsync fence)

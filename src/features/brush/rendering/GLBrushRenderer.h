@@ -8,6 +8,7 @@
 #define AETHER_ENGINE_OPENGL_GLBRUSHRENDERER_H
 
 #include "shared/types/Result.h"
+#include "shared/rendering/GLPixelPackBuffer.h"
 #include "shared/tiles/TileTypes.h"
 #include "shared/tiles/TileGrid.h"
 #include "shared/tiles/TileBrush.h"
@@ -300,8 +301,9 @@ private:
     float m_liquifyPrevWorldX = 0.0f;
     float m_liquifyPrevWorldY = 0.0f;
 
-    GLuint m_pbo = 0;
-    size_t m_pboSize = 0;
+    // Persistently mapped readback staging buffer (immutable storage). Replaces
+    // the old glBufferData + per-readback glMapBuffer pair.
+    GLPixelPackBuffer m_readbackPbo;
     GLsizei m_blurScratchWidth = 0;
     GLsizei m_blurScratchHeight = 0;
     // CONTENT format the blur scratch textures were allocated with.

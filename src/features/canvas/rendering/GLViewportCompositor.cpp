@@ -184,17 +184,13 @@ void GLViewportCompositor::drawTexture(GLuint texture, const CanvasClipParams& c
     m_blitProgram->setUniform("uReplaceWithCoverage", replaceWithCoverage ? 1 : 0);
     m_blitProgram->setUniform("uLassoMaskOrigin", lassoMask.originX, lassoMask.originY);
     m_blitProgram->setUniform("uLassoMaskSize", lassoMask.width, lassoMask.height);
-    m_gl->glActiveTexture(GL_TEXTURE0);
-    m_gl->glBindTexture(GL_TEXTURE_2D, texture);
-    m_gl->glActiveTexture(GL_TEXTURE1);
-    m_gl->glBindTexture(GL_TEXTURE_2D, useLassoMask ? lassoMask.maskTexture : 0);
+    m_gl->glBindTextureUnit(0, texture);
+    m_gl->glBindTextureUnit(1, useLassoMask ? lassoMask.maskTexture : 0);
     m_gl->glBindVertexArray(m_emptyVao);
     m_gl->glDrawArrays(GL_TRIANGLES, 0, 6);
     m_gl->glBindVertexArray(0);
-    m_gl->glActiveTexture(GL_TEXTURE1);
-    m_gl->glBindTexture(GL_TEXTURE_2D, 0);
-    m_gl->glActiveTexture(GL_TEXTURE0);
-    m_gl->glBindTexture(GL_TEXTURE_2D, 0);
+    m_gl->glBindTextureUnit(1, 0);
+    m_gl->glBindTextureUnit(0, 0);
 }
 
 GLuint GLViewportCompositor::applyLuminanceRevealMask(
@@ -255,12 +251,9 @@ GLuint GLViewportCompositor::applyLuminanceRevealMask(
     m_compositeProgram->setUniform("uBackdropColor", 0.0f, 0.0f, 0.0f, 0.0f);
     m_compositeProgram->setUniform("uTileWorldOrigin", 0.0f, 0.0f);
 
-    m_gl->glActiveTexture(GL_TEXTURE0);
-    m_gl->glBindTexture(GL_TEXTURE_2D, colorTex);
-    m_gl->glActiveTexture(GL_TEXTURE1);
-    m_gl->glBindTexture(GL_TEXTURE_2D, colorTex);
-    m_gl->glActiveTexture(GL_TEXTURE2);
-    m_gl->glBindTexture(GL_TEXTURE_2D, maskTex);
+    m_gl->glBindTextureUnit(0, colorTex);
+    m_gl->glBindTextureUnit(1, colorTex);
+    m_gl->glBindTextureUnit(2, maskTex);
 
     m_gl->glBindVertexArray(m_emptyVao);
     m_gl->glDrawArrays(GL_TRIANGLES, 0, 6);
@@ -276,12 +269,9 @@ GLuint GLViewportCompositor::applyLuminanceRevealMask(
     m_compositeProgram->setUniform("uUseGroupComposite", 0);
     m_compositeProgram->setUniform("uReplaceBase", 0);
 
-    m_gl->glActiveTexture(GL_TEXTURE2);
-    m_gl->glBindTexture(GL_TEXTURE_2D, 0);
-    m_gl->glActiveTexture(GL_TEXTURE1);
-    m_gl->glBindTexture(GL_TEXTURE_2D, 0);
-    m_gl->glActiveTexture(GL_TEXTURE0);
-    m_gl->glBindTexture(GL_TEXTURE_2D, 0);
+    m_gl->glBindTextureUnit(2, 0);
+    m_gl->glBindTextureUnit(1, 0);
+    m_gl->glBindTextureUnit(0, 0);
 
     return m_maskRevealTexture;
 }
@@ -703,37 +693,23 @@ void GLViewportCompositor::blendPass(const BlendPassParams& params)
         params.backdropColor.b, params.backdropColor.a);
     m_compositeProgram->setUniform("uTileWorldOrigin", 0.0f, 0.0f);
 
-    m_gl->glActiveTexture(GL_TEXTURE0);
-    m_gl->glBindTexture(GL_TEXTURE_2D, baseTexture);
-    m_gl->glActiveTexture(GL_TEXTURE1);
-    m_gl->glBindTexture(GL_TEXTURE_2D, srcTexture);
-    m_gl->glActiveTexture(GL_TEXTURE2);
-    m_gl->glBindTexture(GL_TEXTURE_2D, useLayerMask ? params.layerMaskTexture : 0);
-    m_gl->glActiveTexture(GL_TEXTURE5);
-    m_gl->glBindTexture(
-        GL_TEXTURE_2D, params.useGroupComposite ? params.groupPassThroughTexture : 0);
-    m_gl->glActiveTexture(GL_TEXTURE6);
-    m_gl->glBindTexture(GL_TEXTURE_2D, params.useGroupComposite ? params.groupCoverageTexture : 0);
-    m_gl->glActiveTexture(GL_TEXTURE7);
-    m_gl->glBindTexture(
-        GL_TEXTURE_2D, params.useGroupComposite ? params.groupSourceCoverageTexture : 0);
+    m_gl->glBindTextureUnit(0, baseTexture);
+    m_gl->glBindTextureUnit(1, srcTexture);
+    m_gl->glBindTextureUnit(2, useLayerMask ? params.layerMaskTexture : 0);
+    m_gl->glBindTextureUnit(5, params.useGroupComposite ? params.groupPassThroughTexture : 0);
+    m_gl->glBindTextureUnit(6, params.useGroupComposite ? params.groupCoverageTexture : 0);
+    m_gl->glBindTextureUnit(7, params.useGroupComposite ? params.groupSourceCoverageTexture : 0);
 
     m_gl->glBindVertexArray(m_emptyVao);
     m_gl->glDrawArrays(GL_TRIANGLES, 0, 6);
     m_gl->glBindVertexArray(0);
 
-    m_gl->glActiveTexture(GL_TEXTURE7);
-    m_gl->glBindTexture(GL_TEXTURE_2D, 0);
-    m_gl->glActiveTexture(GL_TEXTURE6);
-    m_gl->glBindTexture(GL_TEXTURE_2D, 0);
-    m_gl->glActiveTexture(GL_TEXTURE5);
-    m_gl->glBindTexture(GL_TEXTURE_2D, 0);
-    m_gl->glActiveTexture(GL_TEXTURE2);
-    m_gl->glBindTexture(GL_TEXTURE_2D, 0);
-    m_gl->glActiveTexture(GL_TEXTURE1);
-    m_gl->glBindTexture(GL_TEXTURE_2D, 0);
-    m_gl->glActiveTexture(GL_TEXTURE0);
-    m_gl->glBindTexture(GL_TEXTURE_2D, 0);
+    m_gl->glBindTextureUnit(7, 0);
+    m_gl->glBindTextureUnit(6, 0);
+    m_gl->glBindTextureUnit(5, 0);
+    m_gl->glBindTextureUnit(2, 0);
+    m_gl->glBindTextureUnit(1, 0);
+    m_gl->glBindTextureUnit(0, 0);
 }
 
 bool GLViewportCompositor::ensureAdjustmentTargets()

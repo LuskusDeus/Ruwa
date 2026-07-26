@@ -438,8 +438,7 @@ void EffectHostGpuContext::bindTexture(
     }
     HostTexture* t = asTexture(texture);
     HostSampler* s = asSampler(sampler);
-    m_gl->glActiveTexture(GL_TEXTURE0 + unit);
-    m_gl->glBindTexture(GL_TEXTURE_2D, t ? t->id : 0);
+    m_gl->glBindTextureUnit(unit, t ? t->id : 0);
     m_gl->glBindSampler(unit, s ? s->id : 0);
 }
 

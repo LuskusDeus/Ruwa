@@ -438,15 +438,14 @@ GLuint GLLayerEffectRenderer::applyEffectsNeighborhoodBlock(uint32_t tileSize, u
             m_blitProgram->setUniform("uSource", 0);
             m_blitProgram->setUniform("uTexScale", 1.0f, 1.0f);
             m_blitProgram->setUniform("uTexOffset", 0.0f, 0.0f);
-            m_gl->glActiveTexture(GL_TEXTURE0);
             m_gl->glBindVertexArray(m_emptyVao);
-            m_gl->glBindTexture(GL_TEXTURE_2D, neighborTex);
+            m_gl->glBindTextureUnit(0, neighborTex);
             m_gl->glDrawArrays(GL_TRIANGLES, 0, 6);
             anyStamped = true;
         }
     }
     m_gl->glBindVertexArray(0);
-    m_gl->glBindTexture(GL_TEXTURE_2D, 0);
+    m_gl->glBindTextureUnit(0, 0);
     if (!anyStamped) {
         return 0;
     }
@@ -572,15 +571,14 @@ GLuint GLLayerEffectRenderer::assembleWholeRegion(uint32_t tileSize, uint32_t ti
             m_blitProgram->setUniform("uSource", 0);
             m_blitProgram->setUniform("uTexScale", 1.0f, 1.0f);
             m_blitProgram->setUniform("uTexOffset", 0.0f, 0.0f);
-            m_gl->glActiveTexture(GL_TEXTURE0);
             m_gl->glBindVertexArray(m_emptyVao);
-            m_gl->glBindTexture(GL_TEXTURE_2D, tex);
+            m_gl->glBindTextureUnit(0, tex);
             m_gl->glDrawArrays(GL_TRIANGLES, 0, 6);
             anyStamped = true;
         }
     }
     m_gl->glBindVertexArray(0);
-    m_gl->glBindTexture(GL_TEXTURE_2D, 0);
+    m_gl->glBindTextureUnit(0, 0);
     m_gl->glBindFramebuffer(GL_FRAMEBUFFER, 0);
     if (!anyStamped) {
         return 0;
@@ -666,12 +664,11 @@ void GLLayerEffectRenderer::blitTexture(GLuint sourceTexture, GLuint targetTextu
     m_blitProgram->setUniform("uSource", 0);
     m_blitProgram->setUniform("uTexScale", scaleX, scaleY);
     m_blitProgram->setUniform("uTexOffset", offsetX, offsetY);
-    m_gl->glActiveTexture(GL_TEXTURE0);
-    m_gl->glBindTexture(GL_TEXTURE_2D, sourceTexture);
+    m_gl->glBindTextureUnit(0, sourceTexture);
     m_gl->glBindVertexArray(m_emptyVao);
     m_gl->glDrawArrays(GL_TRIANGLES, 0, 6);
     m_gl->glBindVertexArray(0);
-    m_gl->glBindTexture(GL_TEXTURE_2D, 0);
+    m_gl->glBindTextureUnit(0, 0);
 }
 
 bool GLLayerEffectRenderer::hasRenderableEffects(

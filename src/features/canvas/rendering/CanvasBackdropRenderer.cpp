@@ -303,8 +303,7 @@ bool CanvasBackdropRenderer::render(GLuint sourceFbo, GLuint defaultFbo, int sur
             static_cast<float>(item.targetRect.height()));
         m_compositeProgram->setUniform("uCornerRadius", item.cornerRadius);
         m_compositeProgram->setUniform("uOpacity", item.opacity);
-        m_gl->glActiveTexture(GL_TEXTURE0);
-        m_gl->glBindTexture(GL_TEXTURE_2D, target.blurATexture);
+        m_gl->glBindTextureUnit(0, target.blurATexture);
         drawFullscreen();
         m_gl->glDisable(GL_BLEND);
     }

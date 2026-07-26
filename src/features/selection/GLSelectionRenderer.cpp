@@ -15,6 +15,7 @@ namespace aether {
 
 GLSelectionRenderer::GLSelectionRenderer(QOpenGLFunctions_4_5_Core* gl)
     : m_gl(gl)
+    , m_readbackPbo(gl)
 {
 }
 
@@ -115,9 +116,6 @@ Result<void> GLSelectionRenderer::initialize()
 
     m_gl->glGenVertexArrays(1, &m_emptyVAO);
 
-    m_pbo = 0;
-    m_pboSize = 0;
-
     m_initialized = true;
     return Result<void>::ok();
 }
@@ -154,11 +152,7 @@ void GLSelectionRenderer::shutdown()
         m_gl->glDeleteTextures(1, &m_tempTexB);
         m_tempTexB = 0;
     }
-    if (m_pbo) {
-        m_gl->glDeleteBuffers(1, &m_pbo);
-        m_pbo = 0;
-        m_pboSize = 0;
-    }
+    m_readbackPbo.destroy();
 
     m_initialized = false;
 }
@@ -428,10 +422,8 @@ void GLSelectionRenderer::subtractPolygonFromTexture(GLuint destTex,
     m_subtractProgram->setUniform("uDest", 0);
     m_subtractProgram->setUniform("uSrc", 1);
 
-    m_gl->glActiveTexture(GL_TEXTURE0);
-    m_gl->glBindTexture(GL_TEXTURE_2D, destTex);
-    m_gl->glActiveTexture(GL_TEXTURE1);
-    m_gl->glBindTexture(GL_TEXTURE_2D, m_tempTexA);
+    m_gl->glBindTextureUnit(0, destTex);
+    m_gl->glBindTextureUnit(1, m_tempTexA);
 
     m_gl->glBindVertexArray(m_emptyVAO);
     m_gl->glDrawArrays(GL_TRIANGLES, 0, 3);
@@ -450,39 +442,26 @@ GLsync GLSelectionRenderer::startAsyncReadback(TileGrid& grid, const std::vector
     if (keys.empty())
         return nullptr;
 
-    size_t required = static_cast<size_t>(keys.size()) * TILE_BYTE_SIZE;
-    if (m_pbo == 0) {
-        m_gl->glGenBuffers(1, &m_pbo);
-    }
-    if (required > m_pboSize) {
-        m_gl->glBindBuffer(GL_PIXEL_PACK_BUFFER, m_pbo);
-        m_gl->glBufferData(GL_PIXEL_PACK_BUFFER, required, nullptr, GL_STREAM_READ);
-        m_gl->glBindBuffer(GL_PIXEL_PACK_BUFFER, 0);
-        m_pboSize = required;
+    if (!m_readbackPbo.reserve(static_cast<size_t>(keys.size()) * TILE_BYTE_SIZE)) {
+        return nullptr;
     }
 
-    GLint prevFBO = 0;
-    m_gl->glGetIntegerv(GL_FRAMEBUFFER_BINDING, &prevFBO);
-
-    m_gl->glBindFramebuffer(GL_FRAMEBUFFER, m_fbo);
-    m_gl->glBindBuffer(GL_PIXEL_PACK_BUFFER, m_pbo);
+    // Packing straight from the texture objects means no framebuffer is touched,
+    // so the previous save/restore of GL_FRAMEBUFFER_BINDING (and its blocking
+    // glGetIntegerv) is gone along with the per-tile attachment rebind.
+    m_readbackPbo.beginPacking();
 
     size_t offset = 0;
     for (const auto& key : keys) {
         TileData* tile = grid.getTile(key);
-        if (!tile || !tile->hasTexture()) {
-            offset += TILE_BYTE_SIZE;
-            continue;
+        if (tile && tile->hasTexture()) {
+            m_readbackPbo.packTextureLevel(
+                tile->textureId(), TILE_SIZE, TILE_SIZE, GL_RGBA, GL_UNSIGNED_BYTE, offset);
         }
-        m_gl->glFramebufferTexture2D(
-            GL_FRAMEBUFFER, GL_COLOR_ATTACHMENT0, GL_TEXTURE_2D, tile->textureId(), 0);
-        m_gl->glReadPixels(
-            0, 0, TILE_SIZE, TILE_SIZE, GL_RGBA, GL_UNSIGNED_BYTE, reinterpret_cast<void*>(offset));
         offset += TILE_BYTE_SIZE;
     }
 
-    m_gl->glBindBuffer(GL_PIXEL_PACK_BUFFER, 0);
-    m_gl->glBindFramebuffer(GL_FRAMEBUFFER, prevFBO);
+    m_readbackPbo.endPacking();
 
     return m_gl->glFenceSync(GL_SYNC_GPU_COMMANDS_COMPLETE, 0);
 }
@@ -503,19 +482,20 @@ void GLSelectionRenderer::finishReadback(
     m_gl->glClientWaitSync(fence, GL_SYNC_FLUSH_COMMANDS_BIT, 1000000000);
     m_gl->glDeleteSync(fence);
 
-    if (m_pbo == 0 || keys.empty())
+    if (keys.empty())
         return;
 
-    m_gl->glBindBuffer(GL_PIXEL_PACK_BUFFER, m_pbo);
-    void* ptr = m_gl->glMapBuffer(GL_PIXEL_PACK_BUFFER, GL_READ_ONLY);
-    if (!ptr) {
-        m_gl->glBindBuffer(GL_PIXEL_PACK_BUFFER, 0);
+    // The staging buffer stays mapped: copying out is a plain memcpy.
+    const uint8_t* bytes = m_readbackPbo.data();
+    if (!bytes)
         return;
-    }
 
-    uint8_t* bytes = static_cast<uint8_t*>(ptr);
+    const size_t capacity = m_readbackPbo.capacity();
     size_t offset = 0;
     for (const auto& key : keys) {
+        if (offset + TILE_BYTE_SIZE > capacity) {
+            break;
+        }
         TileData* tile = grid.getTile(key);
         if (tile) {
             std::memcpy(tile->pixels(), bytes + offset, TILE_BYTE_SIZE);
@@ -523,9 +503,6 @@ void GLSelectionRenderer::finishReadback(
         }
         offset += TILE_BYTE_SIZE;
     }
-
-    m_gl->glUnmapBuffer(GL_PIXEL_PACK_BUFFER);
-    m_gl->glBindBuffer(GL_PIXEL_PACK_BUFFER, 0);
 }
 
 void GLSelectionRenderer::deleteFence(GLsync fence)

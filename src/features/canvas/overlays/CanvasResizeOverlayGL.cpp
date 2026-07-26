@@ -201,8 +201,7 @@ void CanvasResizeOverlayGL::render(const Viewport& viewport, GLuint sceneTexture
         m_gl->glUseProgram(m_invertProgram);
         m_gl->glUniform2f(m_locInvertViewport, panelW, panelH);
         m_gl->glUniform1f(m_locInvertAlpha, (m_selecting ? 0.88f : 0.98f) * anim);
-        m_gl->glActiveTexture(GL_TEXTURE0);
-        m_gl->glBindTexture(GL_TEXTURE_2D, sceneTextureId);
+        m_gl->glBindTextureUnit(0, sceneTextureId);
         m_gl->glUniform1i(m_locInvertSceneTexture, 0);
 
         // Real bounds: thin outline inset inward to avoid edge half-pixel conflicts.

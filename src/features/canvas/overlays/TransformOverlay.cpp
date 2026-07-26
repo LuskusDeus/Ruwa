@@ -411,8 +411,7 @@ void TransformOverlay::renderInternal(const TransformState& state, const Viewpor
         m_curLocMVP = m_locInvertMVP;
         m_curLocColor = m_locInvertColor;
         m_gl->glUseProgram(m_invertProgram);
-        m_gl->glActiveTexture(GL_TEXTURE0);
-        m_gl->glBindTexture(GL_TEXTURE_2D, sceneTextureId);
+        m_gl->glBindTextureUnit(0, sceneTextureId);
         m_gl->glUniform1i(m_locInvertSceneTexture, 0);
         aether::Vector2 vpSize = viewport.size();
         m_gl->glUniform2f(m_locInvertViewportSize, vpSize.x, vpSize.y);
@@ -759,15 +758,12 @@ void TransformOverlay::drawTexturedRotatedIcon(float cx, float cy, float halfWor
     m_gl->glUniform4f(useInvert ? m_locTexInvColor : m_locTexColor, r, g, b, a);
 
     if (useInvert) {
-        m_gl->glActiveTexture(GL_TEXTURE0);
-        m_gl->glBindTexture(GL_TEXTURE_2D, sceneTextureId);
+        m_gl->glBindTextureUnit(0, sceneTextureId);
         m_gl->glUniform1i(m_locTexInvScene, 0);
-        m_gl->glActiveTexture(GL_TEXTURE1);
-        m_gl->glBindTexture(GL_TEXTURE_2D, m_rotationIconTexture);
+        m_gl->glBindTextureUnit(1, m_rotationIconTexture);
         m_gl->glUniform1i(m_locTexInvIcon, 1);
     } else {
-        m_gl->glActiveTexture(GL_TEXTURE0);
-        m_gl->glBindTexture(GL_TEXTURE_2D, m_rotationIconTexture);
+        m_gl->glBindTextureUnit(0, m_rotationIconTexture);
         m_gl->glUniform1i(m_locTexSampler, 0);
     }
 
@@ -787,10 +783,8 @@ void TransformOverlay::drawTexturedRotatedIcon(float cx, float cy, float halfWor
     m_gl->glVertexAttribPointer(0, 2, GL_FLOAT, GL_FALSE, 2 * sizeof(float), nullptr);
     m_gl->glBindVertexArray(0);
 
-    m_gl->glActiveTexture(GL_TEXTURE1);
-    m_gl->glBindTexture(GL_TEXTURE_2D, 0);
-    m_gl->glActiveTexture(GL_TEXTURE0);
-    m_gl->glBindTexture(GL_TEXTURE_2D, 0);
+    m_gl->glBindTextureUnit(1, 0);
+    m_gl->glBindTextureUnit(0, 0);
 
     m_gl->glUseProgram(m_curProgram);
 }

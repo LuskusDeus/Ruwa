@@ -100,23 +100,17 @@ GLuint GLTargetLayerPreviewPass::render(GLuint targetLayerBaseTexture, GLuint la
     m_program->setUniform("uMaskSize", lassoMaskBounds.width(), lassoMaskBounds.height());
     m_program->setUniform("uFillColor", fillColor.r, fillColor.g, fillColor.b, fillColor.a);
 
-    m_gl->glActiveTexture(GL_TEXTURE0);
-    m_gl->glBindTexture(GL_TEXTURE_2D, targetLayerBaseTexture);
-    m_gl->glActiveTexture(GL_TEXTURE1);
-    m_gl->glBindTexture(GL_TEXTURE_2D, lassoMaskTexture);
-    m_gl->glActiveTexture(GL_TEXTURE2);
-    m_gl->glBindTexture(GL_TEXTURE_2D, selectionMaskTexture);
+    m_gl->glBindTextureUnit(0, targetLayerBaseTexture);
+    m_gl->glBindTextureUnit(1, lassoMaskTexture);
+    m_gl->glBindTextureUnit(2, selectionMaskTexture);
 
     m_gl->glBindVertexArray(m_emptyVao);
     m_gl->glDrawArrays(GL_TRIANGLES, 0, 6);
     m_gl->glBindVertexArray(0);
 
-    m_gl->glActiveTexture(GL_TEXTURE2);
-    m_gl->glBindTexture(GL_TEXTURE_2D, 0);
-    m_gl->glActiveTexture(GL_TEXTURE1);
-    m_gl->glBindTexture(GL_TEXTURE_2D, 0);
-    m_gl->glActiveTexture(GL_TEXTURE0);
-    m_gl->glBindTexture(GL_TEXTURE_2D, 0);
+    m_gl->glBindTextureUnit(2, 0);
+    m_gl->glBindTextureUnit(1, 0);
+    m_gl->glBindTextureUnit(0, 0);
 
     return m_outputTexture;
 }

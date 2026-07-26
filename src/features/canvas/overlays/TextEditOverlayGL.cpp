@@ -263,8 +263,7 @@ void TextEditOverlayGL::drawWorldQuad(const std::array<Vector2, 4>& points, floa
         m_gl->glUniform4f(m_locInvertColor, r, g, b, a);
         m_gl->glUniform2f(m_locInvertViewportSize, static_cast<float>(m_surfaceWidth),
             static_cast<float>(m_surfaceHeight));
-        m_gl->glActiveTexture(GL_TEXTURE0);
-        m_gl->glBindTexture(GL_TEXTURE_2D, m_sceneTextureId);
+        m_gl->glBindTextureUnit(0, m_sceneTextureId);
         m_gl->glUniform1i(m_locInvertSceneTexture, 0);
     } else {
         m_gl->glUniformMatrix4fv(m_locColorMvp, 1, GL_FALSE, vpMatrix.data());

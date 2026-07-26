@@ -48,10 +48,8 @@ void bindWetLuts(QOpenGLFunctions_4_5_Core* gl, GLShaderProgram* program,
     for (std::size_t i = 0; i < wet_pigment_gpu::kLutTextureCount; ++i) {
         const int unit = wet_pigment_gpu::kLutTextureUnits[i];
         program->setUniform(wet_pigment_gpu::kLutSamplerNames[i].data(), unit);
-        gl->glActiveTexture(GL_TEXTURE0 + unit);
-        gl->glBindTexture(GL_TEXTURE_3D, textures[i]);
+        gl->glBindTextureUnit(unit, textures[i]);
     }
-    gl->glActiveTexture(GL_TEXTURE0);
 }
 
 void bindWetReservoir(QOpenGLFunctions_4_5_Core* gl, GLShaderProgram* program,
@@ -60,12 +58,10 @@ void bindWetReservoir(QOpenGLFunctions_4_5_Core* gl, GLShaderProgram* program,
     for (std::size_t i = 0; i < wet_pigment_gpu::kReservoirPlaneCount; ++i) {
         const int unit = wet_pigment_gpu::kReservoirTextureUnits[i];
         program->setUniform(wet_pigment_gpu::kReservoirSamplerNames[i].data(), unit);
-        gl->glActiveTexture(GL_TEXTURE0 + unit);
-        gl->glBindTexture(GL_TEXTURE_2D, textures[i]);
+        gl->glBindTextureUnit(unit, textures[i]);
         if (sampler != 0)
             gl->glBindSampler(unit, sampler);
     }
-    gl->glActiveTexture(GL_TEXTURE0);
 }
 
 bool attachWetReservoir(
@@ -95,15 +91,12 @@ void restoreSingleColorTarget(QOpenGLFunctions_4_5_Core* gl)
 void unbindWetTextures(QOpenGLFunctions_4_5_Core* gl)
 {
     for (const int unit : wet_pigment_gpu::kReservoirTextureUnits) {
-        gl->glActiveTexture(GL_TEXTURE0 + unit);
-        gl->glBindTexture(GL_TEXTURE_2D, 0);
+        gl->glBindTextureUnit(unit, 0);
         gl->glBindSampler(unit, 0);
     }
     for (const int unit : wet_pigment_gpu::kLutTextureUnits) {
-        gl->glActiveTexture(GL_TEXTURE0 + unit);
-        gl->glBindTexture(GL_TEXTURE_3D, 0);
+        gl->glBindTextureUnit(unit, 0);
     }
-    gl->glActiveTexture(GL_TEXTURE0);
 }
 
 void restoreDefaultPremultipliedBlendState(QOpenGLFunctions_4_5_Core* gl)
@@ -171,32 +164,28 @@ bool ensureSmudgeReservoirTextures(QOpenGLFunctions_4_5_Core* gl,
         return true;
     }
     GLsizei sz = std::max(physSize, needSize);
+    TextureParams params;
+    params.minFilter = GL_LINEAR;
+    params.magFilter = GL_LINEAR;
+    params.internalFormat = GL_RGBA16F;
+    params.pixelType = GL_HALF_FLOAT;
+    // Immutable storage: growing the reservoir replaces the texture objects
+    // rather than re-specifying them. The planes are always rebuilt as a set,
+    // and every use site rebinds explicitly, so the new names are not observed.
     auto createOrResize = [&](GLuint& tex) -> bool {
-        if (tex == 0) {
-            gl->glGenTextures(1, &tex);
-            if (tex == 0)
-                return false;
-            gl->glBindTexture(GL_TEXTURE_2D, tex);
-            gl->glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
-            gl->glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
-            gl->glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
-            gl->glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
-        } else {
-            gl->glBindTexture(GL_TEXTURE_2D, tex);
-        }
-        gl->glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA16F, sz, sz, 0, GL_RGBA, GL_HALF_FLOAT, nullptr);
+        recreateTexture2D(gl, tex, sz, sz, params);
+        if (tex == 0)
+            return false;
         gl->glClearTexImage(tex, 0, GL_RGBA, GL_FLOAT, nullptr);
         return true;
     };
     for (int side = 0; side < 2; ++side) {
         for (std::size_t plane = 0; plane < wet_pigment_gpu::kReservoirPlaneCount; ++plane) {
             if (!createOrResize(reservoirTex[side][plane])) {
-                gl->glBindTexture(GL_TEXTURE_2D, 0);
                 return false;
             }
         }
     }
-    gl->glBindTexture(GL_TEXTURE_2D, 0);
     physSize = sz;
     return true;
 }
@@ -1366,6 +1355,7 @@ static const QString kProceduralTextureFrag = QStringLiteral(
 
 GLBrushRenderer::GLBrushRenderer(QOpenGLFunctions_4_5_Core* gl)
     : m_gl(gl)
+    , m_readbackPbo(gl)
 {
 }
 
@@ -1732,23 +1722,24 @@ Result<void> GLBrushRenderer::initialize(const QString& shaderDir)
             }
         }
         while (m_gl->glGetError() != GL_NO_ERROR) { }
-        m_gl->glGenTextures(
+        m_gl->glCreateTextures(GL_TEXTURE_3D,
             static_cast<GLsizei>(wet_pigment_gpu::kLutTextureCount), m_pigmentLutTex);
         if (m_pigmentLutTex[0] == 0 || m_pigmentLutTex[1] == 0) {
             cleanupOnFailure();
             return { ErrorCode::PipelineCreationFailed, "Failed to create pigment LUT textures" };
         }
         for (std::size_t plane = 0; plane < wet_pigment_gpu::kLutTextureCount; ++plane) {
-            m_gl->glBindTexture(GL_TEXTURE_3D, m_pigmentLutTex[plane]);
-            m_gl->glTexParameteri(GL_TEXTURE_3D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
-            m_gl->glTexParameteri(GL_TEXTURE_3D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
-            m_gl->glTexParameteri(GL_TEXTURE_3D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
-            m_gl->glTexParameteri(GL_TEXTURE_3D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
-            m_gl->glTexParameteri(GL_TEXTURE_3D, GL_TEXTURE_WRAP_R, GL_CLAMP_TO_EDGE);
-            m_gl->glTexImage3D(GL_TEXTURE_3D, 0, GL_RGBA16F, m_pigmentLutSize, m_pigmentLutSize,
-                m_pigmentLutSize, 0, GL_RGBA, GL_FLOAT, packed[plane].data());
+            const GLuint lut = m_pigmentLutTex[plane];
+            m_gl->glTextureParameteri(lut, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
+            m_gl->glTextureParameteri(lut, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
+            m_gl->glTextureParameteri(lut, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
+            m_gl->glTextureParameteri(lut, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
+            m_gl->glTextureParameteri(lut, GL_TEXTURE_WRAP_R, GL_CLAMP_TO_EDGE);
+            m_gl->glTextureStorage3D(
+                lut, 1, GL_RGBA16F, m_pigmentLutSize, m_pigmentLutSize, m_pigmentLutSize);
+            m_gl->glTextureSubImage3D(lut, 0, 0, 0, 0, m_pigmentLutSize, m_pigmentLutSize,
+                m_pigmentLutSize, GL_RGBA, GL_FLOAT, packed[plane].data());
         }
-        m_gl->glBindTexture(GL_TEXTURE_3D, 0);
         if (m_gl->glGetError() != GL_NO_ERROR)
             throw std::runtime_error("OpenGL rejected the pigment LUT upload");
     } catch (const std::exception& error) {
@@ -1757,8 +1748,6 @@ Result<void> GLBrushRenderer::initialize(const QString& shaderDir)
             std::string("Failed to load pigment LUT: ") + error.what() };
     }
 
-    m_pbo = 0;
-    m_pboSize = 0;
     m_initialized = true;
     return Result<void>::ok();
 }
@@ -1841,11 +1830,7 @@ void GLBrushRenderer::shutdown()
         m_gl->glDeleteVertexArrays(1, &m_emptyVAO);
         m_emptyVAO = 0;
     }
-    if (m_pbo) {
-        m_gl->glDeleteBuffers(1, &m_pbo);
-        m_pbo = 0;
-        m_pboSize = 0;
-    }
+    m_readbackPbo.destroy();
 
     m_blurScratchWidth = 0;
     m_blurScratchHeight = 0;
@@ -1879,13 +1864,9 @@ void GLBrushRenderer::endStampBatch()
     if (!m_stampBatchActive)
         return;
 
-    m_gl->glActiveTexture(GL_TEXTURE1);
-    m_gl->glBindTexture(GL_TEXTURE_2D, 0);
-    m_gl->glActiveTexture(GL_TEXTURE2);
-    m_gl->glBindTexture(GL_TEXTURE_2D, 0);
-    m_gl->glActiveTexture(GL_TEXTURE4);
-    m_gl->glBindTexture(GL_TEXTURE_2D, 0);
-    m_gl->glActiveTexture(GL_TEXTURE0);
+    m_gl->glBindTextureUnit(1, 0);
+    m_gl->glBindTextureUnit(2, 0);
+    m_gl->glBindTextureUnit(4, 0);
 
     m_gl->glBindVertexArray(0);
     m_gl->glBindFramebuffer(GL_FRAMEBUFFER, m_batchPrevFBO);
@@ -2084,8 +2065,7 @@ void GLBrushRenderer::stampGPU(TileGrid& strokeBuffer, GLTileRenderer* tileRende
         m_blurPassProgram->setUniform("uTexelStep", 1.0f / static_cast<float>(roiWidth), 0.0f);
         m_blurPassProgram->setUniform("uBlurRadius", blurRadiusPx);
 
-        m_gl->glActiveTexture(GL_TEXTURE0);
-        m_gl->glBindTexture(GL_TEXTURE_2D, m_blurScratchSourceTex);
+        m_gl->glBindTextureUnit(0, m_blurScratchSourceTex);
         if (m_blurLinearSampler) {
             m_gl->glBindSampler(0, m_blurLinearSampler);
         }
@@ -2118,12 +2098,10 @@ void GLBrushRenderer::stampGPU(TileGrid& strokeBuffer, GLTileRenderer* tileRende
         m_blurProgram->setUniform("uInvRoiSize", 1.0f / static_cast<float>(roiWidth),
             1.0f / static_cast<float>(roiHeight));
 
-        m_gl->glActiveTexture(GL_TEXTURE1);
-        m_gl->glBindTexture(GL_TEXTURE_2D, m_blurScratchTempTex);
+        m_gl->glBindTextureUnit(1, m_blurScratchTempTex);
         if (m_blurLinearSampler) {
             m_gl->glBindSampler(1, m_blurLinearSampler);
         }
-        m_gl->glActiveTexture(GL_TEXTURE0);
 
         m_gl->glViewport(0, 0, TILE_SIZE, TILE_SIZE);
 
@@ -2167,9 +2145,7 @@ void GLBrushRenderer::stampGPU(TileGrid& strokeBuffer, GLTileRenderer* tileRende
                     if (!maskTile->hasTexture()) {
                         continue;
                     }
-                    m_gl->glActiveTexture(GL_TEXTURE2);
-                    m_gl->glBindTexture(GL_TEXTURE_2D, maskTile->textureId());
-                    m_gl->glActiveTexture(GL_TEXTURE0);
+                    m_gl->glBindTextureUnit(2, maskTile->textureId());
                 }
 
                 const bool tileAlreadyExists = strokeBuffer.hasTile(key);
@@ -2217,11 +2193,8 @@ void GLBrushRenderer::stampGPU(TileGrid& strokeBuffer, GLTileRenderer* tileRende
                 m_blurProgram->setUniform("uQuadMin", quadMinX, quadMinY);
                 m_blurProgram->setUniform("uQuadMax", quadMaxX, quadMaxY);
 
-                m_gl->glActiveTexture(GL_TEXTURE0);
-                m_gl->glBindTexture(GL_TEXTURE_2D, m_blurScratchSourceTex);
-                m_gl->glActiveTexture(GL_TEXTURE1);
-                m_gl->glBindTexture(GL_TEXTURE_2D, m_blurScratchTempTex);
-                m_gl->glActiveTexture(GL_TEXTURE0);
+                m_gl->glBindTextureUnit(0, m_blurScratchSourceTex);
+                m_gl->glBindTextureUnit(1, m_blurScratchTempTex);
 
                 m_gl->glDrawArrays(GL_TRIANGLES, 0, 6);
                 ++m_drawCallEstimate;
@@ -2231,18 +2204,15 @@ void GLBrushRenderer::stampGPU(TileGrid& strokeBuffer, GLTileRenderer* tileRende
             }
         }
 
-        m_gl->glActiveTexture(GL_TEXTURE1);
-        m_gl->glBindTexture(GL_TEXTURE_2D, 0);
+        m_gl->glBindTextureUnit(1, 0);
         if (m_blurLinearSampler) {
             m_gl->glBindSampler(1, 0);
         }
         if (useSelectionMask) {
-            m_gl->glActiveTexture(GL_TEXTURE2);
-            m_gl->glBindTexture(GL_TEXTURE_2D, 0);
+            m_gl->glBindTextureUnit(2, 0);
         }
 
-        m_gl->glActiveTexture(GL_TEXTURE0);
-        m_gl->glBindTexture(GL_TEXTURE_2D, 0);
+        m_gl->glBindTextureUnit(0, 0);
         if (m_blurLinearSampler) {
             m_gl->glBindSampler(0, 0);
         }
@@ -2418,9 +2388,7 @@ void GLBrushRenderer::stampGPU(TileGrid& strokeBuffer, GLTileRenderer* tileRende
         }
         const int useDabShape = dabTexId != 0 ? 1 : 0;
         if (dabTexId != 0) {
-            m_gl->glActiveTexture(GL_TEXTURE3);
-            m_gl->glBindTexture(GL_TEXTURE_2D, dabTexId);
-            m_gl->glActiveTexture(GL_TEXTURE0);
+            m_gl->glBindTextureUnit(3, dabTexId);
         }
 
         // --- 2. Pickup pass: update reservoir from canvas ROI snapshot --------
@@ -2520,8 +2488,7 @@ void GLBrushRenderer::stampGPU(TileGrid& strokeBuffer, GLTileRenderer* tileRende
         // value below.
         pickupProgram->setUniform("uViewportSize", static_cast<float>(reservoirLogical),
             static_cast<float>(reservoirLogical));
-        m_gl->glActiveTexture(GL_TEXTURE0);
-        m_gl->glBindTexture(GL_TEXTURE_2D, m_blurScratchSourceTex);
+        m_gl->glBindTextureUnit(0, m_blurScratchSourceTex);
         if (m_blurLinearSampler) {
             m_gl->glBindSampler(0, m_blurLinearSampler);
         }
@@ -2533,11 +2500,9 @@ void GLBrushRenderer::stampGPU(TileGrid& strokeBuffer, GLTileRenderer* tileRende
             pickupFramebufferComplete
                 = attachWetReservoir(m_gl, m_smudgeReservoirTex[reservoirDstIdx]);
         } else {
-            m_gl->glActiveTexture(GL_TEXTURE1);
-            m_gl->glBindTexture(GL_TEXTURE_2D, m_smudgeReservoirTex[reservoirSrcIdx][0]);
+            m_gl->glBindTextureUnit(1, m_smudgeReservoirTex[reservoirSrcIdx][0]);
             if (m_blurLinearSampler)
                 m_gl->glBindSampler(1, m_blurLinearSampler);
-            m_gl->glActiveTexture(GL_TEXTURE0);
             m_gl->glFramebufferTexture2D(GL_FRAMEBUFFER, GL_COLOR_ATTACHMENT0, GL_TEXTURE_2D,
                 m_smudgeReservoirTex[reservoirDstIdx][0], 0);
             pickupFramebufferComplete
@@ -2552,11 +2517,9 @@ void GLBrushRenderer::stampGPU(TileGrid& strokeBuffer, GLTileRenderer* tileRende
             if (m_blurLinearSampler)
                 m_gl->glBindSampler(0, 0);
             if (dabTexId != 0) {
-                m_gl->glActiveTexture(GL_TEXTURE3);
-                m_gl->glBindTexture(GL_TEXTURE_2D, 0);
+                m_gl->glBindTextureUnit(3, 0);
             }
-            m_gl->glActiveTexture(GL_TEXTURE0);
-            m_gl->glBindTexture(GL_TEXTURE_2D, 0);
+            m_gl->glBindTextureUnit(0, 0);
             finishOwnBatch();
             return;
         }
@@ -2574,18 +2537,14 @@ void GLBrushRenderer::stampGPU(TileGrid& strokeBuffer, GLTileRenderer* tileRende
         // click/tap with a wet brush has to paint).
         if (firstDab && !wetMode) {
             m_smudgePrevValid = true;
-            m_gl->glActiveTexture(GL_TEXTURE1);
-            m_gl->glBindTexture(GL_TEXTURE_2D, 0);
+            m_gl->glBindTextureUnit(1, 0);
             if (m_blurLinearSampler)
                 m_gl->glBindSampler(1, 0);
-            m_gl->glActiveTexture(GL_TEXTURE0);
-            m_gl->glBindTexture(GL_TEXTURE_2D, 0);
+            m_gl->glBindTextureUnit(0, 0);
             if (m_blurLinearSampler)
                 m_gl->glBindSampler(0, 0);
             if (dabTexId != 0) {
-                m_gl->glActiveTexture(GL_TEXTURE3);
-                m_gl->glBindTexture(GL_TEXTURE_2D, 0);
-                m_gl->glActiveTexture(GL_TEXTURE0);
+                m_gl->glBindTextureUnit(3, 0);
             }
             unbindWetTextures(m_gl);
             finishOwnBatch();
@@ -2629,8 +2588,7 @@ void GLBrushRenderer::stampGPU(TileGrid& strokeBuffer, GLTileRenderer* tileRende
             applyProgram->setUniform("uDabShapeTexture", 3);
         }
 
-        m_gl->glActiveTexture(GL_TEXTURE0);
-        m_gl->glBindTexture(GL_TEXTURE_2D, m_blurScratchSourceTex);
+        m_gl->glBindTextureUnit(0, m_blurScratchSourceTex);
         if (m_blurLinearSampler) {
             m_gl->glBindSampler(0, m_blurLinearSampler);
         }
@@ -2638,12 +2596,10 @@ void GLBrushRenderer::stampGPU(TileGrid& strokeBuffer, GLTileRenderer* tileRende
             bindWetReservoir(m_gl, applyProgram, m_smudgeReservoirTex[m_smudgeReservoirSrcIdx],
                 m_blurLinearSampler);
         } else {
-            m_gl->glActiveTexture(GL_TEXTURE1);
-            m_gl->glBindTexture(GL_TEXTURE_2D, m_smudgeReservoirTex[m_smudgeReservoirSrcIdx][0]);
+            m_gl->glBindTextureUnit(1, m_smudgeReservoirTex[m_smudgeReservoirSrcIdx][0]);
             if (m_blurLinearSampler)
                 m_gl->glBindSampler(1, m_blurLinearSampler);
         }
-        m_gl->glActiveTexture(GL_TEXTURE0);
 
         m_gl->glViewport(0, 0, TILE_SIZE, TILE_SIZE);
 
@@ -2687,9 +2643,7 @@ void GLBrushRenderer::stampGPU(TileGrid& strokeBuffer, GLTileRenderer* tileRende
                     if (!maskTile->hasTexture()) {
                         continue;
                     }
-                    m_gl->glActiveTexture(GL_TEXTURE2);
-                    m_gl->glBindTexture(GL_TEXTURE_2D, maskTile->textureId());
-                    m_gl->glActiveTexture(GL_TEXTURE0);
+                    m_gl->glBindTextureUnit(2, maskTile->textureId());
                 }
 
                 const bool tileAlreadyExists = strokeBuffer.hasTile(key);
@@ -2748,14 +2702,11 @@ void GLBrushRenderer::stampGPU(TileGrid& strokeBuffer, GLTileRenderer* tileRende
                     bindWetReservoir(m_gl, applyProgram,
                         m_smudgeReservoirTex[m_smudgeReservoirSrcIdx], m_blurLinearSampler);
                 } else {
-                    m_gl->glActiveTexture(GL_TEXTURE1);
-                    m_gl->glBindTexture(
-                        GL_TEXTURE_2D, m_smudgeReservoirTex[m_smudgeReservoirSrcIdx][0]);
+                    m_gl->glBindTextureUnit(1, m_smudgeReservoirTex[m_smudgeReservoirSrcIdx][0]);
                     if (m_blurLinearSampler)
                         m_gl->glBindSampler(1, m_blurLinearSampler);
                 }
-                m_gl->glActiveTexture(GL_TEXTURE0);
-                m_gl->glBindTexture(GL_TEXTURE_2D, m_blurScratchSourceTex);
+                m_gl->glBindTextureUnit(0, m_blurScratchSourceTex);
 
                 m_gl->glDrawArrays(GL_TRIANGLES, 0, 6);
                 ++m_drawCallEstimate;
@@ -2765,22 +2716,17 @@ void GLBrushRenderer::stampGPU(TileGrid& strokeBuffer, GLTileRenderer* tileRende
             }
         }
 
-        m_gl->glActiveTexture(GL_TEXTURE1);
-        m_gl->glBindTexture(GL_TEXTURE_2D, 0);
+        m_gl->glBindTextureUnit(1, 0);
         if (m_blurLinearSampler)
             m_gl->glBindSampler(1, 0);
         if (useSelectionMask) {
-            m_gl->glActiveTexture(GL_TEXTURE2);
-            m_gl->glBindTexture(GL_TEXTURE_2D, 0);
+            m_gl->glBindTextureUnit(2, 0);
         }
-        m_gl->glActiveTexture(GL_TEXTURE0);
-        m_gl->glBindTexture(GL_TEXTURE_2D, 0);
+        m_gl->glBindTextureUnit(0, 0);
         if (m_blurLinearSampler)
             m_gl->glBindSampler(0, 0);
         if (dabTexId != 0) {
-            m_gl->glActiveTexture(GL_TEXTURE3);
-            m_gl->glBindTexture(GL_TEXTURE_2D, 0);
-            m_gl->glActiveTexture(GL_TEXTURE0);
+            m_gl->glBindTextureUnit(3, 0);
         }
         unbindWetTextures(m_gl);
 
@@ -2820,9 +2766,7 @@ void GLBrushRenderer::stampGPU(TileGrid& strokeBuffer, GLTileRenderer* tileRende
         prog->setUniform("uDabShapeTexture", 3);
         const GLuint dabTexId = resolveDabTextureId(m_gl, brush);
         if (dabTexId != 0) {
-            m_gl->glActiveTexture(GL_TEXTURE3);
-            m_gl->glBindTexture(GL_TEXTURE_2D, dabTexId);
-            m_gl->glActiveTexture(GL_TEXTURE0);
+            m_gl->glBindTextureUnit(3, dabTexId);
         }
     }
 
@@ -2878,46 +2822,25 @@ void GLBrushRenderer::stampGPU(TileGrid& strokeBuffer, GLTileRenderer* tileRende
                     tileRenderer->ensureTileTexture(*maskTile);
                     tileRenderer->uploadTileData(*maskTile);
                 }
-                m_gl->glActiveTexture(GL_TEXTURE1);
-                m_gl->glBindTexture(GL_TEXTURE_2D, maskTile->textureId());
-                m_gl->glActiveTexture(GL_TEXTURE0);
+                m_gl->glBindTextureUnit(1, maskTile->textureId());
             }
 
             if (useTexture) {
                 const GLuint textureTileId = ensureProceduralTextureTile(key, brush);
-                m_gl->glActiveTexture(GL_TEXTURE2);
-                m_gl->glBindTexture(GL_TEXTURE_2D, textureTileId);
-                m_gl->glActiveTexture(GL_TEXTURE0);
+                m_gl->glBindTextureUnit(2, textureTileId);
             }
 
             bool isNew = !strokeBuffer.hasTile(key);
             TileData& tile = strokeBuffer.getOrCreateTile(key);
 
+            // The framebuffer binding, blend state and active program are set up
+            // once before the loop and are no longer disturbed by clearTexture,
+            // so both branches only need the clear itself.
             if (!tile.hasTexture()) {
                 tileRenderer->ensureTileTexture(tile);
                 clearTexture(tile.textureId());
-                m_gl->glBindFramebuffer(GL_FRAMEBUFFER, m_fbo);
-                m_gl->glEnable(GL_BLEND);
-                if (useMaxBlend) {
-                    m_gl->glBlendEquation(GL_MAX);
-                    m_gl->glBlendFunc(GL_ONE, GL_ONE);
-                } else {
-                    m_gl->glBlendEquation(GL_FUNC_ADD);
-                    m_gl->glBlendFunc(GL_ONE, GL_ONE_MINUS_SRC_ALPHA);
-                }
-                prog->use();
             } else if (isNew) {
                 clearTexture(tile.textureId());
-                m_gl->glBindFramebuffer(GL_FRAMEBUFFER, m_fbo);
-                m_gl->glEnable(GL_BLEND);
-                if (useMaxBlend) {
-                    m_gl->glBlendEquation(GL_MAX);
-                    m_gl->glBlendFunc(GL_ONE, GL_ONE);
-                } else {
-                    m_gl->glBlendEquation(GL_FUNC_ADD);
-                    m_gl->glBlendFunc(GL_ONE, GL_ONE_MINUS_SRC_ALPHA);
-                }
-                prog->use();
             }
 
             m_gl->glFramebufferTexture2D(
@@ -2936,19 +2859,13 @@ void GLBrushRenderer::stampGPU(TileGrid& strokeBuffer, GLTileRenderer* tileRende
     }
 
     if (useSelectionMask) {
-        m_gl->glActiveTexture(GL_TEXTURE1);
-        m_gl->glBindTexture(GL_TEXTURE_2D, 0);
-        m_gl->glActiveTexture(GL_TEXTURE0);
+        m_gl->glBindTextureUnit(1, 0);
     }
     if (useDabShape) {
-        m_gl->glActiveTexture(GL_TEXTURE3);
-        m_gl->glBindTexture(GL_TEXTURE_2D, 0);
-        m_gl->glActiveTexture(GL_TEXTURE0);
+        m_gl->glBindTextureUnit(3, 0);
     }
     if (useTexture) {
-        m_gl->glActiveTexture(GL_TEXTURE2);
-        m_gl->glBindTexture(GL_TEXTURE_2D, 0);
-        m_gl->glActiveTexture(GL_TEXTURE0);
+        m_gl->glBindTextureUnit(2, 0);
     }
 
     finishOwnBatch();
@@ -3036,9 +2953,7 @@ bool GLBrushRenderer::stampDabSegmentGPU(TileGrid& strokeBuffer, GLTileRenderer*
         m_rebuildBatchProgram->setUniform("uDabShapeTexture", 3);
         const GLuint dabTexId = resolveDabTextureId(m_gl, brush);
         if (dabTexId != 0) {
-            m_gl->glActiveTexture(GL_TEXTURE3);
-            m_gl->glBindTexture(GL_TEXTURE_2D, dabTexId);
-            m_gl->glActiveTexture(GL_TEXTURE0);
+            m_gl->glBindTextureUnit(3, dabTexId);
         }
     }
 
@@ -3065,15 +2980,11 @@ bool GLBrushRenderer::stampDabSegmentGPU(TileGrid& strokeBuffer, GLTileRenderer*
                 tileRenderer->ensureTileTexture(*maskTile);
                 tileRenderer->uploadTileData(*maskTile);
             }
-            m_gl->glActiveTexture(GL_TEXTURE1);
-            m_gl->glBindTexture(GL_TEXTURE_2D, maskTile->textureId());
-            m_gl->glActiveTexture(GL_TEXTURE0);
+            m_gl->glBindTextureUnit(1, maskTile->textureId());
         }
         if (useTexture) {
             const GLuint textureTileId = ensureProceduralTextureTile(key, brush);
-            m_gl->glActiveTexture(GL_TEXTURE2);
-            m_gl->glBindTexture(GL_TEXTURE_2D, textureTileId);
-            m_gl->glActiveTexture(GL_TEXTURE0);
+            m_gl->glBindTextureUnit(2, textureTileId);
         }
 
         const bool isNew = !strokeBuffer.hasTile(key);
@@ -3087,7 +2998,6 @@ bool GLBrushRenderer::stampDabSegmentGPU(TileGrid& strokeBuffer, GLTileRenderer*
 
         m_gl->glFramebufferTexture2D(
             GL_FRAMEBUFFER, GL_COLOR_ATTACHMENT0, GL_TEXTURE_2D, tile.textureId(), 0);
-        m_gl->glEnable(GL_BLEND);
 
         const float tileOriginX = static_cast<float>(key.x) * static_cast<float>(TILE_SIZE);
         const float tileOriginY = static_cast<float>(key.y) * static_cast<float>(TILE_SIZE);
@@ -3099,16 +3009,12 @@ bool GLBrushRenderer::stampDabSegmentGPU(TileGrid& strokeBuffer, GLTileRenderer*
     }
 
     if (useSelectionMask) {
-        m_gl->glActiveTexture(GL_TEXTURE1);
-        m_gl->glBindTexture(GL_TEXTURE_2D, 0);
+        m_gl->glBindTextureUnit(1, 0);
     }
-    m_gl->glActiveTexture(GL_TEXTURE2);
-    m_gl->glBindTexture(GL_TEXTURE_2D, 0);
+    m_gl->glBindTextureUnit(2, 0);
     if (useDabShape) {
-        m_gl->glActiveTexture(GL_TEXTURE3);
-        m_gl->glBindTexture(GL_TEXTURE_2D, 0);
+        m_gl->glBindTextureUnit(3, 0);
     }
-    m_gl->glActiveTexture(GL_TEXTURE0);
 
     m_gl->glBindVertexArray(0);
     m_gl->glBindFramebuffer(GL_FRAMEBUFFER, prevFBO);
@@ -3232,9 +3138,7 @@ void GLBrushRenderer::rebuildStrokeBufferFromDabsGPU(TileGrid& strokeBuffer,
         m_rebuildBatchProgram->setUniform("uDabShapeTexture", 3);
         const GLuint dabTexId = resolveDabTextureId(m_gl, brush);
         if (dabTexId != 0) {
-            m_gl->glActiveTexture(GL_TEXTURE3);
-            m_gl->glBindTexture(GL_TEXTURE_2D, dabTexId);
-            m_gl->glActiveTexture(GL_TEXTURE0);
+            m_gl->glBindTextureUnit(3, dabTexId);
         }
     }
 
@@ -3267,24 +3171,17 @@ void GLBrushRenderer::rebuildStrokeBufferFromDabsGPU(TileGrid& strokeBuffer,
                 tileRenderer->ensureTileTexture(*maskTile);
                 tileRenderer->uploadTileData(*maskTile);
             }
-            m_gl->glActiveTexture(GL_TEXTURE1);
-            m_gl->glBindTexture(GL_TEXTURE_2D, maskTile->textureId());
-            m_gl->glActiveTexture(GL_TEXTURE0);
+            m_gl->glBindTextureUnit(1, maskTile->textureId());
         }
         if (useTexture) {
             const GLuint textureTileId = ensureProceduralTextureTile(key, brush);
-            m_gl->glActiveTexture(GL_TEXTURE2);
-            m_gl->glBindTexture(GL_TEXTURE_2D, textureTileId);
-            m_gl->glActiveTexture(GL_TEXTURE0);
+            m_gl->glBindTextureUnit(2, textureTileId);
         }
 
         TileData& tile = strokeBuffer.getOrCreateTile(key);
         if (!tile.hasTexture()) {
             tileRenderer->ensureTileTexture(tile);
             clearTexture(tile.textureId());
-            // clearTexture disables blending; rebuild relies on GPU blend
-            // across chunked dab batches, so restore it for draw passes.
-            m_gl->glEnable(GL_BLEND);
         }
 
         m_gl->glFramebufferTexture2D(
@@ -3301,16 +3198,12 @@ void GLBrushRenderer::rebuildStrokeBufferFromDabsGPU(TileGrid& strokeBuffer,
     }
 
     if (useSelectionMask) {
-        m_gl->glActiveTexture(GL_TEXTURE1);
-        m_gl->glBindTexture(GL_TEXTURE_2D, 0);
+        m_gl->glBindTextureUnit(1, 0);
     }
-    m_gl->glActiveTexture(GL_TEXTURE2);
-    m_gl->glBindTexture(GL_TEXTURE_2D, 0);
+    m_gl->glBindTextureUnit(2, 0);
     if (useDabShape) {
-        m_gl->glActiveTexture(GL_TEXTURE3);
-        m_gl->glBindTexture(GL_TEXTURE_2D, 0);
+        m_gl->glBindTextureUnit(3, 0);
     }
-    m_gl->glActiveTexture(GL_TEXTURE0);
 
     m_gl->glBindVertexArray(0);
     m_gl->glBindFramebuffer(GL_FRAMEBUFFER, prevFBO);
@@ -3486,9 +3379,7 @@ void GLBrushRenderer::rebuildStrokeBufferRangeFromDabsGPU(TileGrid& strokeBuffer
         m_rebuildBatchProgram->setUniform("uDabShapeTexture", 3);
         const GLuint dabTexId = resolveDabTextureId(m_gl, brush);
         if (dabTexId != 0) {
-            m_gl->glActiveTexture(GL_TEXTURE3);
-            m_gl->glBindTexture(GL_TEXTURE_2D, dabTexId);
-            m_gl->glActiveTexture(GL_TEXTURE0);
+            m_gl->glBindTextureUnit(3, dabTexId);
         }
     }
 
@@ -3521,15 +3412,11 @@ void GLBrushRenderer::rebuildStrokeBufferRangeFromDabsGPU(TileGrid& strokeBuffer
                 tileRenderer->ensureTileTexture(*maskTile);
                 tileRenderer->uploadTileData(*maskTile);
             }
-            m_gl->glActiveTexture(GL_TEXTURE1);
-            m_gl->glBindTexture(GL_TEXTURE_2D, maskTile->textureId());
-            m_gl->glActiveTexture(GL_TEXTURE0);
+            m_gl->glBindTextureUnit(1, maskTile->textureId());
         }
         if (useTexture) {
             const GLuint textureTileId = ensureProceduralTextureTile(key, brush);
-            m_gl->glActiveTexture(GL_TEXTURE2);
-            m_gl->glBindTexture(GL_TEXTURE_2D, textureTileId);
-            m_gl->glActiveTexture(GL_TEXTURE0);
+            m_gl->glBindTextureUnit(2, textureTileId);
         }
 
         if (!existingTile && !hasContributingDabs) {
@@ -3540,7 +3427,6 @@ void GLBrushRenderer::rebuildStrokeBufferRangeFromDabsGPU(TileGrid& strokeBuffer
         if (!tile.hasTexture()) {
             tileRenderer->ensureTileTexture(tile);
             clearTexture(tile.textureId());
-            m_gl->glEnable(GL_BLEND);
         }
 
         if (!hasContributingDabs) {
@@ -3563,16 +3449,12 @@ void GLBrushRenderer::rebuildStrokeBufferRangeFromDabsGPU(TileGrid& strokeBuffer
     }
 
     if (useSelectionMask) {
-        m_gl->glActiveTexture(GL_TEXTURE1);
-        m_gl->glBindTexture(GL_TEXTURE_2D, 0);
+        m_gl->glBindTextureUnit(1, 0);
     }
-    m_gl->glActiveTexture(GL_TEXTURE2);
-    m_gl->glBindTexture(GL_TEXTURE_2D, 0);
+    m_gl->glBindTextureUnit(2, 0);
     if (useDabShape) {
-        m_gl->glActiveTexture(GL_TEXTURE3);
-        m_gl->glBindTexture(GL_TEXTURE_2D, 0);
+        m_gl->glBindTextureUnit(3, 0);
     }
-    m_gl->glActiveTexture(GL_TEXTURE0);
 
     m_gl->glBindVertexArray(0);
     m_gl->glBindFramebuffer(GL_FRAMEBUFFER, prevFBO);
@@ -3752,8 +3634,7 @@ std::unordered_set<TileKey, TileKeyHash> GLBrushRenderer::flattenStrokeGPU(TileG
         m_gl->glFramebufferTexture2D(
             GL_FRAMEBUFFER, GL_COLOR_ATTACHMENT0, GL_TEXTURE_2D, layerTile.textureId(), 0);
 
-        m_gl->glActiveTexture(GL_TEXTURE0);
-        m_gl->glBindTexture(GL_TEXTURE_2D, strokeTile->textureId());
+        m_gl->glBindTextureUnit(0, strokeTile->textureId());
         if (needsBaseReadTexture) {
             TileData* blendBaseTile = (programmaticStrokeBlend && strokeBlendBackdrop)
                 ? strokeBlendBackdrop->getTile(key)
@@ -3764,21 +3645,16 @@ std::unordered_set<TileKey, TileKeyHash> GLBrushRenderer::flattenStrokeGPU(TileG
             } else if (blendBaseTile && blendBaseTile->isDirty()) {
                 tileRenderer->uploadTileData(*blendBaseTile);
             }
-            m_gl->glActiveTexture(GL_TEXTURE1);
-            m_gl->glBindTexture(GL_TEXTURE_2D,
+            m_gl->glBindTextureUnit(1,
                 (blendBaseTile && blendBaseTile->hasTexture()) ? blendBaseTile->textureId()
                                                                : m_blurReadTex);
-            m_gl->glActiveTexture(GL_TEXTURE2);
-            m_gl->glBindTexture(GL_TEXTURE_2D, m_blurReadTex);
+            m_gl->glBindTextureUnit(2, m_blurReadTex);
             if (blurMode && m_blurLinearSampler) {
                 m_gl->glBindSampler(1, m_blurLinearSampler);
             }
-            m_gl->glActiveTexture(GL_TEXTURE0);
         }
-        m_gl->glActiveTexture(GL_TEXTURE3);
-        m_gl->glBindTexture(GL_TEXTURE_2D,
-            (finalMaskTile && finalMaskTile->hasTexture()) ? finalMaskTile->textureId() : 0);
-        m_gl->glActiveTexture(GL_TEXTURE0);
+        m_gl->glBindTextureUnit(
+            3, (finalMaskTile && finalMaskTile->hasTexture()) ? finalMaskTile->textureId() : 0);
 
         m_flattenProgram->setUniform("uTileWorldOrigin",
             static_cast<float>(key.x * static_cast<int32_t>(TILE_SIZE)),
@@ -3799,19 +3675,15 @@ std::unordered_set<TileKey, TileKeyHash> GLBrushRenderer::flattenStrokeGPU(TileG
         layerGrid.notePixelsChangedOutOfBand();
     }
 
-    m_gl->glActiveTexture(GL_TEXTURE3);
-    m_gl->glBindTexture(GL_TEXTURE_2D, 0);
+    m_gl->glBindTextureUnit(3, 0);
 
     if (needsBaseReadTexture) {
-        m_gl->glActiveTexture(GL_TEXTURE2);
-        m_gl->glBindTexture(GL_TEXTURE_2D, 0);
-        m_gl->glActiveTexture(GL_TEXTURE1);
-        m_gl->glBindTexture(GL_TEXTURE_2D, 0);
+        m_gl->glBindTextureUnit(2, 0);
+        m_gl->glBindTextureUnit(1, 0);
         if (m_blurLinearSampler) {
             m_gl->glBindSampler(1, 0);
         }
     }
-    m_gl->glActiveTexture(GL_TEXTURE0);
 
     m_gl->glBindVertexArray(0);
     m_gl->glBindFramebuffer(GL_FRAMEBUFFER, prevFBO);
@@ -3843,38 +3715,26 @@ GLsync GLBrushRenderer::startAsyncReadback(TileGrid& grid, const std::vector<Til
     const size_t bytesPerTile = tileByteSize(fmt);
     const GLenum pixelType = tileGLPixelType(fmt);
 
-    size_t totalBytes = keys.size() * bytesPerTile;
-
-    if (!m_pbo)
-        m_gl->glGenBuffers(1, &m_pbo);
-
-    if (m_pboSize < totalBytes) {
-        m_gl->glBindBuffer(GL_PIXEL_PACK_BUFFER, m_pbo);
-        m_gl->glBufferData(
-            GL_PIXEL_PACK_BUFFER, static_cast<GLsizeiptr>(totalBytes), nullptr, GL_STREAM_READ);
-        m_pboSize = totalBytes;
-    } else {
-        m_gl->glBindBuffer(GL_PIXEL_PACK_BUFFER, m_pbo);
+    if (!m_readbackPbo.reserve(keys.size() * bytesPerTile)) {
+        return nullptr;
     }
 
-    m_gl->glBindFramebuffer(GL_FRAMEBUFFER, m_fbo);
+    // Textures are packed directly via glGetTextureSubImage, so this path no
+    // longer binds m_fbo, no longer rebinds COLOR_ATTACHMENT0 per tile, and no
+    // longer leaves the framebuffer binding reset to 0 behind it.
+    m_readbackPbo.beginPacking();
 
     size_t offset = 0;
     for (const auto& key : keys) {
         TileData* tile = grid.getTile(key);
-        if (!tile || !tile->hasTexture()) {
-            offset += bytesPerTile;
-            continue;
+        if (tile && tile->hasTexture()) {
+            m_readbackPbo.packTextureLevel(
+                tile->textureId(), TILE_SIZE, TILE_SIZE, GL_RGBA, pixelType, offset);
         }
-        m_gl->glFramebufferTexture2D(
-            GL_FRAMEBUFFER, GL_COLOR_ATTACHMENT0, GL_TEXTURE_2D, tile->textureId(), 0);
-        m_gl->glReadPixels(
-            0, 0, TILE_SIZE, TILE_SIZE, GL_RGBA, pixelType, reinterpret_cast<void*>(offset));
         offset += bytesPerTile;
     }
 
-    m_gl->glBindBuffer(GL_PIXEL_PACK_BUFFER, 0);
-    m_gl->glBindFramebuffer(GL_FRAMEBUFFER, 0);
+    m_readbackPbo.endPacking();
 
     GLsync fence = m_gl->glFenceSync(GL_SYNC_GPU_COMMANDS_COMPLETE, 0);
     m_gl->glFlush();
@@ -3899,25 +3759,28 @@ void GLBrushRenderer::finishReadback(GLsync fence, TileGrid& grid, const std::ve
     m_gl->glClientWaitSync(fence, GL_SYNC_FLUSH_COMMANDS_BIT, 500000000ULL);
     m_gl->glDeleteSync(fence);
 
-    // Map PBO and copy to CPU tile buffers
-    m_gl->glBindBuffer(GL_PIXEL_PACK_BUFFER, m_pbo);
-    const uint8_t* mapped
-        = static_cast<const uint8_t*>(m_gl->glMapBuffer(GL_PIXEL_PACK_BUFFER, GL_READ_ONLY));
-
-    if (mapped) {
-        const size_t bytesPerTile = tileByteSize(grid.format());
-        size_t offset = 0;
-        for (const auto& key : keys) {
-            TileData* tile = grid.getTile(key);
-            if (tile) {
-                std::memcpy(tile->pixels(), mapped + offset, bytesPerTile);
-            }
-            offset += bytesPerTile;
-        }
-        m_gl->glUnmapBuffer(GL_PIXEL_PACK_BUFFER);
+    // The staging buffer stays mapped, so consuming a readback is a plain copy
+    // out of the persistent pointer — no glMapBuffer/glUnmapBuffer per readback.
+    const uint8_t* mapped = m_readbackPbo.data();
+    if (!mapped) {
+        return;
     }
 
-    m_gl->glBindBuffer(GL_PIXEL_PACK_BUFFER, 0);
+    const size_t bytesPerTile = tileByteSize(grid.format());
+    const size_t capacity = m_readbackPbo.capacity();
+    size_t offset = 0;
+    for (const auto& key : keys) {
+        // Guards against a grid whose format changed between start and finish,
+        // which would desync the offsets computed at pack time.
+        if (offset + bytesPerTile > capacity) {
+            break;
+        }
+        TileData* tile = grid.getTile(key);
+        if (tile) {
+            std::memcpy(tile->pixels(), mapped + offset, bytesPerTile);
+        }
+        offset += bytesPerTile;
+    }
 }
 
 void GLBrushRenderer::deleteFence(GLsync fence)
@@ -3980,15 +3843,16 @@ GLuint GLBrushRenderer::ensureProceduralTextureTile(const TileKey& key, const Ti
         gpuTile = it->second;
     }
     if (gpuTile.textureId == 0) {
-        m_gl->glGenTextures(1, &gpuTile.textureId);
-        m_gl->glBindTexture(GL_TEXTURE_2D, gpuTile.textureId);
-        m_gl->glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
-        m_gl->glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
-        m_gl->glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_REPEAT);
-        m_gl->glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_REPEAT);
-        m_gl->glTexImage2D(
-            GL_TEXTURE_2D, 0, GL_R8, TILE_SIZE, TILE_SIZE, 0, GL_RED, GL_UNSIGNED_BYTE, nullptr);
-        m_gl->glBindTexture(GL_TEXTURE_2D, 0);
+        // Fixed TILE_SIZE R8 storage, only ever re-rendered through the FBO
+        // (never re-specified), so immutable storage applies directly.
+        TextureParams params;
+        params.minFilter = GL_LINEAR;
+        params.magFilter = GL_LINEAR;
+        params.wrapS = GL_REPEAT;
+        params.wrapT = GL_REPEAT;
+        params.internalFormat = GL_R8;
+        params.pixelFormat = GL_RED;
+        gpuTile.textureId = createTexture2D(m_gl, TILE_SIZE, TILE_SIZE, params);
     }
 
     // --- GPU-side procedural texture generation ---
@@ -4138,35 +4002,28 @@ void GLBrushRenderer::clearTexture(GLuint texId)
 
 void GLBrushRenderer::clearTexture(GLuint texId, uint32_t packedColor)
 {
-    const GLboolean scissorWasEnabled = m_gl->glIsEnabled(GL_SCISSOR_TEST);
-    GLint previousScissor[4] = { 0, 0, 0, 0 };
-    if (scissorWasEnabled) {
-        m_gl->glGetIntegerv(GL_SCISSOR_BOX, previousScissor);
-        m_gl->glDisable(GL_SCISSOR_TEST);
-    }
-    GLboolean previousColorMask[4] = { GL_TRUE, GL_TRUE, GL_TRUE, GL_TRUE };
-    m_gl->glGetBooleanv(GL_COLOR_WRITEMASK, previousColorMask);
-    m_gl->glColorMask(GL_TRUE, GL_TRUE, GL_TRUE, GL_TRUE);
-
-    m_gl->glBindFramebuffer(GL_FRAMEBUFFER, m_fbo);
-    m_gl->glFramebufferTexture2D(GL_FRAMEBUFFER, GL_COLOR_ATTACHMENT0, GL_TEXTURE_2D, texId, 0);
-    m_gl->glDisable(GL_BLEND);
+    // glClearTexImage writes the texture object directly instead of clearing it
+    // as a framebuffer attachment. Being outside the framebuffer pipeline, it is
+    // unaffected by scissor, color mask and blend state, so the whole
+    // save/disable/restore dance the FBO clear needed is gone — this used to be
+    // ~10 GL calls (including two blocking state queries) per cleared tile.
+    //
+    // It also no longer leaves the framebuffer bound to m_fbo with texId
+    // attached, nor GL_BLEND disabled. Nothing depended on those side effects:
+    // every path here binds m_fbo and sets its own blend state in its prologue.
+    // The one caller that patched the blend fallout by hand has been cleaned up.
     uint8_t r = 0;
     uint8_t g = 0;
     uint8_t b = 0;
     uint8_t a = 0;
     TileData::unpackColor(packedColor, r, g, b, a);
-    m_gl->glClearColor(static_cast<float>(r) / 255.0f, static_cast<float>(g) / 255.0f,
-        static_cast<float>(b) / 255.0f, static_cast<float>(a) / 255.0f);
-    m_gl->glClear(GL_COLOR_BUFFER_BIT);
 
-    m_gl->glColorMask(
-        previousColorMask[0], previousColorMask[1], previousColorMask[2], previousColorMask[3]);
-    if (scissorWasEnabled) {
-        m_gl->glEnable(GL_SCISSOR_TEST);
-        m_gl->glScissor(
-            previousScissor[0], previousScissor[1], previousScissor[2], previousScissor[3]);
-    }
+    // Float source values keep this format-agnostic: the driver converts to the
+    // texture's own format, matching what glClearColor + glClear produced for
+    // both the RGBA8 tiles and the 16F/32F wet working textures.
+    const float rgba[4] = { static_cast<float>(r) / 255.0f, static_cast<float>(g) / 255.0f,
+        static_cast<float>(b) / 255.0f, static_cast<float>(a) / 255.0f };
+    m_gl->glClearTexImage(texId, 0, GL_RGBA, GL_FLOAT, rgba);
 }
 
 bool GLBrushRenderer::copyColorRegion(GLuint sourceTexture, TilePixelFormat sourceFormat,
@@ -4202,6 +4059,8 @@ bool GLBrushRenderer::copyColorRegion(GLuint sourceTexture, TilePixelFormat sour
     m_gl->glGetIntegerv(GL_VIEWPORT, previousViewport);
     m_gl->glGetIntegerv(GL_CURRENT_PROGRAM, &previousProgram);
     m_gl->glGetIntegerv(GL_VERTEX_ARRAY_BINDING, &previousVao);
+    // GL_TEXTURE_BINDING_2D reports the ACTIVE unit's binding, so unit 0 has to
+    // be selected for the query even though the binds themselves are now DSA.
     m_gl->glGetIntegerv(GL_ACTIVE_TEXTURE, &previousActiveTexture);
     m_gl->glActiveTexture(GL_TEXTURE0);
     m_gl->glGetIntegerv(GL_TEXTURE_BINDING_2D, &previousTexture0);
@@ -4231,7 +4090,7 @@ bool GLBrushRenderer::copyColorRegion(GLuint sourceTexture, TilePixelFormat sour
         m_gl->glColorMask(GL_TRUE, GL_TRUE, GL_TRUE, GL_TRUE);
         m_gl->glViewport(targetX, targetY, width, height);
         m_gl->glBindVertexArray(m_emptyVAO);
-        m_gl->glBindTexture(GL_TEXTURE_2D, sourceTexture);
+        m_gl->glBindTextureUnit(0, sourceTexture);
         m_formatCopyProgram->use();
         m_formatCopyProgram->setUniform("uSourceTexture", 0);
         m_formatCopyProgram->setUniform(
@@ -4242,7 +4101,7 @@ bool GLBrushRenderer::copyColorRegion(GLuint sourceTexture, TilePixelFormat sour
         ++m_drawCallEstimate;
     }
 
-    m_gl->glBindTexture(GL_TEXTURE_2D, static_cast<GLuint>(previousTexture0));
+    m_gl->glBindTextureUnit(0, static_cast<GLuint>(previousTexture0));
     m_gl->glActiveTexture(static_cast<GLenum>(previousActiveTexture));
     m_gl->glUseProgram(static_cast<GLuint>(previousProgram));
     m_gl->glBindVertexArray(static_cast<GLuint>(previousVao));
@@ -4284,12 +4143,11 @@ void GLBrushRenderer::ensureBlurReadTexFormat(TilePixelFormat contentFormat)
         return;
     }
     m_blurReadTexFormat = contentFormat;
-    // Mutable storage (created via createTexture2D like the scratch textures),
-    // so glTexImage2D re-specifies format without disturbing filter/wrap params.
-    m_gl->glBindTexture(GL_TEXTURE_2D, m_blurReadTex);
-    m_gl->glTexImage2D(GL_TEXTURE_2D, 0, tileGLInternalFormat(contentFormat), TILE_SIZE, TILE_SIZE,
-        0, GL_RGBA, tileGLPixelType(contentFormat), nullptr);
-    m_gl->glBindTexture(GL_TEXTURE_2D, 0);
+    // Immutable storage cannot be re-formatted in place, so the texture is
+    // replaced. Every use site binds/attaches it explicitly, so the changed
+    // name is not observable elsewhere.
+    recreateTexture2D(m_gl, m_blurReadTex, TILE_SIZE, TILE_SIZE,
+        tileTextureParams(contentFormat, GL_NEAREST, GL_NEAREST));
 }
 
 bool GLBrushRenderer::ensureBlurScratchSize(
@@ -4308,19 +4166,14 @@ bool GLBrushRenderer::ensureBlurScratchSize(
     m_blurScratchFormat = contentFormat;
 
     // Content scratch follows the requested working format. Wet requests float
-    // storage; other effects request the document format.
-    const GLenum internalFmt = tileGLInternalFormat(contentFormat);
-    const GLenum pixelType = tileGLPixelType(contentFormat);
-
-    m_gl->glBindTexture(GL_TEXTURE_2D, m_blurScratchSourceTex);
-    m_gl->glTexImage2D(GL_TEXTURE_2D, 0, internalFmt, m_blurScratchWidth, m_blurScratchHeight, 0,
-        GL_RGBA, pixelType, nullptr);
-
-    m_gl->glBindTexture(GL_TEXTURE_2D, m_blurScratchTempTex);
-    m_gl->glTexImage2D(GL_TEXTURE_2D, 0, internalFmt, m_blurScratchWidth, m_blurScratchHeight, 0,
-        GL_RGBA, pixelType, nullptr);
-    m_gl->glBindTexture(GL_TEXTURE_2D, 0);
-    return true;
+    // storage; other effects request the document format. Immutable storage
+    // means resizing/re-formatting replaces the texture objects.
+    const TextureParams scratchParams = tileTextureParams(contentFormat, GL_NEAREST, GL_NEAREST);
+    recreateTexture2D(
+        m_gl, m_blurScratchSourceTex, m_blurScratchWidth, m_blurScratchHeight, scratchParams);
+    recreateTexture2D(
+        m_gl, m_blurScratchTempTex, m_blurScratchWidth, m_blurScratchHeight, scratchParams);
+    return m_blurScratchSourceTex != 0 && m_blurScratchTempTex != 0;
 }
 
 bool GLBrushRenderer::ensureMaskScratchSize(GLsizei width, GLsizei height)
@@ -4328,26 +4181,18 @@ bool GLBrushRenderer::ensureMaskScratchSize(GLsizei width, GLsizei height)
     if (width <= 0 || height <= 0) {
         return false;
     }
-    if (m_maskScratchTex == 0) {
-        // RGBA8 coverage scratch; NEAREST to match the content-scratch default.
-        m_maskScratchTex = createTexture2D(
-            m_gl, width, height, tileTextureParams(TilePixelFormat::RGBA8, GL_NEAREST, GL_NEAREST));
-        if (m_maskScratchTex == 0)
-            return false;
-        m_maskScratchWidth = width;
-        m_maskScratchHeight = height;
+    if (m_maskScratchTex != 0 && width == m_maskScratchWidth && height == m_maskScratchHeight) {
         return true;
     }
-    if (width == m_maskScratchWidth && height == m_maskScratchHeight) {
-        return true;
-    }
+
+    // RGBA8 coverage scratch; NEAREST to match the content-scratch default.
+    // Immutable storage means a resize replaces the texture object rather than
+    // re-specifying it, so creation and growth share one path.
     m_maskScratchWidth = width;
     m_maskScratchHeight = height;
-    m_gl->glBindTexture(GL_TEXTURE_2D, m_maskScratchTex);
-    m_gl->glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA8, m_maskScratchWidth, m_maskScratchHeight, 0,
-        GL_RGBA, GL_UNSIGNED_BYTE, nullptr);
-    m_gl->glBindTexture(GL_TEXTURE_2D, 0);
-    return true;
+    recreateTexture2D(m_gl, m_maskScratchTex, width, height,
+        tileTextureParams(TilePixelFormat::RGBA8, GL_NEAREST, GL_NEAREST));
+    return m_maskScratchTex != 0;
 }
 
 namespace {
@@ -4367,25 +4212,15 @@ bool ensureSmudgeWorkTextures(QOpenGLFunctions_4_5_Core* gl, GLuint workTex[2], 
     // Grow geometrically to avoid thrashing across slightly-different ROIs.
     GLsizei w = std::max(width, needWidth);
     GLsizei h = std::max(height, needHeight);
-    auto createOrResize = [&](GLuint& tex) {
-        if (tex == 0) {
-            gl->glGenTextures(1, &tex);
-            gl->glBindTexture(GL_TEXTURE_2D, tex);
-            gl->glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
-            gl->glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
-            gl->glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
-            gl->glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
-        } else {
-            gl->glBindTexture(GL_TEXTURE_2D, tex);
-        }
-        // The caller selects document storage for Smudge and float working
-        // storage for Wet. Boundary copies perform format conversion as needed.
-        gl->glTexImage2D(GL_TEXTURE_2D, 0, tileGLInternalFormat(contentFormat), w, h, 0, GL_RGBA,
-            tileGLPixelType(contentFormat), nullptr);
-    };
-    createOrResize(workTex[0]);
-    createOrResize(workTex[1]);
-    gl->glBindTexture(GL_TEXTURE_2D, 0);
+    // The caller selects document storage for Smudge and float working storage
+    // for Wet. Boundary copies perform format conversion as needed. Immutable
+    // storage means a grow/reformat replaces the texture objects.
+    const TextureParams params = tileTextureParams(contentFormat, GL_LINEAR, GL_LINEAR);
+    recreateTexture2D(gl, workTex[0], w, h, params);
+    recreateTexture2D(gl, workTex[1], w, h, params);
+    if (workTex[0] == 0 || workTex[1] == 0) {
+        return false;
+    }
     width = w;
     height = h;
     format = contentFormat;
@@ -4673,9 +4508,7 @@ bool GLBrushRenderer::stampSmudgeSegmentGPU(TileGrid& strokeBuffer, GLTileRender
     }
     const int useDabShape = dabTexId != 0 ? 1 : 0;
     if (dabTexId != 0) {
-        m_gl->glActiveTexture(GL_TEXTURE3);
-        m_gl->glBindTexture(GL_TEXTURE_2D, dabTexId);
-        m_gl->glActiveTexture(GL_TEXTURE0);
+        m_gl->glBindTextureUnit(3, dabTexId);
     }
 
     if (m_blurLinearSampler) {
@@ -4731,9 +4564,7 @@ bool GLBrushRenderer::stampSmudgeSegmentGPU(TileGrid& strokeBuffer, GLTileRender
         "uInvMaskSize", 1.0f / static_cast<float>(roiW), 1.0f / static_cast<float>(roiH));
 
     if (useSelectionMask) {
-        m_gl->glActiveTexture(GL_TEXTURE2);
-        m_gl->glBindTexture(GL_TEXTURE_2D, m_maskScratchTex);
-        m_gl->glActiveTexture(GL_TEXTURE0);
+        m_gl->glBindTextureUnit(2, m_maskScratchTex);
     }
 
     const float deg2rad = 3.14159265358979323846f / 180.0f;
@@ -4810,19 +4641,16 @@ bool GLBrushRenderer::stampSmudgeSegmentGPU(TileGrid& strokeBuffer, GLTileRender
                 static_cast<float>(d.colorG) / 255.0f, static_cast<float>(d.colorB) / 255.0f);
         }
 
-        m_gl->glActiveTexture(GL_TEXTURE0);
-        m_gl->glBindTexture(GL_TEXTURE_2D, m_smudgeWorkTex[wSrc]);
+        m_gl->glBindTextureUnit(0, m_smudgeWorkTex[wSrc]);
         bool pickupFramebufferComplete = false;
         if (wetMode) {
             bindWetLuts(m_gl, pickupProgram, m_pigmentLutTex);
             bindWetReservoir(m_gl, pickupProgram, m_smudgeReservoirTex[rSrc], m_blurLinearSampler);
             pickupFramebufferComplete = attachWetReservoir(m_gl, m_smudgeReservoirTex[rDst]);
         } else {
-            m_gl->glActiveTexture(GL_TEXTURE1);
-            m_gl->glBindTexture(GL_TEXTURE_2D, m_smudgeReservoirTex[rSrc][0]);
+            m_gl->glBindTextureUnit(1, m_smudgeReservoirTex[rSrc][0]);
             if (m_blurLinearSampler)
                 m_gl->glBindSampler(1, m_blurLinearSampler);
-            m_gl->glActiveTexture(GL_TEXTURE0);
             m_gl->glFramebufferTexture2D(GL_FRAMEBUFFER, GL_COLOR_ATTACHMENT0, GL_TEXTURE_2D,
                 m_smudgeReservoirTex[rDst][0], 0);
             pickupFramebufferComplete
@@ -4837,15 +4665,12 @@ bool GLBrushRenderer::stampSmudgeSegmentGPU(TileGrid& strokeBuffer, GLTileRender
                 m_gl->glBindSampler(1, 0);
             }
             if (useSelectionMask) {
-                m_gl->glActiveTexture(GL_TEXTURE2);
-                m_gl->glBindTexture(GL_TEXTURE_2D, 0);
+                m_gl->glBindTextureUnit(2, 0);
             }
             if (dabTexId != 0) {
-                m_gl->glActiveTexture(GL_TEXTURE3);
-                m_gl->glBindTexture(GL_TEXTURE_2D, 0);
+                m_gl->glBindTextureUnit(3, 0);
             }
-            m_gl->glActiveTexture(GL_TEXTURE0);
-            m_gl->glBindTexture(GL_TEXTURE_2D, 0);
+            m_gl->glBindTextureUnit(0, 0);
             if (ownBatch)
                 endStampBatch();
             return false;
@@ -4882,17 +4707,14 @@ bool GLBrushRenderer::stampSmudgeSegmentGPU(TileGrid& strokeBuffer, GLTileRender
         }
         applyProgram->setUniform("uBrushCenter", brushCenterX, brushCenterY);
 
-        m_gl->glActiveTexture(GL_TEXTURE0);
-        m_gl->glBindTexture(GL_TEXTURE_2D, m_smudgeWorkTex[wSrc]);
+        m_gl->glBindTextureUnit(0, m_smudgeWorkTex[wSrc]);
         if (wetMode) {
             bindWetReservoir(m_gl, applyProgram, m_smudgeReservoirTex[rSrc], m_blurLinearSampler);
         } else {
-            m_gl->glActiveTexture(GL_TEXTURE1);
-            m_gl->glBindTexture(GL_TEXTURE_2D, m_smudgeReservoirTex[rSrc][0]);
+            m_gl->glBindTextureUnit(1, m_smudgeReservoirTex[rSrc][0]);
             if (m_blurLinearSampler)
                 m_gl->glBindSampler(1, m_blurLinearSampler);
         }
-        m_gl->glActiveTexture(GL_TEXTURE0);
         m_gl->glFramebufferTexture2D(
             GL_FRAMEBUFFER, GL_COLOR_ATTACHMENT0, GL_TEXTURE_2D, m_smudgeWorkTex[wDst], 0);
         m_gl->glViewport(0, 0, roiW, roiH);
@@ -4913,18 +4735,13 @@ bool GLBrushRenderer::stampSmudgeSegmentGPU(TileGrid& strokeBuffer, GLTileRender
         m_gl->glBindSampler(0, 0);
         m_gl->glBindSampler(1, 0);
     }
-    m_gl->glActiveTexture(GL_TEXTURE1);
-    m_gl->glBindTexture(GL_TEXTURE_2D, 0);
+    m_gl->glBindTextureUnit(1, 0);
     if (useSelectionMask) {
-        m_gl->glActiveTexture(GL_TEXTURE2);
-        m_gl->glBindTexture(GL_TEXTURE_2D, 0);
+        m_gl->glBindTextureUnit(2, 0);
     }
-    m_gl->glActiveTexture(GL_TEXTURE0);
-    m_gl->glBindTexture(GL_TEXTURE_2D, 0);
+    m_gl->glBindTextureUnit(0, 0);
     if (dabTexId != 0) {
-        m_gl->glActiveTexture(GL_TEXTURE3);
-        m_gl->glBindTexture(GL_TEXTURE_2D, 0);
-        m_gl->glActiveTexture(GL_TEXTURE0);
+        m_gl->glBindTextureUnit(3, 0);
     }
     unbindWetTextures(m_gl);
 
@@ -5101,17 +4918,14 @@ bool GLBrushRenderer::stampLiquifySegmentGPU(TileGrid& strokeBuffer, GLTileRende
             return true;
         }
 
-        auto createTex = [&](GLint internalFmt, GLenum fmt, GLenum type) -> GLuint {
-            GLuint tex = 0;
-            m_gl->glGenTextures(1, &tex);
-            m_gl->glBindTexture(GL_TEXTURE_2D, tex);
-            m_gl->glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
-            m_gl->glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
-            m_gl->glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
-            m_gl->glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
-            m_gl->glTexImage2D(
-                GL_TEXTURE_2D, 0, internalFmt, newRoiW, newRoiH, 0, fmt, type, nullptr);
-            return tex;
+        auto createTex = [&](GLenum internalFmt, GLenum fmt, GLenum type) -> GLuint {
+            TextureParams params;
+            params.minFilter = GL_LINEAR;
+            params.magFilter = GL_LINEAR;
+            params.internalFormat = internalFmt;
+            params.pixelFormat = fmt;
+            params.pixelType = type;
+            return createTexture2D(m_gl, newRoiW, newRoiH, params);
         };
 
         // RG32F (not RG16F): the field stores px offsets up to the stroke
@@ -5127,7 +4941,6 @@ bool GLBrushRenderer::stampLiquifySegmentGPU(TileGrid& strokeBuffer, GLTileRende
         m_liquifySourceFormat = liquifyContentFormat;
         GLuint newSource = createTex(tileGLInternalFormat(liquifyContentFormat), GL_RGBA,
             tileGLPixelType(liquifyContentFormat));
-        m_gl->glBindTexture(GL_TEXTURE_2D, 0);
         if (newField0 == 0 || newField1 == 0 || newSource == 0) {
             if (newField0)
                 m_gl->glDeleteTextures(1, &newField0);
@@ -5285,9 +5098,7 @@ bool GLBrushRenderer::stampLiquifySegmentGPU(TileGrid& strokeBuffer, GLTileRende
     m_liquifyFieldProgram->setUniform(
         "uViewportSize", static_cast<float>(roiW), static_cast<float>(roiH));
     if (useSelectionMask) {
-        m_gl->glActiveTexture(GL_TEXTURE2);
-        m_gl->glBindTexture(GL_TEXTURE_2D, m_maskScratchTex);
-        m_gl->glActiveTexture(GL_TEXTURE0);
+        m_gl->glBindTextureUnit(2, m_maskScratchTex);
     }
 
     // Sub-mode + its per-dab rate (Push reads uStepDelta and ignores uRate).
@@ -5336,8 +5147,7 @@ bool GLBrushRenderer::stampLiquifySegmentGPU(TileGrid& strokeBuffer, GLTileRende
         m_liquifyFieldProgram->setUniform("uStepDelta", stepX, stepY);
         m_liquifyFieldProgram->setUniform("uStrength", std::clamp(strength, 0.0f, 1.0f));
 
-        m_gl->glActiveTexture(GL_TEXTURE0);
-        m_gl->glBindTexture(GL_TEXTURE_2D, m_liquifyFieldTex[fSrc]);
+        m_gl->glBindTextureUnit(0, m_liquifyFieldTex[fSrc]);
         m_gl->glFramebufferTexture2D(
             GL_FRAMEBUFFER, GL_COLOR_ATTACHMENT0, GL_TEXTURE_2D, m_liquifyFieldTex[fDst], 0);
         m_gl->glViewport(0, 0, roiW, roiH);
@@ -5354,11 +5164,9 @@ bool GLBrushRenderer::stampLiquifySegmentGPU(TileGrid& strokeBuffer, GLTileRende
         if (m_blurLinearSampler)
             m_gl->glBindSampler(0, 0);
         if (useSelectionMask) {
-            m_gl->glActiveTexture(GL_TEXTURE2);
-            m_gl->glBindTexture(GL_TEXTURE_2D, 0);
-            m_gl->glActiveTexture(GL_TEXTURE0);
+            m_gl->glBindTextureUnit(2, 0);
         }
-        m_gl->glBindTexture(GL_TEXTURE_2D, 0);
+        m_gl->glBindTextureUnit(0, 0);
         if (ownBatch)
             endStampBatch();
         return true; // start point only — field ready, nothing to resolve yet
@@ -5389,11 +5197,8 @@ bool GLBrushRenderer::stampLiquifySegmentGPU(TileGrid& strokeBuffer, GLTileRende
         "uFieldOffset", static_cast<float>(fpMinX - roiX), static_cast<float>(fpMinY - roiY));
     m_liquifyResolveProgram->setUniform(
         "uViewportSize", static_cast<float>(fpW), static_cast<float>(fpH));
-    m_gl->glActiveTexture(GL_TEXTURE0);
-    m_gl->glBindTexture(GL_TEXTURE_2D, m_liquifySourceTex);
-    m_gl->glActiveTexture(GL_TEXTURE1);
-    m_gl->glBindTexture(GL_TEXTURE_2D, m_liquifyFieldTex[m_liquifyFieldSrcIdx]);
-    m_gl->glActiveTexture(GL_TEXTURE0);
+    m_gl->glBindTextureUnit(0, m_liquifySourceTex);
+    m_gl->glBindTextureUnit(1, m_liquifyFieldTex[m_liquifyFieldSrcIdx]);
     m_gl->glFramebufferTexture2D(
         GL_FRAMEBUFFER, GL_COLOR_ATTACHMENT0, GL_TEXTURE_2D, m_smudgeWorkTex[0], 0);
     m_gl->glViewport(0, 0, fpW, fpH);
@@ -5404,14 +5209,11 @@ bool GLBrushRenderer::stampLiquifySegmentGPU(TileGrid& strokeBuffer, GLTileRende
         m_gl->glBindSampler(0, 0);
         m_gl->glBindSampler(1, 0);
     }
-    m_gl->glActiveTexture(GL_TEXTURE1);
-    m_gl->glBindTexture(GL_TEXTURE_2D, 0);
+    m_gl->glBindTextureUnit(1, 0);
     if (useSelectionMask) {
-        m_gl->glActiveTexture(GL_TEXTURE2);
-        m_gl->glBindTexture(GL_TEXTURE_2D, 0);
+        m_gl->glBindTextureUnit(2, 0);
     }
-    m_gl->glActiveTexture(GL_TEXTURE0);
-    m_gl->glBindTexture(GL_TEXTURE_2D, 0);
+    m_gl->glBindTextureUnit(0, 0);
 
     // ----- 5. Copy resolved footprint into the stroke buffer tiles ---------
     {

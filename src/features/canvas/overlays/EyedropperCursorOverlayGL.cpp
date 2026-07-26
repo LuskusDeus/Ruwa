@@ -234,8 +234,7 @@ void EyedropperCursorOverlayGL::render(float centerX, float centerY, int viewpor
     m_gl->glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
     m_gl->glDisable(GL_DEPTH_TEST);
 
-    m_gl->glActiveTexture(GL_TEXTURE0);
-    m_gl->glBindTexture(GL_TEXTURE_2D, sceneTextureId);
+    m_gl->glBindTextureUnit(0, sceneTextureId);
 
     // gl_FragCoord has y from bottom; center in window space
     const float centerWindowX = centerX;
