@@ -26,6 +26,17 @@ namespace {
 
 constexpr int kRebuildBatchMaxDabs = 64;
 
+/// Bumps a stroke buffer's content version when a stamp entry point returns.
+/// Dabs are rendered straight into the tiles' GPU textures, which no TileGrid
+/// mutator observes (only creating a brand-new tile bumps the version), so the
+/// caches that validate on contentVersion — the whole-layer/group effect region
+/// caches in GLCompositor — would keep serving the stroke as it looked when the
+/// tile was first touched. Same reason flattenStrokeGPU notes the layer grid.
+struct StrokeBufferVersionBump {
+    TileGrid& grid;
+    ~StrokeBufferVersionBump() { grid.notePixelsChangedOutOfBand(); }
+};
+
 QString glsl(std::string_view source)
 {
     return QString::fromUtf8(source.data(), static_cast<qsizetype>(source.size()));
@@ -1894,6 +1905,7 @@ void GLBrushRenderer::stampGPU(TileGrid& strokeBuffer, GLTileRenderer* tileRende
     uint8_t a, TileGrid* selectionMask, bool useSelectionMask, uint32_t canvasWidth,
     uint32_t canvasHeight, TileGrid* layerGrid)
 {
+    const StrokeBufferVersionBump versionBump { strokeBuffer };
     if (!m_initialized || !m_brushProgram || !tileRenderer)
         return;
     if (radius <= 0.0f || a == 0)
@@ -2946,6 +2958,7 @@ bool GLBrushRenderer::stampDabSegmentGPU(TileGrid& strokeBuffer, GLTileRenderer*
     const TileBrush& brush, const std::vector<TileBrush::DabPoint>& dabs, TileGrid* selectionMask,
     bool useSelectionMask, uint32_t canvasWidth, uint32_t canvasHeight)
 {
+    const StrokeBufferVersionBump versionBump { strokeBuffer };
     if (!m_initialized || !m_rebuildBatchProgram || !tileRenderer)
         return false;
     if (dabs.empty())
@@ -3109,6 +3122,7 @@ void GLBrushRenderer::rebuildStrokeBufferFromDabsGPU(TileGrid& strokeBuffer,
     const std::vector<TileBrush::DabPoint>& dabs, size_t maxDabs, TileGrid* selectionMask,
     bool useSelectionMask, uint32_t canvasWidth, uint32_t canvasHeight)
 {
+    const StrokeBufferVersionBump versionBump { strokeBuffer };
     if (!m_initialized || !m_rebuildBatchProgram || !tileRenderer)
         return;
     // Rebuilding the stroke from scratch invalidates any in-flight smudge carry.
@@ -3324,6 +3338,7 @@ void GLBrushRenderer::rebuildStrokeBufferRangeFromDabsGPU(TileGrid& strokeBuffer
     const std::vector<TileBrush::DabPoint>& dabs, size_t startDabIndex, size_t dabCount,
     TileGrid* selectionMask, bool useSelectionMask, uint32_t canvasWidth, uint32_t canvasHeight)
 {
+    const StrokeBufferVersionBump versionBump { strokeBuffer };
     if (!m_initialized || !m_rebuildBatchProgram || !tileRenderer)
         return;
     if (dabCount == 0 || startDabIndex >= dabs.size())
@@ -4017,8 +4032,7 @@ GLuint GLBrushRenderer::ensureProceduralTextureTile(const TileKey& key, const Ti
     m_proceduralTextureProgram->setUniform("uNoiseRoughness", brush.textureNoiseRoughness());
     m_proceduralTextureProgram->setUniform(
         "uPerlinOctaves", static_cast<int>(std::lround(brush.texturePerlinOctaves())));
-    m_proceduralTextureProgram->setUniform(
-        "uPerlinPersistence", brush.texturePerlinPersistence());
+    m_proceduralTextureProgram->setUniform("uPerlinPersistence", brush.texturePerlinPersistence());
     m_proceduralTextureProgram->setUniform("uDotsSpacing", brush.textureDotsSpacing());
     m_proceduralTextureProgram->setUniform("uDotsSize", brush.textureDotsSize());
     m_proceduralTextureProgram->setUniform("uDotsJitter", brush.textureDotsJitter());
@@ -4026,10 +4040,8 @@ GLuint GLBrushRenderer::ensureProceduralTextureTile(const TileKey& key, const Ti
     m_proceduralTextureProgram->setUniform("uLinesThickness", brush.textureLinesThickness());
     m_proceduralTextureProgram->setUniform("uLinesAngle", brush.textureLinesAngle());
     m_proceduralTextureProgram->setUniform("uCheckerSize", brush.textureCheckerSize());
-    m_proceduralTextureProgram->setUniform(
-        "uCheckerSoftness", brush.textureCheckerSoftness());
-    m_proceduralTextureProgram->setUniform(
-        "uCheckerRotation", brush.textureCheckerRotation());
+    m_proceduralTextureProgram->setUniform("uCheckerSoftness", brush.textureCheckerSoftness());
+    m_proceduralTextureProgram->setUniform("uCheckerRotation", brush.textureCheckerRotation());
 
     m_gl->glBindVertexArray(m_emptyVAO);
     m_gl->glDrawArrays(GL_TRIANGLES, 0, 6);
@@ -4385,6 +4397,7 @@ bool GLBrushRenderer::stampSmudgeSegmentGPU(TileGrid& strokeBuffer, GLTileRender
     const TileBrush& brush, const std::vector<TileBrush::DabPoint>& dabs, uint32_t canvasWidth,
     uint32_t canvasHeight, TileGrid* layerGrid, TileGrid* selectionMask, bool useSelectionMask)
 {
+    const StrokeBufferVersionBump versionBump { strokeBuffer };
     if (dabs.empty())
         return true;
     const bool wetMode = brush.isWetMode();
@@ -4979,6 +4992,7 @@ bool GLBrushRenderer::stampLiquifySegmentGPU(TileGrid& strokeBuffer, GLTileRende
     const TileBrush& brush, const std::vector<TileBrush::DabPoint>& dabs, uint32_t canvasWidth,
     uint32_t canvasHeight, TileGrid* layerGrid, TileGrid* selectionMask, bool useSelectionMask)
 {
+    const StrokeBufferVersionBump versionBump { strokeBuffer };
     if (dabs.empty())
         return true;
     if (!m_liquifyFieldProgram || !m_liquifyResolveProgram || !layerGrid || !tileRenderer) {

@@ -183,10 +183,8 @@ bool CanvasKeyEventHandler::handleEvent(QObject* watched, QEvent* event)
             // Lasso Fill deliberately remains available for the temporary Eyedropper:
             // unlike selection tools, it does not use Alt as a subtract modifier.
             const bool blocksTemporaryEyedropper = currentTool == ToolId::Lasso
-                || currentTool == ToolId::SquareSelection
-                || currentTool == ToolId::CircleSelection
-                || currentTool == ToolId::MagicWand
-                || currentTool == ToolId::Move;
+                || currentTool == ToolId::SquareSelection || currentTool == ToolId::CircleSelection
+                || currentTool == ToolId::MagicWand || currentTool == ToolId::Move;
             const bool blockTempHandInSelectionInteraction
                 = (ke->key() == Qt::Key_Space) && activeSelectionInteraction;
             const bool blockTempEyedropperInTransform

@@ -964,14 +964,12 @@ void BrushEditorLayoutWidget::commitBrushNameFromInput()
 
 void BrushEditorLayoutWidget::updateTextureControls()
 {
-    const QScopedValueRollback<bool> updatingTextureControlsGuard(
-        m_updatingTextureControls, true);
+    const QScopedValueRollback<bool> updatingTextureControlsGuard(m_updatingTextureControls, true);
 
     const bool hasBrush = !m_selectedBrushId.isEmpty();
     const int textureMode = hasBrush
         ? qBound(static_cast<int>(BrushSettingsData::TextureModeProcedural),
-              m_currentSettings.textureMode,
-              static_cast<int>(BrushSettingsData::TextureModeImage))
+              m_currentSettings.textureMode, static_cast<int>(BrushSettingsData::TextureModeImage))
         : static_cast<int>(BrushSettingsData::TextureModeProcedural);
 
     if (m_textureModeSelector) {
@@ -1415,8 +1413,7 @@ QWidget* BrushEditorLayoutWidget::createCustomTexturePage(
     pageLayout->addWidget(descLabel);
 
     QVector<widgets::SegmentedOptionSelector::Option> modeOptions;
-    modeOptions.append(
-        { tr("Procedural"), QIcon(), BrushSettingsData::TextureModeProcedural });
+    modeOptions.append({ tr("Procedural"), QIcon(), BrushSettingsData::TextureModeProcedural });
     modeOptions.append({ tr("Image"), QIcon(), BrushSettingsData::TextureModeImage });
 
     auto* modeRow = new QWidget(page);
@@ -1426,8 +1423,7 @@ QWidget* BrushEditorLayoutWidget::createCustomTexturePage(
     modeRowLayout->setSpacing(0);
 
     m_textureModeSelector = new widgets::SegmentedOptionSelector(modeOptions, modeRow);
-    m_textureModeSelector->setDisplayMode(
-        widgets::SegmentedOptionSelector::DisplayMode::TextOnly);
+    m_textureModeSelector->setDisplayMode(widgets::SegmentedOptionSelector::DisplayMode::TextOnly);
     m_textureModeSelector->setCurrentIndex(BrushSettingsData::TextureModeProcedural, false);
     modeRowLayout->addStretch();
     modeRowLayout->addWidget(m_textureModeSelector);
@@ -1484,8 +1480,7 @@ QWidget* BrushEditorLayoutWidget::createCustomTexturePage(
         tr("Coming in a future version"),
         tr("Image-based brush textures will be available in upcoming releases of Ruwa."),
         m_textureModeStack));
-    m_textureModeStack->setCurrentIndexWithoutAnimation(
-        BrushSettingsData::TextureModeProcedural);
+    m_textureModeStack->setCurrentIndexWithoutAnimation(BrushSettingsData::TextureModeProcedural);
     updateProceduralTextureEditorHeight();
     updateTextureModeStackHeight();
 
@@ -1503,9 +1498,9 @@ QWidget* BrushEditorLayoutWidget::createCustomTexturePage(
             }
 
             if (!m_updatingTextureControls && !m_selectedBrushId.isEmpty()) {
-                const int textureMode = qBound(
-                    static_cast<int>(BrushSettingsData::TextureModeProcedural), index,
-                    static_cast<int>(BrushSettingsData::TextureModeImage));
+                const int textureMode
+                    = qBound(static_cast<int>(BrushSettingsData::TextureModeProcedural), index,
+                        static_cast<int>(BrushSettingsData::TextureModeImage));
                 if (m_currentSettings.textureMode != textureMode) {
                     m_currentSettings.textureMode = textureMode;
                     m_localSettingsEditInFlight = true;
@@ -1687,10 +1682,10 @@ QWidget* BrushEditorLayoutWidget::createCustomDabPage(
         tr("Coming in a future version"),
         tr("Procedural dab generation will be available in upcoming releases of Ruwa."),
         m_dabModeStack));
-    m_dabModeStack->addWidget(
-        createModePlaceholderPage(IconProvider::StandardIcon::Text, tr("Coming in a future version"),
-            tr("Text-based dab rendering will be available in upcoming releases of Ruwa."),
-            m_dabModeStack));
+    m_dabModeStack->addWidget(createModePlaceholderPage(IconProvider::StandardIcon::Text,
+        tr("Coming in a future version"),
+        tr("Text-based dab rendering will be available in upcoming releases of Ruwa."),
+        m_dabModeStack));
     m_dabModeStack->setCurrentIndexWithoutAnimation(0);
     updateDabModeStackHeight();
 
@@ -1911,8 +1906,7 @@ void BrushEditorLayoutWidget::updateProceduralTextureEditorHeight()
     int editorHeight = margins.top() + margins.bottom();
     int measuredItemCount = 0;
     for (int i = 0;
-         i < settingsLayout->count() && measuredItemCount < kProceduralTextureEditorItemCount;
-         ++i) {
+        i < settingsLayout->count() && measuredItemCount < kProceduralTextureEditorItemCount; ++i) {
         const QLayoutItem* item = settingsLayout->itemAt(i);
         if (!item || item->isEmpty()) {
             continue;

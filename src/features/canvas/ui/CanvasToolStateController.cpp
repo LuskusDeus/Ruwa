@@ -241,9 +241,8 @@ void CanvasToolStateController::flushQueuedSnapshotNoWait()
 
 bool CanvasToolStateController::isDrawInstrument(ToolId tool)
 {
-    return tool == ToolId::Brush || tool == ToolId::Eraser
-        || tool == ToolId::Blur || tool == ToolId::Smudge
-        || tool == ToolId::Liquify;
+    return tool == ToolId::Brush || tool == ToolId::Eraser || tool == ToolId::Blur
+        || tool == ToolId::Smudge || tool == ToolId::Liquify;
 }
 
 bool CanvasToolStateController::shouldEraseForTool(ToolId tool, bool brushEraserActive)
@@ -251,8 +250,7 @@ bool CanvasToolStateController::shouldEraseForTool(ToolId tool, bool brushEraser
     return tool == ToolId::Eraser || (tool == ToolId::Brush && brushEraserActive);
 }
 
-ToolId CanvasToolStateController::overlayInstrumentMode(
-    ToolId currentTool, ToolId lastDrawTool)
+ToolId CanvasToolStateController::overlayInstrumentMode(ToolId currentTool, ToolId lastDrawTool)
 {
     if (isDrawInstrument(currentTool)) {
         return currentTool;
@@ -358,8 +356,7 @@ CanvasLoadedToolState CanvasToolStateController::loadPersistedState()
         = settings.value("lastDrawTool", persistentValueForToolId(ToolId::Brush)).toInt();
     const ToolId storedLastDrawTool
         = toolIdFromPersistentValue(storedLastDraw).value_or(ToolId::Brush);
-    loaded.lastDrawTool
-        = isDrawInstrument(storedLastDrawTool) ? storedLastDrawTool : ToolId::Brush;
+    loaded.lastDrawTool = isDrawInstrument(storedLastDrawTool) ? storedLastDrawTool : ToolId::Brush;
     if (isDrawInstrument(loaded.currentTool)) {
         loaded.lastDrawTool = loaded.currentTool;
     }

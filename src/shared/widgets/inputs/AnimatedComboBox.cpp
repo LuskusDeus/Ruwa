@@ -61,8 +61,7 @@ QImage tintedPreview(const AnimatedComboItem& item, const QColor& fallbackColor)
     QPainter painter(&tinted);
     painter.drawImage(0, 0, item.previewImage);
     painter.setCompositionMode(QPainter::CompositionMode_SourceIn);
-    painter.fillRect(
-        tinted.rect(), item.previewTint.isValid() ? item.previewTint : fallbackColor);
+    painter.fillRect(tinted.rect(), item.previewTint.isValid() ? item.previewTint : fallbackColor);
     return tinted;
 }
 } // namespace
@@ -121,8 +120,8 @@ protected:
         QPainter painter(this);
         const auto& colors = ruwa::ui::core::ThemeManager::instance().colors();
         painter.fillRect(rect(), colors.surfaceElevated());
-        painter.fillRect(QRect(10, rect().center().y(), qMax(0, width() - 20), 1),
-            colors.borderSubtle());
+        painter.fillRect(
+            QRect(10, rect().center().y(), qMax(0, width() - 20), 1), colors.borderSubtle());
     }
 };
 
@@ -255,10 +254,7 @@ public:
 
     int index() const { return m_index; }
     void setSelected(bool selected) { setActive(selected); }
-    void setOnHovered(std::function<void(int)> callback)
-    {
-        m_onHovered = std::move(callback);
-    }
+    void setOnHovered(std::function<void(int)> callback) { m_onHovered = std::move(callback); }
 
 protected:
     void enterEvent(QEnterEvent* event) override
@@ -298,16 +294,14 @@ protected:
         painter.setBrush(background);
         painter.drawRoundedRect(cardRect, 12, 12);
 
-        const QColor topBorder = ruwa::ui::core::ThemeColors::interpolate(colors.borderSubtle(),
-            colors.primary, qMax(hoverProgress() * 0.45, activeProgress()));
+        const QColor topBorder = ruwa::ui::core::ThemeColors::interpolate(
+            colors.borderSubtle(), colors.primary, qMax(hoverProgress() * 0.45, activeProgress()));
         QColor bottomBorder = colors.borderSubtle();
         bottomBorder.setAlpha(bottomBorder.alpha() / 2);
-        ruwa::ui::painting::drawGradientBorder(
-            painter, cardRect, 12, topBorder, bottomBorder);
+        ruwa::ui::painting::drawGradientBorder(painter, cardRect, 12, topBorder, bottomBorder);
 
         const int previewHeight = qMax(30, height() - 40);
-        const QRectF previewRect
-            = cardRect.adjusted(8, 8, -8, -(height() - previewHeight - 8));
+        const QRectF previewRect = cardRect.adjusted(8, 8, -8, -(height() - previewHeight - 8));
         const QRectF labelRect(cardRect.left() + 10, previewRect.bottom() + 8,
             cardRect.width() - 20, cardRect.bottom() - previewRect.bottom() - 12);
 
@@ -614,7 +608,6 @@ protected:
         painter.setPen(pen);
         painter.setBrush(Qt::NoBrush);
         painter.drawPath(borderPath);
-
     }
 
 private:
@@ -678,8 +671,8 @@ private:
     void buildPreviewGrid(const QFont& comboFont, int minWidth)
     {
         m_contentLayout->setSpacing(6);
-        const int gridWidth = m_columns * m_cardSize.width()
-            + qMax(0, m_columns - 1) * kPreviewGridSpacing;
+        const int gridWidth
+            = m_columns * m_cardSize.width() + qMax(0, m_columns - 1) * kPreviewGridSpacing;
         m_popupWidth = qMax(minWidth, gridWidth + kPopupPadding * 2);
 
         QWidget* section = nullptr;
@@ -701,8 +694,8 @@ private:
             }
 
             const int rows = qMax(1, (sectionItemCount + m_columns - 1) / m_columns);
-            const int sectionHeight = rows * m_cardSize.height()
-                + qMax(0, rows - 1) * kPreviewGridSpacing;
+            const int sectionHeight
+                = rows * m_cardSize.height() + qMax(0, rows - 1) * kPreviewGridSpacing;
             section->setFixedHeight(sectionHeight);
             accountForBlock(sectionHeight);
             section = nullptr;
@@ -737,8 +730,7 @@ private:
                 beginSection();
             }
 
-            auto* button
-                = new ComboPreviewCardButton(item, i, m_cardSize, section);
+            auto* button = new ComboPreviewCardButton(item, i, m_cardSize, section);
             button->setFont(comboFont);
             button->setSelected(i == m_selectedIndex);
             connect(button, &QPushButton::clicked, this, [this, i]() {
@@ -825,8 +817,7 @@ private:
     int m_hoveredIndex = -1;
     int m_popupWidth = 180;
     int m_contentHeight = 0;
-    AnimatedComboBox::PopupPresentation m_presentation
-        = AnimatedComboBox::PopupPresentation::List;
+    AnimatedComboBox::PopupPresentation m_presentation = AnimatedComboBox::PopupPresentation::List;
     int m_columns = 1;
     QSize m_cardSize;
     bool m_isVisible = false;
@@ -1270,12 +1261,10 @@ void AnimatedComboBox::keyPressEvent(QKeyEvent* event)
         break;
     case Qt::Key_Right:
     case Qt::Key_Down: {
-        const int offset = event->key() == Qt::Key_Down && isPopupActive()
-            ? m_popup->currentColumnCount()
-            : 1;
-        const int from = isPopupActive() && m_popup->hoveredIndex() >= 0
-            ? m_popup->hoveredIndex()
-            : m_currentIndex;
+        const int offset
+            = event->key() == Qt::Key_Down && isPopupActive() ? m_popup->currentColumnCount() : 1;
+        const int from = isPopupActive() && m_popup->hoveredIndex() >= 0 ? m_popup->hoveredIndex()
+                                                                         : m_currentIndex;
         const int next = nextSelectableIndex(from, offset);
         if (next >= 0) {
             setCurrentIndex(next);
@@ -1286,12 +1275,10 @@ void AnimatedComboBox::keyPressEvent(QKeyEvent* event)
     }
     case Qt::Key_Left:
     case Qt::Key_Up: {
-        const int offset = event->key() == Qt::Key_Up && isPopupActive()
-            ? -m_popup->currentColumnCount()
-            : -1;
-        const int from = isPopupActive() && m_popup->hoveredIndex() >= 0
-            ? m_popup->hoveredIndex()
-            : m_currentIndex;
+        const int offset
+            = event->key() == Qt::Key_Up && isPopupActive() ? -m_popup->currentColumnCount() : -1;
+        const int from = isPopupActive() && m_popup->hoveredIndex() >= 0 ? m_popup->hoveredIndex()
+                                                                         : m_currentIndex;
         const int prev = nextSelectableIndex(from, offset);
         if (prev >= 0) {
             setCurrentIndex(prev);
@@ -1434,8 +1421,8 @@ void AnimatedComboBox::syncPopupItems()
     const int popupMinimumWidth = m_popupPresentation == PopupPresentation::PreviewGrid
         ? qMin(m_popupMinWidth, availableWidth)
         : qMax(m_popupMinWidth, width());
-    m_popup->setItems(m_items, m_currentIndex, popupMinimumWidth, font(),
-        m_popupPresentation, effectiveColumns, m_popupCardSize);
+    m_popup->setItems(m_items, m_currentIndex, popupMinimumWidth, font(), m_popupPresentation,
+        effectiveColumns, m_popupCardSize);
     m_popup->setSelectedIndex(m_currentIndex);
 }
 

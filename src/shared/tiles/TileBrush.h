@@ -204,10 +204,8 @@ public:
     void setTextureType(int v)
     {
         const int nv = std::clamp(v,
-            static_cast<int>(
-                ruwa::core::brushes::BrushSettingsData::TextureTypePencilGrain),
-            static_cast<int>(
-                ruwa::core::brushes::BrushSettingsData::TextureTypeCheckerboard));
+            static_cast<int>(ruwa::core::brushes::BrushSettingsData::TextureTypePencilGrain),
+            static_cast<int>(ruwa::core::brushes::BrushSettingsData::TextureTypeCheckerboard));
         if (m_textureType != nv) {
             m_textureType = nv;
             m_proceduralTextureTiles.clear();
@@ -2321,8 +2319,8 @@ private:
         const float highWeight = detail * 0.2f;
         const float streakWeight = texturePencilStreakStrength() * 0.5f;
         const float weightSum = baseWeight + midWeight + highWeight + streakWeight;
-        return std::clamp((n0 * baseWeight + n1 * midWeight + n2 * highWeight
-                              + streak * streakWeight)
+        return std::clamp(
+            (n0 * baseWeight + n1 * midWeight + n2 * highWeight + streak * streakWeight)
                 / weightSum,
             0.0f, 1.0f);
     }
@@ -2332,9 +2330,8 @@ private:
     {
         const float scale = std::clamp(
             textureScaleOverride > 0.0f ? textureScaleOverride : textureScale(), 0.1f, 4.0f);
-        constexpr std::array<uint32_t, 5> seeds {
-            0xB2C4D1u, 0x8E3A5Fu, 0xD7F21Au, 0x4CA591u, 0xE19B37u
-        };
+        constexpr std::array<uint32_t, 5> seeds { 0xB2C4D1u, 0x8E3A5Fu, 0xD7F21Au, 0x4CA591u,
+            0xE19B37u };
         const int octaveCount
             = std::clamp(static_cast<int>(std::lround(textureNoiseOctaves())), 1, 5);
         const float roughness = textureNoiseRoughness();
@@ -2343,8 +2340,7 @@ private:
         float value = 0.0f;
         float weight = 0.0f;
         for (int octave = 0; octave < octaveCount; ++octave) {
-            value += valueNoise(worldX * frequency, worldY * frequency, seeds[octave])
-                * amplitude;
+            value += valueNoise(worldX * frequency, worldY * frequency, seeds[octave]) * amplitude;
             weight += amplitude;
             frequency *= 2.35f;
             amplitude *= roughness;
@@ -2358,9 +2354,8 @@ private:
     {
         const float scale = std::clamp(
             textureScaleOverride > 0.0f ? textureScaleOverride : textureScale(), 0.1f, 4.0f);
-        constexpr std::array<uint32_t, 5> seeds {
-            0x5A3C91u, 0x7B2D41u, 0xC4E137u, 0x326FA9u, 0xD9155Bu
-        };
+        constexpr std::array<uint32_t, 5> seeds { 0x5A3C91u, 0x7B2D41u, 0xC4E137u, 0x326FA9u,
+            0xD9155Bu };
         const int octaveCount
             = std::clamp(static_cast<int>(std::lround(texturePerlinOctaves())), 1, 5);
         const float persistence = texturePerlinPersistence();
@@ -2381,8 +2376,7 @@ private:
     }
 
     /// Type 3: Dot Grid — regularly spaced points with controllable positional jitter.
-    float proceduralDotsGrain(
-        float worldX, float worldY, float textureScaleOverride = -1.0f) const
+    float proceduralDotsGrain(float worldX, float worldY, float textureScaleOverride = -1.0f) const
     {
         const float scale = std::clamp(
             textureScaleOverride > 0.0f ? textureScaleOverride : textureScale(), 0.1f, 4.0f);
@@ -2403,15 +2397,13 @@ private:
     }
 
     /// Type 4: Parallel Lines — straight repeated lines with angle and width controls.
-    float proceduralLinesGrain(
-        float worldX, float worldY, float textureScaleOverride = -1.0f) const
+    float proceduralLinesGrain(float worldX, float worldY, float textureScaleOverride = -1.0f) const
     {
         const float scale = std::clamp(
             textureScaleOverride > 0.0f ? textureScaleOverride : textureScale(), 0.1f, 4.0f);
         const float period = textureLinesSpacing() / scale;
         const float radians = textureLinesAngle() * 0.01745329251994329577f;
-        const float coordinate = (worldX * std::cos(radians) + worldY * std::sin(radians))
-            / period;
+        const float coordinate = (worldX * std::cos(radians) + worldY * std::sin(radians)) / period;
         const float phase = coordinate - std::floor(coordinate);
         const float distance = std::min(phase, 1.0f - phase);
         const float halfWidth = textureLinesThickness() * 0.5f;
@@ -2441,8 +2433,8 @@ private:
 
         const float localX = gridX - std::floor(gridX);
         const float localY = gridY - std::floor(gridY);
-        const float edgeDistance = std::min(
-            std::min(localX, 1.0f - localX), std::min(localY, 1.0f - localY));
+        const float edgeDistance
+            = std::min(std::min(localX, 1.0f - localX), std::min(localY, 1.0f - localY));
         const float interior = smoothstep01(edgeDistance / softness);
         return 0.5f + (checker - 0.5f) * interior;
     }

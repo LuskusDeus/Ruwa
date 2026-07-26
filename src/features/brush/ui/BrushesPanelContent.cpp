@@ -264,8 +264,7 @@ void BrushesPanelContent::showPack(const QString& packId)
 void BrushesPanelContent::prepareVisiblePreviews()
 {
     auto pageIt = m_filterPages.find(currentPageKey());
-    if (pageIt == m_filterPages.end() || !pageIt->scrollArea
-        || !pageIt->scrollArea->viewport()) {
+    if (pageIt == m_filterPages.end() || !pageIt->scrollArea || !pageIt->scrollArea->viewport()) {
         return;
     }
 
@@ -280,8 +279,7 @@ void BrushesPanelContent::prepareVisiblePreviews()
 bool BrushesPanelContent::visiblePreviewsReady() const
 {
     const auto pageIt = m_filterPages.constFind(currentPageKey());
-    if (pageIt == m_filterPages.cend() || !pageIt->scrollArea
-        || !pageIt->scrollArea->viewport()) {
+    if (pageIt == m_filterPages.cend() || !pageIt->scrollArea || !pageIt->scrollArea->viewport()) {
         return true;
     }
 

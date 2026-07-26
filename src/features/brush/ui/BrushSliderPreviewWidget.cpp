@@ -70,21 +70,20 @@ bool brushSettingsEqual(const ruwa::core::brushes::BrushSettingsData& a,
         && a.textureNoiseRoughness == b.textureNoiseRoughness
         && a.texturePerlinOctaves == b.texturePerlinOctaves
         && a.texturePerlinPersistence == b.texturePerlinPersistence
-        && a.textureDotsSpacing == b.textureDotsSpacing
-        && a.textureDotsSize == b.textureDotsSize && a.textureDotsJitter == b.textureDotsJitter
+        && a.textureDotsSpacing == b.textureDotsSpacing && a.textureDotsSize == b.textureDotsSize
+        && a.textureDotsJitter == b.textureDotsJitter
         && a.textureLinesSpacing == b.textureLinesSpacing
         && a.textureLinesThickness == b.textureLinesThickness
         && a.textureLinesAngle == b.textureLinesAngle
         && a.textureCheckerSize == b.textureCheckerSize
         && a.textureCheckerSoftness == b.textureCheckerSoftness
         && a.textureCheckerRotation == b.textureCheckerRotation
-        && a.textureAmount == b.textureAmount
-        && a.textureScale == b.textureScale && a.textureContrast == b.textureContrast
-        && a.textureDepth == b.textureDepth && a.textureBlend == b.textureBlend
-        && a.textureEdgeBoost == b.textureEdgeBoost && a.scatterPosition == b.scatterPosition
-        && a.postCorrection == b.postCorrection && a.stabilization == b.stabilization
-        && a.startTaper == b.startTaper && a.endTaper == b.endTaper
-        && a.adjustCorrectionBySpeed == b.adjustCorrectionBySpeed
+        && a.textureAmount == b.textureAmount && a.textureScale == b.textureScale
+        && a.textureContrast == b.textureContrast && a.textureDepth == b.textureDepth
+        && a.textureBlend == b.textureBlend && a.textureEdgeBoost == b.textureEdgeBoost
+        && a.scatterPosition == b.scatterPosition && a.postCorrection == b.postCorrection
+        && a.stabilization == b.stabilization && a.startTaper == b.startTaper
+        && a.endTaper == b.endTaper && a.adjustCorrectionBySpeed == b.adjustCorrectionBySpeed
         && a.startCorrectionEnabled == b.startCorrectionEnabled
         && a.startCorrectionLength == b.startCorrectionLength
         && a.endCorrectionEnabled == b.endCorrectionEnabled

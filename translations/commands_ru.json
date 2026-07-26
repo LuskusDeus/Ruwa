@@ -429,6 +429,20 @@
       "o"
     ]
   },
+  "tools.magic-wand": {
+    "title": "Волшебная палочка",
+    "category": "Инструменты",
+    "description": "Выделить связную область похожего цвета",
+    "aliases": [
+      "magic-wand",
+      "wand",
+      "contiguous-selection",
+      "w",
+      "волшебная палочка",
+      "палочка",
+      "выделение"
+    ]
+  },
   "tools.rotate-view": {
     "title": "Поворот вида",
     "category": "Инструменты",

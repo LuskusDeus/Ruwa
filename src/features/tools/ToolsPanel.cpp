@@ -13,6 +13,7 @@
 #include "shared/style/WidgetStyleManager.h"
 
 #include <QContextMenuEvent>
+#include <QCoreApplication>
 #include <QList>
 #include <QLayout>
 #include <QButtonGroup>
@@ -79,8 +80,8 @@ constexpr std::array kToolPresentations {
         QT_TRANSLATE_NOOP("ToolsPanel", "Canvas Resize") },
     ToolPresentation { ToolId::Zoom, IconProvider::StandardIcon::Zoom,
         QT_TRANSLATE_NOOP("ToolsPanel", "Zoom (Z)") },
-    ToolPresentation { ToolId::Blur, IconProvider::StandardIcon::Blur,
-        QT_TRANSLATE_NOOP("ToolsPanel", "Blur") },
+    ToolPresentation {
+        ToolId::Blur, IconProvider::StandardIcon::Blur, QT_TRANSLATE_NOOP("ToolsPanel", "Blur") },
     ToolPresentation { ToolId::Smudge, IconProvider::StandardIcon::Smudge,
         QT_TRANSLATE_NOOP("ToolsPanel", "Smudge") },
     ToolPresentation { ToolId::Liquify, IconProvider::StandardIcon::Liquify,
@@ -119,10 +120,17 @@ const ToolPresentation& presentationForTool(ToolId tool)
     return kToolPresentations.front();
 }
 
+/// Tooltips are declared with QT_TRANSLATE_NOOP("ToolsPanel", ...), so they have
+/// to be looked up in that same context. tr() inside the class would resolve to
+/// "ruwa::ui::workspace::ToolsPanel" instead and never find the translation.
+QString translateToolTooltip(const char* tooltip)
+{
+    return QCoreApplication::translate("ToolsPanel", tooltip);
+}
+
 bool isGroupRepresentative(ToolId tool)
 {
-    return tool == ToolId::Blur || tool == ToolId::Fill
-        || tool == ToolId::Lasso
+    return tool == ToolId::Blur || tool == ToolId::Fill || tool == ToolId::Lasso
         || tool == ToolId::SquareSelection;
 }
 
@@ -147,8 +155,7 @@ QList<ToolId> groupMembers(ToolId representative)
 {
     switch (representative) {
     case ToolId::Blur:
-        return { ToolId::Blur, ToolId::Smudge,
-            ToolId::Liquify };
+        return { ToolId::Blur, ToolId::Smudge, ToolId::Liquify };
     case ToolId::Fill:
         return { ToolId::Fill, ToolId::ClassicFill };
     case ToolId::Lasso:
@@ -390,10 +397,9 @@ private:
 // ToolId groups for layout (separators between groups)
 static const QList<QList<ToolId>> TOOL_GROUPS = {
     { ToolId::Hand, ToolId::RotateView, ToolId::Zoom }, // Navigation
-    { ToolId::Brush, ToolId::Eraser, ToolId::Fill,
-        ToolId::Eyedropper, ToolId::Blur }, // Drawing
-    { ToolId::Move, ToolId::SquareSelection,
-        ToolId::Lasso, ToolId::MagicWand }, // Selection and movement
+    { ToolId::Brush, ToolId::Eraser, ToolId::Fill, ToolId::Eyedropper, ToolId::Blur }, // Drawing
+    { ToolId::Move, ToolId::SquareSelection, ToolId::Lasso,
+        ToolId::MagicWand }, // Selection and movement
     { ToolId::Text, ToolId::CanvasResize } // Other
 };
 
@@ -887,7 +893,7 @@ void ToolsPanel::addTool(ToolId tool)
     const ToolPresentation& presentation = presentationForTool(tool);
     auto* button = new ToolButton(m_contentWidget);
     button->setTabletTracking(true);
-    button->setToolTip(tr(presentation.tooltip));
+    button->setToolTip(translateToolTooltip(presentation.tooltip));
     button->setCheckable(true);
     button->setIconType(presentation.icon);
     button->setCursor(Qt::PointingHandCursor);
@@ -901,7 +907,7 @@ void ToolsPanel::addGroupTool(ToolId tool)
     const ToolPresentation& presentation = presentationForTool(tool);
     auto* button = new GroupToolButton(m_contentWidget);
     button->setTabletTracking(true);
-    button->setToolTip(tr(presentation.tooltip));
+    button->setToolTip(translateToolTooltip(presentation.tooltip));
     button->setCheckable(true);
     button->setIconType(presentation.icon);
     button->setHasGroupIndicator(true);
@@ -984,9 +990,8 @@ void ToolsPanel::openToolGroupPopup(ToolId representativeTool, QWidget* anchor)
     QList<ToolGroupPopup::Item> items;
     const QList<ToolId> tools = groupMembers(representativeTool);
     for (ToolId tool : tools) {
-        items.append(ToolGroupPopup::Item { .tool = tool,
-            .iconType = iconForTool(tool),
-            .tooltip = tooltipForTool(tool) });
+        items.append(ToolGroupPopup::Item {
+            .tool = tool, .iconType = iconForTool(tool), .tooltip = tooltipForTool(tool) });
     }
 
     m_groupPopup->setItems(items);
@@ -1023,7 +1028,7 @@ ToolId ToolsPanel::displayToolFor(ToolId tool) const
 
 QString ToolsPanel::tooltipForTool(ToolId tool) const
 {
-    return tr(presentationForTool(tool).tooltip);
+    return translateToolTooltip(presentationForTool(tool).tooltip);
 }
 
 IconProvider::StandardIcon ToolsPanel::iconForTool(ToolId tool) const

@@ -240,11 +240,11 @@ void LassoSelectionManager::applyRasterSelectionMask(const MaskTileSnapshot& mas
     // full-document marker so the existing hasSelection()/undo plumbing remains
     // authoritative while pixels and edges come from the mask itself.
     m_regions.clear();
-    m_regions.push_back({ { Vector2(0.0f, 0.0f), Vector2(static_cast<float>(canvasWidth), 0.0f),
-                              Vector2(static_cast<float>(canvasWidth),
-                                  static_cast<float>(canvasHeight)),
-                              Vector2(0.0f, static_cast<float>(canvasHeight)) },
-        LassoSelectionMode::Add });
+    m_regions.push_back(
+        { { Vector2(0.0f, 0.0f), Vector2(static_cast<float>(canvasWidth), 0.0f),
+              Vector2(static_cast<float>(canvasWidth), static_cast<float>(canvasHeight)),
+              Vector2(0.0f, static_cast<float>(canvasHeight)) },
+            LassoSelectionMode::Add });
     markMaskSoftAlphaUnknown();
     rebuildEdges(canvasWidth, canvasHeight);
 }

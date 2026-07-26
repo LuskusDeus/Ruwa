@@ -57,8 +57,8 @@ aether::MaskTileSnapshot fullCanvasSelectionMask(uint32_t width, uint32_t height
                 std::fill_n(tile.data() + rowStart,
                     static_cast<size_t>(validWidth) * aether::TILE_CHANNELS, uint8_t { 255 });
             }
-            mask.emplace(aether::TileKey { static_cast<int32_t>(tileX),
-                             static_cast<int32_t>(tileY) },
+            mask.emplace(
+                aether::TileKey { static_cast<int32_t>(tileX), static_cast<int32_t>(tileY) },
                 std::move(tile));
         }
     }
@@ -539,9 +539,8 @@ std::optional<MagicWandSelectionRequest> CanvasSelectionController::prepareMagic
             = m_ctx.getEffectShapedGrid ? m_ctx.getEffectShapedGrid(layer) : nullptr;
         const TileGrid* sourceGrid = effectShapedGrid
             ? effectShapedGrid.get()
-            : (m_ctx.getCompositingGridForLayer
-                      ? m_ctx.getCompositingGridForLayer(layer)
-                      : nullptr);
+            : (m_ctx.getCompositingGridForLayer ? m_ctx.getCompositingGridForLayer(layer)
+                                                : nullptr);
         TileGrid emptySource;
         if (!sourceGrid) {
             sourceGrid = &emptySource;

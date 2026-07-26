@@ -289,8 +289,7 @@ QWidget* CanvasPanel::createContent()
             applyToolStateBrushSettings(settings);
         });
     connect(m_toolStateOverlay, &ruwa::ui::widgets::CanvasToolStateOverlay::liquifyStrengthChanged,
-        this,
-        [this](qreal strength) { setFixedSoftBrushStrength(ToolId::Liquify, strength); });
+        this, [this](qreal strength) { setFixedSoftBrushStrength(ToolId::Liquify, strength); });
     connect(m_toolStateOverlay, &ruwa::ui::widgets::CanvasToolStateOverlay::liquifyModeChanged,
         this, [this](int mode) {
             if (m_toolStateController) {

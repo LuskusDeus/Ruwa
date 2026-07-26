@@ -147,10 +147,9 @@ void CanvasTabletHandler::handleTabletEvent(QTabletEvent* event)
         }
         return Qt::NoButton;
     };
-    const auto beginTemporaryStylusToolHold
-        = [&](Qt::MouseButton heldButton, ToolId tool) {
-              m_host->beginTemporaryToolHoldFromButton(heldButton, tool);
-          };
+    const auto beginTemporaryStylusToolHold = [&](Qt::MouseButton heldButton, ToolId tool) {
+        m_host->beginTemporaryToolHoldFromButton(heldButton, tool);
+    };
     const auto endTemporaryStylusToolHold = [&](Qt::MouseButton heldButton) {
         if (!m_host->temporaryToolHoldActive() || !m_host->temporaryToolHeldButtonIs(heldButton)) {
             return;

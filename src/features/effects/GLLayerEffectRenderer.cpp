@@ -510,8 +510,24 @@ GLuint GLLayerEffectRenderer::applyEffectsWholeLayer(uint32_t tileSize, uint32_t
     ruwa::core::effects::EffectRegionFrame region, bool useGroupPool,
     const QUuid& liveEditedEffectId, quint64 liveEditSourceVariant)
 {
+    if (!hasRenderableEffects(effects, space, realtimeOnly)) {
+        return 0;
+    }
+    const GLuint sourceTexture
+        = assembleWholeRegion(tileSize, tilesW, tilesH, tileTexture, useGroupPool);
+    if (!sourceTexture) {
+        return 0;
+    }
+    return runWholeRegionChain(sourceTexture, tileSize * tilesW, tileSize * tilesH, effects, space,
+        realtimeOnly, backdropTexture, region, useGroupPool, liveEditedEffectId,
+        liveEditSourceVariant);
+}
+
+GLuint GLLayerEffectRenderer::assembleWholeRegion(uint32_t tileSize, uint32_t tilesW,
+    uint32_t tilesH, const std::function<GLuint(int dx, int dy)>& tileTexture, bool useGroupPool)
+{
     if (!m_initialized || tileSize == 0 || tilesW == 0 || tilesH == 0 || !m_blitProgram
-        || !tileTexture || !hasRenderableEffects(effects, space, realtimeOnly)) {
+        || !tileTexture) {
         return 0;
     }
 
@@ -565,15 +581,33 @@ GLuint GLLayerEffectRenderer::applyEffectsWholeLayer(uint32_t tileSize, uint32_t
     }
     m_gl->glBindVertexArray(0);
     m_gl->glBindTexture(GL_TEXTURE_2D, 0);
+    m_gl->glBindFramebuffer(GL_FRAMEBUFFER, 0);
     if (!anyStamped) {
         return 0;
     }
+    return sourceTexture;
+}
 
-    // 2. Run the whole chain on the materialised region with wholeLayerSource=true
-    //    so distortion passes may sample anywhere. No ROI clip: the caller crops
-    //    the output tiles it needs via extractWholeLayerTile. The chain has no
-    //    tile callbacks, so no re-entrancy happens here — but save/restore the
-    //    active pool anyway to stay correct if that ever changes.
+GLuint GLLayerEffectRenderer::runWholeRegionChain(GLuint sourceTexture, uint32_t width,
+    uint32_t height, const QList<ruwa::core::effects::LayerEffectState>& effects,
+    ruwa::core::effects::EffectEvaluationSpace space, bool realtimeOnly, GLuint backdropTexture,
+    ruwa::core::effects::EffectRegionFrame region, bool useGroupPool,
+    const QUuid& liveEditedEffectId, quint64 liveEditSourceVariant)
+{
+    if (!m_initialized || !sourceTexture || width == 0 || height == 0
+        || !hasRenderableEffects(effects, space, realtimeOnly)) {
+        return 0;
+    }
+    WholeRegionPool& pool = useGroupPool ? m_groupPool : m_wholePool;
+    if (!ensureWholeRegionPool(pool, width, height)) {
+        return 0;
+    }
+
+    // Run the whole chain on the materialised region with wholeLayerSource=true
+    // so distortion passes may sample anywhere. No ROI clip: the caller crops
+    // the output tiles it needs via extractWholeLayerTile. The chain has no
+    // tile callbacks, so no re-entrancy happens here — but save/restore the
+    // active pool anyway to stay correct if that ever changes.
     WholeRegionPool* const savedActivePool = m_activeWholePool;
     m_activeWholePool = &pool;
     pool.extraCursor = 0;

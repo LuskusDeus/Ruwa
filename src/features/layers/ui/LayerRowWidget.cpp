@@ -2324,8 +2324,10 @@ void LayerRowWidget::drawCtrlGlowOverlay(QPainter& p, const QRect& r, const QPai
 
     QColor accentA = ThemeColors::adjustBrightness(c.primary, c.isDark ? 1.10 : 0.96);
     QColor accentB = ThemeColors::adjustBrightness(c.primary, c.isDark ? 1.20 : 1.02);
-    accentA.setAlphaF((0.20 * m_thumbnailCtrlGlowProgress) + (0.18 * m_thumbnailClickFlashProgress));
-    accentB.setAlphaF((0.34 * m_thumbnailCtrlGlowProgress) + (0.40 * m_thumbnailClickFlashProgress));
+    accentA.setAlphaF(
+        (0.20 * m_thumbnailCtrlGlowProgress) + (0.18 * m_thumbnailClickFlashProgress));
+    accentB.setAlphaF(
+        (0.34 * m_thumbnailCtrlGlowProgress) + (0.40 * m_thumbnailClickFlashProgress));
 
     QRectF borderRect = QRectF(r).adjusted(0.5, 0.5, -0.5, -0.5);
     QLinearGradient glowGrad(borderRect.topLeft(), borderRect.bottomRight());

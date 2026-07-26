@@ -237,9 +237,8 @@ bool CanvasMouseInputHandler::isPaintingLikeTool() const
     if (!m_host)
         return false;
     const auto tool = m_host->currentInputTool();
-    return tool == ToolId::Brush || tool == ToolId::Eraser
-        || tool == ToolId::Blur || tool == ToolId::Smudge
-        || tool == ToolId::Liquify;
+    return tool == ToolId::Brush || tool == ToolId::Eraser || tool == ToolId::Blur
+        || tool == ToolId::Smudge || tool == ToolId::Liquify;
 }
 
 bool CanvasMouseInputHandler::beginBrushSizeAdjust(QMouseEvent* event)
@@ -690,8 +689,7 @@ bool CanvasMouseInputHandler::handleMousePress(QMouseEvent* event)
             return true;
         }
         if (m_host->currentInputTool() == ToolId::MagicWand) {
-            const aether::Vector2 worldPos
-                = m_panel->mapToViewportWorld(event->globalPosition());
+            const aether::Vector2 worldPos = m_panel->mapToViewportWorld(event->globalPosition());
             const bool addSelection = event->modifiers().testFlag(Qt::ShiftModifier);
             const bool subtractSelection = event->modifiers().testFlag(Qt::AltModifier);
             glWidget->performMagicWandSelection(static_cast<int>(std::floor(worldPos.x)),
@@ -885,9 +883,8 @@ bool CanvasMouseInputHandler::handleMouseMove(QMouseEvent* event)
     }
 
     if (m_pendingMoveToolContentHit) {
-        if (!(event->buttons() & Qt::LeftButton)
-            || m_host->currentInputTool() != ToolId::Move || !m_panel->m_layerModel
-            || !glWidget) {
+        if (!(event->buttons() & Qt::LeftButton) || m_host->currentInputTool() != ToolId::Move
+            || !m_panel->m_layerModel || !glWidget) {
             clearPendingMoveToolContentHit();
             return false;
         }
@@ -957,9 +954,8 @@ bool CanvasMouseInputHandler::handleMouseMove(QMouseEvent* event)
         event->accept();
         return true;
     }
-    if (m_textSelecting && m_panel->toolMode() == ToolId::Text
-        && m_panel->m_textEditingController && m_panel->m_textEditingController->isEditing()
-        && (event->buttons() & Qt::LeftButton)) {
+    if (m_textSelecting && m_panel->toolMode() == ToolId::Text && m_panel->m_textEditingController
+        && m_panel->m_textEditingController->isEditing() && (event->buttons() & Qt::LeftButton)) {
         const aether::Vector2 worldPos = m_panel->mapToWorld(globalPos);
         m_panel->m_textEditingController->extendSelectionToWorld(worldPos);
         event->accept();

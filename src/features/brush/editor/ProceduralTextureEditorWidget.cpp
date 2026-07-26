@@ -49,8 +49,7 @@ QImage generateTexturePreview(const ruwa::core::brushes::BrushSettingsData& sett
 
     aether::TileBrush brush;
     brush.setBrushSettings(normalized);
-    const std::vector<uint8_t>& alpha
-        = brush.proceduralTextureTileAlpha(aether::TileKey { 0, 0 });
+    const std::vector<uint8_t>& alpha = brush.proceduralTextureTileAlpha(aether::TileKey { 0, 0 });
 
     QImage image(static_cast<int>(aether::TILE_SIZE), static_cast<int>(aether::TILE_SIZE),
         QImage::Format_Grayscale8);
@@ -107,8 +106,7 @@ protected:
         if (!m_image.isNull()) {
             QRectF sourceRect(m_image.rect());
             const qreal targetAspect = bounds.width() / qMax<qreal>(1.0, bounds.height());
-            const qreal sourceAspect
-                = sourceRect.width() / qMax<qreal>(1.0, sourceRect.height());
+            const qreal sourceAspect = sourceRect.width() / qMax<qreal>(1.0, sourceRect.height());
             if (sourceAspect > targetAspect) {
                 const qreal croppedWidth = sourceRect.height() * targetAspect;
                 sourceRect.setLeft(sourceRect.center().x() - croppedWidth * 0.5);
@@ -171,8 +169,7 @@ ProceduralTextureEditorWidget::ProceduralTextureEditorWidget(QWidget* parent)
         QCoreApplication::translate("ruwa::core::brushes", "Parallel Lines"),
         QCoreApplication::translate("ruwa::core::brushes", "Checkerboard"),
     };
-    m_typeSelector->addCategory(
-        QCoreApplication::translate("ruwa::core::brushes", "Noise"));
+    m_typeSelector->addCategory(QCoreApplication::translate("ruwa::core::brushes", "Noise"));
     for (int type = 0; type < typeNames.size(); ++type) {
         if (type == BrushSettingsData::TextureTypeDots) {
             m_typeSelector->addCategory(
@@ -241,22 +238,20 @@ ProceduralTextureEditorWidget::ProceduralTextureEditorWidget(QWidget* parent)
 
     QVector<ruwa::core::brushes::BrushSettingDef> noiseDefs;
     noiseDefs.append(ruwa::core::brushes::sliderDef("texture.noiseOctaves",
-        QT_TRANSLATE_NOOP("ruwa::core::brushes", "Octaves"), 3.0f, 1.0f, 5.0f, 1.0f, 1, 0,
-        ""));
+        QT_TRANSLATE_NOOP("ruwa::core::brushes", "Octaves"), 3.0f, 1.0f, 5.0f, 1.0f, 1, 0, ""));
     noiseDefs.append(ruwa::core::brushes::sliderDef("texture.noiseRoughness",
         QT_TRANSLATE_NOOP("ruwa::core::brushes", "Roughness"), 0.55f, 0.0f, 1.0f));
 
     QVector<ruwa::core::brushes::BrushSettingDef> perlinDefs;
     perlinDefs.append(ruwa::core::brushes::sliderDef("texture.perlinOctaves",
-        QT_TRANSLATE_NOOP("ruwa::core::brushes", "Octaves"), 2.0f, 1.0f, 5.0f, 1.0f, 1, 0,
-        ""));
+        QT_TRANSLATE_NOOP("ruwa::core::brushes", "Octaves"), 2.0f, 1.0f, 5.0f, 1.0f, 1, 0, ""));
     perlinDefs.append(ruwa::core::brushes::sliderDef("texture.perlinPersistence",
         QT_TRANSLATE_NOOP("ruwa::core::brushes", "Persistence"), 0.625f, 0.0f, 1.0f));
 
     QVector<ruwa::core::brushes::BrushSettingDef> dotsDefs;
     dotsDefs.append(ruwa::core::brushes::sliderDef("texture.dotsSpacing",
-        QT_TRANSLATE_NOOP("ruwa::core::brushes", "Point Spacing"), 28.0f, 6.0f, 96.0f, 1.0f, 1,
-        0, " px"));
+        QT_TRANSLATE_NOOP("ruwa::core::brushes", "Point Spacing"), 28.0f, 6.0f, 96.0f, 1.0f, 1, 0,
+        " px"));
     dotsDefs.append(ruwa::core::brushes::sliderDef("texture.dotsSize",
         QT_TRANSLATE_NOOP("ruwa::core::brushes", "Point Size"), 0.3f, 0.05f, 0.9f));
     dotsDefs.append(ruwa::core::brushes::sliderDef("texture.dotsJitter",
@@ -264,8 +259,8 @@ ProceduralTextureEditorWidget::ProceduralTextureEditorWidget(QWidget* parent)
 
     QVector<ruwa::core::brushes::BrushSettingDef> linesDefs;
     linesDefs.append(ruwa::core::brushes::sliderDef("texture.linesSpacing",
-        QT_TRANSLATE_NOOP("ruwa::core::brushes", "Line Spacing"), 24.0f, 4.0f, 96.0f, 1.0f, 1,
-        0, " px"));
+        QT_TRANSLATE_NOOP("ruwa::core::brushes", "Line Spacing"), 24.0f, 4.0f, 96.0f, 1.0f, 1, 0,
+        " px"));
     linesDefs.append(ruwa::core::brushes::sliderDef("texture.linesThickness",
         QT_TRANSLATE_NOOP("ruwa::core::brushes", "Line Thickness"), 0.22f, 0.02f, 0.95f));
     linesDefs.append(ruwa::core::brushes::sliderDef("texture.linesAngle",
@@ -277,8 +272,8 @@ ProceduralTextureEditorWidget::ProceduralTextureEditorWidget(QWidget* parent)
         QT_TRANSLATE_NOOP("ruwa::core::brushes", "Cell Size"), 24.0f, 4.0f, 96.0f, 1.0f, 1, 0,
         " px"));
     checkerDefs.append(ruwa::core::brushes::sliderDef("texture.checkerSoftness",
-        QT_TRANSLATE_NOOP("ruwa::core::brushes", "Edge Softness"), 0.06f, 0.0f, 0.45f, 0.01f,
-        100, 0, "%"));
+        QT_TRANSLATE_NOOP("ruwa::core::brushes", "Edge Softness"), 0.06f, 0.0f, 0.45f, 0.01f, 100,
+        0, "%"));
     checkerDefs.append(ruwa::core::brushes::sliderDef("texture.checkerRotation",
         QT_TRANSLATE_NOOP("ruwa::core::brushes", "Rotation"), 0.0f, 0.0f, 90.0f, 1.0f, 1, 0,
         "\u00B0"));
@@ -378,8 +373,7 @@ void ProceduralTextureEditorWidget::updateLayoutMetrics()
         }
     }
     if (m_typeSelector) {
-        m_typeSelector->setPopupCardSize(
-            QSize(theme.scaled(112), theme.scaled(88)));
+        m_typeSelector->setPopupCardSize(QSize(theme.scaled(112), theme.scaled(88)));
         m_typeSelector->setPopupMaxHeight(theme.scaled(300));
     }
     if (m_settingsScrollArea) {

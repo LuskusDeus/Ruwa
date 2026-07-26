@@ -2098,8 +2098,8 @@ FloodFillResult classicFloodFillRawTiles(const FloodFillResult::RawTileMap& sour
 FloodFillResult::RawTileMap buildMagicWandSelectionMask(
     const TileGrid& grid, int seedX, int seedY, int canvasWidth, int canvasHeight)
 {
-    return buildMagicWandSelectionMask(snapshotContentTiles(grid), seedX, seedY, canvasWidth,
-        canvasHeight, grid.format());
+    return buildMagicWandSelectionMask(
+        snapshotContentTiles(grid), seedX, seedY, canvasWidth, canvasHeight, grid.format());
 }
 
 FloodFillResult::RawTileMap buildMagicWandSelectionMask(

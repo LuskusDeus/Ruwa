@@ -20,8 +20,8 @@
 
 namespace ruwa::ui::docking {
 
-DockPanelEntranceOverlay::DockPanelEntranceOverlay(DockContainerWidget* container,
-    DockPanel* stationaryPanel, const QColor& backgroundColor)
+DockPanelEntranceOverlay::DockPanelEntranceOverlay(
+    DockContainerWidget* container, DockPanel* stationaryPanel, const QColor& backgroundColor)
     : QWidget(container)
     , m_container(container)
     , m_backgroundColor(backgroundColor)
@@ -151,11 +151,10 @@ void DockPanelEntranceOverlay::start(int durationMs)
     m_animation->setDuration(qMax(1, durationMs));
     m_animation->setEasingCurve(QEasingCurve::OutCubic);
 
-    connect(m_animation, &QVariantAnimation::valueChanged, this,
-        [this](const QVariant& value) {
-            m_progress = std::clamp(value.toReal(), 0.0, 1.0);
-            update();
-        });
+    connect(m_animation, &QVariantAnimation::valueChanged, this, [this](const QVariant& value) {
+        m_progress = std::clamp(value.toReal(), 0.0, 1.0);
+        update();
+    });
     connect(m_animation, &QVariantAnimation::finished, this, [this]() {
         m_progress = 1.0;
         repaint();
@@ -200,8 +199,8 @@ void DockPanelEntranceOverlay::paintEvent(QPaintEvent* event)
             qRound(item.startOffset.y() * (1.0 - m_progress)));
         const QRectF destination(QRect(item.targetRect.topLeft() + offset, item.targetRect.size()));
         const qreal dpr = qMax<qreal>(1.0, item.snapshot.devicePixelRatio());
-        const QRectF source(QPointF(0.0, 0.0),
-            QSizeF(item.snapshot.width() / dpr, item.snapshot.height() / dpr));
+        const QRectF source(
+            QPointF(0.0, 0.0), QSizeF(item.snapshot.width() / dpr, item.snapshot.height() / dpr));
         painter.drawPixmap(destination, item.snapshot, source);
         painter.restore();
     }
@@ -224,8 +223,8 @@ QPixmap DockPanelEntranceOverlay::captureSideSnapshot(
     }
 
     const qreal dpr = m_container->devicePixelRatioF();
-    const QSize deviceSize(qMax(1, qRound(targetRect.width() * dpr)),
-        qMax(1, qRound(targetRect.height() * dpr)));
+    const QSize deviceSize(
+        qMax(1, qRound(targetRect.width() * dpr)), qMax(1, qRound(targetRect.height() * dpr)));
     QPixmap snapshot(deviceSize);
     snapshot.setDevicePixelRatio(dpr);
 
@@ -301,8 +300,7 @@ DockPanelEntranceOverlay::EntranceEdge DockPanelEntranceOverlay::edgeFor(
     return EntranceEdge::Bottom;
 }
 
-QPoint DockPanelEntranceOverlay::startOffsetFor(
-    EntranceEdge edge, const QRect& targetRect) const
+QPoint DockPanelEntranceOverlay::startOffsetFor(EntranceEdge edge, const QRect& targetRect) const
 {
     switch (edge) {
     case EntranceEdge::Left:

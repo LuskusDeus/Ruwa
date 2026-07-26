@@ -257,6 +257,7 @@ void GLCompositor::compositeTile(const TileKey& key, const std::vector<Composite
     // Composite layers bottom to top
     m_groupCompositeDepth = 0;
     m_activeRootLayers = &layers;
+    m_activeBackdropColor = backdropColor;
     GLuint resultTex = compositeLayerStack(key, layers, tileRenderer, 1.0f, false, backdropColor);
     m_activeRootLayers = nullptr;
     m_groupCompositeDepth = 0;
@@ -713,7 +714,8 @@ GLuint GLCompositor::compositeLayerStack(const TileKey& key,
                     };
                     effectedVisual = applyGroupNeighborhoodEffects(key, layer, tileRenderer,
                         groupPad, frame.passThrough,
-                        /*allowCachedPaths=*/true, passThroughTileTexture);
+                        /*allowCachedPaths=*/true, passThroughTileTexture,
+                        GroupEffectSlot::PassThroughVisual);
                 }
                 if (!effectedVisual) {
                     effectedVisual = applyLayerEffects(key, frame.passThrough, layer,
@@ -761,7 +763,7 @@ GLuint GLCompositor::compositeLayerStack(const TileKey& key,
                     const GLuint effectedCoverage = applyGroupNeighborhoodEffects(key, layer,
                         tileRenderer, groupPad, coverageResult,
                         /*allowCachedPaths=*/true, coverageTileTexture,
-                        /*cacheIdentity=*/static_cast<const void*>(&layer.effects),
+                        GroupEffectSlot::PassThroughCoverage,
                         /*liveEditSourceVariant=*/1);
                     if (effectedCoverage) {
                         coverageResult = effectedCoverage;
@@ -1305,8 +1307,12 @@ GLuint GLCompositor::applyTileEffectSource(const TileKey& key,
 
     if (padPixels > 0 && canRenderEffects) {
         if (blockCacheIdentity && !effectsRequireBackdrop(effects)) {
-            const GLuint blockTile = blockNeighborhoodEffectTile(blockCacheIdentity, key, padPixels,
-                effects, tileTexture, liveEditedEffectId, prefixCacheVariant);
+            // Raster layers keep the per-batch block validity: their effected
+            // output is already reused across batches per tile by
+            // m_layerEffectTileCache (persistResult below).
+            const GLuint blockTile
+                = blockNeighborhoodEffectTile(reinterpret_cast<uintptr_t>(blockCacheIdentity), key,
+                    padPixels, effects, tileTexture, liveEditedEffectId, prefixCacheVariant);
             if (blockTile) {
                 return persistResult(blockTile);
             }
@@ -1414,10 +1420,11 @@ GLuint GLCompositor::applyRetainedEffectSource(
 
     if (padPixels > 0 && m_effectRenderer && m_effectRenderer->isInitialized()) {
         if (!effectsRequireBackdrop(layer.effects)) {
-            const GLuint blockTile = blockNeighborhoodEffectTile(layer.retainedPayload, key,
-                padPixels, layer.effects, retainedTileTexture, layer.liveEditedEffectId,
-                liveEditCacheVariant(layer.liveEffectEditGeneration,
-                    static_cast<uint64_t>(reinterpret_cast<uintptr_t>(layer.retainedPayload))));
+            const GLuint blockTile
+                = blockNeighborhoodEffectTile(reinterpret_cast<uintptr_t>(layer.retainedPayload),
+                    key, padPixels, layer.effects, retainedTileTexture, layer.liveEditedEffectId,
+                    liveEditCacheVariant(layer.liveEffectEditGeneration,
+                        static_cast<uint64_t>(reinterpret_cast<uintptr_t>(layer.retainedPayload))));
             if (blockTile) {
                 return blockTile;
             }
@@ -1597,18 +1604,34 @@ GLuint GLCompositor::recomposePassThroughToGroup(const TileKey& key,
 GLuint GLCompositor::applyGroupNeighborhoodEffects(const TileKey& key,
     const CompositeLayerInfo& layer, GLTileRenderer* tileRenderer, int padPixels,
     GLuint groupResultTexture, bool allowCachedPaths,
-    const std::function<GLuint(const TileKey&)>& passThroughTileTexture, const void* cacheIdentity,
+    const std::function<GLuint(const TileKey&)>& passThroughTileTexture, GroupEffectSlot cacheSlot,
     quint64 liveEditSourceVariant)
 {
     if (!m_effectRenderer || !tileRenderer || padPixels <= 0 || !groupResultTexture) {
         return 0;
     }
+    // Content revision of everything the source callbacks below composite. The
+    // group's OWN effect chain is deliberately NOT part of it — that is what lets
+    // an effect-parameter change reuse the baked source and re-run only the
+    // chain. The pass-through visual additionally sees the stack below the group
+    // (its callback recomposites the document up to it), so that is folded in.
     uint64_t sourceRevision = 0x84222325cbf29ce4ULL;
+    const auto combineRevision = [&sourceRevision](uint64_t value) {
+        sourceRevision
+            ^= value + 0x9e3779b97f4a7c15ULL + (sourceRevision << 6) + (sourceRevision >> 2);
+    };
     for (const auto& child : layer.children) {
-        const uint64_t childRevision = layerContentRevision(child);
-        sourceRevision ^= childRevision + 0x9e3779b97f4a7c15ULL + (sourceRevision << 6)
-            + (sourceRevision >> 2);
+        combineRevision(layerContentRevision(child));
     }
+    if (cacheSlot != GroupEffectSlot::PassThroughCoverage) {
+        // Both the pass-through visual and an isolated group's result can carry
+        // the stack below them (the pass-through composites over it; an isolated
+        // group's stroke-blend backdrop reads it), so they are only valid while
+        // that stack is unchanged. The coverage pass composites over pure
+        // transparency and depends on the children alone.
+        combineRevision(recomposePrefixRevision(&layer));
+    }
+    const uint64_t identity = layerCacheIdentity(layer.id, cacheSlot);
     const quint64 prefixCacheVariant = liveEditCacheVariant(
         layer.liveEffectEditGeneration, sourceRevision, liveEditSourceVariant);
 
@@ -1686,9 +1709,8 @@ GLuint GLCompositor::applyGroupNeighborhoodEffects(const TileKey& key,
                 m_currentPing = savedPing;
                 return result;
             };
-            const void* identity = cacheIdentity ? cacheIdentity : static_cast<const void*>(&layer);
-            const GLuint wholeTile = wholeGroupEffectTile(identity, minX, minY, maxX, maxY, key,
-                padPixels, layer.effects, groupCompositeTile, currentBase(),
+            const GLuint wholeTile = wholeGroupEffectTile(identity, sourceRevision, minX, minY,
+                maxX, maxY, key, padPixels, layer.effects, groupCompositeTile, currentBase(),
                 layer.liveEditedEffectId, prefixCacheVariant);
             if (wholeTile) {
                 return wholeTile;
@@ -1697,12 +1719,16 @@ GLuint GLCompositor::applyGroupNeighborhoodEffects(const TileKey& key,
     }
 
     if (passThroughTileTexture) {
-        auto groupContentTexture
-            = [&](const TileKey& nk) -> GLuint { return passThroughTileTexture(nk); };
+        // Every one of these tiles costs a full re-entrant composite, and the
+        // padded gather asks for the same ones again for each overlapping block
+        // and each batch — memoise them against the group's content revision.
+        auto groupContentTexture = [&](const TileKey& nk) -> GLuint {
+            return cachedGroupSourceTile(identity, nk, sourceRevision, passThroughTileTexture);
+        };
         if (allowCachedPaths && !effectsRequireBackdrop(layer.effects)) {
-            const GLuint blockTile = blockNeighborhoodEffectTile(
-                cacheIdentity ? cacheIdentity : static_cast<const void*>(&layer), key, padPixels,
-                layer.effects, groupContentTexture, layer.liveEditedEffectId, prefixCacheVariant);
+            const GLuint blockTile = blockNeighborhoodEffectTile(identity, key, padPixels,
+                layer.effects, groupContentTexture, layer.liveEditedEffectId, prefixCacheVariant,
+                sourceRevision);
             if (blockTile) {
                 return blockTile;
             }
@@ -1740,7 +1766,7 @@ GLuint GLCompositor::applyGroupNeighborhoodEffects(const TileKey& key,
     }
 
     if (!simpleFlatGroup || !contentGrid) {
-        auto fullGroupTexture = [&](const TileKey& nk) -> GLuint {
+        auto composeFullGroup = [&](const TileKey& nk) -> GLuint {
             const int savedPing = m_currentPing;
             const GLuint savedTex0 = m_pingPongTex[0];
             const GLuint savedTex1 = m_pingPongTex[1];
@@ -1759,11 +1785,14 @@ GLuint GLCompositor::applyGroupNeighborhoodEffects(const TileKey& key,
             --m_groupCompositeDepth;
             return result;
         };
+        auto fullGroupTexture = [&](const TileKey& nk) -> GLuint {
+            return cachedGroupSourceTile(identity, nk, sourceRevision, composeFullGroup);
+        };
 
-        const void* identity = cacheIdentity ? cacheIdentity : static_cast<const void*>(&layer);
         if (allowCachedPaths && !effectsRequireBackdrop(layer.effects)) {
-            const GLuint blockTile = blockNeighborhoodEffectTile(identity, key, padPixels,
-                layer.effects, fullGroupTexture, layer.liveEditedEffectId, prefixCacheVariant);
+            const GLuint blockTile
+                = blockNeighborhoodEffectTile(identity, key, padPixels, layer.effects,
+                    fullGroupTexture, layer.liveEditedEffectId, prefixCacheVariant, sourceRevision);
             if (blockTile) {
                 return blockTile;
             }
@@ -1820,11 +1849,14 @@ GLuint GLCompositor::applyGroupNeighborhoodEffects(const TileKey& key,
     };
 
     // Block-cached fast path: one chain evaluation covers a whole block of
-    // tiles for this batch — during a stroke this is what keeps painting under
-    // a large-radius blur from re-blurring the padded region per tile.
+    // tiles — during a stroke this is what keeps painting under a large-radius
+    // blur from re-blurring the padded region per tile, and while the group's
+    // content revision holds the block also survives batches (so painting on an
+    // unrelated layer no longer re-runs the chain).
     if (allowCachedPaths && !effectsRequireBackdrop(layer.effects)) {
-        const GLuint blockTile = blockNeighborhoodEffectTile(contentGrid, key, padPixels,
-            layer.effects, groupContentTexture, layer.liveEditedEffectId, prefixCacheVariant);
+        const GLuint blockTile
+            = blockNeighborhoodEffectTile(identity, key, padPixels, layer.effects,
+                groupContentTexture, layer.liveEditedEffectId, prefixCacheVariant, sourceRevision);
         if (blockTile) {
             return blockTile;
         }
@@ -2229,8 +2261,8 @@ GLuint GLCompositor::wholeRetainedEffectTile(const void* identity,
     return sliceFrom(entry);
 }
 
-GLuint GLCompositor::wholeGroupEffectTile(const void* identity, int minTileX, int minTileY,
-    int maxTileX, int maxTileY, const TileKey& key, int maxDisplacementPx,
+GLuint GLCompositor::wholeGroupEffectTile(uint64_t identity, uint64_t sourceRevision, int minTileX,
+    int minTileY, int maxTileX, int maxTileY, const TileKey& key, int maxDisplacementPx,
     const QList<ruwa::core::effects::LayerEffectState>& effects,
     const std::function<GLuint(const TileKey&)>& groupTileTexture, GLuint backdropTexture,
     const QUuid& liveEditedEffectId, quint64 liveEditSourceVariant)
@@ -2239,6 +2271,10 @@ GLuint GLCompositor::wholeGroupEffectTile(const void* identity, int minTileX, in
         || maxTileY < minTileY) {
         return 0;
     }
+    // A caller without a content revision (nothing does today) keeps the old
+    // per-batch behaviour: tag the batch serial so it can never alias a hash.
+    const uint64_t revision
+        = sourceRevision != 0 ? sourceRevision : (m_batchSerial | 0x4000000000000000ULL);
 
     // Populated-tile bbox of the group's content, computed by the caller from the
     // group's whole subtree (nested layers + stroke buffers).
@@ -2272,13 +2308,22 @@ GLuint GLCompositor::wholeGroupEffectTile(const void* identity, int minTileX, in
             TILE_SIZE, static_cast<uint32_t>(tileX), static_cast<uint32_t>(tileY));
     };
 
-    // Reuse this batch's already-built region (same identity, bounds, effects).
+    const uint32_t regionW = tilesW * TILE_SIZE;
+    const uint32_t regionH = tilesH * TILE_SIZE;
+    const auto boundsMatch = [&](const GroupRegionEntry& entry) {
+        return entry.originTileX == rMinX && entry.originTileY == rMinY && entry.tilesW == tilesW
+            && entry.tilesH == tilesH;
+    };
+
+    // Level 1: the effected region is still valid — same source content AND the
+    // same chain. Nothing is recomputed; this is the common case when the dirty
+    // tiles come from an unrelated layer, a pan, or a cache eviction.
     auto cached = m_groupRegionCache.find(identity);
     if (cached != m_groupRegionCache.end()) {
         GroupRegionEntry& entry = cached->second;
-        if (entry.texture && entry.batchSerial == m_batchSerial && entry.originTileX == rMinX
-            && entry.originTileY == rMinY && entry.tilesW == tilesW && entry.tilesH == tilesH
+        if (entry.texture && entry.sourceRevision == revision && boundsMatch(entry)
             && entry.effects == effects) {
+            entry.lastUseSerial = m_batchSerial;
             return sliceFrom(entry);
         }
     }
@@ -2290,33 +2335,64 @@ GLuint GLCompositor::wholeGroupEffectTile(const void* identity, int minTileX, in
     region.documentPxPerTexel = 1.0f;
     region.valid = true;
 
-    // Assemble by compositing the group at every region tile, then run the whole
-    // chain with wholeLayerSource=true. The callback may run a re-entrant group
-    // composite that returns a transient buffer, so applyEffectsWholeLayer stamps
-    // each tile immediately after its callback. useGroupPool=true routes this to
-    // the renderer's SECOND whole-region pool, so a group child that is itself a
-    // raster whole-layer distortion (running re-entrantly during this assembly,
-    // on the default pool) cannot clobber this region's source texture.
-    const GLuint regionResult = m_effectRenderer->applyEffectsWholeLayer(
-        TILE_SIZE, tilesW, tilesH,
-        [&](int dx, int dy) -> GLuint {
-            return groupTileTexture(TileKey { rMinX + dx, rMinY + dy });
-        },
-        effects, ruwa::core::effects::EffectEvaluationSpace::DocumentTile,
+    // Level 2: the source is still valid but the chain changed (an effect slider
+    // drag) — re-run the chain on the BAKED source and skip the assembly, which
+    // for a group is by far the expensive half: one full re-entrant composite per
+    // region tile.
+    GLuint assembledSource = 0;
+    if (cached != m_groupRegionCache.end()) {
+        // Claim the entry for this batch BEFORE assembling: a nested group's own
+        // whole-region evaluation runs re-entrantly from the assembly callback
+        // and may evict entries, which would free the very source texture the
+        // level-2 path is about to run the chain on.
+        cached->second.lastUseSerial = m_batchSerial;
+        if (cached->second.sourceValid && cached->second.sourceTexture
+            && cached->second.sourceRevision == revision && boundsMatch(cached->second)) {
+            assembledSource = cached->second.sourceTexture;
+        }
+    }
+
+    // Otherwise assemble by compositing the group at every region tile. The
+    // callback may run a re-entrant group composite that returns a transient
+    // buffer, so the assembly stamps each tile immediately after its callback.
+    // useGroupPool=true routes this to the renderer's SECOND whole-region pool,
+    // so a group child that is itself a raster whole-layer distortion (running
+    // re-entrantly during this assembly, on the default pool) cannot clobber
+    // this region's source texture.
+    const bool assembledFresh = assembledSource == 0;
+    if (!assembledSource) {
+        assembledSource = m_effectRenderer->assembleWholeRegion(
+            TILE_SIZE, tilesW, tilesH,
+            [&](int dx, int dy) -> GLuint {
+                return groupTileTexture(TileKey { rMinX + dx, rMinY + dy });
+            },
+            /*useGroupPool=*/true);
+    }
+    if (!assembledSource) {
+        return 0;
+    }
+
+    // Then run the whole chain on it with wholeLayerSource=true.
+    const GLuint regionResult = m_effectRenderer->runWholeRegionChain(assembledSource, regionW,
+        regionH, effects, ruwa::core::effects::EffectEvaluationSpace::DocumentTile,
         /*realtimeOnly=*/false, backdropTexture, region,
         /*useGroupPool=*/true, liveEditedEffectId, liveEditSourceVariant);
     if (!regionResult) {
         return 0;
     }
 
-    // Copy the transient region result into this identity's owned batch texture
+    // Copy the transient region result into this identity's owned texture
     // (resized in place when the region bounds change).
-    const uint32_t regionW = tilesW * TILE_SIZE;
-    const uint32_t regionH = tilesH * TILE_SIZE;
     GroupRegionEntry& entry = m_groupRegionCache[identity];
     if (entry.texture && (entry.textureW != regionW || entry.textureH != regionH)) {
         deleteTexture(m_gl, entry.texture);
         entry.texture = 0;
+    }
+    if (entry.sourceTexture && entry.sourceTexture != assembledSource
+        && (entry.textureW != regionW || entry.textureH != regionH)) {
+        deleteTexture(m_gl, entry.sourceTexture);
+        entry.sourceTexture = 0;
+        entry.sourceValid = false;
     }
     if (!entry.texture) {
         const TextureParams linear { GL_LINEAR, GL_LINEAR };
@@ -2327,6 +2403,7 @@ GLuint GLCompositor::wholeGroupEffectTile(const void* identity, int minTileX, in
     if (!entry.texture) {
         // Out of memory: drop the entry and serve this tile from the transient
         // region result directly.
+        deleteTexture(m_gl, entry.sourceTexture);
         m_groupRegionCache.erase(identity);
         const int tileX = key.x - rMinX;
         const int tileY = key.y - rMinY;
@@ -2340,14 +2417,186 @@ GLuint GLCompositor::wholeGroupEffectTile(const void* identity, int minTileX, in
     m_gl->glCopyImageSubData(regionResult, GL_TEXTURE_2D, 0, 0, 0, 0, entry.texture, GL_TEXTURE_2D,
         0, 0, 0, 0, static_cast<GLsizei>(regionW), static_cast<GLsizei>(regionH), 1);
 
+    // Bake the freshly assembled source so the NEXT parameter change only has to
+    // re-run the chain. The renderer's pool source is transient (the next
+    // whole-region evaluation overwrites it), hence the owned copy. Oversized
+    // regions are left unbaked: the copy would cost more VRAM than the rebuild
+    // costs time.
+    const bool wantBake = regionW <= kMaxBakedRegionDim && regionH <= kMaxBakedRegionDim;
+    if (assembledFresh && wantBake) {
+        if (!entry.sourceTexture) {
+            const TextureParams linear { GL_LINEAR, GL_LINEAR };
+            entry.sourceTexture = createTexture2D(m_gl, regionW, regionH, linear);
+        }
+        if (entry.sourceTexture) {
+            m_gl->glCopyImageSubData(assembledSource, GL_TEXTURE_2D, 0, 0, 0, 0,
+                entry.sourceTexture, GL_TEXTURE_2D, 0, 0, 0, 0, static_cast<GLsizei>(regionW),
+                static_cast<GLsizei>(regionH), 1);
+            entry.sourceValid = true;
+        }
+    } else if (assembledFresh && !wantBake && entry.sourceTexture) {
+        deleteTexture(m_gl, entry.sourceTexture);
+        entry.sourceTexture = 0;
+        entry.sourceValid = false;
+    }
+
     entry.originTileX = rMinX;
     entry.originTileY = rMinY;
     entry.tilesW = tilesW;
     entry.tilesH = tilesH;
     entry.batchSerial = m_batchSerial;
+    entry.sourceRevision = revision;
     entry.effects = effects;
+    entry.lastUseSerial = m_batchSerial;
 
-    return sliceFrom(entry);
+    const GLuint slice = sliceFrom(entry);
+    evictGroupRegionCacheIfNeeded();
+    return slice;
+}
+
+void GLCompositor::evictGroupRegionCacheIfNeeded()
+{
+    while (m_groupRegionCache.size() > kMaxGroupRegionEntries) {
+        auto victim = m_groupRegionCache.end();
+        uint64_t oldest = std::numeric_limits<uint64_t>::max();
+        for (auto it = m_groupRegionCache.begin(); it != m_groupRegionCache.end(); ++it) {
+            if (it->second.lastUseSerial == m_batchSerial) {
+                continue; // still in use by the batch in flight
+            }
+            if (it->second.lastUseSerial < oldest) {
+                oldest = it->second.lastUseSerial;
+                victim = it;
+            }
+        }
+        if (victim == m_groupRegionCache.end()) {
+            break;
+        }
+        deleteTexture(m_gl, victim->second.texture);
+        deleteTexture(m_gl, victim->second.sourceTexture);
+        m_groupRegionCache.erase(victim);
+    }
+}
+
+uint64_t GLCompositor::layerCacheIdentity(const QUuid& id, GroupEffectSlot slot)
+{
+    const uint64_t hi = static_cast<uint64_t>(qHash(id, 0x9e3779b9u));
+    const uint64_t lo = static_cast<uint64_t>(qHash(id, 0x85ebca6bu));
+    uint64_t value = (hi << 32) ^ lo;
+    value ^= (static_cast<uint64_t>(slot) + 1ULL) * 0x9e3779b97f4a7c15ULL;
+    // Bit 63 marks a uuid-derived identity so it can never collide with the
+    // pointer-derived identities the raster paths use.
+    return value | 0x8000000000000000ULL;
+}
+
+uint64_t GLCompositor::recomposePrefixRevision(const CompositeLayerInfo* target) const
+{
+    uint64_t revision = 0x2545f4914f6cdd1dULL;
+    const auto combine = [&revision](uint64_t value) {
+        revision ^= value + 0x9e3779b97f4a7c15ULL + (revision << 6) + (revision >> 2);
+    };
+    if (!m_activeRootLayers || !target) {
+        return revision;
+    }
+
+    // The canvas backdrop colour is composited into the pass-through source.
+    const auto floatBits = [](float value) {
+        uint32_t bits = 0;
+        std::memcpy(&bits, &value, sizeof(bits));
+        return bits;
+    };
+    combine(floatBits(m_activeBackdropColor.r));
+    combine(floatBits(m_activeBackdropColor.g));
+    combine(floatBits(m_activeBackdropColor.b));
+    combine(floatBits(m_activeBackdropColor.a));
+
+    // Walk exactly the way recomposePassThroughToGroup composites: layer by
+    // layer from the root, descending into the group that contains the target
+    // and stopping AT the target (whose own contribution — content and effect
+    // chain alike — is not part of its own source).
+    std::function<void(const std::vector<CompositeLayerInfo>&)> walk
+        = [&](const std::vector<CompositeLayerInfo>& layers) {
+              for (const CompositeLayerInfo& candidate : layers) {
+                  if (&candidate == target) {
+                      return;
+                  }
+                  if (groupSubtreeContains(candidate.children, target)) {
+                      walk(candidate.children);
+                      return;
+                  }
+                  combine(layerContentRevision(candidate));
+              }
+          };
+    walk(*m_activeRootLayers);
+    return revision;
+}
+
+GLuint GLCompositor::cachedGroupSourceTile(uint64_t identity, const TileKey& key, uint64_t revision,
+    const std::function<GLuint(const TileKey&)>& produce)
+{
+    if (!produce) {
+        return 0;
+    }
+    if (!identity || revision == 0) {
+        return produce(key);
+    }
+
+    const GroupSourceTileKey cacheKey { identity, key };
+    auto it = m_groupSourceTileCache.find(cacheKey);
+    if (it != m_groupSourceTileCache.end() && it->second.texture
+        && it->second.revision == revision) {
+        it->second.lastUsedSerial = m_batchSerial;
+        return it->second.texture;
+    }
+
+    const GLuint fresh = produce(key);
+    if (!fresh) {
+        return 0;
+    }
+
+    GroupSourceTileEntry& entry = m_groupSourceTileCache[cacheKey];
+    if (!entry.texture) {
+        static constexpr TextureParams kCacheTextureParams { GL_LINEAR, GL_NEAREST };
+        entry.texture = createTexture2D(m_gl, TILE_SIZE, TILE_SIZE, kCacheTextureParams);
+        if (!entry.texture) {
+            m_groupSourceTileCache.erase(cacheKey);
+            return fresh; // out of memory: use the transient composite directly
+        }
+    }
+    // The produced texture is a transient composite buffer reused by the very
+    // next call, so keep an owned copy. glCopyImageSubData does not disturb the
+    // FBO/viewport state the caller is mid-assembly in.
+    m_gl->glCopyImageSubData(fresh, GL_TEXTURE_2D, 0, 0, 0, 0, entry.texture, GL_TEXTURE_2D, 0, 0,
+        0, 0, static_cast<GLsizei>(TILE_SIZE), static_cast<GLsizei>(TILE_SIZE), 1);
+    entry.revision = revision;
+    entry.lastUsedSerial = m_batchSerial;
+    return entry.texture;
+}
+
+void GLCompositor::trimGroupSourceTileCache()
+{
+    // Drop entries no batch has touched since the previous trim first, then the
+    // least recently used, until the cache is back under its cap. Never called
+    // mid-batch, so nothing the current batch is assembling can be evicted.
+    if (m_groupSourceTileCache.size() <= kMaxGroupSourceTiles) {
+        return;
+    }
+
+    std::vector<std::pair<GroupSourceTileKey, uint64_t>> oldest;
+    oldest.reserve(m_groupSourceTileCache.size());
+    for (const auto& [cacheKey, entry] : m_groupSourceTileCache) {
+        oldest.emplace_back(cacheKey, entry.lastUsedSerial);
+    }
+    std::sort(oldest.begin(), oldest.end(),
+        [](const auto& lhs, const auto& rhs) { return lhs.second < rhs.second; });
+
+    const size_t removeCount = oldest.size() - kMaxGroupSourceTiles;
+    for (size_t i = 0; i < removeCount; ++i) {
+        auto it = m_groupSourceTileCache.find(oldest[i].first);
+        if (it != m_groupSourceTileCache.end()) {
+            deleteTexture(m_gl, it->second.texture);
+            m_groupSourceTileCache.erase(it);
+        }
+    }
 }
 
 uint64_t GLCompositor::layerContentRevision(const CompositeLayerInfo& layer) const
@@ -2378,6 +2627,24 @@ uint64_t GLCompositor::layerContentRevision(const CompositeLayerInfo& layer) con
         return revision;
     }
 
+    // Structural compositing flags. They only change when the layer stack is
+    // rebuilt, but the cross-batch caches keyed off this revision must see that
+    // rebuild — a toggle such as alpha lock changes the composited result
+    // without touching any grid version.
+    combine(layer.isGroup);
+    combine(layer.isAdjustment);
+    combine(layer.forceIsolation);
+    combine(layer.preserveBaseAlpha);
+    combine(layer.replaceBase);
+    combine(layer.useStrokeBlendBackdrop);
+    combine(layer.clipMaskAlphaOnly);
+    combine(layer.clipMaskAsAlphaCap);
+    combine(layer.clipMaskLuminanceReveal);
+    combine(layer.clipMaskEditPreview);
+    combine(layer.clipMaskReplaceFallback);
+    combine(layer.clipMaskEditReplace);
+    combine(floatBits(layer.clipMaskEditStrokeOpacity));
+
     combine(layer.effectChainRevision);
     for (const auto& effect : layer.effects) {
         combine(qHash(effect.instanceId));
@@ -2390,6 +2657,11 @@ uint64_t GLCompositor::layerContentRevision(const CompositeLayerInfo& layer) con
     addGrid(layer.externalClipMaskGrid);
     addGrid(layer.clipMaskGrid2);
     combine(reinterpret_cast<uintptr_t>(layer.retainedPayload));
+    if (layer.retainedPayload) {
+        // Payloads are rebuilt on edit; the revision guards the case where a new
+        // one lands on the address a freed one had.
+        combine(layer.retainedPayload->revision);
+    }
     combine(layer.hasSolidColor);
     if (layer.hasSolidColor) {
         combine(floatBits(layer.solidColor.r));
@@ -2502,19 +2774,54 @@ void GLCompositor::trimLayerEffectTileCache()
 
 void GLCompositor::resetEffectBlockCache()
 {
-    m_effectBlockCache.clear();
-    m_effectBlockPoolCursor = 0;
+    // Called once per batch. Revision-keyed block entries (groups, adjustment
+    // layers) SURVIVE the batch — they are self-validating, so their chain is
+    // not re-run while nothing that feeds them changed. Revision-less entries
+    // (raster layers, which have their own persistent per-tile cache) were only
+    // ever valid inside their batch and are dropped here; their textures go back
+    // to the free list rather than being deleted.
+    std::vector<EffectBlockKey> expired;
+    std::vector<std::pair<EffectBlockKey, uint64_t>> reusable;
+    for (const auto& [cacheKey, entry] : m_effectBlockCache) {
+        if (entry.sourceRevision == 0) {
+            expired.push_back(cacheKey);
+        } else {
+            reusable.emplace_back(cacheKey, entry.lastUsedSerial);
+        }
+    }
+    if (reusable.size() > kMaxCachedBlocks) {
+        std::sort(reusable.begin(), reusable.end(),
+            [](const auto& lhs, const auto& rhs) { return lhs.second < rhs.second; });
+        const size_t removeCount = reusable.size() - kMaxCachedBlocks;
+        for (size_t i = 0; i < removeCount; ++i) {
+            expired.push_back(reusable[i].first);
+        }
+    }
+    for (const EffectBlockKey& cacheKey : expired) {
+        auto it = m_effectBlockCache.find(cacheKey);
+        if (it == m_effectBlockCache.end()) {
+            continue;
+        }
+        if (it->second.texture) {
+            m_effectBlockPool.push_back(it->second.texture);
+        }
+        m_effectBlockCache.erase(it);
+    }
+
+    trimGroupSourceTileCache();
+
     for (auto& pair : m_retainedRegionCache) {
         deleteTexture(m_gl, pair.second.texture);
+        deleteTexture(m_gl, pair.second.sourceTexture);
     }
     m_retainedRegionCache.clear();
-    // NOTE: m_wholeLayerCache is deliberately NOT cleared here — unlike the block
-    // cache it is cross-batch and self-validating (by contentVersion + effects),
-    // so a static distorted layer stays materialised across pan/idle frames.
-    // Bound the pool so a one-off all-dirty sweep of a huge document does not
-    // pin its worst-case block count in VRAM forever (each entry is a
-    // (kEffectBlockTiles*TILE_SIZE)^2 RGBA8 texture, 16 MB at 8 tiles).
-    constexpr size_t kMaxPooledBlocks = 8;
+    // NOTE: m_wholeLayerCache and m_groupRegionCache are deliberately NOT cleared
+    // here — unlike the per-batch entries above they are cross-batch and
+    // self-validating (by content revision + effects), so a static distorted
+    // layer or group stays materialised across pan/idle frames.
+    // Bound the free list so a one-off all-dirty sweep of a huge document does
+    // not pin its worst-case block count in VRAM forever (each texture is a
+    // (kEffectBlockTiles*TILE_SIZE)^2 RGBA8, 16 MB at 8 tiles).
     while (m_effectBlockPool.size() > kMaxPooledBlocks) {
         deleteTexture(m_gl, m_effectBlockPool.back());
         m_effectBlockPool.pop_back();
@@ -2523,8 +2830,10 @@ void GLCompositor::resetEffectBlockCache()
 
 void GLCompositor::destroyEffectBlockCache()
 {
+    for (auto& pair : m_effectBlockCache) {
+        deleteTexture(m_gl, pair.second.texture);
+    }
     m_effectBlockCache.clear();
-    m_effectBlockPoolCursor = 0;
     for (GLuint& texture : m_effectBlockPool) {
         deleteTexture(m_gl, texture);
     }
@@ -2542,19 +2851,26 @@ void GLCompositor::destroyEffectBlockCache()
 
     for (auto& pair : m_groupRegionCache) {
         deleteTexture(m_gl, pair.second.texture);
+        deleteTexture(m_gl, pair.second.sourceTexture);
     }
     m_groupRegionCache.clear();
 
+    for (auto& pair : m_groupSourceTileCache) {
+        deleteTexture(m_gl, pair.second.texture);
+    }
+    m_groupSourceTileCache.clear();
+
     for (auto& pair : m_retainedRegionCache) {
         deleteTexture(m_gl, pair.second.texture);
+        deleteTexture(m_gl, pair.second.sourceTexture);
     }
     m_retainedRegionCache.clear();
 }
 
-GLuint GLCompositor::blockNeighborhoodEffectTile(const void* contentIdentity, const TileKey& key,
+GLuint GLCompositor::blockNeighborhoodEffectTile(uint64_t contentIdentity, const TileKey& key,
     int padPixels, const QList<ruwa::core::effects::LayerEffectState>& effects,
     const std::function<GLuint(const TileKey&)>& tileContent, const QUuid& liveEditedEffectId,
-    quint64 liveEditSourceVariant)
+    quint64 liveEditSourceVariant, uint64_t sourceRevision)
 {
     if (!m_effectRenderer || !contentIdentity || padPixels <= 0 || !tileContent) {
         return 0;
@@ -2574,9 +2890,17 @@ GLuint GLCompositor::blockNeighborhoodEffectTile(const void* contentIdentity, co
 
     const EffectBlockKey cacheKey { contentIdentity, blockX, blockY };
     auto it = m_effectBlockCache.find(cacheKey);
-    if (it != m_effectBlockCache.end()) {
-        return m_effectRenderer->extractNeighborhoodTile(
-            it->second, kBlockPx, TILE_SIZE, tileX, tileY);
+    if (it != m_effectBlockCache.end() && it->second.texture) {
+        // A revision-keyed entry stays valid for as long as its source content
+        // and effect chain do; a revision-less one only within its own batch.
+        const bool valid = sourceRevision != 0
+            ? (it->second.sourceRevision == sourceRevision && it->second.effects == effects)
+            : (it->second.sourceRevision == 0 && it->second.batchSerial == m_batchSerial);
+        if (valid) {
+            it->second.lastUsedSerial = m_batchSerial;
+            return m_effectRenderer->extractNeighborhoodTile(
+                it->second.texture, kBlockPx, TILE_SIZE, tileX, tileY);
+        }
     }
 
     const GLuint blockResult = m_effectRenderer->applyEffectsNeighborhoodBlock(
@@ -2593,23 +2917,32 @@ GLuint GLCompositor::blockNeighborhoodEffectTile(const void* contentIdentity, co
     }
 
     // The renderer's block output is transient (overwritten by the next
-    // evaluation), so cache a pooled copy.
-    if (m_effectBlockPoolCursor >= m_effectBlockPool.size()) {
-        const TextureParams linear { GL_LINEAR, GL_LINEAR };
-        const GLuint pooled = createTexture2D(m_gl, kBlockPx, kBlockPx, linear);
-        if (!pooled) {
-            // Out of memory: still serve this tile from the transient result.
-            return m_effectRenderer->extractNeighborhoodTile(
-                blockResult, kBlockPx, TILE_SIZE, tileX, tileY);
-        }
-        m_effectBlockPool.push_back(pooled);
+    // evaluation), so keep an owned copy — reusing the entry's own texture when
+    // it is only being refreshed, otherwise one released by an evicted entry.
+    EffectBlockEntry& entry = m_effectBlockCache[cacheKey];
+    if (!entry.texture && !m_effectBlockPool.empty()) {
+        entry.texture = m_effectBlockPool.back();
+        m_effectBlockPool.pop_back();
     }
-    const GLuint pooled = m_effectBlockPool[m_effectBlockPoolCursor++];
-    m_gl->glCopyImageSubData(blockResult, GL_TEXTURE_2D, 0, 0, 0, 0, pooled, GL_TEXTURE_2D, 0, 0, 0,
-        0, static_cast<GLsizei>(kBlockPx), static_cast<GLsizei>(kBlockPx), 1);
-    m_effectBlockCache.emplace(cacheKey, pooled);
+    if (!entry.texture) {
+        const TextureParams linear { GL_LINEAR, GL_LINEAR };
+        entry.texture = createTexture2D(m_gl, kBlockPx, kBlockPx, linear);
+    }
+    if (!entry.texture) {
+        // Out of memory: still serve this tile from the transient result.
+        m_effectBlockCache.erase(cacheKey);
+        return m_effectRenderer->extractNeighborhoodTile(
+            blockResult, kBlockPx, TILE_SIZE, tileX, tileY);
+    }
+    m_gl->glCopyImageSubData(blockResult, GL_TEXTURE_2D, 0, 0, 0, 0, entry.texture, GL_TEXTURE_2D,
+        0, 0, 0, 0, static_cast<GLsizei>(kBlockPx), static_cast<GLsizei>(kBlockPx), 1);
+    entry.sourceRevision = sourceRevision;
+    entry.batchSerial = m_batchSerial;
+    entry.lastUsedSerial = m_batchSerial;
+    entry.effects = sourceRevision != 0 ? effects : QList<ruwa::core::effects::LayerEffectState> {};
 
-    return m_effectRenderer->extractNeighborhoodTile(pooled, kBlockPx, TILE_SIZE, tileX, tileY);
+    return m_effectRenderer->extractNeighborhoodTile(
+        entry.texture, kBlockPx, TILE_SIZE, tileX, tileY);
 }
 
 GLuint GLCompositor::applyAdjustmentNeighborhoodEffects(const TileKey& key,
@@ -2628,9 +2961,16 @@ GLuint GLCompositor::applyAdjustmentNeighborhoodEffects(const TileKey& key,
     }
     const quint64 prefixCacheVariant
         = liveEditCacheVariant(adjustment.liveEffectEditGeneration, sourceRevision);
+    const uint64_t adjustmentIdentity
+        = layerCacheIdentity(adjustment.id, GroupEffectSlot::AdjustmentBelow);
     const bool canMaterializeBelow = adjustmentBelowStackSupported(belowLayers);
-    auto belowCompositeTexture = [&](const TileKey& sourceKey) -> GLuint {
+    auto composeBelow = [&](const TileKey& sourceKey) -> GLuint {
         return recompositeBelowBgFree(sourceKey, belowLayers, tileRenderer);
+    };
+    // Same memoisation as for groups: each source tile is a full recomposite of
+    // the stack below, asked for once per overlapping block and once per batch.
+    auto belowCompositeTexture = [&](const TileKey& sourceKey) -> GLuint {
+        return cachedGroupSourceTile(adjustmentIdentity, sourceKey, sourceRevision, composeBelow);
     };
 
     // Distortions such as Twirl read arbitrary positions from the entire input.
@@ -2657,8 +2997,8 @@ GLuint GLCompositor::applyAdjustmentNeighborhoodEffects(const TileKey& key,
                 maxY = std::max(maxY, sourceKey.y);
             }
 
-            const GLuint wholeTile = wholeGroupEffectTile(static_cast<const void*>(&adjustment),
-                minX, minY, maxX, maxY, key, padPixels, adjustment.effects, belowCompositeTexture,
+            const GLuint wholeTile = wholeGroupEffectTile(adjustmentIdentity, sourceRevision, minX,
+                minY, maxX, maxY, key, padPixels, adjustment.effects, belowCompositeTexture,
                 transparentTexture(), adjustment.liveEditedEffectId, prefixCacheVariant);
             if (wholeTile) {
                 return wholeTile;
@@ -2670,9 +3010,9 @@ GLuint GLCompositor::applyAdjustmentNeighborhoodEffects(const TileKey& key,
     // batch-scoped block cache as raster layers and groups. This avoids rebuilding
     // overlapping padded sources and re-running the chain independently per tile.
     if (canMaterializeBelow && !effectsRequireBackdrop(adjustment.effects)) {
-        const GLuint blockTile = blockNeighborhoodEffectTile(static_cast<const void*>(&adjustment),
-            key, padPixels, adjustment.effects, belowCompositeTexture,
-            adjustment.liveEditedEffectId, prefixCacheVariant);
+        const GLuint blockTile = blockNeighborhoodEffectTile(adjustmentIdentity, key, padPixels,
+            adjustment.effects, belowCompositeTexture, adjustment.liveEditedEffectId,
+            prefixCacheVariant, sourceRevision);
         if (blockTile) {
             return blockTile;
         }

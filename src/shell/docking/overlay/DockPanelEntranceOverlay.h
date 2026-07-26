@@ -32,8 +32,8 @@ class DockPanelEntranceOverlay final : public QWidget {
     Q_OBJECT
 
 public:
-    DockPanelEntranceOverlay(DockContainerWidget* container, DockPanel* stationaryPanel,
-        const QColor& backgroundColor);
+    DockPanelEntranceOverlay(
+        DockContainerWidget* container, DockPanel* stationaryPanel, const QColor& backgroundColor);
     ~DockPanelEntranceOverlay() override;
 
     bool isReady() const { return !m_items.isEmpty(); }

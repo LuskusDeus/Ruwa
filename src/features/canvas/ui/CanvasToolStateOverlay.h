@@ -53,8 +53,7 @@ public:
     void setBrushEraserMode(bool enabled);
     void setUndoAvailable(bool available);
     void setRedoAvailable(bool available);
-    void setToolParameterValues(
-        ruwa::ui::workspace::ToolId tool, qreal hardness, qreal flow);
+    void setToolParameterValues(ruwa::ui::workspace::ToolId tool, qreal hardness, qreal flow);
     void setToolIntensityValue(ruwa::ui::workspace::ToolId tool, qreal intensity);
     void setToolWetMixValue(ruwa::ui::workspace::ToolId tool, qreal wetMix);
     void setToolPageLiquifyMode(int mode);

@@ -102,7 +102,8 @@ QVariantMap readLegacyPixelSettings(QSettings& settings)
     legacy.textureDotsJitter
         = settings.value(QStringLiteral("textureDotsJitter"), legacy.textureDotsJitter).toFloat();
     legacy.textureLinesSpacing
-        = settings.value(QStringLiteral("textureLinesSpacing"), legacy.textureLinesSpacing).toFloat();
+        = settings.value(QStringLiteral("textureLinesSpacing"), legacy.textureLinesSpacing)
+              .toFloat();
     legacy.textureLinesThickness
         = settings.value(QStringLiteral("textureLinesThickness"), legacy.textureLinesThickness)
               .toFloat();

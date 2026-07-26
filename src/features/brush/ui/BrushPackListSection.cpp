@@ -999,8 +999,7 @@ void BrushPackListSection::rebuildBrushRows()
         rowButton->setDeleteBrushCallback([this, sourcePackId](const QString& brushId) {
             emit brushDeleteRequested(sourcePackId, brushId);
         });
-        rowButton->setPreviewStateChangedCallback(
-            [this]() { emit visiblePreviewStateChanged(); });
+        rowButton->setPreviewStateChangedCallback([this]() { emit visiblePreviewStateChanged(); });
         connect(
             rowButton, &QAbstractButton::clicked, this, [this, sourcePackId, brushId = brush.id]() {
                 emit brushActivated(sourcePackId, brushId);

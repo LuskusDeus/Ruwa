@@ -649,8 +649,7 @@ void CanvasToolStateOverlay::setToolPageLiquifyMode(int mode)
     m_liquifyModeButtons[mode]->setChecked(true);
 }
 
-void CanvasToolStateOverlay::setToolStabilizationValue(
-    workspace::ToolId tool, qreal stabilization)
+void CanvasToolStateOverlay::setToolStabilizationValue(workspace::ToolId tool, qreal stabilization)
 {
     ProgressHandleSlider* slider = nullptr;
     if (tool == workspace::ToolId::Lasso) {
@@ -852,8 +851,8 @@ void CanvasToolStateOverlay::setupUi()
         createBrushSettingsPage(tr("Brush"), &m_brushHardnessSlider, &m_brushFlowSlider,
             &m_brushEraserToggleButton, m_toolContentStack));
     addToolPage(workspace::ToolId::Eraser,
-        createBrushSettingsPage(tr("Eraser"), &m_eraserHardnessSlider, &m_eraserFlowSlider,
-            nullptr, m_toolContentStack));
+        createBrushSettingsPage(tr("Eraser"), &m_eraserHardnessSlider, &m_eraserFlowSlider, nullptr,
+            m_toolContentStack));
     addPlaceholderPage(workspace::ToolId::Fill);
     addPlaceholderPage(workspace::ToolId::Eyedropper);
     addToolPage(workspace::ToolId::Lasso,

@@ -110,6 +110,17 @@ struct CompositeLayerInfo {
     std::vector<CompositeLayerInfo> children;
 };
 
+/// Which of a group's several evaluated regions a cache entry belongs to. One
+/// pass-through group evaluates its chain twice per tile (the visible result and
+/// the background-free coverage), and an isolated group once, so the layer's id
+/// alone is not a unique cache identity.
+enum class GroupEffectSlot {
+    PassThroughVisual = 0, ///< group composited over the stack below it
+    PassThroughCoverage = 1, ///< same group over transparency (coverage/clip base)
+    IsolatedResult = 2, ///< isolated group result (forceIsolation / blend group)
+    AdjustmentBelow = 3, ///< adjustment layer: composite of the layers below it
+};
+
 class GLCompositor {
 public:
     explicit GLCompositor(QOpenGLFunctions_4_5_Core* gl);
@@ -236,6 +247,18 @@ private:
         bool realtimeOnly, const void* blockCacheIdentity = nullptr,
         const TileGrid* wholeLayerGrid = nullptr, uint64_t backdropRevision = 0,
         const QUuid& liveEditedEffectId = {}, quint64 liveEditSourceVariant = 0);
+    /// Stable cache identity for the cross-batch group/adjustment region caches.
+    /// The CompositeLayerInfo stack is rebuilt whenever the document changes, so
+    /// its addresses cannot key a cache that must outlive a batch — the layer's
+    /// QUuid can. Bit 63 is set so these can never collide with the
+    /// pointer-derived identities used for raster grids.
+    static uint64_t layerCacheIdentity(const QUuid& id, GroupEffectSlot slot);
+    /// Revision of everything `recomposePassThroughToGroup` composites for
+    /// `target`: the root stack walked up to (and stopping at) the group, plus
+    /// the canvas backdrop colour. Layers ABOVE the group are excluded because
+    /// the recompose stops before them, and the group's OWN effect chain is
+    /// excluded so a slider drag does not invalidate the baked source.
+    uint64_t recomposePrefixRevision(const CompositeLayerInfo* target) const;
     GLuint findCachedLayerEffectTile(const void* contentIdentity, const TileGrid& grid,
         const TileKey& key, const QList<ruwa::core::effects::LayerEffectState>& effects,
         uint64_t backdropRevision);
@@ -274,14 +297,29 @@ private:
     /// (dilated by `maxDisplacementPx`, capped at kMaxWholeLayerDim) into one
     /// texture via the `groupTileTexture` callback (returns the composited group
     /// tile for an absolute key, 0 == empty), runs the chain once, and slices
-    /// `key`. Cached PER BATCH (m_groupRegionCache, validated by m_batchSerial)
-    /// because group content changes every frame. Returns 0 when empty or over
-    /// the VRAM cap (caller falls back to the bounded path).
-    GLuint wholeGroupEffectTile(const void* identity, int minTileX, int minTileY, int maxTileX,
-        int maxTileY, const TileKey& key, int maxDisplacementPx,
+    /// `key`.
+    ///
+    /// The entry is cached ACROSS batches in m_groupRegionCache and validated by
+    /// `sourceRevision` (a content hash of everything the callback composites)
+    /// plus the effect chain, in two levels:
+    ///   * same revision AND same effects -> the effected region is reused as is
+    ///     (nothing at all is recomputed — the common case while painting on a
+    ///     different layer, panning, or after an unrelated edit);
+    ///   * same revision, different effects (an effect slider drag) -> only the
+    ///     chain re-runs, on the BAKED source region kept alongside it, so the
+    ///     per-region-tile group recomposites are skipped entirely.
+    /// Returns 0 when empty or over the VRAM cap (caller falls back to the
+    /// bounded path).
+    GLuint wholeGroupEffectTile(uint64_t identity, uint64_t sourceRevision, int minTileX,
+        int minTileY, int maxTileX, int maxTileY, const TileKey& key, int maxDisplacementPx,
         const QList<ruwa::core::effects::LayerEffectState>& effects,
         const std::function<GLuint(const TileKey&)>& groupTileTexture, GLuint backdropTexture,
         const QUuid& liveEditedEffectId = {}, quint64 liveEditSourceVariant = 0);
+    /// Evicts least-recently-used group/adjustment region entries (each owns an
+    /// effected region texture and, when small enough to be worth baking, its
+    /// assembled source) down to kMaxGroupRegionEntries. Entries used in the
+    /// current batch are never evicted.
+    void evictGroupRegionCacheIfNeeded();
     /// Pixel padding the layer's effect chain needs from neighbouring source
     /// tiles (>0 only for renderable, enabled, neighbour-reading effects).
     /// 0 means the per-tile applyLayerEffects path is sufficient.
@@ -307,7 +345,22 @@ private:
         GLTileRenderer* tileRenderer, int padPixels, GLuint groupResultTexture,
         bool allowCachedPaths = true,
         const std::function<GLuint(const TileKey&)>& passThroughTileTexture = {},
-        const void* cacheIdentity = nullptr, quint64 liveEditSourceVariant = 0);
+        GroupEffectSlot cacheSlot = GroupEffectSlot::IsolatedResult,
+        quint64 liveEditSourceVariant = 0);
+    /// Memoises one composited source tile of a group across batches. Producing
+    /// it costs a full re-entrant composite (of the group, or of the whole stack
+    /// up to it), and the padded/blocked neighbourhood paths ask for the same
+    /// tiles again for every block and every batch. Entries are validated by
+    /// `revision` (the group's content revision), so an effect-parameter change
+    /// reuses them and only the chain re-runs. Returns a texture owned by the
+    /// cache (stable until trimmed), or the produced texture when it cannot be
+    /// cached.
+    GLuint cachedGroupSourceTile(uint64_t identity, const TileKey& key, uint64_t revision,
+        const std::function<GLuint(const TileKey&)>& produce);
+    /// Drops stale/least-recently-used group source tiles down to
+    /// kMaxGroupSourceTiles. Called at batch start only, so a batch that needs
+    /// more tiles than the cap never evicts an entry it is still using.
+    void trimGroupSourceTileCache();
     bool groupSubtreeContains(
         const std::vector<CompositeLayerInfo>& layers, const CompositeLayerInfo* target) const;
     GLuint recomposePassThroughToGroup(const TileKey& key, const CompositeLayerInfo* target,
@@ -344,10 +397,18 @@ private:
     /// returns the layer/group content texture for an absolute tile key (0 ==
     /// empty). Returns a TILE_SIZE texture (owned by the effect renderer,
     /// valid until its next extract) or 0 to fall back to the per-tile path.
-    GLuint blockNeighborhoodEffectTile(const void* contentIdentity, const TileKey& key,
-        int padPixels, const QList<ruwa::core::effects::LayerEffectState>& effects,
+    ///
+    /// `sourceRevision` != 0 makes the entry survive batches: it is then reused
+    /// while that revision AND the effect chain are unchanged (groups and
+    /// adjustment layers pass their content revision, so painting on an
+    /// unrelated layer no longer re-runs their chain). 0 keeps the historical
+    /// per-batch validity (raster layers, which have their own persistent
+    /// per-tile cache).
+    GLuint blockNeighborhoodEffectTile(uint64_t contentIdentity, const TileKey& key, int padPixels,
+        const QList<ruwa::core::effects::LayerEffectState>& effects,
         const std::function<GLuint(const TileKey&)>& tileContent,
-        const QUuid& liveEditedEffectId = {}, quint64 liveEditSourceVariant = 0);
+        const QUuid& liveEditedEffectId = {}, quint64 liveEditSourceVariant = 0,
+        uint64_t sourceRevision = 0);
     /// True if any enabled effect declares requiresBackdrop — those read a
     /// per-tile backdrop texture the block path cannot provide.
     bool effectsRequireBackdrop(const QList<ruwa::core::effects::LayerEffectState>& effects) const;
@@ -406,14 +467,19 @@ private:
     std::vector<std::unique_ptr<GroupCompositeFrame>> m_groupCompositeFrames;
     size_t m_groupCompositeDepth = 0;
     const std::vector<CompositeLayerInfo>* m_activeRootLayers = nullptr;
+    /// Canvas backdrop colour of the batch in flight. A pass-through group's
+    /// source is composited over it, so it takes part in that source's revision.
+    Color m_activeBackdropColor = Color::transparent();
     const CompositeLayerInfo* m_recomposeStopGroup = nullptr;
     bool m_recomposeStopReached = false;
-    // Batch-scoped cache for block-evaluated neighbourhood effects (see
-    // blockNeighborhoodEffectTile). Keyed by content identity (TileGrid* of the
-    // raster layer / group content child — stable and unique for the lifetime
-    // of one compositeDirtyKeys batch) + block coordinates. Pool textures are
-    // (kEffectBlockTiles*TILE_SIZE)^2 RGBA8, reused across batches; the map is
-    // cleared per batch because tile/stroke content changes between batches.
+    // Cache for block-evaluated neighbourhood effects (see
+    // blockNeighborhoodEffectTile). Keyed by content identity (a TileGrid /
+    // payload address for raster sources, a uuid-derived layerCacheIdentity for
+    // groups and adjustment layers) + block coordinates. Textures are
+    // (kEffectBlockTiles*TILE_SIZE)^2 RGBA8, owned by their entry. Entries
+    // carrying a content revision survive batches (self-validating); the
+    // revision-less raster ones are dropped at the next batch start, because
+    // tile/stroke content changes between batches.
     //
     // 8 (not 4): each block gathers a fixed `pad` halo (768px at max blur) that
     // OVERLAPS its neighbours and is recomputed per block, so the halo is pure
@@ -426,7 +492,7 @@ private:
     // acceptable; 16 tiles (~0.5GB) is not.
     static constexpr int kEffectBlockTiles = 8;
     struct EffectBlockKey {
-        const void* identity = nullptr;
+        uint64_t identity = 0;
         int blockX = 0;
         int blockY = 0;
         bool operator==(const EffectBlockKey& other) const
@@ -437,15 +503,33 @@ private:
     struct EffectBlockKeyHash {
         size_t operator()(const EffectBlockKey& key) const
         {
-            size_t h = std::hash<const void*>()(key.identity);
+            size_t h = std::hash<uint64_t>()(key.identity);
             h ^= std::hash<int>()(key.blockX) + 0x9e3779b9u + (h << 6) + (h >> 2);
             h ^= std::hash<int>()(key.blockY) + 0x9e3779b9u + (h << 6) + (h >> 2);
             return h;
         }
     };
-    std::unordered_map<EffectBlockKey, GLuint, EffectBlockKeyHash> m_effectBlockCache;
+    struct EffectBlockEntry {
+        GLuint texture = 0;
+        /// 0 == per-batch entry (valid only while batchSerial == m_batchSerial);
+        /// non-zero == content revision of the source, valid across batches while
+        /// the revision and the effect chain both match.
+        uint64_t sourceRevision = 0;
+        uint64_t batchSerial = 0;
+        QList<ruwa::core::effects::LayerEffectState> effects;
+        uint64_t lastUsedSerial = 0;
+    };
+    std::unordered_map<EffectBlockKey, EffectBlockEntry, EffectBlockKeyHash> m_effectBlockCache;
+    /// Free-list of block-sized textures released by evicted entries, reused
+    /// before allocating a new one. Entries own their texture while cached.
     std::vector<GLuint> m_effectBlockPool;
-    size_t m_effectBlockPoolCursor = 0;
+    /// Revision-keyed block entries kept between batches (16 MB each at
+    /// kEffectBlockTiles=8), plus the free list below them — about the VRAM
+    /// budget the old per-batch pool had. A pass-through group evaluates two
+    /// regions (visual + coverage), so 8 covers a few blocks of one such group;
+    /// the map may grow past it within a batch and is trimmed at the next start.
+    static constexpr size_t kMaxCachedBlocks = 8;
+    static constexpr size_t kMaxPooledBlocks = 2;
 
     // Cross-batch cache for the effected output of an otherwise-static raster
     // layer. The final composition cache is invalidated when another layer is
@@ -510,14 +594,22 @@ private:
     uint64_t m_wholeLayerUseSerial = 0;
     static constexpr size_t kMaxWholeLayerEntries = 4;
 
-    // Per-BATCH cache for whole composite-region distortions. Groups (the live
-    // stroke-preview group and real layer groups) and adjustment-layer sources
-    // recomposite their input every frame, so unlike the raster whole-layer cache
-    // this cannot self-validate by grid.contentVersion — it is rebuilt each batch
-    // (validated by m_batchSerial) and reused across the tiles of that batch.
-    // Each entry OWNS its region texture (resized in place when bounds change).
+    // Cross-BATCH cache for whole composite-region distortions on groups and
+    // adjustment layers. Their input is not a single TileGrid, so it cannot
+    // self-validate by grid.contentVersion like the raster whole-layer cache;
+    // instead the caller hashes everything that feeds the region into
+    // `sourceRevision` (children content + the stack below for a pass-through
+    // group) and the entry stays valid while that hash holds.
+    //
+    // Each entry OWNS its effected region texture and — when the region is small
+    // enough to be worth the VRAM (kMaxBakedRegionDim) — the ASSEMBLED SOURCE it
+    // was produced from. That bake is what makes editing a group effect cheap:
+    // the source only depends on the group's content, so a parameter change
+    // re-runs the chain alone instead of re-compositing the group at every
+    // region tile.
     struct GroupRegionEntry {
-        GLuint texture = 0;
+        GLuint texture = 0; ///< owned effected region
+        GLuint sourceTexture = 0; ///< owned pre-effect region bake (0 == none)
         uint32_t textureW = 0;
         uint32_t textureH = 0;
         int originTileX = 0;
@@ -525,9 +617,52 @@ private:
         uint32_t tilesW = 0;
         uint32_t tilesH = 0;
         uint64_t batchSerial = 0; ///< m_batchSerial when materialised
+        uint64_t sourceRevision = 0; ///< content revision the source was built from
+        bool sourceValid = false; ///< sourceTexture holds that revision's assembly
         QList<ruwa::core::effects::LayerEffectState> effects; ///< chain when materialised
+        uint64_t lastUseSerial = 0; ///< m_batchSerial at last use (eviction order)
     };
-    std::unordered_map<const void*, GroupRegionEntry> m_groupRegionCache;
+    std::unordered_map<uint64_t, GroupRegionEntry> m_groupRegionCache;
+    static constexpr size_t kMaxGroupRegionEntries = 4;
+    /// Regions wider/taller than this are not baked (the source copy would cost
+    /// more VRAM than the rebuild costs time); they still cache their effected
+    /// result, they just re-assemble when the chain changes.
+    static constexpr uint32_t kMaxBakedRegionDim = 4096;
+
+    // Cross-batch cache of individual COMPOSITED GROUP TILES (see
+    // cachedGroupSourceTile). The bounded neighbourhood/block paths ask for the
+    // same group tiles over and over — once per block whose padding covers them,
+    // once per batch — and each request is a full re-entrant composite. Keyed by
+    // (group region identity, tile), validated by the group's content revision.
+    struct GroupSourceTileKey {
+        uint64_t identity = 0;
+        TileKey tile {};
+        bool operator==(const GroupSourceTileKey& other) const
+        {
+            return identity == other.identity && tile == other.tile;
+        }
+    };
+    struct GroupSourceTileKeyHash {
+        size_t operator()(const GroupSourceTileKey& key) const
+        {
+            size_t h = std::hash<uint64_t>()(key.identity);
+            h ^= TileKeyHash {}(key.tile) + 0x9e3779b9u + (h << 6) + (h >> 2);
+            return h;
+        }
+    };
+    struct GroupSourceTileEntry {
+        GLuint texture = 0;
+        uint64_t revision = 0;
+        uint64_t lastUsedSerial = 0;
+    };
+    std::unordered_map<GroupSourceTileKey, GroupSourceTileEntry, GroupSourceTileKeyHash>
+        m_groupSourceTileCache;
+    /// 384 RGBA8 tiles = 96 MiB. One block gather reads (kEffectBlockTiles +
+    /// 2*ring)^2 tiles — 100 at a one-ring pad — and neighbouring blocks share
+    /// most of their halo, so this holds a screenful of blocks without thrashing.
+    /// The cache may exceed it within one batch (never evicting what that batch
+    /// is using) and is trimmed back at the next batch start.
+    static constexpr size_t kMaxGroupSourceTiles = 384;
     // Retained/text whole-region cache is kept separate from group regions:
     // retained payload objects can be recreated while editing text, so entries
     // are cleared per batch instead of being keyed to stable LayerData objects.

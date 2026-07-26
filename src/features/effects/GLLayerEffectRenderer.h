@@ -94,6 +94,27 @@ public:
         bool useGroupPool = false, const QUuid& liveEditedEffectId = {},
         quint64 liveEditSourceVariant = 0);
 
+    /// Assembly half of applyEffectsWholeLayer: stamps the (tilesW x tilesH)
+    /// tile region into the whole-region pool's source texture and returns it
+    /// (0 when nothing was stamped). Split out so a caller can keep its own copy
+    /// of the assembled source ("bake") and later re-run only the chain via
+    /// runWholeRegionChain when nothing but the effect parameters changed — for
+    /// a group that assembly is the expensive part, because every region tile
+    /// costs a full re-entrant composite.
+    GLuint assembleWholeRegion(uint32_t tileSize, uint32_t tilesW, uint32_t tilesH,
+        const std::function<GLuint(int dx, int dy)>& tileTexture, bool useGroupPool);
+
+    /// Chain half of applyEffectsWholeLayer: runs the whole chain on an
+    /// already-assembled region source (which may be a caller-owned texture, not
+    /// necessarily the pool's) with wholeLayerSource=true. Returns the effected
+    /// region texture (owned by the renderer, overwritten by the next
+    /// whole-region call) or 0.
+    GLuint runWholeRegionChain(GLuint sourceTexture, uint32_t width, uint32_t height,
+        const QList<ruwa::core::effects::LayerEffectState>& effects,
+        ruwa::core::effects::EffectEvaluationSpace space, bool realtimeOnly, GLuint backdropTexture,
+        ruwa::core::effects::EffectRegionFrame region, bool useGroupPool,
+        const QUuid& liveEditedEffectId = {}, quint64 liveEditSourceVariant = 0);
+
     /// Blits the (tileX, tileY) tileSize^2 slice out of a whole-layer region
     /// texture (regionTilesW x regionTilesH tiles) produced by
     /// applyEffectsWholeLayer or a caller-owned copy of one. Returns a

@@ -1039,10 +1039,10 @@ BrushSettingsData PixelBrushModule::settingsFromVariantMap(const QVariantMap& se
         out.dynamics = deserializeLegacyPressureBindings(
             settings.value(QStringLiteral("dynamics.pressureBindings")));
     }
-    out.textureMode = std::clamp(
-        settings.value(QStringLiteral("texture.mode"), out.textureMode).toInt(),
-        static_cast<int>(BrushSettingsData::TextureModeProcedural),
-        static_cast<int>(BrushSettingsData::TextureModeImage));
+    out.textureMode
+        = std::clamp(settings.value(QStringLiteral("texture.mode"), out.textureMode).toInt(),
+            static_cast<int>(BrushSettingsData::TextureModeProcedural),
+            static_cast<int>(BrushSettingsData::TextureModeImage));
     out.textureType
         = std::clamp(settings.value(QStringLiteral("texture.type"), out.textureType).toInt(),
             static_cast<int>(BrushSettingsData::TextureTypePencilGrain),
@@ -1052,8 +1052,7 @@ BrushSettingsData PixelBrushModule::settingsFromVariantMap(const QVariantMap& se
         out.texturePencilDetail);
     out.texturePencilStreakStrength = clampUnit(
         settings
-            .value(QStringLiteral("texture.pencilStreakStrength"),
-                out.texturePencilStreakStrength)
+            .value(QStringLiteral("texture.pencilStreakStrength"), out.texturePencilStreakStrength)
             .toDouble(),
         out.texturePencilStreakStrength);
     out.textureNoiseOctaves = std::round(clampRange(
@@ -1071,8 +1070,7 @@ BrushSettingsData PixelBrushModule::settingsFromVariantMap(const QVariantMap& se
                 .toDouble()),
         1.0f, 5.0f));
     out.texturePerlinPersistence = clampUnit(
-        settings
-            .value(QStringLiteral("texture.perlinPersistence"), out.texturePerlinPersistence)
+        settings.value(QStringLiteral("texture.perlinPersistence"), out.texturePerlinPersistence)
             .toDouble(),
         out.texturePerlinPersistence);
     out.textureDotsSpacing = clampRange(
@@ -1254,17 +1252,14 @@ BrushSettingsData PixelBrushModule::normalizeCompatibilitySettings(
     out.flow = std::clamp(out.flow, 0.0f, 1.0f);
     out.roundness = std::clamp(out.roundness, 0.0f, 1.0f);
     out.angle = normalizeAngleDegrees(out.angle);
-    out.textureMode = std::clamp(out.textureMode,
-        static_cast<int>(BrushSettingsData::TextureModeProcedural),
-        static_cast<int>(BrushSettingsData::TextureModeImage));
+    out.textureMode
+        = std::clamp(out.textureMode, static_cast<int>(BrushSettingsData::TextureModeProcedural),
+            static_cast<int>(BrushSettingsData::TextureModeImage));
     out.texturePencilDetail = std::clamp(out.texturePencilDetail, 0.0f, 1.0f);
-    out.texturePencilStreakStrength
-        = std::clamp(out.texturePencilStreakStrength, 0.0f, 1.0f);
-    out.textureNoiseOctaves
-        = std::round(std::clamp(out.textureNoiseOctaves, 1.0f, 5.0f));
+    out.texturePencilStreakStrength = std::clamp(out.texturePencilStreakStrength, 0.0f, 1.0f);
+    out.textureNoiseOctaves = std::round(std::clamp(out.textureNoiseOctaves, 1.0f, 5.0f));
     out.textureNoiseRoughness = std::clamp(out.textureNoiseRoughness, 0.0f, 1.0f);
-    out.texturePerlinOctaves
-        = std::round(std::clamp(out.texturePerlinOctaves, 1.0f, 5.0f));
+    out.texturePerlinOctaves = std::round(std::clamp(out.texturePerlinOctaves, 1.0f, 5.0f));
     out.texturePerlinPersistence = std::clamp(out.texturePerlinPersistence, 0.0f, 1.0f);
     out.textureDotsSpacing = std::clamp(out.textureDotsSpacing, 6.0f, 96.0f);
     out.textureDotsSize = std::clamp(out.textureDotsSize, 0.05f, 0.9f);
@@ -1284,9 +1279,9 @@ BrushSettingsData PixelBrushModule::normalizeCompatibilitySettings(
     out.colorHue = normalizeAngleDegrees(out.colorHue);
     out.colorLightness = std::clamp(out.colorLightness, 0.0f, 2.0f);
     out.colorSaturation = std::clamp(out.colorSaturation, 0.0f, 2.0f);
-    out.textureType = std::clamp(out.textureType,
-        static_cast<int>(BrushSettingsData::TextureTypePencilGrain),
-        static_cast<int>(BrushSettingsData::TextureTypeCheckerboard));
+    out.textureType
+        = std::clamp(out.textureType, static_cast<int>(BrushSettingsData::TextureTypePencilGrain),
+            static_cast<int>(BrushSettingsData::TextureTypeCheckerboard));
     out.dabType = std::clamp(out.dabType, 0, 5);
     out.dabXScale = std::clamp(out.dabXScale, 0.0f, 1.0f);
     out.dabYScale = std::clamp(out.dabYScale, 0.0f, 1.0f);

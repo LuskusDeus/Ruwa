@@ -192,8 +192,7 @@ QWidget* BrushSettingsPanel::createContent()
 
     m_dabPreview = new DotPreviewCanvas(m_headerCard);
     m_dabPreview->setFixedSize(theme.scaled(30), theme.scaled(30));
-    m_dabPreview->setPreviewStateChangedCallback(
-        [this]() { emit visiblePreviewStateChanged(); });
+    m_dabPreview->setPreviewStateChangedCallback([this]() { emit visiblePreviewStateChanged(); });
 
     auto* headerText = new QWidget(m_headerCard);
     headerText->setAttribute(Qt::WA_TranslucentBackground);

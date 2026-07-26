@@ -89,13 +89,10 @@ public:
 
     static bool isDrawInstrument(ToolId tool);
     static bool shouldEraseForTool(ToolId tool, bool brushEraserActive);
-    static ToolId overlayInstrumentMode(
-        ToolId currentTool, ToolId lastDrawTool);
-    static bool overlayMatchesInstrument(
-        ToolId tool, ToolId currentTool, ToolId lastDrawTool);
-    static CanvasToolBrushState* stateForInstrument(ToolId tool,
-        CanvasToolBrushState& brush, CanvasToolBrushState& eraser, CanvasToolBrushState& blur,
-        CanvasToolBrushState& smudge);
+    static ToolId overlayInstrumentMode(ToolId currentTool, ToolId lastDrawTool);
+    static bool overlayMatchesInstrument(ToolId tool, ToolId currentTool, ToolId lastDrawTool);
+    static CanvasToolBrushState* stateForInstrument(ToolId tool, CanvasToolBrushState& brush,
+        CanvasToolBrushState& eraser, CanvasToolBrushState& blur, CanvasToolBrushState& smudge);
     static const CanvasToolBrushState* stateForInstrument(ToolId tool,
         const CanvasToolBrushState& brush, const CanvasToolBrushState& eraser,
         const CanvasToolBrushState& blur, const CanvasToolBrushState& smudge);
@@ -103,9 +100,9 @@ public:
     static void applyPersistedToolState(
         CanvasToolBrushState& target, const CanvasPersistedToolState& state);
     static CanvasLoadedToolState loadPersistedState();
-    static CanvasToolStateSnapshot buildSnapshot(ToolId currentTool,
-        ToolId lastDrawTool, const QColor& currentColor, qreal lassoStabilization,
-        qreal lassoFillStabilization, bool brushEraserActive, const CanvasToolBrushState& brush,
+    static CanvasToolStateSnapshot buildSnapshot(ToolId currentTool, ToolId lastDrawTool,
+        const QColor& currentColor, qreal lassoStabilization, qreal lassoFillStabilization,
+        bool brushEraserActive, const CanvasToolBrushState& brush,
         const CanvasToolBrushState& eraser, const CanvasToolBrushState& blur,
         const CanvasToolBrushState& smudge);
     static void writeSnapshot(const CanvasToolStateSnapshot& snapshot);
