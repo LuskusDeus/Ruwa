@@ -89,13 +89,13 @@ float canvasClipCoverage(vec2 worldPos) {
 vec4 sampleTargetBase(vec2 destScreen) {
     vec2 baseScreen = destScreen + uTargetBaseScreenOffset;
     vec2 baseSize = max(uTargetBaseTextureSize, vec2(1.0));
-    if (baseScreen.x < -0.5 || baseScreen.y < -0.5
-        || baseScreen.x > baseSize.x + 0.5
-        || baseScreen.y > baseSize.y + 0.5) {
+    if (baseScreen.x < 0.0 || baseScreen.y < 0.0
+        || baseScreen.x > baseSize.x
+        || baseScreen.y > baseSize.y) {
         return vec4(0.0);
     }
-    return texture(uTargetBaseTexture, vec2((baseScreen.x + 0.5) / baseSize.x,
-                                            1.0 - (baseScreen.y + 0.5) / baseSize.y));
+    return texture(uTargetBaseTexture, vec2(baseScreen.x / baseSize.x,
+                                            1.0 - baseScreen.y / baseSize.y));
 }
 
 float sampleSelectionMask(vec2 worldPos) {
@@ -108,9 +108,10 @@ float sampleSelectionMask(vec2 worldPos) {
 }
 
 void main() {
+    // gl_FragCoord already carries the framebuffer pixel-center offset.
     vec2 destScreen = vec2(
-        gl_FragCoord.x - 0.5,
-        uViewportSize.y - gl_FragCoord.y - 0.5
+        gl_FragCoord.x,
+        uViewportSize.y - gl_FragCoord.y
     );
     vec2 destWorld = documentWorldFromScreen(destScreen);
     float coverage = canvasClipCoverage(destWorld);

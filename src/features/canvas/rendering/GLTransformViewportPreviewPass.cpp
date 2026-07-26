@@ -110,14 +110,28 @@ Result<void> GLTransformViewportPreviewPass::initialize(const QString& shaderDir
         return gridResult;
     }
 
-    m_gl->glGenSamplers(1, &m_deformMeshSampler);
-    if (m_deformMeshSampler) {
-        m_gl->glSamplerParameteri(
-            m_deformMeshSampler, GL_TEXTURE_MIN_FILTER, GL_LINEAR_MIPMAP_LINEAR);
-        m_gl->glSamplerParameteri(m_deformMeshSampler, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
-        m_gl->glSamplerParameteri(m_deformMeshSampler, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
-        m_gl->glSamplerParameteri(m_deformMeshSampler, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
+    m_gl->glGenSamplers(1, &m_previewSourceSampler);
+    if (!m_previewSourceSampler) {
+        shutdown();
+        return { ErrorCode::PipelineCreationFailed,
+            "Failed to create transform preview source sampler" };
     }
+    m_gl->glSamplerParameteri(m_previewSourceSampler, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
+    m_gl->glSamplerParameteri(m_previewSourceSampler, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
+    m_gl->glSamplerParameteri(m_previewSourceSampler, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
+    m_gl->glSamplerParameteri(m_previewSourceSampler, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
+
+    m_gl->glGenSamplers(1, &m_deformMeshSampler);
+    if (!m_deformMeshSampler) {
+        shutdown();
+        return { ErrorCode::PipelineCreationFailed,
+            "Failed to create transform deform source sampler" };
+    }
+    m_gl->glSamplerParameteri(
+        m_deformMeshSampler, GL_TEXTURE_MIN_FILTER, GL_LINEAR_MIPMAP_LINEAR);
+    m_gl->glSamplerParameteri(m_deformMeshSampler, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
+    m_gl->glSamplerParameteri(m_deformMeshSampler, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
+    m_gl->glSamplerParameteri(m_deformMeshSampler, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
 
     m_initialized = true;
     return Result<void>::ok();
@@ -204,6 +218,10 @@ void GLTransformViewportPreviewPass::shutdown()
     if (m_deformMeshIbo) {
         m_gl->glDeleteBuffers(1, &m_deformMeshIbo);
         m_deformMeshIbo = 0;
+    }
+    if (m_previewSourceSampler) {
+        m_gl->glDeleteSamplers(1, &m_previewSourceSampler);
+        m_previewSourceSampler = 0;
     }
     if (m_deformMeshSampler) {
         m_gl->glDeleteSamplers(1, &m_deformMeshSampler);
@@ -328,15 +346,19 @@ GLuint GLTransformViewportPreviewPass::render(GLuint sourceAtlasTexture, int32_t
     m_gl->glUniformMatrix3fv(matLoc, 1, GL_FALSE, inverseTransform.data());
 
     m_gl->glBindTextureUnit(0, sourceAtlasTexture);
+    m_gl->glBindSampler(0, m_previewSourceSampler);
     m_gl->glBindTextureUnit(1, targetBaseTexture);
     m_gl->glBindTextureUnit(2, selectionMaskAtlasTexture);
+    m_gl->glBindSampler(2, m_previewSourceSampler);
 
     m_gl->glBindVertexArray(m_emptyVao);
     m_gl->glDrawArrays(GL_TRIANGLES, 0, 6);
     m_gl->glBindVertexArray(0);
 
     m_gl->glBindTextureUnit(2, 0);
+    m_gl->glBindSampler(2, 0);
     m_gl->glBindTextureUnit(1, 0);
+    m_gl->glBindSampler(0, 0);
     m_gl->glBindTextureUnit(0, 0);
 
     return m_outputTexture;
@@ -467,15 +489,19 @@ GLuint GLTransformViewportPreviewPass::renderFromScreenSource(GLuint sourceScree
     m_gl->glUniformMatrix3fv(matLoc, 1, GL_FALSE, inverseTransform.data());
 
     m_gl->glBindTextureUnit(0, sourceScreenTexture);
+    m_gl->glBindSampler(0, m_previewSourceSampler);
     m_gl->glBindTextureUnit(1, targetBaseTexture);
     m_gl->glBindTextureUnit(2, selectionMaskAtlasTexture);
+    m_gl->glBindSampler(2, m_previewSourceSampler);
 
     m_gl->glBindVertexArray(m_emptyVao);
     m_gl->glDrawArrays(GL_TRIANGLES, 0, 6);
     m_gl->glBindVertexArray(0);
 
     m_gl->glBindTextureUnit(2, 0);
+    m_gl->glBindSampler(2, 0);
     m_gl->glBindTextureUnit(1, 0);
+    m_gl->glBindSampler(0, 0);
     m_gl->glBindTextureUnit(0, 0);
 
     return m_outputTexture;
@@ -548,6 +574,7 @@ GLuint GLTransformViewportPreviewPass::renderDeformMeshPass(GLuint sourceTexture
 
         m_gl->glBindTextureUnit(1, targetBaseTexture);
         m_gl->glBindTextureUnit(2, selectionMaskAtlasTexture);
+        m_gl->glBindSampler(2, m_previewSourceSampler);
 
         m_gl->glBindVertexArray(m_emptyVao);
         m_gl->glDrawArrays(GL_TRIANGLES, 0, 6);
@@ -636,6 +663,7 @@ GLuint GLTransformViewportPreviewPass::renderDeformMeshPass(GLuint sourceTexture
     }
     if (useMask) {
         m_gl->glBindTextureUnit(2, 0);
+        m_gl->glBindSampler(2, 0);
         m_gl->glBindTextureUnit(1, 0);
     }
     m_gl->glBindTextureUnit(0, 0);

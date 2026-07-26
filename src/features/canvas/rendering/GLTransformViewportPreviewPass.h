@@ -87,9 +87,15 @@ private:
     GLuint m_deformMeshVbo = 0;
     GLuint m_deformMeshIbo = 0;
     GLsizei m_deformMeshIndexCount = 0;
+    // Matches document-tile sampling for interactive transform sources and
+    // selection masks: linear while minifying, nearest while magnifying.
+    // Keeping this as a sampler object avoids mutating atlas and screen-cache
+    // texture state that is shared with the rest of the viewport renderer.
+    GLuint m_previewSourceSampler = 0;
     // Sampler object for source texture sampling during deform mesh draws.
     // Overrides the source texture's per-object sampler params to enable
-    // LINEAR_MIPMAP_LINEAR filtering without mutating shared sampler state.
+    // LINEAR_MIPMAP_LINEAR minification without mutating shared sampler state.
+    // Magnification remains NEAREST, consistent with the regular preview path.
     // Combined with a per-frame glGenerateMipmap on the source, this gives
     // proper LOD selection for stretched regions and cuts texture-cache
     // misses dramatically on large source atlases.

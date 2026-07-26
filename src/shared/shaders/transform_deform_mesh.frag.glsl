@@ -93,20 +93,20 @@ vec4 sampleSourceAtlas(vec2 worldPos) {
     if (uSourceIsScreenTexture != 0) {
         vec2 sourceScreen = screenFromDocumentWorld(worldPos) + uSourceScreenOffset;
         vec2 sourceSize = max(uSourceTextureSize, vec2(1.0));
-        if (sourceScreen.x < -0.5 || sourceScreen.y < -0.5
-            || sourceScreen.x > sourceSize.x + 0.5
-            || sourceScreen.y > sourceSize.y + 0.5) {
+        if (sourceScreen.x < 0.0 || sourceScreen.y < 0.0
+            || sourceScreen.x > sourceSize.x
+            || sourceScreen.y > sourceSize.y) {
             return vec4(0.0);
         }
-        return texture(uSourceAtlasTexture, vec2((sourceScreen.x + 0.5) / sourceSize.x,
-                                                 1.0 - (sourceScreen.y + 0.5) / sourceSize.y));
+        return texture(uSourceAtlasTexture, vec2(sourceScreen.x / sourceSize.x,
+                                                 1.0 - sourceScreen.y / sourceSize.y));
     }
     vec2 atlasPixel = worldPos - uAtlasMinTile * uTileSize;
     if (atlasPixel.x < -0.5 || atlasPixel.y < -0.5
         || atlasPixel.x > uAtlasSize.x + 0.5 || atlasPixel.y > uAtlasSize.y + 0.5) {
         return vec4(0.0);
     }
-    return texture(uSourceAtlasTexture, (atlasPixel + 0.5) / uAtlasSize);
+    return texture(uSourceAtlasTexture, atlasPixel / uAtlasSize);
 }
 
 vec4 sampleClampedSource(vec2 worldPos) {

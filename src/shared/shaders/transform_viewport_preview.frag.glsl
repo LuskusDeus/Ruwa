@@ -117,17 +117,16 @@ vec4 sampleSourceAtlas(vec2 worldPos) {
     if (uSourceIsScreenTexture != 0) {
         vec2 sourceScreen = screenFromDocumentWorld(worldPos) + uSourceScreenOffset;
         vec2 sourceSize = max(uSourceTextureSize, vec2(1.0));
-        if (sourceScreen.x < -0.5 || sourceScreen.y < -0.5
-            || sourceScreen.x > sourceSize.x + 0.5
-            || sourceScreen.y > sourceSize.y + 0.5) {
+        if (sourceScreen.x < 0.0 || sourceScreen.y < 0.0
+            || sourceScreen.x > sourceSize.x
+            || sourceScreen.y > sourceSize.y) {
             return uSourceBackgroundColor;
         }
-        // +0.5 shifts pixel-index screen coords to pixel-center for sampling
-        // texel centers; without it bilinear pulls in the half-texel neighbor,
-        // displacing the displayed content by 0.5px down-right and leaving a
-        // half-pixel gap at the top and left edges of the preview.
-        return texture(uSourceAtlasTexture, vec2((sourceScreen.x + 0.5) / sourceSize.x,
-                                                 1.0 - (sourceScreen.y + 0.5) / sourceSize.y));
+        // Screen coordinates are continuous framebuffer coordinates. Fragment
+        // centers therefore already lie at n + 0.5 and map directly to texel
+        // centers; adding another half pixel would shift the source.
+        return texture(uSourceAtlasTexture, vec2(sourceScreen.x / sourceSize.x,
+                                                 1.0 - sourceScreen.y / sourceSize.y));
     }
 
     vec2 atlasPixel = worldPos - uAtlasMinTile * uTileSize;
@@ -146,13 +145,13 @@ vec4 sampleSourceAtlas(vec2 worldPos) {
 vec4 sampleTargetBase(vec2 destScreen) {
     vec2 baseScreen = destScreen + uTargetBaseScreenOffset;
     vec2 baseSize = max(uTargetBaseTextureSize, vec2(1.0));
-    if (baseScreen.x < -0.5 || baseScreen.y < -0.5
-        || baseScreen.x > baseSize.x + 0.5
-        || baseScreen.y > baseSize.y + 0.5) {
+    if (baseScreen.x < 0.0 || baseScreen.y < 0.0
+        || baseScreen.x > baseSize.x
+        || baseScreen.y > baseSize.y) {
         return vec4(0.0);
     }
-    return texture(uTargetBaseTexture, vec2((baseScreen.x + 0.5) / baseSize.x,
-                                            1.0 - (baseScreen.y + 0.5) / baseSize.y));
+    return texture(uTargetBaseTexture, vec2(baseScreen.x / baseSize.x,
+                                            1.0 - baseScreen.y / baseSize.y));
 }
 
 vec4 sampleTransformedSourceAtlas(vec2 worldPos) {
@@ -178,30 +177,6 @@ float sampleSelectionMask(vec2 worldPos) {
         return 0.0;
     }
     return texture(uSelectionMaskAtlasTexture, maskPixel / uMaskAtlasSize).a;
-}
-
-// Carve mask, dilated by ~1 screen pixel. The base (uTargetBaseTexture) is the
-// layer rendered into a screen-space texture and sampled with LINEAR filtering,
-// so its content edge is anti-aliased over ~1px. Carving it with the hard
-// (NEAREST) selection mask leaves that soft fringe uncarved, which shows as a
-// 1px "ghost" frame at the selection's previous position against empty canvas.
-// Dilating the carve coverage by one screen pixel removes that fringe too. Only
-// used for the base carve; the moved-content clip (m0) must stay un-dilated.
-float sampleSelectionMaskCarve(vec2 worldPos) {
-    if (uUseSelectionMask == 0) {
-        return 1.0;
-    }
-    float step = 1.0 / max(uCameraZoom, 0.0001);
-    float m = sampleSelectionMask(worldPos);
-    m = max(m, sampleSelectionMask(worldPos + vec2( step, 0.0)));
-    m = max(m, sampleSelectionMask(worldPos + vec2(-step, 0.0)));
-    m = max(m, sampleSelectionMask(worldPos + vec2(0.0,  step)));
-    m = max(m, sampleSelectionMask(worldPos + vec2(0.0, -step)));
-    m = max(m, sampleSelectionMask(worldPos + vec2( step,  step)));
-    m = max(m, sampleSelectionMask(worldPos + vec2( step, -step)));
-    m = max(m, sampleSelectionMask(worldPos + vec2(-step,  step)));
-    m = max(m, sampleSelectionMask(worldPos + vec2(-step, -step)));
-    return m;
 }
 
 bool trySolveST(vec2 E, vec2 F, vec2 G, vec2 h, float t, float margin, out vec2 st) {
@@ -307,9 +282,12 @@ int computeSourceWorldAll(vec2 destWorld, out vec2 srcWorld0, out vec2 srcWorld1
 }
 
 void main() {
+    // gl_FragCoord is already located at the framebuffer pixel center. Keep
+    // that half-pixel when converting to document space so the base texture
+    // and document-space selection mask describe the same sample.
     vec2 destScreen = vec2(
-        gl_FragCoord.x - 0.5,
-        uViewportSize.y - gl_FragCoord.y - 0.5
+        gl_FragCoord.x,
+        uViewportSize.y - gl_FragCoord.y
     );
     vec2 destWorld = documentWorldFromScreen(destScreen);
     float canvasCoverage = canvasClipCoverage(destWorld);
@@ -342,17 +320,10 @@ void main() {
 
     vec4 baseColor = sampleTargetBase(destScreen);
     if (uPreserveMaskedSource == 0) {
-        // Carve the base where the selection content was lifted. The hard
-        // (un-dilated) mask is the geometrically correct carve and keeps an
-        // in-place flip seamless (carve region == content fill region, so no
-        // transparent gap ring). The dilated carve is applied ONLY across the
-        // base's own anti-aliased fringe (base.a < 1) — that is the 1px "ghost"
-        // of a lifted edge against empty canvas on a move; on solid surrounding
-        // pixels (base.a == 1) it must NOT extend, or it eats a 1px ring the
-        // moved content does not refill.
-        float carveHard = clamp(sampleSelectionMask(destWorld), 0.0, 1.0);
-        float carveDilated = clamp(sampleSelectionMaskCarve(destWorld), 0.0, 1.0);
-        float carve = max(carveHard, carveDilated * (1.0 - baseColor.a));
+        // destWorld is evaluated at the same fragment center used to rasterize
+        // the screen-space base, so the mask carves the exact lifted pixels
+        // without the old one-screen-pixel dilation workaround.
+        float carve = clamp(sampleSelectionMask(destWorld), 0.0, 1.0);
         // Carve toward the source grid's background, not transparent: where the
         // selection content was lifted, a hide-all mask must leave its opaque
         // black background (reveal 0 = content stays hidden), matching commit.
