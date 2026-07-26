@@ -15,12 +15,13 @@ a release.
 
 ## [Unreleased]
 
-## [0.2.7-alpha] — 2026-07-25 — "Magic Wand, procedural textures, and smarter selections"
+## [0.2.7-alpha] — 2026-07-26 — "Magic Wand, procedural textures, and smarter selections"
 
 This update adds a Magic Wand selection tool and a procedural texture editor for
 brushes, extends copy, cut, paste, and Delete to layer masks and selection
 pixels, reorganizes the tool bar into clearer groups, and gives the workspace an
-animated entrance on startup.
+animated entrance on startup. The canvas renderer and effect caches were also
+modernized for smoother drawing, previews, and compositing.
 
 ### Added
 - A Magic Wand selection tool (`W`) that selects a contiguous region of similar
@@ -50,10 +51,18 @@ animated entrance on startup.
 - Adjustment layers are now applied in screen-space compositing as well, so they
   stay correct during brush strokes, transform previews, and lasso fill.
 - Alt now activates the eyedropper while Lasso Fill is the active tool.
+- Group and adjustment-layer effects now reuse composites and effect results
+  while their source content is unchanged, avoiding repeated work during
+  painting, panning, and effect editing.
+- The GPU rendering path now uses OpenGL 4.5 direct-state access, immutable
+  texture storage, and persistent asynchronous readback buffers across brushes,
+  canvas previews, effects, selections, and transforms.
 
 ### Fixed
 - Layer drag & drop and group undo no longer drop clipping masks partway through
   a multi-layer move.
+- Hiding the base of a clipping group now also hides its clipped layers on the
+  canvas, in live previews, and in exported content.
 - Copy, cut, paste, and Delete no longer edit the document while a text field
   (inline layer rename, search fields) has focus; the keystroke goes to the
   field instead.
@@ -65,6 +74,8 @@ animated entrance on startup.
   existing project's recent-projects thumbnail is captured.
 - Fill and lasso fill now refresh layer-effect caches on commit, so tiles on
   layers with effects no longer revert to a stale cached composite.
+- Frosted canvas-widget backgrounds are rendered after transform and lasso
+  previews, so those previews no longer erase the blur later in the same frame.
 
 ## [0.2.6-alpha] — 2026-07-21 — "Brush favorites, live settings, and smoother drawing"
 

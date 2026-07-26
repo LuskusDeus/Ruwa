@@ -717,8 +717,8 @@ void UpdateMessageOverlay::setupUI()
     auto* descriptionLabel
         = new QLabel(QCoreApplication::translate("UpdateMessageOverlay",
                          "This update adds a Magic Wand selection tool and procedural brush "
-                         "textures, extends copy, paste, and Delete to masks and selection "
-                         "pixels, and gives the workspace an animated entrance."),
+                         "textures, extends copy, cut, paste, and Delete to masks and selection "
+                         "pixels, and modernizes canvas rendering."),
             leftWidget);
     descriptionLabel->setWordWrap(true);
     descriptionLabel->setFont(colors.fonts.getUIFont(theme.scaledFontSize(BodyFontSize)));
@@ -739,18 +739,18 @@ void UpdateMessageOverlay::setupUI()
     addReleaseHighlightRow(highlightsWidget, highlightsLayout, colors, theme,
         ChangelogBadge::Updated,
         QCoreApplication::translate("UpdateMessageOverlay",
-            "Copy, paste, and Delete now work on layer masks and on the pixels inside a "
+            "Copy, cut, paste, and Delete now work on layer masks and on the pixels inside a "
             "selection."));
     addReleaseHighlightRow(highlightsWidget, highlightsLayout, colors, theme,
         ChangelogBadge::Improved,
         QCoreApplication::translate("UpdateMessageOverlay",
-            "Reorganized tool groups, adjustment layers in live previews, and an animated "
-            "workspace entrance."));
+            "Reorganized tool groups, an animated workspace entrance, and faster OpenGL 4.5 "
+            "rendering with smarter effect caches."));
     addReleaseHighlightRow(highlightsWidget, highlightsLayout, colors, theme,
         ChangelogBadge::BugFix,
         QCoreApplication::translate("UpdateMessageOverlay",
-            "Clipping masks survive layer moves, and shortcuts no longer edit the document while "
-            "you type."));
+            "Clipping groups now follow hidden bases, canvas blur survives live previews, and "
+            "shortcuts no longer edit while you type."));
 
     leftLayout->addWidget(highlightsWidget);
     leftLayout->addStretch();

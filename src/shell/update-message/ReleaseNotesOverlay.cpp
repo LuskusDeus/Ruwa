@@ -59,12 +59,12 @@ QVector<ReleaseNoteEntry> releaseNoteEntries()
     return {
         { QCoreApplication::translate(
               "ReleaseNotesOverlay", "Magic Wand, procedural textures, and smarter selections"),
-            QStringLiteral("0.2.7-alpha"), QStringLiteral("25.07.2026"),
+            QStringLiteral("0.2.7-alpha"), QStringLiteral("26.07.2026"),
             QCoreApplication::translate("ReleaseNotesOverlay",
                 "<p><b>This update adds a Magic Wand selection tool and a procedural texture "
-                "editor for brushes, extends copy, paste, and Delete to layer masks and selection "
-                "pixels, reorganizes the tool bar, and gives the workspace an animated "
-                "entrance.</b></p>"
+                "editor for brushes, extends copy, cut, paste, and Delete to layer masks and "
+                "selection pixels, reorganizes the tool bar, gives the workspace an animated "
+                "entrance, and modernizes canvas rendering.</b></p>"
                 "<p><b>New</b></p>"
                 "<ul>"
                 "<li>Magic Wand (W). Selects a contiguous region of similar color on the active "
@@ -89,17 +89,26 @@ QVector<ReleaseNoteEntry> releaseNoteEntries()
                 "<li>Adjustment layers are now applied in screen-space compositing, so they stay "
                 "correct during strokes, transforms, and lasso fill.</li>"
                 "<li>Alt picks a color with the eyedropper while Lasso Fill is active.</li>"
+                "<li>Group and adjustment-layer effects now reuse cached composites while their "
+                "source content is unchanged, avoiding repeated work during painting, panning, "
+                "and effect editing.</li>"
+                "<li>The GPU rendering path now uses OpenGL 4.5 direct-state access, immutable "
+                "textures, and persistent asynchronous readback buffers.</li>"
                 "</ul>"
                 "<p><b>Fixes</b></p>"
                 "<ul>"
                 "<li>Layer drag and drop no longer drops clipping masks partway through a "
                 "multi-layer move.</li>"
-                "<li>Copy, paste, Delete, and the [ and ] brush shortcuts no longer act on the "
-                "document while a text field has focus.</li>"
+                "<li>Hiding a clipping-group base now also hides its clipped layers on the canvas, "
+                "in live previews, and in exported content.</li>"
+                "<li>Copy, cut, paste, Delete, and the [ and ] brush shortcuts no longer act on "
+                "the document while a text field has focus.</li>"
                 "<li>The first-run tab no longer starts blank, and the startup zoom-in animation "
                 "no longer freezes when opening an existing project.</li>"
                 "<li>Fill now refreshes layer-effect caches on commit, so tiles on layers with "
                 "effects no longer revert.</li>"
+                "<li>Transform and lasso previews no longer erase frosted canvas-widget "
+                "backgrounds later in the same frame.</li>"
                 "</ul>") },
         { QCoreApplication::translate(
               "ReleaseNotesOverlay", "Brush favorites, live settings, and smoother drawing"),
