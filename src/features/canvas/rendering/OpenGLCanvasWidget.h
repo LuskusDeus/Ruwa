@@ -498,7 +498,9 @@ private:
         bool needSceneForOverlay, const std::vector<CompositeLayerInfo>& boardLayerStack);
     void paintGL_renderOverlays(GLuint sceneTarget);
     /// Downsample, blur and composite the current visible QWidget regions.
-    void paintGL_renderBackdrop(GLuint sourceFbo, GLint defaultFbo);
+    /// Samples the default framebuffer, so it must run after every pass that
+    /// writes canvas pixels (including the screen-space previews).
+    void paintGL_renderBackdrop(GLint defaultFbo);
     void paintGL_processSelectionReadback();
     void paintGL_renderLassoOverlay();
     void paintGL_renderTransformViewportPreview(const std::vector<CompositeLayerInfo>& layerStack,

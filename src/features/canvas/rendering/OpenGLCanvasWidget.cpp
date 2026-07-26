@@ -9971,7 +9971,7 @@ void OpenGLCanvasWidget::setBackdropRegionProvider(BackdropRegionProvider provid
     requestRender();
 }
 
-void OpenGLCanvasWidget::paintGL_renderBackdrop(GLuint sourceFbo, GLint defaultFbo)
+void OpenGLCanvasWidget::paintGL_renderBackdrop(GLint defaultFbo)
 {
     if (!m_backdropRegionProvider) {
         return;
@@ -9998,8 +9998,13 @@ void OpenGLCanvasWidget::paintGL_renderBackdrop(GLuint sourceFbo, GLint defaultF
         = width() > 0 ? static_cast<qreal>(surf.width()) / static_cast<qreal>(width()) : 1.0;
     const qreal scaleY
         = height() > 0 ? static_cast<qreal>(surf.height()) / static_cast<qreal>(height()) : 1.0;
-    const bool available = m_backdropRenderer->render(sourceFbo, static_cast<GLuint>(defaultFbo),
-        surf.width(), surf.height(), scaleX, scaleY, regions);
+    // Source and destination are the same framebuffer: the blur samples exactly
+    // what the frame has already drawn (scene, screen-space previews, chrome).
+    // No feedback loop — every region is blitted into its own reduction targets
+    // before anything is composited back.
+    const GLuint target = static_cast<GLuint>(defaultFbo);
+    const bool available = m_backdropRenderer->render(
+        target, target, surf.width(), surf.height(), scaleX, scaleY, regions);
     if (available != m_backdropRendererAvailable) {
         m_backdropRendererAvailable = available;
         emit backdropAvailabilityChanged();
@@ -11415,10 +11420,6 @@ void OpenGLCanvasWidget::paintGL()
     GLuint sceneTarget = 0;
     paintGL_renderSceneAndBlit(sceneTarget, defaultFbo, needFullSceneForOverlay, boardLayerStack);
 
-    // Same-frame ROI blur for visible canvas widgets. This runs before cursor
-    // and transform chrome, matching the old backdrop's visual ordering.
-    paintGL_renderBackdrop(sceneTarget, defaultFbo);
-
     if (captureBrushCursorRegion) {
         const QSize surfaceSize = currentSurfacePixelSize(this);
         const int surfaceWidth = surfaceSize.width();
@@ -11459,6 +11460,15 @@ void OpenGLCanvasWidget::paintGL()
 
     paintGL_renderLassoFillOverlay(layerStack, boardLayerStack, defaultFbo);
     paintGL_renderLassoOverlay();
+
+    // Same-frame ROI blur for visible canvas widgets. It must run AFTER every
+    // pass that writes canvas pixels: the screen-space previews (transform,
+    // lasso fill) re-render the viewport into the scene FBO and blit it over the
+    // whole surface, which erased a blur drawn earlier in the frame. Reading the
+    // default framebuffer here (instead of the scene FBO) keeps the source in
+    // sync with what those passes actually left on screen, including the passes
+    // that draw straight to the default target.
+    paintGL_renderBackdrop(defaultFbo);
 
     PaintGLCameraFrameState completedFrameState = currentCameraFrameState;
     completedFrameState.compositionCacheClean = !m_canvas.compositionCache().hasDirtyPositions();
