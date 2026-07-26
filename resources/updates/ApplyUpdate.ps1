@@ -91,6 +91,26 @@ function Stop-HealthCheckProcess([string]$Token) {
     Start-Sleep -Milliseconds 800
 }
 
+function Get-InstallProcessIds([string]$ExecutablePath) {
+    $expectedPath = [IO.Path]::GetFullPath($ExecutablePath)
+    return @(
+        Get-CimInstance Win32_Process -Filter "Name = 'Ruwa.exe'" -ErrorAction SilentlyContinue |
+            ForEach-Object {
+                if ($_.ExecutablePath) {
+                    try {
+                        $processPath = [IO.Path]::GetFullPath([string]$_.ExecutablePath)
+                        if ($processPath.Equals(
+                                $expectedPath, [StringComparison]::OrdinalIgnoreCase)) {
+                            [int]$_.ProcessId
+                        }
+                    } catch {
+                        # A process can exit while its path is being inspected.
+                    }
+                }
+            }
+    )
+}
+
 try {
     New-Item -ItemType Directory -Path ([IO.Path]::GetDirectoryName($config.logPath)) `
         -Force | Out-Null
@@ -219,6 +239,13 @@ try {
         throw 'Ruwa.exe is missing from the staged installation'
     }
 
+    $installedExecutable = Join-Path $installDirectory 'Ruwa.exe'
+    $runningInstallProcessIds = @(Get-InstallProcessIds $installedExecutable)
+    if ($runningInstallProcessIds.Count -gt 0) {
+        throw ('Other Ruwa instances are still using this installation (PID: ' +
+            ($runningInstallProcessIds -join ', ') + '). Close them before applying the update.')
+    }
+
     Invoke-WithRetry { Move-Item -LiteralPath $installDirectory -Destination $backupDirectory } `
         'Failed to back up the current installation'
     $oldInstallMoved = $true
@@ -237,33 +264,61 @@ try {
         throw 'The updated application did not complete its startup health check'
     }
 
+    # The health check is the transaction commit point. Cleanup failures after
+    # this point must not roll a healthy installation back.
     $updateSucceeded = $true
-    Write-UpdateLog ('Update to ' + $config.expectedVersion + ' completed successfully')
-    Remove-Item -LiteralPath $backupDirectory -Recurse -Force
     $oldInstallMoved = $false
+    try {
+        Write-UpdateLog ('Update to ' + $config.expectedVersion + ' completed successfully')
+    } catch {
+        # Logging is not part of the committed update transaction.
+    }
+    try {
+        Invoke-WithRetry {
+            Remove-Item -LiteralPath $backupDirectory -Recurse -Force
+        } 'Failed to remove the previous installation backup'
+    } catch {
+        try {
+            Write-UpdateLog ('Update completed, but backup cleanup failed: ' + $_.Exception.Message)
+        } catch {
+            # Preserve the committed update even when cleanup cannot be logged.
+        }
+    }
     Remove-Item -LiteralPath $config.archivePath, $config.manifestPath, $config.signaturePath `
         -Force -ErrorAction SilentlyContinue
 } catch {
-    Write-UpdateLog ('Update failed: ' + $_.Exception.Message)
-    if ($newInstallActivated) {
-        Stop-HealthCheckProcess ([string]$config.healthToken)
-        if (Test-Path -LiteralPath $config.installDirectory) {
-            Invoke-WithRetry {
-                Move-Item -LiteralPath $config.installDirectory -Destination $failedDirectory
-            } 'Failed to remove the unsuccessful installation'
+    if ($updateSucceeded) {
+        try {
+            Write-UpdateLog ('Post-commit update cleanup failed: ' + $_.Exception.Message)
+        } catch {
+            # Logging must never turn a committed update into a rollback.
         }
-        $newInstallActivated = $false
-    }
-    if ($oldInstallMoved -and (Test-Path -LiteralPath $backupDirectory) -and
-        -not (Test-Path -LiteralPath $config.installDirectory)) {
-        Invoke-WithRetry {
-            Move-Item -LiteralPath $backupDirectory -Destination $config.installDirectory
-        } 'Failed to restore the previous installation'
-        $oldInstallMoved = $false
-        Write-UpdateLog 'Previous installation restored'
-        $oldExecutable = Join-Path $config.installDirectory 'Ruwa.exe'
-        if (Test-Path -LiteralPath $oldExecutable -PathType Leaf) {
-            Start-Ruwa $oldExecutable $config.installDirectory $null
+    } else {
+        try {
+            Write-UpdateLog ('Update failed: ' + $_.Exception.Message)
+        } catch {
+            # Continue with rollback even when the log cannot be written.
+        }
+        if ($newInstallActivated) {
+            Stop-HealthCheckProcess ([string]$config.healthToken)
+            if (Test-Path -LiteralPath $config.installDirectory) {
+                Invoke-WithRetry {
+                    Move-Item -LiteralPath $config.installDirectory -Destination $failedDirectory
+                } 'Failed to remove the unsuccessful installation'
+            }
+            $newInstallActivated = $false
+        }
+        if ($oldInstallMoved -and (Test-Path -LiteralPath $backupDirectory) -and
+            -not (Test-Path -LiteralPath $config.installDirectory)) {
+            Invoke-WithRetry {
+                Move-Item -LiteralPath $backupDirectory -Destination $config.installDirectory
+            } 'Failed to restore the previous installation'
+            $oldInstallMoved = $false
+            Write-UpdateLog 'Previous installation restored'
+            $oldExecutable = Join-Path $config.installDirectory 'Ruwa.exe'
+            if (Test-Path -LiteralPath $oldExecutable -PathType Leaf) {
+                Start-Ruwa $oldExecutable $config.installDirectory $null
+            }
         }
     }
 } finally {
