@@ -94,6 +94,20 @@ bool CanvasPanel::createGLContent()
     }
     connect(m_glWidget, &aether::OpenGLCanvasWidget::strokePainted, this,
         [this]() { emit strokePainted(); });
+    // Per-frame heartbeat. Qt repaints every widget overlapping a QOpenGLWidget on
+    // each of its frames, so the dock container uses this to park floating panels
+    // behind a cached snapshot while the canvas is streaming.
+    //
+    // Only reported during a real canvas interaction: the canvas also renders
+    // continuously for things the user is not driving (marching ants, for one), and
+    // panels must stay live then — a parked panel does not show content changes.
+    connect(m_glWidget, &QOpenGLWidget::frameSwapped, this, [this]() {
+        const bool interacting = m_isDrawing || m_isPanning || isTransformActive()
+            || (m_glWidget && viewport().camera().isAnimating());
+        if (interacting) {
+            emit canvasFrameRendered();
+        }
+    });
     connect(m_glWidget, &aether::OpenGLCanvasWidget::contentRegionChanged, this,
         [this](const QRect& worldRect) { emit canvasContentRegionChanged(worldRect); });
     connect(m_glWidget, &aether::OpenGLCanvasWidget::contentTilesChanged, this,

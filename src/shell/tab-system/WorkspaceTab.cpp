@@ -2572,6 +2572,14 @@ void WorkspaceTab::connectPanelSignals()
         m_canvasGlReady = true;
         tryFinishAsyncStartup();
     });
+    // Qt repaints every widget overlapping the GL canvas on each canvas frame, which
+    // makes floating panels cost a full widget-tree repaint at refresh rate. The dock
+    // container parks them behind a snapshot while frames keep streaming.
+    connect(m_canvasPanel, &workspace::CanvasPanel::canvasFrameRendered, this, [this]() {
+        if (m_dockContainer) {
+            m_dockContainer->notifyCanvasFrame();
+        }
+    });
     connect(m_canvasPanel, &workspace::CanvasPanel::exportFrameChanged, this,
         [this](const QRect& frame) {
             const auto normalized = normalizedExportFrame(

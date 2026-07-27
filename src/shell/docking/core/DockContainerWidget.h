@@ -9,10 +9,13 @@
 #include "shell/docking/state/DockLayoutPreset.h"
 
 #include <QWidget>
+#include <QElapsedTimer>
 #include <QList>
 #include <QMap>
 #include <QPointer>
 #include <QSet>
+
+class QTimer;
 #include <memory>
 #include <optional>
 
@@ -110,6 +113,19 @@ public:
     void setContainerPadding(int padding);
     int containerPadding() const { return m_containerPadding; }
 
+    // === Canvas frame throttling ===
+
+    /**
+     * @brief Report one composited canvas frame (wired from CanvasPanel).
+     *
+     * Qt repaints every widget overlapping a QOpenGLWidget on each of its frames, so
+     * floating panels are fully redrawn at canvas frame rate. While frames keep
+     * streaming (stroke, pan, zoom, transform) the panels are parked behind a cached
+     * snapshot; they come back as soon as frames stop or the cursor reaches one.
+     * Must stay cheap — this runs at display refresh rate.
+     */
+    void notifyCanvasFrame();
+
     // === Theme ===
 
     void applyTheme(const ruwa::ui::core::ThemeColors& colors);
@@ -145,6 +161,9 @@ private:
     /// Get layout bounds (rect adjusted for container padding)
     QRect layoutBounds() const;
 
+    void setFloatingPanelsFrozen(bool frozen);
+    bool isPointOverFloatingContainer(const QPoint& globalPos) const;
+
     /// Validate operation can proceed
     bool validateOperation(const char* opName) const;
 
@@ -176,6 +195,13 @@ private:
 
     // Container padding (space around edges)
     int m_containerPadding = 6; // 6px padding like in HTML reference
+
+    // Canvas frame streaming / floating panel freeze
+    QElapsedTimer m_canvasFrameClock;
+    qint64 m_lastCanvasFrameMs = -1;
+    int m_canvasFrameStreak = 0;
+    bool m_floatingPanelsFrozen = false;
+    QTimer* m_freezeWatchdog = nullptr;
 
     // State flags
     bool m_destroying = false;

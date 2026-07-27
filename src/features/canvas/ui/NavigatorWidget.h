@@ -9,6 +9,7 @@
 
 #include <QWidget>
 #include <QList>
+#include <QPolygonF>
 #include <QRect>
 
 class QTimer;
@@ -59,10 +60,14 @@ private:
     QRectF canvasDisplayRect() const;
     QPointF widgetToWorld(const QPointF& widgetPos) const;
     QPointF worldToWidget(const QPointF& worldPos) const;
+    /// Camera viewport outline in widget coordinates, or an empty polygon when it
+    /// cannot be drawn. Also the change key of the viewport sync poll.
+    QPolygonF viewportOutline() const;
 
     CanvasPanel* m_canvasPanel = nullptr;
     OverviewCache* m_overviewCache = nullptr;
     QRect m_worldFrame;
+    QPolygonF m_lastViewportOutline;
     QTimer* m_viewportSyncTimer = nullptr;
     QTimer* m_overviewRefreshTimer = nullptr;
     bool m_dragging = false;

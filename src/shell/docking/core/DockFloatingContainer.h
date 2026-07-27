@@ -8,6 +8,7 @@
 #include "features/theme/manager/ThemeColors.h"
 
 #include <QFrame>
+#include <QPixmap>
 #include <QPoint>
 #include <QPointer>
 
@@ -103,6 +104,20 @@ public:
     /// Check if currently being resized
     bool isResizing() const { return m_resizing; }
 
+    // === Freeze ===
+
+    /**
+     * @brief Paint from a cached snapshot instead of the live widget tree.
+     *
+     * Qt marks the whole rect of a QOpenGLWidget dirty on every one of its frames
+     * (QWidgetRepaintManager::paintAndFlush: `dirty += rect; toClean += rect;`), so a
+     * floating panel overlapping the canvas is fully repainted at canvas frame rate.
+     * While frozen the frame costs one pixmap blit instead of a whole widget tree.
+     * Refused while the panel is being dragged, resized, animated, or holds focus.
+     */
+    void setFrozen(bool frozen);
+    bool isFrozen() const { return m_frozen; }
+
     // === Theme ===
 
     void applyTheme(const ruwa::ui::core::ThemeColors& colors);
@@ -119,7 +134,12 @@ signals:
     void appearanceAnimationFinished();
 
 protected:
+    bool event(QEvent* event) override;
     void paintEvent(QPaintEvent* event) override;
+    void moveEvent(QMoveEvent* event) override;
+    void resizeEvent(QResizeEvent* event) override;
+    void showEvent(QShowEvent* event) override;
+    void hideEvent(QHideEvent* event) override;
     void mousePressEvent(QMouseEvent* event) override;
     void mouseMoveEvent(QMouseEvent* event) override;
     void mouseReleaseEvent(QMouseEvent* event) override;
@@ -133,10 +153,17 @@ private slots:
 private:
     void setupUI();
     void setupAnimation();
+    void setupShadow();
     void updateCursor(ResizeEdge edge);
     void constrainToParent();
     void applyAnimationFrame(double progress);
     QRect parentBounds() const;
+
+    /// Keep the cached shadow directly behind this frame (geometry + z-order).
+    void syncShadowGeometry();
+    void syncShadowStacking();
+    void refreshShadowAppearance();
+    qreal shadowCornerRadius() const;
 
 private:
     DockContainerWidget* m_container;
@@ -163,8 +190,19 @@ private:
     QPoint m_animStartAnchor; // Starting anchor point (center-top of source)
     QPoint m_lastCursorPos; // Current cursor position in parent coords
 
+    // Freeze (see setFrozen)
+    bool m_frozen = false;
+    QPixmap m_frozenSnapshot;
+    QPoint m_parkedPanelPos;
+
     // Style
     int m_shadowRadius = 8;
+    /// Sibling layer that paints the pre-blurred drop shadow behind this frame.
+    /// A live QGraphicsDropShadowEffect cannot be used here: Qt invalidates a
+    /// graphics effect whenever ANY descendant repaints, so one dirty pixel inside
+    /// a floating panel re-rendered the whole panel and re-blurred it on the GUI
+    /// thread — which starved brush strokes while panels were floating.
+    QPointer<QWidget> m_shadowLayer;
     QColor m_shadowColor;
     QColor m_borderColor;
     /// Matches DockPanel fill so AA fringes at rounded corners do not show a mismatched plate.

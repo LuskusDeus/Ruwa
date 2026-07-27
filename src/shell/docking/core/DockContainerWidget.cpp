@@ -13,10 +13,22 @@
 #include "shared/style/WidgetStyleManager.h"
 
 #include <QVBoxLayout>
+#include <QCursor>
 #include <QResizeEvent>
 #include <QTimer>
 
 namespace ruwa::ui::docking {
+
+namespace {
+
+/// Canvas frames closer together than this count as one continuous stream.
+constexpr qint64 kCanvasStreamGapMs = 40;
+/// Consecutive streaming frames before floating panels are parked.
+constexpr int kCanvasStreamFrames = 4;
+/// No canvas frame for this long ⇒ bring the panels back.
+constexpr int kCanvasIdleUnfreezeMs = 120;
+
+} // namespace
 
 // ============================================================================
 // RAII Guard
@@ -237,6 +249,9 @@ void DockContainerWidget::removePanel(DockPanel* panel)
     if (!panel)
         return;
 
+    // Structural changes must never run against parked panels / stale snapshots.
+    setFloatingPanelsFrozen(false);
+
     if (!validateOperation("removePanel"))
         return;
 
@@ -333,6 +348,8 @@ void DockContainerWidget::floatPanel(DockPanel* panel, const QPoint& pos, bool e
         return;
     }
 
+    setFloatingPanelsFrozen(false);
+
     if (!validateOperation("floatPanel"))
         return;
 
@@ -418,6 +435,8 @@ void DockContainerWidget::dockPanel(DockPanel* panel, DockPosition position)
     if (!panel) {
         return;
     }
+
+    setFloatingPanelsFrozen(false);
 
     if (!validateOperation("dockPanel"))
         return;
@@ -511,6 +530,8 @@ void DockContainerWidget::dockPanelRelativeTo(
     if (!panel || !relativeTo) {
         return;
     }
+
+    setFloatingPanelsFrozen(false);
 
     // Verify relativeTo
     if (!containsPanel(relativeTo)) {
@@ -738,6 +759,81 @@ void DockContainerWidget::restoreDockedPanel(DockPanel* panel)
 }
 
 // ============================================================================
+// Canvas frame throttling
+// ============================================================================
+
+void DockContainerWidget::notifyCanvasFrame()
+{
+    if (m_destroying || m_floatingContainers.isEmpty()) {
+        return;
+    }
+
+    if (!m_canvasFrameClock.isValid()) {
+        m_canvasFrameClock.start();
+    }
+    const qint64 now = m_canvasFrameClock.elapsed();
+    const bool continuous
+        = m_lastCanvasFrameMs >= 0 && (now - m_lastCanvasFrameMs) <= kCanvasStreamGapMs;
+    m_lastCanvasFrameMs = now;
+    m_canvasFrameStreak = continuous ? m_canvasFrameStreak + 1 : 1;
+
+    // A panel under the pointer must stay live: while parked it cannot receive input.
+    if (isPointOverFloatingContainer(QCursor::pos())) {
+        setFloatingPanelsFrozen(false);
+        return;
+    }
+
+    if (!m_floatingPanelsFrozen && m_canvasFrameStreak >= kCanvasStreamFrames) {
+        setFloatingPanelsFrozen(true);
+    }
+
+    if (m_floatingPanelsFrozen && m_freezeWatchdog) {
+        // Re-armed every frame: it fires only once the canvas goes quiet, which also
+        // covers strokes that end without a clean release.
+        m_freezeWatchdog->start(kCanvasIdleUnfreezeMs);
+    }
+}
+
+void DockContainerWidget::setFloatingPanelsFrozen(bool frozen)
+{
+    if (m_destroying || m_floatingPanelsFrozen == frozen) {
+        return;
+    }
+
+    m_floatingPanelsFrozen = frozen;
+
+    // Individual frames may refuse to freeze (drag, resize, focus); unfreezing them
+    // later is then simply a no-op.
+    for (auto* container : m_floatingContainers) {
+        if (container) {
+            container->setFrozen(frozen);
+        }
+    }
+
+    if (!frozen) {
+        m_canvasFrameStreak = 0;
+        if (m_freezeWatchdog) {
+            m_freezeWatchdog->stop();
+        }
+    }
+}
+
+bool DockContainerWidget::isPointOverFloatingContainer(const QPoint& globalPos) const
+{
+    for (auto* container : m_floatingContainers) {
+        if (!container || !container->isVisible()) {
+            continue;
+        }
+        const QRect globalRect(
+            container->mapToGlobal(QPoint(0, 0)), container->size());
+        if (globalRect.contains(globalPos)) {
+            return true;
+        }
+    }
+    return false;
+}
+
+// ============================================================================
 // Theme
 // ============================================================================
 
@@ -745,6 +841,9 @@ void DockContainerWidget::applyTheme(const ruwa::ui::core::ThemeColors& colors)
 {
     if (m_destroying)
         return;
+
+    // Snapshots hold the old palette.
+    setFloatingPanelsFrozen(false);
 
     cancelPanelEntranceAnimation();
 
@@ -797,6 +896,8 @@ void DockContainerWidget::resizeEvent(QResizeEvent* event)
 {
     QWidget::resizeEvent(event);
 
+    setFloatingPanelsFrozen(false);
+
     if (m_overlay) {
         m_overlay->setGeometry(rect());
     }
@@ -844,6 +945,11 @@ void DockContainerWidget::showEvent(QShowEvent* event)
 
 void DockContainerWidget::setupUI()
 {
+    m_freezeWatchdog = new QTimer(this);
+    m_freezeWatchdog->setSingleShot(true);
+    connect(m_freezeWatchdog, &QTimer::timeout, this,
+        [this]() { setFloatingPanelsFrozen(false); });
+
     QVBoxLayout* layout = new QVBoxLayout(this);
     layout->setContentsMargins(0, 0, 0, 0);
     layout->setSpacing(0);

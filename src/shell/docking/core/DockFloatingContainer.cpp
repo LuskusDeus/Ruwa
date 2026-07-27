@@ -5,13 +5,18 @@
 #include "DockContainerWidget.h"
 #include "shell/docking/widgets/DockPanel.h"
 
+#include <QApplication>
 #include <QVBoxLayout>
 #include <QPainter>
 #include <QPainterPath>
 #include <QMouseEvent>
-#include <QGraphicsDropShadowEffect>
+#include <QGraphicsBlurEffect>
+#include <QGraphicsPixmapItem>
+#include <QGraphicsScene>
+#include <QImage>
 #include <QVariantAnimation>
 #include <QEasingCurve>
+#include <QtMath>
 
 namespace ruwa::ui::docking {
 
@@ -21,6 +26,9 @@ constexpr qreal kFloatingBorderWidth = 1.0;
 constexpr qreal kFloatingOuterInset = 0.5;
 constexpr int kFloatingContentInset = 2;
 constexpr qreal kFloatingPanelCornerRadius = 6.0;
+
+/// Vertical offset of the floating panel's drop shadow.
+constexpr int kFloatingShadowOffsetY = 2;
 
 constexpr int kFloatingHMargins = 2 * kFloatingContentInset;
 constexpr int kFloatingVMargins = 2 * kFloatingContentInset;
@@ -76,6 +84,140 @@ inline QSize floatingContainerSizeForPanel(const DockPanel* panel)
     return QSize(w, ht);
 }
 
+/**
+ * @brief Sibling layer painting a pre-blurred drop shadow behind a floating panel.
+ *
+ * Replaces QGraphicsDropShadowEffect on DockFloatingContainer. Qt invalidates a
+ * widget's graphics effect from every descendant repaint
+ * (QWidgetPrivate::invalidateGraphicsEffectsRecursively walks the parent chain), so
+ * with the effect installed a single dirty pixel anywhere inside a floating panel
+ * re-rendered the entire panel into a pixmap and re-ran a CPU Gaussian blur over it.
+ * The shadow silhouette only depends on the frame's size, so it is baked once per
+ * geometry/theme change and blitted afterwards.
+ */
+class FloatingShadowLayer final : public QWidget {
+public:
+    explicit FloatingShadowLayer(QWidget* parent, int blurRadius)
+        : QWidget(parent)
+        , m_blurRadius(qMax(0, blurRadius))
+    {
+        setAttribute(Qt::WA_TransparentForMouseEvents, true);
+        setAttribute(Qt::WA_TranslucentBackground, true);
+        setAttribute(Qt::WA_NoSystemBackground, true);
+        setFocusPolicy(Qt::NoFocus);
+    }
+
+    int margin() const { return m_blurRadius + kFloatingShadowOffsetY; }
+
+    void setAppearance(const QColor& color, qreal cornerRadius)
+    {
+        if (m_color == color && qFuzzyCompare(m_cornerRadius + 1.0, cornerRadius + 1.0)) {
+            return;
+        }
+        m_color = color;
+        m_cornerRadius = cornerRadius;
+        m_cache = QPixmap();
+        update();
+    }
+
+    /// Wrap @p bodyGeometry (the frame's geometry in the shared parent's coordinates).
+    void followBody(const QRect& bodyGeometry)
+    {
+        const int m = margin();
+        const QRect target = bodyGeometry.adjusted(-m, -m, m, m);
+        if (target == geometry()) {
+            return;
+        }
+        const bool sizeChanged = target.size() != size();
+        setGeometry(target);
+        if (sizeChanged) {
+            m_cache = QPixmap();
+            update();
+        }
+    }
+
+protected:
+    void paintEvent(QPaintEvent* /*event*/) override
+    {
+        if (!m_color.isValid() || m_color.alpha() <= 0) {
+            return;
+        }
+        ensureCache();
+        if (m_cache.isNull()) {
+            return;
+        }
+        QPainter painter(this);
+        painter.drawPixmap(0, 0, m_cache);
+    }
+
+private:
+    void ensureCache()
+    {
+        const qreal dpr = devicePixelRatioF();
+        const QSize deviceSize(
+            qMax(1, qCeil(width() * dpr)), qMax(1, qCeil(height() * dpr)));
+        if (!m_cache.isNull() && m_cache.size() == deviceSize
+            && qFuzzyCompare(m_cache.devicePixelRatio(), dpr)) {
+            return;
+        }
+
+        const int m = margin();
+        const qreal bodyW = (width() - 2.0 * m) - (kFloatingOuterInset * 2.0);
+        const qreal bodyH = (height() - 2.0 * m) - (kFloatingOuterInset * 2.0);
+        if (bodyW <= 0.0 || bodyH <= 0.0) {
+            m_cache = QPixmap();
+            return;
+        }
+
+        // Silhouette of the panel body, offset like the old effect, in device pixels.
+        QImage silhouette(deviceSize, QImage::Format_ARGB32_Premultiplied);
+        silhouette.setDevicePixelRatio(1.0);
+        silhouette.fill(Qt::transparent);
+        {
+            QPainter p(&silhouette);
+            p.setRenderHint(QPainter::Antialiasing);
+            p.setPen(Qt::NoPen);
+            p.setBrush(m_color);
+            const QRectF body((m + kFloatingOuterInset) * dpr,
+                (m + kFloatingOuterInset + kFloatingShadowOffsetY) * dpr, bodyW * dpr,
+                bodyH * dpr);
+            const qreal r = m_cornerRadius * dpr;
+            p.drawRoundedRect(body, r, r);
+        }
+
+        if (m_blurRadius <= 0) {
+            m_cache = QPixmap::fromImage(silhouette);
+            m_cache.setDevicePixelRatio(dpr);
+            return;
+        }
+
+        QGraphicsScene scene;
+        auto* item = new QGraphicsPixmapItem(QPixmap::fromImage(silhouette));
+        auto* blur = new QGraphicsBlurEffect;
+        blur->setBlurRadius(m_blurRadius * dpr);
+        blur->setBlurHints(QGraphicsBlurEffect::QualityHint);
+        item->setGraphicsEffect(blur);
+        scene.addItem(item);
+
+        QImage blurred(deviceSize, QImage::Format_ARGB32_Premultiplied);
+        blurred.setDevicePixelRatio(1.0);
+        blurred.fill(Qt::transparent);
+        {
+            QPainter p(&blurred);
+            const QRectF full(0, 0, deviceSize.width(), deviceSize.height());
+            scene.render(&p, full, full);
+        }
+
+        m_cache = QPixmap::fromImage(blurred);
+        m_cache.setDevicePixelRatio(dpr);
+    }
+
+    int m_blurRadius = 0;
+    QColor m_color;
+    qreal m_cornerRadius = kFloatingPanelCornerRadius;
+    QPixmap m_cache;
+};
+
 } // namespace
 
 QSize DockFloatingContainer::outerSizeForPanel(const DockPanel* panel)
@@ -89,11 +231,17 @@ DockFloatingContainer::DockFloatingContainer(DockContainerWidget* container, Doc
     , m_panel(panel)
 {
     setupUI();
+    setupShadow();
     setupAnimation();
 }
 
 DockFloatingContainer::~DockFloatingContainer()
 {
+    // Parented to the dock container, not to this frame — delete it explicitly.
+    if (m_shadowLayer) {
+        delete m_shadowLayer.data();
+    }
+
     if (m_panel) {
         m_panel->setOverlayAnimationSuspended(false);
     }
@@ -340,6 +488,60 @@ ResizeEdge DockFloatingContainer::resizeEdgeAt(const QPoint& localPos) const
 }
 
 // ============================================================================
+// Freeze
+// ============================================================================
+
+void DockFloatingContainer::setFrozen(bool frozen)
+{
+    if (m_frozen == frozen) {
+        return;
+    }
+
+    if (frozen) {
+        if (!m_panel || !isVisible() || m_animatingAppearance || m_dragging || m_resizing) {
+            return;
+        }
+        // A panel the user is typing into must keep its live cursor and repaints.
+        if (QWidget* focus = QApplication::focusWidget();
+            focus && (focus == m_panel || m_panel->isAncestorOf(focus))) {
+            return;
+        }
+
+        const QPixmap snapshot = grab();
+        if (snapshot.isNull()) {
+            return;
+        }
+
+        m_frozenSnapshot = snapshot;
+        m_frozen = true;
+
+        // Park the panel outside this frame instead of hiding it. hide() would run
+        // hideEvent through the whole panel tree (timers, animations, focus, scroll
+        // state) on every stroke; a child that lies fully outside the parent rect is
+        // simply skipped by the paint traversal, which is all we need. The layout is
+        // suspended so it does not drag the panel back or collapse the frame.
+        if (QLayout* frameLayout = layout()) {
+            frameLayout->setEnabled(false);
+        }
+        m_parkedPanelPos = m_panel->pos();
+        m_panel->move(0, height() + 1);
+        update();
+        return;
+    }
+
+    m_frozen = false;
+    m_frozenSnapshot = QPixmap();
+    if (m_panel) {
+        m_panel->move(m_parkedPanelPos);
+    }
+    if (QLayout* frameLayout = layout()) {
+        frameLayout->setEnabled(true);
+        frameLayout->activate();
+    }
+    update();
+}
+
+// ============================================================================
 // Theme
 // ============================================================================
 
@@ -349,11 +551,7 @@ void DockFloatingContainer::applyTheme(const ruwa::ui::core::ThemeColors& colors
     m_borderColor = colors.border;
     m_panelSurfaceColor = colors.surface;
 
-    // Update shadow effect
-    auto* shadow = qobject_cast<QGraphicsDropShadowEffect*>(graphicsEffect());
-    if (shadow) {
-        shadow->setColor(m_shadowColor);
-    }
+    refreshShadowAppearance();
 
     setStyleSheet(QString(R"(
         ruwa--ui--docking--DockFloatingContainer {
@@ -369,8 +567,78 @@ void DockFloatingContainer::applyTheme(const ruwa::ui::core::ThemeColors& colors
 // Events
 // ============================================================================
 
+bool DockFloatingContainer::event(QEvent* event)
+{
+    // Every raise()/stackUnder() path (drag start, click, raiseFloatingContainers)
+    // ends here, so the shadow follows the frame without hooking each call site.
+    if (event->type() == QEvent::ZOrderChange) {
+        syncShadowStacking();
+    }
+
+    // Safety net for the freeze: while frozen the live panel is parked outside the
+    // frame, so any pointer input aimed at it would land on this frame instead.
+    // The dock container also unfreezes as soon as the cursor enters a floating
+    // frame, this covers the gap when canvas frames stop arriving at that moment.
+    if (m_frozen) {
+        switch (event->type()) {
+        case QEvent::Enter:
+        case QEvent::MouseButtonPress:
+        case QEvent::MouseButtonDblClick:
+        case QEvent::MouseMove:
+        case QEvent::Wheel:
+        case QEvent::TabletPress:
+        case QEvent::TabletMove:
+            setFrozen(false);
+            break;
+        default:
+            break;
+        }
+    }
+
+    return QFrame::event(event);
+}
+
+void DockFloatingContainer::moveEvent(QMoveEvent* event)
+{
+    QFrame::moveEvent(event);
+    syncShadowGeometry();
+}
+
+void DockFloatingContainer::resizeEvent(QResizeEvent* event)
+{
+    QFrame::resizeEvent(event);
+    syncShadowGeometry();
+}
+
+void DockFloatingContainer::showEvent(QShowEvent* event)
+{
+    QFrame::showEvent(event);
+    if (m_shadowLayer) {
+        refreshShadowAppearance();
+        syncShadowGeometry();
+        m_shadowLayer->show();
+        syncShadowStacking();
+    }
+}
+
+void DockFloatingContainer::hideEvent(QHideEvent* event)
+{
+    QFrame::hideEvent(event);
+    // Never stay parked behind a stale snapshot across a hide/show cycle.
+    setFrozen(false);
+    if (m_shadowLayer) {
+        m_shadowLayer->hide();
+    }
+}
+
 void DockFloatingContainer::paintEvent(QPaintEvent* event)
 {
+    if (m_frozen && !m_frozenSnapshot.isNull()) {
+        QPainter p(this);
+        p.drawPixmap(0, 0, m_frozenSnapshot);
+        return;
+    }
+
     if (m_panel) {
         QPainter p(this);
         p.setRenderHint(QPainter::Antialiasing);
@@ -544,13 +812,6 @@ void DockFloatingContainer::setupUI()
     setAttribute(Qt::WA_TranslucentBackground, true);
     setAutoFillBackground(false);
 
-    // Shadow effect
-    auto* shadow = new QGraphicsDropShadowEffect(this);
-    shadow->setBlurRadius(m_shadowRadius);
-    shadow->setOffset(0, 2);
-    shadow->setColor(QColor(0, 0, 0, 80));
-    setGraphicsEffect(shadow);
-
     // Keep the panel away from the anti-aliased rounded border so corners stay visible.
     QVBoxLayout* layout = new QVBoxLayout(this);
     layout->setContentsMargins(
@@ -563,6 +824,53 @@ void DockFloatingContainer::setupUI()
         layout->addWidget(m_panel);
 
         resize(floatingContainerSizeForPanel(m_panel));
+    }
+}
+
+void DockFloatingContainer::setupShadow()
+{
+    if (!m_container) {
+        return;
+    }
+
+    auto* layer = new FloatingShadowLayer(m_container, m_shadowRadius);
+    m_shadowLayer = layer;
+    layer->setVisible(isVisible());
+    refreshShadowAppearance();
+    syncShadowGeometry();
+    syncShadowStacking();
+}
+
+qreal DockFloatingContainer::shadowCornerRadius() const
+{
+    if (m_panel && m_panel->baseCornerRadius() > 0) {
+        return qreal(m_panel->baseCornerRadius());
+    }
+    return kFloatingPanelCornerRadius;
+}
+
+void DockFloatingContainer::refreshShadowAppearance()
+{
+    if (!m_shadowLayer) {
+        return;
+    }
+    static_cast<FloatingShadowLayer*>(m_shadowLayer.data())
+        ->setAppearance(m_shadowColor.isValid() ? m_shadowColor : QColor(0, 0, 0, 80),
+            shadowCornerRadius());
+}
+
+void DockFloatingContainer::syncShadowGeometry()
+{
+    if (!m_shadowLayer) {
+        return;
+    }
+    static_cast<FloatingShadowLayer*>(m_shadowLayer.data())->followBody(geometry());
+}
+
+void DockFloatingContainer::syncShadowStacking()
+{
+    if (m_shadowLayer && m_shadowLayer->parentWidget() == parentWidget()) {
+        m_shadowLayer->stackUnder(this);
     }
 }
 

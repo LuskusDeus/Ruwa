@@ -43,9 +43,20 @@ NavigatorWidget::NavigatorWidget(QWidget* parent)
     m_viewportSyncTimer = new QTimer(this);
     m_viewportSyncTimer->setInterval(26);
     connect(m_viewportSyncTimer, &QTimer::timeout, this, [this]() {
-        if (isVisible() && m_canvasPanel && m_canvasPanel->isGLContentReady()) {
-            update();
+        if (!isVisible() || !m_canvasPanel || !m_canvasPanel->isGLContentReady()) {
+            return;
         }
+        // Repaint only when the drawn viewport outline actually moved. This poll used
+        // to call update() unconditionally ~38 times a second for the widget's whole
+        // life: cheap while the panel is docked, but a repaint inside a *floating*
+        // panel is far more expensive, and it ran right through every brush stroke.
+        // Overview content changes repaint through refreshOverview(), not this timer.
+        const QPolygonF outline = viewportOutline();
+        if (outline == m_lastViewportOutline) {
+            return;
+        }
+        m_lastViewportOutline = outline;
+        update();
     });
 
     m_overviewRefreshTimer = new QTimer(this);
@@ -299,6 +310,11 @@ void NavigatorWidget::paintEvent(QPaintEvent* event)
     const auto& colors = ruwa::ui::core::WidgetStyleManager::instance().colors();
     p.fillRect(rect(), colors.surface);
 
+    // Recorded even when nothing below gets drawn, so the viewport sync poll never
+    // sees a permanently stale key and repaints on every tick.
+    const QPolygonF outline = viewportOutline();
+    m_lastViewportOutline = outline;
+
     const QRectF disp = canvasDisplayRect();
     if (disp.isEmpty()) {
         return;
@@ -306,25 +322,35 @@ void NavigatorWidget::paintEvent(QPaintEvent* event)
 
     m_overviewCache->draw(p, disp);
 
-    if (m_canvasPanel && m_canvasPanel->isGLContentReady()) {
-        const auto& vp = m_canvasPanel->viewport();
-        const float vw = static_cast<float>(vp.width());
-        const float vh = static_cast<float>(vp.height());
-        if (vw >= 1 && vh >= 1 && m_worldFrame.isValid() && !m_worldFrame.isEmpty()) {
-            const aether::Vector2 p0 = vp.screenToWorld({ 0.0f, 0.0f });
-            const aether::Vector2 p1 = vp.screenToWorld({ vw, 0.0f });
-            const aether::Vector2 p2 = vp.screenToWorld({ vw, vh });
-            const aether::Vector2 p3 = vp.screenToWorld({ 0.0f, vh });
-
-            QPolygonF poly;
-            poly << worldToWidget(QPointF(p0.x, p0.y)) << worldToWidget(QPointF(p1.x, p1.y))
-                 << worldToWidget(QPointF(p2.x, p2.y)) << worldToWidget(QPointF(p3.x, p3.y));
-
-            p.setPen(QPen(colors.primary, 2));
-            p.setBrush(Qt::NoBrush);
-            p.drawPolygon(poly);
-        }
+    if (!outline.isEmpty()) {
+        p.setPen(QPen(colors.primary, 2));
+        p.setBrush(Qt::NoBrush);
+        p.drawPolygon(outline);
     }
+}
+
+QPolygonF NavigatorWidget::viewportOutline() const
+{
+    if (!m_canvasPanel || !m_canvasPanel->isGLContentReady()) {
+        return {};
+    }
+
+    const auto& vp = m_canvasPanel->viewport();
+    const float vw = static_cast<float>(vp.width());
+    const float vh = static_cast<float>(vp.height());
+    if (vw < 1 || vh < 1 || !m_worldFrame.isValid() || m_worldFrame.isEmpty()) {
+        return {};
+    }
+
+    const aether::Vector2 p0 = vp.screenToWorld({ 0.0f, 0.0f });
+    const aether::Vector2 p1 = vp.screenToWorld({ vw, 0.0f });
+    const aether::Vector2 p2 = vp.screenToWorld({ vw, vh });
+    const aether::Vector2 p3 = vp.screenToWorld({ 0.0f, vh });
+
+    QPolygonF poly;
+    poly << worldToWidget(QPointF(p0.x, p0.y)) << worldToWidget(QPointF(p1.x, p1.y))
+         << worldToWidget(QPointF(p2.x, p2.y)) << worldToWidget(QPointF(p3.x, p3.y));
+    return poly;
 }
 
 void NavigatorWidget::mousePressEvent(QMouseEvent* event)

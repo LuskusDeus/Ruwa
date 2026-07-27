@@ -400,6 +400,9 @@ public slots:
 
 signals:
     void glContentReady();
+    /// Emitted once per composited canvas frame. Consumers must stay trivial: this
+    /// fires at display refresh rate while the canvas is streaming frames.
+    void canvasFrameRendered();
     void zoomChanged(qreal zoom);
     void cursorPositionChanged(const QPoint& pos);
     void canvasSizeChanged(const QSize& size);
