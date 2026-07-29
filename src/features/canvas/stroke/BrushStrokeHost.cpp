@@ -368,6 +368,8 @@ void BrushStrokeHost::beginStroke(
     m_strokeElapsedTimer.start();
     m_realtimePreviewEventCount = 0;
     m_lastRealtimeTaperTailStart = std::numeric_limits<size_t>::max();
+    m_lastRealtimeTaperPreviewDabCount = 0;
+    m_lastRealtimeTaperPreviewWasSampled = false;
     m_lastRealtimeTaperPreviewNs = std::numeric_limits<qint64>::min();
     m_realtimePreviewTimer.invalidate();
 
@@ -1277,6 +1279,8 @@ void BrushStrokeHost::completeEndStrokeAfterQueueDrain()
     m_isDrawing = false;
     ruwa::core::brushes::clearStrokeStabilizer(m_stabilizationState);
     m_lastRealtimeTaperTailStart = std::numeric_limits<size_t>::max();
+    m_lastRealtimeTaperPreviewDabCount = 0;
+    m_lastRealtimeTaperPreviewWasSampled = false;
     m_lastRealtimeTaperPreviewNs = std::numeric_limits<qint64>::min();
 
     TileBrush* currentBrush = brush();
@@ -1876,7 +1880,7 @@ bool BrushStrokeHost::rebuildStrokePreviewFromDabs(TileGrid* grid, TileGrid* sel
         return false;
     }
 
-    const bool hasTaper = currentBrush->hasTaperEffect();
+    const bool usesTaperReplay = currentBrush->requiresRealtimeTaperReplay();
     constexpr qint64 kTaperPreviewFrameIntervalNs = 1000000000ll / 60ll;
 
     const auto rebuildFullPreview = [&](size_t maxPreviewDabs) {
@@ -1902,28 +1906,17 @@ bool BrushStrokeHost::rebuildStrokePreviewFromDabs(TileGrid* grid, TileGrid* sel
         return true;
     };
 
-    if (hasTaper) {
+    if (usesTaperReplay) {
         const auto replayData = activeStrokeReplayData();
         const size_t strokeDabCount = replayData ? replayData->size() : 0;
         if (strokeDabCount == 0) {
             return false;
         }
 
-        const size_t startCount = currentBrush->startTaperDabCount();
-        const size_t endCount = currentBrush->endTaperDabCount();
-        const bool startTouchesWholeStroke = startCount >= strokeDabCount;
-        const bool endTouchesWholeStroke = endCount >= strokeDabCount;
-        const bool taperRangesOverlap
-            = (startCount > 0 && endCount > 0 && (startCount + endCount) >= strokeDabCount);
-        if (startTouchesWholeStroke || endTouchesWholeStroke || taperRangesOverlap
-            || !allowPreviewSampling) {
-            m_lastRealtimeTaperTailStart = std::numeric_limits<size_t>::max();
-            m_lastRealtimeTaperPreviewNs = std::numeric_limits<qint64>::min();
-            currentBrush->applyStrokeTaperToDabs();
-            return rebuildFullPreview(0);
-        }
-
-        if (m_realtimePreviewTimer.isValid()) {
+        // Throttle before choosing full versus range replay. Previously the
+        // whole-stroke/overlap branch returned above this gate, so the most
+        // expensive path ran once per tablet packet instead of once per frame.
+        if (allowPreviewSampling && m_realtimePreviewTimer.isValid()) {
             const qint64 previewNowNs = m_realtimePreviewTimer.nsecsElapsed();
             if (m_lastRealtimeTaperPreviewNs != std::numeric_limits<qint64>::min()
                 && (previewNowNs - m_lastRealtimeTaperPreviewNs) < kTaperPreviewFrameIntervalNs) {
@@ -1932,15 +1925,57 @@ bool BrushStrokeHost::rebuildStrokePreviewFromDabs(TileGrid* grid, TileGrid* sel
             m_lastRealtimeTaperPreviewNs = previewNowNs;
         }
 
-        const size_t tailStart
-            = (endCount > 0 && strokeDabCount > endCount) ? (strokeDabCount - endCount) : 0;
-        size_t updateStart = tailStart;
-        if (m_lastRealtimeTaperTailStart != std::numeric_limits<size_t>::max()) {
-            updateStart = std::min(updateStart, m_lastRealtimeTaperTailStart);
+        const TileBrush::StrokeTaperState taperState = currentBrush->strokeTaperState();
+        if (taperState.dabCount != strokeDabCount) {
+            // Replay data and TileBrush dabs are expected to be the same store.
+            // Do not risk a partial clear against mismatched indices.
+            currentBrush->applyStrokeTaperToDabs(taperState);
+            m_lastRealtimeTaperTailStart = taperState.endRangeStart();
+            m_lastRealtimeTaperPreviewDabCount = taperState.dabCount;
+            const size_t previewDabLimit
+                = allowPreviewSampling
+                    && taperState.dabCount > TileBrush::kMaxTaperAffectedDabs
+                ? TileBrush::kMaxTaperAffectedDabs
+                : 0;
+            m_lastRealtimeTaperPreviewWasSampled = previewDabLimit > 0;
+            return rebuildFullPreview(previewDabLimit);
         }
+
+        if (taperState.touchesWholeStroke() || !allowPreviewSampling) {
+            currentBrush->applyStrokeTaperToDabs(taperState);
+            m_lastRealtimeTaperTailStart = taperState.endRangeStart();
+            m_lastRealtimeTaperPreviewDabCount = strokeDabCount;
+
+            // The existing rebuild API already supports a sampled interactive
+            // replay. Cap only the live preview; endStroke passes
+            // allowPreviewSampling=false and always commits every dab.
+            const size_t previewDabLimit
+                = allowPreviewSampling && strokeDabCount > TileBrush::kMaxTaperAffectedDabs
+                ? TileBrush::kMaxTaperAffectedDabs
+                : 0;
+            m_lastRealtimeTaperPreviewWasSampled = previewDabLimit > 0;
+            return rebuildFullPreview(previewDabLimit);
+        }
+
+        const size_t tailStart = taperState.endRangeStart();
+        if (m_lastRealtimeTaperPreviewWasSampled) {
+            // A range rebuild cannot fill dabs omitted by the preceding sampled
+            // whole-stroke preview. Materialize one exact frame when leaving
+            // the overlap phase, then subsequent frames can stay on ranges.
+            currentBrush->applyStrokeTaperToDabs(taperState);
+            m_lastRealtimeTaperTailStart = tailStart;
+            m_lastRealtimeTaperPreviewDabCount = strokeDabCount;
+            m_lastRealtimeTaperPreviewWasSampled = false;
+            return rebuildFullPreview(0);
+        }
+
+        const size_t updateStart = stroke_taper::updateRangeStart(taperState,
+            m_lastRealtimeTaperPreviewDabCount, m_lastRealtimeTaperTailStart);
         const size_t updateCount = strokeDabCount - updateStart;
         m_lastRealtimeTaperTailStart = tailStart;
-        currentBrush->applyStrokeTaperToDabRange(updateStart, updateCount);
+        m_lastRealtimeTaperPreviewDabCount = strokeDabCount;
+        m_lastRealtimeTaperPreviewWasSampled = false;
+        currentBrush->applyStrokeTaperToDabRange(updateStart, updateCount, taperState);
 
         // Collect tiles covered by the rebuild dab range BEFORE the rebuild.
         // This gives us the precise set of tiles that will be cleared/rewritten,
@@ -2107,7 +2142,7 @@ bool BrushStrokeHost::strokeNeedsRealtimeRebuild() const
         || currentBrush->isWetMode() || currentBrush->isLiquifyMode()) {
         return false;
     }
-    return currentBrush->hasTaperEffect();
+    return currentBrush->requiresRealtimeTaperReplay();
 }
 
 bool BrushStrokeHost::hasPendingStabilizerCatchup() const

@@ -14,6 +14,7 @@ add_executable(RuwaTests
     pigment_model_test.cpp
     project_serializer_test.cpp
     smoke_test.cpp
+    taper_state_test.cpp
     texture_replacement_math_test.cpp
     update_manifest_test.cpp
     update_security_test.cpp

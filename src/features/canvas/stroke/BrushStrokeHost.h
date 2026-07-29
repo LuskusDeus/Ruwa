@@ -315,6 +315,8 @@ private:
     QElapsedTimer m_realtimePreviewTimer;
     size_t m_realtimePreviewEventCount = 0;
     size_t m_lastRealtimeTaperTailStart = std::numeric_limits<size_t>::max();
+    size_t m_lastRealtimeTaperPreviewDabCount = 0;
+    bool m_lastRealtimeTaperPreviewWasSampled = false;
     qint64 m_lastRealtimeTaperPreviewNs = std::numeric_limits<qint64>::min();
 
     std::unordered_map<TileKey, std::vector<uint8_t>, TileKeyHash> m_strokeBeforeSnapshots;

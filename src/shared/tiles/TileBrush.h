@@ -8,6 +8,7 @@
 #define RUWA_CORE_TILES_TILEBRUSH_H
 
 #include "DabShapeFalloff.h"
+#include "StrokeTaperState.h"
 #include "TileTypes.h"
 #include "TileGrid.h"
 #include "features/brush/manager/BrushSettings.h"
@@ -64,6 +65,8 @@ public:
         uint8_t alpha = 255;
         uint8_t baseAlpha = 255;
     };
+
+    using StrokeTaperState = stroke_taper::State;
 
     TileBrush() = default;
 
@@ -680,17 +683,61 @@ public:
     }
     bool hasTaperEffect() const
     {
-        // Taper is meaningless for the canvas-reading reservoir tools
-        // (blur/smudge/wet): scaling end-dab radius and rebuilding the stroke
-        // from dabs corrupts their accumulation. Never taper those.
-        if (m_blurMode || m_smudgeMode || m_liquifyMode || isWetMode()) {
-            return false;
-        }
+        return strokeTaperState().hasEffect();
+    }
+    bool requiresRealtimeTaperReplay() const
+    {
+        // Keep the replay pipeline stable while a dynamic end taper can cross
+        // zero; otherwise the last tapered tail remains in the stroke buffer
+        // when a later input sample disables the effect. Start taper is sampled
+        // once at the head, so after the first dab its captured value is enough.
+        const bool applicable = canApplyStrokeTaper();
+
         constexpr float kEpsilon = 0.0001f;
-        const bool taperEnabled = (startTaper() > kEpsilon) || (endTaper() > kEpsilon);
-        if (!taperEnabled)
-            return false;
-        return hasRadiusPressureResponse() || hasOpacityPressureResponse();
+        if (!m_useBrushSettingsModel) {
+            return stroke_taper::requiresReplay(
+                applicable, false, 0.0f, m_startTaper > kEpsilon, m_endTaper > kEpsilon);
+        }
+
+        const auto& dynamics = m_brushSettingsModel.dynamics;
+        const bool startMayProduceTaper = dynamicsSlotMayProduceTaper(
+            m_brushSettingsModel.startTaper,
+            dynamics.slotForSetting(
+                ruwa::core::brushes::BrushDynamicsSettingKey::StrokeStartTaper));
+        const bool endNeedsReplay = dynamicsSlotMayProduceTaper(m_brushSettingsModel.endTaper,
+            dynamics.slotForSetting(
+                ruwa::core::brushes::BrushDynamicsSettingKey::StrokeEndTaper));
+        return stroke_taper::requiresReplay(applicable, !m_strokeDabs.empty(),
+            m_strokeDabs.empty() ? 0.0f : m_strokeDabs.front().startTaper,
+            startMayProduceTaper, endNeedsReplay);
+    }
+    StrokeTaperState strokeTaperState() const
+    {
+        const bool applicable = canApplyStrokeTaper();
+        if (!applicable) {
+            return stroke_taper::makeState(m_strokeDabs.size(), 0.0f, 0.0f, false);
+        }
+
+        float startValue = 0.0f;
+        float endValue = 0.0f;
+        if (!m_strokeDabs.empty()) {
+            // Start taper is a property of the stroke head; end taper follows
+            // the latest captured input. Use these immutable dab values for the
+            // whole update so capability checks and range selection cannot
+            // observe different pressure/time/random samples.
+            startValue = m_strokeDabs.front().startTaper;
+            endValue = m_strokeDabs.back().endTaper;
+        } else if (m_useBrushSettingsModel) {
+            const auto evaluated = evaluateDynamicsForCurrentInput();
+            startValue = evaluated.startTaper;
+            endValue = evaluated.endTaper;
+        } else {
+            startValue = m_startTaper;
+            endValue = m_endTaper;
+        }
+
+        return stroke_taper::makeState(
+            m_strokeDabs.size(), startValue, endValue, applicable);
     }
     bool hasEndpointCorrectionEffect() const
     {
@@ -855,7 +902,7 @@ public:
     const TileGrid& strokeBuffer() const { return m_strokeBuffer; }
     std::vector<DabPoint>& strokeDabs() { return m_strokeDabs; }
     const std::vector<DabPoint>& strokeDabs() const { return m_strokeDabs; }
-    static constexpr size_t kMaxTaperAffectedDabs = 1500;
+    static constexpr size_t kMaxTaperAffectedDabs = stroke_taper::kMaxAffectedDabs;
 
     void collectStrokeDabRangeCoveredTiles(size_t startDabIndex, size_t dabCount,
         std::unordered_set<TileKey, TileKeyHash>& outTiles, bool includeBaseExtent = false) const
@@ -871,43 +918,38 @@ public:
 
     size_t startTaperDabCount() const
     {
-        const float taper = m_strokeDabs.empty() ? startTaper() : m_strokeDabs.front().startTaper;
-        return taperAffectedDabCount(taper, m_strokeDabs.size());
+        return strokeTaperState().startDabCount;
     }
 
     size_t endTaperDabCount() const
     {
-        const float taper = m_strokeDabs.empty() ? endTaper() : m_strokeDabs.back().endTaper;
-        return taperAffectedDabCount(taper, m_strokeDabs.size());
+        return strokeTaperState().endDabCount;
     }
 
     bool applyStrokeTaperToDabRange(size_t startDabIndex, size_t dabCount)
     {
+        return applyStrokeTaperToDabRange(startDabIndex, dabCount, strokeTaperState());
+    }
+
+    bool applyStrokeTaperToDabRange(
+        size_t startDabIndex, size_t dabCount, const StrokeTaperState& requestedState)
+    {
         if (m_strokeDabs.empty())
-            return false;
-        if (!hasTaperEffect())
             return false;
         if (dabCount == 0 || startDabIndex >= m_strokeDabs.size())
             return false;
 
-        const size_t startCount = startTaperDabCount();
-        const size_t endCount = endTaperDabCount();
-        if (startCount == 0 && endCount == 0)
+        const StrokeTaperState state = (requestedState.dabCount == m_strokeDabs.size())
+            ? requestedState
+            : strokeTaperState();
+        if (!state.applicable)
             return false;
 
         const size_t endDabIndex = std::min(startDabIndex + dabCount, m_strokeDabs.size());
-        const size_t lastIndex = m_strokeDabs.size() - 1;
         bool changed = false;
 
         for (size_t i = startDabIndex; i < endDabIndex; ++i) {
-            float taperScale = 1.0f;
-            if (startCount > 0 && i < startCount) {
-                taperScale = std::min(taperScale, taperScaleForEdgeIndex(i, startCount));
-            }
-            const size_t distToEnd = lastIndex - i;
-            if (endCount > 0 && distToEnd < endCount) {
-                taperScale = std::min(taperScale, taperScaleForEdgeIndex(distToEnd, endCount));
-            }
+            const float taperScale = stroke_taper::scaleForDab(state, i);
 
             DabPoint& dab = m_strokeDabs[i];
             const float oldRadius = dab.radius;
@@ -936,7 +978,15 @@ public:
         return changed;
     }
 
-    bool applyStrokeTaperToDabs() { return applyStrokeTaperToDabRange(0, m_strokeDabs.size()); }
+    bool applyStrokeTaperToDabs()
+    {
+        return applyStrokeTaperToDabRange(0, m_strokeDabs.size(), strokeTaperState());
+    }
+
+    bool applyStrokeTaperToDabs(const StrokeTaperState& state)
+    {
+        return applyStrokeTaperToDabRange(0, m_strokeDabs.size(), state);
+    }
 
     bool applyEndpointCorrectionToDabs()
     {
@@ -1888,6 +1938,38 @@ private:
             || m_brushSettingsModel.opacityPressureEnabled;
     }
 
+    bool canApplyStrokeTaper() const
+    {
+        // Taper is meaningless for the canvas-reading reservoir tools
+        // (blur/smudge/wet): scaling end-dab radius and rebuilding the stroke
+        // from dabs corrupts their accumulation. Never taper those.
+        if (m_blurMode || m_smudgeMode || m_liquifyMode || isWetMode()) {
+            return false;
+        }
+        return hasRadiusPressureResponse() || hasOpacityPressureResponse();
+    }
+
+    static bool dynamicsSlotMayProduceTaper(
+        float baseValue, const ruwa::core::brushes::BrushDynamicsSlot& slot)
+    {
+        constexpr float kEpsilon = 0.0001f;
+        if (baseValue > kEpsilon) {
+            return true;
+        }
+        for (const auto& binding : slot.bindings) {
+            if (!binding.isActive()
+                || binding.mode == ruwa::core::brushes::BrushDynamicsBlendMode::Multiply) {
+                continue;
+            }
+            for (const auto& point : binding.curve.points) {
+                if (point.y > kEpsilon) {
+                    return true;
+                }
+            }
+        }
+        return false;
+    }
+
     bool hasDynamicTextureBinding() const
     {
         if (!m_useBrushSettingsModel) {
@@ -2160,26 +2242,6 @@ private:
     {
         t = std::clamp(t, 0.0f, 1.0f);
         return t * t * (3.0f - 2.0f * t);
-    }
-
-    static size_t taperAffectedDabCount(float taper, size_t dabCount)
-    {
-        if (dabCount == 0)
-            return 0;
-        const float clampedTaper = std::clamp(taper, 0.0f, 1.0f);
-        if (clampedTaper <= 0.0001f)
-            return 0;
-        const size_t affected = static_cast<size_t>(
-            std::ceil(clampedTaper * static_cast<float>(kMaxTaperAffectedDabs)));
-        return std::min(dabCount, std::max<size_t>(1, affected));
-    }
-
-    static float taperScaleForEdgeIndex(size_t edgeIndex, size_t affectedCount)
-    {
-        if (affectedCount <= 1)
-            return 0.0f;
-        return std::clamp(
-            static_cast<float>(edgeIndex) / static_cast<float>(affectedCount - 1), 0.0f, 1.0f);
     }
 
     static uint8_t computeDabAlpha(float normalizedOpacity)
