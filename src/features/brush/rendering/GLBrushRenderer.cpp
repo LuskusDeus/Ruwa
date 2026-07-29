@@ -3584,6 +3584,13 @@ std::unordered_set<TileKey, TileKeyHash> GLBrushRenderer::flattenStrokeGPU(TileG
     // Erase and blur preserve their existing semantics.
     const bool useAlphaCap
         = selectionAlphaCap && finalSourceMask != nullptr && !alphaLock && !eraseMode && !blurMode;
+    // A normal fully-opaque stroke over a brand-new transparent layer tile is
+    // already the exact final tile. Transfer its GPU texture into the layer
+    // instead of allocating a second texture and drawing a full-tile copy.
+    const bool canTransferNewLayerTexture = !eraseMode && !blurMode && !alphaLock && !useAlphaCap
+        && !maskErase && finalSourceMask == nullptr && !layerGrid.hasDefaultFill()
+        && strokeBlendMode == ruwa::core::layers::BlendMode::Normal
+        && std::clamp(strokeOpacity, 0.0f, 1.0f) >= 1.0f;
 
     std::vector<TileKey> keysVec;
     for (auto& [key, tile] : strokeBuffer.tiles()) {
@@ -3657,7 +3664,7 @@ std::unordered_set<TileKey, TileKeyHash> GLBrushRenderer::flattenStrokeGPU(TileG
         strokeBlendBackdropColor.g, strokeBlendBackdropColor.b, strokeBlendBackdropColor.a);
 
     for (const auto& key : keysVec) {
-        const TileData* strokeTile = strokeBuffer.getTile(key);
+        TileData* strokeTile = strokeBuffer.getTile(key);
         if (!strokeTile || !strokeTile->hasTexture())
             continue;
         TileData* finalMaskTile = finalSourceMask ? finalSourceMask->getTile(key) : nullptr;
@@ -3677,6 +3684,15 @@ std::unordered_set<TileKey, TileKeyHash> GLBrushRenderer::flattenStrokeGPU(TileG
 
         const bool layerTileExisted = layerGrid.hasTile(key);
         TileData& layerTile = layerGrid.getOrCreateTile(key);
+        if (!layerTileExisted && canTransferNewLayerTexture
+            && strokeTile->format() == layerTile.format()) {
+            layerTile.setTextureId(strokeTile->textureId());
+            strokeTile->setTextureId(0);
+            layerTile.clearDirty();
+            layerGrid.removeDirty(key);
+            layerGrid.notePixelsChangedOutOfBand();
+            continue;
+        }
         // We are about to render per-pixel stroke content into this tile's GPU
         // texture, so it is no longer a uniform-color (solid) tile — its truth is
         // the texture (and, after the async readback, its per-pixel CPU buffer).
@@ -3847,35 +3863,51 @@ bool GLBrushRenderer::isReadbackComplete(GLsync fence)
 
 void GLBrushRenderer::finishReadback(GLsync fence, TileGrid& grid, const std::vector<TileKey>& keys)
 {
-    if (!fence || keys.empty())
+    if (!fence)
         return;
 
-    // Wait for DMA to complete (should already be done if polled first)
-    m_gl->glClientWaitSync(fence, GL_SYNC_FLUSH_COMMANDS_BIT, 500000000ULL);
-    m_gl->glDeleteSync(fence);
+    finishReadbackBatch(fence, grid, keys, 0, keys.size());
+}
+
+size_t GLBrushRenderer::finishReadbackBatch(
+    GLsync fence, TileGrid& grid, const std::vector<TileKey>& keys, size_t firstKey, size_t maxKeys)
+{
+    if (fence) {
+        // The deferred path polls first, so this normally cannot block. A
+        // forced flush retains the previous bounded wait behavior.
+        m_gl->glClientWaitSync(fence, GL_SYNC_FLUSH_COMMANDS_BIT, 500000000ULL);
+        m_gl->glDeleteSync(fence);
+    }
+
+    if (firstKey >= keys.size() || maxKeys == 0) {
+        return std::min(firstKey, keys.size());
+    }
 
     // The staging buffer stays mapped, so consuming a readback is a plain copy
     // out of the persistent pointer — no glMapBuffer/glUnmapBuffer per readback.
     const uint8_t* mapped = m_readbackPbo.data();
     if (!mapped) {
-        return;
+        return keys.size();
     }
 
     const size_t bytesPerTile = tileByteSize(grid.format());
     const size_t capacity = m_readbackPbo.capacity();
-    size_t offset = 0;
-    for (const auto& key : keys) {
+    const size_t endKey = std::min(keys.size(), firstKey + maxKeys);
+    size_t keyIndex = firstKey;
+    for (; keyIndex < endKey; ++keyIndex) {
+        const size_t offset = keyIndex * bytesPerTile;
         // Guards against a grid whose format changed between start and finish,
         // which would desync the offsets computed at pack time.
         if (offset + bytesPerTile > capacity) {
-            break;
+            return keys.size();
         }
+        const auto& key = keys[keyIndex];
         TileData* tile = grid.getTile(key);
         if (tile) {
             std::memcpy(tile->pixels(), mapped + offset, bytesPerTile);
         }
-        offset += bytesPerTile;
     }
+    return keyIndex;
 }
 
 void GLBrushRenderer::deleteFence(GLsync fence)

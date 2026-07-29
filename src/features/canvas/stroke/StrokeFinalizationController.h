@@ -42,13 +42,21 @@ struct PendingStrokeFinalization {
     QUuid layerId;
     bool maskTarget = false;
     std::unordered_set<TileKey, TileKeyHash> flattenedKeys;
-    std::vector<TileKey> readbackKeysOrdered;
+    std::vector<TileKey> finalizationKeysOrdered;
+    std::vector<TileKey> readbackBatchKeys;
 
     std::unordered_map<TileKey, std::vector<uint8_t>, TileKeyHash> beforeTiles;
+    std::unordered_map<TileKey, std::vector<uint8_t>, TileKeyHash> afterTiles;
     std::unordered_set<TileKey, TileKeyHash> createdTiles;
     std::unordered_set<TileKey, TileKeyHash> removedTiles;
 
     bool eraseMode = false;
+    bool removeEmptyTiles = false;
+    bool readbackActive = false;
+    bool strokePaintedEmitted = false;
+    bool selectionRestoreCaptured = false;
+    size_t nextKey = 0;
+    std::optional<SelectionRestoreContext> selectionRestore;
 
     GLsync fence = nullptr;
 };
@@ -71,8 +79,9 @@ public:
         std::optional<SelectionRestoreContext> selectionRestore;
     };
 
-    /// Consumes pending, performs readback, builds snapshot, pushes undo.
-    /// Clears pending when done.
+    /// Advances one bounded finalization batch. Clears pending after the final
+    /// batch builds the undo snapshot; otherwise leaves it active for the next
+    /// event-loop tick.
     static void finalize(PendingStrokeFinalization& pending, Context& ctx);
 };
 

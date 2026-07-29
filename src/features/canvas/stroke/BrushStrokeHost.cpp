@@ -161,6 +161,7 @@ BrushStrokeHost::BrushStrokeHost(QObject* parent, Callbacks callbacks)
 {
     m_finalizeTimer.setSingleShot(true);
     m_finalizeTimer.setInterval(0);
+    m_finalizeTimer.setTimerType(Qt::PreciseTimer);
     connect(&m_finalizeTimer, &QTimer::timeout, this, &BrushStrokeHost::finalizeStroke);
 
     m_strokeInputTimer.setSingleShot(true);
@@ -1511,7 +1512,6 @@ void BrushStrokeHost::completeEndStrokeAfterQueueDrain()
             useAlphaLockFlatten, strokeBlendBackdrop.get(), strokeBlendBackdropColor,
             finalSourceMask, selectionAlphaCap, maskErase);
         std::vector<TileKey> readbackKeys(flattenedKeys.begin(), flattenedKeys.end());
-        GLsync fence = executionBackend->startAsyncReadback(*grid, readbackKeys, true);
         if (m_callbacks.cleanupStrokeTextures) {
             m_callbacks.cleanupStrokeTextures();
         }
@@ -1527,12 +1527,20 @@ void BrushStrokeHost::completeEndStrokeAfterQueueDrain()
         m_pending.layerId = layer->id;
         m_pending.maskTarget = layer->maskEditActive && layer->maskGrid != nullptr;
         m_pending.flattenedKeys = std::move(flattenedKeys);
-        m_pending.readbackKeysOrdered = std::move(readbackKeys);
+        m_pending.finalizationKeysOrdered = std::move(readbackKeys);
+        m_pending.readbackBatchKeys.clear();
         m_pending.beforeTiles = std::move(m_strokeBeforeSnapshots);
+        m_pending.afterTiles.clear();
         m_pending.createdTiles = std::move(m_strokeCreatedTiles);
         m_pending.removedTiles.clear();
-        m_pending.eraseMode = currentBrush->isEraseMode();
-        m_pending.fence = fence;
+        m_pending.eraseMode = completedEraseMode;
+        m_pending.removeEmptyTiles = completedEraseMode && !maskErase;
+        m_pending.readbackActive = !m_pending.finalizationKeysOrdered.empty();
+        m_pending.strokePaintedEmitted = false;
+        m_pending.selectionRestoreCaptured = false;
+        m_pending.nextKey = 0;
+        m_pending.selectionRestore.reset();
+        m_pending.fence = nullptr;
 
         if (m_callbacks.queueDeferredStrokeCommit) {
             m_callbacks.queueDeferredStrokeCommit(completedLayerId, m_pending.flattenedKeys,
@@ -1556,16 +1564,6 @@ void BrushStrokeHost::completeEndStrokeAfterQueueDrain()
                   selectionAlphaCap, maskErase)
             : currentBrush->endStroke(*grid, useAlphaLockFlatten, strokeBlendBackdrop.get(),
                   strokeBlendBackdropColor, finalSourceMask, selectionAlphaCap, maskErase);
-        std::unordered_set<TileKey, TileKeyHash> removedTiles;
-        if (currentBrush->isEraseMode() && !maskErase) {
-            for (const auto& key : flattenedKeys) {
-                TileData* tile = grid->getTile(key);
-                if (tile && tile->isEmpty()) {
-                    removedTiles.insert(key);
-                }
-            }
-            grid->pruneEmpty();
-        }
 
         // Wait for any in-flight async BEFORE-snapshot memcpys to settle
         // before we hand the map off to the pending finalization.
@@ -1574,11 +1572,20 @@ void BrushStrokeHost::completeEndStrokeAfterQueueDrain()
         m_pending.layerId = layer->id;
         m_pending.maskTarget = layer->maskEditActive && layer->maskGrid != nullptr;
         m_pending.flattenedKeys = std::move(flattenedKeys);
-        m_pending.readbackKeysOrdered.clear();
+        m_pending.finalizationKeysOrdered.assign(
+            m_pending.flattenedKeys.begin(), m_pending.flattenedKeys.end());
+        m_pending.readbackBatchKeys.clear();
         m_pending.beforeTiles = std::move(m_strokeBeforeSnapshots);
+        m_pending.afterTiles.clear();
         m_pending.createdTiles = std::move(m_strokeCreatedTiles);
-        m_pending.removedTiles = std::move(removedTiles);
-        m_pending.eraseMode = currentBrush->isEraseMode();
+        m_pending.removedTiles.clear();
+        m_pending.eraseMode = completedEraseMode;
+        m_pending.removeEmptyTiles = completedEraseMode && !maskErase;
+        m_pending.readbackActive = false;
+        m_pending.strokePaintedEmitted = false;
+        m_pending.selectionRestoreCaptured = false;
+        m_pending.nextKey = 0;
+        m_pending.selectionRestore.reset();
         m_pending.fence = nullptr;
 
         if (m_callbacks.queueDeferredStrokeCommit) {
@@ -2278,16 +2285,30 @@ bool BrushStrokeHost::tryFinalizeStroke(bool forceWait)
 {
     if (m_pending.active && m_pending.fence && !forceWait) {
         auto* executionBackend = brushExecutionBackend();
-        if (executionBackend && !executionBackend->isReadbackComplete(m_pending.fence)) {
+        bool readbackComplete = true;
+        if (executionBackend) {
+            if (m_callbacks.makeCurrent) {
+                m_callbacks.makeCurrent();
+            }
+            readbackComplete = executionBackend->isReadbackComplete(m_pending.fence);
+            if (m_callbacks.doneCurrent) {
+                m_callbacks.doneCurrent();
+            }
+        }
+        if (!readbackComplete) {
             return false;
         }
     }
 
     if (m_callbacks.finalizePendingStroke) {
-        const bool emitStrokePainted = !m_pending.eraseMode && !m_pending.flattenedKeys.empty();
+        const bool emitStrokePainted = !m_pending.strokePaintedEmitted && !m_pending.eraseMode
+            && !m_pending.flattenedKeys.empty();
+        if (emitStrokePainted) {
+            m_pending.strokePaintedEmitted = true;
+        }
         m_callbacks.finalizePendingStroke(m_pending, m_selectionAtStrokeBegin, emitStrokePainted);
     }
-    return true;
+    return !m_pending.active;
 }
 
 void BrushStrokeHost::flushPendingFinalization()
@@ -2305,7 +2326,11 @@ void BrushStrokeHost::flushPendingFinalization()
         }
     }
     if (m_pending.active) {
-        tryFinalizeStroke(true);
+        while (m_pending.active) {
+            if (!tryFinalizeStroke(true) && !m_callbacks.finalizePendingStroke) {
+                break;
+            }
+        }
     }
 }
 

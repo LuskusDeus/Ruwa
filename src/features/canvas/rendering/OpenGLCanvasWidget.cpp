@@ -2462,21 +2462,24 @@ OpenGLCanvasWidget::OpenGLCanvasWidget(QWidget* parent)
                 ctx.doneCurrent = [this]() { doneCurrent(); };
                 ctx.canvas = &m_canvas;
                 ctx.layerModel = m_layerModel;
-                SelectionRestoreContext selRestore;
-                selRestore.layerSelection
-                    = m_layerModel ? m_layerModel->selectionManager() : nullptr;
-                selRestore.lassoSelection
-                    = m_selectionController ? &m_selectionController->lassoSelection() : nullptr;
-                selRestore.canvas = &m_canvas;
-                selRestore.before = selectionBefore;
-                selRestore.after.layer = captureLayerSelection(selRestore.layerSelection);
-                selRestore.after.lasso = captureLassoSelection(selRestore.lassoSelection,
-                    effectiveDocumentBoundsWidth(), effectiveDocumentBoundsHeight());
-                selRestore.layerExists = [this](const ruwa::core::layers::LayerId& id) {
-                    return m_layerModel && m_layerModel->contains(id);
-                };
-                selRestore.requestRender = [this]() { requestRender(); };
-                ctx.selectionRestore = std::move(selRestore);
+                if (!pending.selectionRestoreCaptured) {
+                    SelectionRestoreContext selRestore;
+                    selRestore.layerSelection
+                        = m_layerModel ? m_layerModel->selectionManager() : nullptr;
+                    selRestore.lassoSelection = m_selectionController
+                        ? &m_selectionController->lassoSelection()
+                        : nullptr;
+                    selRestore.canvas = &m_canvas;
+                    selRestore.before = selectionBefore;
+                    selRestore.after.layer = captureLayerSelection(selRestore.layerSelection);
+                    selRestore.after.lasso = captureLassoSelection(selRestore.lassoSelection,
+                        effectiveDocumentBoundsWidth(), effectiveDocumentBoundsHeight());
+                    selRestore.layerExists = [this](const ruwa::core::layers::LayerId& id) {
+                        return m_layerModel && m_layerModel->contains(id);
+                    };
+                    selRestore.requestRender = [this]() { requestRender(); };
+                    ctx.selectionRestore = std::move(selRestore);
+                }
 
                 if (emitPainted) {
                     emit strokePainted();
