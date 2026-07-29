@@ -424,16 +424,9 @@ void CanvasPanel::loadGlobalToolState()
 
 void CanvasPanel::persistGlobalToolState()
 {
-    const ToolId currentTool = toolMode();
-    if (CanvasToolStateController::isDrawInstrument(currentTool)) {
-        captureToolState(currentTool);
-    } else if (m_brushOverlay) {
-        const ToolId inst = overlayInstrumentMode();
-        if (CanvasToolStateController::isDrawInstrument(inst)) {
-            captureToolState(inst);
-        }
-    }
-
+    // Nothing to collect from the UI first: every editable value (size, opacity,
+    // color, brush id, settings) is written into its instrument's state as it
+    // changes, so the controller is already up to date here.
     if (m_isEyedropping) {
         return;
     }
@@ -784,10 +777,15 @@ void CanvasPanel::setBrushEraserActive(bool active)
         return;
     }
 
-    // The toggle only affects the Brush tool; apply the erase mode immediately
-    // when it is the active tool so the next dab reflects the new state.
+    // The toggle only affects the Brush tool. It cannot take effect mid-stroke:
+    // endStroke() flattens the whole buffer against the erase flag, so flipping it
+    // now would re-commit everything already painted. Defer it like a tool switch.
     if (toolMode() == ToolId::Brush) {
-        setEraseMode(shouldEraseForTool(toolMode()));
+        if (m_isDrawing && m_glWidget && m_glWidget->isDrawing()) {
+            m_pendingToolStateApply = ToolId::Brush;
+        } else {
+            setEraseMode(shouldEraseForTool(toolMode()));
+        }
     }
 
     if (m_toolStateOverlay) {
@@ -800,6 +798,14 @@ void CanvasPanel::setBrushEraserActive(bool active)
 bool CanvasPanel::shouldEraseForTool(ToolId tool) const
 {
     return m_toolStateController && m_toolStateController->shouldEraseForTool(tool);
+}
+
+void CanvasPanel::applyToolPaintModes(ToolId tool)
+{
+    setEraseMode(shouldEraseForTool(tool));
+    setBlurMode(tool == ToolId::Blur);
+    setSmudgeMode(tool == ToolId::Smudge);
+    setLiquifyMode(tool == ToolId::Liquify);
 }
 
 void CanvasPanel::setBlurMode(bool blur)
@@ -900,10 +906,8 @@ void CanvasPanel::setToolMode(ToolId tool)
         m_isDrawing = false;
         m_tabletActive = false;
         m_glWidget->endStroke();
-        setEraseMode(shouldEraseForTool(currentTool));
-        setBlurMode(currentTool == ToolId::Blur);
-        setSmudgeMode(currentTool == ToolId::Smudge);
-        setLiquifyMode(currentTool == ToolId::Liquify);
+        // Still the tool being left: the stroke commits with the flags it used.
+        applyToolPaintModes(currentTool);
         emit canvasContentChanged();
     }
     logStep("quick-shape-exit");
@@ -950,33 +954,32 @@ void CanvasPanel::setToolMode(ToolId tool)
         midStroke = false;
     }
 
-    if (!midStroke || !brushEraserSwitch) {
-        // Save current tool state before switching
-        if (CanvasToolStateController::isDrawInstrument(currentTool)) {
-            if (m_toolStateController) {
-                m_toolStateController->setLastDrawTool(currentTool);
-            }
-            captureCurrentToolState();
-        }
+    if (CanvasToolStateController::isDrawInstrument(currentTool) && m_toolStateController) {
+        m_toolStateController->setLastDrawTool(currentTool);
     }
-    logStep("capture-current-state");
+    logStep("note-last-draw-tool");
 
     if (m_toolStateController) {
         m_toolStateController->setCurrentTool(tool);
     }
-    setEraseMode(shouldEraseForTool(tool));
-    setBlurMode(tool == ToolId::Blur);
-    setSmudgeMode(tool == ToolId::Smudge);
-    setLiquifyMode(tool == ToolId::Liquify);
-    syncToolStateOverlayContent();
-    logStep("set-current-tool");
 
-    if (!midStroke || !brushEraserSwitch) {
+    // A stroke belongs to the tool it began with. TileBrush::endStroke() flattens
+    // the WHOLE stroke buffer and reads the mode flags at that moment, so flipping
+    // erase mid-stroke does not "only affect the rest of the stroke" — it commits
+    // everything already painted as an erase. Nothing about the switch may touch
+    // the brush until the stroke is finished; the deferred apply carries both the
+    // mode flags and the tool's own size/opacity/brush.
+    if (midStroke) {
+        m_pendingToolStateApply = tool;
+    } else {
+        m_pendingToolStateApply.reset();
+        applyToolPaintModes(tool);
         if (CanvasToolStateController::isDrawInstrument(tool)) {
             restoreToolState(tool);
         }
     }
-    logStep("restore-target-state");
+    syncToolStateOverlayContent();
+    logStep("apply-target-tool");
 
     // Set up temporary tool hold if this switch was triggered by a held key
     if (pendingKey != 0 && !m_tempToolHold.active) {
@@ -1181,17 +1184,13 @@ void CanvasPanel::setBrushRadius(float radius)
 
 qreal CanvasPanel::brushSizeNormalized() const
 {
-    if (m_brushOverlay) {
-        return m_brushOverlay->brushSize();
-    }
-
-    if (const ToolBrushState* state = toolBrushStateForInstrument(toolMode());
+    // The active instrument's state is the value; the overlay only displays it.
+    if (const ToolBrushState* state = toolBrushStateForInstrument(overlayInstrumentMode());
         state && state->valid) {
         return state->brushSize;
     }
-    const ToolId inst = overlayInstrumentMode();
-    if (const ToolBrushState* state = toolBrushStateForInstrument(inst); state && state->valid) {
-        return state->brushSize;
+    if (m_brushOverlay) {
+        return m_brushOverlay->brushSize();
     }
     if (m_toolStateController && m_toolStateController->brushState().valid) {
         return m_toolStateController->brushState().brushSize;
@@ -1201,6 +1200,10 @@ qreal CanvasPanel::brushSizeNormalized() const
 
 qreal CanvasPanel::brushOpacityNormalized() const
 {
+    if (const ToolBrushState* state = toolBrushStateForInstrument(overlayInstrumentMode());
+        state && state->valid) {
+        return state->brushOpacity;
+    }
     if (m_brushOverlay) {
         return m_brushOverlay->brushOpacity();
     }
@@ -1245,18 +1248,9 @@ void CanvasPanel::setLassoFillStabilization(qreal stabilization)
 
 CanvasPanel::PersistedToolState CanvasPanel::persistedToolState(ToolId tool) const
 {
-    PersistedToolState snapshot = m_toolStateController
-        ? m_toolStateController->persistedState(tool)
-        : PersistedToolState {};
-
-    if (m_brushOverlay && toolMode() == tool) {
-        snapshot.brushSize = m_brushOverlay->brushSize();
-        snapshot.brushOpacity = m_brushOverlay->brushOpacity();
-        snapshot.color = currentBrushColor();
-        snapshot.valid = true;
-    }
-
-    return snapshot;
+    // No overlay override: the instrument states are kept live as the user edits.
+    return m_toolStateController ? m_toolStateController->persistedState(tool)
+                                 : PersistedToolState {};
 }
 
 void CanvasPanel::setPersistedToolState(ToolId tool, const PersistedToolState& state)
@@ -1351,6 +1345,10 @@ void CanvasPanel::emitBrushSelectionContextChanged()
 void CanvasPanel::setBrushSizeNormalized(qreal size)
 {
     const qreal clamped = qBound(0.0, size, 1.0);
+    // Record the edit against the active instrument before it reaches any widget:
+    // slider drags inside the overlay funnel through its signal, everything else
+    // (shortcuts, quick popup, commands) arrives here.
+    writeLiveBrushSizeToToolState(clamped);
 
     if (m_brushOverlay) {
         m_brushOverlay->setBrushSize(clamped);
@@ -1377,6 +1375,7 @@ void CanvasPanel::setBrushSizeNormalized(qreal size)
 void CanvasPanel::setBrushOpacityNormalized(qreal opacity)
 {
     const qreal clamped = qBound(0.0, opacity, 1.0);
+    writeLiveBrushOpacityToToolState(clamped);
 
     if (m_brushOverlay) {
         m_brushOverlay->setBrushOpacity(clamped);
@@ -1696,13 +1695,18 @@ void CanvasPanel::applyBrushSettings(const ruwa::core::brushes::BrushSettingsDat
     if (m_brushOverlay) {
         m_brushOverlay->setBrushSettings(settings);
     }
+
+    const ToolId instrument = overlayInstrumentMode();
+    if (CanvasToolStateController::isDrawInstrument(instrument)) {
+        // Settings belong to the instrument, not to whichever overlay is alive.
+        if (ToolBrushState* state = toolBrushStateForInstrument(instrument)) {
+            state->settings = settings;
+            state->valid = true;
+        }
+    }
+
     if (m_toolStateOverlay) {
-        const ToolId instrument = overlayInstrumentMode();
         if (CanvasToolStateController::isDrawInstrument(instrument)) {
-            if (ToolBrushState* state = toolBrushStateForInstrument(instrument)) {
-                state->settings = settings;
-                state->valid = true;
-            }
             if (instrument == ToolId::Blur || instrument == ToolId::Smudge
                 || instrument == ToolId::Liquify) {
                 m_toolStateOverlay->setToolIntensityValue(instrument, settings.flow);
@@ -1838,46 +1842,86 @@ bool CanvasPanel::applyBrushSelectionForTool(ToolId tool, const QString& request
     return !resolvedBrushId.isEmpty();
 }
 
-void CanvasPanel::captureToolState(ToolId tool)
+ruwa::core::brushes::BrushSettingsData CanvasPanel::currentBrushSettings() const
 {
-    ToolBrushState* state = toolBrushStateForInstrument(tool);
-    if (!state) {
-        return;
+    if (const ToolBrushState* state = toolBrushStateForInstrument(overlayInstrumentMode());
+        state && state->valid) {
+        return state->settings;
     }
-    if (m_glWidget && m_glWidget->isDrawing()) {
-        return;
-    }
-    // The shared overlay shows at most one instrument; never copy its size/opacity into the other.
-    if (!overlayMatchesInstrument(tool)) {
-        return;
-    }
-    // Fixed-brush tools only persist size here; keep their forced soft settings
-    // (and strength) instead of pulling the overlay's selected brush.
-    if (usesFixedSoftBrush(tool)) {
-        state->valid = true;
-        state->brushSize = m_brushOverlay ? m_brushOverlay->brushSize() : 0.3;
-        return;
-    }
-    state->valid = true;
-    state->brushSize = m_brushOverlay ? m_brushOverlay->brushSize() : 0.3;
-    state->brushOpacity = m_brushOverlay ? m_brushOverlay->brushOpacity() : 1.0;
-    const QColor color = currentBrushColor();
-    state->color.r = static_cast<uint8_t>(color.red());
-    state->color.g = static_cast<uint8_t>(color.green());
-    state->color.b = static_cast<uint8_t>(color.blue());
-    // Opacity slider is the source of truth; the runtime color can lag one instrument behind.
-    state->color.a = static_cast<uint8_t>(qBound(0.0, state->brushOpacity, 1.0) * 255.0);
-    state->settings = m_brushOverlay ? m_brushOverlay->brushSettings()
-                                     : ruwa::core::brushes::BrushSettingsData {};
+    return m_brushOverlay ? m_brushOverlay->brushSettings()
+                          : ruwa::core::brushes::BrushSettingsData {};
 }
 
-void CanvasPanel::captureCurrentToolState()
+void CanvasPanel::writeLiveBrushSizeToToolState(qreal size)
 {
-    const ToolId currentTool = toolMode();
-    if (!CanvasToolStateController::isDrawInstrument(currentTool)) {
+    // A restore pushes a state INTO the overlay; writing back would be a no-op at
+    // best. A deferred apply means the overlay still shows the previous
+    // instrument — its values must not leak into the tool that is active now.
+    if (m_pendingToolStateApply
+        || (m_toolStateController && m_toolStateController->suppressPersistDuringRestore())) {
         return;
     }
-    captureToolState(currentTool);
+    if (ToolBrushState* state = toolBrushStateForInstrument(overlayInstrumentMode())) {
+        state->brushSize = qBound(0.0, size, 1.0);
+        state->valid = true;
+    }
+}
+
+void CanvasPanel::writeLiveBrushOpacityToToolState(qreal opacity)
+{
+    if (m_pendingToolStateApply
+        || (m_toolStateController && m_toolStateController->suppressPersistDuringRestore())) {
+        return;
+    }
+    // Fixed-brush tools (Blur, Liquify) drive strength through flow, not opacity.
+    const ToolId instrument = overlayInstrumentMode();
+    if (usesFixedSoftBrush(instrument)) {
+        return;
+    }
+    if (ToolBrushState* state = toolBrushStateForInstrument(instrument)) {
+        const qreal clamped = qBound(0.0, opacity, 1.0);
+        state->brushOpacity = clamped;
+        state->color.a = static_cast<uint8_t>(clamped * 255.0);
+        state->valid = true;
+    }
+}
+
+void CanvasPanel::flushPendingToolStateApply()
+{
+    if (!m_pendingToolStateApply) {
+        return;
+    }
+
+    if (m_glWidget) {
+        // A released stroke can still be draining queued samples, and isDrawing()
+        // stays true until that drain completes. Force it to finish so the brush is
+        // free — this is a no-op while the pen is genuinely still down.
+        m_glWidget->flushPendingStrokeFinalization();
+        if (m_glWidget->isDrawing()) {
+            // Really still painting: keep owing the apply, retry at the actual end.
+            return;
+        }
+    }
+
+    const ToolId tool = *m_pendingToolStateApply;
+    m_pendingToolStateApply.reset();
+
+    if (tool != toolMode()) {
+        return;
+    }
+
+    // The stroke is flattened and committed by now, so the mode flags are free.
+    applyToolPaintModes(tool);
+    if (!CanvasToolStateController::isDrawInstrument(tool)) {
+        return;
+    }
+
+    restoreToolState(tool);
+    updateBrushCursorOverlayRadius();
+    if (m_brushQuickPopupManager && m_brushQuickPopupManager->isBrushQuickPopupVisible()) {
+        m_brushQuickPopupManager->refreshBrushQuickPopup();
+    }
+    emitBrushSelectionContextChanged();
 }
 
 void CanvasPanel::applyFixedSoftBrush(ToolId tool)
@@ -1929,6 +1973,11 @@ void CanvasPanel::restoreToolState(ToolId tool)
 {
     if (!m_brushOverlay)
         return;
+
+    // This tool's settings reach the brush right here, so nothing is owed anymore.
+    if (m_pendingToolStateApply && *m_pendingToolStateApply == tool) {
+        m_pendingToolStateApply.reset();
+    }
 
     struct RestoreToolStatePersistSuppressor {
         CanvasToolStateController* controller;
@@ -3142,11 +3191,10 @@ void CanvasPanel::endActiveStrokeSession()
         releaseMouse();
     }
     m_glWidget->endStroke();
-    const ToolId currentTool = toolMode();
-    setEraseMode(shouldEraseForTool(currentTool));
-    setBlurMode(currentTool == ToolId::Blur);
-    setSmudgeMode(currentTool == ToolId::Smudge);
-    setLiquifyMode(currentTool == ToolId::Liquify);
+    // Before any mode flag is touched: endStroke() can leave the flatten pending,
+    // and the flush finalizes it while the stroke's own flags are still in place.
+    flushPendingToolStateApply();
+    applyToolPaintModes(toolMode());
     emit canvasContentChanged();
 }
 
@@ -3876,9 +3924,22 @@ void CanvasPanel::endTemporaryTool()
     const bool wasUsed = m_tempToolHold.toolWasUsed;
     const bool alwaysRevert = m_tempToolHold.alwaysRevert;
     const ToolId previousTool = m_tempToolHold.previousTool;
+    const bool releasedMidStroke = m_isDrawing && m_glWidget && m_glWidget->isDrawing();
     resetTemporaryMoveToolUndoCooldown();
     m_tempToolHold = {};
     updateTemporaryToolHoldPolling();
+
+    // Borrowing a tool by holding its hotkey only counts while the key outlives the
+    // work done with it — a real hold is still down when the stroke is finished.
+    // Coming up before that (already up when the stroke started, see
+    // markTemporaryToolUsed, or released while it is still running, here) means the
+    // key was tapped and the stroke simply outlasted the tap: picking a tool and
+    // using it in the same breath is a deliberate, permanent switch.
+    // Always-revert gestures (Space/Alt/Ctrl, stylus side button) have no tap
+    // meaning and keep reverting unconditionally.
+    if (!alwaysRevert && releasedMidStroke) {
+        return;
+    }
 
     if ((wasUsed || alwaysRevert) && toolMode() != previousTool) {
         // Revert to previous tool (prevent setToolMode from re-entering hold)

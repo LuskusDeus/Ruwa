@@ -104,6 +104,9 @@ public:
 
     virtual bool shouldEraseForTool(ToolId tool) const = 0;
     virtual void setEraseMode(bool erase) = 0;
+    /// A paint stroke just finished. Applies a tool switch whose brush settings
+    /// were deferred because the switch landed in the middle of that stroke.
+    virtual void notifyStrokeSessionEnded() = 0;
     virtual void showBlockedDrawMessageForSelectedLayer() = 0;
     virtual void notifyCanvasContentChanged() = 0;
 };

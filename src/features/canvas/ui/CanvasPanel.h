@@ -457,15 +457,27 @@ private:
     void scheduleInitialBrushOverlayPlacement();
     void loadGlobalToolState();
     void persistGlobalToolState();
-    void captureToolState(ToolId tool);
+    /// Live size/opacity edits write straight into the active instrument's state,
+    /// the same way brush id, settings and color already do. The shared overlay is
+    /// a view: it never owns a value that some other tool would inherit later.
+    void writeLiveBrushSizeToToolState(qreal size);
+    void writeLiveBrushOpacityToToolState(qreal opacity);
+    ruwa::core::brushes::BrushSettingsData currentBrushSettings() const;
     void applyBrushSettings(const ruwa::core::brushes::BrushSettingsData& settings);
     void applyToolStateBrushSettings(const ruwa::core::brushes::BrushSettingsData& settings);
     QString resolveBrushSelectionId(
         const QString& requestedBrushId, const QString& fallbackPresetId = QString()) const;
     bool applyBrushSelectionForTool(ToolId tool, const QString& requestedBrushId,
         const QString& fallbackPresetId, bool persistSelection, bool emitSyncSignal);
-    void captureCurrentToolState();
     void restoreToolState(ToolId tool);
+    /// Push a tool's erase/blur/smudge/liquify flags onto the shared TileBrush.
+    /// Only safe between strokes — endStroke() reads them to flatten the whole
+    /// stroke buffer, so changing them mid-stroke rewrites what is already painted.
+    void applyToolPaintModes(ToolId tool);
+    /// A tool switch during a live stroke cannot reconfigure the shared TileBrush
+    /// (the in-flight stroke must keep the settings it began with), so the apply is
+    /// deferred to the end of that stroke instead of being dropped.
+    void flushPendingToolStateApply();
     /// Blur and Liquify use the same fixed standard soft brush (hardness 0, round)
     /// and ignore brush selection — only size and strength (flow) are user-adjustable.
     void applyFixedSoftBrush(ToolId tool);
@@ -539,8 +551,22 @@ private:
     }
     void markTemporaryToolUsed() override
     {
-        if (m_tempToolHold.active)
-            m_tempToolHold.toolWasUsed = true;
+        if (!m_tempToolHold.active) {
+            return;
+        }
+        // "Used" may only count while the hotkey is genuinely still down.
+        // Selecting a tool and using it in the same frame beats the key-release
+        // event (and the 16 ms poll) to the canvas: the key is already physically
+        // up by the time the stroke starts, so this was a tap plus a deliberate,
+        // permanent switch. Marking it used would revert the tool as soon as the
+        // release is finally noticed. Always-revert gestures (Space/Alt/Ctrl,
+        // stylus side button) have no tap meaning and are left alone.
+        if (!m_tempToolHold.alwaysRevert && m_tempToolHold.heldKey != 0
+            && !isTemporaryToolHoldKeyPressed()) {
+            syncTemporaryToolHoldFromPressedKeys();
+            return;
+        }
+        m_tempToolHold.toolWasUsed = true;
     }
     void beginTemporaryToolHoldFromButton(Qt::MouseButton heldButton, ToolId tool) override;
     void endTemporaryTool() override;
@@ -593,6 +619,7 @@ private:
     void dispatchSyntheticMouseMove(QMouseEvent* event) override;
     void dispatchSyntheticMouseRelease(QMouseEvent* event) override;
     void notifyCanvasContentChanged() override { emit canvasContentChanged(); }
+    void notifyStrokeSessionEnded() override { flushPendingToolStateApply(); }
 
     void applyZoomLimits();
     void showZoomInfoOverlay();
@@ -755,6 +782,10 @@ private:
     const ToolBrushState* toolBrushStateForInstrument(ToolId tool) const;
 
     TemporaryToolHold m_tempToolHold;
+
+    /// Tool whose brush settings still have to be pushed to the shared TileBrush and
+    /// the overlay once the stroke that blocked the switch finishes.
+    std::optional<ToolId> m_pendingToolStateApply;
 
     // Pending temp-tool key (set in ShortcutOverride, consumed in setToolMode)
     int m_pendingTempToolKey = 0;

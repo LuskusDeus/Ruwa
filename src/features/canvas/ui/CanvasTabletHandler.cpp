@@ -362,6 +362,9 @@ void CanvasTabletHandler::handleTabletEvent(QTabletEvent* event)
                     m_host->endSpaceStrokeMove();
                 }
                 m_host->inputGlWidget()->endStroke();
+                // Finalize a still-draining stroke before any mode flag moves:
+                // endStroke() flattens the whole buffer and reads those flags then.
+                m_host->notifyStrokeSessionEnded();
                 m_host->setEraseMode(m_host->shouldEraseForTool(m_host->currentInputTool()));
                 m_host->notifyCanvasContentChanged();
                 event->accept();
@@ -460,6 +463,9 @@ void CanvasTabletHandler::handleTabletEvent(QTabletEvent* event)
                     m_host->endSpaceStrokeMove();
                 }
                 m_host->inputGlWidget()->endStroke();
+                // Finalize a still-draining stroke before any mode flag moves:
+                // endStroke() flattens the whole buffer and reads those flags then.
+                m_host->notifyStrokeSessionEnded();
                 m_host->setEraseMode(m_host->shouldEraseForTool(m_host->currentInputTool()));
                 m_host->notifyCanvasContentChanged();
             }

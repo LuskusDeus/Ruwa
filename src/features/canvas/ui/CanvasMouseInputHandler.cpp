@@ -466,9 +466,7 @@ bool CanvasMouseInputHandler::handleMousePress(QMouseEvent* event)
     }
 
     if (event->button() == Qt::LeftButton) {
-        if (m_panel->m_tempToolHold.active) {
-            m_panel->m_tempToolHold.toolWasUsed = true;
-        }
+        m_panel->markTemporaryToolUsed();
 
         if (m_host->currentInputTool() == ToolId::CanvasResize) {
             auto& cam = glWidget->viewport().camera();
@@ -716,6 +714,7 @@ bool CanvasMouseInputHandler::handleMousePress(QMouseEvent* event)
                     if (m_panel->m_isDrawing) {
                         m_panel->m_isDrawing = false;
                         m_panel->m_glWidget->endStroke();
+                        m_panel->notifyStrokeSessionEnded();
                         m_panel->canvasContentChanged();
                     }
                 } else {
@@ -1382,6 +1381,9 @@ bool CanvasMouseInputHandler::handleMouseRelease(QMouseEvent* event)
             m_panel->endSpaceStrokeMove();
         }
         m_panel->m_glWidget->endStroke();
+        // Finalize a still-draining stroke before any mode flag moves: endStroke()
+        // flattens the whole buffer and reads those flags when it does.
+        m_panel->notifyStrokeSessionEnded();
         m_panel->setEraseMode(m_panel->shouldEraseForTool(m_panel->toolMode()));
         m_panel->canvasContentChanged();
         event->accept();

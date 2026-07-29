@@ -256,15 +256,13 @@ QWidget* CanvasPanel::createContent()
         this, [this](bool enabled) { setBrushEraserActive(enabled); });
     connect(m_toolStateOverlay, &ruwa::ui::widgets::CanvasToolStateOverlay::brushHardnessChanged,
         this, [this](qreal hardness) {
-            auto settings = m_brushOverlay ? m_brushOverlay->brushSettings()
-                                           : ruwa::core::brushes::BrushSettingsData {};
+            auto settings = currentBrushSettings();
             settings.hardness = qBound(0.0f, static_cast<float>(hardness), 1.0f);
             applyToolStateBrushSettings(settings);
         });
     connect(m_toolStateOverlay, &ruwa::ui::widgets::CanvasToolStateOverlay::brushFlowChanged, this,
         [this](qreal flow) {
-            auto settings = m_brushOverlay ? m_brushOverlay->brushSettings()
-                                           : ruwa::core::brushes::BrushSettingsData {};
+            auto settings = currentBrushSettings();
             settings.flow = qBound(0.0f, static_cast<float>(flow), 1.0f);
             applyToolStateBrushSettings(settings);
         });
@@ -276,15 +274,13 @@ QWidget* CanvasPanel::createContent()
         });
     connect(m_toolStateOverlay, &ruwa::ui::widgets::CanvasToolStateOverlay::smudgeIntensityChanged,
         this, [this](qreal intensity) {
-            auto settings = m_brushOverlay ? m_brushOverlay->brushSettings()
-                                           : ruwa::core::brushes::BrushSettingsData {};
+            auto settings = currentBrushSettings();
             settings.flow = qBound(0.0f, static_cast<float>(intensity), 1.0f);
             applyToolStateBrushSettings(settings);
         });
     connect(m_toolStateOverlay, &ruwa::ui::widgets::CanvasToolStateOverlay::smudgeWetMixChanged,
         this, [this](qreal wetMix) {
-            auto settings = m_brushOverlay ? m_brushOverlay->brushSettings()
-                                           : ruwa::core::brushes::BrushSettingsData {};
+            auto settings = currentBrushSettings();
             settings.wetMix = qBound(0.0f, static_cast<float>(wetMix), 1.0f);
             applyToolStateBrushSettings(settings);
         });

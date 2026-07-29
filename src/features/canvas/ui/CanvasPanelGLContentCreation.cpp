@@ -176,10 +176,7 @@ bool CanvasPanel::createGLContent()
     }
     if (m_glWidget) {
         const ToolId currentTool = toolMode();
-        setEraseMode(shouldEraseForTool(currentTool));
-        setBlurMode(currentTool == ToolId::Blur);
-        setSmudgeMode(currentTool == ToolId::Smudge);
-        setLiquifyMode(currentTool == ToolId::Liquify);
+        applyToolPaintModes(currentTool);
         if (m_toolStateOverlay) {
             m_toolStateOverlay->setCanvasFlipStates(
                 m_glWidget->canvasContentFlipHorizontal(), m_glWidget->canvasContentFlipVertical());
@@ -190,7 +187,7 @@ bool CanvasPanel::createGLContent()
             static_cast<uint8_t>(color.green()), static_cast<uint8_t>(color.blue()),
             static_cast<uint8_t>(color.alpha()));
         m_glWidget->brush().setRadius(ruwa::ui::widgets::brushRadiusFromNormalizedSizeForCanvasMode(
-            m_brushOverlay->brushSize(), m_canvasSize.width(), m_canvasSize.height(),
+            brushSizeNormalized(), m_canvasSize.width(), m_canvasSize.height(),
             hasFiniteDocumentBounds()));
         applyBrushSettings({});
 
@@ -422,6 +419,7 @@ bool CanvasPanel::createGLContent()
     // Connect brush control signals
     connect(m_brushOverlay, &ruwa::ui::widgets::BrushControlOverlay::brushSizeChanged, this,
         [this](qreal size) {
+            writeLiveBrushSizeToToolState(size);
             if (m_glWidget) {
                 const float radius = ruwa::ui::widgets::brushRadiusFromNormalizedSizeForCanvasMode(
                     size, m_canvasSize.width(), m_canvasSize.height(), hasFiniteDocumentBounds());
@@ -437,6 +435,7 @@ bool CanvasPanel::createGLContent()
 
     connect(m_brushOverlay, &ruwa::ui::widgets::BrushControlOverlay::brushOpacityChanged, this,
         [this](qreal opacity) {
+            writeLiveBrushOpacityToToolState(opacity);
             if (m_glWidget) {
                 // Convert 0.0-1.0 to 0-255
                 uint8_t alpha = static_cast<uint8_t>(opacity * 255.0);
