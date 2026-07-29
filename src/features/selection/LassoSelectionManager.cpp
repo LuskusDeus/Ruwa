@@ -7,6 +7,8 @@
 #include "features/selection/LassoSelectionManager.h"
 
 #include <algorithm>
+#include <bit>
+#include <cmath>
 #include <cstring>
 
 namespace aether {
@@ -39,6 +41,144 @@ bool pointInPolygon(const Vector2& p, const std::vector<Vector2>& poly)
             inside = !inside;
     }
     return inside;
+}
+
+// ---- Tile coverage bitmaps (edge rebuilding) ----
+//
+// Edge extraction only ever asks "does this pixel have non-zero selection
+// alpha, and do its four neighbours?". Answering that from a bitmap instead of
+// from the pixel buffer turns the inner loop into whole-word logic: an interior
+// scanline of a solid tile produces no edges at all and costs four word tests
+// instead of 256 pixel reads with four neighbour lookups each.
+
+static_assert(TILE_SIZE % 64 == 0, "coverage bitmaps assume a multiple-of-64 tile width");
+constexpr uint32_t kRowWords = TILE_SIZE / 64;
+
+/// Coverage of one tile scanline, LSB-first: bit i of word w is pixel
+/// (w * 64 + i). Bits outside a covered area (and every bit of an absent
+/// neighbour tile) are zero.
+struct RowBits {
+    uint64_t words[kRowWords] {};
+
+    bool any() const noexcept
+    {
+        uint64_t merged = 0;
+        for (uint32_t w = 0; w < kRowWords; ++w)
+            merged |= words[w];
+        return merged != 0;
+    }
+};
+
+/// Coverage bits for one scanline of a tile buffer (null tile = all zero).
+RowBits rowCoverage(const uint8_t* px, uint32_t ly)
+{
+    RowBits bits;
+    if (!px)
+        return bits;
+
+    const uint8_t* row = px + static_cast<size_t>(ly) * TILE_SIZE * TILE_CHANNELS;
+    for (uint32_t w = 0; w < kRowWords; ++w) {
+        const uint8_t* chunk = row + static_cast<size_t>(w) * 64 * TILE_CHANNELS;
+
+        // Probe the 64-pixel chunk as whole words first. All-bits-clear means
+        // every alpha is zero, all-bits-set means every alpha is 0xFF; both are
+        // endian-independent and both are the overwhelmingly common case for a
+        // large selection. Only a chunk straddling the selection edge falls
+        // through to the per-pixel pass.
+        constexpr size_t chunkWords = (64 * TILE_CHANNELS) / sizeof(uint64_t);
+        uint64_t andAll = ~uint64_t { 0 };
+        uint64_t orAll = 0;
+        for (size_t i = 0; i < chunkWords; ++i) {
+            uint64_t word = 0;
+            std::memcpy(&word, chunk + i * sizeof(uint64_t), sizeof(word));
+            andAll &= word;
+            orAll |= word;
+        }
+
+        if (orAll == 0) {
+            bits.words[w] = 0;
+        } else if (andAll == ~uint64_t { 0 }) {
+            bits.words[w] = ~uint64_t { 0 };
+        } else {
+            uint64_t acc = 0;
+            for (uint32_t i = 0; i < 64; ++i) {
+                acc |= static_cast<uint64_t>(chunk[i * TILE_CHANNELS + 3] != 0) << i;
+            }
+            bits.words[w] = acc;
+        }
+    }
+    return bits;
+}
+
+/// Coverage of the pixels one step to the left: bit i becomes bit i-1, with
+/// `carryIn` (the neighbour tile's rightmost column) shifted into bit 0.
+RowBits shiftedFromLeft(const RowBits& v, bool carryIn)
+{
+    RowBits r;
+    uint64_t carry = carryIn ? 1u : 0u;
+    for (uint32_t w = 0; w < kRowWords; ++w) {
+        r.words[w] = (v.words[w] << 1) | carry;
+        carry = v.words[w] >> 63;
+    }
+    return r;
+}
+
+/// Coverage of the pixels one step to the right: bit i becomes bit i+1, with
+/// `carryIn` (the neighbour tile's leftmost column) shifted into the top bit.
+RowBits shiftedFromRight(const RowBits& v, bool carryIn)
+{
+    RowBits r;
+    uint64_t carry = carryIn ? (uint64_t { 1 } << 63) : 0u;
+    for (uint32_t w = kRowWords; w-- > 0;) {
+        r.words[w] = (v.words[w] >> 1) | carry;
+        carry = (v.words[w] & 1u) << 63;
+    }
+    return r;
+}
+
+/// Invoke `emit(lx)` for every set bit of `a & ~b`, in ascending order.
+template <typename Fn> void forEachUncovered(const RowBits& a, const RowBits& b, Fn&& emit)
+{
+    for (uint32_t w = 0; w < kRowWords; ++w) {
+        uint64_t bits = a.words[w] & ~b.words[w];
+        while (bits != 0) {
+            const uint32_t bit = static_cast<uint32_t>(std::countr_zero(bits));
+            bits &= bits - 1;
+            emit(w * 64 + bit);
+        }
+    }
+}
+
+/// True when pixel (lx, ly) of a tile buffer has non-zero alpha. Used only for
+/// the single-column carries at a tile's left / right seam.
+bool pixelCovered(const uint8_t* px, uint32_t lx, uint32_t ly)
+{
+    return px && px[(static_cast<size_t>(ly) * TILE_SIZE + lx) * TILE_CHANNELS + 3] != 0;
+}
+
+/// True when every pixel of an RGBA8 tile buffer equals the first one.
+/// Compares two pixels at a time and bails on the first mismatch, so the
+/// non-uniform case (a tile straddling the selection edge) costs almost nothing
+/// while the uniform case costs one streaming pass over the tile.
+bool uniformTilePixel(const uint8_t* px)
+{
+    static_assert(TILE_BYTE_SIZE % sizeof(uint64_t) == 0);
+    static_assert(TILE_CHANNELS * 2 == sizeof(uint64_t), "the probe pattern holds exactly 2 pixels");
+    uint8_t pair[sizeof(uint64_t)];
+    std::memcpy(pair, px, TILE_CHANNELS);
+    std::memcpy(pair + TILE_CHANNELS, px, TILE_CHANNELS);
+    uint64_t pattern = 0;
+    std::memcpy(&pattern, pair, sizeof(pattern));
+
+    constexpr size_t wordCount = TILE_BYTE_SIZE / sizeof(uint64_t);
+    for (size_t i = 0; i < wordCount; ++i) {
+        uint64_t word = 0;
+        std::memcpy(&word, px + i * sizeof(uint64_t), sizeof(word));
+        if (word != pattern) {
+            return false;
+        }
+    }
+    return true;
 }
 
 uint8_t maskAlphaAt(
@@ -82,9 +222,24 @@ std::shared_ptr<const MaskTileSnapshot> LassoSelectionManager::snapshotMask() co
     auto snapshot = std::make_shared<MaskTileSnapshot>();
     snapshot->reserve(m_mask.tiles().size());
     for (const auto& [key, tile] : m_mask.tiles()) {
-        std::vector<uint8_t> bytes(TILE_BYTE_SIZE);
-        std::memcpy(bytes.data(), tile.pixels(), TILE_BYTE_SIZE);
-        snapshot->emplace(key, std::move(bytes));
+        if (tile.isSolid()) {
+            uint8_t r = 0, g = 0, b = 0, a = 0;
+            tile.solidColor(r, g, b, a);
+            snapshot->emplace(key, makeUniformMaskTile(r, g, b, a));
+            continue;
+        }
+        const uint8_t* px = tile.pixels();
+        // A large selection is mostly solid interior tiles; storing those as a
+        // single RGBA value keeps the snapshot (and the undo entry holding it)
+        // small and skips the copy entirely. The probe bails on the first
+        // mismatch, so a partially covered tile costs almost nothing.
+        if (uniformTilePixel(px)) {
+            snapshot->emplace(key, makeUniformMaskTile(px[0], px[1], px[2], px[3]));
+            continue;
+        }
+        // Range-construct rather than size-then-memcpy: the sized constructor
+        // would zero all TILE_BYTE_SIZE bytes before the copy overwrote them.
+        snapshot->emplace(key, std::vector<uint8_t>(px, px + TILE_BYTE_SIZE));
     }
     m_cachedMaskSnapshot = std::move(snapshot);
     return m_cachedMaskSnapshot;
@@ -103,10 +258,16 @@ void LassoSelectionManager::applyMaskSnapshot(std::shared_ptr<const MaskTileSnap
         mask.clear();
         if (maskTiles) {
             for (const auto& [key, bytes] : *maskTiles) {
-                if (bytes.size() != TILE_BYTE_SIZE)
+                const MaskTileView incoming = viewMaskTile(bytes);
+                if (!incoming.valid)
                     continue;
                 TileData& tile = mask.getOrCreateTile(key);
-                std::memcpy(tile.pixels(), bytes.data(), TILE_BYTE_SIZE);
+                // Expand even a uniform entry into real pixels: the live mask
+                // grid is read through const pixels() all over the paint / fill
+                // / transform paths, and that returns zeros for a solid tile.
+                // The compact encoding is a storage format for the snapshot,
+                // not a representation the live grid supports.
+                incoming.expandInto(tile.pixels());
                 tile.markDirty();
             }
         }
@@ -146,26 +307,28 @@ void LassoSelectionManager::applyRasterSelectionMask(const MaskTileSnapshot& mas
     invalidateMaskSnapshotCache();
     if (replaceSelection) {
         // The destination is empty after clear(), so combining pixel-by-pixel is
-        // unnecessary. Copy each ready-made mask tile in one contiguous block.
-        for (const auto& [key, incoming] : maskTiles) {
-            if (incoming.size() != TILE_BYTE_SIZE) {
+        // unnecessary. Write each ready-made mask tile in one block.
+        for (const auto& [key, bytes] : maskTiles) {
+            const MaskTileView incoming = viewMaskTile(bytes);
+            if (!incoming.valid) {
                 continue;
             }
 
             TileData& tile = m_mask.getOrCreateTile(key);
-            std::memcpy(tile.pixels(), incoming.data(), TILE_BYTE_SIZE);
+            incoming.expandInto(tile.pixels());
             tile.markDirty();
         }
     } else if (mode == LassoSelectionMode::Add) {
-        for (const auto& [key, incoming] : maskTiles) {
-            if (incoming.size() != TILE_BYTE_SIZE) {
+        for (const auto& [key, bytes] : maskTiles) {
+            const MaskTileView incoming = viewMaskTile(bytes);
+            if (!incoming.valid) {
                 continue;
             }
 
             TileData* existingTile = m_mask.getTile(key);
             if (!existingTile) {
                 TileData& tile = m_mask.getOrCreateTile(key);
-                std::memcpy(tile.pixels(), incoming.data(), TILE_BYTE_SIZE);
+                incoming.expandInto(tile.pixels());
                 tile.markDirty();
                 continue;
             }
@@ -173,17 +336,14 @@ void LassoSelectionManager::applyRasterSelectionMask(const MaskTileSnapshot& mas
             TileData& tile = *existingTile;
             uint8_t* destination = tile.pixels();
             bool changed = false;
-            for (uint32_t y = 0; y < TILE_SIZE; ++y) {
-                for (uint32_t x = 0; x < TILE_SIZE; ++x) {
-                    const uint32_t idx = (y * TILE_SIZE + x) * TILE_CHANNELS;
-                    const uint8_t next = std::max(destination[idx + 3], incoming[idx + 3]);
-                    if (next != destination[idx + 3]) {
-                        destination[idx + 0] = next;
-                        destination[idx + 1] = next;
-                        destination[idx + 2] = next;
-                        destination[idx + 3] = next;
-                        changed = true;
-                    }
+            for (uint32_t idx = 0; idx < TILE_BYTE_SIZE; idx += TILE_CHANNELS) {
+                const uint8_t next = std::max(destination[idx + 3], incoming.alphaAt(idx));
+                if (next != destination[idx + 3]) {
+                    destination[idx + 0] = next;
+                    destination[idx + 1] = next;
+                    destination[idx + 2] = next;
+                    destination[idx + 3] = next;
+                    changed = true;
                 }
             }
             if (changed) {
@@ -194,27 +354,26 @@ void LassoSelectionManager::applyRasterSelectionMask(const MaskTileSnapshot& mas
         std::vector<TileKey> emptyTiles;
         for (auto& [key, tile] : m_mask.tiles()) {
             const auto incomingIt = maskTiles.find(key);
-            if (incomingIt == maskTiles.end() || incomingIt->second.size() != TILE_BYTE_SIZE) {
+            if (incomingIt == maskTiles.end()) {
+                continue;
+            }
+            const MaskTileView incoming = viewMaskTile(incomingIt->second);
+            if (!incoming.valid) {
                 continue;
             }
 
-            const auto& incoming = incomingIt->second;
             uint8_t* destination = tile.pixels();
             bool changed = false;
-            for (uint32_t y = 0; y < TILE_SIZE; ++y) {
-                for (uint32_t x = 0; x < TILE_SIZE; ++x) {
-                    const uint32_t idx = (y * TILE_SIZE + x) * TILE_CHANNELS;
-                    const uint8_t current = destination[idx + 3];
-                    const uint8_t amount = incoming[idx + 3];
-                    const uint8_t next
-                        = amount >= current ? 0 : static_cast<uint8_t>(current - amount);
-                    if (next != current) {
-                        destination[idx + 0] = next;
-                        destination[idx + 1] = next;
-                        destination[idx + 2] = next;
-                        destination[idx + 3] = next;
-                        changed = true;
-                    }
+            for (uint32_t idx = 0; idx < TILE_BYTE_SIZE; idx += TILE_CHANNELS) {
+                const uint8_t current = destination[idx + 3];
+                const uint8_t amount = incoming.alphaAt(idx);
+                const uint8_t next = amount >= current ? 0 : static_cast<uint8_t>(current - amount);
+                if (next != current) {
+                    destination[idx + 0] = next;
+                    destination[idx + 1] = next;
+                    destination[idx + 2] = next;
+                    destination[idx + 3] = next;
+                    changed = true;
                 }
             }
             if (changed) {
@@ -386,10 +545,80 @@ void LassoSelectionManager::applySelection(const std::vector<Vector2>& polygon,
 
     constexpr int32_t TS = static_cast<int32_t>(TILE_SIZE);
     const size_t count = polygon.size();
+
+    // Tile resolution is hoisted out of the pixel loop. One band of TILE_SIZE
+    // scanlines maps to a single row of tiles, so each tile is looked up once
+    // per band instead of once per pixel — the difference between ~36M hash
+    // lookups and ~24 for a full-canvas 6000x6000 selection.
+    const int32_t bandMinTX = floorDiv(x0, TS);
+    const size_t bandWidth = static_cast<size_t>(floorDiv(x1, TS) - bandMinTX + 1);
+    std::vector<TileData*> bandTiles(bandWidth, nullptr);
+    std::vector<uint8_t> bandProbed(bandWidth, 0);
+    int32_t bandTY = 0;
+    bool bandValid = false;
+
+    // Fills one horizontal run [xa, xb] on scanline y, one tile-clipped segment
+    // at a time. Each segment is contiguous in the tile buffer, so the common
+    // opaque-add case collapses to a memset.
+    auto fillRun = [&](int32_t y, int32_t xa, int32_t xb) {
+        const int32_t ty = floorDiv(y, TS);
+        if (!bandValid || ty != bandTY) {
+            bandTY = ty;
+            bandValid = true;
+            std::fill(bandTiles.begin(), bandTiles.end(), nullptr);
+            std::fill(bandProbed.begin(), bandProbed.end(), uint8_t { 0 });
+        }
+        const uint32_t localY = floorMod(y, TS);
+
+        for (int32_t x = xa; x <= xb;) {
+            const int32_t tx = floorDiv(x, TS);
+            const int32_t tileBaseX = tx * TS;
+            const int32_t segmentEnd = std::min(xb, tileBaseX + TS - 1);
+            const size_t slot = static_cast<size_t>(tx - bandMinTX);
+
+            if (!bandProbed[slot]) {
+                bandProbed[slot] = 1;
+                // Subtracting from a tile that does not exist is a no-op, so
+                // unlike Add it must not allocate one.
+                bandTiles[slot] = (mode == LassoSelectionMode::Subtract)
+                    ? m_mask.getTile(TileKey { tx, ty })
+                    : &m_mask.getOrCreateTile(TileKey { tx, ty });
+            }
+
+            TileData* tile = bandTiles[slot];
+            if (tile) {
+                const uint32_t localX = static_cast<uint32_t>(x - tileBaseX);
+                const size_t length = static_cast<size_t>(segmentEnd - x + 1);
+                uint8_t* run = tile->pixels() + (localY * TILE_SIZE + localX) * TILE_CHANNELS;
+
+                if (mode == LassoSelectionMode::Add && strength == 255) {
+                    std::memset(run, 255, length * TILE_CHANNELS);
+                } else if (mode == LassoSelectionMode::Add) {
+                    for (size_t i = 0; i < length; ++i) {
+                        uint8_t* px = run + i * TILE_CHANNELS;
+                        const uint8_t next = std::max(px[3], strength);
+                        px[0] = px[1] = px[2] = px[3] = next;
+                    }
+                } else {
+                    for (size_t i = 0; i < length; ++i) {
+                        uint8_t* px = run + i * TILE_CHANNELS;
+                        const uint8_t next
+                            = (strength >= px[3]) ? 0 : static_cast<uint8_t>(px[3] - strength);
+                        px[0] = px[1] = px[2] = px[3] = next;
+                    }
+                }
+                tile->markDirty();
+            }
+
+            x = segmentEnd + 1;
+        }
+    };
+
+    std::vector<float> intersections;
+    intersections.reserve(count);
     for (int32_t y = y0; y <= y1; ++y) {
         float scanY = static_cast<float>(y) + 0.5f;
-        std::vector<float> intersections;
-        intersections.reserve(count);
+        intersections.clear();
 
         for (size_t i = 0, j = count - 1; i < count; j = i++) {
             const Vector2& a = polygon[j];
@@ -416,23 +645,7 @@ void LassoSelectionManager::applySelection(const std::vector<Vector2>& polygon,
             if (xb < xa)
                 continue;
 
-            for (int32_t x = xa; x <= xb; ++x) {
-                int32_t tx = floorDiv(x, TS);
-                int32_t ty = floorDiv(y, TS);
-                uint32_t localX = floorMod(x, TS);
-                uint32_t localY = floorMod(y, TS);
-                TileData& tile = m_mask.getOrCreateTile(TileKey { tx, ty });
-
-                uint32_t idx = (localY * TILE_SIZE + localX) * TILE_CHANNELS;
-                uint8_t current = tile.pixels()[idx + 3];
-                uint8_t next = current;
-                if (mode == LassoSelectionMode::Add) {
-                    next = std::max(current, strength);
-                } else if (mode == LassoSelectionMode::Subtract) {
-                    next = (strength >= current) ? 0 : static_cast<uint8_t>(current - strength);
-                }
-                tile.setPixel(localX, localY, next, next, next, next);
-            }
+            fillRun(y, xa, xb);
         }
     }
 
@@ -446,82 +659,67 @@ void LassoSelectionManager::rebuildEdges(uint32_t canvasWidth, uint32_t canvasHe
     if (m_mask.empty())
         return;
     constexpr uint32_t TS = TILE_SIZE;
-    constexpr uint32_t TC = TILE_CHANNELS;
     (void) canvasWidth;
     (void) canvasHeight;
 
-    // ---- Step 1: Collect raw unit-length edges with cached tile lookups ----
+    // ---- Step 1: Collect raw unit-length edges from tile coverage bitmaps ----
     // HEdge: horizontal from (a, b) to (a+1, b)
     // VEdge: vertical   from (a, b) to (a, b+1)
+    // A pixel contributes an edge on each side whose neighbour is uncovered, so
+    // every edge falls out of `coverage & ~neighbourCoverage`.
     struct RawEdge {
         int32_t a, b;
     };
     std::vector<RawEdge> hRaw;
     std::vector<RawEdge> vRaw;
 
+    std::vector<RowBits> rows(TS);
+
     for (const auto& [key, tile] : m_mask.tiles()) {
         const int32_t baseX = key.x * static_cast<int32_t>(TS);
         const int32_t baseY = key.y * static_cast<int32_t>(TS);
         const uint8_t* px = tile.pixels();
 
-        // Cache neighbor tile pointers (avoids hash lookup per boundary pixel)
+        // Cache neighbor tile pointers (avoids a hash lookup per boundary pixel)
         const TileData* tL = m_mask.getTile({ key.x - 1, key.y });
         const TileData* tR = m_mask.getTile({ key.x + 1, key.y });
         const TileData* tU = m_mask.getTile({ key.x, key.y - 1 });
         const TileData* tD = m_mask.getTile({ key.x, key.y + 1 });
+        const uint8_t* pxL = tL ? tL->pixels() : nullptr;
+        const uint8_t* pxR = tR ? tR->pixels() : nullptr;
 
         for (uint32_t ly = 0; ly < TS; ++ly) {
-            for (uint32_t lx = 0; lx < TS; ++lx) {
-                if (px[(ly * TS + lx) * TC + 3] == 0)
-                    continue;
+            rows[ly] = rowCoverage(px, ly);
+        }
+        // Coverage just outside the tile's top and bottom seams.
+        const RowBits above = rowCoverage(tU ? tU->pixels() : nullptr, TS - 1);
+        const RowBits below = rowCoverage(tD ? tD->pixels() : nullptr, 0);
 
-                const int32_t x = baseX + static_cast<int32_t>(lx);
-                const int32_t y = baseY + static_cast<int32_t>(ly);
+        for (uint32_t ly = 0; ly < TS; ++ly) {
+            const RowBits& cur = rows[ly];
+            if (!cur.any())
+                continue;
 
-                // Left neighbor (x-1, y) → vertical edge at x
-                {
-                    uint8_t na = 0;
-                    if (lx > 0)
-                        na = px[(ly * TS + lx - 1) * TC + 3];
-                    else if (tL)
-                        na = tL->pixels()[(ly * TS + TS - 1) * TC + 3];
-                    if (na == 0)
-                        vRaw.push_back({ x, y });
-                }
+            const int32_t y = baseY + static_cast<int32_t>(ly);
+            const RowBits& up = (ly > 0) ? rows[ly - 1] : above;
+            const RowBits& down = (ly + 1 < TS) ? rows[ly + 1] : below;
 
-                // Right neighbor (x+1, y) → vertical edge at x+1
-                {
-                    uint8_t na = 0;
-                    if (lx + 1 < TS)
-                        na = px[(ly * TS + lx + 1) * TC + 3];
-                    else if (tR)
-                        na = tR->pixels()[(ly * TS + 0) * TC + 3];
-                    if (na == 0)
-                        vRaw.push_back({ x + 1, y });
-                }
+            // Left / right neighbours, carrying in the adjacent tile's seam column.
+            const RowBits left = shiftedFromLeft(cur, pixelCovered(pxL, TS - 1, ly));
+            const RowBits right = shiftedFromRight(cur, pixelCovered(pxR, 0, ly));
 
-                // Top neighbor (x, y-1) → horizontal edge at y
-                {
-                    uint8_t na = 0;
-                    if (ly > 0)
-                        na = px[((ly - 1) * TS + lx) * TC + 3];
-                    else if (tU)
-                        na = tU->pixels()[((TS - 1) * TS + lx) * TC + 3];
-                    if (na == 0)
-                        hRaw.push_back({ x, y });
-                }
-
-                // Bottom neighbor (x, y+1) → horizontal edge at y+1
-                {
-                    uint8_t na = 0;
-                    if (ly + 1 < TS)
-                        na = px[((ly + 1) * TS + lx) * TC + 3];
-                    else if (tD)
-                        na = tD->pixels()[(lx) *TC + 3];
-                    if (na == 0)
-                        hRaw.push_back({ x, y + 1 });
-                }
-            }
+            forEachUncovered(cur, up, [&](uint32_t lx) {
+                hRaw.push_back({ baseX + static_cast<int32_t>(lx), y });
+            });
+            forEachUncovered(cur, down, [&](uint32_t lx) {
+                hRaw.push_back({ baseX + static_cast<int32_t>(lx), y + 1 });
+            });
+            forEachUncovered(cur, left, [&](uint32_t lx) {
+                vRaw.push_back({ baseX + static_cast<int32_t>(lx), y });
+            });
+            forEachUncovered(cur, right, [&](uint32_t lx) {
+                vRaw.push_back({ baseX + static_cast<int32_t>(lx) + 1, y });
+            });
         }
     }
 

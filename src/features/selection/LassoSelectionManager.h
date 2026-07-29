@@ -12,6 +12,7 @@
 #include "shared/tiles/TileTypes.h"
 
 #include <cstdint>
+#include <cstring>
 #include <memory>
 #include <unordered_map>
 #include <vector>
@@ -19,9 +20,78 @@
 namespace aether {
 
 /// Per-tile pixel snapshot of the selection mask, suitable for undo restore.
-/// Each tile entry is the raw RGBA byte buffer (TILE_BYTE_SIZE long) for a
-/// single tile keyed by world TileKey. Empty buffer / absent key = empty tile.
+/// Each tile entry is keyed by world TileKey; an absent key = empty tile.
+///
+/// A tile entry carries one of two encodings, distinguished by its size:
+///   - TILE_BYTE_SIZE bytes: verbatim RGBA8 pixels for the tile.
+///   - kMaskTileUniformBytes bytes: a single RGBA value that applies to every
+///     pixel of the tile.
+/// Any other size is malformed and is skipped by the readers.
+///
+/// The uniform encoding matters at scale: a large selection is mostly solid
+/// interior tiles, so a 6000x6000 selection snapshots to a few MB instead of
+/// ~150 MB — and costs a scan instead of 576 heap allocations plus a 150 MB
+/// copy on the GUI thread. Producers should emit it via makeUniformMaskTile()
+/// whenever a tile is uniform; readers must go through MaskTileView.
 using MaskTileSnapshot = std::unordered_map<TileKey, std::vector<uint8_t>, TileKeyHash>;
+
+inline constexpr size_t kMaskTileUniformBytes = TILE_CHANNELS;
+
+inline std::vector<uint8_t> makeUniformMaskTile(uint8_t r, uint8_t g, uint8_t b, uint8_t a)
+{
+    return std::vector<uint8_t> { r, g, b, a };
+}
+
+/// Read-only view over one MaskTileSnapshot entry that hides the encoding.
+/// `valid` is false for a malformed entry; the accessors must not be used then.
+struct MaskTileView {
+    const uint8_t* pixels = nullptr; // null when uniform
+    const uint8_t* uniform = nullptr; // 4 RGBA bytes when uniform
+    bool valid = false;
+
+    bool isUniform() const noexcept { return uniform != nullptr; }
+
+    /// Alpha at a byte offset produced the usual way:
+    /// (localY * TILE_SIZE + localX) * TILE_CHANNELS.
+    uint8_t alphaAt(uint32_t byteIndex) const noexcept
+    {
+        return uniform ? uniform[3] : pixels[byteIndex + 3];
+    }
+
+    /// Write the tile's pixels into `dst` (TILE_BYTE_SIZE bytes).
+    void expandInto(uint8_t* dst) const
+    {
+        if (uniform) {
+            // Selection coverage always writes the same value to all four
+            // channels, so the broadcast is a memset in practice.
+            if (uniform[0] == uniform[1] && uniform[1] == uniform[2] && uniform[2] == uniform[3]) {
+                std::memset(dst, uniform[0], TILE_BYTE_SIZE);
+                return;
+            }
+            for (size_t i = 0; i < TILE_BYTE_SIZE; i += TILE_CHANNELS) {
+                dst[i + 0] = uniform[0];
+                dst[i + 1] = uniform[1];
+                dst[i + 2] = uniform[2];
+                dst[i + 3] = uniform[3];
+            }
+        } else {
+            std::memcpy(dst, pixels, TILE_BYTE_SIZE);
+        }
+    }
+};
+
+inline MaskTileView viewMaskTile(const std::vector<uint8_t>& bytes) noexcept
+{
+    MaskTileView view;
+    if (bytes.size() == TILE_BYTE_SIZE) {
+        view.pixels = bytes.data();
+        view.valid = true;
+    } else if (bytes.size() == kMaskTileUniformBytes) {
+        view.uniform = bytes.data();
+        view.valid = true;
+    }
+    return view;
+}
 
 enum class LassoSelectionMode { Replace, Add, Subtract };
 
@@ -119,11 +189,12 @@ public:
     /**
      * @brief Cached deep-copy snapshot of the current mask tiles for undo capture.
      *
-     * The first call after a mutation deep-copies all current mask tile pixel
+     * The first call after a mutation copies all current mask tile pixel
      * buffers into a fresh `MaskTileSnapshot` and returns a shared_ptr to it.
-     * Subsequent calls without intervening mutation return the same pointer
-     * (cheap copy). MaskMutationScope's destructor invalidates the cache, so
-     * the next call after a mutation rebuilds.
+     * Uniform tiles are stored in the compact encoding instead of being copied
+     * (see MaskTileSnapshot). Subsequent calls without intervening mutation
+     * return the same pointer (cheap copy). MaskMutationScope's destructor
+     * invalidates the cache, so the next call after a mutation rebuilds.
      *
      * This means typical undo patterns (capture before-state, run an op that
      * mutates only layer pixels — not the selection mask, capture after-state)

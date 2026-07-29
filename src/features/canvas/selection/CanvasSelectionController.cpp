@@ -17,6 +17,7 @@
 
 #include <algorithm>
 #include <cmath>
+#include <cstring>
 
 namespace {
 
@@ -50,6 +51,15 @@ aether::MaskTileSnapshot fullCanvasSelectionMask(uint32_t width, uint32_t height
         for (uint32_t tileX = 0; tileX < tileColumns; ++tileX) {
             const uint32_t validWidth
                 = std::min(aether::TILE_SIZE, width - tileX * aether::TILE_SIZE);
+            const aether::TileKey key { static_cast<int32_t>(tileX), static_cast<int32_t>(tileY) };
+
+            // A tile the canvas covers completely is uniform; only the tiles
+            // clipped by the right / bottom canvas edge need real pixels.
+            if (validWidth == aether::TILE_SIZE && validHeight == aether::TILE_SIZE) {
+                mask.emplace(key, aether::makeUniformMaskTile(255, 255, 255, 255));
+                continue;
+            }
+
             std::vector<uint8_t> tile(aether::TILE_BYTE_SIZE, 0);
             for (uint32_t localY = 0; localY < validHeight; ++localY) {
                 const size_t rowStart
@@ -57,9 +67,7 @@ aether::MaskTileSnapshot fullCanvasSelectionMask(uint32_t width, uint32_t height
                 std::fill_n(tile.data() + rowStart,
                     static_cast<size_t>(validWidth) * aether::TILE_CHANNELS, uint8_t { 255 });
             }
-            mask.emplace(
-                aether::TileKey { static_cast<int32_t>(tileX), static_cast<int32_t>(tileY) },
-                std::move(tile));
+            mask.emplace(key, std::move(tile));
         }
     }
     return mask;
@@ -161,18 +169,13 @@ void CanvasSelectionController::commitPolygonSelection(
     // ear-clip triangulation — avoids jagged self-intersecting strokes.
     m_lassoSelection.applySelection(std::move(clipped), mode, cw, ch, 255);
 
-    if (tileRenderer) {
-        LassoSelectionManager::MaskMutationScope scope(m_lassoSelection);
-        scope.disableSoftAlphaInvalidation(); // GPU upload only — pixel data not mutated here
-        for (auto& [key, tile] : scope.grid().tiles()) {
-            if (!tile.isDirty()) {
-                continue;
-            }
-            tileRenderer->ensureTileTexture(tile);
-            tileRenderer->uploadTileData(tile);
-        }
-        scope.disableSnapshotInvalidation();
-    }
+    // Mask tiles are left dirty on purpose. Uploading the whole mask here costs
+    // one texture allocation plus 256 KB of PCIe traffic per tile — ~150 MB on a
+    // 6000x6000 selection, on the GUI thread, for tiles most of which no
+    // consumer will ever sample. Every consumer that binds a mask tile texture
+    // (the brush renderer, the fill blit, the transform mask atlas) already
+    // uploads on demand and honors the dirty flag, so the work now happens
+    // lazily and only where it is needed.
 
     if (m_ctx.requestRender) {
         m_ctx.requestRender();
@@ -587,19 +590,8 @@ bool CanvasSelectionController::applyMagicWandSelection(const MaskTileSnapshot& 
     m_lassoSelection.applyRasterSelectionMask(wandMask, mode, canvasWidth, canvasHeight);
     m_contentSelectionSourceLayerId = QUuid();
 
-    if (tileRenderer) {
-        LassoSelectionManager::MaskMutationScope scope(m_lassoSelection);
-        scope.disableSoftAlphaInvalidation();
-        for (auto& [key, tile] : scope.grid().tiles()) {
-            (void) key;
-            if (!tile.isDirty()) {
-                continue;
-            }
-            tileRenderer->ensureTileTexture(tile);
-            tileRenderer->uploadTileData(tile);
-        }
-        scope.disableSnapshotInvalidation();
-    }
+    // As in commitPolygonSelection: the tiles stay dirty and are uploaded by
+    // whichever consumer first samples them.
 
     if (m_ctx.requestRender) {
         m_ctx.requestRender();
@@ -658,14 +650,25 @@ void CanvasSelectionController::selectActiveLayerContent()
         if (bgAlpha == 0)
             return;
         hasSoftAlpha = (bgAlpha < 255);
-        for (int y = 0; y < canvasH; ++y) {
-            const int tileY = y / static_cast<int>(TILE_SIZE);
-            const uint32_t localY = static_cast<uint32_t>(y % static_cast<int>(TILE_SIZE));
-            for (int x = 0; x < canvasW; ++x) {
-                const int tileX = x / static_cast<int>(TILE_SIZE);
-                const uint32_t localX = static_cast<uint32_t>(x % static_cast<int>(TILE_SIZE));
+        // Filled tile by tile rather than pixel by pixel: the coverage is
+        // uniform, so each tile is one lookup and one memset per scanline
+        // instead of a hash lookup and a bounds-checked write per pixel.
+        const int tileSize = static_cast<int>(TILE_SIZE);
+        const int lastTileX = (canvasW - 1) / tileSize;
+        const int lastTileY = (canvasH - 1) / tileSize;
+        for (int tileY = 0; tileY <= lastTileY; ++tileY) {
+            const uint32_t rowCount
+                = static_cast<uint32_t>(std::min(tileSize, canvasH - tileY * tileSize));
+            for (int tileX = 0; tileX <= lastTileX; ++tileX) {
+                const uint32_t columnCount
+                    = static_cast<uint32_t>(std::min(tileSize, canvasW - tileX * tileSize));
                 TileData& dstTile = maskGrid.getOrCreateTile(TileKey { tileX, tileY });
-                dstTile.setPixel(localX, localY, bgAlpha, bgAlpha, bgAlpha, bgAlpha);
+                uint8_t* pixels = dstTile.pixels();
+                for (uint32_t localY = 0; localY < rowCount; ++localY) {
+                    std::memset(pixels + static_cast<size_t>(localY) * TILE_SIZE * TILE_CHANNELS,
+                        bgAlpha, static_cast<size_t>(columnCount) * TILE_CHANNELS);
+                }
+                dstTile.markDirty();
                 hasMaskContent = true;
             }
         }

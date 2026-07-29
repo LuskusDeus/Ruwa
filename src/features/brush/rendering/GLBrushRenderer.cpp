@@ -2868,6 +2868,12 @@ void GLBrushRenderer::stampGPU(TileGrid& strokeBuffer, GLTileRenderer* tileRende
                 if (!maskTile->hasTexture()) {
                     tileRenderer->ensureTileTexture(*maskTile);
                     tileRenderer->uploadTileData(*maskTile);
+                } else if (maskTile->isDirty()) {
+                    // The selection mask is CPU-authoritative: a tile that kept
+                    // its texture across a selection change still carries the
+                    // stale pixels until it is re-uploaded. Selection commits
+                    // deliberately leave the upload to consumers like this one.
+                    tileRenderer->uploadTileData(*maskTile);
                 }
                 m_gl->glBindTextureUnit(1, maskTile->textureId());
             }
@@ -3054,6 +3060,8 @@ bool GLBrushRenderer::stampDabSegmentGPU(TileGrid& strokeBuffer, GLTileRenderer*
                 continue;
             if (!maskTile->hasTexture()) {
                 tileRenderer->ensureTileTexture(*maskTile);
+                tileRenderer->uploadTileData(*maskTile);
+            } else if (maskTile->isDirty()) {
                 tileRenderer->uploadTileData(*maskTile);
             }
             m_gl->glBindTextureUnit(1, maskTile->textureId());
@@ -3254,6 +3262,8 @@ void GLBrushRenderer::rebuildStrokeBufferFromDabsGPU(TileGrid& strokeBuffer,
             }
             if (!maskTile->hasTexture()) {
                 tileRenderer->ensureTileTexture(*maskTile);
+                tileRenderer->uploadTileData(*maskTile);
+            } else if (maskTile->isDirty()) {
                 tileRenderer->uploadTileData(*maskTile);
             }
             m_gl->glBindTextureUnit(1, maskTile->textureId());
@@ -3493,6 +3503,8 @@ void GLBrushRenderer::rebuildStrokeBufferRangeFromDabsGPU(TileGrid& strokeBuffer
             }
             if (!maskTile->hasTexture()) {
                 tileRenderer->ensureTileTexture(*maskTile);
+                tileRenderer->uploadTileData(*maskTile);
+            } else if (maskTile->isDirty()) {
                 tileRenderer->uploadTileData(*maskTile);
             }
             m_gl->glBindTextureUnit(1, maskTile->textureId());
