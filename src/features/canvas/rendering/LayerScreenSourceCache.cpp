@@ -48,26 +48,34 @@ GLuint LayerScreenSourceCache::acquireLayerTexture(const CompositeLayerInfo& lay
     LayerRevisionState& revisionState = m_layerRevisions[layer.id];
     revisionState.lastAccessGeneration = accessGeneration;
     const uint64_t layerRevision = revisionState.revision;
+    const uint32_t vpWidth = viewport.width();
+    const uint32_t vpHeight = viewport.height();
     const Key key { layer.id, layerRevision, layer.effectChainRevision, previewOverrideRevision,
-        viewportRevision, static_cast<int>(kind), static_cast<int>(sourcePurpose) };
+        viewportRevision, vpWidth, vpHeight, static_cast<int>(kind),
+        static_cast<int>(sourcePurpose) };
     auto [it, inserted] = m_entries.try_emplace(key);
     Entry& entry = it->second;
     entry.lastAccessGeneration = accessGeneration;
 
-    const uint32_t vpWidth = viewport.width();
-    const uint32_t vpHeight = viewport.height();
     const bool textureRecreated = ensureEntrySize(entry, vpWidth, vpHeight);
     if (!entry.texture || !entry.fbo) {
         return 0;
     }
 
-    // The cache key does not include viewport size, so an existing entry whose
-    // texture was just (re)allocated due to a size change has empty content and
-    // must be re-rendered. Otherwise an entry resized for transform-preview
-    // overscan growth would return a blank texture and the preview would crop
-    // along viewport edges as the camera moves.
+    // Size is part of the key, so a hit always carries a texture of the requested
+    // size with valid content; only a freshly inserted entry needs rendering. The
+    // textureRecreated check stays as a guard: a (re)allocated texture is empty, and
+    // returning it as-is would crop the preview along the viewport edges.
     if (!inserted && !textureRecreated) {
         return entry.texture;
+    }
+
+    if (inserted) {
+        // A new size for an otherwise identical source supersedes the old one: the
+        // caller (transform preview overscan) only ever grows, so the previous size
+        // will not be asked for again. Release it now rather than leaving a
+        // viewport-sized — possibly multi-megabyte — texture to the idle pruner.
+        dropSupersededSizes(key);
     }
 
     const bool directRenderable
@@ -81,6 +89,27 @@ GLuint LayerScreenSourceCache::acquireLayerTexture(const CompositeLayerInfo& lay
     }
 
     return entry.texture;
+}
+
+void LayerScreenSourceCache::dropSupersededSizes(const Key& key)
+{
+    for (auto it = m_entries.begin(); it != m_entries.end();) {
+        const Key& other = it->first;
+        const bool sameSource = other.layerId == key.layerId
+            && other.layerRevision == key.layerRevision
+            && other.effectChainRevision == key.effectChainRevision
+            && other.previewOverrideRevision == key.previewOverrideRevision
+            && other.viewportRevision == key.viewportRevision && other.kind == key.kind
+            && other.sourcePurpose == key.sourcePurpose;
+        const bool sameSize
+            = other.textureWidth == key.textureWidth && other.textureHeight == key.textureHeight;
+        if (sameSource && !sameSize) {
+            deferDestroyEntry(std::move(it->second));
+            it = m_entries.erase(it);
+        } else {
+            ++it;
+        }
+    }
 }
 
 void LayerScreenSourceCache::invalidateByLayer(const QUuid& layerId)
@@ -128,6 +157,8 @@ size_t LayerScreenSourceCache::KeyHash::operator()(const Key& key) const noexcep
     seed = hashCombine(seed, static_cast<size_t>(key.effectChainRevision));
     seed = hashCombine(seed, static_cast<size_t>(key.previewOverrideRevision));
     seed = hashCombine(seed, static_cast<size_t>(key.viewportRevision));
+    seed = hashCombine(seed, static_cast<size_t>(key.textureWidth));
+    seed = hashCombine(seed, static_cast<size_t>(key.textureHeight));
     seed = hashCombine(seed, static_cast<size_t>(key.kind));
     seed = hashCombine(seed, static_cast<size_t>(key.sourcePurpose));
     return seed;

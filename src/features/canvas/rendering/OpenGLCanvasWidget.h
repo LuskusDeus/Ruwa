@@ -746,6 +746,15 @@ private:
         float cameraRotation = 0.0f;
         bool flipH = false;
         bool flipV = false;
+        // Source-overscan pad latched for this preview session (screen px, already
+        // quantised). The pad a transform needs grows with the drag offset, and the
+        // screen-source cache keys on texture size — letting the pad follow the
+        // offset px-for-px reallocated and fully re-rendered every transform target
+        // on every drag frame. Latching the running maximum (reset whenever the
+        // camera/viewport changes, which invalidates the cache anyway) keeps the
+        // source size stable so those renders are reused across frames.
+        uint32_t sourceOverscanPadX = 0;
+        uint32_t sourceOverscanPadY = 0;
     };
     TransformViewportPreviewState m_transformViewportPreview;
 

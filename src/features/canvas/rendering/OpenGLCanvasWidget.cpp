@@ -10120,6 +10120,11 @@ void OpenGLCanvasWidget::paintGL_renderTransformViewportPreview(
         if (!m_transformTargetSet.empty() && !m_transformTargetSet.singleVisualTarget()) {
             session.sourceDirty = true;
         }
+        // The latched source-overscan pad is expressed in screen px at the previous
+        // camera, and every cached source is dropped below anyway, so re-derive it
+        // from scratch for the new viewport instead of carrying a stale maximum.
+        session.sourceOverscanPadX = 0;
+        session.sourceOverscanPadY = 0;
         m_layerScreenSourceCache->invalidateByViewport();
     }
     if (session.viewportRevision == 0) {
@@ -10149,6 +10154,24 @@ void OpenGLCanvasWidget::paintGL_renderTransformViewportPreview(
         uint32_t padY = 0;
         uint32_t viewportWidth = 0;
         uint32_t viewportHeight = 0;
+    };
+
+    // The pad a transform source needs grows continuously with the drag offset (for a
+    // pure move it is offset * zoom). LayerScreenSourceCache allocates its entry at the
+    // source viewport size, so a pad that follows the offset px-for-px destroyed and
+    // re-created the texture — and re-rendered the layer in full — for every transform
+    // target on every drag frame. Rounding the pad up to a coarse quantum makes the
+    // source size change only once per quantum of travel, so the cached source (and its
+    // render) is reused for the frames in between.
+    constexpr uint32_t kSourcePadQuantum = 256;
+    auto quantizeSourcePad = [](float needed, uint32_t maxPad) -> uint32_t {
+        if (needed <= 0.0f) {
+            return 0u;
+        }
+        const uint32_t raw = static_cast<uint32_t>(std::ceil(needed + 8.0f));
+        const uint32_t quantized
+            = ((raw + kSourcePadQuantum - 1u) / kSourcePadQuantum) * kSourcePadQuantum;
+        return std::min(quantized, maxPad);
     };
 
     auto computeSourceOverscan = [&]() -> TransformPreviewSourceOverscan {
@@ -10189,12 +10212,16 @@ void OpenGLCanvasWidget::paintGL_renderTransformViewportPreview(
         const float sourcePadYNeeded = std::max(sourcePadTop, sourcePadBottom);
 
         TransformPreviewSourceOverscan overscan;
-        overscan.padX = sourcePadXNeeded > 0.0f
-            ? std::min(static_cast<uint32_t>(std::ceil(sourcePadXNeeded + 8.0f)), maxSourcePadX)
-            : 0u;
-        overscan.padY = sourcePadYNeeded > 0.0f
-            ? std::min(static_cast<uint32_t>(std::ceil(sourcePadYNeeded + 8.0f)), maxSourcePadY)
-            : 0u;
+        // Latch the running maximum on top of the quantised requirement: dragging back
+        // toward the origin would otherwise shrink the source and throw away the larger
+        // texture that the outbound half of the same drag already rendered. The latch is
+        // cleared whenever the camera/viewport changes (which drops the cache anyway).
+        const uint32_t neededPadX = quantizeSourcePad(sourcePadXNeeded, maxSourcePadX);
+        const uint32_t neededPadY = quantizeSourcePad(sourcePadYNeeded, maxSourcePadY);
+        overscan.padX = std::min(std::max(session.sourceOverscanPadX, neededPadX), maxSourcePadX);
+        overscan.padY = std::min(std::max(session.sourceOverscanPadY, neededPadY), maxSourcePadY);
+        session.sourceOverscanPadX = overscan.padX;
+        session.sourceOverscanPadY = overscan.padY;
         overscan.viewportWidth = viewportWidth + overscan.padX * 2u;
         overscan.viewportHeight = viewportHeight + overscan.padY * 2u;
         return overscan;
@@ -10248,12 +10275,11 @@ void OpenGLCanvasWidget::paintGL_renderTransformViewportPreview(
             = kMaxOverscanSourceSize > outHU ? (kMaxOverscanSourceSize - outHU) / 2u : 0u;
 
         TransformPreviewSourceOverscan overscan;
-        overscan.padX = padXNeeded > 0.0f
-            ? std::min(static_cast<uint32_t>(std::ceil(padXNeeded + 8.0f)), maxPadX)
-            : 0u;
-        overscan.padY = padYNeeded > 0.0f
-            ? std::min(static_cast<uint32_t>(std::ceil(padYNeeded + 8.0f)), maxPadY)
-            : 0u;
+        // Quantised for the same reason as the plain source overscan above. No session
+        // latch here: this pad is relative to a per-layer effect-overscan OUTPUT size,
+        // so the maximum is not shared across layers and would over-allocate.
+        overscan.padX = quantizeSourcePad(padXNeeded, maxPadX);
+        overscan.padY = quantizeSourcePad(padYNeeded, maxPadY);
         overscan.viewportWidth = outWU + overscan.padX * 2u;
         overscan.viewportHeight = outHU + overscan.padY * 2u;
         return overscan;

@@ -83,6 +83,14 @@ private:
         uint64_t effectChainRevision = 0;
         uint64_t previewOverrideRevision = 0;
         uint64_t viewportRevision = 0;
+        // Source viewport size. Part of the key so an entry is never resized in place:
+        // resizing reallocates the texture, which silently empties the cached content
+        // and forces a full re-render. A transform preview asks for a different size as
+        // its overscan grows, so a size-agnostic key made every such request re-render
+        // the layer; keyed by size, each size keeps its own reusable entry and the
+        // unused ones are reclaimed by the idle pruner.
+        uint32_t textureWidth = 0;
+        uint32_t textureHeight = 0;
         int kind = 0;
         int sourcePurpose = 0;
 
@@ -91,8 +99,9 @@ private:
             return layerId == other.layerId && layerRevision == other.layerRevision
                 && effectChainRevision == other.effectChainRevision
                 && previewOverrideRevision == other.previewOverrideRevision
-                && viewportRevision == other.viewportRevision && kind == other.kind
-                && sourcePurpose == other.sourcePurpose;
+                && viewportRevision == other.viewportRevision
+                && textureWidth == other.textureWidth && textureHeight == other.textureHeight
+                && kind == other.kind && sourcePurpose == other.sourcePurpose;
         }
     };
 
@@ -106,6 +115,10 @@ private:
     // Returns true if the underlying texture was (re)created (size changed or first allocation),
     // signaling that the entry's pixel content is empty and must be re-rendered.
     bool ensureEntrySize(Entry& entry, uint32_t width, uint32_t height);
+    // Releases entries that match `key` in everything but texture size. Called when a
+    // new size is inserted, so a grown transform-preview source does not leave the
+    // previous (unreachable) size allocated until the idle pruner gets to it.
+    void dropSupersededSizes(const Key& key);
     void renderDirect(const CompositeLayerInfo& layer, Entry& entry, GLRenderer& renderer,
         const Viewport& viewport, uint32_t canvasWidth, uint32_t canvasHeight, bool flipH,
         bool flipV, SourceKind kind);
