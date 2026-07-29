@@ -1001,6 +1001,86 @@ private:
     std::vector<uint8_t>* m_fillMaskTile = nullptr;
 };
 
+FloodFillResult::RawTileMap buildClassicFloodFillMaskRaw(
+    const FloodFillResult::RawTileMap& sourceTiles,
+    const FloodFillResult::RawTileMap* selectionMaskTiles, int seedX, int seedY, int canvasWidth,
+    int canvasHeight, TilePixelFormat contentFormat)
+{
+    FloodFillResult::RawTileMap fillMaskTiles;
+    if (seedX < 0 || seedX >= canvasWidth || seedY < 0 || seedY >= canvasHeight) {
+        return fillMaskTiles;
+    }
+
+    if (selectionMaskTiles && sampleRawAlphaAt(*selectionMaskTiles, seedX, seedY) == 0) {
+        return fillMaskTiles;
+    }
+
+    const PremultPixel seedPixel = sampleRawPixelAt(sourceTiles, seedX, seedY, contentFormat);
+
+    struct SeedPoint {
+        int x = 0;
+        int y = 0;
+    };
+
+    std::vector<SeedPoint> stack;
+    stack.push_back({ seedX, seedY });
+
+    while (!stack.empty()) {
+        const SeedPoint seed = stack.back();
+        stack.pop_back();
+
+        ClassicRawFillRowAccessor rowAccessor(
+            sourceTiles, selectionMaskTiles, &fillMaskTiles, seed.y, seedPixel, contentFormat);
+        if (!rowAccessor.canFill(seed.x, canvasWidth)) {
+            continue;
+        }
+
+        int left = seed.x;
+        while (left > 0 && rowAccessor.canFill(left - 1, canvasWidth)) {
+            --left;
+        }
+
+        int right = seed.x;
+        while (right + 1 < canvasWidth && rowAccessor.canFill(right + 1, canvasWidth)) {
+            ++right;
+        }
+
+        rowAccessor.markSpan(left, right);
+
+        if (seed.y > 0) {
+            ClassicRawFillRowAccessor aboveAccessor(sourceTiles, selectionMaskTiles, &fillMaskTiles,
+                seed.y - 1, seedPixel, contentFormat);
+            bool spanAbove = false;
+            for (int x = left; x <= right; ++x) {
+                const bool canFillAbove = aboveAccessor.canFill(x, canvasWidth);
+                if (canFillAbove && !spanAbove) {
+                    stack.push_back({ x, seed.y - 1 });
+                    spanAbove = true;
+                } else if (!canFillAbove) {
+                    spanAbove = false;
+                }
+            }
+        }
+
+        if (seed.y + 1 < canvasHeight) {
+            ClassicRawFillRowAccessor belowAccessor(sourceTiles, selectionMaskTiles, &fillMaskTiles,
+                seed.y + 1, seedPixel, contentFormat);
+            bool spanBelow = false;
+            for (int x = left; x <= right; ++x) {
+                const bool canFillBelow = belowAccessor.canFill(x, canvasWidth);
+                if (canFillBelow && !spanBelow) {
+                    stack.push_back({ x, seed.y + 1 });
+                    spanBelow = true;
+                } else if (!canFillBelow) {
+                    spanBelow = false;
+                }
+            }
+        }
+    }
+
+    return fillMaskTiles;
+}
+
 class ConnectivityDisjointSet {
 public:
     explicit ConnectivityDisjointSet(size_t count)
@@ -1090,7 +1170,7 @@ FloodFillResult::RawTileMap snapshotContentTiles(const TileGrid& grid)
 
 static FloodFillResult floodFillImpl(TileGrid& grid, int seedX, int seedY, uint8_t fillR,
     uint8_t fillG, uint8_t fillB, uint8_t fillA, const TileGrid* selectionMask, int canvasWidth,
-    int canvasHeight, bool maskOnly)
+    int canvasHeight)
 {
     FloodFillResult result;
 
@@ -1836,14 +1916,6 @@ static FloodFillResult floodFillImpl(TileGrid& grid, int seedX, int seedY, uint8
     interiorMaskTiles = std::move(rebuiltInteriorMaskTiles);
     softEdgeMaskTiles = std::move(rebuiltSoftEdgeMaskTiles);
 
-    if (maskOnly) {
-        // Magic Wand only needs the combined coverage mask. Avoid constructing
-        // undo before/after tiles and applying a probe fill to this throwaway grid.
-        mergeMaskTileMap(interiorMaskTiles, std::move(softEdgeMaskTiles));
-        result.fillMaskTiles = std::move(interiorMaskTiles);
-        return result;
-    }
-
     // Feed the selection mask into the per-pixel cap pass so multi-fill
     // accumulation under a soft selection cannot push alpha above the cap.
     FloodFillResult::RawTileMap bucketSelectionTiles = snapshotSelectionMaskTiles(selectionMask);
@@ -1860,7 +1932,7 @@ FloodFillResult floodFill(TileGrid& grid, int seedX, int seedY, uint8_t fillR, u
     uint8_t fillB, uint8_t fillA, const TileGrid* selectionMask, int canvasWidth, int canvasHeight)
 {
     return floodFillImpl(grid, seedX, seedY, fillR, fillG, fillB, fillA, selectionMask, canvasWidth,
-        canvasHeight, false);
+        canvasHeight);
 }
 
 FloodFillResult classicFloodFill(TileGrid& grid, int seedX, int seedY, uint8_t fillR, uint8_t fillG,
@@ -2021,70 +2093,9 @@ FloodFillResult classicFloodFillRawTiles(const FloodFillResult::RawTileMap& sour
         return result;
     }
 
-    struct SeedPoint {
-        int x = 0;
-        int y = 0;
-    };
-
-    FloodFillResult::RawTileMap fillMaskTiles;
-    std::vector<SeedPoint> stack;
-    stack.push_back({ seedX, seedY });
-
-    while (!stack.empty()) {
-        const SeedPoint seed = stack.back();
-        stack.pop_back();
-
-        ClassicRawFillRowAccessor rowAccessor(sourceTiles,
-            selectionMaskTiles.empty() ? nullptr : &selectionMaskTiles, &fillMaskTiles, seed.y,
-            seedPixel, contentFormat);
-        if (!rowAccessor.canFill(seed.x, canvasWidth)) {
-            continue;
-        }
-
-        int left = seed.x;
-        while (left > 0 && rowAccessor.canFill(left - 1, canvasWidth)) {
-            --left;
-        }
-
-        int right = seed.x;
-        while (right + 1 < canvasWidth && rowAccessor.canFill(right + 1, canvasWidth)) {
-            ++right;
-        }
-
-        rowAccessor.markSpan(left, right);
-
-        if (seed.y > 0) {
-            ClassicRawFillRowAccessor aboveAccessor(sourceTiles,
-                selectionMaskTiles.empty() ? nullptr : &selectionMaskTiles, &fillMaskTiles,
-                seed.y - 1, seedPixel, contentFormat);
-            bool spanAbove = false;
-            for (int x = left; x <= right; ++x) {
-                const bool canFillAbove = aboveAccessor.canFill(x, canvasWidth);
-                if (canFillAbove && !spanAbove) {
-                    stack.push_back({ x, seed.y - 1 });
-                    spanAbove = true;
-                } else if (!canFillAbove) {
-                    spanAbove = false;
-                }
-            }
-        }
-
-        if (seed.y + 1 < canvasHeight) {
-            ClassicRawFillRowAccessor belowAccessor(sourceTiles,
-                selectionMaskTiles.empty() ? nullptr : &selectionMaskTiles, &fillMaskTiles,
-                seed.y + 1, seedPixel, contentFormat);
-            bool spanBelow = false;
-            for (int x = left; x <= right; ++x) {
-                const bool canFillBelow = belowAccessor.canFill(x, canvasWidth);
-                if (canFillBelow && !spanBelow) {
-                    stack.push_back({ x, seed.y + 1 });
-                    spanBelow = true;
-                } else if (!canFillBelow) {
-                    spanBelow = false;
-                }
-            }
-        }
-    }
+    FloodFillResult::RawTileMap fillMaskTiles = buildClassicFloodFillMaskRaw(sourceTiles,
+        selectionMaskTiles.empty() ? nullptr : &selectionMaskTiles, seedX, seedY, canvasWidth,
+        canvasHeight, contentFormat);
 
     if (fillMaskTiles.empty()) {
         return result;
@@ -2106,21 +2117,8 @@ FloodFillResult::RawTileMap buildMagicWandSelectionMask(
     const FloodFillResult::RawTileMap& sourceTiles, int seedX, int seedY, int canvasWidth,
     int canvasHeight, TilePixelFormat contentFormat)
 {
-    if (seedX < 0 || seedX >= canvasWidth || seedY < 0 || seedY >= canvasHeight) {
-        return {};
-    }
-
-    const PremultPixel seed = sampleRawPixelAt(sourceTiles, seedX, seedY, contentFormat);
-
-    // Reuse the project's edge-aware contiguous-region implementation in its
-    // mask-only mode. A guaranteed-different probe color keeps the existing
-    // region semantics without constructing undo/result tiles or mutating content.
-    const uint8_t probeR = static_cast<uint8_t>(255u - seed.r);
-    const uint8_t probeA = seed.a == 255 ? 254 : 255;
-    TileGrid sourceGrid = rawTileMapToGrid(sourceTiles, contentFormat);
-    FloodFillResult result = floodFillImpl(sourceGrid, seedX, seedY, probeR, seed.g, seed.b, probeA,
-        nullptr, canvasWidth, canvasHeight, true);
-    return std::move(result.fillMaskTiles);
+    return buildClassicFloodFillMaskRaw(
+        sourceTiles, nullptr, seedX, seedY, canvasWidth, canvasHeight, contentFormat);
 }
 
 namespace {

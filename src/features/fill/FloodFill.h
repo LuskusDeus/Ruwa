@@ -124,8 +124,8 @@ FloodFillResult classicFloodFillRawTiles(const FloodFillResult::RawTileMap& sour
 /// The snapshot preserves the grid's native pixel format.
 FloodFillResult::RawTileMap snapshotContentTiles(const TileGrid& grid);
 
-/// Build a read-only, contiguous selection mask using the same edge-aware
-/// region detection as the smart fill tool. The source grid is not modified.
+/// Build a read-only, contiguous exact-color selection mask using the same
+/// region detection as the classic fill tool. The source grid is not modified.
 FloodFillResult::RawTileMap buildMagicWandSelectionMask(
     const TileGrid& grid, int seedX, int seedY, int canvasWidth, int canvasHeight);
 

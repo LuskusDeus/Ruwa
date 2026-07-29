@@ -111,13 +111,25 @@ TEST_CASE("Magic Wand mask selects only the connected matching-color region",
         grid.format());
     REQUIRE(snapshotMask == mask);
 
-    TileGrid probeGrid;
-    TileData& probeTile = probeGrid.getOrCreateTile(TileKey { 0, 0 });
-    probeTile.setPixel(0, 0, 255, 0, 0, 255);
-    probeTile.setPixel(1, 0, 255, 0, 0, 255);
-    probeTile.setPixel(2, 0, 0, 0, 255, 255);
-    const auto fullFillResult = floodFill(probeGrid, 0, 0, 0, 0, 0, 254, nullptr, 3, 1);
-    REQUIRE(fullFillResult.fillMaskTiles == mask);
+    const auto classicFillResult = classicFloodFillRawTiles(
+        snapshotContentTiles(grid), 0, 0, 0, 0, 0, 254, {}, 3, 1, grid.format());
+    REQUIRE(classicFillResult.fillMaskTiles == mask);
+}
+
+TEST_CASE("Magic Wand uses exact classic fill matching instead of smart fill tolerance",
+    "[fill][selection][magic-wand][classic]")
+{
+    TileGrid grid;
+    TileData& tile = grid.getOrCreateTile(TileKey { 0, 0 });
+    tile.setPixel(0, 0, 255, 0, 0, 255);
+    tile.setPixel(1, 0, 254, 0, 0, 255);
+    tile.setPixel(2, 0, 255, 0, 0, 255);
+
+    const auto mask = buildMagicWandSelectionMask(grid, 0, 0, 3, 1);
+
+    REQUIRE(rawMaskAlphaAt(mask, 0, 0) == 255);
+    REQUIRE(rawMaskAlphaAt(mask, 1, 0) == 0);
+    REQUIRE(rawMaskAlphaAt(mask, 2, 0) == 0);
 }
 
 TEST_CASE("Magic Wand mask can select transparent space around opaque content",
