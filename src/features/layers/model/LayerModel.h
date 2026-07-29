@@ -419,6 +419,9 @@ signals:
     /** @brief Layer effect chain changed; revision is monotonically increasing per layer. */
     void layerEffectsChanged(const LayerId& id, quint64 revision);
 
+    /** @brief The changed effect state alters the currently rendered document result. */
+    void layerEffectResultChanged(const LayerId& id, quint64 revision);
+
     // === Selection Changes ===
 
     /** @brief Selection changed */

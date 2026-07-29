@@ -2905,6 +2905,8 @@ void OpenGLCanvasWidget::setLayerModel(ruwa::core::layers::LayerModel* model)
             &OpenGLCanvasWidget::onLayersChanged);
         connect(m_layerModel, &ruwa::core::layers::LayerModel::layerDataChanged, this,
             &OpenGLCanvasWidget::onLayerDataChanged);
+        connect(m_layerModel, &ruwa::core::layers::LayerModel::layerEffectResultChanged, this,
+            &OpenGLCanvasWidget::onLayerEffectResultChanged);
         connect(m_layerModel, &ruwa::core::layers::LayerModel::layerEffectsChanged, this,
             [this](const QUuid& id, quint64) {
                 if (m_layerScreenSourceCache) {
@@ -2931,6 +2933,7 @@ void OpenGLCanvasWidget::setLayerModel(ruwa::core::layers::LayerModel* model)
     }
 
     m_smartProjectedGrids.clear();
+    m_layerHadBoundsEffect.clear();
     requestRender();
 }
 
@@ -2982,6 +2985,50 @@ void OpenGLCanvasWidget::purgeStaleCompositionCacheTiles()
     }
 }
 
+bool OpenGLCanvasWidget::updateBoundsEffectInvalidationState(
+    const QUuid& id, const ruwa::core::layers::LayerData* layer)
+{
+    if (!layer) {
+        return m_layerHadBoundsEffect.value(id, false);
+    }
+
+    // Bounds-expanding effects bleed beyond the layer's own tile positions.
+    // Remember both sides of an on/off transition so disabling or removing the
+    // effect also clears the previously rendered neighbour tiles.
+    const bool nowBoundsEffect
+        = ruwa::core::effects::EffectCoverageResolver::neighborhoodPadPixels(layer->effects) > 0;
+    const bool boundsInvalidate = nowBoundsEffect || m_layerHadBoundsEffect.value(id, false);
+    m_layerHadBoundsEffect.insert(id, nowBoundsEffect);
+    return boundsInvalidate;
+}
+
+void OpenGLCanvasWidget::dirtyClippedLayerDependents(const QUuid& id)
+{
+    if (!m_layerModel) {
+        return;
+    }
+
+    // Layers clipped to this one are composited as part of its clip group and
+    // follow its result. Their own tiles may extend past the base layer.
+    const auto clippedLayers = m_layerModel->layersClippedTo(id);
+    for (auto* clipped : clippedLayers) {
+        if (!clipped) {
+            continue;
+        }
+        m_canvas.dirtyManager().onLayerPropertyChanged(clipped->id);
+        if (!clipped->hasChildren()) {
+            continue;
+        }
+        QList<ruwa::core::layers::LayerData*> descendants;
+        clipped->flatten(descendants, false);
+        for (auto* descendant : descendants) {
+            if (descendant) {
+                m_canvas.dirtyManager().onLayerPropertyChanged(descendant->id);
+            }
+        }
+    }
+}
+
 void OpenGLCanvasWidget::onLayerDataChanged(const QUuid& id)
 {
     cancelPendingLassoFillCommit(id);
@@ -3015,12 +3062,7 @@ void OpenGLCanvasWidget::onLayerDataChanged(const QUuid& id)
             // neighbour tiles. Track whether the layer HAD such an effect and force
             // a full (viewport-culled) cache invalidation across the on→off / add→
             // remove transition as well, not only while the effect is active.
-            const bool nowBoundsEffect
-                = ruwa::core::effects::EffectCoverageResolver::neighborhoodPadPixels(layer->effects)
-                > 0;
-            const bool boundsInvalidate
-                = nowBoundsEffect || m_layerHadBoundsEffect.value(id, false);
-            m_layerHadBoundsEffect.insert(id, nowBoundsEffect);
+            const bool boundsInvalidate = updateBoundsEffectInvalidationState(id, layer);
             if (layer->isIsolatedPixelLayer()) {
                 rebuildSmartProjectionCacheForLayer(id);
                 m_canvas.dirtyManager().onStructureChanged();
@@ -3068,20 +3110,7 @@ void OpenGLCanvasWidget::onLayerDataChanged(const QUuid& id)
             // and follow its visibility (a hidden base hides the whole group), so
             // their own tiles must recomposite as well — they can reach past the
             // base's tiles and would otherwise keep stale pixels.
-            const auto clippedLayers = m_layerModel->layersClippedTo(id);
-            for (auto* clipped : clippedLayers) {
-                m_canvas.dirtyManager().onLayerPropertyChanged(clipped->id);
-                if (!clipped->hasChildren()) {
-                    continue;
-                }
-                QList<ruwa::core::layers::LayerData*> descendants;
-                clipped->flatten(descendants, false);
-                for (auto* descendant : descendants) {
-                    if (descendant) {
-                        m_canvas.dirtyManager().onLayerPropertyChanged(descendant->id);
-                    }
-                }
-            }
+            dirtyClippedLayerDependents(id);
             if (layerAffectsBoardComposition(layer) || m_boardCompositionLayerIds.contains(id)) {
                 invalidateBoardCompositionCache();
             }
@@ -3096,6 +3125,50 @@ void OpenGLCanvasWidget::onLayerDataChanged(const QUuid& id)
         if (m_boardCompositionLayerIds.contains(id)) {
             invalidateBoardCompositionCache();
         }
+    }
+    requestRender();
+}
+
+void OpenGLCanvasWidget::onLayerEffectResultChanged(const QUuid& id, quint64 revision)
+{
+    Q_UNUSED(revision);
+
+    if (m_layerScreenSourceCache) {
+        m_layerScreenSourceCache->invalidateByLayer(id);
+    }
+    invalidateCachedLayerStacks();
+
+    if (!m_layerModel) {
+        m_canvas.dirtyManager().onLayerPropertyChanged(id);
+        requestRender();
+        return;
+    }
+
+    auto* layer = m_layerModel->layerById(id);
+    if (!layer) {
+        m_canvas.dirtyManager().onStructureChanged();
+        requestRender();
+        return;
+    }
+
+    const bool boundsInvalidate = updateBoundsEffectInvalidationState(id, layer);
+    if (boundsInvalidate || layer->isBackground()) {
+        // Covers both active expanded output and the first frame after disabling
+        // or removing it, when the old bleed still has to be cleared.
+        m_canvas.compositionCache().markAllDirty();
+    } else if (layer->isGroup() || layer->isAdjustment()) {
+        // These layers have no source tile positions of their own.
+        m_canvas.dirtyManager().onStructureChanged();
+    } else {
+        // Raster, smart, board, text and retained-content layers already have a
+        // stable position index. In particular, an effect consumes the smart
+        // projection but never mutates its pixels or transform.
+        m_canvas.dirtyManager().onLayerPropertyChanged(id);
+    }
+
+    dirtyClippedLayerDependents(id);
+    if (layerAffectsBoardComposition(layer) || m_boardCompositionLayerIds.contains(id)) {
+        invalidateBoardCompositionCache();
     }
     requestRender();
 }
@@ -3313,6 +3386,7 @@ std::shared_ptr<TileGrid> OpenGLCanvasWidget::buildSmartProjectedGrid(
 void OpenGLCanvasWidget::rebuildLayerProjectionCaches()
 {
     m_canvas.tilePositionIndex().clear();
+    m_layerHadBoundsEffect.clear();
     if (!m_layerModel) {
         m_smartProjectedGrids.clear();
         return;
@@ -3324,6 +3398,11 @@ void OpenGLCanvasWidget::rebuildLayerProjectionCaches()
         if (!layer) {
             return;
         }
+
+        const bool hasBoundsEffect
+            = ruwa::core::effects::EffectCoverageResolver::neighborhoodPadPixels(layer->effects)
+            > 0;
+        m_layerHadBoundsEffect.insert(layer->id, hasBoundsEffect);
 
         if (layer->isIsolatedPixelLayer()) {
             aliveIsolatedIds.insert(layer->id);

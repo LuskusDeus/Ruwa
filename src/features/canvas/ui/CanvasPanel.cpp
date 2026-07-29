@@ -2045,7 +2045,7 @@ void CanvasPanel::setLayerModel(ruwa::core::layers::LayerModel* model)
                 publishEffectiveExportFrameIfChanged();
                 emit canvasContentChanged();
             });
-        connect(m_layerModel, &ruwa::core::layers::LayerModel::layerEffectsChanged, this,
+        connect(m_layerModel, &ruwa::core::layers::LayerModel::layerEffectResultChanged, this,
             [this](const ruwa::core::layers::LayerId&, quint64) {
                 publishEffectiveExportFrameIfChanged();
                 emit canvasContentChanged();

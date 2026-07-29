@@ -576,9 +576,13 @@ private slots:
     // LayerModel signal handlers
     void onLayersChanged();
     void onLayerDataChanged(const QUuid& id);
+    void onLayerEffectResultChanged(const QUuid& id, quint64 revision);
     void onLayerRemoved(const QUuid& id);
 
 private:
+    bool updateBoundsEffectInvalidationState(
+        const QUuid& id, const ruwa::core::layers::LayerData* layer);
+    void dirtyClippedLayerDependents(const QUuid& id);
     void synchronizeCompositionForReadback();
 
     std::unique_ptr<GLRenderer> m_renderer;
@@ -598,10 +602,10 @@ private:
     std::unordered_set<TileKey, TileKeyHash> m_boardCompositionKeys;
     QSet<QUuid> m_boardCompositionLayerIds;
     // Per-layer flag: did the layer have an enabled bounds-expanding effect (blur)
-    // at the last data-change? Toggling/removing such an effect drops its pad to 0,
-    // so onLayerDataChanged would otherwise only dirty the layer's own tiles and
-    // leave the now-stale bleed ("ghost") on the expanded neighbour tiles. The flag
-    // forces a full (viewport-culled) cache invalidation across the transition.
+    // in its last observed effect state? Toggling/removing such an effect drops its
+    // pad to 0, so effect invalidation would otherwise only dirty the layer's own
+    // tiles and leave the now-stale bleed ("ghost") on the expanded neighbour tiles.
+    // The flag forces a full (viewport-culled) cache invalidation across the transition.
     QHash<QUuid, bool> m_layerHadBoundsEffect;
 
     // Undo manager (non-owning)

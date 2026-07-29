@@ -1235,10 +1235,18 @@ void LayerModel::markLayerEffectsChanged(LayerData* layer, bool affectsDocumentR
     }
 
     ++layer->effectChainRevision;
+
+    // Effect state has its own notification channel. Do not also emit
+    // layerDataChanged(): that signal represents content/geometry/property
+    // mutations and makes the canvas rebuild smart-layer projection caches.
+    // Effects consume the already projected source, so rebuilding it for every
+    // live slider value is both unnecessary and extremely expensive.
+    //
+    // Layer thumbnails currently preview the raw layer source rather than the
+    // post-effect result, so invalidating them here would only clone and render
+    // the same pixels again.
     if (affectsDocumentResult) {
-        layer->thumbnail = QPixmap();
-        layer->thumbnailDirty = true;
-        emit layerDataChanged(layer->id);
+        emit layerEffectResultChanged(layer->id, layer->effectChainRevision);
     }
     emit layerEffectsChanged(layer->id, layer->effectChainRevision);
 }
@@ -2530,8 +2538,7 @@ void LayerModel::applyLayerEffectsEntries(
 
         layer->effects = std::move(normalized);
         ++layer->effectChainRevision;
-        layer->thumbnail = QPixmap();
-        layer->thumbnailDirty = true;
+        emit layerEffectResultChanged(layer->id, layer->effectChainRevision);
         emit layerEffectsChanged(layer->id, layer->effectChainRevision);
         anyChanged = true;
     }
