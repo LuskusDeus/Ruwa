@@ -52,6 +52,10 @@ Result<void> GLTileRenderer::initialize(const QString& shaderDir)
 
 void GLTileRenderer::shutdown()
 {
+    // Unconditional: the pool holds GL objects belonging to this context and
+    // must not outlive it, whether or not initialize() ever completed.
+    m_texturePool.clear(m_gl);
+
     if (!m_initialized)
         return;
 
@@ -74,7 +78,14 @@ void GLTileRenderer::ensureTileTexture(TileData& tile)
     if (tile.hasTexture())
         return;
 
-    GLuint tex = createTexture2D(m_gl, TILE_SIZE, TILE_SIZE, tileTextureParams(tile.format()));
+    const TextureParams params = tileTextureParams(tile.format());
+    // A recycled texture comes back zero-filled with these sampler params
+    // already applied, so this is indistinguishable from the allocation it
+    // replaces — only ~100x cheaper.
+    GLuint tex = m_texturePool.acquire(m_gl, params);
+    if (tex == 0) {
+        tex = createTexture2D(m_gl, TILE_SIZE, TILE_SIZE, params);
+    }
     tile.setTextureId(tex);
 }
 
@@ -126,8 +137,36 @@ void GLTileRenderer::destroyTileTexture(TileData& tile)
 {
     if (tile.hasTexture()) {
         GLuint tex = tile.textureId();
-        m_gl->glDeleteTextures(1, &tex);
+        if (!m_texturePool.release(m_gl, tex)) {
+            m_gl->glDeleteTextures(1, &tex);
+        }
         tile.setTextureId(0);
+    }
+}
+
+void GLTileRenderer::flushOrphanedTextures()
+{
+    // Anything released since the previous frame becomes reusable now, before
+    // this frame's passes bind anything.
+    m_texturePool.promotePending();
+
+    auto orphaned = OrphanedTextureCollector::instance().takeAll();
+    if (orphaned.empty())
+        return;
+
+    // Most of these are stroke and composition-cache tiles that will be needed
+    // again within a few frames, so they go back into the pool. release()
+    // verifies each one against GL, so ids that outlived their context or came
+    // from somewhere unexpected fall through to the delete batch.
+    std::vector<GLuint> toDelete;
+    for (const uint32_t id : orphaned) {
+        const GLuint tex = static_cast<GLuint>(id);
+        if (!m_texturePool.release(m_gl, tex)) {
+            toDelete.push_back(tex);
+        }
+    }
+    if (!toDelete.empty()) {
+        m_gl->glDeleteTextures(static_cast<GLsizei>(toDelete.size()), toDelete.data());
     }
 }
 

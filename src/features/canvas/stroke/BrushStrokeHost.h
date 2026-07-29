@@ -193,7 +193,14 @@ private:
         BrushExecutionBackend* brushExecutionBackend, bool allowPreviewSampling,
         std::unordered_set<TileKey, TileKeyHash>* outRebuiltTiles = nullptr);
     void collectStrokeChangedKeys(std::unordered_set<TileKey, TileKeyHash>& changedKeys) const;
-    void markStrokeBufferDirtyDelta(const std::unordered_set<TileKey, TileKeyHash>& changedKeys);
+    // How far the stroke buffer's TILE SET may have moved since the previous
+    // markStrokeBufferDirtyDelta call. GrowOnly is the plain dab-append case,
+    // where tiles can only be added — that is what lets the delta cost
+    // O(changed keys) instead of O(stroke tiles). Rebuild paths re-stamp from
+    // the whole dab list and can drop tiles, so they stay on Arbitrary.
+    enum class StrokeTileSetChange { Arbitrary, GrowOnly };
+    void markStrokeBufferDirtyDelta(const std::unordered_set<TileKey, TileKeyHash>& changedKeys,
+        StrokeTileSetChange tileSetChange = StrokeTileSetChange::Arbitrary);
     void snapshotNewTiles(const TileGrid& strokeBuffer, TileGrid* layerGrid);
     void completeEndStrokeAfterQueueDrain();
     bool strokeNeedsRealtimeRebuild() const;

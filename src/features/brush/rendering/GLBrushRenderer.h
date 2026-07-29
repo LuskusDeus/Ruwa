@@ -157,11 +157,30 @@ private:
     bool copyColorRegion(GLuint sourceTexture, TilePixelFormat sourceFormat, GLint sourceX,
         GLint sourceY, GLuint targetTexture, TilePixelFormat targetFormat, GLint targetX,
         GLint targetY, GLsizei width, GLsizei height);
-    void renderDabBatchForTile(const std::vector<TileBrush::DabPoint>& dabs,
+    // Uniform locations of the shared dab-batch program, resolved once per
+    // entry point instead of per tile.
+    struct DabBatchUniforms {
+        GLint dabCount = -1;
+        GLint blendMode = -1;
+        GLint dabCenter = -1;
+        GLint dabParams = -1;
+        GLint dabColor = -1;
+        GLint dabExtent = -1;
+        GLint instancedDabs = -1;
+    };
+    // Reusable per-chunk upload staging, kept across tiles so a stroke segment
+    // does not reallocate for every tile it touches.
+    struct DabBatchScratch {
+        std::vector<float> centers;
+        std::vector<float> params;
+        std::vector<float> colors;
+        std::vector<float> extents;
+        void resizeForMaxDabs(size_t maxDabs);
+    };
+    void renderDabBatchForTile(const TileBrush& brush, const std::vector<TileBrush::DabPoint>& dabs,
         const std::vector<uint32_t>& indices, float tileOriginX, float tileOriginY,
-        GLint locDabCount, GLint locBlendMode, GLint locDabCenter, GLint locDabParams,
-        GLint locDabColor, std::vector<float>& centers, std::vector<float>& params,
-        std::vector<float>& colors);
+        const DabBatchUniforms& uniforms, DabBatchScratch& scratch);
+    DabBatchUniforms resolveDabBatchUniforms() const;
     bool ensureBlurScratchSize(GLsizei width, GLsizei height, TilePixelFormat contentFormat);
     // Re-format the fixed TILE_SIZE blur read texture to match a document tile
     // before glCopyImageSubData (format-compatibility). No-op when unchanged.

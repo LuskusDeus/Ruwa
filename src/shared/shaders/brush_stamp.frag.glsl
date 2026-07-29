@@ -24,6 +24,14 @@ uniform int   uUseTexture;
 uniform int   uUseDabShapeTexture;
 uniform vec2  uDabShapeScale;
 uniform float uTextureEdgeBoost;
+// Shaping applied to the sampled procedural grain. The texture cache stores
+// RAW grain so these four stay out of TileBrush::textureRevision() — otherwise
+// a dynamic texture binding re-renders every cached tile on every dab.
+// Duplicated verbatim in kBatchRebuildFrag (GLBrushRenderer.cpp); keep in step.
+uniform float uTextureContrast;
+uniform float uTextureDepth;
+uniform float uTextureBlend;
+uniform float uTextureAmount;
 uniform float uInvTileSize;
 
 in vec2 fragPixelCoord;       // tile-local pixel position (from vertex shader)
@@ -51,6 +59,15 @@ vec2 sampleDabShapeSafe(vec2 uv) {
         shape.g = 0.0;
     }
     return shape;
+}
+
+float applyTextureShaping(float grain) {
+    float contrastStrength = 0.5 + uTextureContrast * 2.5;
+    float g = clamp(0.5 + (grain - 0.5) * contrastStrength, 0.0, 1.0);
+    float depthMix = 1.0 - uTextureDepth * (1.0 - g);
+    float blendMix = (1.0 - uTextureBlend) * depthMix
+                   + uTextureBlend * (depthMix * depthMix);
+    return clamp((1.0 - uTextureAmount) + uTextureAmount * blendMix, 0.0, 1.0);
 }
 
 float sampleCustomDabCoverage(vec2 uv, float hardness) {
@@ -101,7 +118,8 @@ void main() {
             maskScale = maskA;
         }
         if (uUseTexture != 0) {
-            float textureA = texture(uTextureTile, fragPixelCoord * uInvTileSize).r;
+            float textureA = applyTextureShaping(
+                texture(uTextureTile, fragPixelCoord * uInvTileSize).r);
             if (uTextureEdgeBoost > 0.0) {
                 float contrast = 1.0 + edgeFactor * uTextureEdgeBoost * 8.0;
                 textureA = clamp(0.5 + (textureA - 0.5) * contrast, 0.0, 1.0);
@@ -142,7 +160,8 @@ void main() {
         maskScale = maskA;
     }
     if (uUseTexture != 0) {
-        float textureA = texture(uTextureTile, fragPixelCoord * uInvTileSize).r;
+        float textureA = applyTextureShaping(
+            texture(uTextureTile, fragPixelCoord * uInvTileSize).r);
         if (uTextureEdgeBoost > 0.0) {
             float contrast = 1.0 + edgeFactor * uTextureEdgeBoost * 8.0;
             textureA = clamp(0.5 + (textureA - 0.5) * contrast, 0.0, 1.0);

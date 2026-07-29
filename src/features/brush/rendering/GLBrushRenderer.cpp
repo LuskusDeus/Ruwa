@@ -204,20 +204,44 @@ GLsizei computeSmudgeReservoirLogicalSize(const TileBrush& brush)
     return std::max<GLsizei>(side, 4);
 }
 
+// Two geometries share one program:
+//   uInstancedDabs == 0 — a single quad spanning uQuadMin..uQuadMax, and the
+//     fragment stage walks all uDabCount dabs. Accumulation happens in float
+//     inside the shader, so a run of low-alpha src-over dabs does not get
+//     quantised into the 8-bit tile after every dab.
+//   uInstancedDabs != 0 — one instance per dab, each rasterising only its own
+//     coverage box, with the hardware doing the blending between dabs. Far less
+//     fragment work when dabs are small relative to the tile, but every dab
+//     round-trips through the render target, so it is only used where that is
+//     provably identical (GL_MAX runs — see renderDabBatchForTile).
 const QString kBatchRebuildVert
     = QStringLiteral("#version 450 core\n"
                      "uniform vec2 uQuadMin;\n"
                      "uniform vec2 uQuadMax;\n"
+                     "uniform int uInstancedDabs;\n"
+                     "uniform vec2 uDabCenter[64];\n"
+                     "uniform float uDabExtent[64];\n"
                      "out vec2 fragPixelCoord;\n"
+                     "flat out int fragDabIndex;\n"
                      "vec2 positions[6] = vec2[](\n"
                      "    vec2(0.0, 0.0), vec2(1.0, 0.0), vec2(0.0, 1.0),\n"
                      "    vec2(0.0, 1.0), vec2(1.0, 0.0), vec2(1.0, 1.0)\n"
                      ");\n"
                      "void main() {\n"
+                     "    vec2 quadMin = uQuadMin;\n"
+                     "    vec2 quadMax = uQuadMax;\n"
+                     "    int index = -1;\n"
+                     "    if (uInstancedDabs != 0) {\n"
+                     "        index = gl_InstanceID;\n"
+                     "        vec2 margin = vec2(uDabExtent[index] + 1.0);\n"
+                     "        quadMin = uDabCenter[index] - margin;\n"
+                     "        quadMax = uDabCenter[index] + margin;\n"
+                     "    }\n"
                      "    vec2 t = positions[gl_VertexID];\n"
-                     "    vec2 pixel = mix(uQuadMin, uQuadMax, t);\n"
+                     "    vec2 pixel = mix(quadMin, quadMax, t);\n"
                      "    gl_Position = vec4(pixel / 128.0 - 1.0, 0.0, 1.0);\n"
                      "    fragPixelCoord = pixel;\n"
+                     "    fragDabIndex = index;\n"
                      "}\n");
 
 const QString kBatchRebuildFrag = QStringLiteral(
@@ -236,8 +260,19 @@ const QString kBatchRebuildFrag = QStringLiteral(
     "uniform int uUseDabShapeTexture;\n"
     "uniform vec2 uDabShapeScale;\n"
     "uniform float uTextureEdgeBoost;\n"
+    // Shaping of the sampled grain. The procedural texture cache stores raw
+    // grain so these four stay out of textureRevision(); duplicated verbatim in
+    // brush_stamp.frag.glsl — keep the two in step.
+    "uniform float uTextureContrast;\n"
+    "uniform float uTextureDepth;\n"
+    "uniform float uTextureBlend;\n"
+    "uniform float uTextureAmount;\n"
     "uniform float uInvTileSize;\n"
     "in vec2 fragPixelCoord;\n"
+    // >= 0 when the vertex stage emitted one quad per dab: evaluate only that
+    // dab and let the hardware blend. -1 for the single-quad geometry, where
+    // the whole uDabCount run is accumulated here in float.
+    "flat in int fragDabIndex;\n"
     "out vec4 outColor;\n"
     "float hardnessFalloff(float edgeDistance, float hardness) {\n"
     "    hardness = clamp(hardness, 0.0, 1.0);\n"
@@ -245,6 +280,14 @@ const QString kBatchRebuildFrag = QStringLiteral(
     "    if (edgeDistance <= 0.0) return 0.0;\n"
     "    if (softness <= 0.001) return 1.0;\n"
     "    return smoothstep(0.0, softness, edgeDistance);\n"
+    "}\n"
+    "float applyTextureShaping(float grain) {\n"
+    "    float contrastStrength = 0.5 + uTextureContrast * 2.5;\n"
+    "    float g = clamp(0.5 + (grain - 0.5) * contrastStrength, 0.0, 1.0);\n"
+    "    float depthMix = 1.0 - uTextureDepth * (1.0 - g);\n"
+    "    float blendMix = (1.0 - uTextureBlend) * depthMix\n"
+    "                   + uTextureBlend * (depthMix * depthMix);\n"
+    "    return clamp((1.0 - uTextureAmount) + uTextureAmount * blendMix, 0.0, 1.0);\n"
     "}\n"
     "vec2 sampleDabShapeSafe(vec2 uv) {\n"
     "    vec2 clampedUv = clamp(uv, vec2(0.0), vec2(1.0));\n"
@@ -271,12 +314,15 @@ const QString kBatchRebuildFrag = QStringLiteral(
     "    }\n"
     "    float textureA = 1.0;\n"
     "    if (uUseTexture != 0) {\n"
-    "        textureA = texture(uTextureTile, fragPixelCoord * uInvTileSize).r;\n"
+    "        textureA = applyTextureShaping(\n"
+    "            texture(uTextureTile, fragPixelCoord * uInvTileSize).r);\n"
     "        if (textureA <= 0.0) { outColor = vec4(0.0); return; }\n"
     "    }\n"
     "    vec4 accum = vec4(0.0);\n"
-    "    for (int i = 0; i < 64; ++i) {\n"
-    "        if (i >= uDabCount) break;\n"
+    "    int firstDab = (fragDabIndex >= 0) ? fragDabIndex : 0;\n"
+    "    int lastDab = (fragDabIndex >= 0) ? (fragDabIndex + 1) : uDabCount;\n"
+    "    for (int i = firstDab; i < 64; ++i) {\n"
+    "        if (i >= lastDab) break;\n"
     "        vec2 delta = fragPixelCoord - uDabCenter[i];\n"
     "        float radius = uDabParams[i].x;\n"
     "        float hardness = uDabParams[i].y;\n"
@@ -1138,10 +1184,6 @@ static const QString kProceduralTextureFrag = QStringLiteral(
     "#version 450 core\n"
     "uniform vec2  uTileOrigin;\n"
     "uniform float uScale;\n"
-    "uniform float uContrast;\n"
-    "uniform float uDepth;\n"
-    "uniform float uBlend;\n"
-    "uniform float uAmount;\n"
     "uniform int   uTextureType;\n"
     "uniform float uPencilDetail;\n"
     "uniform float uPencilStreakStrength;\n"
@@ -1338,13 +1380,14 @@ static const QString kProceduralTextureFrag = QStringLiteral(
     "    } else {\n"
     "        g = pencilGrain(wx, wy, uScale);\n"
     "    }\n"
-    "    float contrastStrength = 0.5 + uContrast * 2.5;\n"
-    "    g = clamp(0.5 + (g - 0.5) * contrastStrength, 0.0, 1.0);\n"
-    "    float depthMix = 1.0 - uDepth * (1.0 - g);\n"
-    "    float blendMix = (1.0 - uBlend) * depthMix\n"
-    "                   + uBlend * (depthMix * depthMix);\n"
-    "    float factor = (1.0 - uAmount) + uAmount * blendMix;\n"
-    "    outValue = clamp(factor, 0.0, 1.0);\n"
+    // Raw grain only. Contrast/depth/blend/amount used to be baked in here,
+    // which put them in textureRevision() and made every one of them a cache
+    // key — so a dynamic texture binding, which drives exactly those, threw
+    // away and re-rendered every cached tile on EVERY dab. They are pure
+    // per-pixel remaps of this value, so they now live at the sampling site
+    // (kTextureShapingGlsl) and the cache only has to track what actually
+    // changes the pattern.
+    "    outValue = clamp(g, 0.0, 1.0);\n"
     "}\n");
 
 } // namespace
@@ -2751,6 +2794,10 @@ void GLBrushRenderer::stampGPU(TileGrid& strokeBuffer, GLTileRenderer* tileRende
     prog->setUniform("uMaskAffectsAlpha", brush.selectionMaskAffectsAlpha() ? 1 : 0);
     prog->setUniform("uUseTexture", useTexture ? 1 : 0);
     prog->setUniform("uTextureEdgeBoost", brush.textureEdgeBoost());
+    prog->setUniform("uTextureContrast", brush.textureContrast());
+    prog->setUniform("uTextureDepth", brush.textureDepth());
+    prog->setUniform("uTextureBlend", brush.textureBlend());
+    prog->setUniform("uTextureAmount", brush.textureAmount());
     prog->setUniform("uUseDabShapeTexture", useDabShape ? 1 : 0);
     prog->setUniform("uDabShapeScale", brush.dabXScale(), brush.dabYScale());
 
@@ -2886,7 +2933,25 @@ bool GLBrushRenderer::stampDabSegmentGPU(TileGrid& strokeBuffer, GLTileRenderer*
         return true;
 
     const bool clipToCanvas = (canvasWidth > 0 && canvasHeight > 0);
-    std::unordered_map<TileKey, std::vector<uint32_t>, TileKeyHash> tileDabs;
+
+    // Per-tile dab list plus the union of those dabs' coverage boxes, in
+    // tile-local pixels. The batch program is a quad pass whose extent the
+    // vertex stage takes from uQuadMin/uQuadMax, and this path used to hand it
+    // the whole 256x256 tile regardless of brush size — so a segment of small
+    // dabs ran the dab loop over every texel of the tile. Narrowing the quad to
+    // the dabs' actual footprint is free of behaviour change: outside it every
+    // dab fails its own coverage test, the shader emits transparent black, and
+    // both blend modes (src-over and GL_MAX) treat that as a no-op.
+    // stampGPU already did this per dab; only the batch path lagged behind.
+    struct TileDabBatch {
+        std::vector<uint32_t> indices;
+        // Seeded to the opposite corners so the first dab establishes the box.
+        float minX = static_cast<float>(TILE_SIZE);
+        float minY = static_cast<float>(TILE_SIZE);
+        float maxX = 0.0f;
+        float maxY = 0.0f;
+    };
+    std::unordered_map<TileKey, TileDabBatch, TileKeyHash> tileDabs;
     tileDabs.reserve(dabs.size() * 2u);
 
     for (size_t idx = 0; idx < dabs.size(); ++idx) {
@@ -2914,7 +2979,17 @@ bool GLBrushRenderer::stampDabSegmentGPU(TileGrid& strokeBuffer, GLTileRenderer*
 
         for (int32_t ty = tMinY; ty <= tMaxY; ++ty) {
             for (int32_t tx = tMinX; tx <= tMaxX; ++tx) {
-                tileDabs[TileKey { tx, ty }].push_back(static_cast<uint32_t>(idx));
+                TileDabBatch& batch = tileDabs[TileKey { tx, ty }];
+                batch.indices.push_back(static_cast<uint32_t>(idx));
+
+                const float tileOriginX = static_cast<float>(tx) * static_cast<float>(TILE_SIZE);
+                const float tileOriginY = static_cast<float>(ty) * static_cast<float>(TILE_SIZE);
+                // Same rasterExtent that decided tile membership above, so the
+                // box can never exclude a texel this dab could have touched.
+                batch.minX = std::min(batch.minX, dab.worldX - rasterExtent - tileOriginX);
+                batch.minY = std::min(batch.minY, dab.worldY - rasterExtent - tileOriginY);
+                batch.maxX = std::max(batch.maxX, dab.worldX + rasterExtent - tileOriginX);
+                batch.maxY = std::max(batch.maxY, dab.worldY + rasterExtent - tileOriginY);
             }
         }
     }
@@ -2943,11 +3018,12 @@ bool GLBrushRenderer::stampDabSegmentGPU(TileGrid& strokeBuffer, GLTileRenderer*
     const bool useDabShape = (brush.dabType() > 0);
     m_rebuildBatchProgram->setUniform("uUseDabShapeTexture", useDabShape ? 1 : 0);
     m_rebuildBatchProgram->setUniform("uTextureEdgeBoost", brush.textureEdgeBoost());
+    m_rebuildBatchProgram->setUniform("uTextureContrast", brush.textureContrast());
+    m_rebuildBatchProgram->setUniform("uTextureDepth", brush.textureDepth());
+    m_rebuildBatchProgram->setUniform("uTextureBlend", brush.textureBlend());
+    m_rebuildBatchProgram->setUniform("uTextureAmount", brush.textureAmount());
     m_rebuildBatchProgram->setUniform("uDabShapeScale", brush.dabXScale(), brush.dabYScale());
     m_rebuildBatchProgram->setUniform("uInvTileSize", 1.0f / static_cast<float>(TILE_SIZE));
-    m_rebuildBatchProgram->setUniform("uQuadMin", 0.0f, 0.0f);
-    m_rebuildBatchProgram->setUniform(
-        "uQuadMax", static_cast<float>(TILE_SIZE), static_cast<float>(TILE_SIZE));
 
     if (useDabShape) {
         m_rebuildBatchProgram->setUniform("uDabShapeTexture", 3);
@@ -2958,17 +3034,17 @@ bool GLBrushRenderer::stampDabSegmentGPU(TileGrid& strokeBuffer, GLTileRenderer*
     }
 
     const GLuint batchProgram = m_rebuildBatchProgram->handle();
-    const GLint locDabCount = m_gl->glGetUniformLocation(batchProgram, "uDabCount");
-    const GLint locDabCenter = m_gl->glGetUniformLocation(batchProgram, "uDabCenter");
-    const GLint locDabParams = m_gl->glGetUniformLocation(batchProgram, "uDabParams");
-    const GLint locDabColor = m_gl->glGetUniformLocation(batchProgram, "uDabColor");
-    const GLint locBlendMode = m_gl->glGetUniformLocation(batchProgram, "uBlendMode");
+    const DabBatchUniforms batchUniforms = resolveDabBatchUniforms();
+    // Per-tile now, so the locations are resolved once here instead of going
+    // through the name-keyed setUniform on every tile.
+    const GLint locQuadMin = m_gl->glGetUniformLocation(batchProgram, "uQuadMin");
+    const GLint locQuadMax = m_gl->glGetUniformLocation(batchProgram, "uQuadMax");
 
-    std::vector<float> centers(static_cast<size_t>(kRebuildBatchMaxDabs) * 2u);
-    std::vector<float> params(static_cast<size_t>(kRebuildBatchMaxDabs) * 4u);
-    std::vector<float> colors(static_cast<size_t>(kRebuildBatchMaxDabs) * 4u);
+    DabBatchScratch batchScratch;
+    batchScratch.resizeForMaxDabs(static_cast<size_t>(kRebuildBatchMaxDabs));
 
-    for (const auto& [key, indices] : tileDabs) {
+    for (const auto& [key, batch] : tileDabs) {
+        const std::vector<uint32_t>& indices = batch.indices;
         if (indices.empty())
             continue;
 
@@ -2999,10 +3075,24 @@ bool GLBrushRenderer::stampDabSegmentGPU(TileGrid& strokeBuffer, GLTileRenderer*
         m_gl->glFramebufferTexture2D(
             GL_FRAMEBUFFER, GL_COLOR_ATTACHMENT0, GL_TEXTURE_2D, tile.textureId(), 0);
 
+        // Clamp the dabs' union footprint to the tile and grow it by a pixel,
+        // so a partially covered edge texel can never fall outside the quad.
+        // NOTE: deliberately NOT clipped to the canvas rect — this path lets
+        // dabs paint into the off-canvas part of an edge tile, and narrowing
+        // the quad there would change what gets drawn, not just how fast.
+        const float quadMinX = std::max(0.0f, std::floor(batch.minX) - 1.0f);
+        const float quadMinY = std::max(0.0f, std::floor(batch.minY) - 1.0f);
+        const float quadMaxX
+            = std::min(static_cast<float>(TILE_SIZE), std::ceil(batch.maxX) + 1.0f);
+        const float quadMaxY
+            = std::min(static_cast<float>(TILE_SIZE), std::ceil(batch.maxY) + 1.0f);
+        m_gl->glUniform2f(locQuadMin, quadMinX, quadMinY);
+        m_gl->glUniform2f(locQuadMax, quadMaxX, quadMaxY);
+
         const float tileOriginX = static_cast<float>(key.x) * static_cast<float>(TILE_SIZE);
         const float tileOriginY = static_cast<float>(key.y) * static_cast<float>(TILE_SIZE);
-        renderDabBatchForTile(dabs, indices, tileOriginX, tileOriginY, locDabCount, locBlendMode,
-            locDabCenter, locDabParams, locDabColor, centers, params, colors);
+        renderDabBatchForTile(
+            brush, dabs, indices, tileOriginX, tileOriginY, batchUniforms, batchScratch);
 
         tile.clearDirty();
         strokeBuffer.removeDirty(key);
@@ -3128,6 +3218,10 @@ void GLBrushRenderer::rebuildStrokeBufferFromDabsGPU(TileGrid& strokeBuffer,
     const bool useDabShape = (brush.dabType() > 0);
     m_rebuildBatchProgram->setUniform("uUseDabShapeTexture", useDabShape ? 1 : 0);
     m_rebuildBatchProgram->setUniform("uTextureEdgeBoost", brush.textureEdgeBoost());
+    m_rebuildBatchProgram->setUniform("uTextureContrast", brush.textureContrast());
+    m_rebuildBatchProgram->setUniform("uTextureDepth", brush.textureDepth());
+    m_rebuildBatchProgram->setUniform("uTextureBlend", brush.textureBlend());
+    m_rebuildBatchProgram->setUniform("uTextureAmount", brush.textureAmount());
     m_rebuildBatchProgram->setUniform("uDabShapeScale", brush.dabXScale(), brush.dabYScale());
     m_rebuildBatchProgram->setUniform("uInvTileSize", 1.0f / static_cast<float>(TILE_SIZE));
     m_rebuildBatchProgram->setUniform("uQuadMin", 0.0f, 0.0f);
@@ -3142,19 +3236,10 @@ void GLBrushRenderer::rebuildStrokeBufferFromDabsGPU(TileGrid& strokeBuffer,
         }
     }
 
-    const GLuint batchProgram = m_rebuildBatchProgram->handle();
-    const GLint locDabCount = m_gl->glGetUniformLocation(batchProgram, "uDabCount");
-    const GLint locDabCenter = m_gl->glGetUniformLocation(batchProgram, "uDabCenter");
-    const GLint locDabParams = m_gl->glGetUniformLocation(batchProgram, "uDabParams");
-    const GLint locDabColor = m_gl->glGetUniformLocation(batchProgram, "uDabColor");
-    const GLint locBlendMode = m_gl->glGetUniformLocation(batchProgram, "uBlendMode");
+    const DabBatchUniforms batchUniforms = resolveDabBatchUniforms();
 
-    std::vector<float> centers;
-    std::vector<float> params;
-    std::vector<float> colors;
-    centers.resize(static_cast<size_t>(kRebuildBatchMaxDabs) * 2u);
-    params.resize(static_cast<size_t>(kRebuildBatchMaxDabs) * 4u);
-    colors.resize(static_cast<size_t>(kRebuildBatchMaxDabs) * 4u);
+    DabBatchScratch batchScratch;
+    batchScratch.resizeForMaxDabs(static_cast<size_t>(kRebuildBatchMaxDabs));
 
     for (const auto& key : touched) {
         auto tileIt = tileDabs.find(key);
@@ -3190,8 +3275,8 @@ void GLBrushRenderer::rebuildStrokeBufferFromDabsGPU(TileGrid& strokeBuffer,
         const float tileOriginX = static_cast<float>(key.x) * static_cast<float>(TILE_SIZE);
         const float tileOriginY = static_cast<float>(key.y) * static_cast<float>(TILE_SIZE);
 
-        renderDabBatchForTile(dabs, tileIt->second, tileOriginX, tileOriginY, locDabCount,
-            locBlendMode, locDabCenter, locDabParams, locDabColor, centers, params, colors);
+        renderDabBatchForTile(
+            brush, dabs, tileIt->second, tileOriginX, tileOriginY, batchUniforms, batchScratch);
 
         tile.clearDirty();
         strokeBuffer.removeDirty(key);
@@ -3369,6 +3454,10 @@ void GLBrushRenderer::rebuildStrokeBufferRangeFromDabsGPU(TileGrid& strokeBuffer
     const bool useDabShape = (brush.dabType() > 0);
     m_rebuildBatchProgram->setUniform("uUseDabShapeTexture", useDabShape ? 1 : 0);
     m_rebuildBatchProgram->setUniform("uTextureEdgeBoost", brush.textureEdgeBoost());
+    m_rebuildBatchProgram->setUniform("uTextureContrast", brush.textureContrast());
+    m_rebuildBatchProgram->setUniform("uTextureDepth", brush.textureDepth());
+    m_rebuildBatchProgram->setUniform("uTextureBlend", brush.textureBlend());
+    m_rebuildBatchProgram->setUniform("uTextureAmount", brush.textureAmount());
     m_rebuildBatchProgram->setUniform("uDabShapeScale", brush.dabXScale(), brush.dabYScale());
     m_rebuildBatchProgram->setUniform("uInvTileSize", 1.0f / static_cast<float>(TILE_SIZE));
     m_rebuildBatchProgram->setUniform("uQuadMin", 0.0f, 0.0f);
@@ -3383,16 +3472,10 @@ void GLBrushRenderer::rebuildStrokeBufferRangeFromDabsGPU(TileGrid& strokeBuffer
         }
     }
 
-    const GLuint batchProgram = m_rebuildBatchProgram->handle();
-    const GLint locDabCount = m_gl->glGetUniformLocation(batchProgram, "uDabCount");
-    const GLint locDabCenter = m_gl->glGetUniformLocation(batchProgram, "uDabCenter");
-    const GLint locDabParams = m_gl->glGetUniformLocation(batchProgram, "uDabParams");
-    const GLint locDabColor = m_gl->glGetUniformLocation(batchProgram, "uDabColor");
-    const GLint locBlendMode = m_gl->glGetUniformLocation(batchProgram, "uBlendMode");
+    const DabBatchUniforms batchUniforms = resolveDabBatchUniforms();
 
-    std::vector<float> centers(static_cast<size_t>(kRebuildBatchMaxDabs) * 2u);
-    std::vector<float> params(static_cast<size_t>(kRebuildBatchMaxDabs) * 4u);
-    std::vector<float> colors(static_cast<size_t>(kRebuildBatchMaxDabs) * 4u);
+    DabBatchScratch batchScratch;
+    batchScratch.resizeForMaxDabs(static_cast<size_t>(kRebuildBatchMaxDabs));
 
     for (const auto& key : rebuildTiles) {
         auto tileIt = tileDabs.find(key);
@@ -3441,8 +3524,8 @@ void GLBrushRenderer::rebuildStrokeBufferRangeFromDabsGPU(TileGrid& strokeBuffer
         const float tileOriginX = static_cast<float>(key.x) * static_cast<float>(TILE_SIZE);
         const float tileOriginY = static_cast<float>(key.y) * static_cast<float>(TILE_SIZE);
 
-        renderDabBatchForTile(dabs, tileIt->second, tileOriginX, tileOriginY, locDabCount,
-            locBlendMode, locDabCenter, locDabParams, locDabColor, centers, params, colors);
+        renderDabBatchForTile(
+            brush, dabs, tileIt->second, tileOriginX, tileOriginY, batchUniforms, batchScratch);
 
         tile.clearDirty();
         strokeBuffer.removeDirty(key);
@@ -3813,7 +3896,7 @@ GLuint GLBrushRenderer::ensureProceduralTextureTile(const TileKey& key, const Ti
     }
 
     // Evict least-recently-used entries when the cache is full.
-    // Each entry is a 256x256 R8 texture = 64 KB VRAM.
+    // Each entry is a 256x256 R16F texture = 128 KB VRAM.
     constexpr size_t kMaxCachedGpuTextureTiles = 128;
     constexpr size_t kEvictCount = kMaxCachedGpuTextureTiles / 4;
     if (m_proceduralTextureGpuTiles.size() >= kMaxCachedGpuTextureTiles) {
@@ -3850,8 +3933,12 @@ GLuint GLBrushRenderer::ensureProceduralTextureTile(const TileKey& key, const Ti
         params.magFilter = GL_LINEAR;
         params.wrapS = GL_REPEAT;
         params.wrapT = GL_REPEAT;
-        params.internalFormat = GL_R8;
+        // R16F, not R8: the tile now holds raw grain and the shaping runs at
+        // sample time, where a contrast of up to 3x would otherwise amplify
+        // 8-bit quantisation into visible steps.
+        params.internalFormat = GL_R16F;
         params.pixelFormat = GL_RED;
+        params.pixelType = GL_HALF_FLOAT;
         gpuTile.textureId = createTexture2D(m_gl, TILE_SIZE, TILE_SIZE, params);
     }
 
@@ -3883,10 +3970,6 @@ GLuint GLBrushRenderer::ensureProceduralTextureTile(const TileKey& key, const Ti
         static_cast<float>(key.x) * static_cast<float>(TILE_SIZE),
         static_cast<float>(key.y) * static_cast<float>(TILE_SIZE));
     m_proceduralTextureProgram->setUniform("uScale", brush.textureScale());
-    m_proceduralTextureProgram->setUniform("uContrast", brush.textureContrast());
-    m_proceduralTextureProgram->setUniform("uDepth", brush.textureDepth());
-    m_proceduralTextureProgram->setUniform("uBlend", brush.textureBlend());
-    m_proceduralTextureProgram->setUniform("uAmount", brush.textureAmount());
     m_proceduralTextureProgram->setUniform("uTextureType", brush.textureType());
     m_proceduralTextureProgram->setUniform("uPencilDetail", brush.texturePencilDetail());
     m_proceduralTextureProgram->setUniform(
@@ -3928,11 +4011,40 @@ GLuint GLBrushRenderer::ensureProceduralTextureTile(const TileKey& key, const Ti
     return gpuTile.textureId;
 }
 
-void GLBrushRenderer::renderDabBatchForTile(const std::vector<TileBrush::DabPoint>& dabs,
-    const std::vector<uint32_t>& indices, float tileOriginX, float tileOriginY, GLint locDabCount,
-    GLint locBlendMode, GLint locDabCenter, GLint locDabParams, GLint locDabColor,
-    std::vector<float>& centers, std::vector<float>& params, std::vector<float>& colors)
+void GLBrushRenderer::DabBatchScratch::resizeForMaxDabs(size_t maxDabs)
 {
+    centers.resize(maxDabs * 2u);
+    params.resize(maxDabs * 4u);
+    colors.resize(maxDabs * 4u);
+    extents.resize(maxDabs);
+}
+
+GLBrushRenderer::DabBatchUniforms GLBrushRenderer::resolveDabBatchUniforms() const
+{
+    DabBatchUniforms uniforms;
+    if (!m_rebuildBatchProgram) {
+        return uniforms;
+    }
+    const GLuint program = m_rebuildBatchProgram->handle();
+    uniforms.dabCount = m_gl->glGetUniformLocation(program, "uDabCount");
+    uniforms.blendMode = m_gl->glGetUniformLocation(program, "uBlendMode");
+    uniforms.dabCenter = m_gl->glGetUniformLocation(program, "uDabCenter");
+    uniforms.dabParams = m_gl->glGetUniformLocation(program, "uDabParams");
+    uniforms.dabColor = m_gl->glGetUniformLocation(program, "uDabColor");
+    uniforms.dabExtent = m_gl->glGetUniformLocation(program, "uDabExtent");
+    uniforms.instancedDabs = m_gl->glGetUniformLocation(program, "uInstancedDabs");
+    return uniforms;
+}
+
+void GLBrushRenderer::renderDabBatchForTile(const TileBrush& brush,
+    const std::vector<TileBrush::DabPoint>& dabs, const std::vector<uint32_t>& indices,
+    float tileOriginX, float tileOriginY, const DabBatchUniforms& uniforms,
+    DabBatchScratch& scratch)
+{
+    std::vector<float>& centers = scratch.centers;
+    std::vector<float>& params = scratch.params;
+    std::vector<float>& colors = scratch.colors;
+
     size_t cursor = 0;
     while (cursor < indices.size()) {
         const bool blendAsMax = dabs[indices[cursor]].useMaxBlend;
@@ -3941,6 +4053,37 @@ void GLBrushRenderer::renderDabBatchForTile(const std::vector<TileBrush::DabPoin
         size_t runEnd = cursor;
         while (runEnd < indices.size() && dabs[indices[runEnd]].useMaxBlend == blendAsMax) {
             ++runEnd;
+        }
+
+        // Decide once per run whether the dabs can be drawn as one instance
+        // each (each rasterising only its own coverage box) instead of one
+        // tile-wide quad running the dab loop per fragment. The restriction is
+        // load-bearing in BOTH directions:
+        //
+        //  * GL_MAX blends component-wise, while the shader loop keeps the
+        //    whole dab with the larger alpha. Those agree only when every dab
+        //    in the run carries the same colour: premultiplied rgb is then
+        //    proportional to alpha through one shared constant, so both rules
+        //    pick the same dab at every pixel. Max mode normally guarantees
+        //    that already — TileBrush::useMaxBlendForCurrentMode() drops to
+        //    src-over as soon as a dynamic colour binding exists — but the
+        //    colours are compared here rather than assumed.
+        //
+        //  * src-over deliberately stays on the loop. Max is idempotent;
+        //    src-over accumulates, and instancing would round the tile to its
+        //    storage format after every dab. A long run of low-flow dabs would
+        //    then drift away from the float accumulation the loop performs.
+        bool instanced = blendAsMax;
+        if (instanced) {
+            const TileBrush::DabPoint& first = dabs[indices[cursor]];
+            for (size_t i = cursor + 1; i < runEnd; ++i) {
+                const TileBrush::DabPoint& dab = dabs[indices[i]];
+                if (dab.colorR != first.colorR || dab.colorG != first.colorG
+                    || dab.colorB != first.colorB) {
+                    instanced = false;
+                    break;
+                }
+            }
         }
 
         size_t runCursor = cursor;
@@ -3977,15 +4120,30 @@ void GLBrushRenderer::renderDabBatchForTile(const std::vector<TileBrush::DabPoin
                 colors[vec4Base + 1] = gPremul;
                 colors[vec4Base + 2] = bPremul;
                 colors[vec4Base + 3] = alpha;
+
+                if (instanced) {
+                    // Same conservative bound the tile assignment uses, so an
+                    // instance's quad can never clip its own coverage.
+                    scratch.extents[i] = dabCoverageExtent(
+                        brush, dab.radius, dab.hardness, dab.roundness, dab.angleDegrees, true);
+                }
             }
 
-            m_gl->glUniform1i(locDabCount, static_cast<GLint>(chunkCount));
-            m_gl->glUniform1i(locBlendMode, blendMode);
-            m_gl->glUniform2fv(locDabCenter, static_cast<GLsizei>(chunkCount), centers.data());
-            m_gl->glUniform4fv(locDabParams, static_cast<GLsizei>(chunkCount), params.data());
-            m_gl->glUniform4fv(locDabColor, static_cast<GLsizei>(chunkCount), colors.data());
+            m_gl->glUniform1i(uniforms.dabCount, static_cast<GLint>(chunkCount));
+            m_gl->glUniform1i(uniforms.blendMode, blendMode);
+            m_gl->glUniform1i(uniforms.instancedDabs, instanced ? 1 : 0);
+            m_gl->glUniform2fv(
+                uniforms.dabCenter, static_cast<GLsizei>(chunkCount), centers.data());
+            m_gl->glUniform4fv(uniforms.dabParams, static_cast<GLsizei>(chunkCount), params.data());
+            m_gl->glUniform4fv(uniforms.dabColor, static_cast<GLsizei>(chunkCount), colors.data());
 
-            m_gl->glDrawArrays(GL_TRIANGLES, 0, 6);
+            if (instanced) {
+                m_gl->glUniform1fv(
+                    uniforms.dabExtent, static_cast<GLsizei>(chunkCount), scratch.extents.data());
+                m_gl->glDrawArraysInstanced(GL_TRIANGLES, 0, 6, static_cast<GLsizei>(chunkCount));
+            } else {
+                m_gl->glDrawArrays(GL_TRIANGLES, 0, 6);
+            }
             ++m_drawCallEstimate;
 
             runCursor += chunkCount;

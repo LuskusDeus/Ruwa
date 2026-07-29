@@ -437,6 +437,10 @@ void BrushStrokeHost::beginStroke(
     }
 
     std::unordered_set<TileKey, TileKeyHash> changedKeys;
+    // Only the plain-append branch below leaves the stroke buffer's tile set
+    // monotonically growing; a rebuild re-stamps from the dab list and can drop
+    // tiles, so it must not take the cheap delta.
+    auto tileSetChange = StrokeTileSetChange::Arbitrary;
     if (realtimeRebuild) {
         if (previewUpdated) {
             // If range rebuild populated rebuiltTiles, use that precise set.
@@ -460,9 +464,10 @@ void BrushStrokeHost::beginStroke(
                 stabilizedStart.y, currentBrush->effectiveRadius(), documentBoundsWidth(),
                 documentBoundsHeight(), changedKeys);
         }
+        tileSetChange = StrokeTileSetChange::GrowOnly;
     }
     if (!changedKeys.empty()) {
-        markStrokeBufferDirtyDelta(changedKeys);
+        markStrokeBufferDirtyDelta(changedKeys, tileSetChange);
     }
 
     if (auto* quickShape = quickShapeMorph(); quickShape && !currentBrush->isBlurMode()
@@ -1098,6 +1103,9 @@ void BrushStrokeHost::continueStrokeWithResolvedPoint(float worldX, float worldY
     }
 
     std::unordered_set<TileKey, TileKeyHash> changedKeys;
+    // See the note in beginStroke: only plain dab append keeps the stroke
+    // buffer's tile set monotonically growing.
+    auto tileSetChange = StrokeTileSetChange::Arbitrary;
     if (realtimeRebuild) {
         if (previewUpdated) {
             // If range rebuild populated rebuiltTiles, use that precise set.
@@ -1121,9 +1129,10 @@ void BrushStrokeHost::continueStrokeWithResolvedPoint(float worldX, float worldY
                 currentBrush->effectiveRadius(), documentBoundsWidth(), documentBoundsHeight(),
                 changedKeys);
         }
+        tileSetChange = StrokeTileSetChange::GrowOnly;
     }
     if (!changedKeys.empty()) {
-        markStrokeBufferDirtyDelta(changedKeys);
+        markStrokeBufferDirtyDelta(changedKeys, tileSetChange);
     }
 
     if (shouldResetQuickShapeHold) {
@@ -1722,6 +1731,10 @@ void BrushStrokeHost::rasterizeQuadraticStroke(TileGrid* grid, TileGrid* selecti
     if (useGpuContext && !hasCurrentContext && m_callbacks.makeCurrent) {
         m_callbacks.makeCurrent();
     }
+    // Collect every micro-segment's dabs and stamp the span in one go.
+    if (useGpuContext) {
+        executionBackend->beginDabBatch(*currentBrush);
+    }
 
     Vector2 prevPoint = start;
     float prevPressure = startPressure;
@@ -1744,6 +1757,11 @@ void BrushStrokeHost::rasterizeQuadraticStroke(TileGrid* grid, TileGrid* selecti
         startStrokeElapsedSeconds = nextElapsedSeconds;
     }
 
+    // Must land before the caller touches the stroke buffer (snapshot, dirty
+    // delta, rebuild, flatten) and while the GL context is still current.
+    if (useGpuContext) {
+        executionBackend->endDabBatch(*currentBrush, selectionMask);
+    }
     if (useGpuContext && !hasCurrentContext && m_callbacks.doneCurrent) {
         m_callbacks.doneCurrent();
     }
@@ -1811,6 +1829,11 @@ void BrushStrokeHost::rasterizeCatmullRomStroke(TileGrid* grid, TileGrid* select
     if (useGpuContext && !hasCurrentContext && m_callbacks.makeCurrent) {
         m_callbacks.makeCurrent();
     }
+    // The hot one: this span is subdivided into up to 128 micro-segments, and
+    // without coalescing each of them is a separate GPU stamp with full setup.
+    if (useGpuContext) {
+        executionBackend->beginDabBatch(*currentBrush);
+    }
 
     Vector2 prevPoint = b0;
     float prevPressure = p1Pressure;
@@ -1827,6 +1850,11 @@ void BrushStrokeHost::rasterizeCatmullRomStroke(TileGrid* grid, TileGrid* select
         prevElapsed = nextElapsed;
     }
 
+    // Must land before the caller touches the stroke buffer (snapshot, dirty
+    // delta, rebuild, flatten) and while the GL context is still current.
+    if (useGpuContext) {
+        executionBackend->endDabBatch(*currentBrush, selectionMask);
+    }
     if (useGpuContext && !hasCurrentContext && m_callbacks.doneCurrent) {
         m_callbacks.doneCurrent();
     }
@@ -1951,7 +1979,7 @@ void BrushStrokeHost::collectStrokeChangedKeys(
 }
 
 void BrushStrokeHost::markStrokeBufferDirtyDelta(
-    const std::unordered_set<TileKey, TileKeyHash>& changedKeys)
+    const std::unordered_set<TileKey, TileKeyHash>& changedKeys, StrokeTileSetChange tileSetChange)
 {
     if (!m_callbacks.markCompositionTilesDirty) {
         return;
@@ -1959,6 +1987,34 @@ void BrushStrokeHost::markStrokeBufferDirtyDelta(
 
     TileBrush* currentBrush = brush();
     if (!currentBrush) {
+        return;
+    }
+
+    // Fast path for plain dab append. The caller guarantees no tile LEFT the
+    // stroke buffer, so an unchanged tile count proves the key set is exactly
+    // the one recorded last time — nothing was added either. Both the
+    // "appeared" and "disappeared" halves of the delta are then empty, and the
+    // only dirty tiles are the changed keys that live in the buffer, which
+    // m_prevStrokePreviewKeys can answer without materializing a fresh set.
+    //
+    // That is the whole point: the rescan below builds two hash sets spanning
+    // the entire stroke footprint, on every input event, so its cost grew with
+    // the stroke — a long sweep across a large canvas ended up paying it 3-10
+    // times per frame over hundreds of tiles. Tiles are only created every
+    // ~TILE_SIZE px of travel, so the rescan still runs, just on the handful of
+    // events that actually grow the buffer instead of all of them.
+    if (tileSetChange == StrokeTileSetChange::GrowOnly
+        && currentBrush->strokeBuffer().tileCount() == m_prevStrokePreviewKeys.size()) {
+        std::vector<TileKey> dirtyVec;
+        dirtyVec.reserve(changedKeys.size());
+        for (const auto& key : changedKeys) {
+            if (m_prevStrokePreviewKeys.find(key) != m_prevStrokePreviewKeys.end()) {
+                dirtyVec.push_back(key);
+            }
+        }
+        if (!dirtyVec.empty()) {
+            m_callbacks.markCompositionTilesDirty(dirtyVec);
+        }
         return;
     }
 
@@ -1986,7 +2042,6 @@ void BrushStrokeHost::markStrokeBufferDirtyDelta(
     }
 
     if (!dirtyKeys.empty()) {
-        if (dirtyKeys.size() > 20 || changedKeys.size() > 20) { }
         std::vector<TileKey> dirtyVec(dirtyKeys.begin(), dirtyKeys.end());
         m_callbacks.markCompositionTilesDirty(dirtyVec);
     }
@@ -2204,7 +2259,8 @@ void BrushStrokeHost::emitLiquifyDwell()
             changedDabStart, total - changedDabStart, changedKeys);
     }
     if (!changedKeys.empty()) {
-        markStrokeBufferDirtyDelta(changedKeys);
+        // Dwell only appends dabs, never rebuilds.
+        markStrokeBufferDirtyDelta(changedKeys, StrokeTileSetChange::GrowOnly);
     }
     if (m_callbacks.requestRender) {
         m_callbacks.requestRender();

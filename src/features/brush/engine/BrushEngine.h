@@ -45,6 +45,26 @@ public:
         float fromStrokeElapsedSeconds = 0.0f, float toStrokeElapsedSeconds = 0.0f,
         bool strokeTimeAvailable = false);
 
+    /// Collect the dabs of several consecutive strokeTo() calls and stamp them
+    /// in ONE GPU batch at endDabBatch().
+    ///
+    /// A curved input span is subdivided into up to 128 straight micro-segments
+    /// (BrushStrokeHost::rasterizeCatmullRomStroke), each of which used to be
+    /// its own strokeTo — and with a large brush each carries only one or two
+    /// dabs, below the threshold for the batched path, so every dab paid the
+    /// full per-call GL setup: framebuffer state queries, uniform location
+    /// lookups, a dozen uniform uploads and a fresh dab vector. Accumulating
+    /// the span collapses all of that into a single stamp.
+    ///
+    /// Only plain paint/erase dabs are collected; blur, smudge, wet and liquify
+    /// keep their own segment paths and stamp immediately, so the pending dabs
+    /// stay a pure prefix of the stroke and ordering is preserved.
+    ///
+    /// endDabBatch() MUST run before anything reads the stroke buffer —
+    /// snapshotting, dirty marking, rebuilds, flatten, readback.
+    void beginDabBatch(const TileBrush& brush);
+    void endDabBatch(TileBrush& brush, TileGrid* selectionMask);
+
     // Rebuild in-progress stroke buffer from stored dabs.
     // Returns true when GPU path was used.
     bool rebuildStrokeFromDabs(
@@ -76,6 +96,10 @@ private:
     uint32_t m_canvasWidth = 0;
     uint32_t m_canvasHeight = 0;
     BrushExecutionOptions m_options {};
+
+    // Dab coalescing across the micro-segments of one input span.
+    std::vector<TileBrush::DabPoint> m_pendingBatchDabs;
+    bool m_dabBatchActive = false;
 };
 
 using BrushEngine = BrushExecutionBackend;

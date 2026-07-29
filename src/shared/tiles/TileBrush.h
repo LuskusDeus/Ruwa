@@ -594,6 +594,17 @@ public:
     float textureCheckerSize() const { return m_textureCheckerSize; }
     float textureCheckerSoftness() const { return m_textureCheckerSoftness; }
     float textureCheckerRotation() const { return m_textureCheckerRotation; }
+    /// Identity of the CACHED procedural grain, i.e. of the pattern the
+    /// generator rasterizes — not of the final texture factor.
+    ///
+    /// Deliberately excludes amount / contrast / depth / blend / edgeBoost:
+    /// those are per-pixel remaps applied where the grain is sampled
+    /// (applyTextureShaping in the stamp shaders), so they cannot change a
+    /// cached tile. Keeping them here used to invalidate the whole GPU texture
+    /// cache whenever they moved — and a dynamic texture binding moves them on
+    /// EVERY dab, which meant re-rendering every touched tile per dab.
+    /// textureScale stays: it is the pattern's frequency, baked into the
+    /// rasterized tile, and cannot be undone at sample time.
     uint32_t textureRevision() const
     {
         auto quantize = [](float value) -> uint32_t {
@@ -623,12 +634,7 @@ public:
         mix(quantizeWide(textureCheckerSize()));
         mix(quantize(textureCheckerSoftness()));
         mix(quantizeWide(textureCheckerRotation()));
-        mix(quantize(textureAmount()));
         mix(quantize(textureScale()));
-        mix(quantize(textureContrast()));
-        mix(quantize(textureDepth()));
-        mix(quantize(textureBlend()));
-        mix(quantize(textureEdgeBoost()));
         return derived;
     }
     const std::vector<uint8_t>& proceduralTextureTileAlpha(const TileKey& key) const

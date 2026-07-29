@@ -151,8 +151,26 @@ bool BrushExecutionBackend::strokeTo(TileBrush& brush, TileGrid& layerGrid, floa
             // Fall through to the legacy looped path on failure.
         }
 
-        if (!brush.isBlurMode() && !brush.isSmudgeMode() && !brush.isWetMode()
-            && !brush.isLiquifyMode() && segmentDabs.size() >= 8
+        const bool plainPaint = !brush.isBlurMode() && !brush.isSmudgeMode() && !brush.isWetMode()
+            && !brush.isLiquifyMode();
+
+        // Coalescing window open: hand the dabs to the pending batch instead of
+        // stamping now. Brush state still advances to the last dab immediately,
+        // because the following micro-segment's appendInterpolatedStrokeDabs
+        // reads it — stampGPU/stampDabSegmentGPU only ever read the brush, so
+        // deferring the draw cannot change what those dabs look like.
+        if (plainPaint && m_dabBatchActive) {
+            if (!segmentDabs.empty()) {
+                m_pendingBatchDabs.insert(
+                    m_pendingBatchDabs.end(), segmentDabs.begin(), segmentDabs.end());
+                const auto& last = segmentDabs.back();
+                brush.setPressure(last.pressure);
+                brush.setStrokeElapsedSeconds(last.strokeElapsedSeconds, last.strokeTimeAvailable);
+            }
+            return true;
+        }
+
+        if (plainPaint && segmentDabs.size() >= 8
             && m_brushRenderer->stampDabSegmentGPU(brush.strokeBuffer(), m_tileRenderer, brush,
                 segmentDabs, selectionMask, selectionMask != nullptr, m_canvasWidth,
                 m_canvasHeight)) {
@@ -182,6 +200,62 @@ bool BrushExecutionBackend::strokeTo(TileBrush& brush, TileGrid& layerGrid, floa
     brush.strokeToInterpolatedSize(layerGrid, fromX, fromY, toX, toY, fromPressure, toPressure,
         selectionMask, fromStrokeElapsedSeconds, toStrokeElapsedSeconds, strokeTimeAvailable);
     return false;
+}
+
+void BrushExecutionBackend::beginDabBatch(const TileBrush& brush)
+{
+    m_dabBatchActive = false;
+    m_pendingBatchDabs.clear();
+    if (!hasGpuBackend()) {
+        return;
+    }
+    // A dynamic texture binding re-derives the procedural texture parameters
+    // per dab, while the batched stamp applies the brush's current parameters
+    // to the whole batch. Widening that window past a single micro-segment
+    // would visibly change such brushes, so they keep the per-dab path.
+    if (brush.hasDynamicsRequiringCpuReplay()) {
+        return;
+    }
+    m_dabBatchActive = true;
+}
+
+void BrushExecutionBackend::endDabBatch(TileBrush& brush, TileGrid* selectionMask)
+{
+    if (!m_dabBatchActive) {
+        return;
+    }
+    m_dabBatchActive = false;
+    if (m_pendingBatchDabs.empty() || !hasGpuBackend()) {
+        m_pendingBatchDabs.clear();
+        return;
+    }
+
+    // Same threshold the un-batched path applies to a single segment, so spans
+    // short enough to have stayed on the per-dab route before still do.
+    const bool batched = m_pendingBatchDabs.size() >= 8
+        && m_brushRenderer->stampDabSegmentGPU(brush.strokeBuffer(), m_tileRenderer, brush,
+            m_pendingBatchDabs, selectionMask, selectionMask != nullptr, m_canvasWidth,
+            m_canvasHeight);
+
+    if (!batched) {
+        m_brushRenderer->beginStampBatch();
+        for (const auto& dab : m_pendingBatchDabs) {
+            brush.setPressure(dab.pressure);
+            brush.setStrokeElapsedSeconds(dab.strokeElapsedSeconds, dab.strokeTimeAvailable);
+            m_brushRenderer->stampGPU(brush.strokeBuffer(), m_tileRenderer, brush, dab.worldX,
+                dab.worldY, dab.radius, dab.hardness, dab.roundness, dab.angleDegrees,
+                dab.useMaxBlend, dab.colorR, dab.colorG, dab.colorB, dab.alpha, selectionMask,
+                selectionMask != nullptr, m_canvasWidth, m_canvasHeight, nullptr);
+        }
+        m_brushRenderer->endStampBatch();
+        // Leave the brush where the accumulation already advanced it, so the
+        // replay above cannot rewind pressure/time for whatever follows.
+        const auto& last = m_pendingBatchDabs.back();
+        brush.setPressure(last.pressure);
+        brush.setStrokeElapsedSeconds(last.strokeElapsedSeconds, last.strokeTimeAvailable);
+    }
+
+    m_pendingBatchDabs.clear();
 }
 
 bool BrushExecutionBackend::rebuildStrokeFromDabs(

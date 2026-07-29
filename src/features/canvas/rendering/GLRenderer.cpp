@@ -160,10 +160,16 @@ void GLRenderer::beginFrame(uint32_t width, uint32_t height)
     m_viewportHeight = height;
 
     // Flush any GPU textures orphaned by TileData destructors on other threads
-    // or during grid clear/remove operations between frames.
-    auto orphaned = OrphanedTextureCollector::instance().takeAll();
-    if (!orphaned.empty()) {
-        m_gl->glDeleteTextures(static_cast<GLsizei>(orphaned.size()), orphaned.data());
+    // or during grid clear/remove operations between frames. The tile renderer
+    // recycles the tile-sized ones into its pool instead of deleting them —
+    // stroke and cache tiles come straight back a frame or two later.
+    if (m_tileRenderer) {
+        m_tileRenderer->flushOrphanedTextures();
+    } else {
+        auto orphaned = OrphanedTextureCollector::instance().takeAll();
+        if (!orphaned.empty()) {
+            m_gl->glDeleteTextures(static_cast<GLsizei>(orphaned.size()), orphaned.data());
+        }
     }
 
     m_gl->glViewport(0, 0, width, height);

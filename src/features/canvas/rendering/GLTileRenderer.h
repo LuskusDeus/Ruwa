@@ -11,6 +11,7 @@
 #include "shared/types/Types.h"
 #include "shared/tiles/TileTypes.h"
 #include "shared/tiles/TileGrid.h"
+#include "shared/rendering/GLTileTexturePool.h"
 #include "features/canvas/scene/Viewport.h"
 
 #include <QOpenGLFunctions_4_5_Core>
@@ -47,11 +48,16 @@ public:
         const Color& viewportBackgroundColor = Color::transparent(), bool clipToCanvas = true);
     uint32_t lastRenderDrawCallCount() const { return m_lastRenderDrawCalls; }
 
-    /// Destroy GPU texture for a tile
+    /// Release a tile's GPU texture (recycled through the tile texture pool)
     void destroyTileTexture(TileData& tile);
 
     /// Ensure a tile has a GPU texture allocated (lazy creation)
     void ensureTileTexture(TileData& tile);
+
+    /// Reclaim textures that TileData destructors could not free themselves
+    /// (no GL context, wrong thread) and feed them back into the pool. Call
+    /// once per frame from the GL thread.
+    void flushOrphanedTextures();
 
     /// Upload tile CPU pixel data to its GPU texture
     void uploadTileData(TileData& tile);
@@ -70,6 +76,11 @@ private:
     QOpenGLFunctions_4_5_Core* m_gl = nullptr;
 
     std::unique_ptr<GLShaderProgram> m_tileProgram;
+
+    // Recycles tile textures instead of paying glTextureStorage2D per tile.
+    // Owned here because every tile texture in the document is created and
+    // released through this class.
+    GLTileTexturePool m_texturePool;
 
     GLuint m_emptyVAO = 0;
     uint32_t m_lastRenderDrawCalls = 0;
