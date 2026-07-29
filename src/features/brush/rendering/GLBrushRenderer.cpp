@@ -402,73 +402,57 @@ const QString kBrushStampVert
                      "    fragPixelCoord = pixel;\n"
                      "}\n");
 
-const QString kBlurPassVert = QStringLiteral("#version 450 core\n"
-                                             "out vec2 fragTexCoord;\n"
-                                             "vec2 positions[6] = vec2[](\n"
-                                             "    vec2(0.0, 0.0), vec2(1.0, 0.0), vec2(0.0, 1.0),\n"
-                                             "    vec2(0.0, 1.0), vec2(1.0, 0.0), vec2(1.0, 1.0)\n"
-                                             ");\n"
-                                             "void main() {\n"
-                                             "    vec2 uv = positions[gl_VertexID];\n"
-                                             "    gl_Position = vec4(uv * 2.0 - 1.0, 0.0, 1.0);\n"
-                                             "    fragTexCoord = uv;\n"
-                                             "}\n");
+// Deepest blur pyramid the brush ever needs: level L carries sigma
+// 0.5*sqrt(4^L - 1) source pixels, so 6 levels reach ~32px against the tool's
+// 10px sigma ceiling. Small ROIs allocate fewer (mipLevelsFor).
+constexpr GLsizei kMaxBlurPyramidLevels = 6;
 
-const QString kBlurPassFrag = QStringLiteral(
-    "#version 450 core\n"
-    "uniform sampler2D uSourceTexture;\n"
-    "uniform vec2 uInvSourceSize;\n"
-    "uniform vec2 uTexelStep;\n"
-    "uniform float uBlurRadius;\n"
-    "in vec2 fragTexCoord;\n"
-    "out vec4 outColor;\n"
-    "const int kMaxPairs = 25;\n"
-    "void buildAxisKernel(out float axisOffsets[kMaxPairs],\n"
-    "                     out float axisWeights[kMaxPairs],\n"
-    "                     out int sampleCount) {\n"
-    "    float sigma = max(uBlurRadius * 0.5, 0.5);\n"
-    "    float invTwoSigma2 = 1.0 / (2.0 * sigma * sigma);\n"
-    "    int supportHalf = int(ceil(min(uBlurRadius * 1.22474487139, 24.0)));\n"
-    "    supportHalf = max(supportHalf, 1);\n"
-    "    sampleCount = 0;\n"
-    "    axisOffsets[sampleCount] = 0.0;\n"
-    "    axisWeights[sampleCount] = 1.0;\n"
-    "    ++sampleCount;\n"
-    "    for (int tap = 1; tap <= supportHalf && sampleCount + 1 < kMaxPairs; tap += 2) {\n"
-    "        float pairOffset = float(tap);\n"
-    "        float pairWeight = exp(-(pairOffset * pairOffset) * invTwoSigma2);\n"
-    "        if (tap < supportHalf) {\n"
-    "            float nextOffset = float(tap + 1);\n"
-    "            float nextWeight = exp(-(nextOffset * nextOffset) * invTwoSigma2);\n"
-    "            pairWeight += nextWeight;\n"
-    "            pairOffset += nextWeight / pairWeight;\n"
-    "        }\n"
-    "        axisOffsets[sampleCount] = -pairOffset;\n"
-    "        axisWeights[sampleCount] = pairWeight;\n"
-    "        ++sampleCount;\n"
-    "        axisOffsets[sampleCount] = pairOffset;\n"
-    "        axisWeights[sampleCount] = pairWeight;\n"
-    "        ++sampleCount;\n"
-    "    }\n"
-    "}\n"
-    "void main() {\n"
-    "    float axisOffsets[kMaxPairs];\n"
-    "    float axisWeights[kMaxPairs];\n"
-    "    int sampleCount = 0;\n"
-    "    buildAxisKernel(axisOffsets, axisWeights, sampleCount);\n"
-    "    vec2 centeredUv = fragTexCoord;\n"
-    "    vec4 accum = vec4(0.0);\n"
-    "    float totalWeight = 0.0;\n"
-    "    for (int i = 0; i < kMaxPairs; ++i) {\n"
-    "        if (i >= sampleCount) continue;\n"
-    "        float w = axisWeights[i];\n"
-    "        vec2 uv = centeredUv + uTexelStep * axisOffsets[i];\n"
-    "        accum += texture(uSourceTexture, uv) * w;\n"
-    "        totalWeight += w;\n"
-    "    }\n"
-    "    outColor = totalWeight > 0.0 ? (accum / totalWeight) : vec4(0.0);\n"
-    "}\n");
+const QString kBlurDownsampleVert
+    = QStringLiteral("#version 450 core\n"
+                     "out vec2 fragTexCoord;\n"
+                     "vec2 positions[6] = vec2[](\n"
+                     "    vec2(0.0, 0.0), vec2(1.0, 0.0), vec2(0.0, 1.0),\n"
+                     "    vec2(0.0, 1.0), vec2(1.0, 0.0), vec2(1.0, 1.0)\n"
+                     ");\n"
+                     "void main() {\n"
+                     "    vec2 uv = positions[gl_VertexID];\n"
+                     "    gl_Position = vec4(uv * 2.0 - 1.0, 0.0, 1.0);\n"
+                     "    fragTexCoord = uv;\n"
+                     "}\n");
 
+// One level of the blur pyramid: halve the ROI with a 4x4 tent (3x3 bilinear
+// taps one parent texel apart, each tap itself averaging a 2x2 parent block).
+// Level L therefore holds the ROI blurred with sigma = 0.5 * sqrt(4^L - 1)
+// source pixels, and the apply pass reads a continuous level from that chain
+// instead of a fixed-sigma prepass. See kBlurApplyFrag for why that matters.
+const QString kBlurDownsampleFrag
+    = QStringLiteral("#version 450 core\n"
+                     "uniform sampler2D uSourceTexture;\n"
+                     "uniform vec2 uInvParentSize;\n"
+                     "in vec2 fragTexCoord;\n"
+                     "out vec4 outColor;\n"
+                     "void main() {\n"
+                     "    vec2 o = uInvParentSize;\n"
+                     "    vec4 c = textureLod(uSourceTexture, fragTexCoord, 0.0) * 4.0;\n"
+                     "    c += (textureLod(uSourceTexture, fragTexCoord + vec2(o.x, 0.0), 0.0)\n"
+                     "        + textureLod(uSourceTexture, fragTexCoord - vec2(o.x, 0.0), 0.0)\n"
+                     "        + textureLod(uSourceTexture, fragTexCoord + vec2(0.0, o.y), 0.0)\n"
+                     "        + textureLod(uSourceTexture, fragTexCoord - vec2(0.0, o.y), 0.0))\n"
+                     "        * 2.0;\n"
+                     "    c += textureLod(uSourceTexture, fragTexCoord + vec2(o.x, o.y), 0.0)\n"
+                     "        + textureLod(uSourceTexture, fragTexCoord + vec2(o.x, -o.y), 0.0)\n"
+                     "        + textureLod(uSourceTexture, fragTexCoord + vec2(-o.x, o.y), 0.0)\n"
+                     "        + textureLod(uSourceTexture, fragTexCoord + vec2(-o.x, -o.y), 0.0);\n"
+                     "    outColor = c * (1.0 / 16.0);\n"
+                     "}\n");
+
+// The dab profile drives the blur SIGMA, not a cross-fade towards the sharp
+// original. Mixing `original` with a fixed-sigma blur is not the same thing as
+// a weaker blur: it leaves the full sharp image underneath at (1-k) weight, so
+// a soft brush laid down a translucent blurred copy with doubled contours
+// instead of fading the blur out. Here every pixel samples the pyramid at the
+// level matching its own sigma, and at the rim sigma -> 0 collapses all taps
+// onto one texel, which converges to the original exactly.
 const QString kBlurApplyFrag = QStringLiteral(
     "#version 450 core\n"
     "uniform vec2  uBrushCenter;\n"
@@ -476,20 +460,18 @@ const QString kBlurApplyFrag = QStringLiteral(
     "uniform float uBrushHardness;\n"
     "uniform float uBrushRoundness;\n"
     "uniform float uBrushAngleRad;\n"
-    "uniform float uBrushAlpha;\n"
     "uniform sampler2D uOriginalTexture;\n"
-    "uniform sampler2D uBlurTexture;\n"
+    "uniform sampler2D uBlurPyramid;\n"
     "uniform sampler2D uMaskTexture;\n"
     "uniform int   uUseMask;\n"
-    "uniform float uBlurRadius;\n"
-    "uniform vec2  uInvBlurSize;\n"
+    "uniform float uPeakSigma;\n"
+    "uniform float uMaxLod;\n"
     "uniform vec2  uInvTileSize;\n"
     "uniform vec2  uTileOriginPx;\n"
     "uniform vec2  uRoiOriginPx;\n"
     "uniform vec2  uInvRoiSize;\n"
     "in vec2 fragPixelCoord;\n"
     "out vec4 outColor;\n"
-    "const int kMaxPairs = 25;\n"
     "vec2 worldToUv(vec2 worldPixelCoord) {\n"
     "    return (worldPixelCoord - uRoiOriginPx) * uInvRoiSize;\n"
     "}\n"
@@ -498,33 +480,20 @@ const QString kBlurApplyFrag = QStringLiteral(
     "    float n = fract(52.9829189 * fract(dot(p, vec2(0.06711056, 0.00583715))));\n"
     "    return n - 0.5;\n"
     "}\n"
-    "void buildAxisKernel(out float axisOffsets[kMaxPairs],\n"
-    "                     out float axisWeights[kMaxPairs],\n"
-    "                     out int sampleCount) {\n"
-    "    float sigma = max(uBlurRadius * 0.5, 0.5);\n"
-    "    float invTwoSigma2 = 1.0 / (2.0 * sigma * sigma);\n"
-    "    int supportHalf = int(ceil(min(uBlurRadius * 1.22474487139, 24.0)));\n"
-    "    supportHalf = max(supportHalf, 1);\n"
-    "    sampleCount = 0;\n"
-    "    axisOffsets[sampleCount] = 0.0;\n"
-    "    axisWeights[sampleCount] = 1.0;\n"
-    "    ++sampleCount;\n"
-    "    for (int tap = 1; tap <= supportHalf && sampleCount + 1 < kMaxPairs; tap += 2) {\n"
-    "        float pairOffset = float(tap);\n"
-    "        float pairWeight = exp(-(pairOffset * pairOffset) * invTwoSigma2);\n"
-    "        if (tap < supportHalf) {\n"
-    "            float nextOffset = float(tap + 1);\n"
-    "            float nextWeight = exp(-(nextOffset * nextOffset) * invTwoSigma2);\n"
-    "            pairWeight += nextWeight;\n"
-    "            pairOffset += nextWeight / pairWeight;\n"
-    "        }\n"
-    "        axisOffsets[sampleCount] = -pairOffset;\n"
-    "        axisWeights[sampleCount] = pairWeight;\n"
-    "        ++sampleCount;\n"
-    "        axisOffsets[sampleCount] = pairOffset;\n"
-    "        axisWeights[sampleCount] = pairWeight;\n"
-    "        ++sampleCount;\n"
-    "    }\n"
+    // 3x3 tent around uv at `lod`, taps `offset` uv apart. Level lod already
+    // carries sigma 0.5*sqrt(4^lod - 1); the tent adds offsetPx/sqrt(2) on top,
+    // and the caller sizes the offset so the two compose to exactly `sigma`.
+    "vec4 tentSample(vec2 uv, float lod, vec2 offset) {\n"
+    "    vec4 c = textureLod(uBlurPyramid, uv, lod) * 4.0;\n"
+    "    c += (textureLod(uBlurPyramid, uv + vec2(offset.x, 0.0), lod)\n"
+    "        + textureLod(uBlurPyramid, uv - vec2(offset.x, 0.0), lod)\n"
+    "        + textureLod(uBlurPyramid, uv + vec2(0.0, offset.y), lod)\n"
+    "        + textureLod(uBlurPyramid, uv - vec2(0.0, offset.y), lod)) * 2.0;\n"
+    "    c += textureLod(uBlurPyramid, uv + offset, lod)\n"
+    "        + textureLod(uBlurPyramid, uv + vec2(offset.x, -offset.y), lod)\n"
+    "        + textureLod(uBlurPyramid, uv + vec2(-offset.x, offset.y), lod)\n"
+    "        + textureLod(uBlurPyramid, uv - offset, lod);\n"
+    "    return c * (1.0 / 16.0);\n"
     "}\n"
     "void main() {\n"
     "    vec2 worldPixelCoord = uTileOriginPx + fragPixelCoord;\n"
@@ -553,24 +522,15 @@ const QString kBlurApplyFrag = QStringLiteral(
     "        maskScale = texture(uMaskTexture, fragPixelCoord * uInvTileSize).a;\n"
     "        if (maskScale <= 0.0) { discard; }\n"
     "    }\n"
-    "    float axisOffsets[kMaxPairs];\n"
-    "    float axisWeights[kMaxPairs];\n"
-    "    int sampleCount = 0;\n"
-    "    buildAxisKernel(axisOffsets, axisWeights, sampleCount);\n"
-    "    vec4 blurred = vec4(0.0);\n"
-    "    float totalWeight = 0.0;\n"
-    "    for (int i = 0; i < kMaxPairs; ++i) {\n"
-    "        if (i >= sampleCount) continue;\n"
-    "        float w = axisWeights[i];\n"
-    "        vec2 uv = sourceUv + vec2(0.0, uInvBlurSize.y * axisOffsets[i]);\n"
-    "        blurred += texture(uBlurTexture, uv) * w;\n"
-    "        totalWeight += w;\n"
-    "    }\n"
-    "    if (totalWeight <= 0.0) {\n"
-    "        discard;\n"
-    "    }\n"
-    "    blurred /= totalWeight;\n"
-    "    outColor = mix(original, blurred, uBrushAlpha * falloff * maskScale);\n"
+    // The dab profile IS the blur strength. Pick the pyramid level whose own
+    // sigma sits just under the target, then let the tent make up the rest.
+    "    float sigma = uPeakSigma * falloff;\n"
+    "    float lod = clamp(log2(max(sigma * 1.15470054, 1e-4)), 0.0, uMaxLod);\n"
+    "    float levelSigma = 0.5 * sqrt(max(exp2(2.0 * lod) - 1.0, 0.0));\n"
+    "    float tentSigma = sqrt(max(sigma * sigma - levelSigma * levelSigma, 0.0));\n"
+    "    vec2 offset = uInvRoiSize * (tentSigma * 1.41421356);\n"
+    "    vec4 blurred = tentSample(sourceUv, lod, offset);\n"
+    "    outColor = mix(original, blurred, maskScale);\n"
     "    if (outColor.a > 0.0 && outColor.a < 1.0) {\n"
     "        float dither = stableDither(worldPixelCoord) / 255.0;\n"
     "        float oldAlpha = outColor.a;\n"
@@ -1423,8 +1383,9 @@ Result<void> GLBrushRenderer::initialize(const QString& shaderDir)
         return result;
     }
 
-    m_blurPassProgram = std::make_unique<GLShaderProgram>(m_gl);
-    auto blurPassResult = m_blurPassProgram->loadFromSource(kBlurPassVert, kBlurPassFrag);
+    m_blurDownsampleProgram = std::make_unique<GLShaderProgram>(m_gl);
+    auto blurPassResult
+        = m_blurDownsampleProgram->loadFromSource(kBlurDownsampleVert, kBlurDownsampleFrag);
     if (!blurPassResult) {
         return blurPassResult;
     }
@@ -1705,7 +1666,10 @@ Result<void> GLBrushRenderer::initialize(const QString& shaderDir)
             m_gl->glDeleteSamplers(1, &m_blurLinearSampler);
             m_blurLinearSampler = 0;
         }
-        deleteTexture(m_gl, m_blurScratchTempTex);
+        if (m_blurPyramidSampler) {
+            m_gl->glDeleteSamplers(1, &m_blurPyramidSampler);
+            m_blurPyramidSampler = 0;
+        }
         deleteTexture(m_gl, m_blurScratchSourceTex);
         deleteTexture(m_gl, m_blurReadTex);
         deleteTexture(m_gl, m_pigmentLutTex[0]);
@@ -1741,13 +1705,21 @@ Result<void> GLBrushRenderer::initialize(const QString& shaderDir)
         = tileTextureParams(kDefaultTileFormat, GL_NEAREST, GL_NEAREST);
     m_blurReadTex = createTexture2D(m_gl, TILE_SIZE, TILE_SIZE, contentScratchParams);
     m_blurScratchSourceTex = createTexture2D(m_gl, 1, 1, contentScratchParams); // resized on demand
-    m_blurScratchTempTex = createTexture2D(m_gl, 1, 1, contentScratchParams); // resized on demand
 
     m_gl->glGenSamplers(1, &m_blurLinearSampler);
     m_gl->glSamplerParameteri(m_blurLinearSampler, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
     m_gl->glSamplerParameteri(m_blurLinearSampler, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
     m_gl->glSamplerParameteri(m_blurLinearSampler, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
     m_gl->glSamplerParameteri(m_blurLinearSampler, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
+
+    // Trilinear: the blur brush reads a CONTINUOUS pyramid level, so the mip
+    // filter has to interpolate between levels. m_blurLinearSampler stays
+    // GL_LINEAR (base level only) for every other consumer of the ROI scratch.
+    m_gl->glGenSamplers(1, &m_blurPyramidSampler);
+    m_gl->glSamplerParameteri(m_blurPyramidSampler, GL_TEXTURE_MIN_FILTER, GL_LINEAR_MIPMAP_LINEAR);
+    m_gl->glSamplerParameteri(m_blurPyramidSampler, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
+    m_gl->glSamplerParameteri(m_blurPyramidSampler, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
+    m_gl->glSamplerParameteri(m_blurPyramidSampler, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
 
     // Wet encode samples the two packed PigmentLut planes. Failure is fatal to
     // renderer initialization; wet never falls back to RGB reservoir mixing.
@@ -1807,7 +1779,7 @@ void GLBrushRenderer::shutdown()
     DabShapeCache::instance().releaseTextures(m_gl);
 
     m_brushProgram.reset();
-    m_blurPassProgram.reset();
+    m_blurDownsampleProgram.reset();
     m_blurProgram.reset();
     m_smudgeProgram.reset();
     m_smudgeBatchProgram.reset();
@@ -1833,7 +1805,6 @@ void GLBrushRenderer::shutdown()
 
     deleteTexture(m_gl, m_blurReadTex);
     deleteTexture(m_gl, m_blurScratchSourceTex);
-    deleteTexture(m_gl, m_blurScratchTempTex);
     deleteTexture(m_gl, m_maskScratchTex);
     deleteTexture(m_gl, m_pigmentLutTex[0]);
     deleteTexture(m_gl, m_pigmentLutTex[1]);
@@ -1865,6 +1836,10 @@ void GLBrushRenderer::shutdown()
         m_gl->glDeleteSamplers(1, &m_blurLinearSampler);
         m_blurLinearSampler = 0;
     }
+    if (m_blurPyramidSampler) {
+        m_gl->glDeleteSamplers(1, &m_blurPyramidSampler);
+        m_blurPyramidSampler = 0;
+    }
     if (m_fbo) {
         m_gl->glDeleteFramebuffers(1, &m_fbo);
         m_fbo = 0;
@@ -1877,6 +1852,7 @@ void GLBrushRenderer::shutdown()
 
     m_blurScratchWidth = 0;
     m_blurScratchHeight = 0;
+    m_blurScratchLevels = 1;
     m_drawCallEstimate = 0;
     m_initialized = false;
 }
@@ -1999,7 +1975,7 @@ void GLBrushRenderer::stampGPU(TileGrid& strokeBuffer, GLTileRenderer* tileRende
     // Routing both here keeps single/first dabs consistent with the batched
     // stroke path (stampSmudgeSegmentGPU).
     const bool wantsSmudge = brush.isSmudgeMode() || brush.isWetMode();
-    const bool isBlur = wantsBlur && m_blurPassProgram && m_blurProgram && layerGrid;
+    const bool isBlur = wantsBlur && m_blurDownsampleProgram && m_blurProgram && layerGrid;
     if (wantsBlur && !isBlur) {
         finishOwnBatch();
         return;
@@ -2007,6 +1983,11 @@ void GLBrushRenderer::stampGPU(TileGrid& strokeBuffer, GLTileRenderer* tileRende
     const float blurRadiusBase = std::min(radius * 0.35f, 20.0f);
     const float blurRadiusPx = isBlur ? blurRadiusBase * std::max(alpha, 0.05f) : blurRadiusBase;
     const float blurKernelReach = std::max(blurRadiusPx * 1.22474487139f, 1.0f);
+    // Sigma at the dab CENTRE. Unchanged from the fixed-sigma kernel this path
+    // used to run, so a hard-edged dab still blurs exactly as much as before;
+    // what changed is that softer parts of the dab now get a smaller sigma
+    // instead of a transparent overlay of this one.
+    const float blurPeakSigma = std::max(blurRadiusPx * 0.5f, 0.5f);
 
     if (isBlur) {
         int32_t roiMinX
@@ -2095,34 +2076,59 @@ void GLBrushRenderer::stampGPU(TileGrid& strokeBuffer, GLTileRenderer* tileRende
             }
         }
 
-        clearTexture(m_blurScratchTempTex);
+        // Build the blur pyramid in the ROI texture's own mip levels: level 0 is
+        // the untouched source (sigma 0), each further level halves the ROI with
+        // a 4x4 tent. Only the levels the peak sigma can actually reach are
+        // built, so a small brush pays one or two tiny draws and a large one
+        // still costs far less than the full-resolution fixed-sigma prepass this
+        // replaced — the per-tile apply pass now reads 9 texels instead of ~25
+        // full-res ones, and it reads them from a level scaled to its own sigma.
+        const float peakOffsetPx = blurPeakSigma * 1.15470054f;
+        const int maxUsefulLevel = static_cast<int>(m_blurScratchLevels) - 1;
+        const int pyramidLevels = std::clamp(
+            static_cast<int>(std::ceil(std::log2(std::max(peakOffsetPx, 1.0f)))), 0,
+            std::max(maxUsefulLevel, 0));
 
-        m_gl->glViewport(0, 0, roiWidth, roiHeight);
-        m_gl->glFramebufferTexture2D(
-            GL_FRAMEBUFFER, GL_COLOR_ATTACHMENT0, GL_TEXTURE_2D, m_blurScratchTempTex, 0);
+        if (pyramidLevels > 0) {
+            m_blurDownsampleProgram->use();
+            m_blurDownsampleProgram->setUniform("uSourceTexture", 0);
+            m_gl->glBindTextureUnit(0, m_blurScratchSourceTex);
+            if (m_blurPyramidSampler) {
+                m_gl->glBindSampler(0, m_blurPyramidSampler);
+            }
 
-        m_blurPassProgram->use();
-        m_blurPassProgram->setUniform("uSourceTexture", 0);
-        m_blurPassProgram->setUniform("uInvSourceSize", 1.0f / static_cast<float>(roiWidth),
-            1.0f / static_cast<float>(roiHeight));
-        m_blurPassProgram->setUniform("uTexelStep", 1.0f / static_cast<float>(roiWidth), 0.0f);
-        m_blurPassProgram->setUniform("uBlurRadius", blurRadiusPx);
+            for (int level = 1; level <= pyramidLevels; ++level) {
+                const GLsizei parentW = std::max<GLsizei>(roiWidth >> (level - 1), 1);
+                const GLsizei parentH = std::max<GLsizei>(roiHeight >> (level - 1), 1);
+                const GLsizei levelW = std::max<GLsizei>(roiWidth >> level, 1);
+                const GLsizei levelH = std::max<GLsizei>(roiHeight >> level, 1);
 
-        m_gl->glBindTextureUnit(0, m_blurScratchSourceTex);
-        if (m_blurLinearSampler) {
-            m_gl->glBindSampler(0, m_blurLinearSampler);
-        }
+                // Reading and writing one texture at once is only defined while
+                // the readable levels exclude the attached one, so the sampled
+                // range is pinned to the parent for the duration of the draw.
+                m_gl->glTextureParameteri(m_blurScratchSourceTex, GL_TEXTURE_BASE_LEVEL, level - 1);
+                m_gl->glTextureParameteri(m_blurScratchSourceTex, GL_TEXTURE_MAX_LEVEL, level - 1);
+                m_gl->glFramebufferTexture2D(GL_FRAMEBUFFER, GL_COLOR_ATTACHMENT0, GL_TEXTURE_2D,
+                    m_blurScratchSourceTex, level);
+                m_gl->glViewport(0, 0, levelW, levelH);
+                m_blurDownsampleProgram->setUniform("uInvParentSize",
+                    1.0f / static_cast<float>(parentW), 1.0f / static_cast<float>(parentH));
 
-        m_gl->glDrawArrays(GL_TRIANGLES, 0, 6);
-        ++m_drawCallEstimate;
+                m_gl->glDrawArrays(GL_TRIANGLES, 0, 6);
+                ++m_drawCallEstimate;
+            }
 
-        if (m_blurLinearSampler) {
-            m_gl->glBindSampler(0, 0);
+            m_gl->glTextureParameteri(m_blurScratchSourceTex, GL_TEXTURE_BASE_LEVEL, 0);
+            m_gl->glTextureParameteri(
+                m_blurScratchSourceTex, GL_TEXTURE_MAX_LEVEL, m_blurScratchLevels - 1);
+            if (m_blurPyramidSampler) {
+                m_gl->glBindSampler(0, 0);
+            }
         }
 
         m_blurProgram->use();
         m_blurProgram->setUniform("uOriginalTexture", 0);
-        m_blurProgram->setUniform("uBlurTexture", 1);
+        m_blurProgram->setUniform("uBlurPyramid", 1);
         m_blurProgram->setUniform("uMaskTexture", 2);
         m_blurProgram->setUniform("uUseMask", useSelectionMask ? 1 : 0);
         m_blurProgram->setUniform("uBrushRadius", radius);
@@ -2130,10 +2136,8 @@ void GLBrushRenderer::stampGPU(TileGrid& strokeBuffer, GLTileRenderer* tileRende
         m_blurProgram->setUniform("uBrushRoundness", std::clamp(roundness, 0.0f, 1.0f));
         m_blurProgram->setUniform(
             "uBrushAngleRad", angleDegrees * (3.14159265358979323846f / 180.0f));
-        m_blurProgram->setUniform("uBrushAlpha", 1.0f);
-        m_blurProgram->setUniform("uBlurRadius", blurRadiusPx);
-        m_blurProgram->setUniform("uInvBlurSize", 1.0f / static_cast<float>(roiWidth),
-            1.0f / static_cast<float>(roiHeight));
+        m_blurProgram->setUniform("uPeakSigma", blurPeakSigma);
+        m_blurProgram->setUniform("uMaxLod", static_cast<float>(pyramidLevels));
         m_blurProgram->setUniform("uInvTileSize", 1.0f / static_cast<float>(TILE_SIZE),
             1.0f / static_cast<float>(TILE_SIZE));
         m_blurProgram->setUniform(
@@ -2141,9 +2145,11 @@ void GLBrushRenderer::stampGPU(TileGrid& strokeBuffer, GLTileRenderer* tileRende
         m_blurProgram->setUniform("uInvRoiSize", 1.0f / static_cast<float>(roiWidth),
             1.0f / static_cast<float>(roiHeight));
 
-        m_gl->glBindTextureUnit(1, m_blurScratchTempTex);
-        if (m_blurLinearSampler) {
-            m_gl->glBindSampler(1, m_blurLinearSampler);
+        // Unit 0 keeps the texture's own NEAREST filtering for the untouched
+        // original; unit 1 is the same texture read trilinearly as the pyramid.
+        m_gl->glBindTextureUnit(1, m_blurScratchSourceTex);
+        if (m_blurPyramidSampler) {
+            m_gl->glBindSampler(1, m_blurPyramidSampler);
         }
 
         m_gl->glViewport(0, 0, TILE_SIZE, TILE_SIZE);
@@ -2237,7 +2243,7 @@ void GLBrushRenderer::stampGPU(TileGrid& strokeBuffer, GLTileRenderer* tileRende
                 m_blurProgram->setUniform("uQuadMax", quadMaxX, quadMaxY);
 
                 m_gl->glBindTextureUnit(0, m_blurScratchSourceTex);
-                m_gl->glBindTextureUnit(1, m_blurScratchTempTex);
+                m_gl->glBindTextureUnit(1, m_blurScratchSourceTex);
 
                 m_gl->glDrawArrays(GL_TRIANGLES, 0, 6);
                 ++m_drawCallEstimate;
@@ -2248,7 +2254,7 @@ void GLBrushRenderer::stampGPU(TileGrid& strokeBuffer, GLTileRenderer* tileRende
         }
 
         m_gl->glBindTextureUnit(1, 0);
-        if (m_blurLinearSampler) {
+        if (m_blurPyramidSampler) {
             m_gl->glBindSampler(1, 0);
         }
         if (useSelectionMask) {
@@ -2256,9 +2262,6 @@ void GLBrushRenderer::stampGPU(TileGrid& strokeBuffer, GLTileRenderer* tileRende
         }
 
         m_gl->glBindTextureUnit(0, 0);
-        if (m_blurLinearSampler) {
-            m_gl->glBindSampler(0, 0);
-        }
 
         finishOwnBatch();
         return;
@@ -4355,7 +4358,7 @@ void GLBrushRenderer::ensureBlurReadTexFormat(TilePixelFormat contentFormat)
 bool GLBrushRenderer::ensureBlurScratchSize(
     GLsizei width, GLsizei height, TilePixelFormat contentFormat)
 {
-    if (width <= 0 || height <= 0 || !m_blurScratchSourceTex || !m_blurScratchTempTex) {
+    if (width <= 0 || height <= 0 || !m_blurScratchSourceTex) {
         return false;
     }
     if (width == m_blurScratchWidth && height == m_blurScratchHeight
@@ -4370,12 +4373,16 @@ bool GLBrushRenderer::ensureBlurScratchSize(
     // Content scratch follows the requested working format. Wet requests float
     // storage; other effects request the document format. Immutable storage
     // means resizing/re-formatting replaces the texture objects.
-    const TextureParams scratchParams = tileTextureParams(contentFormat, GL_NEAREST, GL_NEAREST);
+    TextureParams scratchParams = tileTextureParams(contentFormat, GL_NEAREST, GL_NEAREST);
+    // The blur brush builds its pyramid in this texture's own mip levels. Every
+    // other consumer samples it through m_blurLinearSampler (GL_LINEAR), which
+    // never touches a mip, so the chain costs them only the 1/3 extra storage.
+    // kMaxBlurPyramidLevels covers sigma well past the tool's 10px ceiling.
+    scratchParams.levels = mipLevelsFor(width, height, kMaxBlurPyramidLevels);
+    m_blurScratchLevels = scratchParams.levels;
     recreateTexture2D(
         m_gl, m_blurScratchSourceTex, m_blurScratchWidth, m_blurScratchHeight, scratchParams);
-    recreateTexture2D(
-        m_gl, m_blurScratchTempTex, m_blurScratchWidth, m_blurScratchHeight, scratchParams);
-    return m_blurScratchSourceTex != 0 && m_blurScratchTempTex != 0;
+    return m_blurScratchSourceTex != 0;
 }
 
 bool GLBrushRenderer::ensureMaskScratchSize(GLsizei width, GLsizei height)

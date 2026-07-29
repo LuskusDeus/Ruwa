@@ -200,7 +200,9 @@ private:
     QOpenGLFunctions_4_5_Core* m_gl = nullptr;
 
     std::unique_ptr<GLShaderProgram> m_brushProgram;
-    std::unique_ptr<GLShaderProgram> m_blurPassProgram;
+    // Halves the blur brush's ROI into the next mip level of the scratch
+    // texture, building the pyramid the apply program samples per pixel.
+    std::unique_ptr<GLShaderProgram> m_blurDownsampleProgram;
     std::unique_ptr<GLShaderProgram> m_blurProgram;
     std::unique_ptr<GLShaderProgram> m_smudgeProgram;
     std::unique_ptr<GLShaderProgram> m_smudgeBatchProgram;
@@ -235,14 +237,20 @@ private:
     // format. Wet uses workingColorFormat(documentFormat), with conversions at
     // the layer boundary handled by copyColorRegion().
     GLuint m_blurReadTex = 0;
+    // Allocated with a mip chain: the blur brush writes its pyramid into the
+    // levels of this very texture, so level 0 doubles as the sharp original and
+    // no second full-ROI texture is needed. Consumers other than the blur apply
+    // program sample it through m_blurLinearSampler and never see a mip.
     GLuint m_blurScratchSourceTex = 0;
-    GLuint m_blurScratchTempTex = 0;
     GLuint m_blurLinearSampler = 0;
+    // GL_LINEAR_MIPMAP_LINEAR — required for the blur brush's continuous level
+    // selection; the linear sampler above would clamp every read to level 0.
+    GLuint m_blurPyramidSampler = 0;
 
     // Selection-mask snapshot scratch for smudge/liquify. Masks are ALWAYS
     // RGBA8 coverage, so this stays RGBA8 and is kept separate from the content
-    // scratch above (the two roles previously shared m_blurScratchTempTex,
-    // which can no longer be both 16F content and an RGBA8 mask target).
+    // scratch above (the two roles once shared a single scratch texture, which
+    // can no longer be both 16F content and an RGBA8 mask target).
     GLuint m_maskScratchTex = 0;
     GLsizei m_maskScratchWidth = 0;
     GLsizei m_maskScratchHeight = 0;
@@ -332,6 +340,9 @@ private:
     GLPixelPackBuffer m_readbackPbo;
     GLsizei m_blurScratchWidth = 0;
     GLsizei m_blurScratchHeight = 0;
+    // Mip levels m_blurScratchSourceTex was allocated with — the ceiling on the
+    // blur pyramid depth, and therefore on the sigma a single ROI can reach.
+    GLsizei m_blurScratchLevels = 1;
     // CONTENT format the blur scratch textures were allocated with.
     TilePixelFormat m_blurScratchFormat = kDefaultTileFormat;
     // CONTENT format the fixed TILE_SIZE m_blurReadTex currently holds.

@@ -6,6 +6,8 @@
 
 #include "shared/tiles/TileFormat.h"
 
+#include <algorithm>
+
 namespace aether {
 
 struct TextureParams {
@@ -16,7 +18,22 @@ struct TextureParams {
     GLenum internalFormat = GL_RGBA8;
     GLenum pixelFormat = GL_RGBA;
     GLenum pixelType = GL_UNSIGNED_BYTE;
+    /// Mip levels to allocate. 1 = no chain (the default everywhere except the
+    /// blur brush's ROI scratch, which stores its blur pyramid in the mips).
+    GLsizei levels = 1;
 };
+
+/// Full mip chain depth for a texture of this size, capped at `maxLevels`.
+inline GLsizei mipLevelsFor(GLsizei width, GLsizei height, GLsizei maxLevels = 16)
+{
+    GLsizei minDim = std::min(width, height);
+    GLsizei levels = 1;
+    while (minDim > 1 && levels < maxLevels) {
+        minDim >>= 1;
+        ++levels;
+    }
+    return levels;
+}
 
 // ---- Tile pixel format -> GL enums ----
 //
@@ -95,7 +112,7 @@ inline GLuint createTexture2D(QOpenGLFunctions_4_5_Core* gl, GLsizei width, GLsi
     gl->glTextureParameteri(tex, GL_TEXTURE_MAG_FILTER, p.magFilter);
     gl->glTextureParameteri(tex, GL_TEXTURE_WRAP_S, p.wrapS);
     gl->glTextureParameteri(tex, GL_TEXTURE_WRAP_T, p.wrapT);
-    gl->glTextureStorage2D(tex, 1, p.internalFormat, width, height);
+    gl->glTextureStorage2D(tex, std::max<GLsizei>(p.levels, 1), p.internalFormat, width, height);
     if (data != nullptr) {
         gl->glTextureSubImage2D(tex, 0, 0, 0, width, height, p.pixelFormat, p.pixelType, data);
     }
