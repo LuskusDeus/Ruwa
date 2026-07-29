@@ -898,7 +898,10 @@ void BrushStrokeHost::continueStrokeWithResolvedPoint(float worldX, float worldY
     float moveDy = stabilizedPoint.y - m_lastStrokeInputY;
     const bool stabilizerCatchupPending = (currentBrush->stabilization() > 0.0001f)
         && ruwa::core::brushes::hasPendingStrokeStabilizer(m_stabilizationState, worldX, worldY);
-    const float pressureDelta = std::abs(pressure - m_lastStrokePressure);
+    // Pressure-only input must be compared with the previous input sample, not
+    // m_lastStrokePressure. The latter is the rasterized path anchor and can lag
+    // several samples behind while the live smoothing window is populated.
+    const float pressureDelta = std::abs(pressure - m_lastStrokeInputPressure);
     const bool pressureChanged = pressureDelta > 0.001f;
     const bool movementBelowThreshold = (moveDx * moveDx + moveDy * moveDy)
         < (kQuickLineMovementEpsilon * kQuickLineMovementEpsilon);
@@ -936,6 +939,25 @@ void BrushStrokeHost::continueStrokeWithResolvedPoint(float worldX, float worldY
     const size_t changedDabStart = currentBrush->strokeDabs().size();
 
     if (!hasMeaningfulMovement && pressureChanged) {
+        if (!currentBrush->usesNonAccumulatingDabBlend()) {
+            // A pressure-only packet revises the current input sample; it is not
+            // distance travelled by the brush. Re-stamping an accumulating
+            // (src-over or dynamic-color) dab here makes opacity depend on the
+            // tablet report rate and creates dark stationary dots. Keep the
+            // pending endpoint pressure current so the next real segment (or
+            // the end-of-stroke drain) still interpolates the latest pressure.
+            if (m_liveStrokePoints.size() > 1) {
+                m_liveStrokePoints.back().pressure = pressure;
+                m_liveStrokePoints.back().strokeElapsedSeconds = strokeElapsedSeconds;
+            }
+            m_lastStrokeInputPressure = pressure;
+            m_lastStrokeInputElapsedSeconds = strokeElapsedSeconds;
+            if (updateCatchupTimer && stabilizerCatchupPending) {
+                updateStabilizerCatchupTimer();
+            }
+            return;
+        }
+
         if (deferInitialDabForDirection) {
             skippedDabForDirection = true;
             previewUpdated = false;

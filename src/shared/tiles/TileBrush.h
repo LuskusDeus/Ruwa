@@ -160,6 +160,7 @@ public:
             ? ruwa::core::brushes::BrushSettingsData::FlowBlendSrcOver
             : ruwa::core::brushes::BrushSettingsData::FlowBlendMax;
     }
+    bool usesNonAccumulatingDabBlend() const { return useMaxBlendForCurrentMode(); }
     void setTextureAmount(float v)
     {
         const float nv = std::clamp(v, 0.0f, 1.0f);
