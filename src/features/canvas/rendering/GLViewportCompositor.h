@@ -83,6 +83,44 @@ public:
         }
     };
 
+    struct RadialRevealParams {
+        bool enabled;
+        Vector2 documentOrigin;
+        float radius;
+        float feather;
+        bool flipH;
+        bool flipV;
+
+        RadialRevealParams()
+            : enabled(false)
+            , documentOrigin()
+            , radius(0.0f)
+            , feather(0.0f)
+            , flipH(false)
+            , flipV(false)
+        {
+        }
+    };
+
+    struct CheckerBackdropParams {
+        bool enabled;
+        bool documentSpace;
+        Color color1;
+        Color color2;
+        Color viewportColor;
+        float size;
+
+        CheckerBackdropParams()
+            : enabled(false)
+            , documentSpace(false)
+            , color1()
+            , color2()
+            , viewportColor()
+            , size(1.0f)
+        {
+        }
+    };
+
     explicit GLViewportCompositor(QOpenGLFunctions_4_5_Core* gl);
     ~GLViewportCompositor();
 
@@ -111,7 +149,14 @@ public:
         const OverscanSourceResolver& overscanResolver = {},
         const LayerMaskResolver& layerMaskResolver = {});
     void drawTexture(GLuint texture, const CanvasClipParams& clipParams = CanvasClipParams(),
-        const LassoMaskParams& lassoMask = LassoMaskParams(), bool replaceWithCoverage = false);
+        const LassoMaskParams& lassoMask = LassoMaskParams(), bool replaceWithCoverage = false,
+        const RadialRevealParams& radialReveal = RadialRevealParams(),
+        const CheckerBackdropParams& checkerBackdrop = CheckerBackdropParams());
+
+    /// Copies a transient compositor result into a caller-owned stable texture.
+    /// The texture is reused while its size matches the current frame.
+    bool saveTexture(
+        GLuint sourceTexture, GLuint& stableTexture, uint32_t& stableWidth, uint32_t& stableHeight);
 
     // Gate a screen-space color texture by a layer mask, returning a new texture
     // = colorTex * reveal, where reveal = clamp(lum(maskTexel.rgb) + (1 - maskTexel.a), 0, 1)

@@ -559,9 +559,7 @@ constexpr qint64 kCanvasCornerFrameDelayMs = 16;
 constexpr float kCanvasCornerVisibilityMarginPx = 0.5f;
 constexpr float kCanvasCornerMaxScreenRadiusPx = 12.0f;
 constexpr float kCanvasCornerAnimationSpeed = 14.0f;
-constexpr qint64 kFillPreviewStartDelayMs = 1000;
 constexpr qint64 kClassicFillWaitPopupDelayMs = 2000;
-constexpr float kFillPreviewPauseRadiusPx = 1000.0f;
 constexpr int kFillProgressPopupMargin = 8;
 constexpr int kFillProgressPopupOffsetY = 18;
 
@@ -601,24 +599,10 @@ aether::TileGrid makeTechnicalWarmupGrid(uint8_t alpha)
     return grid;
 }
 
-double elapsedMs(const QElapsedTimer& timer)
-{
-    return static_cast<double>(timer.nsecsElapsed()) / 1000000.0;
-}
-
 const QUuid& lassoPreviewSelectionMaskCacheId()
 {
     static const QUuid id(QStringLiteral("{5b4ce0bb-14e7-4bc5-9ed4-bcb954cf6989}"));
     return id;
-}
-
-QString formatTilePayload(size_t tileCount)
-{
-    const double mib = static_cast<double>(tileCount) * static_cast<double>(aether::TILE_BYTE_SIZE)
-        / (1024.0 * 1024.0);
-    return QStringLiteral("%1 tiles (~%2 MiB)")
-        .arg(static_cast<qulonglong>(tileCount))
-        .arg(mib, 0, 'f', 1);
 }
 
 } // namespace
@@ -2301,7 +2285,6 @@ OpenGLCanvasWidget::OpenGLCanvasWidget(QWidget* parent)
         = [this](const ruwa::core::layers::LayerData* layer, const TileGrid* paintMask) {
               return shouldPreserveAlphaForPaintMask(layer, paintMask);
           };
-    layerCtx.getFillPreview = [this]() { return currentFillPreviewState(); };
     layerCtx.useViewportTransformPreview = [this]() {
         return m_transformViewportPreview.active && m_transformViewportPreview.viewportPathEnabled;
     };
@@ -2552,9 +2535,10 @@ bool OpenGLCanvasWidget::nativeEvent(const QByteArray& eventType, void* message,
 OpenGLCanvasWidget::~OpenGLCanvasWidget()
 {
     cancelPendingLassoFillCommit();
-    stopFillPreview(false);
+    stopFillPreview();
     shutdownFillWorker();
     makeCurrent();
+    flushPendingFillPreviewTextureDeletes();
     if (m_selectionController) {
         m_selectionController->shutdown(m_selectionRenderer.get());
     }
@@ -2581,6 +2565,13 @@ OpenGLCanvasWidget::~OpenGLCanvasWidget()
 void OpenGLCanvasWidget::setCanvas(uint32_t width, uint32_t height)
 {
     m_canvas.setSize(width, height);
+    if (m_fillPreview.active) {
+        ++m_fillPreview.viewportRevision;
+        m_fillPreview.finalCompositeDirty = true;
+        if (m_layerScreenSourceCache) {
+            m_layerScreenSourceCache->invalidateByViewport();
+        }
+    }
     update();
 }
 
@@ -2814,13 +2805,6 @@ void OpenGLCanvasWidget::updateFillProgressPopupPosition()
     m_fillProgressPopup->updateAnchor(fillProgressPopupTopLeft());
 }
 
-void OpenGLCanvasWidget::showFillProgressPopupProcessing()
-{
-    ensureFillProgressPopup();
-    m_fillProgressPopup->showProcessingAt(fillProgressPopupAnchorPoint());
-    m_fillProgressPopup->updateAnchor(fillProgressPopupTopLeft());
-}
-
 void OpenGLCanvasWidget::showClassicFillWaitPopup()
 {
     ensureFillProgressPopup();
@@ -2889,7 +2873,7 @@ void OpenGLCanvasWidget::setTextEditOverlayState(const TextEditOverlayState& sta
 
 void OpenGLCanvasWidget::setLayerModel(ruwa::core::layers::LayerModel* model)
 {
-    stopFillPreview(false);
+    stopFillPreview();
     clearLassoFillPreview(false);
     // Disconnect old model
     if (m_layerModel) {
@@ -2950,7 +2934,7 @@ void OpenGLCanvasWidget::onLayersChanged()
 {
     // Structure changed (add/remove/reorder) â€” rebuild projection/index and dirty all
     cancelPendingLassoFillCommit();
-    stopFillPreview(false);
+    stopFillPreview();
     clearLassoFillPreview(false);
     if (m_layerScreenSourceCache) {
         m_layerScreenSourceCache->clear();
@@ -3036,7 +3020,7 @@ void OpenGLCanvasWidget::onLayerDataChanged(const QUuid& id)
 {
     cancelPendingLassoFillCommit(id);
     if (m_fillPreview.active && m_fillPreview.targetLayerId == id) {
-        stopFillPreview(false);
+        stopFillPreview();
     }
     if (m_layerScreenSourceCache) {
         m_layerScreenSourceCache->invalidateByLayer(id);
@@ -3180,7 +3164,7 @@ void OpenGLCanvasWidget::onLayerRemoved(const QUuid& id)
 {
     cancelPendingLassoFillCommit(id);
     if (m_fillPreview.active && m_fillPreview.targetLayerId == id) {
-        stopFillPreview(false);
+        stopFillPreview();
     }
     if (m_layerScreenSourceCache) {
         m_layerScreenSourceCache->invalidateByLayer(id);
@@ -3207,6 +3191,9 @@ void OpenGLCanvasWidget::invalidateCachedLayerStacks()
 {
     if (m_layerCompositingBuilder) {
         m_layerCompositingBuilder->invalidateCaches();
+    }
+    if (m_fillPreview.active) {
+        m_fillPreview.finalCompositeDirty = true;
     }
 }
 
@@ -3270,9 +3257,6 @@ void OpenGLCanvasWidget::updateBoardCompositionTransientDirty()
         if (auto* layer = activeLayer(); layer && isBoardCompositionLayerId(layer->id)) {
             invalidateBoardCompositionCache();
         }
-    }
-    if (m_fillPreview.active && isBoardCompositionLayerId(m_fillPreview.targetLayerId)) {
-        invalidateBoardCompositionCache();
     }
     if (m_transformController.isActive()
         && isBoardCompositionLayerId(m_transformController.layerId())) {
@@ -4277,7 +4261,6 @@ void OpenGLCanvasWidget::refreshLassoFillPreview()
     m_lassoFillPreview.bounds = bounds;
     m_lassoFillPreview.polygon = previewPolygon;
     m_lassoFillPreview.color = previewColor;
-    m_lassoFillPreview.compositingState = {};
 
     m_lassoFillViewportPreview.active = true;
     m_lassoFillViewportPreview.targetLayerId = layer->id;
@@ -4302,7 +4285,6 @@ void OpenGLCanvasWidget::clearLassoFillPreview(bool markDirtyTiles)
     m_lassoFillPreview.bounds = {};
     m_lassoFillPreview.polygon.clear();
     m_lassoFillPreview.color = {};
-    m_lassoFillPreview.compositingState = {};
     m_lassoFillViewportPreview = {};
 }
 
@@ -5632,7 +5614,7 @@ bool OpenGLCanvasWidget::startAnimatedSelectionFlip(bool flipHorizontal, bool fl
 
 void OpenGLCanvasWidget::cancelFillPreview()
 {
-    const bool hadPreview = m_fillPreview.active || !m_fillPreview.dirtyKeys.empty()
+    const bool hadPreview = m_fillPreview.active || !m_fillPreview.affectedKeys.empty()
         || m_activeFillWorkerRequest != 0;
     stopFillPreview();
     if (hadPreview) {
@@ -5644,7 +5626,6 @@ void OpenGLCanvasWidget::scheduleDeferredFillKickoff(const QUuid& layerId, FillA
     SelectionRestoreContext selectionRestore, FillOrigin origin, FillColor color,
     FillCanvasBounds canvasBounds, bool maskTarget, bool forceFinalResultOnly)
 {
-    if (m_pendingFillKickoff.pending) { }
     m_pendingFillKickoff.pending = true;
     ++m_pendingFillKickoff.sequence;
     m_pendingFillKickoff.layerId = layerId;
@@ -5669,9 +5650,6 @@ void OpenGLCanvasWidget::executeDeferredFillKickoff(uint64_t sequence)
 
     PendingFillKickoff kickoff = std::move(m_pendingFillKickoff);
     m_pendingFillKickoff = {};
-    QElapsedTimer kickoffTimer;
-    kickoffTimer.start();
-
     auto* layer = m_layerModel ? m_layerModel->layerById(kickoff.layerId) : nullptr;
     if (!isLayerCanvasEditable(layer) || !layer->isRaster()) {
         syncFillProcessingLayerSignal();
@@ -5693,14 +5671,10 @@ void OpenGLCanvasWidget::executeDeferredFillKickoff(uint64_t sequence)
         return;
     }
 
-    QElapsedTimer layerSnapshotTimer;
-    layerSnapshotTimer.start();
     FillPreviewRawTileMap layerSnapshotTiles = snapshotRawTiles<FillPreviewRawTileMap>(*targetGrid);
 
     FillPreviewRawTileMap selectionMaskTiles;
     if (selectionMask) {
-        QElapsedTimer selectionSnapshotTimer;
-        selectionSnapshotTimer.start();
         selectionMaskTiles = snapshotRawTiles<FillPreviewRawTileMap>(*selectionMask);
     }
 
@@ -5850,9 +5824,6 @@ void OpenGLCanvasWidget::handleFillWorkerResult(uint64_t requestSequence, const 
     if (requestSequence == 0 || requestSequence != m_activeFillWorkerRequest) {
         return;
     }
-    QElapsedTimer resultTimer;
-    resultTimer.start();
-
     m_activeFillWorkerRequest = 0;
     m_fillWorkerCancelState.reset();
 
@@ -5873,8 +5844,6 @@ void OpenGLCanvasWidget::handleFillWorkerResult(uint64_t requestSequence, const 
         return;
     }
 
-    const int resultPixelsFilled = result.pixelsFilled;
-
     if (m_fillPreview.job) {
         m_fillPreview.job->cancelled.store(true, std::memory_order_release);
         m_fillPreview.job.reset();
@@ -5882,49 +5851,28 @@ void OpenGLCanvasWidget::handleFillWorkerResult(uint64_t requestSequence, const 
 
     m_fillPreview.selectionRestore = std::move(selectionRestore);
     m_fillPreview.queuedBatches.clear();
-    m_fillPreview.queuedRevealSegments.clear();
 
-    if (m_fillPreview.previewPaused) {
-        const aether::FillPreviewRadiusRange resultRange
-            = aether::computeFillPreviewRadiusRange(result.fillMaskTiles,
-                Vector2 { static_cast<float>(originX) + 0.5f, static_cast<float>(originY) + 0.5f });
-        m_fillPreview.radiusCap
-            = resultRange.maxRadius > kFillPreviewPauseRadiusPx ? kFillPreviewPauseRadiusPx : 0.0f;
-        if (m_fillPreview.radiusCap > 0.0f) {
-            const float effectiveRadiusCap
-                = std::max(m_fillPreview.radiusCap, m_fillPreview.displayRadius);
-            m_fillPreview.readyRadius = std::min(m_fillPreview.readyRadius, effectiveRadiusCap);
-            if (m_fillPreview.easeActive) {
-                m_fillPreview.easeTargetRadius
-                    = std::min(m_fillPreview.easeTargetRadius, effectiveRadiusCap);
-            }
-        }
+    const float readyRadiusAtResult = m_fillPreview.readyRadius;
+    auto job = std::make_shared<FillPreviewState::AsyncJob>();
+    m_fillPreview.awaitingResult = true;
+    m_fillPreview.pendingResult = {};
+    m_fillPreview.job = job;
 
-        m_fillPreview.awaitingResult = false;
-        m_fillPreview.pendingResult = std::move(result);
-    } else {
-        const float readyRadiusAtResult = m_fillPreview.readyRadius;
-        auto job = std::make_shared<FillPreviewState::AsyncJob>();
-        m_fillPreview.awaitingResult = true;
-        m_fillPreview.pendingResult = {};
-        m_fillPreview.job = job;
-
-        std::thread([job, result = std::move(result), originX, originY,
-                        readyRadiusAtResult]() mutable {
+    std::thread(
+        [job, result = std::move(result), originX, originY, readyRadiusAtResult]() mutable {
             if (job->cancelled.load(std::memory_order_acquire)) {
                 return;
             }
 
             std::deque<FillPreviewState::ProgressBatch> preparedBatches
-                = OpenGLCanvasWidget::buildFillPreviewBatches(result.afterTiles,
-                    result.fillMaskTiles, originX, originY, readyRadiusAtResult, 0.0f);
+                = OpenGLCanvasWidget::buildFillPreviewBatches(
+                    result.afterTiles, result.fillMaskTiles, originX, originY, readyRadiusAtResult);
             if (job->cancelled.load(std::memory_order_acquire)) {
                 return;
             }
 
             {
                 std::lock_guard<std::mutex> lock(job->resultMutex);
-                job->preparedRadiusCap = 0.0f;
                 while (!preparedBatches.empty()) {
                     job->pendingBatches.push_back(std::move(preparedBatches.front()));
                     preparedBatches.pop_front();
@@ -5932,8 +5880,8 @@ void OpenGLCanvasWidget::handleFillWorkerResult(uint64_t requestSequence, const 
                 job->result = std::move(result);
             }
             job->done.store(true, std::memory_order_release);
-        }).detach();
-    }
+        })
+        .detach();
 
     if (!m_fillPreview.previewActive) {
         beginFillPreviewAnimation(FloodFillResult {});
@@ -5958,7 +5906,7 @@ void OpenGLCanvasWidget::startAsyncFillSession(const QUuid& layerId, FillAlgorit
     const int workOriginY = canvasBounds.workOriginY;
     const int canvasW = canvasBounds.width;
     const int canvasH = canvasBounds.height;
-    stopFillPreview(true);
+    stopFillPreview();
     const bool finalResultOnly = waitForExternalResultOnly || forceFinalResultOnly
         || algorithm == FillAlgorithm::Classic
         || (algorithm == FillAlgorithm::Smart && !selectionMaskTiles.empty());
@@ -5975,17 +5923,27 @@ void OpenGLCanvasWidget::startAsyncFillSession(const QUuid& layerId, FillAlgorit
     m_fillPreview.maskTarget = maskTarget;
     m_fillPreview.contentFormat = contentFormat;
     m_fillPreview.previewActive = false;
-    m_fillPreview.previewPaused = false;
     m_fillPreview.easeActive = false;
     m_fillPreview.targetLayerId = layerId;
     m_fillPreview.previewContentGrid.reset();
     m_fillPreview.fillMaskGrid.reset();
-    m_fillPreview.dirtyKeys.clear();
+    m_fillPreview.affectedKeys.clear();
     m_fillPreview.queuedBatches.clear();
-    m_fillPreview.queuedRevealSegments.clear();
+    m_fillPreview.sourceCacheId = QUuid::createUuid();
+    m_fillPreview.contentRevision = 1;
+    m_fillPreview.viewportRevision = 1;
+    m_fillPreview.finalCompositeDirty = true;
+    m_fillPreview.gpuPipelineFailed = false;
+    m_fillPreview.affectedDocumentBounds = {};
+    m_fillPreview.viewportWidth = 0;
+    m_fillPreview.viewportHeight = 0;
+    m_fillPreview.cameraPosition = {};
+    m_fillPreview.cameraZoom = 0.0f;
+    m_fillPreview.cameraRotation = 0.0f;
+    m_fillPreview.flipH = false;
+    m_fillPreview.flipV = false;
     m_fillPreview.origin
         = Vector2 { static_cast<float>(originX) + 0.5f, static_cast<float>(originY) + 0.5f };
-    m_fillPreview.radiusCap = 0.0f;
     m_fillPreview.readyRadius = 0.0f;
     m_fillPreview.displayRadius = 0.0f;
     m_fillPreview.revealSpeedPxPerMs = 0.0f;
@@ -5995,11 +5953,8 @@ void OpenGLCanvasWidget::startAsyncFillSession(const QUuid& layerId, FillAlgorit
     m_fillPreview.timer.restart();
     m_fillPreview.lastAnimationMs = 0;
     m_fillPreview.easeStartMs = 0;
-    m_fillPreview.lastPreviewGateLogMs = -1;
-    m_fillPreview.lastPreviewGateReason = 0;
     m_fillPreview.pendingResult = {};
     m_fillPreview.selectionRestore = std::move(selectionRestore);
-    m_fillPreview.compositingState = {};
     syncFillProcessingLayerSignal();
 
     const bool hasInitialPreview = !initialMaskTiles.empty();
@@ -6012,7 +5967,7 @@ void OpenGLCanvasWidget::startAsyncFillSession(const QUuid& layerId, FillAlgorit
 
     if (hasInitialPreview) {
         enqueueFillPreviewBatches(initialPreviewTiles, initialMaskTiles, originX, originY);
-        applyPendingFillPreviewBatches();
+        applyFillPreviewBatchBudget(kFillPreviewStartBatchBudget, kFillPreviewStartBatchBudgetMs);
     }
 
     if (hasInitialPendingResult) {
@@ -6036,9 +5991,6 @@ void OpenGLCanvasWidget::startAsyncFillSession(const QUuid& layerId, FillAlgorit
             if (job->cancelled.load(std::memory_order_acquire)) {
                 return;
             }
-
-            QElapsedTimer totalTimer;
-            totalTimer.start();
 
             const bool clipSmartResultToSelection
                 = algorithm == FillAlgorithm::Smart && !selectionMaskTiles.empty();
@@ -6064,8 +6016,6 @@ void OpenGLCanvasWidget::startAsyncFillSession(const QUuid& layerId, FillAlgorit
                 selectionTilesForFill = &localSelectionMaskTiles;
             }
             if (clipSmartResultToSelection) {
-                QElapsedTimer boundsTimer;
-                boundsTimer.start();
                 int selectionOffsetX = 0;
                 int selectionOffsetY = 0;
                 int selectionCanvasW = localCanvasW;
@@ -6076,8 +6026,6 @@ void OpenGLCanvasWidget::startAsyncFillSession(const QUuid& layerId, FillAlgorit
                     return;
                 }
 
-                QElapsedTimer extractTimer;
-                extractTimer.start();
                 localLayerSnapshotTiles
                     = extractRawTilesRegion(*layerTilesForFill, selectionOffsetX, selectionOffsetY,
                         selectionCanvasW, selectionCanvasH, false, contentFormat);
@@ -6091,8 +6039,6 @@ void OpenGLCanvasWidget::startAsyncFillSession(const QUuid& layerId, FillAlgorit
                 layerTilesForFill = &localLayerSnapshotTiles;
                 selectionTilesForFill = &localSelectionMaskTiles;
             }
-            QElapsedTimer fillTimer;
-            fillTimer.start();
             FloodFillResult result = algorithm == FillAlgorithm::Classic
                 ? classicFloodFillRawTiles(*layerTilesForFill, originX - localOffsetX,
                       originY - localOffsetY, fillR, fillG, fillB, fillA, *selectionTilesForFill,
@@ -6104,8 +6050,6 @@ void OpenGLCanvasWidget::startAsyncFillSession(const QUuid& layerId, FillAlgorit
                       localCanvasW, localCanvasH, contentFormat);
 
             if (clipSmartResultToSelection && result.pixelsFilled > 0) {
-                QElapsedTimer clipTimer;
-                clipTimer.start();
                 aether::clipFloodFillResultToSelectionMask(
                     *layerTilesForFill, *selectionTilesForFill, result, contentFormat);
                 aether::translateFloodFillResultToWorld(
@@ -6391,7 +6335,7 @@ void OpenGLCanvasWidget::startAsyncFillSession(const QUuid& layerId, FillAlgorit
         if (!finalResult.fillMaskTiles.empty()) {
             std::deque<FillPreviewState::ProgressBatch> preparedBatches
                 = OpenGLCanvasWidget::buildFillPreviewBatches(finalResult.afterTiles,
-                    finalResult.fillMaskTiles, originX, originY, previousReadyRadius, 0.0f);
+                    finalResult.fillMaskTiles, originX, originY, previousReadyRadius);
             if (job->cancelled.load(std::memory_order_acquire)) {
                 return;
             }
@@ -6420,8 +6364,7 @@ void OpenGLCanvasWidget::startAsyncFillSession(const QUuid& layerId, FillAlgorit
 
 std::deque<OpenGLCanvasWidget::FillPreviewState::ProgressBatch>
 OpenGLCanvasWidget::buildFillPreviewBatches(const FillPreviewRawTileMap& previewTiles,
-    const FillPreviewRawTileMap& maskTiles, int originX, int originY, float readyRadius,
-    float radiusCap)
+    const FillPreviewRawTileMap& maskTiles, int originX, int originY, float readyRadius)
 {
     std::deque<FillPreviewState::ProgressBatch> queuedBatches;
     if (maskTiles.empty()) {
@@ -6452,8 +6395,7 @@ OpenGLCanvasWidget::buildFillPreviewBatches(const FillPreviewRawTileMap& preview
     }
     std::sort(sortedRadii.begin(), sortedRadii.end());
 
-    const bool hasRadiusCap = radiusCap > 0.0f;
-    float previousReadyRadius = hasRadiusCap ? std::min(readyRadius, radiusCap) : readyRadius;
+    float previousReadyRadius = readyRadius;
     const Vector2 origin { static_cast<float>(originX) + 0.5f, static_cast<float>(originY) + 0.5f };
     const aether::FillPreviewRadiusRange finalRange
         = aether::computeFillPreviewRadiusRange(maskTiles, origin);
@@ -6534,9 +6476,6 @@ OpenGLCanvasWidget::buildFillPreviewBatches(const FillPreviewRawTileMap& preview
                     break;
                 }
             }
-        }
-        if (hasRadiusCap) {
-            batchTargetRadius = std::min(batchTargetRadius, radiusCap);
         }
         batch.maxRadius = std::max(batch.minRadius, batchTargetRadius);
 
@@ -6652,8 +6591,8 @@ void OpenGLCanvasWidget::enqueueFillPreviewBatches(const FillPreviewRawTileMap& 
     }
 
     std::deque<FillPreviewState::ProgressBatch> preparedBatches
-        = OpenGLCanvasWidget::buildFillPreviewBatches(previewTiles, maskTiles, originX, originY,
-            m_fillPreview.readyRadius, m_fillPreview.radiusCap);
+        = OpenGLCanvasWidget::buildFillPreviewBatches(
+            previewTiles, maskTiles, originX, originY, m_fillPreview.readyRadius);
     while (!preparedBatches.empty()) {
         m_fillPreview.queuedBatches.push_back(std::move(preparedBatches.front()));
         preparedBatches.pop_front();
@@ -6666,10 +6605,6 @@ bool OpenGLCanvasWidget::applyPendingFillPreviewBatches()
         return false;
     }
 
-    if (m_fillPreview.previewPaused) {
-        return false;
-    }
-
     if (m_fillPreview.job) {
         std::lock_guard<std::mutex> lock(m_fillPreview.job->resultMutex);
         while (!m_fillPreview.job->pendingBatches.empty()) {
@@ -6677,10 +6612,6 @@ bool OpenGLCanvasWidget::applyPendingFillPreviewBatches()
                 std::move(m_fillPreview.job->pendingBatches.front()));
             m_fillPreview.job->pendingBatches.pop_front();
         }
-    }
-
-    if (m_fillPreview.easeActive) {
-        return false;
     }
 
     if (m_fillPreview.queuedBatches.empty()) {
@@ -6698,22 +6629,6 @@ bool OpenGLCanvasWidget::applyPendingFillPreviewBatches()
         m_fillPreview.fillMaskGrid->setFormat(aether::TilePixelFormat::RGBA8);
     }
 
-    const float batchUnlockMargin = 1.5f;
-    if (m_fillPreview.previewActive
-        && m_fillPreview.displayRadius + batchUnlockMargin
-            < m_fillPreview.queuedBatches.front().minRadius) {
-        // Bridge empty radial gaps between batches; otherwise the preview can
-        // wait forever for a minRadius it is no longer able to reach.
-        if (m_fillPreview.queuedBatches.front().minRadius > m_fillPreview.readyRadius + 0.01f) {
-            retargetFillPreviewReveal(m_fillPreview.queuedBatches.front().minRadius);
-        }
-        return false;
-    }
-
-    const float readyRadiusBefore = m_fillPreview.readyRadius;
-    const qulonglong queuedBefore = static_cast<qulonglong>(m_fillPreview.queuedBatches.size());
-    QElapsedTimer applyBatchTimer;
-    applyBatchTimer.start();
     FillPreviewState::ProgressBatch batch = std::move(m_fillPreview.queuedBatches.front());
     m_fillPreview.queuedBatches.pop_front();
     bool overwroteMaskTiles = false;
@@ -6740,11 +6655,19 @@ bool OpenGLCanvasWidget::applyPendingFillPreviewBatches()
 
     retargetFillPreviewReveal(batch.maxRadius);
 
-    if (!m_fillPreview.queuedRevealSegments.empty()) {
-        m_fillPreview.queuedRevealSegments.clear();
+    m_fillPreview.affectedKeys.insert(batch.keys.begin(), batch.keys.end());
+    const QRect batchDocumentBounds(batch.minTileX * static_cast<int>(TILE_SIZE),
+        batch.minTileY * static_cast<int>(TILE_SIZE),
+        (batch.maxTileX - batch.minTileX + 1) * static_cast<int>(TILE_SIZE),
+        (batch.maxTileY - batch.minTileY + 1) * static_cast<int>(TILE_SIZE));
+    m_fillPreview.affectedDocumentBounds = m_fillPreview.affectedDocumentBounds.isEmpty()
+        ? batchDocumentBounds
+        : m_fillPreview.affectedDocumentBounds.united(batchDocumentBounds);
+    ++m_fillPreview.contentRevision;
+    m_fillPreview.finalCompositeDirty = true;
+    if (m_layerScreenSourceCache && !m_fillPreview.sourceCacheId.isNull()) {
+        m_layerScreenSourceCache->invalidateByLayer(m_fillPreview.sourceCacheId);
     }
-
-    m_fillPreview.dirtyKeys.insert(batch.keys.begin(), batch.keys.end());
 
     if (overwroteMaskTiles) {
         m_fillPreview.metricsDirty = true;
@@ -6753,8 +6676,6 @@ bool OpenGLCanvasWidget::applyPendingFillPreviewBatches()
         updateFillPreviewMetricsFromBatch(batch);
     }
 
-    markFillPreviewDirtyTiles();
-    if (readyRadiusBefore <= 0.0f && m_fillPreview.readyRadius > 0.0f) { }
     return true;
 }
 
@@ -6769,12 +6690,8 @@ void OpenGLCanvasWidget::adoptCompletedFillResult()
     }
 
     FloodFillResult result;
-    float preparedRadiusCap = 0.0f;
-    QElapsedTimer adoptTimer;
-    adoptTimer.start();
     {
         std::lock_guard<std::mutex> lock(m_fillPreview.job->resultMutex);
-        preparedRadiusCap = m_fillPreview.job->preparedRadiusCap;
         while (!m_fillPreview.job->pendingBatches.empty()) {
             m_fillPreview.queuedBatches.push_back(
                 std::move(m_fillPreview.job->pendingBatches.front()));
@@ -6784,31 +6701,21 @@ void OpenGLCanvasWidget::adoptCompletedFillResult()
     }
 
     m_fillPreview.awaitingResult = false;
-    m_fillPreview.radiusCap = preparedRadiusCap;
-    if (m_fillPreview.radiusCap > 0.0f) {
-        const float effectiveRadiusCap
-            = std::max(m_fillPreview.radiusCap, m_fillPreview.displayRadius);
-        m_fillPreview.readyRadius = std::min(m_fillPreview.readyRadius, effectiveRadiusCap);
-        if (m_fillPreview.easeActive) {
-            m_fillPreview.easeTargetRadius
-                = std::min(m_fillPreview.easeTargetRadius, effectiveRadiusCap);
-        }
-    }
     m_fillPreview.job.reset();
 
     if (result.pixelsFilled <= 0 || result.fillMaskTiles.empty()) {
-        stopFillPreview(false, false);
+        stopFillPreview(false);
         return;
     }
 
     m_fillPreview.pendingResult = std::move(result);
-    if (!m_fillPreview.previewPaused && m_fillPreview.appliedPixelCount > 0
+    if (m_fillPreview.gpuPipelineFailed) {
+        failFillPreviewGpuPipeline();
+        return;
+    }
+    if (m_fillPreview.appliedPixelCount > 0
         && m_fillPreview.appliedMaxRadius > m_fillPreview.readyRadius + 0.01f) {
         retargetFillPreviewReveal(m_fillPreview.appliedMaxRadius);
-    }
-    if (m_fillPreview.previewPaused) {
-        m_fillPreview.queuedBatches.clear();
-        m_fillPreview.queuedRevealSegments.clear();
     }
     if (!m_fillPreview.previewActive) {
         beginFillPreviewAnimation(FloodFillResult {});
@@ -6822,54 +6729,30 @@ void OpenGLCanvasWidget::beginFillPreviewAnimation(FloodFillResult&& result)
         return;
     }
 
-    const qint64 waitElapsedMs = m_fillPreview.timer.isValid() ? m_fillPreview.timer.elapsed() : 0;
-    if (m_fillPreview.awaitingResult && waitElapsedMs < kFillPreviewStartDelayMs) {
+    // Keep progressive batches hidden until the final result is complete. Starting
+    // from a partial readyRadius produces a small eased reveal followed by a pause
+    // and a fast linear catch-up when the remaining batches arrive.
+    if (m_fillPreview.awaitingResult || m_fillPreview.pendingResult.pixelsFilled <= 0) {
         return;
     }
 
-    if (!m_fillPreview.awaitingResult) {
-        QElapsedTimer applyExistingBatchesTimer;
-        applyExistingBatchesTimer.start();
-        const size_t appliedBatchCount = applyFillPreviewBatchBudget(
-            kFillPreviewStartBatchBudget, kFillPreviewStartBatchBudgetMs);
-    } else {
-        QElapsedTimer applySinglePendingTimer;
-        applySinglePendingTimer.start();
-        applyPendingFillPreviewBatches();
-    }
+    applyFillPreviewBatchBudget(kFillPreviewStartBatchBudget, kFillPreviewStartBatchBudgetMs);
 
     if (m_fillPreview.readyRadius <= 0.0f && m_fillPreview.pendingResult.pixelsFilled > 0
         && !m_fillPreview.pendingResult.fillMaskTiles.empty()) {
-        const float readyRadiusBeforeEnqueue = m_fillPreview.readyRadius;
-        QElapsedTimer enqueuePendingResultTimer;
-        enqueuePendingResultTimer.start();
         enqueueFillPreviewBatches(m_fillPreview.pendingResult.afterTiles,
             m_fillPreview.pendingResult.fillMaskTiles,
             static_cast<int>(std::floor(m_fillPreview.origin.x)),
             static_cast<int>(std::floor(m_fillPreview.origin.y)));
-        if (!m_fillPreview.awaitingResult) {
-            QElapsedTimer applyEnqueuedBatchesTimer;
-            applyEnqueuedBatchesTimer.start();
-            const size_t appliedBatchCount = applyFillPreviewBatchBudget(
-                kFillPreviewStartBatchBudget, kFillPreviewStartBatchBudgetMs);
-        } else {
-            QElapsedTimer applyEnqueuedPendingTimer;
-            applyEnqueuedPendingTimer.start();
-            applyPendingFillPreviewBatches();
-        }
-        if (readyRadiusBeforeEnqueue <= 0.0f && m_fillPreview.readyRadius > 0.0f) { }
+        applyFillPreviewBatchBudget(kFillPreviewStartBatchBudget, kFillPreviewStartBatchBudgetMs);
     }
 
-    if (m_fillPreview.readyRadius <= 0.0f) {
+    if (!m_fillPreview.queuedBatches.empty() || m_fillPreview.readyRadius <= 0.0f) {
         return;
     }
 
-    m_fillPreview.lastPreviewGateReason = 0;
-    m_fillPreview.lastPreviewGateLogMs = waitElapsedMs;
-
     m_fillPreview.timer.restart();
     m_fillPreview.previewActive = true;
-    m_fillPreview.previewPaused = false;
     m_fillPreview.easeActive = true;
     const float animationStartRadius = std::clamp(std::max(1.0f, m_fillPreview.minRevealRadius),
         1.0f, std::max(1.0f, m_fillPreview.readyRadius));
@@ -6884,25 +6767,10 @@ void OpenGLCanvasWidget::beginFillPreviewAnimation(FloodFillResult&& result)
 
 void OpenGLCanvasWidget::retargetFillPreviewReveal(float newReadyRadius)
 {
-    float clampedReadyRadius = std::max(newReadyRadius, m_fillPreview.displayRadius);
-    float revealRadiusCap = 0.0f;
-    if (m_fillPreview.awaitingResult || m_fillPreview.previewPaused) {
-        revealRadiusCap = kFillPreviewPauseRadiusPx;
-    }
-    if (m_fillPreview.radiusCap > 0.0f) {
-        revealRadiusCap = revealRadiusCap > 0.0f
-            ? std::min(revealRadiusCap, m_fillPreview.radiusCap)
-            : m_fillPreview.radiusCap;
-    }
-    if (revealRadiusCap > 0.0f && clampedReadyRadius > revealRadiusCap) {
-        clampedReadyRadius = std::max(revealRadiusCap, m_fillPreview.displayRadius);
-    }
+    const float clampedReadyRadius = std::max(newReadyRadius, m_fillPreview.displayRadius);
     if (clampedReadyRadius <= m_fillPreview.readyRadius + 0.01f) {
         return;
     }
-
-    const qint64 elapsedMs = m_fillPreview.timer.isValid() ? m_fillPreview.timer.elapsed() : 0;
-    m_fillPreview.lastAnimationMs = elapsedMs;
 
     const float segmentDistance = std::max(0.0f, clampedReadyRadius - m_fillPreview.displayRadius);
     const float distanceNorm = std::clamp(segmentDistance / 220.0f, 0.0f, 1.0f);
@@ -6917,9 +6785,6 @@ bool OpenGLCanvasWidget::applyFloodFillResult(const QUuid& layerId, FloodFillRes
     if (result.pixelsFilled <= 0) {
         return false;
     }
-    QElapsedTimer applyTimer;
-    applyTimer.start();
-
     auto* layer = m_layerModel ? m_layerModel->layerById(layerId) : nullptr;
     if (!isLayerCanvasEditable(layer) || !layer->isRaster()) {
         return false;
@@ -6931,8 +6796,6 @@ bool OpenGLCanvasWidget::applyFloodFillResult(const QUuid& layerId, FloodFillRes
 
     auto& grid = *targetGrid;
     std::unordered_set<TileKey, TileKeyHash> affectedKeys;
-    QElapsedTimer collectTimer;
-    collectTimer.start();
     affectedKeys.reserve(
         result.beforeTiles.size() + result.afterTiles.size() + result.removedTiles.size());
     for (const auto& [key, _] : result.beforeTiles) {
@@ -6945,8 +6808,6 @@ bool OpenGLCanvasWidget::applyFloodFillResult(const QUuid& layerId, FloodFillRes
         affectedKeys.insert(key);
     }
 
-    QElapsedTimer applyTilesTimer;
-    applyTilesTimer.start();
     for (const TileKey& key : affectedKeys) {
         if (result.removedTiles.count(key) > 0) {
             grid.removeTile(key);
@@ -6974,8 +6835,6 @@ bool OpenGLCanvasWidget::applyFloodFillResult(const QUuid& layerId, FloodFillRes
     }
 
     std::vector<TileKey> dirtyVec(affectedKeys.begin(), affectedKeys.end());
-    QElapsedTimer dirtyTimer;
-    dirtyTimer.start();
     if (!dirtyVec.empty()) {
         m_canvas.dirtyManager().onTilesDirtied(layer->id, dirtyVec);
         markBoardCompositionTilesDirty(layer->id, dirtyVec);
@@ -6994,17 +6853,12 @@ bool OpenGLCanvasWidget::applyFloodFillResult(const QUuid& layerId, FloodFillRes
     }
 
     StrokeSnapshot snapshot;
-    QElapsedTimer undoTimer;
-    undoTimer.start();
     snapshot.layerId = layer->id;
     snapshot.maskTarget = maskTarget;
     snapshot.beforeTiles = std::move(result.beforeTiles);
     snapshot.afterTiles = std::move(result.afterTiles);
     snapshot.createdTiles = std::move(result.createdTiles);
     snapshot.removedTiles = std::move(result.removedTiles);
-    const size_t undoBeforeCount = snapshot.beforeTiles.size();
-    const size_t undoAfterCount = snapshot.afterTiles.size();
-
     auto cmd = std::make_unique<DrawCommand>(
         &m_canvas, m_layerModel, std::move(snapshot), std::move(selectionRestore));
 
@@ -7056,15 +6910,11 @@ void OpenGLCanvasWidget::syncFillProcessingLayerSignal()
     emit fillProcessingLayerChanged(m_signaledFillProcessingLayerId);
 }
 
-void OpenGLCanvasWidget::stopFillPreview(bool markDirtyTiles, bool cancelWorker, bool hidePopup)
+void OpenGLCanvasWidget::stopFillPreview(bool cancelWorker, bool hidePopup)
 {
-    if (!m_fillPreview.active && m_fillPreview.dirtyKeys.empty() && !m_fillPreview.job
+    if (!m_fillPreview.active && m_fillPreview.affectedKeys.empty() && !m_fillPreview.job
         && !m_pendingFillKickoff.pending && m_activeFillWorkerRequest == 0) {
         return;
-    }
-
-    if (markDirtyTiles) {
-        markFillPreviewDirtyTiles();
     }
 
     if (m_fillPreview.job) {
@@ -7077,17 +6927,15 @@ void OpenGLCanvasWidget::stopFillPreview(bool markDirtyTiles, bool cancelWorker,
     m_fillPreview.active = false;
     m_fillPreview.previewActive = false;
     m_fillPreview.awaitingResult = false;
-    m_fillPreview.previewPaused = false;
     m_fillPreview.easeActive = false;
     m_fillPreview.finalResultOnly = false;
     m_fillPreview.maskTarget = false;
     m_fillPreview.targetLayerId = QUuid();
+    releaseFillPreviewGpuResources();
     m_fillPreview.previewContentGrid.reset();
     m_fillPreview.fillMaskGrid.reset();
-    m_fillPreview.dirtyKeys.clear();
+    m_fillPreview.affectedKeys.clear();
     m_fillPreview.queuedBatches.clear();
-    m_fillPreview.queuedRevealSegments.clear();
-    m_fillPreview.radiusCap = 0.0f;
     m_fillPreview.readyRadius = 0.0f;
     m_fillPreview.displayRadius = 0.0f;
     m_fillPreview.revealSpeedPxPerMs = 0.0f;
@@ -7096,12 +6944,9 @@ void OpenGLCanvasWidget::stopFillPreview(bool markDirtyTiles, bool cancelWorker,
     resetFillPreviewMetrics();
     m_fillPreview.lastAnimationMs = 0;
     m_fillPreview.easeStartMs = 0;
-    m_fillPreview.lastPreviewGateLogMs = -1;
-    m_fillPreview.lastPreviewGateReason = 0;
     m_fillPreview.pendingResult = {};
     m_fillPreview.selectionRestore = {};
     m_fillPreview.job.reset();
-    m_fillPreview.compositingState = {};
     m_pendingFillKickoff = {};
     if (cancelWorker) {
         m_fillWorkerCancelState.reset();
@@ -7113,10 +6958,45 @@ void OpenGLCanvasWidget::stopFillPreview(bool markDirtyTiles, bool cancelWorker,
     syncFillProcessingLayerSignal();
 }
 
-void OpenGLCanvasWidget::markFillPreviewDirtyTiles()
+void OpenGLCanvasWidget::releaseFillPreviewGpuResources()
 {
-    if (!m_fillPreview.dirtyKeys.empty()) {
-        m_canvas.compositionCache().markDirty(m_fillPreview.dirtyKeys);
+    if (m_layerScreenSourceCache && !m_fillPreview.sourceCacheId.isNull()) {
+        m_layerScreenSourceCache->invalidateByLayer(m_fillPreview.sourceCacheId);
+    }
+    m_fillPreview.sourceCacheId = QUuid();
+    if (m_fillPreview.finalCompositeTexture) {
+        m_pendingFillPreviewTextureDeletes.push_back(m_fillPreview.finalCompositeTexture);
+        m_fillPreview.finalCompositeTexture = 0;
+    }
+    m_fillPreview.finalCompositeWidth = 0;
+    m_fillPreview.finalCompositeHeight = 0;
+    m_fillPreview.affectedDocumentBounds = {};
+    m_fillPreview.contentRevision = 0;
+    m_fillPreview.viewportRevision = 0;
+    m_fillPreview.finalCompositeDirty = true;
+    m_fillPreview.gpuPipelineFailed = false;
+}
+
+void OpenGLCanvasWidget::flushPendingFillPreviewTextureDeletes()
+{
+    if (m_pendingFillPreviewTextureDeletes.empty() || QOpenGLContext::currentContext() != context()) {
+        return;
+    }
+    glDeleteTextures(static_cast<GLsizei>(m_pendingFillPreviewTextureDeletes.size()),
+        m_pendingFillPreviewTextureDeletes.data());
+    m_pendingFillPreviewTextureDeletes.clear();
+}
+
+void OpenGLCanvasWidget::failFillPreviewGpuPipeline()
+{
+    if (!m_fillPreview.active) {
+        return;
+    }
+    m_fillPreview.gpuPipelineFailed = true;
+    m_fillPreview.previewActive = false;
+    if (m_fillPreview.pendingResult.pixelsFilled > 0) {
+        commitFillPreviewResult();
+        stopFillPreview(m_fillPreview.awaitingResult);
     }
 }
 
@@ -7126,7 +7006,14 @@ bool OpenGLCanvasWidget::updateFillPreviewAnimationState()
         return false;
     }
 
-    applyPendingFillPreviewBatches();
+    applyFillPreviewBatchBudget(kFillPreviewFrameBatchBudget, kFillPreviewFrameBatchBudgetMs);
+    if (m_fillPreview.gpuPipelineFailed) {
+        if (m_fillPreview.awaitingResult) {
+            adoptCompletedFillResult();
+        }
+        failFillPreviewGpuPipeline();
+        return m_fillPreview.active;
+    }
 
     const bool finalResultOnlyAwaitingResult
         = m_fillPreview.finalResultOnly && m_fillPreview.awaitingResult;
@@ -7178,26 +7065,6 @@ bool OpenGLCanvasWidget::updateFillPreviewAnimationState()
                 + m_fillPreview.revealSpeedPxPerMs * static_cast<float>(deltaMs));
     }
 
-    if (!m_fillPreview.easeActive && !m_fillPreview.previewPaused && m_fillPreview.awaitingResult
-        && m_fillPreview.displayRadius >= kFillPreviewPauseRadiusPx) {
-        m_fillPreview.previewPaused = true;
-        m_fillPreview.displayRadius = kFillPreviewPauseRadiusPx;
-        m_fillPreview.readyRadius = kFillPreviewPauseRadiusPx;
-        m_fillPreview.revealSpeedPxPerMs = 0.0f;
-        m_fillPreview.queuedRevealSegments.clear();
-        showFillProgressPopupProcessing();
-    }
-
-    if (!m_fillPreview.queuedRevealSegments.empty()) {
-        const float preloadMargin = std::max(m_fillPreview.feather, 6.0f);
-        while (!m_fillPreview.queuedRevealSegments.empty()
-            && m_fillPreview.displayRadius + preloadMargin
-                >= m_fillPreview.queuedRevealSegments.front().minRadius) {
-            retargetFillPreviewReveal(m_fillPreview.queuedRevealSegments.front().maxRadius);
-            m_fillPreview.queuedRevealSegments.pop_front();
-        }
-    }
-
     if (m_fillPreview.awaitingResult) {
         adoptCompletedFillResult();
         if (!m_fillPreview.active) {
@@ -7205,36 +7072,9 @@ bool OpenGLCanvasWidget::updateFillPreviewAnimationState()
         }
     }
 
-    if (m_fillPreview.previewPaused) {
-        updateFillProgressPopupPosition();
-        if (!m_fillPreview.awaitingResult || m_fillPreview.pendingResult.pixelsFilled > 0) {
-            m_fillPreview.previewPaused = false;
-            m_fillPreview.radiusCap = 0.0f;
-            m_fillPreview.readyRadius
-                = std::max(m_fillPreview.readyRadius, m_fillPreview.displayRadius);
-            m_fillPreview.revealSpeedPxPerMs = 0.0f;
-            m_fillPreview.queuedBatches.clear();
-            m_fillPreview.queuedRevealSegments.clear();
-
-            enqueueFillPreviewBatches(m_fillPreview.pendingResult.afterTiles,
-                m_fillPreview.pendingResult.fillMaskTiles,
-                static_cast<int>(std::floor(m_fillPreview.origin.x)),
-                static_cast<int>(std::floor(m_fillPreview.origin.y)));
-            applyPendingFillPreviewBatches();
-
-            hideFillProgressPopupImmediate();
-            markFillPreviewDirtyTiles();
-            return m_fillPreview.active;
-        }
-
-        markFillPreviewDirtyTiles();
-        return m_fillPreview.active;
-    }
-
     const bool hasQueuedBatches = !m_fillPreview.queuedBatches.empty();
     const bool hasCommitReadyResult = m_fillPreview.pendingResult.pixelsFilled > 0;
-    if (!m_fillPreview.awaitingResult && !m_fillPreview.previewPaused
-        && m_fillPreview.appliedPixelCount > 0
+    if (!m_fillPreview.awaitingResult && m_fillPreview.appliedPixelCount > 0
         && m_fillPreview.appliedMaxRadius > m_fillPreview.readyRadius + 0.01f) {
         retargetFillPreviewReveal(m_fillPreview.appliedMaxRadius);
     }
@@ -7242,37 +7082,11 @@ bool OpenGLCanvasWidget::updateFillPreviewAnimationState()
     if (!hasQueuedBatches && animationCaughtUp
         && (!m_fillPreview.awaitingResult || hasCommitReadyResult)) {
         commitFillPreviewResult();
-        stopFillPreview(true, m_fillPreview.awaitingResult);
+        stopFillPreview(m_fillPreview.awaitingResult);
         return false;
     }
 
-    markFillPreviewDirtyTiles();
     return m_fillPreview.active;
-}
-
-const FillPreviewCompositingState* OpenGLCanvasWidget::currentFillPreviewState() const
-{
-    if (m_fillPreview.active && m_fillPreview.previewActive && m_fillPreview.previewContentGrid
-        && m_fillPreview.fillMaskGrid) {
-        const qint64 elapsedMs = m_fillPreview.timer.isValid() ? m_fillPreview.timer.elapsed() : 0;
-        Q_UNUSED(elapsedMs);
-
-        m_fillPreview.compositingState.active = true;
-        m_fillPreview.compositingState.targetLayerId = m_fillPreview.targetLayerId;
-        m_fillPreview.compositingState.maskTarget = m_fillPreview.maskTarget;
-        m_fillPreview.compositingState.previewContentGrid = m_fillPreview.previewContentGrid.get();
-        m_fillPreview.compositingState.fillMaskGrid = m_fillPreview.fillMaskGrid.get();
-        m_fillPreview.compositingState.retainedPayload = nullptr;
-        m_fillPreview.compositingState.useSolidColor = false;
-        m_fillPreview.compositingState.renderAboveLayerContent = true;
-        m_fillPreview.compositingState.solidColor = {};
-        m_fillPreview.compositingState.origin = m_fillPreview.origin;
-        m_fillPreview.compositingState.radius = std::max(1.0f, m_fillPreview.displayRadius);
-        m_fillPreview.compositingState.feather = m_fillPreview.feather;
-        return &m_fillPreview.compositingState;
-    }
-
-    return nullptr;
 }
 
 bool OpenGLCanvasWidget::performFill(int worldX, int worldY)
@@ -7314,7 +7128,7 @@ bool OpenGLCanvasWidget::performFill(int worldX, int worldY)
     const uint8_t pb
         = static_cast<uint8_t>((static_cast<int>(fillB) * static_cast<int>(fillA) + 127) / 255);
 
-    stopFillPreview(true);
+    stopFillPreview();
 
     uint8_t seedR = 0;
     uint8_t seedG = 0;
@@ -7575,6 +7389,14 @@ void OpenGLCanvasWidget::onLayerSelectionChanged(const ruwa::core::layers::Layer
         m_selectionController ? &m_selectionController->lassoSelection() : nullptr,
         effectiveDocumentBoundsWidth(), effectiveDocumentBoundsHeight());
     m_lastSelectionState = current;
+
+    if (m_fillPreview.active) {
+        auto* selectedLayer = activeLayer();
+        if (!selectedLayer || selectedLayer->id != m_fillPreview.targetLayerId) {
+            stopFillPreview();
+            requestRender();
+        }
+    }
 
     if (m_layerScreenSourceCache) {
         m_layerScreenSourceCache->invalidateByLayer(lassoPreviewSelectionMaskCacheId());
@@ -10986,6 +10808,315 @@ void OpenGLCanvasWidget::paintGL_renderTransformViewportPreview(
     session.selectionMaskDirty = false;
 }
 
+void OpenGLCanvasWidget::paintGL_renderFillPreviewOverlay(
+    const std::vector<CompositeLayerInfo>& layerStack, GLuint sceneTarget, GLint defaultFbo)
+{
+    if (!m_fillPreview.active || !m_fillPreview.previewActive
+        || !m_fillPreview.previewContentGrid || !m_fillPreview.fillMaskGrid
+        || m_fillPreview.fillMaskGrid->empty() || !m_renderer
+        || !m_layerScreenSourceCache) {
+        return;
+    }
+
+    const QSize surfaceSize = currentSurfacePixelSize(this);
+    const int viewportWidth = surfaceSize.width();
+    const int viewportHeight = surfaceSize.height();
+    auto* viewportCompositor = m_renderer->viewportCompositor();
+    auto* targetPreviewPass = m_renderer->targetLayerPreviewPass();
+    if (viewportWidth <= 0 || viewportHeight <= 0 || !viewportCompositor
+        || !viewportCompositor->isInitialized() || !targetPreviewPass
+        || !targetPreviewPass->isInitialized()) {
+        failFillPreviewGpuPipeline();
+        return;
+    }
+
+    auto* targetLayer
+        = m_layerModel ? m_layerModel->layerById(m_fillPreview.targetLayerId) : nullptr;
+    if (!targetLayer || !targetLayer->isRaster()
+        || (m_fillPreview.maskTarget && !targetLayer->maskTileGrid())) {
+        stopFillPreview();
+        return;
+    }
+
+    const Vector2 cameraPosition = m_viewport.camera().position();
+    const float cameraZoom = m_viewport.camera().zoom();
+    const float cameraRotation = m_viewport.camera().rotation();
+    const bool flipH = effectiveContentFlipH();
+    const bool flipV = effectiveContentFlipV();
+    const bool viewportChanged = m_viewport.camera().isAnimating()
+        || m_fillPreview.viewportWidth != static_cast<uint32_t>(viewportWidth)
+        || m_fillPreview.viewportHeight != static_cast<uint32_t>(viewportHeight)
+        || m_fillPreview.flipH != flipH || m_fillPreview.flipV != flipV
+        || !nearlyEqualPoint(m_fillPreview.cameraPosition, cameraPosition)
+        || !nearlyEqualFloat(m_fillPreview.cameraZoom, cameraZoom)
+        || !nearlyEqualFloat(m_fillPreview.cameraRotation, cameraRotation);
+    if (viewportChanged) {
+        m_fillPreview.viewportWidth = static_cast<uint32_t>(viewportWidth);
+        m_fillPreview.viewportHeight = static_cast<uint32_t>(viewportHeight);
+        m_fillPreview.cameraPosition = cameraPosition;
+        m_fillPreview.cameraZoom = cameraZoom;
+        m_fillPreview.cameraRotation = cameraRotation;
+        m_fillPreview.flipH = flipH;
+        m_fillPreview.flipV = flipV;
+        ++m_fillPreview.viewportRevision;
+        m_fillPreview.finalCompositeDirty = true;
+        m_layerScreenSourceCache->invalidateByViewport();
+    }
+    if (m_fillPreview.viewportRevision == 0) {
+        m_fillPreview.viewportRevision = 1;
+    }
+
+    const CompositeLayerInfo* targetLayerInfo = nullptr;
+    std::function<void(const std::vector<CompositeLayerInfo>&)> findTarget
+        = [&](const std::vector<CompositeLayerInfo>& layers) {
+              for (const CompositeLayerInfo& info : layers) {
+                  if (targetLayerInfo) {
+                      return;
+                  }
+                  if (info.isGroup) {
+                      findTarget(info.children);
+                  } else if (info.id == m_fillPreview.targetLayerId) {
+                      targetLayerInfo = &info;
+                  }
+              }
+          };
+    findTarget(layerStack);
+    if (!targetLayerInfo) {
+        // Export-excluded board layers are composed by a different surface and
+        // cannot be represented exactly by this document viewport stack.
+        failFillPreviewGpuPipeline();
+        return;
+    }
+
+    const bool finiteDocumentBounds = hasFiniteDocumentBounds();
+    const uint32_t canvasWidth = finiteDocumentBounds ? m_canvas.width() : 0u;
+    const uint32_t canvasHeight = finiteDocumentBounds ? m_canvas.height() : 0u;
+
+    if (m_fillPreview.finalCompositeDirty || !m_fillPreview.finalCompositeTexture) {
+        CompositeLayerInfo afterInfo;
+        afterInfo.id = m_fillPreview.sourceCacheId;
+        afterInfo.tileGrid = m_fillPreview.previewContentGrid.get();
+        afterInfo.opacity = 1.0f;
+        afterInfo.blendMode = 0;
+        afterInfo.visible = true;
+        const GLuint afterTexture = m_layerScreenSourceCache->acquireLayerTexture(afterInfo,
+            *m_renderer, m_viewport, canvasWidth, canvasHeight, flipH, flipV,
+            m_fillPreview.viewportRevision, LayerScreenSourceCache::SourceKind::LayerColor,
+            ruwa::core::effects::LayerSourcePurpose::RawContent, m_fillPreview.contentRevision);
+
+        CompositeLayerInfo coverageInfo;
+        coverageInfo.id = m_fillPreview.sourceCacheId;
+        coverageInfo.tileGrid = m_fillPreview.fillMaskGrid.get();
+        coverageInfo.opacity = 1.0f;
+        coverageInfo.blendMode = 0;
+        coverageInfo.visible = true;
+        const GLuint coverageTexture = m_layerScreenSourceCache->acquireLayerTexture(coverageInfo,
+            *m_renderer, m_viewport, 0u, 0u, flipH, flipV, m_fillPreview.viewportRevision,
+            LayerScreenSourceCache::SourceKind::AlphaMask,
+            ruwa::core::effects::LayerSourcePurpose::MaskColor, m_fillPreview.contentRevision);
+
+        GLuint replacementBaseTexture = 0;
+        if (m_fillPreview.maskTarget) {
+            CompositeLayerInfo committedMaskInfo;
+            committedMaskInfo.id = targetLayer->id;
+            committedMaskInfo.effectChainRevision = targetLayer->effectChainRevision;
+            committedMaskInfo.tileGrid = targetLayer->maskTileGrid();
+            committedMaskInfo.opacity = 1.0f;
+            committedMaskInfo.blendMode = 0;
+            committedMaskInfo.visible = true;
+            replacementBaseTexture = m_layerScreenSourceCache->acquireLayerTexture(
+                committedMaskInfo, *m_renderer, m_viewport, canvasWidth, canvasHeight, flipH, flipV,
+                m_fillPreview.viewportRevision, LayerScreenSourceCache::SourceKind::LayerMask,
+                ruwa::core::effects::LayerSourcePurpose::MaskColor);
+        } else {
+            CompositeLayerInfo targetBaseInfo = *targetLayerInfo;
+            targetBaseInfo.effectChainRevision = targetLayer->effectChainRevision;
+            targetBaseInfo.externalClipMaskGrid = nullptr;
+            targetBaseInfo.clipMaskLuminanceReveal = false;
+            targetBaseInfo.clipMaskGrid2 = nullptr;
+            replacementBaseTexture = m_layerScreenSourceCache->acquireLayerTexture(targetBaseInfo,
+                *m_renderer, m_viewport, canvasWidth, canvasHeight, flipH, flipV,
+                m_fillPreview.viewportRevision, LayerScreenSourceCache::SourceKind::LayerColor,
+                ruwa::core::effects::LayerSourcePurpose::RawContent);
+        }
+
+        const GLuint replacedTexture
+            = targetPreviewPass->renderTextureReplacement(replacementBaseTexture, afterTexture,
+                coverageTexture, static_cast<uint32_t>(viewportWidth),
+                static_cast<uint32_t>(viewportHeight));
+        if (!replacedTexture) {
+            failFillPreviewGpuPipeline();
+            return;
+        }
+
+        viewportCompositor->beginFrame(
+            static_cast<uint32_t>(viewportWidth), static_cast<uint32_t>(viewportHeight));
+        Color canvasBackground;
+        const bool hasCanvasBackground
+            = m_layerCompositingBuilder->resolveCanvasBackgroundColor(canvasBackground);
+        const GLuint transientComposite = viewportCompositor->compositeLayers(
+            layerStack,
+            [&](const CompositeLayerInfo& info) -> GLuint {
+                if (!m_fillPreview.maskTarget && !info.isGroup
+                    && info.id == m_fillPreview.targetLayerId) {
+                    return replacedTexture;
+                }
+                return m_layerScreenSourceCache->acquireLayerTexture(info, *m_renderer, m_viewport,
+                    canvasWidth, canvasHeight, flipH, flipV, m_fillPreview.viewportRevision,
+                    LayerScreenSourceCache::SourceKind::LayerColor,
+                    ruwa::core::effects::LayerSourcePurpose::RawContent);
+            },
+            hasCanvasBackground ? canvasBackground : Color::transparent(), cameraZoom,
+            buildViewportEffectRegion(m_viewport, static_cast<float>(canvasWidth),
+                static_cast<float>(canvasHeight), flipH, flipV, viewportWidth, viewportHeight),
+            [&](const CompositeLayerInfo& info, int padX,
+                int padY) -> GLViewportCompositor::OverscanLayerSource {
+                if (info.isGroup || info.id == m_fillPreview.targetLayerId) {
+                    return {};
+                }
+                return resolveOverscanRasterSource(info, padX, padY, *m_layerScreenSourceCache,
+                    *m_renderer, m_viewport, viewportWidth, viewportHeight, canvasWidth,
+                    canvasHeight, flipH, flipV, m_fillPreview.viewportRevision);
+            },
+            [&](const CompositeLayerInfo& info) -> GLuint {
+                if (m_fillPreview.maskTarget && !info.isGroup
+                    && info.id == m_fillPreview.targetLayerId) {
+                    return replacedTexture;
+                }
+                return acquireLayerMaskTextureForPreview(
+                    info, flipH, flipV, m_fillPreview.viewportRevision);
+            });
+        if (!transientComposite
+            || !viewportCompositor->saveTexture(transientComposite,
+                m_fillPreview.finalCompositeTexture, m_fillPreview.finalCompositeWidth,
+                m_fillPreview.finalCompositeHeight)) {
+            failFillPreviewGpuPipeline();
+            return;
+        }
+        m_fillPreview.finalCompositeDirty = false;
+    }
+
+    if (!m_fillPreview.finalCompositeTexture || m_fillPreview.affectedDocumentBounds.isEmpty()) {
+        return;
+    }
+
+    QRect affectedBounds = m_fillPreview.affectedDocumentBounds;
+    int effectPadDocument = 0;
+    if (m_layerModel) {
+        m_layerModel->forEach([&](ruwa::core::layers::LayerData* layer) {
+            if (layer) {
+                effectPadDocument = std::max(effectPadDocument,
+                    ruwa::core::effects::EffectCoverageResolver::neighborhoodPadPixels(
+                        layer->effects, /*realtimeOnly=*/true));
+            }
+        });
+    }
+    affectedBounds.adjust(
+        -effectPadDocument, -effectPadDocument, effectPadDocument, effectPadDocument);
+    const std::array<Vector2, 4> documentCorners {
+        Vector2 { static_cast<float>(affectedBounds.left()),
+            static_cast<float>(affectedBounds.top()) },
+        Vector2 { static_cast<float>(affectedBounds.right() + 1),
+            static_cast<float>(affectedBounds.top()) },
+        Vector2 { static_cast<float>(affectedBounds.right() + 1),
+            static_cast<float>(affectedBounds.bottom() + 1) },
+        Vector2 { static_cast<float>(affectedBounds.left()),
+            static_cast<float>(affectedBounds.bottom() + 1) }
+    };
+    float minScreenX = std::numeric_limits<float>::max();
+    float minScreenY = std::numeric_limits<float>::max();
+    float maxScreenX = std::numeric_limits<float>::lowest();
+    float maxScreenY = std::numeric_limits<float>::lowest();
+    for (const Vector2& corner : documentCorners) {
+        const Vector2 screen = screenFromDocumentWorld(corner);
+        minScreenX = std::min(minScreenX, screen.x);
+        minScreenY = std::min(minScreenY, screen.y);
+        maxScreenX = std::max(maxScreenX, screen.x);
+        maxScreenY = std::max(maxScreenY, screen.y);
+    }
+    constexpr int kFillPreviewScissorPadding = 2;
+    const QRect drawBounds(static_cast<int>(std::floor(minScreenX)) - kFillPreviewScissorPadding,
+        static_cast<int>(std::floor(minScreenY)) - kFillPreviewScissorPadding,
+        static_cast<int>(std::ceil(maxScreenX) - std::floor(minScreenX))
+            + kFillPreviewScissorPadding * 2,
+        static_cast<int>(std::ceil(maxScreenY) - std::floor(minScreenY))
+            + kFillPreviewScissorPadding * 2);
+    const QRect clippedDrawBounds
+        = drawBounds.intersected(QRect(0, 0, viewportWidth, viewportHeight));
+    if (clippedDrawBounds.isEmpty()) {
+        return;
+    }
+
+    GLViewportCompositor::CanvasClipParams clipParams;
+    if (finiteDocumentBounds) {
+        clipParams.enabled = true;
+        clipParams.cameraPosition = cameraPosition;
+        clipParams.cameraZoom = cameraZoom;
+        clipParams.cameraRotation = cameraRotation;
+        clipParams.canvasWidth = static_cast<float>(canvasWidth);
+        clipParams.canvasHeight = static_cast<float>(canvasHeight);
+        clipParams.canvasCornerRadius = canvasCornerRadiusCanvasPx();
+    }
+    GLViewportCompositor::RadialRevealParams radialReveal;
+    radialReveal.enabled = true;
+    radialReveal.documentOrigin = m_fillPreview.origin;
+    radialReveal.radius = std::max(1.0f, m_fillPreview.displayRadius);
+    radialReveal.feather = m_fillPreview.feather;
+    radialReveal.flipH = flipH;
+    radialReveal.flipV = flipV;
+    GLViewportCompositor::CheckerBackdropParams checkerBackdrop;
+    checkerBackdrop.enabled = true;
+    checkerBackdrop.documentSpace = finiteDocumentBounds;
+    checkerBackdrop.color1 = m_checkerColor1;
+    checkerBackdrop.color2 = m_checkerColor2;
+    checkerBackdrop.viewportColor = m_backgroundColor;
+    checkerBackdrop.size = m_checkerSize;
+
+    const GLuint targetFbo
+        = sceneTarget == m_sceneFboManager.sceneFbo() ? sceneTarget : static_cast<GLuint>(defaultFbo);
+    glBindFramebuffer(GL_FRAMEBUFFER, targetFbo);
+    glViewport(0, 0, viewportWidth, viewportHeight);
+
+    const GLboolean scissorWasEnabled = glIsEnabled(GL_SCISSOR_TEST);
+    const GLboolean blendWasEnabled = glIsEnabled(GL_BLEND);
+    GLint previousScissor[4] = {};
+    GLint previousBlendSrcRgb = 0;
+    GLint previousBlendDstRgb = 0;
+    GLint previousBlendSrcAlpha = 0;
+    GLint previousBlendDstAlpha = 0;
+    glGetIntegerv(GL_SCISSOR_BOX, previousScissor);
+    glGetIntegerv(GL_BLEND_SRC_RGB, &previousBlendSrcRgb);
+    glGetIntegerv(GL_BLEND_DST_RGB, &previousBlendDstRgb);
+    glGetIntegerv(GL_BLEND_SRC_ALPHA, &previousBlendSrcAlpha);
+    glGetIntegerv(GL_BLEND_DST_ALPHA, &previousBlendDstAlpha);
+    glEnable(GL_SCISSOR_TEST);
+    glScissor(clippedDrawBounds.x(),
+        viewportHeight - clippedDrawBounds.y() - clippedDrawBounds.height(),
+        clippedDrawBounds.width(), clippedDrawBounds.height());
+    glEnable(GL_BLEND);
+    glBlendFunc(GL_ONE, GL_ONE_MINUS_SRC_ALPHA);
+    viewportCompositor->drawTexture(m_fillPreview.finalCompositeTexture, clipParams,
+        GLViewportCompositor::LassoMaskParams {}, /*replaceWithCoverage=*/true, radialReveal,
+        checkerBackdrop);
+    glBlendFuncSeparate(static_cast<GLenum>(previousBlendSrcRgb),
+        static_cast<GLenum>(previousBlendDstRgb), static_cast<GLenum>(previousBlendSrcAlpha),
+        static_cast<GLenum>(previousBlendDstAlpha));
+    if (blendWasEnabled) {
+        glEnable(GL_BLEND);
+    } else {
+        glDisable(GL_BLEND);
+    }
+    if (scissorWasEnabled) {
+        glScissor(previousScissor[0], previousScissor[1], previousScissor[2], previousScissor[3]);
+    } else {
+        glDisable(GL_SCISSOR_TEST);
+    }
+
+    if (targetFbo == m_sceneFboManager.sceneFbo()) {
+        m_sceneFboManager.blitToDefaultFbo(this, defaultFbo, viewportWidth, viewportHeight);
+    }
+}
+
 void OpenGLCanvasWidget::paintGL_renderLassoFillOverlay(
     const std::vector<CompositeLayerInfo>& layerStack,
     const std::vector<CompositeLayerInfo>& boardLayerStack, GLint defaultFbo)
@@ -11419,6 +11550,7 @@ void OpenGLCanvasWidget::paintGL()
     if (!m_initialized || !m_renderer)
         return;
 
+    flushPendingFillPreviewTextureDeletes();
     paintGL_updateCameraAndEmitSignals();
     const bool canvasCornerAnimating = updateCanvasCornerEffectState();
     const bool fillPreviewAnimating = updateFillPreviewAnimationState();
@@ -11501,6 +11633,8 @@ void OpenGLCanvasWidget::paintGL()
     glGetIntegerv(GL_FRAMEBUFFER_BINDING, &defaultFbo);
     GLuint sceneTarget = 0;
     paintGL_renderSceneAndBlit(sceneTarget, defaultFbo, needFullSceneForOverlay, boardLayerStack);
+
+    paintGL_renderFillPreviewOverlay(layerStack, sceneTarget, defaultFbo);
 
     if (captureBrushCursorRegion) {
         const QSize surfaceSize = currentSurfacePixelSize(this);

@@ -29,21 +29,6 @@ namespace aether {
 class GLRenderer;
 class TransformController;
 
-struct FillPreviewCompositingState {
-    bool active = false;
-    QUuid targetLayerId;
-    bool maskTarget = false;
-    TileGrid* previewContentGrid = nullptr;
-    TileGrid* fillMaskGrid = nullptr;
-    const RetainedRenderPayload* retainedPayload = nullptr;
-    bool useSolidColor = false;
-    bool renderAboveLayerContent = false;
-    Color solidColor {};
-    Vector2 origin {};
-    float radius = 0.0f;
-    float feather = 0.0f;
-};
-
 struct LassoFillPreviewPlan {
     std::vector<CompositeLayerInfo> sceneBelowTargetGroup;
     std::vector<CompositeLayerInfo> targetGroup;
@@ -75,7 +60,6 @@ struct LayerCompositingContext {
     std::function<bool()> getSelectionMaskHasSoftAlpha;
     std::function<bool(const ruwa::core::layers::LayerData*, const TileGrid*)>
         shouldPreserveAlphaForPaintMask;
-    std::function<const FillPreviewCompositingState*()> getFillPreview;
     std::function<TransformController*()> getTransformController;
     std::function<GLRenderer*()> getRenderer;
     std::function<bool()> useViewportTransformPreview;
@@ -145,19 +129,6 @@ private:
         bool transformPreserveMaskedSource = false;
         bool rendererHasTransformAtlas = false;
         bool useViewportTransformPreview = false;
-        bool fillPreviewActive = false;
-        QUuid fillPreviewTargetLayerId;
-        bool fillPreviewMaskTarget = false;
-        TileGrid* fillPreviewContentGrid = nullptr;
-        TileGrid* fillPreviewMaskGrid = nullptr;
-        const RetainedRenderPayload* fillPreviewRetainedPayload = nullptr;
-        bool fillPreviewUseSolidColor = false;
-        bool fillPreviewRenderAboveLayerContent = false;
-        Color fillPreviewSolidColor {};
-        Vector2 fillPreviewOrigin {};
-        float fillPreviewRadius = 0.0f;
-        float fillPreviewFeather = 0.0f;
-
         bool operator==(const BuildStateSnapshot& other) const;
         bool operator!=(const BuildStateSnapshot& other) const { return !(*this == other); }
     };

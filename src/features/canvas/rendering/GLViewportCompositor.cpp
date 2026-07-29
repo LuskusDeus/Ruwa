@@ -159,7 +159,8 @@ GLuint GLViewportCompositor::compositeLayers(const std::vector<CompositeLayerInf
 }
 
 void GLViewportCompositor::drawTexture(GLuint texture, const CanvasClipParams& clipParams,
-    const LassoMaskParams& lassoMask, bool replaceWithCoverage)
+    const LassoMaskParams& lassoMask, bool replaceWithCoverage,
+    const RadialRevealParams& radialReveal, const CheckerBackdropParams& checkerBackdrop)
 {
     if (!m_initialized || !texture || !m_blitProgram || !m_blitProgram->isValid()) {
         return;
@@ -184,6 +185,24 @@ void GLViewportCompositor::drawTexture(GLuint texture, const CanvasClipParams& c
     m_blitProgram->setUniform("uReplaceWithCoverage", replaceWithCoverage ? 1 : 0);
     m_blitProgram->setUniform("uLassoMaskOrigin", lassoMask.originX, lassoMask.originY);
     m_blitProgram->setUniform("uLassoMaskSize", lassoMask.width, lassoMask.height);
+    m_blitProgram->setUniform("uUseRadialReveal", radialReveal.enabled ? 1 : 0);
+    m_blitProgram->setUniform(
+        "uRadialRevealOrigin", radialReveal.documentOrigin.x, radialReveal.documentOrigin.y);
+    m_blitProgram->setUniform("uRadialRevealRadius", radialReveal.radius);
+    m_blitProgram->setUniform("uRadialRevealFeather", radialReveal.feather);
+    m_blitProgram->setUniform("uContentFlipH", radialReveal.flipH ? 1 : 0);
+    m_blitProgram->setUniform("uContentFlipV", radialReveal.flipV ? 1 : 0);
+    m_blitProgram->setUniform("uUseCheckerBackdrop", checkerBackdrop.enabled ? 1 : 0);
+    m_blitProgram->setUniform(
+        "uCheckerDocumentSpace", checkerBackdrop.documentSpace ? 1 : 0);
+    m_blitProgram->setUniform("uCheckerColor1", checkerBackdrop.color1.r,
+        checkerBackdrop.color1.g, checkerBackdrop.color1.b, checkerBackdrop.color1.a);
+    m_blitProgram->setUniform("uCheckerColor2", checkerBackdrop.color2.r,
+        checkerBackdrop.color2.g, checkerBackdrop.color2.b, checkerBackdrop.color2.a);
+    m_blitProgram->setUniform("uCheckerViewportColor", checkerBackdrop.viewportColor.r,
+        checkerBackdrop.viewportColor.g, checkerBackdrop.viewportColor.b,
+        checkerBackdrop.viewportColor.a);
+    m_blitProgram->setUniform("uCheckerSize", checkerBackdrop.size);
     m_gl->glBindTextureUnit(0, texture);
     m_gl->glBindTextureUnit(1, useLassoMask ? lassoMask.maskTexture : 0);
     m_gl->glBindVertexArray(m_emptyVao);
@@ -191,6 +210,29 @@ void GLViewportCompositor::drawTexture(GLuint texture, const CanvasClipParams& c
     m_gl->glBindVertexArray(0);
     m_gl->glBindTextureUnit(1, 0);
     m_gl->glBindTextureUnit(0, 0);
+}
+
+bool GLViewportCompositor::saveTexture(
+    GLuint sourceTexture, GLuint& stableTexture, uint32_t& stableWidth, uint32_t& stableHeight)
+{
+    if (!m_initialized || !sourceTexture || m_width == 0 || m_height == 0) {
+        return false;
+    }
+
+    if (!stableTexture || stableWidth != m_width || stableHeight != m_height) {
+        deleteTexture(m_gl, stableTexture);
+        stableTexture = createTexture2D(m_gl, m_width, m_height, { GL_LINEAR, GL_LINEAR });
+        stableWidth = stableTexture ? m_width : 0;
+        stableHeight = stableTexture ? m_height : 0;
+    }
+    if (!stableTexture) {
+        return false;
+    }
+
+    m_gl->glCopyImageSubData(sourceTexture, GL_TEXTURE_2D, 0, 0, 0, 0, stableTexture,
+        GL_TEXTURE_2D, 0, 0, 0, 0, static_cast<GLsizei>(m_width),
+        static_cast<GLsizei>(m_height), 1);
+    return true;
 }
 
 GLuint GLViewportCompositor::applyLuminanceRevealMask(

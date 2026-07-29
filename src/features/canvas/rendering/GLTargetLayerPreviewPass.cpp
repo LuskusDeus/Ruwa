@@ -89,6 +89,7 @@ GLuint GLTargetLayerPreviewPass::render(GLuint targetLayerBaseTexture, GLuint la
     m_gl->glClear(GL_COLOR_BUFFER_BIT);
 
     m_program->use();
+    m_program->setUniform("uMode", 0);
     m_program->setUniform("uBaseTexture", 0);
     m_program->setUniform("uMaskTexture", 1);
     m_program->setUniform("uSelectionMaskTexture", 2);
@@ -110,6 +111,49 @@ GLuint GLTargetLayerPreviewPass::render(GLuint targetLayerBaseTexture, GLuint la
 
     m_gl->glBindTextureUnit(2, 0);
     m_gl->glBindTextureUnit(1, 0);
+    m_gl->glBindTextureUnit(0, 0);
+
+    return m_outputTexture;
+}
+
+GLuint GLTargetLayerPreviewPass::renderTextureReplacement(GLuint baseTexture, GLuint afterTexture,
+    GLuint coverageTexture, uint32_t viewportWidth, uint32_t viewportHeight)
+{
+    if (!m_initialized || !m_program || !m_program->isValid() || !baseTexture || !afterTexture
+        || !coverageTexture || viewportWidth == 0 || viewportHeight == 0) {
+        return 0;
+    }
+
+    ensureRenderTarget(viewportWidth, viewportHeight);
+    if (!m_outputTexture) {
+        return 0;
+    }
+
+    GLFboViewportBlendGuard guard(m_gl);
+
+    m_gl->glBindFramebuffer(GL_FRAMEBUFFER, m_fbo);
+    m_gl->glFramebufferTexture2D(
+        GL_FRAMEBUFFER, GL_COLOR_ATTACHMENT0, GL_TEXTURE_2D, m_outputTexture, 0);
+    m_gl->glViewport(
+        0, 0, static_cast<GLsizei>(viewportWidth), static_cast<GLsizei>(viewportHeight));
+    m_gl->glDisable(GL_BLEND);
+
+    m_program->use();
+    m_program->setUniform("uMode", 1);
+    m_program->setUniform("uBaseTexture", 0);
+    m_program->setUniform("uAfterTexture", 3);
+    m_program->setUniform("uCoverageTexture", 4);
+
+    m_gl->glBindTextureUnit(0, baseTexture);
+    m_gl->glBindTextureUnit(3, afterTexture);
+    m_gl->glBindTextureUnit(4, coverageTexture);
+
+    m_gl->glBindVertexArray(m_emptyVao);
+    m_gl->glDrawArrays(GL_TRIANGLES, 0, 6);
+    m_gl->glBindVertexArray(0);
+
+    m_gl->glBindTextureUnit(4, 0);
+    m_gl->glBindTextureUnit(3, 0);
     m_gl->glBindTextureUnit(0, 0);
 
     return m_outputTexture;

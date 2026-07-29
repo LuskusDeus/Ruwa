@@ -23,6 +23,18 @@ uniform ivec2 uLassoMaskSize;
 // double-composites in the covered region. (The destination alpha is irrelevant
 // here — the default framebuffer's alpha is force-cleared to 1 afterwards.)
 uniform int uReplaceWithCoverage;
+uniform int uUseRadialReveal;
+uniform vec2 uRadialRevealOrigin;
+uniform float uRadialRevealRadius;
+uniform float uRadialRevealFeather;
+uniform int uContentFlipH;
+uniform int uContentFlipV;
+uniform int uUseCheckerBackdrop;
+uniform int uCheckerDocumentSpace;
+uniform vec4 uCheckerColor1;
+uniform vec4 uCheckerColor2;
+uniform vec4 uCheckerViewportColor;
+uniform float uCheckerSize;
 
 in vec2 fragTexCoord;
 
@@ -67,7 +79,42 @@ vec2 documentWorldFromScreen(vec2 screenPixel) {
         scaledOffset.x * c + scaledOffset.y * s,
         -scaledOffset.x * s + scaledOffset.y * c
     );
-    return uCameraPosition + worldOffset;
+    vec2 documentPos = uCameraPosition + worldOffset;
+    if (uCanvasSize.x > 0.0 && uContentFlipH != 0) {
+        documentPos.x = uCanvasSize.x - documentPos.x;
+    }
+    if (uCanvasSize.y > 0.0 && uContentFlipV != 0) {
+        documentPos.y = uCanvasSize.y - documentPos.y;
+    }
+    return documentPos;
+}
+
+float radialRevealCoverage() {
+    if (uUseRadialReveal == 0) {
+        return 1.0;
+    }
+
+    vec2 screenPixel = vec2(gl_FragCoord.x, uViewportSize.y - gl_FragCoord.y);
+    vec2 documentPos = documentWorldFromScreen(screenPixel);
+    float radius = max(uRadialRevealRadius, 0.0001);
+    float feather = clamp(uRadialRevealFeather, 0.0001, radius);
+    float innerRadius = max(0.0, radius - feather);
+    return 1.0 - smoothstep(
+        innerRadius, radius, distance(documentPos, uRadialRevealOrigin));
+}
+
+vec4 checkerBackdrop(vec2 screenPixel) {
+    vec2 checkerPixel = uCheckerDocumentSpace != 0
+        ? documentWorldFromScreen(screenPixel)
+        : screenPixel;
+    vec2 cell = floor(checkerPixel / max(uCheckerSize, 0.0001));
+    float checker = mod(cell.x + cell.y, 2.0);
+    vec4 checkerStraight = mix(uCheckerColor1, uCheckerColor2, checker);
+    vec4 viewportPremul = vec4(
+        uCheckerViewportColor.rgb * uCheckerViewportColor.a, uCheckerViewportColor.a);
+    vec4 checkerPremul = vec4(
+        checkerStraight.rgb * checkerStraight.a, checkerStraight.a);
+    return checkerPremul + viewportPremul * (1.0 - checkerPremul.a);
 }
 
 float canvasClipCoverage() {
@@ -97,8 +144,13 @@ float canvasClipCoverage() {
 }
 
 void main() {
-    float coverage = canvasClipCoverage() * lassoMaskCoverage();
+    float coverage = canvasClipCoverage() * lassoMaskCoverage() * radialRevealCoverage();
     vec4 src = texture(uTileTexture, fragTexCoord);
+    if (uUseCheckerBackdrop != 0) {
+        vec2 screenPixel = vec2(gl_FragCoord.x, uViewportSize.y - gl_FragCoord.y);
+        vec4 backdrop = checkerBackdrop(screenPixel);
+        src = src + backdrop * (1.0 - src.a);
+    }
     if (uReplaceWithCoverage != 0) {
         // Premultiplied src.rgb scaled by coverage, alpha = coverage → replace.
         outColor = vec4(src.rgb * coverage, coverage);

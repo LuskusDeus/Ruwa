@@ -109,6 +109,10 @@ public:
     void setCanvasBoundsMode(ruwa::core::canvas::CanvasBoundsMode mode)
     {
         m_canvas.setBoundsMode(mode);
+        if (m_fillPreview.active) {
+            ++m_fillPreview.viewportRevision;
+            m_fillPreview.finalCompositeDirty = true;
+        }
     }
     ruwa::core::canvas::CanvasBoundsMode canvasBoundsMode() const { return m_canvas.boundsMode(); }
     bool hasFiniteDocumentBounds() const { return m_canvas.hasFiniteDocumentBounds(); }
@@ -458,7 +462,6 @@ private:
     QPoint fillProgressPopupAnchorPoint() const;
     QPoint fillProgressPopupTopLeft() const;
     void updateFillProgressPopupPosition();
-    void showFillProgressPopupProcessing();
     void showClassicFillWaitPopup();
     void showFillProgressPopupDone(const QPoint& anchorPoint);
     void hideFillProgressPopupImmediate();
@@ -505,6 +508,8 @@ private:
     void paintGL_renderLassoOverlay();
     void paintGL_renderTransformViewportPreview(const std::vector<CompositeLayerInfo>& layerStack,
         const std::vector<CompositeLayerInfo>& boardLayerStack, GLint defaultFbo);
+    void paintGL_renderFillPreviewOverlay(const std::vector<CompositeLayerInfo>& layerStack,
+        GLuint sceneTarget, GLint defaultFbo);
     void paintGL_renderLassoFillOverlay(const std::vector<CompositeLayerInfo>& layerStack,
         const std::vector<CompositeLayerInfo>& boardLayerStack, GLint defaultFbo);
     // Resolves a painted layer mask to the standard viewport. GLViewportCompositor
@@ -560,11 +565,11 @@ private:
     bool applyFloodFillResult(const QUuid& layerId, FloodFillResult&& result,
         std::optional<SelectionRestoreContext> selectionRestore, bool maskTarget = false);
     bool commitFillPreviewResult();
-    void stopFillPreview(
-        bool markDirtyTiles = true, bool cancelWorker = true, bool hidePopup = true);
-    void markFillPreviewDirtyTiles();
+    void stopFillPreview(bool cancelWorker = true, bool hidePopup = true);
     bool updateFillPreviewAnimationState();
-    const FillPreviewCompositingState* currentFillPreviewState() const;
+    void failFillPreviewGpuPipeline();
+    void releaseFillPreviewGpuResources();
+    void flushPendingFillPreviewTextureDeletes();
     QUuid currentFillProcessingLayerId() const;
     void syncFillProcessingLayerSignal();
 
@@ -755,7 +760,6 @@ private:
         Rect bounds {};
         std::vector<Vector2> polygon;
         Color color {};
-        mutable FillPreviewCompositingState compositingState {};
     };
     mutable LassoFillPreviewState m_lassoFillPreview;
     struct PreviewViewportSessionState {
@@ -807,11 +811,6 @@ private:
             FillPreviewRawTileMap maskTiles;
         };
 
-        struct RevealSegment {
-            float minRadius = 0.0f;
-            float maxRadius = 0.0f;
-        };
-
         bool active = false;
         FillAlgorithm algorithm = FillAlgorithm::Smart;
         bool finalResultOnly = false;
@@ -821,16 +820,29 @@ private:
         aether::TilePixelFormat contentFormat = aether::kDefaultTileFormat;
         bool previewActive = false;
         bool awaitingResult = false;
-        bool previewPaused = false;
         bool easeActive = false;
         QUuid targetLayerId;
         std::shared_ptr<TileGrid> previewContentGrid;
         std::shared_ptr<TileGrid> fillMaskGrid;
-        std::unordered_set<TileKey, TileKeyHash> dirtyKeys;
+        std::unordered_set<TileKey, TileKeyHash> affectedKeys;
         std::deque<ProgressBatch> queuedBatches;
-        std::deque<RevealSegment> queuedRevealSegments;
+        QUuid sourceCacheId;
+        uint64_t contentRevision = 0;
+        uint64_t viewportRevision = 0;
+        bool finalCompositeDirty = true;
+        bool gpuPipelineFailed = false;
+        GLuint finalCompositeTexture = 0;
+        uint32_t finalCompositeWidth = 0;
+        uint32_t finalCompositeHeight = 0;
+        QRect affectedDocumentBounds;
+        uint32_t viewportWidth = 0;
+        uint32_t viewportHeight = 0;
+        Vector2 cameraPosition {};
+        float cameraZoom = 0.0f;
+        float cameraRotation = 0.0f;
+        bool flipH = false;
+        bool flipV = false;
         Vector2 origin {};
-        float radiusCap = 0.0f;
         float minRevealRadius = 0.0f;
         float readyRadius = 0.0f;
         float displayRadius = 0.0f;
@@ -846,8 +858,6 @@ private:
         QElapsedTimer timer;
         qint64 lastAnimationMs = 0;
         qint64 easeStartMs = 0;
-        qint64 lastPreviewGateLogMs = -1;
-        int lastPreviewGateReason = 0;
         FloodFillResult pendingResult;
         SelectionRestoreContext selectionRestore {};
         struct AsyncJob {
@@ -855,20 +865,19 @@ private:
             std::atomic<bool> done { false };
             std::mutex resultMutex;
             std::deque<ProgressBatch> pendingBatches;
-            float preparedRadiusCap = 0.0f;
             FloodFillResult result;
         };
         std::shared_ptr<AsyncJob> job;
-        mutable FillPreviewCompositingState compositingState {};
     };
     FillPreviewState m_fillPreview;
+    std::vector<GLuint> m_pendingFillPreviewTextureDeletes;
     void resetFillPreviewMetrics();
     void rebuildFillPreviewMetricsFromGrid();
     bool updateFillPreviewMetricsFromBatch(const FillPreviewState::ProgressBatch& batch);
     size_t applyFillPreviewBatchBudget(size_t maxBatchCount, qint64 maxElapsedMs);
     static std::deque<FillPreviewState::ProgressBatch> buildFillPreviewBatches(
         const FillPreviewRawTileMap& previewTiles, const FillPreviewRawTileMap& maskTiles,
-        int originX, int originY, float readyRadius, float radiusCap);
+        int originX, int originY, float readyRadius);
 
     struct PendingFillKickoff {
         bool pending = false;

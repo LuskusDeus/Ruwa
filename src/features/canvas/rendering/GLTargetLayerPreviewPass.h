@@ -29,6 +29,12 @@ public:
     GLuint render(GLuint targetLayerBaseTexture, GLuint lassoMaskTexture,
         const QRect& lassoMaskBounds, uint32_t viewportWidth, uint32_t viewportHeight,
         const Color& fillColor, bool preserveBaseAlpha, GLuint selectionMaskTexture = 0);
+    /// Replaces covered premultiplied pixels in an already-rendered screen source.
+    /// `afterTexture` contains the CPU-computed FloodFillResult after pixels and
+    /// `coverageTexture` is binary/antialiased replacement coverage in the same
+    /// screen space. This deliberately does not reimplement fill semantics in GLSL.
+    GLuint renderTextureReplacement(GLuint baseTexture, GLuint afterTexture,
+        GLuint coverageTexture, uint32_t viewportWidth, uint32_t viewportHeight);
 
     bool isInitialized() const { return m_initialized; }
 

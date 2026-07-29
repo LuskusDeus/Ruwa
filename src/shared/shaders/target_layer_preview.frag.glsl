@@ -2,6 +2,9 @@
 // SPDX-License-Identifier: MPL-2.0
 
 uniform sampler2D uBaseTexture;
+uniform sampler2D uAfterTexture;
+uniform sampler2D uCoverageTexture;
+uniform int uMode;
 uniform sampler2D uMaskTexture;
 uniform sampler2D uSelectionMaskTexture;
 uniform int uUseSelectionMask;
@@ -28,6 +31,16 @@ float sampleMask() {
 
 void main() {
     vec4 base = texture(uBaseTexture, fragTexCoord);
+    if (uMode == 1) {
+        vec4 after = texture(uAfterTexture, fragTexCoord);
+        float coverage = clamp(texture(uCoverageTexture, fragTexCoord).a, 0.0, 1.0);
+        // Both inputs are premultiplied. FloodFillResult has already resolved
+        // exterior/interior semantics, selection softness, alpha lock and the
+        // document pixel format, so preview is an exact covered replacement.
+        outColor = mix(base, after, coverage);
+        return;
+    }
+
     float mask = sampleMask();
     if (uUseSelectionMask != 0) {
         mask *= texture(uSelectionMaskTexture, fragTexCoord).a;

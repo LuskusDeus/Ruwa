@@ -25,6 +25,8 @@ namespace aether {
 inline constexpr float kSmartFillMaxEstimatedRadiusPx = 3000.0f;
 inline constexpr size_t kFillPreviewStartBatchBudget = 4;
 inline constexpr qint64 kFillPreviewStartBatchBudgetMs = 12;
+inline constexpr size_t kFillPreviewFrameBatchBudget = 8;
+inline constexpr qint64 kFillPreviewFrameBatchBudgetMs = 4;
 
 inline size_t fillPreviewWorkerCount(size_t workItemCount)
 {

@@ -108,23 +108,7 @@ bool LayerCompositingBuilder::BuildStateSnapshot::operator==(const BuildStateSna
         && transformControllerStateKey == other.transformControllerStateKey
         && transformPreserveMaskedSource == other.transformPreserveMaskedSource
         && rendererHasTransformAtlas == other.rendererHasTransformAtlas
-        && useViewportTransformPreview == other.useViewportTransformPreview
-        && fillPreviewActive == other.fillPreviewActive
-        && fillPreviewTargetLayerId == other.fillPreviewTargetLayerId
-        && fillPreviewMaskTarget == other.fillPreviewMaskTarget
-        && fillPreviewContentGrid == other.fillPreviewContentGrid
-        && fillPreviewMaskGrid == other.fillPreviewMaskGrid
-        && fillPreviewRetainedPayload == other.fillPreviewRetainedPayload
-        && fillPreviewUseSolidColor == other.fillPreviewUseSolidColor
-        && fillPreviewRenderAboveLayerContent == other.fillPreviewRenderAboveLayerContent
-        && fillPreviewSolidColor.r == other.fillPreviewSolidColor.r
-        && fillPreviewSolidColor.g == other.fillPreviewSolidColor.g
-        && fillPreviewSolidColor.b == other.fillPreviewSolidColor.b
-        && fillPreviewSolidColor.a == other.fillPreviewSolidColor.a
-        && fillPreviewOrigin.x == other.fillPreviewOrigin.x
-        && fillPreviewOrigin.y == other.fillPreviewOrigin.y
-        && fillPreviewRadius == other.fillPreviewRadius
-        && fillPreviewFeather == other.fillPreviewFeather;
+        && useViewportTransformPreview == other.useViewportTransformPreview;
 }
 
 // ==========================================================================
@@ -297,23 +281,6 @@ LayerCompositingBuilder::BuildStateSnapshot LayerCompositingBuilder::buildStateS
     snapshot.useViewportTransformPreview
         = m_context.useViewportTransformPreview && m_context.useViewportTransformPreview();
 
-    const FillPreviewCompositingState* fillPreview
-        = m_context.getFillPreview ? m_context.getFillPreview() : nullptr;
-    if (fillPreview) {
-        snapshot.fillPreviewActive = fillPreview->active;
-        snapshot.fillPreviewTargetLayerId = fillPreview->targetLayerId;
-        snapshot.fillPreviewMaskTarget = fillPreview->maskTarget;
-        snapshot.fillPreviewContentGrid = fillPreview->previewContentGrid;
-        snapshot.fillPreviewMaskGrid = fillPreview->fillMaskGrid;
-        snapshot.fillPreviewRetainedPayload = fillPreview->retainedPayload;
-        snapshot.fillPreviewUseSolidColor = fillPreview->useSolidColor;
-        snapshot.fillPreviewRenderAboveLayerContent = fillPreview->renderAboveLayerContent;
-        snapshot.fillPreviewSolidColor = fillPreview->solidColor;
-        snapshot.fillPreviewOrigin = fillPreview->origin;
-        snapshot.fillPreviewRadius = fillPreview->radius;
-        snapshot.fillPreviewFeather = fillPreview->feather;
-    }
-
     return snapshot;
 }
 
@@ -385,8 +352,6 @@ std::vector<CompositeLayerInfo> LayerCompositingBuilder::buildLayerStackRecursiv
                 ? m_context.shouldPreserveAlphaForPaintMask(activeLayerPtr, selectionMaskGrid)
                 : (activeLayerPtr->alphaLock || selectionMaskHasSoftAlpha));
 
-    const FillPreviewCompositingState* fillPreview
-        = m_context.getFillPreview ? m_context.getFillPreview() : nullptr;
     auto* transformController
         = m_context.getTransformController ? m_context.getTransformController() : nullptr;
     auto* renderer = m_context.getRenderer ? m_context.getRenderer() : nullptr;
@@ -414,133 +379,6 @@ std::vector<CompositeLayerInfo> LayerCompositingBuilder::buildLayerStackRecursiv
         // (document tiles).
         const bool hiddenByClipBase = ruwa::core::layers::isHiddenByClipBaseInSiblings(layers, i);
         const bool layerVisible = layerData->visible && !hiddenByClipBase;
-
-        const bool isFillPreviewTarget = fillPreview && fillPreview->active && layerData->isRaster()
-            && layerData->id == fillPreview->targetLayerId
-            && (fillPreview->maskTarget
-                    ? (fillPreview->previewContentGrid && !fillPreview->previewContentGrid->empty()
-                          && fillPreview->fillMaskGrid && !fillPreview->fillMaskGrid->empty()
-                          && layerData->maskTileGrid())
-                    : ((fillPreview->fillMaskGrid && !fillPreview->fillMaskGrid->empty())
-                          || fillPreview->retainedPayload));
-        if (isFillPreviewTarget) {
-            if (fillPreview->maskTarget) {
-                CompositeLayerInfo info;
-                info.id = layerData->id;
-                info.effectChainRevision = layerData->effectChainRevision;
-                info.effects = layerData->effects;
-                info.liveEditedEffectId = layerData->liveEditedEffectId;
-                info.liveEditedEffectParamKey = layerData->liveEditedEffectParamKey;
-                info.liveEffectEditGeneration = layerData->liveEffectEditGeneration;
-                info.opacity = static_cast<float>(layerData->opacity);
-                info.blendMode = static_cast<int>(layerData->blendMode);
-                info.visible = layerVisible;
-                info.clippedToBelow = layerData->clippedToBelow;
-                info.tileGrid = compositingGridForLayer(layerData.get());
-                info.externalClipMaskGrid = fillPreview->previewContentGrid;
-                info.clipMaskGrid2 = const_cast<TileGrid*>(layerData->maskTileGrid());
-                info.clipMaskEditReplace = true;
-                info.clipMaskReplaceFallback = true;
-                info.clipMaskEditStrokeOpacity = 1.0f;
-                info.useRadialReveal = true;
-                info.radialRevealOrigin = fillPreview->origin;
-                info.radialRevealRadius = fillPreview->radius;
-                info.radialRevealFeather = fillPreview->feather;
-                result.push_back(std::move(info));
-                continue;
-            }
-
-            CompositeLayerInfo groupInfo;
-            groupInfo.id = layerData->id;
-            groupInfo.effectChainRevision = layerData->effectChainRevision;
-            groupInfo.effects = layerData->effects;
-            groupInfo.liveEditedEffectId = layerData->liveEditedEffectId;
-            groupInfo.liveEditedEffectParamKey = layerData->liveEditedEffectParamKey;
-            groupInfo.liveEffectEditGeneration = layerData->liveEffectEditGeneration;
-            groupInfo.opacity = static_cast<float>(layerData->opacity);
-            groupInfo.blendMode = static_cast<int>(layerData->blendMode);
-            groupInfo.visible = layerVisible;
-            groupInfo.isGroup = true;
-            groupInfo.clippedToBelow = layerData->clippedToBelow;
-            groupInfo.forceIsolation = true;
-            const bool previewAboveLayerContent = fillPreview->renderAboveLayerContent;
-
-            auto appendPreviewContent = [&]() {
-                if (fillPreview->retainedPayload) {
-                    CompositeLayerInfo previewContent;
-                    previewContent.retainedPayload = fillPreview->retainedPayload;
-                    previewContent.opacity = 1.0f;
-                    previewContent.blendMode = 0;
-                    previewContent.visible = true;
-                    groupInfo.children.push_back(std::move(previewContent));
-                } else if (fillPreview->useSolidColor) {
-                    CompositeLayerInfo previewContent;
-                    previewContent.hasSolidColor = true;
-                    previewContent.solidColor = fillPreview->solidColor;
-                    previewContent.opacity = 1.0f;
-                    previewContent.blendMode = 0;
-                    previewContent.visible = true;
-                    previewContent.externalClipMaskGrid = fillPreview->fillMaskGrid;
-                    previewContent.useRadialReveal = true;
-                    previewContent.radialRevealOrigin = fillPreview->origin;
-                    previewContent.radialRevealRadius = fillPreview->radius;
-                    previewContent.radialRevealFeather = fillPreview->feather;
-                    groupInfo.children.push_back(std::move(previewContent));
-                } else if (fillPreview->previewContentGrid
-                    && !fillPreview->previewContentGrid->empty()) {
-                    CompositeLayerInfo previewContent;
-                    previewContent.tileGrid = fillPreview->previewContentGrid;
-                    previewContent.opacity = 1.0f;
-                    previewContent.blendMode = 0;
-                    previewContent.visible = true;
-                    previewContent.externalClipMaskGrid = fillPreview->fillMaskGrid;
-                    previewContent.useRadialReveal = true;
-                    previewContent.radialRevealOrigin = fillPreview->origin;
-                    previewContent.radialRevealRadius = fillPreview->radius;
-                    previewContent.radialRevealFeather = fillPreview->feather;
-                    groupInfo.children.push_back(std::move(previewContent));
-                }
-            };
-
-            if (!previewAboveLayerContent) {
-                appendPreviewContent();
-            }
-
-            CompositeLayerInfo filledContent;
-            filledContent.id = layerData->id;
-            filledContent.tileGrid = compositingGridForLayer(layerData.get());
-            filledContent.opacity = 1.0f;
-            filledContent.blendMode = 0;
-            filledContent.visible = true;
-            if (previewAboveLayerContent) {
-                filledContent.externalClipMaskGrid = fillPreview->fillMaskGrid;
-                filledContent.subtractClipRevealFromSrc = true;
-                filledContent.useRadialReveal = true;
-                filledContent.radialRevealOrigin = fillPreview->origin;
-                filledContent.radialRevealRadius = fillPreview->radius;
-                filledContent.radialRevealFeather = fillPreview->feather;
-            }
-            groupInfo.children.push_back(std::move(filledContent));
-
-            if (previewAboveLayerContent) {
-                appendPreviewContent();
-            }
-
-            if (layerData->maskAffectsCompositing()) {
-                // Same gating as the static path / live-stroke path: a lasso-fill
-                // preview on a masked layer must keep the mask applied. The fill is
-                // baked into the layer pixels on commit and then gated by the mask,
-                // so during preview the mask must gate the whole isolated group
-                // (preview content + layer content). Without this the affected
-                // tiles drop the mask mid-preview and snap back only on confirm.
-                // groupInfo is already forceIsolation=true.
-                groupInfo.externalClipMaskGrid = const_cast<TileGrid*>(layerData->maskTileGrid());
-                groupInfo.clipMaskLuminanceReveal = true;
-            }
-
-            result.push_back(std::move(groupInfo));
-            continue;
-        }
 
         bool isActiveWithStroke
             = hasStroke && layerData->id == activeLayerPtr->id && layerData->isRaster();
