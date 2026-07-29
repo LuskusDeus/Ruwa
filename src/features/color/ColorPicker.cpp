@@ -1100,11 +1100,14 @@ void ColorPicker::drawHueRing(QPainter& painter)
     ringPath.addEllipse(center, outerR, outerR);
     ringPath.addEllipse(center, innerR, innerR);
 
-    // Conical gradient: hue=0 (red) at top, increasing counterclockwise
-    QConicalGradient gradient(center, 90);
+    // Conical gradient. QConicalGradient sweeps counterclockwise from its start angle,
+    // so the hue is walked backwards along the sweep to make it grow clockwise on screen,
+    // with hue=0 (red) landing on HueRingRedAngleDeg.
+    QConicalGradient gradient(center, HueRingRedAngleDeg);
     for (int i = 0; i <= 6; ++i) {
         qreal t = qreal(i) / 6.0;
-        gradient.setColorAt(t, QColor::fromHsvF(qMin(t, 0.9999), 1.0, 1.0));
+        qreal h = qMin(1.0 - t, 0.9999);
+        gradient.setColorAt(t, QColor::fromHsvF(h, 1.0, 1.0));
     }
 
     painter.save();
@@ -1131,9 +1134,10 @@ void ColorPicker::drawRingHueCursor(QPainter& painter)
     qreal midR = (ringOuterRadius() + ringInnerRadius()) / 2.0;
     qreal ringW = ringOuterRadius() - ringInnerRadius();
 
-    // Position on ring for current hue
-    qreal cx = center.x() - midR * qSin(m_hue * 2.0 * M_PI);
-    qreal cy = center.y() - midR * qCos(m_hue * 2.0 * M_PI);
+    // Position on ring for current hue (clockwise from HueRingRedAngleDeg)
+    qreal angle = qDegreesToRadians(HueRingRedAngleDeg - m_hue * 360.0);
+    qreal cx = center.x() + midR * qCos(angle);
+    qreal cy = center.y() - midR * qSin(angle);
 
     qreal cursorR = ringW / 2.0 + theme.scaled(2);
 
@@ -1157,9 +1161,9 @@ void ColorPicker::handleHueRingDrag(const QPoint& pos)
     QPointF center = ringCenter();
     qreal dx = pos.x() - center.x();
     qreal dy = center.y() - pos.y(); // invert y for math coords
-    qreal theta = qAtan2(dy, dx); // angle from east, CCW positive
-    qreal h = (theta - M_PI / 2.0) / (2.0 * M_PI);
-    h = std::fmod(h + 1.0, 1.0);
+    qreal theta = qRadiansToDegrees(qAtan2(dy, dx)); // angle from east, CCW positive
+    qreal h = (HueRingRedAngleDeg - theta) / 360.0; // hue grows clockwise
+    h = std::fmod(h, 1.0);
     if (h < 0)
         h += 1.0;
 
@@ -1766,7 +1770,7 @@ void ColorPicker::handleDrag(const QPoint& pos)
         QRectF rect = hueBarRect();
         qreal h = 0.0;
         if (m_embeddedMode) {
-            h = qBound(0.0, (pos.y() - rect.top()) / rect.height(), 1.0);
+            h = qBound(0.0, 1.0 - (pos.y() - rect.top()) / rect.height(), 1.0);
         } else {
             h = qBound(0.0, (pos.x() - rect.left()) / rect.width(), 1.0);
         }
@@ -2295,8 +2299,10 @@ void ColorPicker::drawHueBar(QPainter& painter, const QRectF& rect)
 
     QLinearGradient gradient(rect.topLeft(), m_embeddedMode ? rect.bottomLeft() : rect.topRight());
     for (int i = 0; i <= 6; ++i) {
-        qreal hue = qreal(i) / 6.0;
-        gradient.setColorAt(hue, QColor::fromHsvF(hue, 1.0, 1.0));
+        qreal t = qreal(i) / 6.0;
+        // The vertical (embedded) bar runs bottom-up: red on top, then violet, down to yellow.
+        qreal hue = m_embeddedMode ? qMin(1.0 - t, 0.9999) : t;
+        gradient.setColorAt(t, QColor::fromHsvF(hue, 1.0, 1.0));
     }
 
     painter.save();
@@ -2389,7 +2395,7 @@ void ColorPicker::drawHueCursor(QPainter& painter, const QRectF& rect)
 
     QRectF r;
     if (m_embeddedMode) {
-        const qreal y = rect.top() + m_hue * rect.height();
+        const qreal y = rect.top() + (1.0 - m_hue) * rect.height();
         const qreal h = theme.scaled(HueCursorWidth);
         const qreal w = rect.width() + theme.scaled(HueCursorOverhang);
         r = QRectF(rect.center().x() - w * 0.5, y - h * 0.5, w, h);

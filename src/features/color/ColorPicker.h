@@ -355,6 +355,10 @@ private:
     // Ring mode constants
     static constexpr int RingThickness = 16;
     static constexpr int RingInnerGap = 3;
+    // Hue ring orientation: hue grows clockwise on screen, and the angle below is
+    // where hue=0 (red) sits, measured in the math convention (degrees CCW from east).
+    // 150 deg puts red at ~10 o'clock, yellow at the top and pure blue straight down.
+    static constexpr qreal HueRingRedAngleDeg = 150.0;
     static constexpr int ModeSwitcherBtnSize = 22;
     static constexpr int ModeSwitcherGap = 2;
     static constexpr int ModeSwitcherBottomGap = 8;
