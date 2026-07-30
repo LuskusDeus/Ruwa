@@ -1819,12 +1819,12 @@ void WorkspaceTab::tryFinishAsyncStartup()
         m_layersPanel->setThumbnailLoadingMode(false);
     }
 
-    if (m_navigatorPanel && m_navigatorPanel->contentWidget()) {
-        if (auto* w
-            = qobject_cast<workspace::NavigatorWidget*>(m_navigatorPanel->contentWidget())) {
-            w->refreshThumbnail();
-        }
-    }
+    // The Navigator may have completed an overview while deferred tile restore
+    // was still in progress. A plain refresh would keep those now-clean tiles,
+    // even though they contain a partial composition. Invalidate the existing
+    // overview so the startup readiness pass rebuilds every tile from the fully
+    // restored layer stack.
+    invalidateNavigatorOverview();
 
     scheduleRecentProjectsThumbnailCapture();
 
