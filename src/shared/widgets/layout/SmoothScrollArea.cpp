@@ -570,14 +570,15 @@ void SmoothScrollArea::updateScrollRange()
     const bool wasRefreshingLayout = m_refreshingLayout;
     m_refreshingLayout = true;
 
-    m_contentWidget->updateGeometry();
-
     const QSize widgetSizeHint = m_contentWidget->sizeHint();
 
     QSize layoutSizeHint;
     if (m_contentWidget->layout()) {
         auto* contentLayout = m_contentWidget->layout();
-        contentLayout->invalidate();
+        // LayoutRequest is one of the events that schedules this refresh. Marking
+        // the same layout dirty here would post another LayoutRequest after
+        // m_refreshingLayout is cleared and keep the zero-delay timer alive forever.
+        // activate() still resolves a genuinely pending layout synchronously.
         contentLayout->activate();
         layoutSizeHint = contentLayout->sizeHint();
     }
@@ -785,11 +786,6 @@ void SmoothScrollArea::updateGeometry()
     if (m_orientation == Qt::Horizontal) {
         m_viewport->setGeometry(rect());
         m_verticalScrollBar->setGeometry(width(), 0, static_cast<int>(kScrollBarWidth), height());
-
-        if (m_contentWidget && m_contentWidget->layout()) {
-            m_contentWidget->layout()->invalidate();
-            m_contentWidget->layout()->activate();
-        }
         return;
     }
 
@@ -805,11 +801,6 @@ void SmoothScrollArea::updateGeometry()
     if (m_contentWidget) {
         if (m_contentWidthFixedToViewport) {
             m_contentWidget->setFixedWidth(m_viewport->width());
-        }
-
-        if (m_contentWidget->layout()) {
-            m_contentWidget->layout()->invalidate();
-            m_contentWidget->layout()->activate();
         }
     }
 }
