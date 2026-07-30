@@ -17,6 +17,7 @@ namespace ruwa::ui::widgets {
 
 class ThemePreviewWidget;
 class CustomThemesNavigatorWidget;
+class ListCollapseAnimator;
 
 class ThemeSelectorWidget : public BaseSettingsWidget {
     Q_OBJECT
@@ -51,6 +52,8 @@ public:
 private:
     void updateScaledSizes();
     void rebuildPreviews();
+    void syncPreviews(const QVector<ruwa::ui::core::ThemePreset>& themes, bool animate);
+    ThemePreviewWidget* createPreview(const ruwa::ui::core::ThemePreset& theme);
 
 private:
     QVector<ruwa::ui::core::ThemePreset> m_themes;
@@ -61,6 +64,7 @@ private:
     QHBoxLayout* m_previewLayout { nullptr };
     QLabel* m_separatorLabel { nullptr };
     CustomThemesNavigatorWidget* m_customNavigator { nullptr };
+    ListCollapseAnimator* m_transitionAnimator { nullptr };
 };
 
 } // namespace ruwa::ui::widgets

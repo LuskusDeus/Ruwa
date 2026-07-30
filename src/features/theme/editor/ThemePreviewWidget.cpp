@@ -132,6 +132,13 @@ QSize ThemePreviewWidget::minimumSizeHint() const
     return previewSizeHint();
 }
 
+void ThemePreviewWidget::setPreset(const ThemePreset& preset)
+{
+    m_preset = preset;
+    updateGeometry();
+    update();
+}
+
 void ThemePreviewWidget::setSelected(bool selected)
 {
     if (isActive() == selected)

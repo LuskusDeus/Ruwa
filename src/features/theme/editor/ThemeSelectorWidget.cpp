@@ -5,13 +5,17 @@
 #include "ThemePreviewWidget.h"
 #include "CustomThemesNavigatorWidget.h"
 #include "features/theme/manager/ThemeManager.h"
+#include "shared/widgets/ListCollapseAnimator.h"
 
 #include <QCoreApplication>
 #include <QEvent>
 #include <QHBoxLayout>
 #include <QLabel>
+#include <QSet>
 
 namespace ruwa::ui::widgets {
+
+using ruwa::ui::core::ThemePreset;
 
 namespace {
 const int BASE_PREVIEW_MARGIN_TOP = 4;
@@ -52,11 +56,40 @@ void ThemeSelectorWidget::setupContent()
     mainLayout()->addWidget(m_previewContainer);
     mainLayout()->setAlignment(m_previewContainer, Qt::AlignRight | Qt::AlignTop);
 
+    m_transitionAnimator = new ListCollapseAnimator(this);
+    connect(m_transitionAnimator, &ListCollapseAnimator::stepped, this, [this]() {
+        if (m_previewContainer) {
+            m_previewContainer->updateGeometry();
+        }
+        refreshLayoutGeometry();
+    });
+
     rebuildPreviews();
+}
+
+ThemePreviewWidget* ThemeSelectorWidget::createPreview(const ThemePreset& theme)
+{
+    auto* preview = new ThemePreviewWidget(theme, m_previewContainer);
+    preview->setSelected(theme.id == m_selectedId);
+
+    const QUuid themeId = theme.id;
+    connect(preview, &ThemePreviewWidget::clicked, this, [this, themeId]() {
+        for (const auto& candidate : m_themes) {
+            if (candidate.id == themeId) {
+                setSelectedTheme(themeId);
+                break;
+            }
+        }
+    });
+    return preview;
 }
 
 void ThemeSelectorWidget::rebuildPreviews()
 {
+    if (m_transitionAnimator) {
+        m_transitionAnimator->finishAll();
+    }
+
     // 1. Delete old theme preview widgets
     for (ThemePreviewWidget* p : m_previews) {
         delete p;
@@ -96,21 +129,7 @@ void ThemeSelectorWidget::rebuildPreviews()
 
     // 5. Add favorite theme previews
     for (const auto& theme : m_themes) {
-        ThemePreviewWidget* preview = new ThemePreviewWidget(theme, m_previewContainer);
-        preview->setSelected(theme.id == m_selectedId);
-
-        // Capture theme ID, not pointer (important for rebuilds)
-        QUuid themeId = theme.id;
-        connect(preview, &ThemePreviewWidget::clicked, this, [this, themeId]() {
-            // Find theme by ID and apply
-            for (const auto& t : m_themes) {
-                if (t.id == themeId) {
-                    setSelectedTheme(themeId);
-                    break;
-                }
-            }
-        });
-
+        ThemePreviewWidget* preview = createPreview(theme);
         m_previews.append(preview);
         m_previewLayout->addWidget(preview);
     }
@@ -133,6 +152,124 @@ void ThemeSelectorWidget::rebuildPreviews()
     m_previewLayout->addStretch();
 
     // 9. Apply scaled sizes to new layout
+    updateScaledSizes();
+    refreshLayoutGeometry();
+}
+
+void ThemeSelectorWidget::syncPreviews(const QVector<ThemePreset>& themes, bool animate)
+{
+    const auto idsMatch
+        = [](const QVector<ThemePreviewWidget*>& previews, const QVector<ThemePreset>& presets) {
+              if (previews.size() != presets.size()) {
+                  return false;
+              }
+              for (int i = 0; i < previews.size(); ++i) {
+                  if (!previews[i] || previews[i]->preset().id != presets[i].id) {
+                      return false;
+                  }
+              }
+              return true;
+          };
+    const auto isOrderedSubsequence
+        = [](const QVector<QUuid>& needle, const QVector<QUuid>& haystack) {
+              int index = 0;
+              for (const QUuid& id : haystack) {
+                  if (index < needle.size() && needle[index] == id) {
+                      ++index;
+                  }
+              }
+              return index == needle.size();
+          };
+
+    if (idsMatch(m_previews, themes)) {
+        m_themes = themes;
+        for (int i = 0; i < m_previews.size(); ++i) {
+            m_previews[i]->setPreset(m_themes[i]);
+            m_previews[i]->setSelected(m_themes[i].id == m_selectedId);
+        }
+        return;
+    }
+
+    if (m_transitionAnimator && m_transitionAnimator->isAnimating()) {
+        m_transitionAnimator->finishAll();
+    }
+
+    QVector<QUuid> oldIds;
+    QVector<QUuid> newIds;
+    oldIds.reserve(m_previews.size());
+    newIds.reserve(themes.size());
+    for (ThemePreviewWidget* preview : m_previews) {
+        if (preview) {
+            oldIds.append(preview->preset().id);
+        }
+    }
+    for (const ThemePreset& theme : themes) {
+        newIds.append(theme.id);
+    }
+
+    const bool pureRemoval
+        = themes.size() < m_previews.size() && isOrderedSubsequence(newIds, oldIds);
+    const bool pureAddition
+        = themes.size() > m_previews.size() && isOrderedSubsequence(oldIds, newIds);
+    if (!pureRemoval && !pureAddition) {
+        m_themes = themes;
+        rebuildPreviews();
+        return;
+    }
+
+    const bool shouldAnimate = animate && isVisible();
+    if (pureRemoval) {
+        QSet<QUuid> retainedIds;
+        for (const QUuid& id : newIds) {
+            retainedIds.insert(id);
+        }
+        for (int i = m_previews.size() - 1; i >= 0; --i) {
+            ThemePreviewWidget* preview = m_previews[i];
+            if (preview && retainedIds.contains(preview->preset().id)) {
+                continue;
+            }
+            m_previews.removeAt(i);
+            const int layoutIndex = m_previewLayout ? m_previewLayout->indexOf(preview) : -1;
+            if (shouldAnimate && m_transitionAnimator && layoutIndex >= 0) {
+                m_transitionAnimator->collapseRange(
+                    m_previewLayout, m_previewContainer, layoutIndex, layoutIndex);
+            } else if (preview) {
+                if (m_previewLayout) {
+                    m_previewLayout->removeWidget(preview);
+                }
+                preview->deleteLater();
+            }
+        }
+    } else {
+        QVector<ThemePreviewWidget*> syncedPreviews;
+        syncedPreviews.reserve(themes.size());
+        int oldIndex = 0;
+        for (int targetIndex = 0; targetIndex < themes.size(); ++targetIndex) {
+            const ThemePreset& theme = themes[targetIndex];
+            if (oldIndex < m_previews.size() && m_previews[oldIndex]->preset().id == theme.id) {
+                syncedPreviews.append(m_previews[oldIndex]);
+                ++oldIndex;
+                continue;
+            }
+
+            ThemePreviewWidget* preview = createPreview(theme);
+            syncedPreviews.append(preview);
+            if (shouldAnimate && m_transitionAnimator) {
+                m_transitionAnimator->revealWidget(
+                    m_previewLayout, m_previewContainer, preview, targetIndex);
+            } else {
+                m_previewLayout->insertWidget(targetIndex, preview);
+                preview->show();
+            }
+        }
+        m_previews = syncedPreviews;
+    }
+
+    m_themes = themes;
+    for (int i = 0; i < m_previews.size(); ++i) {
+        m_previews[i]->setPreset(m_themes[i]);
+        m_previews[i]->setSelected(m_themes[i].id == m_selectedId);
+    }
     updateScaledSizes();
     refreshLayoutGeometry();
 }
@@ -228,19 +365,21 @@ void ThemeSelectorWidget::addCustomTheme(const ruwa::ui::core::ThemePreset& pres
         if (t.id == preset.id)
             return;
     }
-    m_themes.append(preset);
-    rebuildPreviews();
+    QVector<ThemePreset> themes = m_themes;
+    themes.append(preset);
+    syncPreviews(themes, true);
 }
 
 void ThemeSelectorWidget::removeCustomTheme(const QUuid& id)
 {
     for (int i = 0; i < m_themes.size(); ++i) {
         if (m_themes[i].id == id && !m_themes[i].isBuiltIn) {
-            m_themes.removeAt(i);
-            if (m_selectedId == id && !m_themes.isEmpty()) {
-                setSelectedTheme(m_themes.first().id);
+            QVector<ThemePreset> themes = m_themes;
+            themes.removeAt(i);
+            if (m_selectedId == id && !themes.isEmpty()) {
+                setSelectedTheme(themes.first().id);
             }
-            rebuildPreviews();
+            syncPreviews(themes, true);
             return;
         }
     }
@@ -286,16 +425,16 @@ void ThemeSelectorWidget::updateThemeColors()
 void ThemeSelectorWidget::reloadThemes()
 {
     // Reload only favorite themes from ThemeManager
-    m_themes.clear();
+    m_selectedId = ruwa::ui::core::ThemeManager::instance().currentPresetId();
+    QVector<ThemePreset> themes;
     auto allThemes = ruwa::ui::core::ThemeManager::instance().allPresets();
     for (const auto& theme : allThemes) {
         if (theme.isFavorite) {
-            m_themes.append(theme);
+            themes.append(theme);
         }
     }
 
-    // Rebuild preview widgets
-    rebuildPreviews();
+    syncPreviews(themes, true);
 }
 
 void ThemeSelectorWidget::updateFromThemeEditor(const QUuid& appliedThemeId)

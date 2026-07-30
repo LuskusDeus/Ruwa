@@ -14,15 +14,14 @@ class QWidget;
 namespace ruwa::ui::widgets {
 
 /**
- * @brief Smoothly collapses a contiguous run of widgets out of a QBoxLayout.
+ * @brief Smoothly reveals or collapses widgets in a QBoxLayout.
  *
- * Reusable building block for "animation-ready" lists: instead of deleting rows
- * abruptly, snapshot the doomed widgets, drop a shrinking/fading placeholder in
- * their layout slot, and let the box layout slide the neighbours together as the
- * placeholder's height animates to zero. The originals are hidden immediately and
- * deleteLater()'d, so the caller can update its model right away.
+ * Reusable building block for "animation-ready" lists and rows: a captured widget
+ * snapshot grows/fades in or shrinks/fades out in the affected layout slot, letting
+ * the box layout slide neighbouring widgets continuously. The vertical or horizontal
+ * axis is inferred from the layout direction.
  *
- * Several collapses may run concurrently. Drive scroll-geometry refreshes off the
+ * Several transitions may run concurrently. Drive dependent-geometry refreshes off the
  * \ref stepped signal, which fires once per animation frame.
  */
 class ListCollapseAnimator : public QObject {
@@ -54,7 +53,15 @@ public:
     void collapseRange(QBoxLayout* layout, QWidget* content, int startIndex, int endIndex,
         int durationMs = 0, std::function<void()> onFinished = {});
 
-    /// Snap every in-flight collapse to its end state immediately, running each
+    /**
+     * Reveal \p widget at \p index using an expanding/fading snapshot. The widget
+     * is owned by \p content and kept hidden until its snapshot reaches full size,
+     * then atomically replaces the snapshot in the layout.
+     */
+    void revealWidget(QBoxLayout* layout, QWidget* content, QWidget* widget, int index,
+        int durationMs = 0, std::function<void()> onFinished = {});
+
+    /// Snap every in-flight transition to its end state immediately, running each
     /// onFinished callback. Call before structurally rebuilding the layout.
     void finishAll();
 

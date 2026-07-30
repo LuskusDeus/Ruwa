@@ -27,6 +27,7 @@ public:
     ~ThemePreviewWidget() override = default;
 
     const ruwa::ui::core::ThemePreset& preset() const { return m_preset; }
+    void setPreset(const ruwa::ui::core::ThemePreset& preset);
 
     bool isSelected() const { return isActive(); }
     void setSelected(bool selected);

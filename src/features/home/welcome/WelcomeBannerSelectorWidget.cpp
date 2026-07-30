@@ -8,6 +8,7 @@
 #include "WelcomeBannerImageCatalog.h"
 #include "features/settings/SettingsManager.h"
 #include "features/theme/manager/ThemeManager.h"
+#include "shared/widgets/ListCollapseAnimator.h"
 #include "shared/widgets/SegmentedOptionSelector.h"
 #include "shared/utils/FileDialogMemory.h"
 
@@ -177,6 +178,14 @@ void WelcomeBannerSelectorWidget::setupContent()
     m_previewContainer->setSizePolicy(QSizePolicy::Maximum, QSizePolicy::Fixed);
     mainLayout()->addWidget(m_previewContainer);
 
+    m_transitionAnimator = new ListCollapseAnimator(this);
+    connect(m_transitionAnimator, &ListCollapseAnimator::stepped, this, [this]() {
+        if (m_previewContainer) {
+            m_previewContainer->updateGeometry();
+        }
+        refreshLayoutGeometry();
+    });
+
     m_dividerWrap = new QWidget(this);
     m_dividerWrap->setAttribute(Qt::WA_TranslucentBackground);
     m_dividerWrap->setSizePolicy(QSizePolicy::Expanding, QSizePolicy::Fixed);
@@ -282,8 +291,26 @@ void WelcomeBannerSelectorWidget::reinstallBannerRootGridLayout()
     grid->setColumnStretch(1, 0);
 }
 
+WelcomeBannerPreviewWidget* WelcomeBannerSelectorWidget::createPreview(const QString& key)
+{
+    auto* preview = new WelcomeBannerPreviewWidget(key, m_previewContainer);
+    connect(preview, &WelcomeBannerPreviewWidget::imageClicked, this,
+        &WelcomeBannerSelectorWidget::onPreviewClicked);
+    if (preview->isCustomUserImage()) {
+        connect(preview, &WelcomeBannerPreviewWidget::customImageDeleteRequested, this,
+            &WelcomeBannerSelectorWidget::removeCustomBannerImage);
+        connect(preview, &WelcomeBannerPreviewWidget::customImageEditCropRequested, this,
+            &WelcomeBannerSelectorWidget::editCustomBannerImageCrop);
+    }
+    return preview;
+}
+
 void WelcomeBannerSelectorWidget::rebuildPreviews()
 {
+    if (m_transitionAnimator) {
+        m_transitionAnimator->finishAll();
+    }
+
     if (m_previewContainer) {
         if (QWidget* fw = QApplication::focusWidget()) {
             if (m_previewContainer->isAncestorOf(fw)) {
@@ -327,21 +354,13 @@ void WelcomeBannerSelectorWidget::rebuildPreviews()
         if (key == QLatin1String(":/images/Banner1April")) {
             continue;
         }
-        auto* preview = new WelcomeBannerPreviewWidget(key, m_previewContainer);
-        connect(preview, &WelcomeBannerPreviewWidget::imageClicked, this,
-            &WelcomeBannerSelectorWidget::onPreviewClicked);
+        auto* preview = createPreview(key);
         m_previews.append(preview);
         m_previewLayout->addWidget(preview);
     }
 
     for (const QString& path : m_customPaths) {
-        auto* preview = new WelcomeBannerPreviewWidget(path, m_previewContainer);
-        connect(preview, &WelcomeBannerPreviewWidget::imageClicked, this,
-            &WelcomeBannerSelectorWidget::onPreviewClicked);
-        connect(preview, &WelcomeBannerPreviewWidget::customImageDeleteRequested, this,
-            &WelcomeBannerSelectorWidget::removeCustomBannerImage);
-        connect(preview, &WelcomeBannerPreviewWidget::customImageEditCropRequested, this,
-            &WelcomeBannerSelectorWidget::editCustomBannerImageCrop);
+        auto* preview = createPreview(path);
         m_previews.append(preview);
         m_previewLayout->addWidget(preview);
     }
@@ -359,8 +378,124 @@ void WelcomeBannerSelectorWidget::rebuildPreviews()
     syncSelectionVisuals();
     updateScaledSizes();
     refreshLayoutGeometry();
+}
 
-    m_previewRowCustomPaths = m_customPaths;
+void WelcomeBannerSelectorWidget::syncPreviews(bool animate)
+{
+    QStringList targetKeys;
+    const QStringList builtins = welcomeBannerBuiltinImageKeys();
+    for (const QString& key : builtins) {
+        if (key != QLatin1String(":/images/Banner1April")) {
+            targetKeys.append(key);
+        }
+    }
+    targetKeys.append(m_customPaths);
+
+    const auto previewsMatch
+        = [](const QVector<WelcomeBannerPreviewWidget*>& previews, const QStringList& keys) {
+              if (previews.size() != keys.size()) {
+                  return false;
+              }
+              for (int i = 0; i < previews.size(); ++i) {
+                  if (!previews[i] || !keysEqual(previews[i]->imageKey(), keys[i])) {
+                      return false;
+                  }
+              }
+              return true;
+          };
+    const auto isOrderedSubsequence = [](const QStringList& needle, const QStringList& haystack) {
+        int index = 0;
+        for (const QString& key : haystack) {
+            if (index < needle.size() && keysEqual(needle[index], key)) {
+                ++index;
+            }
+        }
+        return index == needle.size();
+    };
+
+    if (previewsMatch(m_previews, targetKeys)) {
+        syncSelectionVisuals();
+        updateScaledSizes();
+        refreshLayoutGeometry();
+        return;
+    }
+
+    if (m_transitionAnimator && m_transitionAnimator->isAnimating()) {
+        m_transitionAnimator->finishAll();
+    }
+
+    QStringList oldKeys;
+    oldKeys.reserve(m_previews.size());
+    for (WelcomeBannerPreviewWidget* preview : m_previews) {
+        if (preview) {
+            oldKeys.append(preview->imageKey());
+        }
+    }
+
+    const bool pureRemoval
+        = targetKeys.size() < oldKeys.size() && isOrderedSubsequence(targetKeys, oldKeys);
+    const bool pureAddition
+        = targetKeys.size() > oldKeys.size() && isOrderedSubsequence(oldKeys, targetKeys);
+    if (!pureRemoval && !pureAddition) {
+        rebuildPreviews();
+        return;
+    }
+
+    const bool shouldAnimate = animate && isVisible();
+    if (pureRemoval) {
+        for (int i = m_previews.size() - 1; i >= 0; --i) {
+            WelcomeBannerPreviewWidget* preview = m_previews[i];
+            bool retained = false;
+            for (const QString& key : targetKeys) {
+                if (preview && keysEqual(preview->imageKey(), key)) {
+                    retained = true;
+                    break;
+                }
+            }
+            if (retained) {
+                continue;
+            }
+
+            m_previews.removeAt(i);
+            const int layoutIndex = m_previewLayout ? m_previewLayout->indexOf(preview) : -1;
+            if (shouldAnimate && m_transitionAnimator && layoutIndex >= 0) {
+                m_transitionAnimator->collapseRange(
+                    m_previewLayout, m_previewContainer, layoutIndex, layoutIndex);
+            } else if (preview) {
+                if (m_previewLayout) {
+                    m_previewLayout->removeWidget(preview);
+                }
+                preview->deleteLater();
+            }
+        }
+    } else {
+        QVector<WelcomeBannerPreviewWidget*> syncedPreviews;
+        syncedPreviews.reserve(targetKeys.size());
+        int oldIndex = 0;
+        for (int targetIndex = 0; targetIndex < targetKeys.size(); ++targetIndex) {
+            const QString& key = targetKeys[targetIndex];
+            if (oldIndex < m_previews.size() && keysEqual(m_previews[oldIndex]->imageKey(), key)) {
+                syncedPreviews.append(m_previews[oldIndex]);
+                ++oldIndex;
+                continue;
+            }
+
+            WelcomeBannerPreviewWidget* preview = createPreview(key);
+            syncedPreviews.append(preview);
+            if (shouldAnimate && m_transitionAnimator) {
+                m_transitionAnimator->revealWidget(
+                    m_previewLayout, m_previewContainer, preview, targetIndex);
+            } else {
+                m_previewLayout->insertWidget(targetIndex, preview);
+                preview->show();
+            }
+        }
+        m_previews = syncedPreviews;
+    }
+
+    syncSelectionVisuals();
+    updateScaledSizes();
+    refreshLayoutGeometry();
 }
 
 void WelcomeBannerSelectorWidget::syncSelectionVisuals()
@@ -622,17 +757,7 @@ void WelcomeBannerSelectorWidget::loadFromSettings()
         m_textColorSelector->blockSignals(false);
     }
 
-    // Cannot compare to previous m_customPaths: remove/add already updated it before save, so the
-    // signal would incorrectly skip rebuild. Compare to the pool the preview row was built for.
-    const bool sameCustomPool = !m_previews.isEmpty() && (filtered == m_previewRowCustomPaths);
-    if (sameCustomPool) {
-        syncSelectionVisuals();
-        updateScaledSizes();
-        refreshLayoutGeometry();
-        return;
-    }
-
-    rebuildPreviews();
+    syncPreviews(true);
 }
 
 void WelcomeBannerSelectorWidget::setSelectedImageKey(const QString& key)

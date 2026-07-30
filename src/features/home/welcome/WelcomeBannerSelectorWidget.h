@@ -20,6 +20,7 @@ class WelcomeBannerPreviewWidget;
 class WelcomeBannerAddImageWidget;
 class WelcomeBannerCropOverlay;
 class SegmentedOptionSelector;
+class ListCollapseAnimator;
 
 /**
  * @brief Welcome banner image picker: built-in and custom thumbnails, add image, random vs fixed.
@@ -46,6 +47,8 @@ public:
 private:
     void updateScaledSizes();
     void rebuildPreviews();
+    void syncPreviews(bool animate);
+    WelcomeBannerPreviewWidget* createPreview(const QString& key);
     void syncSelectionVisuals();
     void onPreviewClicked(const QString& key);
     void onModeIndexChanged(int index);
@@ -65,6 +68,7 @@ private:
     QLabel* m_separatorLabel { nullptr };
     QVector<WelcomeBannerPreviewWidget*> m_previews;
     WelcomeBannerAddImageWidget* m_addTile { nullptr };
+    ListCollapseAnimator* m_transitionAnimator { nullptr };
 
     QLabel* m_modeLabel { nullptr };
     SegmentedOptionSelector* m_modeSelector { nullptr };
@@ -78,8 +82,6 @@ private:
     QWidget* m_sectionDivider { nullptr };
 
     QStringList m_customPaths;
-    /// Custom paths last used when building m_previews (for loadFromSettings skip vs rebuild).
-    QStringList m_previewRowCustomPaths;
     /// Imported images awaiting a crop selection, processed front-to-back one at a time.
     QStringList m_pendingCropQueue;
     QPointer<WelcomeBannerCropOverlay> m_cropOverlay;
