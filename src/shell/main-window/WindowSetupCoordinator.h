@@ -11,6 +11,7 @@
 
 class QMainWindow;
 class QOpenGLWidget;
+class QScreen;
 
 namespace QWK {
 class WidgetWindowAgent;
@@ -39,6 +40,9 @@ public:
     void setupOpenGLWarmup(QMainWindow* parent);
     void restoreWindowState(QMainWindow* mainWindow);
     void saveWindowState(QMainWindow* mainWindow);
+
+    /// Returns the screen saved for the main window, or nullptr if it is unavailable.
+    static QScreen* savedScreen();
 
     QWK::WidgetWindowAgent* windowAgent() const { return m_windowAgent; }
 

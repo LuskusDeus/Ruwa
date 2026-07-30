@@ -8,6 +8,7 @@
 #include "features/theme/manager/ThemeManager.h"
 #include "shared/resources/FontFamilyNames.h"
 #include "shared/resources/IconProvider.h"
+#include "shell/main-window/WindowSetupCoordinator.h"
 
 #include <QApplication>
 #include <QFontDatabase>
@@ -50,7 +51,11 @@ SplashScreen::SplashScreen(QWidget* parent)
 
     ensureSplashFontsOnce();
 
-    if (QScreen* screen = QGuiApplication::primaryScreen()) {
+    QScreen* screen = WindowSetupCoordinator::savedScreen();
+    if (!screen) {
+        screen = QGuiApplication::primaryScreen();
+    }
+    if (screen) {
         QRect screenRect = screen->availableGeometry();
         setGeometry(screenRect);
 
@@ -357,11 +362,8 @@ void SplashScreen::paintEvent(QPaintEvent* event)
         const qreal scaledWidth = SPLASH_WIDTH * scale;
         const qreal scaledHeight = SPLASH_HEIGHT * scale;
 
-        if (QScreen* screen = QGuiApplication::primaryScreen()) {
-            QRect screenRect = screen->availableGeometry();
-            drawRect = QRectF((screenRect.width() - scaledWidth) / 2.0,
-                (screenRect.height() - scaledHeight) / 2.0, scaledWidth, scaledHeight);
-        }
+        drawRect = QRectF((width() - scaledWidth) / 2.0, (height() - scaledHeight) / 2.0,
+            scaledWidth, scaledHeight);
     }
 
     const qreal chromeOpacity = m_isAppearing ? m_contentOpacity : m_foregroundOpacity;

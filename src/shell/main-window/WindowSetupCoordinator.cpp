@@ -28,6 +28,22 @@ WindowSetupCoordinator::~WindowSetupCoordinator()
     // Cleanup handled by Qt parent-child ownership
 }
 
+QScreen* WindowSetupCoordinator::savedScreen()
+{
+    const QString savedScreenName = QSettings().value("MainWindow/screenName").toString();
+    if (savedScreenName.isEmpty()) {
+        return nullptr;
+    }
+
+    const auto screens = QGuiApplication::screens();
+    for (QScreen* screen : screens) {
+        if (screen && screen->name() == savedScreenName) {
+            return screen;
+        }
+    }
+    return nullptr;
+}
+
 void WindowSetupCoordinator::setupWindowAgent(
     QMainWindow* mainWindow, widgets::TopBar* topBar, tabs::CustomTabBar* tabBar)
 {
@@ -96,14 +112,35 @@ void WindowSetupCoordinator::restoreWindowState(QMainWindow* mainWindow)
         mainWindow->restoreGeometry(settings.value("MainWindow/geometry").toByteArray());
         mainWindow->restoreState(settings.value("MainWindow/state").toByteArray());
     } else {
-        // Default: centered, 1200x800
-        if (QScreen* screen = QGuiApplication::primaryScreen()) {
-            QRect geo = screen->availableGeometry();
-            mainWindow->resize(1200, 800);
-            mainWindow->move(
-                (geo.width() - mainWindow->width()) / 2, (geo.height() - mainWindow->height()) / 2);
-        }
+        mainWindow->resize(1200, 800);
     }
+
+    QScreen* targetScreen = savedScreen();
+
+    // Existing installations have no screenName yet. In that case,
+    // restoreGeometry() still lets Qt identify the former screen.
+    if (!targetScreen) {
+        targetScreen = mainWindow->screen();
+    }
+    if (!targetScreen) {
+        targetScreen = QGuiApplication::primaryScreen();
+    }
+
+    if (targetScreen) {
+        const QRect available = targetScreen->availableGeometry();
+        QSize normalSize = mainWindow->normalGeometry().size();
+        if (!normalSize.isValid() || normalSize.isEmpty()) {
+            normalSize = mainWindow->size();
+        }
+        normalSize = normalSize.boundedTo(available.size());
+
+        QRect normalGeometry(QPoint(), normalSize);
+        normalGeometry.moveCenter(available.center());
+
+        mainWindow->setWindowState(Qt::WindowNoState);
+        mainWindow->setGeometry(normalGeometry);
+    }
+    mainWindow->setWindowState(Qt::WindowMaximized);
 }
 
 void WindowSetupCoordinator::saveWindowState(QMainWindow* mainWindow)
@@ -114,6 +151,9 @@ void WindowSetupCoordinator::saveWindowState(QMainWindow* mainWindow)
     QSettings settings;
     settings.setValue("MainWindow/geometry", mainWindow->saveGeometry());
     settings.setValue("MainWindow/state", mainWindow->saveState());
+    if (QScreen* screen = mainWindow->screen()) {
+        settings.setValue("MainWindow/screenName", screen->name());
+    }
 }
 
 } // namespace ruwa::ui::windows

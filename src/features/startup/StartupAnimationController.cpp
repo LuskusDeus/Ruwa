@@ -16,7 +16,6 @@
 #include <QCoreApplication>
 #include <QGuiApplication>
 #include <QPropertyAnimation>
-#include <QScreen>
 #include <QTimer>
 #include <QWindow>
 namespace ruwa::core {
@@ -34,15 +33,9 @@ void StartupAnimationController::expandSplashToWindow(ruwa::ui::windows::SplashS
 
     // === 1. P R E P A R E   M A I N   W I N D O W ===
 
-    // Startup should always land in the same system-maximized mode as the
-    // top-right maximize button, not Qt fullscreen and not a floating window.
-    QRect targetGeometry;
-    if (QScreen* screen = QGuiApplication::primaryScreen()) {
-        targetGeometry = screen->availableGeometry();
-    }
-    if (!targetGeometry.isNull()) {
-        mainWindow->setGeometry(targetGeometry);
-    }
+    // WindowSetupCoordinator has already placed MainWindow on the remembered
+    // screen. Keep the application's normal maximized startup mode without
+    // overriding that screen with the primary display.
 
     // Establish the native owner relationship before MainWindow is shown for the first time.
     // This keeps the splash above MainWindow without making either window globally topmost and

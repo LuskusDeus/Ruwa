@@ -703,6 +703,9 @@ void MainWindow::closeEvent(QCloseEvent* event)
 {
     auto* tm = m_tabCoordinator->tabManager();
     if (!tm) {
+        if (!ruwa::Application::isFactoryResetRestartInProgress()) {
+            m_setupCoordinator->saveWindowState(this);
+        }
         event->accept();
         return;
     }
@@ -750,6 +753,9 @@ void MainWindow::closeEvent(QCloseEvent* event)
         tm->confirmTabClosed(tab->id());
     }
 
+    if (!ruwa::Application::isFactoryResetRestartInProgress()) {
+        m_setupCoordinator->saveWindowState(this);
+    }
     event->accept();
 }
 
