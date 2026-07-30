@@ -46,13 +46,28 @@ NavigatorWidget::NavigatorWidget(QWidget* parent)
         if (!isVisible() || !m_canvasPanel || !m_canvasPanel->isGLContentReady()) {
             return;
         }
+
+        bool overviewChanged = false;
+        if (m_overviewCache->hasActiveTransitions()) {
+            m_overviewCache->advanceTransitions();
+            overviewChanged = true;
+            if (!m_overviewCache->hasActiveTransitions()) {
+                if (m_overviewCache->hasDirtyTiles()) {
+                    scheduleOverviewRefresh();
+                } else {
+                    emit presentationReadyChanged();
+                }
+            }
+        }
+
         // Repaint only when the drawn viewport outline actually moved. This poll used
         // to call update() unconditionally ~38 times a second for the widget's whole
         // life: cheap while the panel is docked, but a repaint inside a *floating*
         // panel is far more expensive, and it ran right through every brush stroke.
-        // Overview content changes repaint through refreshOverview(), not this timer.
+        // Overview content changes normally repaint through refreshOverview(); this
+        // timer also drives the short dirty-tile fade while one is active.
         const QPolygonF outline = viewportOutline();
-        if (outline == m_lastViewportOutline) {
+        if (!overviewChanged && outline == m_lastViewportOutline) {
             return;
         }
         m_lastViewportOutline = outline;
@@ -126,7 +141,8 @@ void NavigatorWidget::refreshOverview()
 bool NavigatorWidget::presentationReady() const
 {
     return m_canvasPanel && m_canvasPanel->isGLContentReady() && m_overviewCache
-        && m_overviewCache->isValid() && !m_overviewCache->hasDirtyTiles();
+        && m_overviewCache->isValid() && !m_overviewCache->hasDirtyTiles()
+        && !m_overviewCache->hasActiveTransitions();
 }
 
 void NavigatorWidget::invalidateOverviewTiles(const QList<QPoint>& tilePositions)

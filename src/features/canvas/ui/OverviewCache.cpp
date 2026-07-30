@@ -19,6 +19,8 @@ void OverviewCache::clear()
     m_overviewSize = {};
     m_tiles.clear();
     m_dirtyTiles.clear();
+    m_transitionTiles.clear();
+    m_transitionClock.invalidate();
 }
 
 bool OverviewCache::configure(const QRect& worldFrame, const QSize& overviewSize)
@@ -84,7 +86,16 @@ void OverviewCache::invalidateCompositionTiles(const QList<QPoint>& tilePosition
 
 QList<QPoint> OverviewCache::dirtyTiles() const
 {
-    return m_dirtyTiles.keys();
+    QList<QPoint> result;
+    result.reserve(m_dirtyTiles.size());
+    for (auto it = m_dirtyTiles.constBegin(); it != m_dirtyTiles.constEnd(); ++it) {
+        // If the tile changed again during its fade, finish the current transition
+        // first. This avoids snapping its opacity back to zero mid-animation.
+        if (!m_transitionTiles.contains(it.key())) {
+            result.append(it.key());
+        }
+    }
+    return result;
 }
 
 QRect OverviewCache::overviewTilePixelRect(const QPoint& tileCoord) const
@@ -133,8 +144,40 @@ void OverviewCache::storeTile(const QPoint& tileCoord, const QImage& image)
         return;
     }
 
-    m_tiles.insert(tileCoord, image);
     m_dirtyTiles.remove(tileCoord);
+    if (!m_tiles.contains(tileCoord)) {
+        // There is no previous image to preserve during initial population.
+        m_tiles.insert(tileCoord, image);
+        return;
+    }
+
+    if (!m_transitionClock.isValid()) {
+        m_transitionClock.start();
+    }
+    m_transitionTiles.insert(
+        tileCoord, TransitionTile { image, m_transitionClock.elapsed() });
+}
+
+void OverviewCache::advanceTransitions()
+{
+    if (m_transitionTiles.isEmpty() || !m_transitionClock.isValid()) {
+        return;
+    }
+
+    const qint64 now = m_transitionClock.elapsed();
+    for (auto it = m_transitionTiles.begin(); it != m_transitionTiles.end();) {
+        if (now - it->startedAtMs < TileFadeDurationMs) {
+            ++it;
+            continue;
+        }
+
+        m_tiles.insert(it.key(), it->image);
+        it = m_transitionTiles.erase(it);
+    }
+
+    if (m_transitionTiles.isEmpty()) {
+        m_transitionClock.invalidate();
+    }
 }
 
 void OverviewCache::draw(QPainter& painter, const QRectF& displayRect) const
@@ -150,6 +193,32 @@ void OverviewCache::draw(QPainter& painter, const QRectF& displayRect) const
         }
         painter.drawImage(mapOverviewPixelRectToDisplayRect(pixelRect, displayRect), it.value());
     }
+
+    if (m_transitionTiles.isEmpty() || !m_transitionClock.isValid()) {
+        return;
+    }
+
+    const qreal originalOpacity = painter.opacity();
+    const qint64 now = m_transitionClock.elapsed();
+    for (auto it = m_transitionTiles.constBegin(); it != m_transitionTiles.constEnd(); ++it) {
+        const QRect pixelRect = overviewTilePixelRect(it.key());
+        if (!pixelRect.isValid() || pixelRect.isEmpty()) {
+            continue;
+        }
+
+        const qreal fadeProgress = qBound<qreal>(0.0,
+            static_cast<qreal>(now - it->startedAtMs)
+                / static_cast<qreal>(TileFadeDurationMs),
+            1.0);
+        if (fadeProgress <= 0.0) {
+            continue;
+        }
+
+        painter.setOpacity(originalOpacity * fadeProgress);
+        painter.drawImage(
+            mapOverviewPixelRectToDisplayRect(pixelRect, displayRect), it->image);
+    }
+    painter.setOpacity(originalOpacity);
 }
 
 void OverviewCache::markTileDirty(const QPoint& tileCoord)
