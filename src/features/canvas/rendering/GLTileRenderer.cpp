@@ -46,6 +46,19 @@ Result<void> GLTileRenderer::initialize(const QString& shaderDir)
         return { ErrorCode::PipelineCreationFailed, "Failed to create tile VAO" };
     }
 
+    m_gl->glGenSamplers(1, &m_displaySampler);
+    if (m_displaySampler == 0) {
+        m_gl->glDeleteVertexArrays(1, &m_emptyVAO);
+        m_emptyVAO = 0;
+        m_tileProgram.reset();
+        return { ErrorCode::PipelineCreationFailed, "Failed to create tile display sampler" };
+    }
+    m_gl->glSamplerParameteri(
+        m_displaySampler, GL_TEXTURE_MIN_FILTER, GL_LINEAR_MIPMAP_LINEAR);
+    m_gl->glSamplerParameteri(m_displaySampler, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
+    m_gl->glSamplerParameteri(m_displaySampler, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
+    m_gl->glSamplerParameteri(m_displaySampler, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
+
     m_initialized = true;
     return Result<void>::ok();
 }
@@ -60,6 +73,11 @@ void GLTileRenderer::shutdown()
         return;
 
     m_tileProgram.reset();
+
+    if (m_displaySampler) {
+        m_gl->glDeleteSamplers(1, &m_displaySampler);
+        m_displaySampler = 0;
+    }
 
     if (m_emptyVAO) {
         m_gl->glDeleteVertexArrays(1, &m_emptyVAO);
@@ -78,7 +96,7 @@ void GLTileRenderer::ensureTileTexture(TileData& tile)
     if (tile.hasTexture())
         return;
 
-    const TextureParams params = tileTextureParams(tile.format());
+    const TextureParams params = displayTileTextureParams(tile.format());
     // A recycled texture comes back zero-filled with these sampler params
     // already applied, so this is indistinguishable from the allocation it
     // replaces — only ~100x cheaper.
@@ -223,6 +241,11 @@ void GLTileRenderer::render(const TileGrid& grid, const Viewport& viewport, uint
     if (visibleKeys.empty())
         return;
 
+    constexpr float kDisplayFilteringMaxZoom = 2.0f;
+    const float zoom = viewport.camera().zoom();
+    const bool minifying = zoom < 1.0f;
+    const bool useDisplayFiltering = zoom <= kDisplayFilteringMaxZoom;
+
     if (compositeRoundedEdgesOverViewportBackground) {
         m_gl->glDisable(GL_BLEND);
     } else {
@@ -235,6 +258,10 @@ void GLTileRenderer::render(const TileGrid& grid, const Viewport& viewport, uint
 
     m_tileProgram->use();
     m_gl->glBindVertexArray(m_emptyVAO);
+    // Mip levels are only sampled below 100%; between 100% and 200% the same
+    // sampler uses its GL_LINEAR magnification filter. Above the cutoff the
+    // texture object's original GL_NEAREST magnification state takes over.
+    m_gl->glBindSampler(0, useDisplayFiltering ? m_displaySampler : 0);
 
     for (const auto& key : visibleKeys) {
         if (clipToCanvas) {
@@ -244,6 +271,10 @@ void GLTileRenderer::render(const TileGrid& grid, const Viewport& viewport, uint
         }
         const TileData* tile = grid.getTile(key);
         if (tile && tile->hasTexture()) {
+            if (minifying && tile->displayMipmapsDirty()) {
+                m_gl->glGenerateTextureMipmap(tile->textureId());
+                tile->clearDisplayMipmapsDirty();
+            }
             if (drawTileQuad(key, *tile, vpMatrix, canvasWidth, canvasHeight, clipToCanvas,
                     cornerRadiusCanvasPx, compositeRoundedEdgesOverViewportBackground,
                     viewportBackgroundColor)) {
@@ -252,6 +283,7 @@ void GLTileRenderer::render(const TileGrid& grid, const Viewport& viewport, uint
         }
     }
 
+    m_gl->glBindSampler(0, 0);
     m_gl->glBindVertexArray(0);
     m_gl->glDisable(GL_BLEND);
 }

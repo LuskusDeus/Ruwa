@@ -18,7 +18,7 @@ namespace aether {
 // ==========================================================================
 //
 //   Free-list of TILE_SIZE x TILE_SIZE textures, bucketed by sized internal
-//   format.
+//   format and immutable mip-level count.
 //
 //   Allocating a tile texture is expensive: glCreateTextures +
 //   glTextureStorage2D for one 256x256 tile measured ~190 us against ~8 us to
@@ -40,20 +40,41 @@ namespace aether {
 //
 
 class GLTileTexturePool {
+private:
+    struct PoolKey {
+        GLenum internalFormat = 0;
+        GLsizei levels = 0;
+
+        bool operator==(const PoolKey& other) const
+        {
+            return internalFormat == other.internalFormat && levels == other.levels;
+        }
+    };
+
+    struct PoolKeyHash {
+        size_t operator()(const PoolKey& key) const
+        {
+            return (static_cast<size_t>(key.internalFormat) << 8)
+                ^ static_cast<size_t>(key.levels);
+        }
+    };
+
 public:
-    /// Take a texture matching `params`' internal format, or 0 when the pool
-    /// has none. The result is zero-filled and carries `params`' sampler
-    /// state, so callers cannot tell it from a freshly created texture.
+    /// Take a texture matching `params`' internal format and mip-level count,
+    /// or 0 when the pool has none. The result is zero-filled and carries
+    /// `params`' sampler state, so callers cannot tell it from a freshly
+    /// created texture.
     GLuint acquire(QOpenGLFunctions_4_5_Core* gl, const TextureParams& params)
     {
-        auto it = m_buckets.find(params.internalFormat);
+        const PoolKey key { params.internalFormat, std::max<GLsizei>(params.levels, 1) };
+        auto it = m_buckets.find(key);
         if (it == m_buckets.end() || it->second.empty()) {
             return 0;
         }
 
         const GLuint texture = it->second.back();
         it->second.pop_back();
-        const size_t tileBytes = pooledBytesPerTile(params.internalFormat);
+        const size_t tileBytes = pooledBytesPerTexture(key.internalFormat, key.levels);
         m_pooledBytes -= (tileBytes <= m_pooledBytes) ? tileBytes : m_pooledBytes;
 
         // Sampler state lives on the texture object and the previous owner may
@@ -108,20 +129,22 @@ public:
         GLint width = 0;
         GLint height = 0;
         GLint internalFormat = 0;
+        GLint levels = 0;
         gl->glGetTextureLevelParameteriv(texture, 0, GL_TEXTURE_WIDTH, &width);
         gl->glGetTextureLevelParameteriv(texture, 0, GL_TEXTURE_HEIGHT, &height);
         gl->glGetTextureLevelParameteriv(texture, 0, GL_TEXTURE_INTERNAL_FORMAT, &internalFormat);
+        gl->glGetTextureParameteriv(texture, GL_TEXTURE_IMMUTABLE_LEVELS, &levels);
         if (width != static_cast<GLint>(TILE_SIZE) || height != static_cast<GLint>(TILE_SIZE)) {
             return false;
         }
 
         const GLenum format = static_cast<GLenum>(internalFormat);
-        const size_t tileBytes = pooledBytesPerTile(format);
+        const size_t tileBytes = pooledBytesPerTexture(format, levels);
         if (tileBytes == 0 || m_pooledBytes + tileBytes > kMaxPooledBytes) {
             return false;
         }
 
-        m_pending.emplace_back(format, texture);
+        m_pending.emplace_back(PoolKey { format, levels }, texture);
         m_pooledBytes += tileBytes;
         return true;
     }
@@ -150,30 +173,48 @@ private:
     /// only the formats tile textures are actually created with are accepted,
     /// so an unexpected object can never be handed to a caller expecting tile
     /// storage.
-    static size_t pooledBytesPerTile(GLenum internalFormat)
+    static size_t pooledBytesPerTexture(GLenum internalFormat, GLsizei levels)
     {
-        constexpr size_t kTexels = static_cast<size_t>(TILE_SIZE) * static_cast<size_t>(TILE_SIZE);
+        size_t bytesPerTexel = 0;
         switch (internalFormat) {
         case GL_RGBA8:
-            return kTexels * 4u;
+            bytesPerTexel = 4u;
+            break;
         case GL_RGBA16F:
-            return kTexels * 8u;
+            bytesPerTexel = 8u;
+            break;
         case GL_RGBA32F:
-            return kTexels * 16u;
+            bytesPerTexel = 16u;
+            break;
         default:
             return 0u;
         }
+
+        if (levels <= 0) {
+            return 0u;
+        }
+
+        size_t texels = 0;
+        size_t width = TILE_SIZE;
+        size_t height = TILE_SIZE;
+        for (GLsizei level = 0; level < levels; ++level) {
+            texels += width * height;
+            width = std::max<size_t>(width >> 1, 1u);
+            height = std::max<size_t>(height >> 1, 1u);
+        }
+        return texels * bytesPerTexel;
     }
 
     // Ceiling on retained VRAM: enough to absorb a screenful of tiles churning
     // between frames without letting an idle document sit on a large
-    // reservation. 64 MB is 256 RGBA8 tiles, or 64 at RGBA32F.
+    // reservation. With full mip chains, 64 MB is about 192 RGBA8 display
+    // tiles, or 48 at RGBA32F.
     static constexpr size_t kMaxPooledBytes = 64u * 1024u * 1024u;
 
-    std::unordered_map<GLenum, std::vector<GLuint>> m_buckets;
+    std::unordered_map<PoolKey, std::vector<GLuint>, PoolKeyHash> m_buckets;
     // Released this frame, available from the next promotePending(). Counted
     // against the budget immediately so a burst cannot overshoot it.
-    std::vector<std::pair<GLenum, GLuint>> m_pending;
+    std::vector<std::pair<PoolKey, GLuint>> m_pending;
     size_t m_pooledBytes = 0;
 };
 

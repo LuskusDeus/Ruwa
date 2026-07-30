@@ -77,6 +77,11 @@ private:
 
     std::unique_ptr<GLShaderProgram> m_tileProgram;
 
+    // Overrides the texture object's sampling state only for the final
+    // viewport draw. Minification uses the lazily generated mip chain, while
+    // modest magnification stays linearly filtered through the 200% cutoff.
+    GLuint m_displaySampler = 0;
+
     // Recycles tile textures instead of paying glTextureStorage2D per tile.
     // Owned here because every tile texture in the document is created and
     // released through this class.

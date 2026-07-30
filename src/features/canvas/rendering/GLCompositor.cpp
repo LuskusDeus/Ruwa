@@ -168,8 +168,8 @@ void GLCompositor::ensurePingPongTextures()
     // Use GL_LINEAR minFilter to match cache tile textures created by
     // GLTileRenderer::ensureTileTexture().  This allows compositeTile()
     // to swap ping-pong and cache textures without a filter mismatch.
-    static constexpr TextureParams kTileParams { GL_LINEAR, GL_NEAREST };
-    auto ensureTex = [this](GLuint& tex) {
+    const TextureParams kTileParams = displayTileTextureParams(kDefaultTileFormat);
+    auto ensureTex = [this, &kTileParams](GLuint& tex) {
         if (!tex)
             tex = createTexture2D(m_gl, TILE_SIZE, TILE_SIZE, kTileParams);
     };
@@ -202,9 +202,9 @@ GLCompositor::GroupCompositeFrame& GLCompositor::ensureGroupCompositeFrame(size_
         m_groupCompositeFrames[depth] = std::make_unique<GroupCompositeFrame>();
     }
 
-    static constexpr TextureParams kTileParams { GL_LINEAR, GL_NEAREST };
+    const TextureParams kTileParams = displayTileTextureParams(kDefaultTileFormat);
     GroupCompositeFrame& frame = *m_groupCompositeFrames[depth];
-    auto ensureTex = [this](GLuint& texture) {
+    auto ensureTex = [this, &kTileParams](GLuint& texture) {
         if (!texture) {
             texture = createTexture2D(m_gl, TILE_SIZE, TILE_SIZE, kTileParams);
         }
