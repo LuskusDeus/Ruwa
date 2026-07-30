@@ -182,6 +182,25 @@ void GLRenderer::endFrame()
     // Qt handles buffer swap
 }
 
+void GLRenderer::beginDisplayMipFrame(bool deferRegeneration)
+{
+    if (m_tileRenderer) {
+        m_tileRenderer->beginDisplayMipFrame(deferRegeneration);
+    }
+}
+
+void GLRenderer::beginUnrestrictedDisplayMipFrame()
+{
+    if (m_tileRenderer) {
+        m_tileRenderer->beginUnrestrictedDisplayMipFrame();
+    }
+}
+
+bool GLRenderer::hasPendingVisibleDisplayMipmaps() const
+{
+    return m_tileRenderer && m_tileRenderer->hasPendingVisibleDisplayMipmaps();
+}
+
 // ==========================================================================
 //   D R A W   C A L L S
 // ==========================================================================
@@ -239,12 +258,12 @@ void GLRenderer::uploadDirtyTiles(TileGrid& grid)
 void GLRenderer::drawTiles(const TileGrid& grid, const Viewport& viewport, uint32_t canvasWidth,
     uint32_t canvasHeight, float cornerRadiusCanvasPx, bool canvasContentFlipH,
     bool canvasContentFlipV, bool compositeRoundedEdgesOverViewportBackground,
-    const Color& viewportBackgroundColor, bool clipToCanvas)
+    const Color& viewportBackgroundColor, bool clipToCanvas, bool useDisplayMipmaps)
 {
     if (m_tileRenderer) {
         m_tileRenderer->render(grid, viewport, canvasWidth, canvasHeight, cornerRadiusCanvasPx,
             canvasContentFlipH, canvasContentFlipV, compositeRoundedEdgesOverViewportBackground,
-            viewportBackgroundColor, clipToCanvas);
+            viewportBackgroundColor, clipToCanvas, useDisplayMipmaps);
     }
 }
 

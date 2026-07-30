@@ -7888,6 +7888,7 @@ QImage OpenGLCanvasWidget::renderCompositedRegion(const QRect& worldRect, const 
     overviewViewport.camera().setZoom(std::min(zoomX, zoomY));
     overviewViewport.camera().setRotation(0.0f);
 
+    m_renderer->beginUnrestrictedDisplayMipFrame();
     m_renderer->beginFrame(targetW, targetH);
     glClearColor(0.0f, 0.0f, 0.0f, 0.0f);
     glClear(GL_COLOR_BUFFER_BIT);
@@ -8021,6 +8022,7 @@ QImage OpenGLCanvasWidget::grabCanvasImage(const QRect& worldRect)
     glViewport(0, 0, static_cast<GLsizei>(cw), static_cast<GLsizei>(ch));
 
     // Render canvas to FBO
+    m_renderer->beginUnrestrictedDisplayMipFrame();
     m_renderer->beginFrame(cw, ch);
 
     // Clear to transparent so hidden/transparent background exports correctly
@@ -11604,6 +11606,7 @@ void OpenGLCanvasWidget::paintGL()
         || (m_transformController.isActive() && !viewportTransformPreviewActive)
         || m_pendingTransform.active || m_autoApplyingTransform
         || m_canvas.undoManager().isUndoRedoInProgress();
+    m_renderer->beginDisplayMipFrame(contentMutationActive);
     paintGLCompositeContexts()[this] = PaintGLCompositeContext {
         paintGLCameraStateChanged(previousCameraFrameState, currentCameraFrameState)
             && !contentMutationActive,
@@ -11726,6 +11729,8 @@ void OpenGLCanvasWidget::paintGL()
     if (fillPreviewAnimating)
         update();
     if (canvasCornerAnimating)
+        update();
+    if (!contentMutationActive && m_renderer->hasPendingVisibleDisplayMipmaps())
         update();
     if (m_viewport.camera().isAnimating() && !m_cameraAnimationFrameTimer.isActive()) {
         constexpr qint64 kCameraFrameIntervalNs = 1000000000LL / 120;

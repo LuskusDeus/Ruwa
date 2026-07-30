@@ -2318,6 +2318,7 @@ void BrushStrokeHost::finalizeStroke()
 
 bool BrushStrokeHost::tryFinalizeStroke(bool forceWait)
 {
+    const bool hadPendingFinalization = m_pending.active;
     if (m_pending.active && m_pending.fence && !forceWait) {
         auto* executionBackend = brushExecutionBackend();
         bool readbackComplete = true;
@@ -2342,6 +2343,12 @@ bool BrushStrokeHost::tryFinalizeStroke(bool forceWait)
             m_pending.strokePaintedEmitted = true;
         }
         m_callbacks.finalizePendingStroke(m_pending, m_selectionAtStrokeBegin, emitStrokePainted);
+    }
+    if (hadPendingFinalization && !m_pending.active && m_callbacks.requestRender) {
+        // The final interactive frame deliberately deferred display mipmaps.
+        // Request the first idle frame even when finalization itself made no
+        // additional visible change.
+        m_callbacks.requestRender();
     }
     return !m_pending.active;
 }

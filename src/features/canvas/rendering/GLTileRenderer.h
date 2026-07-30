@@ -34,6 +34,13 @@ public:
     Result<void> initialize(const QString& shaderDir);
     void shutdown();
 
+    /// Start one top-level viewport/export frame. During an interactive content
+    /// mutation stale mip chains are not rebuilt; their tiles are sampled from
+    /// fresh level zero instead.
+    void beginDisplayMipFrame(bool deferRegeneration);
+    void beginUnrestrictedDisplayMipFrame();
+    bool hasPendingVisibleDisplayMipmaps() const { return m_visibleDisplayMipmapsPending; }
+
     /// Upload all dirty tiles to GPU textures.
     void uploadDirtyTiles(TileGrid& grid);
 
@@ -45,7 +52,8 @@ public:
         uint32_t canvasHeight = 0, float cornerRadiusCanvasPx = 0.0f,
         bool canvasContentFlipH = false, bool canvasContentFlipV = false,
         bool compositeRoundedEdgesOverViewportBackground = false,
-        const Color& viewportBackgroundColor = Color::transparent(), bool clipToCanvas = true);
+        const Color& viewportBackgroundColor = Color::transparent(), bool clipToCanvas = true,
+        bool useDisplayMipmaps = true);
     uint32_t lastRenderDrawCallCount() const { return m_lastRenderDrawCalls; }
 
     /// Release a tile's GPU texture (recycled through the tile texture pool)
@@ -53,6 +61,9 @@ public:
 
     /// Ensure a tile has a GPU texture allocated (lazy creation)
     void ensureTileTexture(TileData& tile);
+
+    /// Ensure a final composition-cache tile has storage for its display mip chain.
+    void ensureDisplayTileTexture(TileData& tile);
 
     /// Reclaim textures that TileData destructors could not free themselves
     /// (no GL context, wrong thread) and feed them back into the pool. Call
@@ -65,6 +76,8 @@ public:
     bool isInitialized() const { return m_initialized; }
 
 private:
+    void ensureTileTextureStorage(TileData& tile, const TextureParams& params);
+
     bool drawTileQuad(const TileKey& key, const TileData& tile,
         const std::array<float, 16>& vpMatrix, uint32_t canvasWidth, uint32_t canvasHeight,
         bool clipToCanvas, float cornerRadiusCanvasPx,
@@ -77,10 +90,18 @@ private:
 
     std::unique_ptr<GLShaderProgram> m_tileProgram;
 
-    // Overrides the texture object's sampling state only for the final
-    // viewport draw. Minification uses the lazily generated mip chain, while
-    // modest magnification stays linearly filtered through the 200% cutoff.
+    // Overrides the texture object's sampling state only for display draws.
+    // Clean minified tiles use the mip sampler. Dirty tiles that cannot be
+    // regenerated in this frame use the level-zero sampler, which avoids both
+    // stale mip content and synchronous regeneration during interactive edits.
     GLuint m_displaySampler = 0;
+    GLuint m_levelZeroLinearSampler = 0;
+
+    static constexpr uint32_t kDisplayMipRegenerationBudget = 2;
+    uint32_t m_displayMipRegenerationBudget = kDisplayMipRegenerationBudget;
+    uint32_t m_displayMipRegenerationsThisFrame = 0;
+    bool m_deferDisplayMipRegeneration = false;
+    bool m_visibleDisplayMipmapsPending = false;
 
     // Recycles tile textures instead of paying glTextureStorage2D per tile.
     // Owned here because every tile texture in the document is created and

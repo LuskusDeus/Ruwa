@@ -165,27 +165,27 @@ void GLCompositor::shutdown()
 
 void GLCompositor::ensurePingPongTextures()
 {
-    // Use GL_LINEAR minFilter to match cache tile textures created by
-    // GLTileRenderer::ensureTileTexture().  This allows compositeTile()
-    // to swap ping-pong and cache textures without a filter mismatch.
-    const TextureParams kTileParams = displayTileTextureParams(kDefaultTileFormat);
-    auto ensureTex = [this, &kTileParams](GLuint& tex) {
+    // Only the main ping-pong pair is swapped into the final composition cache,
+    // so only that pair needs storage for a complete display mip chain.
+    const TextureParams kDisplayTileParams = displayTileTextureParams(kDefaultTileFormat);
+    const TextureParams kWorkingTileParams = tileTextureParams(kDefaultTileFormat);
+    auto ensureTex = [this](GLuint& tex, const TextureParams& params) {
         if (!tex)
-            tex = createTexture2D(m_gl, TILE_SIZE, TILE_SIZE, kTileParams);
+            tex = createTexture2D(m_gl, TILE_SIZE, TILE_SIZE, params);
     };
 
     for (int i = 0; i < 2; ++i)
-        ensureTex(m_pingPongTex[i]);
-    ensureTex(m_groupTempTex[0]);
-    ensureTex(m_groupTempTex[1]);
-    ensureTex(m_neighborhoodCenterTex);
-    ensureTex(m_clipGroupTempTex[0]);
-    ensureTex(m_clipGroupTempTex[1]);
-    ensureTex(m_wholeGroupTempTex[0]);
-    ensureTex(m_wholeGroupTempTex[1]);
-    ensureTex(m_adjustmentTempTex[0]);
-    ensureTex(m_adjustmentTempTex[1]);
-    ensureTex(m_programmaticBlendBaseTex);
+        ensureTex(m_pingPongTex[i], kDisplayTileParams);
+    ensureTex(m_groupTempTex[0], kWorkingTileParams);
+    ensureTex(m_groupTempTex[1], kWorkingTileParams);
+    ensureTex(m_neighborhoodCenterTex, kWorkingTileParams);
+    ensureTex(m_clipGroupTempTex[0], kWorkingTileParams);
+    ensureTex(m_clipGroupTempTex[1], kWorkingTileParams);
+    ensureTex(m_wholeGroupTempTex[0], kWorkingTileParams);
+    ensureTex(m_wholeGroupTempTex[1], kWorkingTileParams);
+    ensureTex(m_adjustmentTempTex[0], kWorkingTileParams);
+    ensureTex(m_adjustmentTempTex[1], kWorkingTileParams);
+    ensureTex(m_programmaticBlendBaseTex, kWorkingTileParams);
 }
 
 void GLCompositor::swapPingPong()
@@ -202,7 +202,7 @@ GLCompositor::GroupCompositeFrame& GLCompositor::ensureGroupCompositeFrame(size_
         m_groupCompositeFrames[depth] = std::make_unique<GroupCompositeFrame>();
     }
 
-    const TextureParams kTileParams = displayTileTextureParams(kDefaultTileFormat);
+    const TextureParams kTileParams = tileTextureParams(kDefaultTileFormat);
     GroupCompositeFrame& frame = *m_groupCompositeFrames[depth];
     auto ensureTex = [this, &kTileParams](GLuint& texture) {
         if (!texture) {
@@ -268,7 +268,7 @@ void GLCompositor::compositeTile(const TileKey& key, const std::vector<Composite
     // Transfer result to cache tile via texture swap (zero GPU copy).
     TileData& cacheTile = cache.grid().getOrCreateTile(key);
     if (!cacheTile.hasTexture()) {
-        tileRenderer->ensureTileTexture(cacheTile);
+        tileRenderer->ensureDisplayTileTexture(cacheTile);
     }
 
     const int resultSlot = (resultTex == m_pingPongTex[0]) ? 0 : 1;

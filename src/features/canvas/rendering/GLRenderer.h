@@ -47,6 +47,9 @@ public:
     // Frame operations
     void beginFrame(uint32_t width, uint32_t height);
     void endFrame();
+    void beginDisplayMipFrame(bool deferRegeneration);
+    void beginUnrestrictedDisplayMipFrame();
+    bool hasPendingVisibleDisplayMipmaps() const;
 
     // Draw calls
     void drawBackground(const Color& color);
@@ -63,7 +66,8 @@ public:
         uint32_t canvasHeight = 0, float cornerRadiusCanvasPx = 0.0f,
         bool canvasContentFlipH = false, bool canvasContentFlipV = false,
         bool compositeRoundedEdgesOverViewportBackground = false,
-        const Color& viewportBackgroundColor = Color::transparent(), bool clipToCanvas = true);
+        const Color& viewportBackgroundColor = Color::transparent(), bool clipToCanvas = true,
+        bool useDisplayMipmaps = true);
 
     // Compositor: composite dirty tiles from layer stack into cache
     /// Composite all dirty tiles into the cache.
