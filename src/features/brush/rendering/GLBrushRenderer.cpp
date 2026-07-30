@@ -5107,10 +5107,18 @@ bool GLBrushRenderer::stampLiquifySegmentGPU(TileGrid& strokeBuffer, GLTileRende
             nMaxX = std::max(nMaxX, m_liquifyRoiX + m_liquifyRoiW);
             nMaxY = std::max(nMaxY, m_liquifyRoiY + m_liquifyRoiH);
         }
-        nMinX -= kFieldGrowPad;
-        nMinY -= kFieldGrowPad;
-        nMaxX += kFieldGrowPad;
-        nMaxY += kFieldGrowPad;
+        // Geometric growth. A flat pad reallocates + re-snapshots the field every
+        // kFieldGrowPad px of travel, and each such event costs O(ROI area) — so a
+        // long stroke pays O(n^2). Padding proportionally to the current extent
+        // makes the number of reallocations logarithmic in the stroke length. The
+        // extra area is nearly free now that advection is scissored per dab
+        // (below), i.e. no longer proportional to the ROI.
+        const int32_t growPadX = std::max<int32_t>(kFieldGrowPad, (nMaxX - nMinX) / 4);
+        const int32_t growPadY = std::max<int32_t>(kFieldGrowPad, (nMaxY - nMinY) / 4);
+        nMinX -= growPadX;
+        nMinY -= growPadY;
+        nMaxX += growPadX;
+        nMaxY += growPadY;
         if (clipToCanvas) {
             nMinX = std::max<int32_t>(nMinX, 0);
             nMinY = std::max<int32_t>(nMinY, 0);
@@ -5147,6 +5155,7 @@ bool GLBrushRenderer::stampLiquifySegmentGPU(TileGrid& strokeBuffer, GLTileRende
         // per-document format (glCopyImageSubData needs format-compatibility).
         const TilePixelFormat liquifyContentFormat
             = layerGrid ? layerGrid->format() : kDefaultTileFormat;
+        const TilePixelFormat oldSourceFormat = m_liquifySourceFormat;
         m_liquifySourceFormat = liquifyContentFormat;
         GLuint newSource = createTex(tileGLInternalFormat(liquifyContentFormat), GL_RGBA,
             tileGLPixelType(liquifyContentFormat));
@@ -5167,22 +5176,28 @@ bool GLBrushRenderer::stampLiquifySegmentGPU(TileGrid& strokeBuffer, GLTileRende
         // a ROI growth mid-stroke.
         clearTexture(newField0);
         clearTexture(newField1);
-        if (!firstSegmentOfStroke && haveField && m_liquifyRoiW > 0 && m_liquifyRoiH > 0) {
-            const int32_t offX = m_liquifyRoiX - newRoiX; // >= 0 (new ROI ⊇ old)
-            const int32_t offY = m_liquifyRoiY - newRoiY;
-            if (offX >= 0 && offY >= 0 && offX + m_liquifyRoiW <= newRoiW
-                && offY + m_liquifyRoiH <= newRoiH) {
+        const GLuint oldFieldTex0 = m_liquifyFieldTex[0];
+        const GLuint oldFieldTex1 = m_liquifyFieldTex[1];
+        const GLuint oldSourceTex = m_liquifySourceTex;
+        const int32_t oldRoiX = m_liquifyRoiX;
+        const int32_t oldRoiY = m_liquifyRoiY;
+        const GLsizei oldRoiW = m_liquifyRoiW;
+        const GLsizei oldRoiH = m_liquifyRoiH;
+        int32_t carryOffX = 0;
+        int32_t carryOffY = 0;
+        bool carriedOver = false;
+        if (!firstSegmentOfStroke && haveField && oldRoiW > 0 && oldRoiH > 0) {
+            const int32_t offX = oldRoiX - newRoiX; // >= 0 (new ROI ⊇ old)
+            const int32_t offY = oldRoiY - newRoiY;
+            if (offX >= 0 && offY >= 0 && offX + oldRoiW <= newRoiW && offY + oldRoiH <= newRoiH) {
                 m_gl->glCopyImageSubData(m_liquifyFieldTex[m_liquifyFieldSrcIdx], GL_TEXTURE_2D, 0,
-                    0, 0, 0, newField0, GL_TEXTURE_2D, 0, offX, offY, 0, m_liquifyRoiW,
-                    m_liquifyRoiH, 1);
+                    0, 0, 0, newField0, GL_TEXTURE_2D, 0, offX, offY, 0, oldRoiW, oldRoiH, 1);
+                carryOffX = offX;
+                carryOffY = offY;
+                carriedOver = true;
             }
         }
 
-        if (haveField) {
-            m_gl->glDeleteTextures(1, &m_liquifyFieldTex[0]);
-            m_gl->glDeleteTextures(1, &m_liquifyFieldTex[1]);
-            m_gl->glDeleteTextures(1, &m_liquifySourceTex);
-        }
         m_liquifyFieldTex[0] = newField0;
         m_liquifyFieldTex[1] = newField1;
         m_liquifySourceTex = newSource;
@@ -5201,6 +5216,23 @@ bool GLBrushRenderer::stampLiquifySegmentGPU(TileGrid& strokeBuffer, GLTileRende
         // Snapshot the frozen source (the original layer over the full ROI). The
         // layer is unmodified until the stroke flattens, so this stays valid.
         clearTexture(m_liquifySourceTex, layerGrid ? layerGrid->defaultFillPacked() : 0u);
+
+        // The previous snapshot is still valid content (the layer cannot change
+        // mid-stroke), so carry it over as one blit and let the tile loop below
+        // fill only the newly exposed band. Without this, every ROI growth
+        // re-copies every tile under the (ever larger) ROI.
+        const bool sourceCarried
+            = carriedOver && oldSourceTex != 0 && oldSourceFormat == liquifyContentFormat;
+        if (sourceCarried) {
+            m_gl->glCopyImageSubData(oldSourceTex, GL_TEXTURE_2D, 0, 0, 0, 0, m_liquifySourceTex,
+                GL_TEXTURE_2D, 0, carryOffX, carryOffY, 0, oldRoiW, oldRoiH, 1);
+        }
+        // Region already covered by the carried snapshot, in canvas pixel coords.
+        const int32_t coveredMinX = oldRoiX;
+        const int32_t coveredMinY = oldRoiY;
+        const int32_t coveredMaxX = oldRoiX + oldRoiW;
+        const int32_t coveredMaxY = oldRoiY + oldRoiH;
+
         int32_t sMinTileX = static_cast<int32_t>(std::floor(static_cast<float>(roiX) / TILE_SIZE));
         int32_t sMinTileY = static_cast<int32_t>(std::floor(static_cast<float>(roiY) / TILE_SIZE));
         int32_t sMaxTileX
@@ -5217,12 +5249,6 @@ bool GLBrushRenderer::stampLiquifySegmentGPU(TileGrid& strokeBuffer, GLTileRende
         }
         for (int32_t ty = sMinTileY; ty <= sMaxTileY; ++ty) {
             for (int32_t tx = sMinTileX; tx <= sMaxTileX; ++tx) {
-                TileData* layerTile = layerGrid->getTile(TileKey { tx, ty });
-                if (layerTile && layerTile->isEmpty() && !layerGrid->hasDefaultFill())
-                    continue;
-                ensureUploadedTileTexture(layerTile);
-                if (!layerTile || !layerTile->hasTexture())
-                    continue;
                 const int32_t tileMinX = tx * static_cast<int32_t>(TILE_SIZE);
                 const int32_t tileMinY = ty * static_cast<int32_t>(TILE_SIZE);
                 const int32_t cMinX = std::max(roiX, tileMinX);
@@ -5233,10 +5259,32 @@ bool GLBrushRenderer::stampLiquifySegmentGPU(TileGrid& strokeBuffer, GLTileRende
                     = std::min(roiY + roiH, tileMinY + static_cast<int32_t>(TILE_SIZE));
                 if (cMaxX <= cMinX || cMaxY <= cMinY)
                     continue;
+                // Fully inside the carried-over snapshot: already up to date.
+                if (sourceCarried && cMinX >= coveredMinX && cMinY >= coveredMinY
+                    && cMaxX <= coveredMaxX && cMaxY <= coveredMaxY) {
+                    continue;
+                }
+                TileData* layerTile = layerGrid->getTile(TileKey { tx, ty });
+                if (layerTile && layerTile->isEmpty() && !layerGrid->hasDefaultFill())
+                    continue;
+                ensureUploadedTileTexture(layerTile);
+                if (!layerTile || !layerTile->hasTexture())
+                    continue;
                 m_gl->glCopyImageSubData(layerTile->textureId(), GL_TEXTURE_2D, 0, cMinX - tileMinX,
                     cMinY - tileMinY, 0, m_liquifySourceTex, GL_TEXTURE_2D, 0, cMinX - roiX,
                     cMinY - roiY, 0, cMaxX - cMinX, cMaxY - cMinY, 1);
             }
+        }
+
+        // Old textures were read above (field migration + source carry-over), so
+        // they can only be released now.
+        if (haveField) {
+            if (oldFieldTex0)
+                m_gl->glDeleteTextures(1, &oldFieldTex0);
+            if (oldFieldTex1)
+                m_gl->glDeleteTextures(1, &oldFieldTex1);
+            if (oldSourceTex)
+                m_gl->glDeleteTextures(1, &oldSourceTex);
         }
     }
     m_liquifyActive = true;
@@ -5331,8 +5379,32 @@ bool GLBrushRenderer::stampLiquifySegmentGPU(TileGrid& strokeBuffer, GLTileRende
 
     float prevX = firstSegmentOfStroke ? dabs.front().worldX : m_liquifyPrevWorldX;
     float prevY = firstSegmentOfStroke ? dabs.front().worldY : m_liquifyPrevWorldY;
-    int fSrc = m_liquifyFieldSrcIdx;
+    const int fSrc = m_liquifyFieldSrcIdx;
+    const int fDst = fSrc ^ 1;
     bool didAdvect = false;
+
+    // A dab only WRITES inside its own brush disk: everywhere else the coverage
+    // w is 0, so v is 0 and the shader stores B_old[p] unchanged. Rasterizing the
+    // whole field ROI per dab therefore burns bandwidth proportional to the
+    // stroke's accumulated extent (megapixels of RG32F, read + written, tens of
+    // times per frame) purely to copy identical values across the ping-pong.
+    //
+    // Instead: scissor each pass to the dab's bounding box and fold that box back
+    // into fSrc, which stays the single canonical field. Same fragment inputs,
+    // same coordinates, bit-identical output — just the untouched remainder is
+    // never rasterized. (Ping-ponging is impossible with a scissor: fDst outside
+    // the box would keep stale content from earlier dabs.)
+    const GLboolean scissorWasEnabled = m_gl->glIsEnabled(GL_SCISSOR_TEST);
+    GLint prevScissorBox[4] = { 0, 0, 0, 0 };
+    if (scissorWasEnabled) {
+        m_gl->glGetIntegerv(GL_SCISSOR_BOX, prevScissorBox);
+    }
+    m_gl->glEnable(GL_SCISSOR_TEST);
+    m_gl->glBindTextureUnit(0, m_liquifyFieldTex[fSrc]);
+    m_gl->glFramebufferTexture2D(
+        GL_FRAMEBUFFER, GL_COLOR_ATTACHMENT0, GL_TEXTURE_2D, m_liquifyFieldTex[fDst], 0);
+    m_gl->glViewport(0, 0, roiW, roiH);
+
     for (const auto& d : dabs) {
         const float stepX = d.worldX - prevX;
         const float stepY = d.worldY - prevY;
@@ -5345,7 +5417,23 @@ bool GLBrushRenderer::stampLiquifySegmentGPU(TileGrid& strokeBuffer, GLTileRende
         if (liquifyMode == 0 && stepX == 0.0f && stepY == 0.0f)
             continue;
 
-        const int fDst = fSrc ^ 1;
+        // Coverage vanishes outside |delta| > radius for every roundness/angle,
+        // so this box bounds everything the dab can change (kFieldMargin matches
+        // the footprint padding used above).
+        const float ext = d.radius + static_cast<float>(kFieldMargin);
+        const float localX = d.worldX - static_cast<float>(roiX);
+        const float localY = d.worldY - static_cast<float>(roiY);
+        const int32_t boxMinX
+            = std::max<int32_t>(0, static_cast<int32_t>(std::floor(localX - ext)));
+        const int32_t boxMinY
+            = std::max<int32_t>(0, static_cast<int32_t>(std::floor(localY - ext)));
+        const int32_t boxMaxX
+            = std::min<int32_t>(roiW, static_cast<int32_t>(std::ceil(localX + ext)) + 1);
+        const int32_t boxMaxY
+            = std::min<int32_t>(roiH, static_cast<int32_t>(std::ceil(localY + ext)) + 1);
+        if (boxMaxX <= boxMinX || boxMaxY <= boxMinY)
+            continue;
+
         const float strength = static_cast<float>(d.alpha) / 255.0f;
         m_liquifyFieldProgram->setUniform("uBrushRadius", d.radius);
         m_liquifyFieldProgram->setUniform("uBrushHardness", d.hardness);
@@ -5356,14 +5444,20 @@ bool GLBrushRenderer::stampLiquifySegmentGPU(TileGrid& strokeBuffer, GLTileRende
         m_liquifyFieldProgram->setUniform("uStepDelta", stepX, stepY);
         m_liquifyFieldProgram->setUniform("uStrength", std::clamp(strength, 0.0f, 1.0f));
 
-        m_gl->glBindTextureUnit(0, m_liquifyFieldTex[fSrc]);
-        m_gl->glFramebufferTexture2D(
-            GL_FRAMEBUFFER, GL_COLOR_ATTACHMENT0, GL_TEXTURE_2D, m_liquifyFieldTex[fDst], 0);
-        m_gl->glViewport(0, 0, roiW, roiH);
+        m_gl->glScissor(boxMinX, boxMinY, boxMaxX - boxMinX, boxMaxY - boxMinY);
         m_gl->glDrawArrays(GL_TRIANGLES, 0, 6);
         ++m_drawCallEstimate;
-        fSrc = fDst;
+        // Fold the box back so the next dab reads a fully valid field from fSrc.
+        m_gl->glCopyImageSubData(m_liquifyFieldTex[fDst], GL_TEXTURE_2D, 0, boxMinX, boxMinY, 0,
+            m_liquifyFieldTex[fSrc], GL_TEXTURE_2D, 0, boxMinX, boxMinY, 0, boxMaxX - boxMinX,
+            boxMaxY - boxMinY, 1);
         didAdvect = true;
+    }
+
+    if (scissorWasEnabled) {
+        m_gl->glScissor(prevScissorBox[0], prevScissorBox[1], prevScissorBox[2], prevScissorBox[3]);
+    } else {
+        m_gl->glDisable(GL_SCISSOR_TEST);
     }
     m_liquifyFieldSrcIdx = fSrc;
     m_liquifyPrevWorldX = prevX;
