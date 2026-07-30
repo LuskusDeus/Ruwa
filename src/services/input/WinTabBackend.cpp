@@ -592,9 +592,26 @@ bool WinTabBackend::handleNativeEvent(void* message)
     if (msg->message == WT_PROXIMITY && reinterpret_cast<HCTX>(msg->wParam) == m_data->context) {
         // WinTab stores proximity flags in lParam; it is not a context handle.
         // LOWORD != 0 means entering this context, LOWORD == 0 means leaving it.
+        // HIWORD carries an independent meaning: it is non-zero only when the
+        // message reports a *hardware* proximity transition, i.e. the pen
+        // physically entered or left the tablet's hover range. A message with
+        // HIWORD == 0 is a context-only transition — the cursor crossed the
+        // boundary of the region this context owns (our window) while the pen
+        // stayed on the tablet.
         const bool enteringContext = LOWORD(msg->lParam) != 0;
+        const bool hardwareTransition = HIWORD(msg->lParam) != 0;
 
         if (enteringContext) {
+            if (!hardwareTransition && m_data->penEngaged) {
+                // The pen came back over the window without ever leaving the
+                // tablet. Clearing contact state here would drop penEngaged, and
+                // the next light packet (rawPressure at or just above the axis
+                // minimum) would then fail the re-engage threshold and report
+                // NoButton — a spurious release in the middle of a live stroke.
+                setDetails(QStringLiteral("WT_PROXIMITY context enter (pen still down)"));
+                return true;
+            }
+
             m_data->penDown = false;
             m_data->penEngaged = false;
             m_data->pressure = 0.0f;
@@ -603,6 +620,20 @@ bool WinTabBackend::handleNativeEvent(void* message)
             m_data->buttons = Qt::NoButton;
             m_data->inProximity = true;
             setDetails(QStringLiteral("WT_PROXIMITY enter"));
+            return true;
+        }
+
+        if (!hardwareTransition && m_data->penEngaged) {
+            // Context-only leave while the pen is in contact: the pen did not
+            // lift, it only moved outside the region this context owns — in
+            // practice, outside the application window. A mouse drag keeps
+            // drawing there because CanvasPanel grabs the mouse on press, so the
+            // pen must not be cut short either. Keep the contact (and proximity,
+            // which is what makes StylusInputManager stay the authoritative
+            // pointer owner) alive; the stroke then ends the normal way, either
+            // from the zero-pressure packet the driver sends when the pen lifts
+            // or from a real hardware proximity leave.
+            setDetails(QStringLiteral("WT_PROXIMITY context leave (pen still down)"));
             return true;
         }
 
