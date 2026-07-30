@@ -312,10 +312,11 @@ private:
     TilePixelFormat m_smudgeWorkFormat = kDefaultTileFormat;
 
     // Liquify per-stroke displacement field (RG32F ping-pong) + the frozen
-    // source snapshot (RGBA8, the original layer over the field ROI — the layer
-    // is unmodified until the stroke flattens, so re-snapshotting on growth is
-    // safe). The field is accumulated across all segments of a stroke; the ROI
-    // grows to the stroke's bounding box (+ margin) as the brush travels.
+    // source snapshot in the document's content format. The layer is unmodified
+    // until the stroke flattens, so re-snapshotting on growth is safe. The field
+    // is accumulated across all segments of a stroke; the logical ROI grows to
+    // the stroke's bounding box (+ margin), while physical texture capacity is
+    // retained across strokes and grows only on demand.
     GLuint m_liquifyFieldTex[2] = { 0, 0 };
     GLuint m_liquifySourceTex = 0;
     // CONTENT format the frozen liquify source snapshot was allocated with.

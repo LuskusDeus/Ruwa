@@ -5135,6 +5135,29 @@ bool GLBrushRenderer::stampLiquifySegmentGPU(TileGrid& strokeBuffer, GLTileRende
             return true;
         }
 
+        const TilePixelFormat liquifyContentFormat
+            = layerGrid ? layerGrid->format() : kDefaultTileFormat;
+        const GLuint oldFieldTex0 = m_liquifyFieldTex[0];
+        const GLuint oldFieldTex1 = m_liquifyFieldTex[1];
+        const GLuint oldSourceTex = m_liquifySourceTex;
+        const TilePixelFormat oldSourceFormat = m_liquifySourceFormat;
+        const int oldFieldSrcIdx = m_liquifyFieldSrcIdx;
+        const int32_t oldRoiX = m_liquifyRoiX;
+        const int32_t oldRoiY = m_liquifyRoiY;
+        const GLsizei oldRoiW = m_liquifyRoiW;
+        const GLsizei oldRoiH = m_liquifyRoiH;
+
+        // Texture objects are capacity; the ROI is the active logical rectangle
+        // at texture origin (0, 0). A new stroke may move that rectangle anywhere
+        // on the canvas without replacing storage. Mid-stroke growth can reuse
+        // the same capacity too by migrating through the other ping-pong side.
+        const bool reuseStorage = haveField && oldSourceFormat == liquifyContentFormat
+            && m_liquifyTexW >= newRoiW && m_liquifyTexH >= newRoiH;
+        const GLsizei newTexW
+            = reuseStorage ? m_liquifyTexW : std::max(m_liquifyTexW, newRoiW);
+        const GLsizei newTexH
+            = reuseStorage ? m_liquifyTexH : std::max(m_liquifyTexH, newRoiH);
+
         auto createTex = [&](GLenum internalFmt, GLenum fmt, GLenum type) -> GLuint {
             TextureParams params;
             params.minFilter = GL_LINEAR;
@@ -5142,47 +5165,55 @@ bool GLBrushRenderer::stampLiquifySegmentGPU(TileGrid& strokeBuffer, GLTileRende
             params.internalFormat = internalFmt;
             params.pixelFormat = fmt;
             params.pixelType = type;
-            return createTexture2D(m_gl, newRoiW, newRoiH, params);
+            return createTexture2D(m_gl, newTexW, newTexH, params);
         };
 
-        // RG32F (not RG16F): the field stores px offsets up to the stroke
-        // length; half-float ULP grows to ~0.3 px at large displacement, which
-        // shows up as smearing on stretched tips and as drift accumulating
-        // through self-intersecting (curling) strokes. Full float keeps it crisp.
-        GLuint newField0 = createTex(GL_RG32F, GL_RG, GL_FLOAT);
-        GLuint newField1 = createTex(GL_RG32F, GL_RG, GL_FLOAT);
-        // Frozen content source: copied from document tiles -> the target grid's
-        // per-document format (glCopyImageSubData needs format-compatibility).
-        const TilePixelFormat liquifyContentFormat
-            = layerGrid ? layerGrid->format() : kDefaultTileFormat;
-        const TilePixelFormat oldSourceFormat = m_liquifySourceFormat;
-        m_liquifySourceFormat = liquifyContentFormat;
-        GLuint newSource = createTex(tileGLInternalFormat(liquifyContentFormat), GL_RGBA,
-            tileGLPixelType(liquifyContentFormat));
-        if (newField0 == 0 || newField1 == 0 || newSource == 0) {
-            if (newField0)
-                m_gl->glDeleteTextures(1, &newField0);
-            if (newField1)
-                m_gl->glDeleteTextures(1, &newField1);
-            if (newSource)
-                m_gl->glDeleteTextures(1, &newSource);
-            if (ownBatch)
-                endStampBatch();
-            return false;
+        GLuint newField0 = oldFieldTex0;
+        GLuint newField1 = oldFieldTex1;
+        GLuint newSource = oldSourceTex;
+        if (!reuseStorage) {
+            // RG32F (not RG16F): the field stores px offsets up to the stroke
+            // length; half-float ULP grows to ~0.3 px at large displacement,
+            // which shows up as smearing on stretched tips and as drift
+            // accumulating through self-intersecting strokes.
+            newField0 = createTex(GL_RG32F, GL_RG, GL_FLOAT);
+            newField1 = createTex(GL_RG32F, GL_RG, GL_FLOAT);
+            // Frozen content source follows the document format because
+            // glCopyImageSubData requires format-compatible storage.
+            newSource = createTex(tileGLInternalFormat(liquifyContentFormat), GL_RGBA,
+                tileGLPixelType(liquifyContentFormat));
+            if (newField0 == 0 || newField1 == 0 || newSource == 0) {
+                if (newField0)
+                    m_gl->glDeleteTextures(1, &newField0);
+                if (newField1)
+                    m_gl->glDeleteTextures(1, &newField1);
+                if (newSource)
+                    m_gl->glDeleteTextures(1, &newSource);
+                if (ownBatch)
+                    endStampBatch();
+                return false;
+            }
         }
 
-        // Identity field everywhere, then migrate the old field's content into
-        // the new buffer at the shifted origin so the accumulated warp survives
-        // a ROI growth mid-stroke.
-        clearTexture(newField0);
-        clearTexture(newField1);
-        const GLuint oldFieldTex0 = m_liquifyFieldTex[0];
-        const GLuint oldFieldTex1 = m_liquifyFieldTex[1];
-        const GLuint oldSourceTex = m_liquifySourceTex;
-        const int32_t oldRoiX = m_liquifyRoiX;
-        const int32_t oldRoiY = m_liquifyRoiY;
-        const GLsizei oldRoiW = m_liquifyRoiW;
-        const GLsizei oldRoiH = m_liquifyRoiH;
+        const float zeroField[2] = { 0.0f, 0.0f };
+        auto clearFieldRegion = [&](GLuint texture) {
+            m_gl->glClearTexSubImage(texture, 0, 0, 0, 0, newRoiW, newRoiH, 1, GL_RG, GL_FLOAT,
+                zeroField);
+        };
+        uint8_t clearR = 0;
+        uint8_t clearG = 0;
+        uint8_t clearB = 0;
+        uint8_t clearA = 0;
+        TileData::unpackColor(layerGrid ? layerGrid->defaultFillPacked() : 0u, clearR, clearG,
+            clearB, clearA);
+        const float sourceClear[4] = { static_cast<float>(clearR) / 255.0f,
+            static_cast<float>(clearG) / 255.0f, static_cast<float>(clearB) / 255.0f,
+            static_cast<float>(clearA) / 255.0f };
+        auto clearSourceRegion = [&]() {
+            m_gl->glClearTexSubImage(newSource, 0, 0, 0, 0, newRoiW, newRoiH, 1, GL_RGBA,
+                GL_FLOAT, sourceClear);
+        };
+
         int32_t carryOffX = 0;
         int32_t carryOffY = 0;
         bool carriedOver = false;
@@ -5190,24 +5221,34 @@ bool GLBrushRenderer::stampLiquifySegmentGPU(TileGrid& strokeBuffer, GLTileRende
             const int32_t offX = oldRoiX - newRoiX; // >= 0 (new ROI ⊇ old)
             const int32_t offY = oldRoiY - newRoiY;
             if (offX >= 0 && offY >= 0 && offX + oldRoiW <= newRoiW && offY + oldRoiH <= newRoiH) {
-                m_gl->glCopyImageSubData(m_liquifyFieldTex[m_liquifyFieldSrcIdx], GL_TEXTURE_2D, 0,
-                    0, 0, 0, newField0, GL_TEXTURE_2D, 0, offX, offY, 0, oldRoiW, oldRoiH, 1);
+                const int migrationDstIdx = reuseStorage ? (oldFieldSrcIdx ^ 1) : 0;
+                const GLuint migrationDst = migrationDstIdx == 0 ? newField0 : newField1;
+                clearFieldRegion(migrationDst);
+                const GLuint migrationSrc
+                    = oldFieldSrcIdx == 0 ? oldFieldTex0 : oldFieldTex1;
+                m_gl->glCopyImageSubData(migrationSrc, GL_TEXTURE_2D, 0, 0, 0, 0, migrationDst,
+                    GL_TEXTURE_2D, 0, offX, offY, 0, oldRoiW, oldRoiH, 1);
+                m_liquifyFieldSrcIdx = migrationDstIdx;
                 carryOffX = offX;
                 carryOffY = offY;
                 carriedOver = true;
             }
         }
+        if (!carriedOver) {
+            m_liquifyFieldSrcIdx = 0;
+            clearFieldRegion(newField0);
+        }
 
         m_liquifyFieldTex[0] = newField0;
         m_liquifyFieldTex[1] = newField1;
         m_liquifySourceTex = newSource;
-        m_liquifyFieldSrcIdx = 0; // migrated content lives in field[0]
+        m_liquifySourceFormat = liquifyContentFormat;
         m_liquifyRoiX = newRoiX;
         m_liquifyRoiY = newRoiY;
         m_liquifyRoiW = newRoiW;
         m_liquifyRoiH = newRoiH;
-        m_liquifyTexW = newRoiW;
-        m_liquifyTexH = newRoiH;
+        m_liquifyTexW = newTexW;
+        m_liquifyTexH = newTexH;
         roiX = newRoiX;
         roiY = newRoiY;
         roiW = newRoiW;
@@ -5215,14 +5256,14 @@ bool GLBrushRenderer::stampLiquifySegmentGPU(TileGrid& strokeBuffer, GLTileRende
 
         // Snapshot the frozen source (the original layer over the full ROI). The
         // layer is unmodified until the stroke flattens, so this stays valid.
-        clearTexture(m_liquifySourceTex, layerGrid ? layerGrid->defaultFillPacked() : 0u);
+        clearSourceRegion();
 
         // The previous snapshot is still valid content (the layer cannot change
         // mid-stroke), so carry it over as one blit and let the tile loop below
         // fill only the newly exposed band. Without this, every ROI growth
         // re-copies every tile under the (ever larger) ROI.
-        const bool sourceCarried
-            = carriedOver && oldSourceTex != 0 && oldSourceFormat == liquifyContentFormat;
+        const bool sourceCarried = carriedOver && !reuseStorage && oldSourceTex != 0
+            && oldSourceFormat == liquifyContentFormat;
         if (sourceCarried) {
             m_gl->glCopyImageSubData(oldSourceTex, GL_TEXTURE_2D, 0, 0, 0, 0, m_liquifySourceTex,
                 GL_TEXTURE_2D, 0, carryOffX, carryOffY, 0, oldRoiW, oldRoiH, 1);
@@ -5278,7 +5319,7 @@ bool GLBrushRenderer::stampLiquifySegmentGPU(TileGrid& strokeBuffer, GLTileRende
 
         // Old textures were read above (field migration + source carry-over), so
         // they can only be released now.
-        if (haveField) {
+        if (!reuseStorage && haveField) {
             if (oldFieldTex0)
                 m_gl->glDeleteTextures(1, &oldFieldTex0);
             if (oldFieldTex1)
@@ -5289,8 +5330,12 @@ bool GLBrushRenderer::stampLiquifySegmentGPU(TileGrid& strokeBuffer, GLTileRende
     }
     m_liquifyActive = true;
 
-    const float invFieldW = 1.0f / static_cast<float>(roiW);
-    const float invFieldH = 1.0f / static_cast<float>(roiH);
+    const float invFieldW = 1.0f / static_cast<float>(m_liquifyTexW);
+    const float invFieldH = 1.0f / static_cast<float>(m_liquifyTexH);
+    const float maxValidFieldU
+        = (static_cast<float>(roiW) - 0.5f) / static_cast<float>(m_liquifyTexW);
+    const float maxValidFieldV
+        = (static_cast<float>(roiH) - 0.5f) / static_cast<float>(m_liquifyTexH);
 
     // Optional selection mask snapshot over the full field ROI.
     if (useSelectionMask) {
@@ -5350,8 +5395,9 @@ bool GLBrushRenderer::stampLiquifySegmentGPU(TileGrid& strokeBuffer, GLTileRende
     m_liquifyFieldProgram->setUniform("uMaskTexture", 2);
     m_liquifyFieldProgram->setUniform("uUseMask", useSelectionMask ? 1 : 0);
     m_liquifyFieldProgram->setUniform("uInvFieldSize", invFieldW, invFieldH);
-    m_liquifyFieldProgram->setUniform("uInvMaskSize", invFieldW, invFieldH);
-    m_liquifyFieldProgram->setUniform("uMaxValidUv", 1.0f, 1.0f);
+    m_liquifyFieldProgram->setUniform(
+        "uInvMaskSize", 1.0f / static_cast<float>(roiW), 1.0f / static_cast<float>(roiH));
+    m_liquifyFieldProgram->setUniform("uMaxValidUv", maxValidFieldU, maxValidFieldV);
     m_liquifyFieldProgram->setUniform(
         "uViewportSize", static_cast<float>(roiW), static_cast<float>(roiH));
     if (useSelectionMask) {
@@ -5495,7 +5541,7 @@ bool GLBrushRenderer::stampLiquifySegmentGPU(TileGrid& strokeBuffer, GLTileRende
     m_liquifyResolveProgram->setUniform("uSourceTexture", 0);
     m_liquifyResolveProgram->setUniform("uFieldTex", 1);
     m_liquifyResolveProgram->setUniform("uInvFieldSize", invFieldW, invFieldH);
-    m_liquifyResolveProgram->setUniform("uMaxValidUv", 1.0f, 1.0f);
+    m_liquifyResolveProgram->setUniform("uMaxValidUv", maxValidFieldU, maxValidFieldV);
     m_liquifyResolveProgram->setUniform(
         "uFieldOffset", static_cast<float>(fpMinX - roiX), static_cast<float>(fpMinY - roiY));
     m_liquifyResolveProgram->setUniform(
