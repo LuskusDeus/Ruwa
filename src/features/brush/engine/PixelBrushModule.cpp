@@ -180,7 +180,7 @@ BrushDynamicsModel deserializeDynamicsBindings(const QVariant& value)
             }
 
             auto& binding = dynamics.slotForSetting(dynamicsKey).binding(source);
-            binding.mode = normalizeBrushDynamicsBlendMode(dynamicsKey,
+            binding.mode = normalizeBrushDynamicsBlendMode(dynamicsKey, source,
                 brushDynamicsBlendModeFromName(
                     bindingMap.value(QStringLiteral("mode")).toString().toStdString()));
             binding.enabled = bindingMap.value(QStringLiteral("enabled"), binding.enabled).toBool();
@@ -365,8 +365,7 @@ QVector<BrushTabDef> pixelBrushTabDefinitions()
                     pressureTimeRandomDynamicsTarget(BrushDynamicsSettingKey::ShapeRoundness)),
                 sliderDef("shape.angle", QT_TR_NOOP("Angle"), 0.0f, 0.0f, 360.0f, 1.0f, 1, 0,
                     "\u00B0",
-                    pressureTimeRandomDynamicsTarget(BrushDynamicsSettingKey::ShapeAngle,
-                        { BrushDynamicsBlendMode::Add, BrushDynamicsBlendMode::Override })),
+                    pressureTimeRandomDynamicsTarget(BrushDynamicsSettingKey::ShapeAngle)),
                 toggleDef("shape.brushFeather", QT_TR_NOOP("Brush Feather"), true,
                     QT_TR_NOOP("Slight edge softening so brush is not pixel-perfect")),
             } },
@@ -376,8 +375,7 @@ QVector<BrushTabDef> pixelBrushTabDefinitions()
                     static_cast<int>(ruwa::core::layers::BlendMode::Normal),
                     layerBlendModeOptions()),
                 sliderDef("color.hue", QT_TR_NOOP("HUE"), 0.0f, 0.0f, 360.0f, 1.0f, 1, 0, "\u00B0",
-                    pressureTimeRandomDynamicsTarget(BrushDynamicsSettingKey::ColorHue,
-                        { BrushDynamicsBlendMode::Add, BrushDynamicsBlendMode::Override })),
+                    pressureTimeRandomDynamicsTarget(BrushDynamicsSettingKey::ColorHue)),
                 sliderDef("color.lightness", QT_TR_NOOP("Lightness"), 1.0f, 0.0f, 2.0f, 0.01f, 100,
                     0, "%",
                     pressureTimeRandomDynamicsTarget(BrushDynamicsSettingKey::ColorLightness)),

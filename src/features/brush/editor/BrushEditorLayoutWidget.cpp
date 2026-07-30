@@ -236,7 +236,8 @@ ruwa::core::brushes::BrushDynamicsSlot defaultDynamicsSlotForSetting(const QStri
     auto& binding = slot.binding(ruwa::core::brushes::BrushInputSourceKey::TabletPressure);
     binding.setting = slot.setting;
     binding.source = ruwa::core::brushes::BrushInputSourceKey::TabletPressure;
-    binding.mode = ruwa::core::brushes::defaultBrushDynamicsBlendMode(slot.setting);
+    binding.mode = ruwa::core::brushes::defaultBrushDynamicsBlendMode(
+        slot.setting, binding.source);
     if (slot.setting == ruwa::core::brushes::BrushDynamicsSettingKey::ShapeAngle
         || slot.setting == ruwa::core::brushes::BrushDynamicsSettingKey::ColorHue) {
         binding.curve.points = {
@@ -1135,11 +1136,6 @@ BrushEditorLayoutWidget::BrushDynamicTargetDef BrushEditorLayoutWidget::dynamics
         if (!ruwa::core::brushes::supportsBrushDynamicsSetting(dynamicsKey)) {
             return {};
         }
-        if (dynamicsKey == ruwa::core::brushes::BrushDynamicsSettingKey::ShapeAngle) {
-            return ruwa::core::brushes::pressureTimeRandomDynamicsTarget(dynamicsKey,
-                { ruwa::core::brushes::BrushDynamicsBlendMode::Add,
-                    ruwa::core::brushes::BrushDynamicsBlendMode::Override });
-        }
         return ruwa::core::brushes::pressureTimeRandomDynamicsTarget(dynamicsKey);
     };
     if (!module) {
@@ -1168,18 +1164,14 @@ bool BrushEditorLayoutWidget::applyDynamicsSlotForSetting(
         auto& binding = normalizedSlot.bindings[sourceIndex];
         binding.setting = dynamicsKey;
         binding.source = ruwa::core::brushes::brushInputSourceFromIndex(sourceIndex);
+        binding.mode = ruwa::core::brushes::normalizeBrushDynamicsBlendMode(
+            dynamicsKey, binding.source, binding.mode);
         if (binding.source == ruwa::core::brushes::BrushInputSourceKey::RandomValue) {
-            binding.mode = ruwa::core::brushes::BrushDynamicsBlendMode::Add;
             if (binding.enabled || binding.hasStoredCurve()) {
-                ruwa::core::brushes::setBrushDynamicsRandomAmount(
-                    binding, ruwa::core::brushes::brushDynamicsRandomAmount(binding));
+                const auto range = ruwa::core::brushes::brushDynamicsRandomRange(binding);
+                ruwa::core::brushes::setBrushDynamicsRandomRange(
+                    binding, range.minimum, range.maximum);
             }
-        } else if (binding.source == ruwa::core::brushes::BrushInputSourceKey::StrokeDirection
-            && dynamicsKey == ruwa::core::brushes::BrushDynamicsSettingKey::ShapeAngle) {
-            binding.mode = ruwa::core::brushes::BrushDynamicsBlendMode::Override;
-        } else {
-            binding.mode
-                = ruwa::core::brushes::normalizeBrushDynamicsBlendMode(dynamicsKey, binding.mode);
         }
         binding.durationSec
             = ruwa::core::brushes::clampBrushTimeDurationSeconds(binding.durationSec);

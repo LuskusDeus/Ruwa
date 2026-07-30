@@ -157,6 +157,15 @@ public:
         update();
     }
 
+    void setSuppressedByOverride(bool suppressed)
+    {
+        if (m_suppressedByOverride == suppressed) {
+            return;
+        }
+        m_suppressedByOverride = suppressed;
+        update();
+    }
+
 protected:
     void mousePressEvent(QMouseEvent* event) override
     {
@@ -220,8 +229,15 @@ protected:
         const QRectF iconRect(iconLeft, (height() - iconSize) * 0.5, iconSize, iconSize);
         drawSourceIcon(painter, iconRect, textColor);
 
-        painter.drawText(rect().adjusted(theme.scaled(29), 0, -theme.scaled(10), 0),
+        const int rightMargin = theme.scaled(10);
+        const int warningWidth = m_suppressedByOverride ? theme.scaled(10) : 0;
+        painter.drawText(rect().adjusted(
+                             theme.scaled(29), 0, -(rightMargin + warningWidth), 0),
             Qt::AlignLeft | Qt::AlignVCenter, text());
+        if (m_suppressedByOverride) {
+            painter.drawText(rect().adjusted(0, 0, -rightMargin, 0),
+                Qt::AlignRight | Qt::AlignVCenter, QStringLiteral("!"));
+        }
     }
 
 private:
@@ -249,6 +265,7 @@ private:
 private:
     SourceIcon m_icon = SourceIcon::Pressure;
     bool m_available = true;
+    bool m_suppressedByOverride = false;
 };
 
 QVector<ruwa::ui::widgets::CurveEditorWidget::Point> curveEditorPointsFromBinding(
@@ -308,7 +325,8 @@ BrushEditorParameterOverlay::BrushDynamicsBinding BrushEditorParameterOverlay::d
     BrushDynamicsBinding binding;
     binding.setting = setting;
     binding.source = BrushInputSourceKey::Time;
-    binding.mode = ruwa::core::brushes::defaultBrushDynamicsBlendMode(setting);
+    binding.mode
+        = ruwa::core::brushes::defaultBrushDynamicsBlendMode(setting, binding.source);
     binding.enabled = false;
     binding.durationSec = 1.0f;
     binding.endAction = BrushTimeEndAction::Stop;
@@ -333,9 +351,10 @@ BrushEditorParameterOverlay::BrushDynamicsBinding BrushEditorParameterOverlay::d
     BrushDynamicsBinding binding;
     binding.setting = setting;
     binding.source = BrushInputSourceKey::RandomValue;
-    binding.mode = BrushDynamicsBlendMode::Add;
+    binding.mode
+        = ruwa::core::brushes::defaultBrushDynamicsBlendMode(setting, binding.source);
     binding.enabled = false;
-    ruwa::core::brushes::setBrushDynamicsRandomAmount(binding, 0.0f);
+    ruwa::core::brushes::setBrushDynamicsRandomRange(binding, 0.0f, 0.0f);
     return binding;
 }
 
@@ -346,9 +365,8 @@ BrushEditorParameterOverlay::defaultStrokeDirectionBinding(
     BrushDynamicsBinding binding;
     binding.setting = setting;
     binding.source = BrushInputSourceKey::StrokeDirection;
-    binding.mode = (setting == BrushDynamicsSettingKey::ShapeAngle)
-        ? BrushDynamicsBlendMode::Override
-        : ruwa::core::brushes::defaultBrushDynamicsBlendMode(setting);
+    binding.mode
+        = ruwa::core::brushes::defaultBrushDynamicsBlendMode(setting, binding.source);
     binding.enabled = false;
     if (setting == BrushDynamicsSettingKey::ShapeAngle) {
         binding.curve.points = {
@@ -368,15 +386,8 @@ BrushEditorParameterOverlay::defaultStrokeDirectionBinding(
 BrushEditorParameterOverlay::BrushDynamicsBinding BrushEditorParameterOverlay::displayBinding(
     BrushDynamicsBinding binding) const
 {
-    if (binding.source == BrushInputSourceKey::RandomValue) {
-        binding.mode = BrushDynamicsBlendMode::Add;
-    } else if (binding.source == BrushInputSourceKey::StrokeDirection
-        && binding.setting == BrushDynamicsSettingKey::ShapeAngle) {
-        binding.mode = BrushDynamicsBlendMode::Override;
-    } else {
-        binding.mode
-            = ruwa::core::brushes::normalizeBrushDynamicsBlendMode(binding.setting, binding.mode);
-    }
+    binding.mode = ruwa::core::brushes::normalizeBrushDynamicsBlendMode(
+        binding.setting, binding.source, binding.mode);
     if (binding.source == BrushInputSourceKey::Time) {
         if (!binding.hasStoredCurve()) {
             auto fallback = defaultTimeBinding(binding.setting);
@@ -392,16 +403,24 @@ BrushEditorParameterOverlay::BrushDynamicsBinding BrushEditorParameterOverlay::d
             binding.endAction = BrushTimeEndAction::Stop;
         }
     } else if (binding.source == BrushInputSourceKey::RandomValue) {
-        const float amount = ruwa::core::brushes::brushDynamicsRandomAmount(binding);
-        const bool enabled = binding.enabled;
-        binding = defaultRandomBinding(binding.setting);
-        binding.enabled = enabled;
-        ruwa::core::brushes::setBrushDynamicsRandomAmount(binding, amount);
+        if (!binding.hasStoredCurve()) {
+            auto fallback = defaultRandomBinding(binding.setting);
+            fallback.enabled = binding.enabled;
+            fallback.mode = binding.mode;
+            const float neutralValue
+                = binding.mode == BrushDynamicsBlendMode::Add ? 0.0f : 1.0f;
+            ruwa::core::brushes::setBrushDynamicsRandomRange(
+                fallback, neutralValue, neutralValue);
+            binding = fallback;
+        } else {
+            const auto range = ruwa::core::brushes::brushDynamicsRandomRange(binding);
+            ruwa::core::brushes::setBrushDynamicsRandomRange(
+                binding, range.minimum, range.maximum);
+        }
     } else if (binding.source == BrushInputSourceKey::StrokeDirection
         && !binding.hasStoredCurve()) {
         auto fallback = defaultStrokeDirectionBinding(binding.setting);
         fallback.enabled = binding.enabled;
-        fallback.mode = binding.mode;
         binding = fallback;
     }
     return binding;
@@ -424,7 +443,7 @@ BrushEditorParameterOverlay::CurveAxesConfig BrushEditorParameterOverlay::curveA
     return config;
 }
 
-int BrushEditorParameterOverlay::randomAmountSliderFactor() const
+int BrushEditorParameterOverlay::randomRangeSliderFactor() const
 {
     int factor = qMax(1, qRound(m_curveAxesConfig.verticalAxis.displayScale));
     for (int i = 0; i < m_curveAxesConfig.verticalAxis.displayDecimals; ++i) {
@@ -433,28 +452,28 @@ int BrushEditorParameterOverlay::randomAmountSliderFactor() const
     return factor;
 }
 
-int BrushEditorParameterOverlay::sliderValueFromRandomAmount(float amount) const
+int BrushEditorParameterOverlay::sliderValueFromRandomRangeValue(float value) const
 {
-    return qRound(ruwa::core::brushes::clampRange(amount, 0.0f,
-                      ruwa::core::brushes::brushDynamicsRandomAmountMax(m_slot.setting))
-        * static_cast<float>(randomAmountSliderFactor()));
+    return qRound(value * static_cast<float>(randomRangeSliderFactor()));
 }
 
-float BrushEditorParameterOverlay::randomAmountFromSliderValue(int sliderValue) const
+float BrushEditorParameterOverlay::randomRangeValueFromSliderValue(int sliderValue) const
 {
-    return ruwa::core::brushes::clampRange(
-        static_cast<float>(sliderValue) / static_cast<float>(randomAmountSliderFactor()), 0.0f,
-        ruwa::core::brushes::brushDynamicsRandomAmountMax(m_slot.setting));
+    return static_cast<float>(sliderValue) / static_cast<float>(randomRangeSliderFactor());
 }
 
-QString BrushEditorParameterOverlay::formatRandomAmount(float amount) const
+QString BrushEditorParameterOverlay::formatRandomRange(
+    const ruwa::core::brushes::BrushDynamicsRandomRange& range) const
 {
     const auto& axis = m_curveAxesConfig.verticalAxis;
     QString suffix = axis.suffix;
     if (suffix.isEmpty() && qRound(axis.displayScale) == 100) {
         suffix = QStringLiteral("%");
     }
-    return QLocale().toString(amount * axis.displayScale, 'f', axis.displayDecimals) + suffix;
+    const auto formatValue = [&axis, &suffix](float value) {
+        return QLocale().toString(value * axis.displayScale, 'f', axis.displayDecimals) + suffix;
+    };
+    return QStringLiteral("%1 – %2").arg(formatValue(range.minimum), formatValue(range.maximum));
 }
 
 widgets::ToggleSwitch* BrushEditorParameterOverlay::activeToggle() const
@@ -474,10 +493,7 @@ widgets::ToggleSwitch* BrushEditorParameterOverlay::activeToggle() const
 widgets::SegmentedOptionSelector* BrushEditorParameterOverlay::activeModeSelector() const
 {
     if (m_activeSource == BrushInputSourceKey::RandomValue) {
-        return nullptr;
-    }
-    if (isShapeAngleStrokeDirection()) {
-        return nullptr;
+        return m_randomModeSelector;
     }
     if (m_activeSource == BrushInputSourceKey::StrokeDirection) {
         return m_directionModeSelector;
@@ -488,9 +504,6 @@ widgets::SegmentedOptionSelector* BrushEditorParameterOverlay::activeModeSelecto
 widgets::CurveEditorWidget* BrushEditorParameterOverlay::activeCurveEditor() const
 {
     if (m_activeSource == BrushInputSourceKey::RandomValue) {
-        return nullptr;
-    }
-    if (isShapeAngleStrokeDirection()) {
         return nullptr;
     }
     if (m_activeSource == BrushInputSourceKey::StrokeDirection) {
@@ -755,26 +768,42 @@ BrushEditorParameterOverlay::BrushEditorParameterOverlay(QWidget* parent)
     randomToggleLayout->addStretch();
     randomToggleLayout->addWidget(m_randomToggle);
 
-    auto* randomAmountRow = new QWidget(m_randomPage);
-    makeWidgetTransparent(randomAmountRow);
-    auto* randomAmountLayout = new QHBoxLayout(randomAmountRow);
-    randomAmountLayout->setContentsMargins(0, 0, 0, 0);
-    randomAmountLayout->setSpacing(ThemeManager::instance().scaled(12));
-    m_randomAmountLabel = new QLabel(randomAmountRow);
-    m_randomAmountLabel->setObjectName(
-        QStringLiteral("brush_editor_parameter_overlay_random_amount_label"));
-    m_randomAmountSlider = new widgets::ProgressHandleSlider(randomAmountRow);
-    m_randomAmountSlider->setOrientation(Qt::Horizontal);
-    m_randomAmountSlider->setShowValueText(true);
-    m_randomAmountSlider->setValueDisplayMode(
+    auto* randomModeRow = new QWidget(m_randomPage);
+    makeWidgetTransparent(randomModeRow);
+    auto* randomModeLayout = new QHBoxLayout(randomModeRow);
+    randomModeLayout->setContentsMargins(0, 0, 0, 0);
+    randomModeLayout->setSpacing(ThemeManager::instance().scaled(10));
+    m_randomModeLabel = new QLabel(randomModeRow);
+    m_randomModeLabel->setObjectName(
+        QStringLiteral("brush_editor_parameter_overlay_random_mode_label"));
+    m_randomModeSelector = new widgets::SegmentedOptionSelector(randomModeRow);
+    m_randomModeSelector->setDisplayMode(
+        widgets::SegmentedOptionSelector::DisplayMode::TextOnly);
+    randomModeLayout->addWidget(m_randomModeLabel);
+    randomModeLayout->addWidget(m_randomModeSelector, 1);
+
+    auto* randomRangeRow = new QWidget(m_randomPage);
+    makeWidgetTransparent(randomRangeRow);
+    auto* randomRangeLayout = new QHBoxLayout(randomRangeRow);
+    randomRangeLayout->setContentsMargins(0, 0, 0, 0);
+    randomRangeLayout->setSpacing(ThemeManager::instance().scaled(12));
+    m_randomRangeLabel = new QLabel(randomRangeRow);
+    m_randomRangeLabel->setObjectName(
+        QStringLiteral("brush_editor_parameter_overlay_random_range_label"));
+    m_randomRangeSlider = new widgets::ProgressHandleSlider(randomRangeRow);
+    m_randomRangeSlider->setRangeMode(true);
+    m_randomRangeSlider->setOrientation(Qt::Horizontal);
+    m_randomRangeSlider->setShowValueText(true);
+    m_randomRangeSlider->setValueDisplayMode(
         widgets::ProgressHandleSlider::ValueDisplayMode::RawValue);
-    m_randomAmountSlider->setValueTextPrefix(QString());
-    m_randomAmountSlider->setValueTextSuffix(QString());
-    randomAmountLayout->addWidget(m_randomAmountLabel, 1);
-    randomAmountLayout->addWidget(m_randomAmountSlider, 0);
+    m_randomRangeSlider->setValueTextPrefix(QString());
+    m_randomRangeSlider->setValueTextSuffix(QString());
+    randomRangeLayout->addWidget(m_randomRangeLabel, 1);
+    randomRangeLayout->addWidget(m_randomRangeSlider, 0);
 
     randomLayout->addWidget(randomToggleRow);
-    randomLayout->addWidget(randomAmountRow);
+    randomLayout->addWidget(randomModeRow);
+    randomLayout->addWidget(randomRangeRow);
     randomLayout->addStretch(1);
 
     m_directionPage = new QWidget(m_editorStack);
@@ -894,55 +923,29 @@ BrushEditorParameterOverlay::BrushEditorParameterOverlay(QWidget* parent)
         updateTexts();
         emit editingFinished();
     });
-    connect(m_modeSelector, &widgets::SegmentedOptionSelector::selectionChanged, this, [this]() {
-        if (m_syncingModeSelector) {
-            return;
-        }
-        auto binding = currentBinding();
-        const int index = m_modeSelector ? m_modeSelector->currentIndex() : 0;
-        const auto sourceDef = m_targetDef.sourceDef(m_activeSource);
-        if (!sourceDef.has_value() || index < 0 || index >= sourceDef->allowedBlendModes.size()) {
-            return;
-        }
-        binding.mode = sourceDef->allowedBlendModes[index];
-        binding.curve.normalize(binding.setting, binding.mode);
-        storeCurrentBinding(binding);
-        syncEditorFromCurrentBinding();
-    });
-    connect(
-        m_timeModeSelector, &widgets::SegmentedOptionSelector::selectionChanged, this, [this]() {
-            if (m_syncingModeSelector) {
-                return;
-            }
-            auto binding = currentBinding();
-            const int index = m_timeModeSelector ? m_timeModeSelector->currentIndex() : 0;
-            const auto sourceDef = m_targetDef.sourceDef(m_activeSource);
-            if (!sourceDef.has_value() || index < 0
-                || index >= sourceDef->allowedBlendModes.size()) {
-                return;
-            }
-            binding.mode = sourceDef->allowedBlendModes[index];
-            binding.curve.normalize(binding.setting, binding.mode);
-            storeCurrentBinding(binding);
-            syncEditorFromCurrentBinding();
-        });
-    connect(m_directionModeSelector, &widgets::SegmentedOptionSelector::selectionChanged, this,
-        [this]() {
-            if (m_syncingModeSelector) {
-                return;
-            }
-            auto binding = currentBinding();
-            const int index = m_directionModeSelector ? m_directionModeSelector->currentIndex() : 0;
-            const auto sourceDef = m_targetDef.sourceDef(m_activeSource);
-            if (!sourceDef.has_value() || index < 0
-                || index >= sourceDef->allowedBlendModes.size()) {
-                return;
-            }
-            binding.mode = sourceDef->allowedBlendModes[index];
-            binding.curve.normalize(binding.setting, binding.mode);
-            storeCurrentBinding(binding);
-            syncEditorFromCurrentBinding();
-        });
+    const auto connectModeSelector = [this](widgets::SegmentedOptionSelector* selector) {
+        connect(selector, &widgets::SegmentedOptionSelector::selectionChanged, this,
+            [this, selector]() {
+                if (m_syncingModeSelector) {
+                    return;
+                }
+                auto binding = currentBinding();
+                const int index = selector->currentIndex();
+                const auto sourceDef = m_targetDef.sourceDef(m_activeSource);
+                if (!sourceDef.has_value() || index < 0
+                    || index >= sourceDef->allowedBlendModes.size()) {
+                    return;
+                }
+                binding.mode = sourceDef->allowedBlendModes[index];
+                binding.curve.normalize(binding.setting, binding.mode);
+                storeCurrentBinding(binding);
+                syncEditorFromCurrentBinding();
+            });
+    };
+    connectModeSelector(m_modeSelector);
+    connectModeSelector(m_timeModeSelector);
+    connectModeSelector(m_randomModeSelector);
+    connectModeSelector(m_directionModeSelector);
     connect(m_curveEditor, &widgets::CurveEditorWidget::pointsChanged, this, [this]() {
         storeCurrentBinding(bindingFromCurveEditor(currentBinding(), m_curveEditor->points()));
     });
@@ -977,15 +980,16 @@ BrushEditorParameterOverlay::BrushEditorParameterOverlay(QWidget* parent)
         syncEditorFromCurrentBinding();
         emit editingFinished();
     });
-    connect(m_randomAmountSlider, &widgets::ProgressHandleSlider::valueChanged, this,
-        [this](int sliderValue) {
+    connect(m_randomRangeSlider, &widgets::ProgressHandleSlider::rangeValuesChanged, this,
+        [this](int lowerValue, int upperValue) {
             auto binding = currentBinding();
-            ruwa::core::brushes::setBrushDynamicsRandomAmount(
-                binding, randomAmountFromSliderValue(sliderValue));
+            ruwa::core::brushes::setBrushDynamicsRandomRange(binding,
+                randomRangeValueFromSliderValue(lowerValue),
+                randomRangeValueFromSliderValue(upperValue));
             storeCurrentBinding(binding);
             syncEditorFromCurrentBinding();
         });
-    connect(m_randomAmountSlider, &widgets::ProgressHandleSlider::sliderReleased, this,
+    connect(m_randomRangeSlider, &widgets::ProgressHandleSlider::sliderReleased, this,
         &BrushEditorParameterOverlay::editingFinished);
 
     if (parentWidget()) {
@@ -1186,12 +1190,6 @@ bool BrushEditorParameterOverlay::isSourceAvailable(BrushInputSourceKey source) 
     return sourceDef->available;
 }
 
-bool BrushEditorParameterOverlay::isShapeAngleStrokeDirection() const
-{
-    return m_activeSource == BrushInputSourceKey::StrokeDirection
-        && m_slot.setting == BrushDynamicsSettingKey::ShapeAngle;
-}
-
 BrushEditorParameterOverlay::BrushInputSourceKey BrushEditorParameterOverlay::fallbackSource() const
 {
     for (const auto& sourceDef : m_targetDef.sources) {
@@ -1271,7 +1269,8 @@ BrushEditorParameterOverlay::defaultBindingForSource(BrushInputSourceKey source)
     BrushDynamicsBinding binding;
     binding.setting = m_slot.setting;
     binding.source = BrushInputSourceKey::TabletPressure;
-    binding.mode = ruwa::core::brushes::defaultBrushDynamicsBlendMode(m_slot.setting);
+    binding.mode
+        = ruwa::core::brushes::defaultBrushDynamicsBlendMode(m_slot.setting, binding.source);
     if (m_slot.setting == BrushDynamicsSettingKey::ShapeAngle
         || m_slot.setting == BrushDynamicsSettingKey::ColorHue) {
         binding.curve.points = {
@@ -1312,16 +1311,12 @@ void BrushEditorParameterOverlay::storeCurrentBinding(
     auto normalized = binding;
     normalized.setting = m_slot.setting;
     normalized.source = binding.source;
+    normalized.mode = ruwa::core::brushes::normalizeBrushDynamicsBlendMode(
+        normalized.setting, normalized.source, normalized.mode);
     if (normalized.source == BrushInputSourceKey::RandomValue) {
-        normalized.mode = BrushDynamicsBlendMode::Add;
-        ruwa::core::brushes::setBrushDynamicsRandomAmount(
-            normalized, ruwa::core::brushes::brushDynamicsRandomAmount(normalized));
-    } else if (normalized.source == BrushInputSourceKey::StrokeDirection
-        && normalized.setting == BrushDynamicsSettingKey::ShapeAngle) {
-        normalized.mode = BrushDynamicsBlendMode::Override;
-    } else {
-        normalized.mode = ruwa::core::brushes::normalizeBrushDynamicsBlendMode(
-            normalized.setting, normalized.mode);
+        const auto range = ruwa::core::brushes::brushDynamicsRandomRange(normalized);
+        ruwa::core::brushes::setBrushDynamicsRandomRange(
+            normalized, range.minimum, range.maximum);
     }
     normalized.durationSec
         = ruwa::core::brushes::clampBrushTimeDurationSeconds(normalized.durationSec);
@@ -1340,6 +1335,7 @@ void BrushEditorParameterOverlay::storeCurrentBinding(
         }
     }
 
+    updateSourceButtons();
     if (emitSlotChanged) {
         emit slotChanged(m_settingKey, m_slot);
     }
@@ -1394,10 +1390,6 @@ void BrushEditorParameterOverlay::syncEditorFromCurrentBinding()
 
     if (m_directionCurveEditor) {
         syncCurveEditor(m_directionCurveEditor, directionBinding);
-        m_directionCurveEditor->setVisible(!isShapeAngleStrokeDirection());
-    }
-    if (m_directionModeLabel) {
-        m_directionModeLabel->setVisible(!isShapeAngleStrokeDirection());
     }
 
     if (auto* toggle = activeToggle()) {
@@ -1419,14 +1411,18 @@ void BrushEditorParameterOverlay::syncEditorFromCurrentBinding()
             m_timeEndActionCombo->setCurrentIndex(comboIndex);
         }
     }
-    if (m_randomAmountSlider) {
-        const QSignalBlocker blocker(m_randomAmountSlider);
-        const float amount = ruwa::core::brushes::brushDynamicsRandomAmount(randomBinding);
-        m_randomAmountSlider->setRange(0,
-            sliderValueFromRandomAmount(
-                ruwa::core::brushes::brushDynamicsRandomAmountMax(m_slot.setting)));
-        m_randomAmountSlider->setValue(sliderValueFromRandomAmount(amount));
-        m_randomAmountSlider->setCustomDisplayText(formatRandomAmount(amount));
+    if (m_randomRangeSlider) {
+        const QSignalBlocker blocker(m_randomRangeSlider);
+        const float minimum = ruwa::core::brushes::brushDynamicsBindingValueMin(
+            randomBinding.setting, randomBinding.mode);
+        const float maximum = ruwa::core::brushes::brushDynamicsBindingValueMax(
+            randomBinding.setting, randomBinding.mode);
+        const auto range = ruwa::core::brushes::brushDynamicsRandomRange(randomBinding);
+        m_randomRangeSlider->setRange(sliderValueFromRandomRangeValue(minimum),
+            sliderValueFromRandomRangeValue(maximum));
+        m_randomRangeSlider->setRangeValues(sliderValueFromRandomRangeValue(range.minimum),
+            sliderValueFromRandomRangeValue(range.maximum));
+        m_randomRangeSlider->setCustomDisplayText(formatRandomRange(range));
     }
 
     updateModeSelector();
@@ -1438,6 +1434,8 @@ void BrushEditorParameterOverlay::updateModeSelector()
     QLabel* modeLabel = m_modeLabel;
     if (m_activeSource == BrushInputSourceKey::Time) {
         modeLabel = m_timeModeLabel;
+    } else if (m_activeSource == BrushInputSourceKey::RandomValue) {
+        modeLabel = m_randomModeLabel;
     } else if (m_activeSource == BrushInputSourceKey::StrokeDirection) {
         modeLabel = m_directionModeLabel;
     }
@@ -1568,9 +1566,13 @@ void BrushEditorParameterOverlay::updateTexts()
         m_randomEnabledLabel->setText(
             QCoreApplication::translate("BrushEditorParameterOverlay", "Enabled"));
     }
-    if (m_randomAmountLabel) {
-        m_randomAmountLabel->setText(
-            QCoreApplication::translate("BrushEditorParameterOverlay", "Amount"));
+    if (m_randomModeLabel) {
+        m_randomModeLabel->setText(
+            QCoreApplication::translate("BrushEditorParameterOverlay", "Mode"));
+    }
+    if (m_randomRangeLabel) {
+        m_randomRangeLabel->setText(
+            QCoreApplication::translate("BrushEditorParameterOverlay", "Range"));
     }
     if (m_directionEnabledLabel) {
         m_directionEnabledLabel->setText(
@@ -1584,6 +1586,13 @@ void BrushEditorParameterOverlay::updateTexts()
 
 void BrushEditorParameterOverlay::updateSourceButtons()
 {
+    const auto* overrideBinding = m_slot.activeOverrideBinding();
+    const auto isSuppressedByOverride
+        = [this, overrideBinding](BrushInputSourceKey source) {
+              return overrideBinding && overrideBinding->source != source
+                  && m_slot.binding(source).isActive();
+          };
+
     if (auto* tabletPressureButton
         = static_cast<BrushEditorOverlaySourceButton*>(m_tabletPressureButton)) {
         const bool enabled = m_targetDef.sourceDef(BrushInputSourceKey::TabletPressure).has_value()
@@ -1591,6 +1600,8 @@ void BrushEditorParameterOverlay::updateSourceButtons()
         tabletPressureButton->setVisible(true);
         tabletPressureButton->setEnabled(true);
         tabletPressureButton->setSourceAvailable(enabled);
+        tabletPressureButton->setSuppressedByOverride(
+            isSuppressedByOverride(BrushInputSourceKey::TabletPressure));
         tabletPressureButton->setActive(
             enabled && m_activeSource == BrushInputSourceKey::TabletPressure);
     }
@@ -1600,6 +1611,8 @@ void BrushEditorParameterOverlay::updateSourceButtons()
         timeButton->setVisible(true);
         timeButton->setEnabled(true);
         timeButton->setSourceAvailable(enabled);
+        timeButton->setSuppressedByOverride(
+            isSuppressedByOverride(BrushInputSourceKey::Time));
         timeButton->setActive(enabled && m_activeSource == BrushInputSourceKey::Time);
     }
     if (auto* randomButton = static_cast<BrushEditorOverlaySourceButton*>(m_randomButton)) {
@@ -1608,6 +1621,8 @@ void BrushEditorParameterOverlay::updateSourceButtons()
         randomButton->setVisible(true);
         randomButton->setEnabled(true);
         randomButton->setSourceAvailable(enabled);
+        randomButton->setSuppressedByOverride(
+            isSuppressedByOverride(BrushInputSourceKey::RandomValue));
         randomButton->setActive(enabled && m_activeSource == BrushInputSourceKey::RandomValue);
     }
     if (auto* directionButton = static_cast<BrushEditorOverlaySourceButton*>(m_directionButton)) {
@@ -1616,6 +1631,8 @@ void BrushEditorParameterOverlay::updateSourceButtons()
         directionButton->setVisible(true);
         directionButton->setEnabled(true);
         directionButton->setSourceAvailable(enabled);
+        directionButton->setSuppressedByOverride(
+            isSuppressedByOverride(BrushInputSourceKey::StrokeDirection));
         directionButton->setActive(
             enabled && m_activeSource == BrushInputSourceKey::StrokeDirection);
     }
@@ -1708,8 +1725,11 @@ void BrushEditorParameterOverlay::updateStyles()
     if (m_randomEnabledLabel) {
         m_randomEnabledLabel->setFont(sectionFont);
     }
-    if (m_randomAmountLabel) {
-        m_randomAmountLabel->setFont(sectionFont);
+    if (m_randomModeLabel) {
+        m_randomModeLabel->setFont(sectionFont);
+    }
+    if (m_randomRangeLabel) {
+        m_randomRangeLabel->setFont(sectionFont);
     }
     if (m_directionEnabledLabel) {
         m_directionEnabledLabel->setFont(sectionFont);
@@ -1769,11 +1789,16 @@ void BrushEditorParameterOverlay::updateStyles()
             QStringLiteral("QLabel { background: transparent; color: %1; }")
                 .arg(colors.text.name(QColor::HexArgb)));
     }
-    if (m_randomAmountLabel) {
-        m_randomAmountLabel->setStyleSheet(
+    if (m_randomModeLabel) {
+        m_randomModeLabel->setStyleSheet(
             QStringLiteral("QLabel { background: transparent; color: %1; }")
                 .arg(colors.text.name(QColor::HexArgb)));
-        m_randomAmountLabel->setMinimumWidth(theme.scaled(92));
+    }
+    if (m_randomRangeLabel) {
+        m_randomRangeLabel->setStyleSheet(
+            QStringLiteral("QLabel { background: transparent; color: %1; }")
+                .arg(colors.text.name(QColor::HexArgb)));
+        m_randomRangeLabel->setMinimumWidth(theme.scaled(92));
     }
     if (m_directionEnabledLabel) {
         m_directionEnabledLabel->setStyleSheet(
@@ -1842,11 +1867,11 @@ void BrushEditorParameterOverlay::updateStyles()
         m_timeDurationSlider->setFixedWidth(timeControlWidth);
         m_timeDurationSlider->setSizePolicy(QSizePolicy::Fixed, QSizePolicy::Fixed);
     }
-    if (m_randomAmountSlider) {
-        m_randomAmountSlider->setMinimumHeight(theme.scaled(22));
-        m_randomAmountSlider->setMaximumHeight(theme.scaled(22));
-        m_randomAmountSlider->setFixedWidth(timeControlWidth);
-        m_randomAmountSlider->setSizePolicy(QSizePolicy::Fixed, QSizePolicy::Fixed);
+    if (m_randomRangeSlider) {
+        m_randomRangeSlider->setMinimumHeight(theme.scaled(22));
+        m_randomRangeSlider->setMaximumHeight(theme.scaled(22));
+        m_randomRangeSlider->setFixedWidth(timeControlWidth);
+        m_randomRangeSlider->setSizePolicy(QSizePolicy::Fixed, QSizePolicy::Fixed);
     }
     if (m_timeEndActionCombo) {
         m_timeEndActionCombo->setFixedHeight(theme.scaled(24));

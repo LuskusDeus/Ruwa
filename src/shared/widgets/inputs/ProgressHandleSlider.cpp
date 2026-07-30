@@ -13,6 +13,8 @@
 #include <QTabletEvent>
 #include <QVariantAnimation>
 
+#include <cmath>
+
 namespace ruwa::ui::widgets {
 
 ProgressHandleSlider::ProgressHandleSlider(QWidget* parent)
@@ -52,6 +54,15 @@ void ProgressHandleSlider::setRange(int minimum, int maximum)
     m_minimum = minimum;
     m_maximum = maximum;
     setValue(qBound(m_minimum, m_value, m_maximum));
+    if (m_rangeMode) {
+        setRangeValues(m_lowerValue, m_upperValue);
+    } else {
+        m_lowerValue = qBound(m_minimum, m_lowerValue, m_maximum);
+        m_upperValue = qBound(m_minimum, m_upperValue, m_maximum);
+        if (m_lowerValue > m_upperValue) {
+            qSwap(m_lowerValue, m_upperValue);
+        }
+    }
     update();
 }
 
@@ -64,6 +75,34 @@ void ProgressHandleSlider::setValue(int value)
 
     m_value = boundedValue;
     emit valueChanged(m_value);
+    update();
+}
+
+void ProgressHandleSlider::setRangeMode(bool enabled)
+{
+    if (m_rangeMode == enabled) {
+        return;
+    }
+
+    m_rangeMode = enabled;
+    m_activeRangeHandle = RangeHandle::None;
+    update();
+}
+
+void ProgressHandleSlider::setRangeValues(int lowerValue, int upperValue)
+{
+    int boundedLower = qBound(m_minimum, lowerValue, m_maximum);
+    int boundedUpper = qBound(m_minimum, upperValue, m_maximum);
+    if (boundedLower > boundedUpper) {
+        qSwap(boundedLower, boundedUpper);
+    }
+    if (m_lowerValue == boundedLower && m_upperValue == boundedUpper) {
+        return;
+    }
+
+    m_lowerValue = boundedLower;
+    m_upperValue = boundedUpper;
+    emit rangeValuesChanged(m_lowerValue, m_upperValue);
     update();
 }
 
@@ -247,35 +286,50 @@ void ProgressHandleSlider::paintEvent(QPaintEvent* event)
         p.drawRoundedRect(progress, trackRadius, trackRadius);
     }
 
-    const QRectF handle = handleRect(track, progress);
-    const qreal handleRadius = qMax<qreal>(1.2, qMin(handle.width(), handle.height()) * 0.45);
-
-    QColor handleOnFilled = colors.textOnPrimary();
-    QColor handleOnEmpty = colors.text;
-    if (m_orientation == Qt::Vertical) {
-        qSwap(handleOnFilled, handleOnEmpty);
-    }
-    qreal transitionCenter = 0.0;
-    qreal handleCenter = 0.0;
-    qreal transitionWidth = 1.0;
-    if (m_orientation == Qt::Horizontal) {
-        transitionCenter = progress.right();
-        handleCenter = handle.center().x();
-        transitionWidth = qMax<qreal>(1.0, handle.width() * 0.75);
+    if (m_rangeMode) {
+        const QRectF lowerHandle = rangeHandleRect(track, progress, true);
+        const QRectF upperHandle = rangeHandleRect(track, progress, false);
+        const auto drawRangeHandle = [&p, &colors](const QRectF& handle) {
+            const qreal radius
+                = qMax<qreal>(1.2, qMin(handle.width(), handle.height()) * 0.45);
+            p.setBrush(colors.textOnPrimary());
+            p.setPen(QPen(colors.shadow(70), 1.0));
+            p.drawRoundedRect(handle, radius, radius);
+        };
+        drawRangeHandle(lowerHandle);
+        drawRangeHandle(upperHandle);
     } else {
-        // Vertical slider fills bottom -> top, so compare against progress top edge.
-        transitionCenter = progress.top();
-        handleCenter = handle.center().y();
-        transitionWidth = qMax<qreal>(1.0, handle.height() * 0.75);
-    }
-    const qreal transition = qBound(
-        0.0, (handleCenter - (transitionCenter - transitionWidth)) / (transitionWidth * 2.0), 1.0);
-    QColor handleColor
-        = ruwa::ui::core::ThemeColors::interpolate(handleOnFilled, handleOnEmpty, transition);
+        const QRectF handle = handleRect(track, progress);
+        const qreal handleRadius
+            = qMax<qreal>(1.2, qMin(handle.width(), handle.height()) * 0.45);
 
-    p.setBrush(handleColor);
-    p.setPen(QPen(colors.shadow(70), 1.0));
-    p.drawRoundedRect(handle, handleRadius, handleRadius);
+        QColor handleOnFilled = colors.textOnPrimary();
+        QColor handleOnEmpty = colors.text;
+        if (m_orientation == Qt::Vertical) {
+            qSwap(handleOnFilled, handleOnEmpty);
+        }
+        qreal transitionCenter = 0.0;
+        qreal handleCenter = 0.0;
+        qreal transitionWidth = 1.0;
+        if (m_orientation == Qt::Horizontal) {
+            transitionCenter = progress.right();
+            handleCenter = handle.center().x();
+            transitionWidth = qMax<qreal>(1.0, handle.width() * 0.75);
+        } else {
+            // Vertical slider fills bottom -> top, so compare against progress top edge.
+            transitionCenter = progress.top();
+            handleCenter = handle.center().y();
+            transitionWidth = qMax<qreal>(1.0, handle.height() * 0.75);
+        }
+        const qreal transition = qBound(0.0,
+            (handleCenter - (transitionCenter - transitionWidth)) / (transitionWidth * 2.0), 1.0);
+        QColor handleColor
+            = ruwa::ui::core::ThemeColors::interpolate(handleOnFilled, handleOnEmpty, transition);
+
+        p.setBrush(handleColor);
+        p.setPen(QPen(colors.shadow(70), 1.0));
+        p.drawRoundedRect(handle, handleRadius, handleRadius);
+    }
 
     if (m_showValueText && m_orientation == Qt::Horizontal) {
         QFont valueFont = font();
@@ -295,18 +349,12 @@ void ProgressHandleSlider::paintEvent(QPaintEvent* event)
                 textOnEmpty, colors.textMuted, 0.15 * (1.0 - m_hoverProgress));
         }
 
-        // Draw text color for empty part of the track.
-        p.save();
-        p.setClipRect(QRectF(progress.right(), track.top(),
-            qMax<qreal>(0.0, track.right() - progress.right()), track.height()));
+        // Draw the empty-track text first, then overlay the selected range in primary colors.
         p.setPen(textOnEmpty);
         p.drawText(textRect, Qt::AlignRight | Qt::AlignVCenter, text);
-        p.restore();
 
-        // Draw text color for filled primary part of the track.
         p.save();
-        p.setClipRect(QRectF(track.left(), track.top(),
-            qMax<qreal>(0.0, progress.right() - track.left()), track.height()));
+        p.setClipRect(progress);
         p.setPen(textOnFilled);
         p.drawText(textRect, Qt::AlignRight | Qt::AlignVCenter, text);
         p.restore();
@@ -320,6 +368,9 @@ void ProgressHandleSlider::tabletEvent(QTabletEvent* event)
         m_dragging = true;
         m_tabletDragActive = true;
         setFocus(Qt::OtherFocusReason);
+        if (m_rangeMode) {
+            selectNearestRangeHandle(event->position());
+        }
         emit sliderPressed();
         setValueFromPosition(event->position());
         event->accept();
@@ -336,6 +387,7 @@ void ProgressHandleSlider::tabletEvent(QTabletEvent* event)
             m_dragging = false;
             m_tabletDragActive = false;
             setValueFromPosition(event->position());
+            m_activeRangeHandle = RangeHandle::None;
             emit sliderReleased();
             update();
             event->accept();
@@ -359,6 +411,9 @@ void ProgressHandleSlider::mousePressEvent(QMouseEvent* event)
     if (event->button() == Qt::LeftButton) {
         m_dragging = true;
         setFocus(Qt::MouseFocusReason);
+        if (m_rangeMode) {
+            selectNearestRangeHandle(event->position());
+        }
         emit sliderPressed();
         setValueFromPosition(event->position());
         event->accept();
@@ -390,6 +445,7 @@ void ProgressHandleSlider::mouseReleaseEvent(QMouseEvent* event)
     if (event->button() == Qt::LeftButton) {
         m_dragging = false;
         setValueFromPosition(event->position());
+        m_activeRangeHandle = RangeHandle::None;
         emit sliderReleased();
         update();
         event->accept();
@@ -420,23 +476,39 @@ void ProgressHandleSlider::leaveEvent(QEvent* event)
 
 void ProgressHandleSlider::keyPressEvent(QKeyEvent* event)
 {
+    const auto adjustValue = [this](int delta) {
+        if (m_rangeMode) {
+            setRangeHandleValue(m_lastRangeHandle,
+                (m_lastRangeHandle == RangeHandle::Upper ? m_upperValue : m_lowerValue) + delta);
+        } else {
+            setValue(m_value + delta);
+        }
+    };
+    const auto setBoundaryValue = [this](bool maximum) {
+        if (m_rangeMode) {
+            setRangeHandleValue(m_lastRangeHandle, maximum ? m_maximum : m_minimum);
+        } else {
+            setValue(maximum ? m_maximum : m_minimum);
+        }
+    };
+
     switch (event->key()) {
     case Qt::Key_Left:
     case Qt::Key_Down:
-        setValue(m_value - 1);
+        adjustValue(-1);
         event->accept();
         return;
     case Qt::Key_Right:
     case Qt::Key_Up:
-        setValue(m_value + 1);
+        adjustValue(1);
         event->accept();
         return;
     case Qt::Key_Home:
-        setValue(m_minimum);
+        setBoundaryValue(false);
         event->accept();
         return;
     case Qt::Key_End:
-        setValue(m_maximum);
+        setBoundaryValue(true);
         event->accept();
         return;
     default:
@@ -465,6 +537,34 @@ QRectF ProgressHandleSlider::trackRect(const QRectF& content) const
 
 QRectF ProgressHandleSlider::progressRect(const QRectF& track) const
 {
+    if (m_rangeMode) {
+        const auto& tm = ruwa::ui::core::ThemeManager::instance();
+        const qreal inset = qMax<qreal>(2.0, tm.scaled(2.0));
+        const qreal lowerRatio = valueToRatio(m_lowerValue);
+        const qreal upperRatio = valueToRatio(m_upperValue);
+        if (m_orientation == Qt::Horizontal) {
+            const qreal handleWidth
+                = qBound<qreal>(tm.scaled(2.0), track.height() * 0.20, tm.scaled(4.0));
+            const qreal minimumWidth = handleWidth * 2.0 + inset * 3.0;
+            const qreal valueLeft = track.left() + track.width() * lowerRatio;
+            const qreal valueRight = track.left() + track.width() * upperRatio;
+            const qreal width = qMin(track.width(), qMax(minimumWidth, valueRight - valueLeft));
+            qreal left = (valueLeft + valueRight - width) * 0.5;
+            left = qBound(track.left(), left, track.right() - width);
+            return QRectF(left, track.top(), width, track.height());
+        }
+
+        const qreal handleHeight
+            = qBound<qreal>(tm.scaled(2.0), track.width() * 0.20, tm.scaled(4.0));
+        const qreal minimumHeight = handleHeight * 2.0 + inset * 3.0;
+        const qreal valueTop = track.bottom() - track.height() * upperRatio;
+        const qreal valueBottom = track.bottom() - track.height() * lowerRatio;
+        const qreal height = qMin(track.height(), qMax(minimumHeight, valueBottom - valueTop));
+        qreal top = (valueTop + valueBottom - height) * 0.5;
+        top = qBound(track.top(), top, track.bottom() - height);
+        return QRectF(track.left(), top, track.width(), height);
+    }
+
     const qreal ratio = valueToRatio(m_value);
     if (m_orientation == Qt::Horizontal) {
         return QRectF(track.left(), track.top(), track.width() * ratio, track.height());
@@ -502,6 +602,34 @@ QRectF ProgressHandleSlider::handleRect(const QRectF& track, const QRectF& progr
     return QRectF(track.center().x() - handleWidth * 0.5, handleTop, handleWidth, handleHeight);
 }
 
+QRectF ProgressHandleSlider::rangeHandleRect(
+    const QRectF& track, const QRectF& progress, bool lowerHandle) const
+{
+    const auto& tm = ruwa::ui::core::ThemeManager::instance();
+    const qreal inset = qMax<qreal>(2.0, tm.scaled(2.0));
+
+    if (m_orientation == Qt::Horizontal) {
+        const qreal handleWidth
+            = qBound<qreal>(tm.scaled(2.0), track.height() * 0.20, tm.scaled(4.0));
+        const qreal handleHeight = qMax<qreal>(handleWidth * 2.6, track.height() - inset * 2.0);
+        const qreal preferredLeft = lowerHandle ? progress.left() + inset
+                                                : progress.right() - inset - handleWidth;
+        const qreal handleLeft = qBound(
+            track.left() + inset, preferredLeft, track.right() - inset - handleWidth);
+        return QRectF(
+            handleLeft, track.center().y() - handleHeight * 0.5, handleWidth, handleHeight);
+    }
+
+    const qreal handleHeight
+        = qBound<qreal>(tm.scaled(2.0), track.width() * 0.20, tm.scaled(4.0));
+    const qreal handleWidth = qMax<qreal>(handleHeight * 2.6, track.width() - inset * 2.0);
+    const qreal preferredTop = lowerHandle ? progress.bottom() - inset - handleHeight
+                                           : progress.top() + inset;
+    const qreal handleTop = qBound(
+        track.top() + inset, preferredTop, track.bottom() - inset - handleHeight);
+    return QRectF(track.center().x() - handleWidth * 0.5, handleTop, handleWidth, handleHeight);
+}
+
 qreal ProgressHandleSlider::valueToRatio(int value) const
 {
     const int span = m_maximum - m_minimum;
@@ -520,23 +648,64 @@ int ProgressHandleSlider::ratioToValue(qreal ratio) const
     return m_minimum + qRound(qBound(0.0, ratio, 1.0) * span);
 }
 
+qreal ProgressHandleSlider::positionToRatio(const QPointF& position, const QRectF& track) const
+{
+    if (m_orientation == Qt::Horizontal) {
+        return qBound(0.0, (position.x() - track.left()) / track.width(), 1.0);
+    }
+    return qBound(0.0, (track.bottom() - position.y()) / track.height(), 1.0);
+}
+
 QString ProgressHandleSlider::displayText() const
 {
     if (!m_customDisplayText.isEmpty()) {
         return m_customDisplayText;
     }
 
-    int displayedValue = m_value;
-    if (m_valueDisplayMode == ValueDisplayMode::Percent) {
+    const auto displayedValue = [this](int value) {
+        if (m_valueDisplayMode != ValueDisplayMode::Percent) {
+            return value;
+        }
         const int span = m_maximum - m_minimum;
         if (span > 0) {
-            displayedValue = qRound(((m_value - m_minimum) / static_cast<qreal>(span)) * 100.0);
-        } else {
-            displayedValue = 0;
+            return qRound(((value - m_minimum) / static_cast<qreal>(span)) * 100.0);
         }
+        return 0;
+    };
+
+    if (m_rangeMode) {
+        return QStringLiteral("%1%2%3 – %1%4%3")
+            .arg(m_valueTextPrefix)
+            .arg(displayedValue(m_lowerValue))
+            .arg(m_valueTextSuffix)
+            .arg(displayedValue(m_upperValue));
     }
 
-    return QString("%1%2%3").arg(m_valueTextPrefix).arg(displayedValue).arg(m_valueTextSuffix);
+    return QStringLiteral("%1%2%3")
+        .arg(m_valueTextPrefix)
+        .arg(displayedValue(m_value))
+        .arg(m_valueTextSuffix);
+}
+
+void ProgressHandleSlider::selectNearestRangeHandle(const QPointF& position)
+{
+    const QRectF track = trackRect(contentRect());
+    if (track.width() <= 0.0 || track.height() <= 0.0) {
+        m_activeRangeHandle = RangeHandle::None;
+        return;
+    }
+
+    const qreal clickedRatio = positionToRatio(position, track);
+    const qreal lowerDistance = std::abs(clickedRatio - valueToRatio(m_lowerValue));
+    const qreal upperDistance = std::abs(clickedRatio - valueToRatio(m_upperValue));
+    if (qFuzzyCompare(lowerDistance + 1.0, upperDistance + 1.0)) {
+        m_activeRangeHandle
+            = clickedRatio <= valueToRatio(m_lowerValue) ? RangeHandle::Lower : RangeHandle::Upper;
+    } else {
+        m_activeRangeHandle
+            = lowerDistance < upperDistance ? RangeHandle::Lower : RangeHandle::Upper;
+    }
+    m_lastRangeHandle = m_activeRangeHandle;
 }
 
 void ProgressHandleSlider::setValueFromPosition(const QPointF& position)
@@ -546,13 +715,36 @@ void ProgressHandleSlider::setValueFromPosition(const QPointF& position)
         return;
     }
 
-    qreal ratio = 0.0;
-    if (m_orientation == Qt::Horizontal) {
-        ratio = (position.x() - track.left()) / track.width();
+    const int positionValue = ratioToValue(positionToRatio(position, track));
+    if (m_rangeMode) {
+        setRangeHandleValue(m_activeRangeHandle, positionValue);
     } else {
-        ratio = (track.bottom() - position.y()) / track.height();
+        setValue(positionValue);
     }
-    setValue(ratioToValue(ratio));
+}
+
+void ProgressHandleSlider::setRangeHandleValue(RangeHandle handle, int value)
+{
+    if (handle == RangeHandle::None) {
+        return;
+    }
+
+    if (handle == RangeHandle::Lower) {
+        const int boundedValue = qBound(m_minimum, value, m_upperValue);
+        if (m_lowerValue == boundedValue) {
+            return;
+        }
+        m_lowerValue = boundedValue;
+    } else {
+        const int boundedValue = qBound(m_lowerValue, value, m_maximum);
+        if (m_upperValue == boundedValue) {
+            return;
+        }
+        m_upperValue = boundedValue;
+    }
+
+    emit rangeValuesChanged(m_lowerValue, m_upperValue);
+    update();
 }
 
 } // namespace ruwa::ui::widgets

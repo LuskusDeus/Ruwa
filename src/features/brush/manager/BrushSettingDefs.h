@@ -27,7 +27,7 @@ enum class SettingType {
 
 enum class BrushDynamicsEditorKind : uint8_t {
     Curve = 0,
-    Amount,
+    Range,
 };
 
 enum class BrushSettingDependencyKind : uint8_t {
@@ -129,21 +129,20 @@ inline BrushDynamicTargetDef pressureTimeRandomDynamicsTarget(BrushDynamicsSetti
     BrushDynamicsSourceDef random;
     random.source = BrushInputSourceKey::RandomValue;
     random.available = true;
-    random.editorKind = BrushDynamicsEditorKind::Amount;
-    random.allowedBlendModes.append(BrushDynamicsBlendMode::Add);
+    random.editorKind = BrushDynamicsEditorKind::Range;
+    random.allowedBlendModes.reserve(static_cast<qsizetype>(allowedBlendModes.size()));
+    for (const auto mode : allowedBlendModes) {
+        random.allowedBlendModes.append(mode);
+    }
 
     target.sources.append(random);
 
     BrushDynamicsSourceDef direction;
     direction.source = BrushInputSourceKey::StrokeDirection;
     direction.available = true;
-    if (setting == BrushDynamicsSettingKey::ShapeAngle) {
-        direction.allowedBlendModes.append(BrushDynamicsBlendMode::Override);
-    } else {
-        direction.allowedBlendModes.reserve(static_cast<qsizetype>(allowedBlendModes.size()));
-        for (const auto mode : allowedBlendModes) {
-            direction.allowedBlendModes.append(mode);
-        }
+    direction.allowedBlendModes.reserve(static_cast<qsizetype>(allowedBlendModes.size()));
+    for (const auto mode : allowedBlendModes) {
+        direction.allowedBlendModes.append(mode);
     }
 
     target.sources.append(direction);

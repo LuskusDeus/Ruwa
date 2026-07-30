@@ -21,6 +21,8 @@ public:
 
     void setRange(int minimum, int maximum);
     void setValue(int value);
+    void setRangeMode(bool enabled);
+    void setRangeValues(int lowerValue, int upperValue);
     void setOrientation(Qt::Orientation orientation);
     void setFillInset(qreal inset);
     void setBackgroundOpacity(qreal surfaceOpacity, qreal trackOpacity);
@@ -32,8 +34,11 @@ public:
     void setCustomDisplayText(const QString& text);
 
     int value() const { return m_value; }
+    int lowerValue() const { return m_lowerValue; }
+    int upperValue() const { return m_upperValue; }
     int minimum() const { return m_minimum; }
     int maximum() const { return m_maximum; }
+    bool rangeMode() const { return m_rangeMode; }
     Qt::Orientation orientation() const { return m_orientation; }
     qreal fillInset() const { return m_fillInset; }
     qreal surfaceOpacity() const { return m_surfaceOpacity; }
@@ -47,6 +52,7 @@ public:
 
 signals:
     void valueChanged(int value);
+    void rangeValuesChanged(int lowerValue, int upperValue);
     void sliderPressed();
     void sliderReleased();
 
@@ -64,19 +70,31 @@ private slots:
     void onThemeChanged();
 
 private:
+    enum class RangeHandle { None, Lower, Upper };
+
     QRectF contentRect() const;
     QRectF trackRect(const QRectF& content) const;
     QRectF progressRect(const QRectF& track) const;
     QRectF handleRect(const QRectF& track, const QRectF& progress) const;
+    QRectF rangeHandleRect(
+        const QRectF& track, const QRectF& progress, bool lowerHandle) const;
     qreal valueToRatio(int value) const;
     int ratioToValue(qreal ratio) const;
+    qreal positionToRatio(const QPointF& position, const QRectF& track) const;
     QString displayText() const;
+    void selectNearestRangeHandle(const QPointF& position);
     void setValueFromPosition(const QPointF& position);
+    void setRangeHandleValue(RangeHandle handle, int value);
 
 private:
     int m_minimum = 0;
     int m_maximum = 100;
     int m_value = 100;
+    int m_lowerValue = 0;
+    int m_upperValue = 100;
+    bool m_rangeMode = false;
+    RangeHandle m_activeRangeHandle = RangeHandle::None;
+    RangeHandle m_lastRangeHandle = RangeHandle::Lower;
     bool m_dragging = false;
     bool m_tabletDragActive = false;
     bool m_hovered = false;

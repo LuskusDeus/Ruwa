@@ -439,14 +439,6 @@ inline float clampBrushDynamicsResultValue(BrushDynamicsSettingKey setting, floa
     return clampRange(value, brushDynamicsResultMin(setting), brushDynamicsResultMax(setting));
 }
 
-inline float brushDynamicsRandomAmountMax(BrushDynamicsSettingKey setting)
-{
-    if (setting == BrushDynamicsSettingKey::RadiusMultiplier) {
-        return 1.0f;
-    }
-    return brushDynamicsResultMax(setting) - brushDynamicsResultMin(setting);
-}
-
 inline bool supportsBrushDynamicsSetting(BrushDynamicsSettingKey setting)
 {
     return setting != BrushDynamicsSettingKey::None && setting != BrushDynamicsSettingKey::Count;
@@ -460,16 +452,25 @@ inline BrushDynamicsBlendMode defaultBrushDynamicsBlendMode(BrushDynamicsSetting
         : BrushDynamicsBlendMode::Multiply;
 }
 
+inline BrushDynamicsBlendMode defaultBrushDynamicsBlendMode(
+    BrushDynamicsSettingKey setting, BrushInputSourceKey source)
+{
+    if (source == BrushInputSourceKey::RandomValue) {
+        return BrushDynamicsBlendMode::Add;
+    }
+    if ((setting == BrushDynamicsSettingKey::ShapeAngle
+            || setting == BrushDynamicsSettingKey::ColorHue)
+        && source == BrushInputSourceKey::StrokeDirection) {
+        return BrushDynamicsBlendMode::Override;
+    }
+    return defaultBrushDynamicsBlendMode(setting);
+}
+
 inline bool supportsBrushDynamicsBlendMode(
     BrushDynamicsSettingKey setting, BrushDynamicsBlendMode mode)
 {
     if (!supportsBrushDynamicsSetting(setting) || mode == BrushDynamicsBlendMode::Count) {
         return false;
-    }
-
-    if (setting == BrushDynamicsSettingKey::ShapeAngle
-        || setting == BrushDynamicsSettingKey::ColorHue) {
-        return mode == BrushDynamicsBlendMode::Add || mode == BrushDynamicsBlendMode::Override;
     }
 
     return mode == BrushDynamicsBlendMode::Multiply || mode == BrushDynamicsBlendMode::Add
@@ -481,6 +482,14 @@ inline BrushDynamicsBlendMode normalizeBrushDynamicsBlendMode(
 {
     return supportsBrushDynamicsBlendMode(setting, mode) ? mode
                                                          : defaultBrushDynamicsBlendMode(setting);
+}
+
+inline BrushDynamicsBlendMode normalizeBrushDynamicsBlendMode(BrushDynamicsSettingKey setting,
+    BrushInputSourceKey source, BrushDynamicsBlendMode mode)
+{
+    return supportsBrushDynamicsBlendMode(setting, mode) ? mode
+                                                         : defaultBrushDynamicsBlendMode(
+                                                               setting, source);
 }
 
 inline float finalizeBrushDynamicsResultValue(BrushDynamicsSettingKey setting, float value)
@@ -755,24 +764,52 @@ struct BrushDynamicsBinding {
     }
 };
 
-inline float brushDynamicsRandomAmount(const BrushDynamicsBinding& binding)
+struct BrushDynamicsRandomRange {
+    float minimum = 0.0f;
+    float maximum = 0.0f;
+};
+
+inline BrushDynamicsRandomRange brushDynamicsRandomRange(const BrushDynamicsBinding& binding)
 {
-    float amount = 0.0f;
-    for (const auto& point : binding.curve.points) {
-        amount = std::max(amount, std::abs(point.y));
+    const float neutralValue = binding.mode == BrushDynamicsBlendMode::Add ? 0.0f : 1.0f;
+    if (binding.curve.empty()) {
+        return { neutralValue, neutralValue };
     }
-    return clampRange(amount, 0.0f, brushDynamicsRandomAmountMax(binding.setting));
+
+    BrushDynamicsRandomRange range { std::numeric_limits<float>::max(),
+        std::numeric_limits<float>::lowest() };
+    bool hasFiniteValue = false;
+    for (const auto& point : binding.curve.points) {
+        if (!std::isfinite(point.y)) {
+            continue;
+        }
+        const float value = clampBrushDynamicsBindingValue(binding.setting, binding.mode, point.y);
+        range.minimum = std::min(range.minimum, value);
+        range.maximum = std::max(range.maximum, value);
+        hasFiniteValue = true;
+    }
+    return hasFiniteValue ? range : BrushDynamicsRandomRange { neutralValue, neutralValue };
 }
 
-inline void setBrushDynamicsRandomAmount(BrushDynamicsBinding& binding, float amount)
+inline void setBrushDynamicsRandomRange(
+    BrushDynamicsBinding& binding, float minimum, float maximum)
 {
     binding.source = BrushInputSourceKey::RandomValue;
-    binding.mode = BrushDynamicsBlendMode::Add;
-    const float clampedAmount
-        = clampRange(amount, 0.0f, brushDynamicsRandomAmountMax(binding.setting));
+    const float neutralValue = binding.mode == BrushDynamicsBlendMode::Add ? 0.0f : 1.0f;
+    if (!std::isfinite(minimum)) {
+        minimum = neutralValue;
+    }
+    if (!std::isfinite(maximum)) {
+        maximum = neutralValue;
+    }
+    float clampedMinimum = clampBrushDynamicsBindingValue(binding.setting, binding.mode, minimum);
+    float clampedMaximum = clampBrushDynamicsBindingValue(binding.setting, binding.mode, maximum);
+    if (clampedMinimum > clampedMaximum) {
+        std::swap(clampedMinimum, clampedMaximum);
+    }
     binding.curve.points = {
-        { 0.0f, -clampedAmount, 0.65f },
-        { 1.0f, clampedAmount, 0.65f },
+        { 0.0f, clampedMinimum, 0.65f },
+        { 1.0f, clampedMaximum, 0.65f },
     };
     binding.curve.normalize(binding.setting, binding.mode);
 }
@@ -893,6 +930,7 @@ struct BrushDynamicsModel {
                 auto& binding = slotItem.bindings[sourceIndex];
                 binding.setting = slotItem.setting;
                 binding.source = brushInputSourceFromIndex(sourceIndex);
+                binding.mode = defaultBrushDynamicsBlendMode(binding.setting, binding.source);
             }
         }
     }
@@ -1262,17 +1300,13 @@ inline void normalizeBrushDynamics(BrushDynamicsModel& dynamics)
             auto& binding = slotItem.bindings[sourceIndex];
             binding.setting = slotItem.setting;
             binding.source = brushInputSourceFromIndex(sourceIndex);
+            binding.mode = normalizeBrushDynamicsBlendMode(
+                slotItem.setting, binding.source, binding.mode);
             if (binding.source == BrushInputSourceKey::RandomValue) {
-                binding.mode = BrushDynamicsBlendMode::Add;
                 if (binding.enabled || binding.hasStoredCurve()) {
-                    setBrushDynamicsRandomAmount(binding, brushDynamicsRandomAmount(binding));
+                    const auto range = brushDynamicsRandomRange(binding);
+                    setBrushDynamicsRandomRange(binding, range.minimum, range.maximum);
                 }
-            } else if (binding.source == BrushInputSourceKey::StrokeDirection
-                && (slotItem.setting == BrushDynamicsSettingKey::ShapeAngle
-                    || slotItem.setting == BrushDynamicsSettingKey::ColorHue)) {
-                binding.mode = BrushDynamicsBlendMode::Override;
-            } else {
-                binding.mode = normalizeBrushDynamicsBlendMode(slotItem.setting, binding.mode);
             }
             binding.durationSec = clampBrushTimeDurationSeconds(binding.durationSec);
             if (binding.endAction == BrushTimeEndAction::Count) {

@@ -89,15 +89,15 @@ private:
     static BrushDynamicsBinding defaultStrokeDirectionBinding(BrushDynamicsSettingKey setting);
     BrushDynamicsBinding displayBinding(BrushDynamicsBinding binding) const;
     CurveAxesConfig curveAxesConfigForBinding(const BrushDynamicsBinding& binding) const;
-    int randomAmountSliderFactor() const;
-    int sliderValueFromRandomAmount(float amount) const;
-    float randomAmountFromSliderValue(int sliderValue) const;
-    QString formatRandomAmount(float amount) const;
+    int randomRangeSliderFactor() const;
+    int sliderValueFromRandomRangeValue(float value) const;
+    float randomRangeValueFromSliderValue(int sliderValue) const;
+    QString formatRandomRange(
+        const ruwa::core::brushes::BrushDynamicsRandomRange& range) const;
     widgets::ToggleSwitch* activeToggle() const;
     widgets::SegmentedOptionSelector* activeModeSelector() const;
     widgets::CurveEditorWidget* activeCurveEditor() const;
     bool isSourceAvailable(BrushInputSourceKey source) const;
-    bool isShapeAngleStrokeDirection() const;
     BrushInputSourceKey fallbackSource() const;
     int sourcePageIndex(BrushInputSourceKey source) const;
     BrushDynamicsBinding currentBinding() const;
@@ -131,7 +131,8 @@ private:
     QLabel* m_timeDurationLabel = nullptr;
     QLabel* m_timeEndActionLabel = nullptr;
     QLabel* m_randomEnabledLabel = nullptr;
-    QLabel* m_randomAmountLabel = nullptr;
+    QLabel* m_randomModeLabel = nullptr;
+    QLabel* m_randomRangeLabel = nullptr;
     QLabel* m_directionEnabledLabel = nullptr;
     QLabel* m_directionModeLabel = nullptr;
     ruwa::ui::widgets::CapsuleButton* m_resetButton = nullptr;
@@ -149,7 +150,8 @@ private:
     ruwa::ui::widgets::ProgressHandleSlider* m_timeDurationSlider = nullptr;
     ruwa::ui::widgets::AnimatedComboBox* m_timeEndActionCombo = nullptr;
     ruwa::ui::widgets::ToggleSwitch* m_randomToggle = nullptr;
-    ruwa::ui::widgets::ProgressHandleSlider* m_randomAmountSlider = nullptr;
+    ruwa::ui::widgets::SegmentedOptionSelector* m_randomModeSelector = nullptr;
+    ruwa::ui::widgets::ProgressHandleSlider* m_randomRangeSlider = nullptr;
     ruwa::ui::widgets::ToggleSwitch* m_directionToggle = nullptr;
     ruwa::ui::widgets::SegmentedOptionSelector* m_directionModeSelector = nullptr;
     ruwa::ui::widgets::CurveEditorWidget* m_directionCurveEditor = nullptr;
