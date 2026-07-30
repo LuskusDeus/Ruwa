@@ -118,7 +118,6 @@ void NavigatorWidget::setCanvasPanel(CanvasPanel* panel)
     }
 
     m_overviewCache->clear();
-    m_worldFrame = {};
     updateOverview();
     update();
     if (isVisible() && m_canvasPanel) {
@@ -161,10 +160,8 @@ void NavigatorWidget::invalidateOverviewTiles(const QList<QPoint>& tilePositions
     }
 
     if (m_overviewCache->configure(currentFrame, overviewSize)) {
-        m_worldFrame = currentFrame;
         m_overviewCache->invalidateAll();
     } else {
-        m_worldFrame = currentFrame;
         if (m_canvasPanel->isDrawingActive()) {
             m_overviewCache->invalidateAll();
         } else {
@@ -192,11 +189,7 @@ void NavigatorWidget::invalidateAllOverview()
         return;
     }
 
-    if (m_overviewCache->configure(currentFrame, overviewSize)) {
-        m_worldFrame = currentFrame;
-    } else {
-        m_worldFrame = currentFrame;
-    }
+    m_overviewCache->configure(currentFrame, overviewSize);
     m_overviewCache->invalidateAll();
 
     if (isVisible()) {
@@ -219,7 +212,6 @@ void NavigatorWidget::updateOverview()
 {
     if (!m_canvasPanel) {
         m_overviewCache->clear();
-        m_worldFrame = {};
         return;
     }
 
@@ -227,15 +219,12 @@ void NavigatorWidget::updateOverview()
     const QSize overviewSize = targetOverviewSize();
     if (!frame.isValid() || frame.isEmpty() || !overviewSize.isValid()) {
         m_overviewCache->clear();
-        m_worldFrame = {};
         return;
     }
 
     if (m_overviewCache->configure(frame, overviewSize)) {
         m_overviewCache->invalidateAll();
     }
-    m_worldFrame = frame;
-
     const QList<QPoint> dirtyTiles = m_overviewCache->dirtyTiles();
     for (const QPoint& tileCoord : dirtyTiles) {
         const QRect pixelRect = m_overviewCache->overviewTilePixelRect(tileCoord);
@@ -274,8 +263,13 @@ QRectF NavigatorWidget::canvasDisplayRect() const
         return {};
     }
 
-    const float cw = static_cast<float>(m_overviewCache->overviewSize().width());
-    const float ch = static_cast<float>(m_overviewCache->overviewSize().height());
+    const QRectF frame = presentedWorldFrame();
+    if (!frame.isValid() || frame.isEmpty()) {
+        return {};
+    }
+
+    const float cw = static_cast<float>(frame.width());
+    const float ch = static_cast<float>(frame.height());
     const float w = static_cast<float>(width());
     const float h = static_cast<float>(height());
     const float scale = qMin(w / cw, h / ch);
@@ -292,28 +286,30 @@ QPointF NavigatorWidget::widgetToWorld(const QPointF& widgetPos) const
     if (disp.isEmpty() || !m_canvasPanel || !m_canvasPanel->isGLContentReady()) {
         return {};
     }
-    if (!m_worldFrame.isValid() || m_worldFrame.isEmpty()) {
+    const QRectF frame = presentedWorldFrame();
+    if (!frame.isValid() || frame.isEmpty()) {
         return {};
     }
 
     const float nx = (widgetPos.x() - disp.x()) / disp.width();
     const float ny = (widgetPos.y() - disp.y()) / disp.height();
     return QPointF(
-        static_cast<float>(m_worldFrame.x()) + nx * static_cast<float>(m_worldFrame.width()),
-        static_cast<float>(m_worldFrame.y()) + ny * static_cast<float>(m_worldFrame.height()));
+        static_cast<float>(frame.x()) + nx * static_cast<float>(frame.width()),
+        static_cast<float>(frame.y()) + ny * static_cast<float>(frame.height()));
 }
 
 QPointF NavigatorWidget::worldToWidget(const QPointF& worldPos) const
 {
     const QRectF disp = canvasDisplayRect();
-    if (disp.isEmpty() || !m_worldFrame.isValid() || m_worldFrame.isEmpty()) {
+    const QRectF frame = presentedWorldFrame();
+    if (disp.isEmpty() || !frame.isValid() || frame.isEmpty()) {
         return {};
     }
 
-    const float nx = static_cast<float>(worldPos.x() - m_worldFrame.x())
-        / static_cast<float>(m_worldFrame.width());
-    const float ny = static_cast<float>(worldPos.y() - m_worldFrame.y())
-        / static_cast<float>(m_worldFrame.height());
+    const float nx
+        = static_cast<float>(worldPos.x() - frame.x()) / static_cast<float>(frame.width());
+    const float ny
+        = static_cast<float>(worldPos.y() - frame.y()) / static_cast<float>(frame.height());
     return QPointF(disp.x() + nx * disp.width(), disp.y() + ny * disp.height());
 }
 
@@ -354,7 +350,8 @@ QPolygonF NavigatorWidget::viewportOutline() const
     const auto& vp = m_canvasPanel->viewport();
     const float vw = static_cast<float>(vp.width());
     const float vh = static_cast<float>(vp.height());
-    if (vw < 1 || vh < 1 || !m_worldFrame.isValid() || m_worldFrame.isEmpty()) {
+    const QRectF frame = presentedWorldFrame();
+    if (vw < 1 || vh < 1 || !frame.isValid() || frame.isEmpty()) {
         return {};
     }
 
@@ -367,6 +364,11 @@ QPolygonF NavigatorWidget::viewportOutline() const
     poly << worldToWidget(QPointF(p0.x, p0.y)) << worldToWidget(QPointF(p1.x, p1.y))
          << worldToWidget(QPointF(p2.x, p2.y)) << worldToWidget(QPointF(p3.x, p3.y));
     return poly;
+}
+
+QRectF NavigatorWidget::presentedWorldFrame() const
+{
+    return m_overviewCache ? m_overviewCache->presentedWorldFrame() : QRectF {};
 }
 
 void NavigatorWidget::mousePressEvent(QMouseEvent* event)

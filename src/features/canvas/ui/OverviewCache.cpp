@@ -21,6 +21,10 @@ void OverviewCache::clear()
     m_dirtyTiles.clear();
     m_transitionTiles.clear();
     m_transitionClock.invalidate();
+    m_previousOverview = {};
+    m_previousWorldFrame = {};
+    m_frameTransitionStart = {};
+    m_frameTransitionActive = false;
 }
 
 bool OverviewCache::configure(const QRect& worldFrame, const QSize& overviewSize)
@@ -30,9 +34,29 @@ bool OverviewCache::configure(const QRect& worldFrame, const QSize& overviewSize
         return false;
     }
 
-    clear();
+    // Flatten the currently presented generations before changing coordinates.
+    // Keeping this image in world space makes an interrupted resize continue from
+    // its current visual state instead of flashing or restarting from an old frame.
+    const QImage previousOverview = renderCurrentComposition();
+    const QRect previousWorldFrame = m_worldFrame;
+    const QRectF transitionStart = presentedWorldFrame();
+
+    m_tiles.clear();
+    m_dirtyTiles.clear();
+    m_transitionTiles.clear();
     m_worldFrame = normalizedFrame;
     m_overviewSize = overviewSize;
+
+    m_previousOverview = previousOverview;
+    m_previousWorldFrame = previousWorldFrame;
+    m_frameTransitionStart = transitionStart;
+    m_frameTransitionActive = !m_previousOverview.isNull() && transitionStart.isValid()
+        && !transitionStart.isEmpty() && transitionStart != QRectF(m_worldFrame);
+
+    m_transitionClock.invalidate();
+    if (!m_previousOverview.isNull()) {
+        m_transitionClock.start();
+    }
     return true;
 }
 
@@ -40,6 +64,24 @@ bool OverviewCache::isValid() const
 {
     return m_worldFrame.isValid() && !m_worldFrame.isEmpty() && m_overviewSize.isValid()
         && !m_overviewSize.isEmpty();
+}
+
+QRectF OverviewCache::presentedWorldFrame() const
+{
+    if (!m_frameTransitionActive || !m_transitionClock.isValid()
+        || !m_frameTransitionStart.isValid() || m_frameTransitionStart.isEmpty()) {
+        return QRectF(m_worldFrame);
+    }
+
+    const qreal progress = frameTransitionProgress();
+    const auto interpolate = [progress](qreal from, qreal to) {
+        return from + (to - from) * progress;
+    };
+    const QRectF target(m_worldFrame);
+    return QRectF(interpolate(m_frameTransitionStart.x(), target.x()),
+        interpolate(m_frameTransitionStart.y(), target.y()),
+        interpolate(m_frameTransitionStart.width(), target.width()),
+        interpolate(m_frameTransitionStart.height(), target.height()));
 }
 
 void OverviewCache::invalidateAll()
@@ -146,9 +188,13 @@ void OverviewCache::storeTile(const QPoint& tileCoord, const QImage& image)
 
     m_dirtyTiles.remove(tileCoord);
     if (!m_tiles.contains(tileCoord)) {
-        // There is no previous image to preserve during initial population.
-        m_tiles.insert(tileCoord, image);
-        return;
+        if (m_previousOverview.isNull()) {
+            // There is no previous presentation to preserve during initial population.
+            m_tiles.insert(tileCoord, image);
+            return;
+        }
+    } else if (m_transitionTiles.contains(tileCoord)) {
+        m_transitionTiles.remove(tileCoord);
     }
 
     if (!m_transitionClock.isValid()) {
@@ -158,9 +204,14 @@ void OverviewCache::storeTile(const QPoint& tileCoord, const QImage& image)
         tileCoord, TransitionTile { image, m_transitionClock.elapsed() });
 }
 
+bool OverviewCache::hasActiveTransitions() const
+{
+    return m_frameTransitionActive || !m_transitionTiles.isEmpty();
+}
+
 void OverviewCache::advanceTransitions()
 {
-    if (m_transitionTiles.isEmpty() || !m_transitionClock.isValid()) {
+    if (!m_transitionClock.isValid()) {
         return;
     }
 
@@ -175,8 +226,17 @@ void OverviewCache::advanceTransitions()
         it = m_transitionTiles.erase(it);
     }
 
-    if (m_transitionTiles.isEmpty()) {
+    if (m_frameTransitionActive && now >= FrameTransitionDurationMs) {
+        m_frameTransitionActive = false;
+        m_frameTransitionStart = QRectF(m_worldFrame);
+    }
+
+    if (!m_frameTransitionActive && m_transitionTiles.isEmpty()) {
         m_transitionClock.invalidate();
+        if (m_dirtyTiles.isEmpty()) {
+            m_previousOverview = {};
+            m_previousWorldFrame = {};
+        }
     }
 }
 
@@ -186,15 +246,59 @@ void OverviewCache::draw(QPainter& painter, const QRectF& displayRect) const
         return;
     }
 
+    drawComposition(painter, displayRect, presentedWorldFrame());
+}
+
+QImage OverviewCache::renderCurrentComposition() const
+{
+    if (!isValid()) {
+        return {};
+    }
+
+    QImage image(m_overviewSize, QImage::Format_ARGB32_Premultiplied);
+    image.fill(Qt::transparent);
+
+    QPainter painter(&image);
+    painter.setRenderHint(QPainter::SmoothPixmapTransform);
+    drawComposition(
+        painter, QRectF(QPointF(0.0, 0.0), QSizeF(m_overviewSize)), QRectF(m_worldFrame));
+    return image;
+}
+
+void OverviewCache::drawComposition(
+    QPainter& painter, const QRectF& displayRect, const QRectF& presentedFrame) const
+{
+    if (!isValid() || displayRect.isEmpty() || !presentedFrame.isValid()
+        || presentedFrame.isEmpty()) {
+        return;
+    }
+
+    painter.save();
+    painter.setClipRect(displayRect);
+
+    if (!m_previousOverview.isNull() && m_previousWorldFrame.isValid()
+        && !m_previousWorldFrame.isEmpty()) {
+        // The retained generation follows the same interpolated world transform as
+        // the new tiles, so the old content resizes continuously until replacement
+        // tiles have faded in.
+        const QRectF previousDisplayRect = mapWorldFrameToDisplayRect(
+            QRectF(m_previousWorldFrame), presentedFrame, displayRect);
+        painter.drawImage(previousDisplayRect, m_previousOverview);
+    }
+
+    const QRectF currentDisplayRect
+        = mapWorldFrameToDisplayRect(QRectF(m_worldFrame), presentedFrame, displayRect);
     for (auto it = m_tiles.constBegin(); it != m_tiles.constEnd(); ++it) {
         const QRect pixelRect = overviewTilePixelRect(it.key());
         if (!pixelRect.isValid() || pixelRect.isEmpty()) {
             continue;
         }
-        painter.drawImage(mapOverviewPixelRectToDisplayRect(pixelRect, displayRect), it.value());
+        painter.drawImage(
+            mapOverviewPixelRectToDisplayRect(pixelRect, currentDisplayRect), it.value());
     }
 
     if (m_transitionTiles.isEmpty() || !m_transitionClock.isValid()) {
+        painter.restore();
         return;
     }
 
@@ -215,10 +319,26 @@ void OverviewCache::draw(QPainter& painter, const QRectF& displayRect) const
         }
 
         painter.setOpacity(originalOpacity * fadeProgress);
-        painter.drawImage(
-            mapOverviewPixelRectToDisplayRect(pixelRect, displayRect), it->image);
+        painter.drawImage(mapOverviewPixelRectToDisplayRect(pixelRect, currentDisplayRect),
+            it->image);
     }
     painter.setOpacity(originalOpacity);
+    painter.restore();
+}
+
+QRectF OverviewCache::mapWorldFrameToDisplayRect(const QRectF& worldFrame,
+    const QRectF& presentedFrame, const QRectF& displayRect) const
+{
+    if (!worldFrame.isValid() || worldFrame.isEmpty() || !presentedFrame.isValid()
+        || presentedFrame.isEmpty() || displayRect.isEmpty()) {
+        return {};
+    }
+
+    const qreal scaleX = displayRect.width() / presentedFrame.width();
+    const qreal scaleY = displayRect.height() / presentedFrame.height();
+    return QRectF(displayRect.left() + (worldFrame.left() - presentedFrame.left()) * scaleX,
+        displayRect.top() + (worldFrame.top() - presentedFrame.top()) * scaleY,
+        worldFrame.width() * scaleX, worldFrame.height() * scaleY);
 }
 
 void OverviewCache::markTileDirty(const QPoint& tileCoord)
@@ -270,6 +390,20 @@ QRectF OverviewCache::mapOverviewPixelRectToDisplayRect(
     return QRectF(displayRect.left() + pixelRect.left() * scaleX,
         displayRect.top() + pixelRect.top() * scaleY, pixelRect.width() * scaleX,
         pixelRect.height() * scaleY);
+}
+
+qreal OverviewCache::frameTransitionProgress() const
+{
+    if (!m_frameTransitionActive || !m_transitionClock.isValid()) {
+        return 1.0;
+    }
+
+    const qreal linearProgress = qBound<qreal>(0.0,
+        static_cast<qreal>(m_transitionClock.elapsed())
+            / static_cast<qreal>(FrameTransitionDurationMs),
+        1.0);
+    static const QEasingCurve easing(QEasingCurve::InOutCubic);
+    return easing.valueForProgress(linearProgress);
 }
 
 } // namespace ruwa::ui::workspace
