@@ -398,6 +398,7 @@ bool CanvasMouseInputHandler::handleMousePress(QMouseEvent* event)
 
             glWidget->beginTransformUndoStep();
             if (ctrl.mousePress(worldPos, zoom, event->modifiers())) {
+                glWidget->beginTransformSnapSession();
                 m_panel->m_transformDragCursorValid = true;
                 m_panel->m_transformDragCursor = detail::cursorForTransformHandle(hit, ctrl.state(),
                     ctrl.cornersActAsRotationHandles(), glWidget->canvasContentFlipHorizontal(),
@@ -530,6 +531,7 @@ bool CanvasMouseInputHandler::handleMousePress(QMouseEvent* event)
                 auto& ctrl = glWidget->transformController();
                 glWidget->beginTransformUndoStep();
                 if (ctrl.mousePress(worldPos, zoom, event->modifiers())) {
+                    glWidget->beginTransformSnapSession();
                     m_panel->m_transformDragCursorValid = true;
                     m_panel->m_transformDragCursor = Qt::SizeAllCursor;
                     if (auto* cursorManager = m_host->inputCursorManager()) {
@@ -905,6 +907,7 @@ bool CanvasMouseInputHandler::handleMouseMove(QMouseEvent* event)
                 const float zoom = viewport.camera().zoom();
                 glWidget->beginTransformUndoStep();
                 if (ctrl.mousePress(pressWorldPos, zoom, event->modifiers())) {
+                    glWidget->beginTransformSnapSession();
                     m_panel->m_transformDragCursorValid = true;
                     m_panel->m_transformDragCursor = Qt::SizeAllCursor;
                     if (cursorManager) {
@@ -912,13 +915,9 @@ bool CanvasMouseInputHandler::handleMouseMove(QMouseEvent* event)
                     }
 
                     const aether::Vector2 worldPos = m_panel->mapToWorld(globalPos);
-                    aether::TransformSnapContext snapContext;
-                    snapContext.canvasSize = glWidget->canvas().size();
-                    snapContext.snapToCanvasCenter = true;
-                    snapContext.snapToCanvasEdges = glWidget->hasFiniteDocumentBounds();
                     glWidget->latchSelectionCopyMoveTransformIfNeeded(worldPos, event->modifiers());
-                    if (ctrl.mouseMove(
-                            worldPos, zoom, event->modifiers(), &viewport, &snapContext)) {
+                    if (ctrl.mouseMove(worldPos, zoom, event->modifiers(), &viewport)) {
+                        glWidget->syncTransformSnapMetricLabel();
                         m_panel->requestRender();
                     }
                     event->accept();
@@ -1213,13 +1212,10 @@ bool CanvasMouseInputHandler::handleMouseMove(QMouseEvent* event)
         aether::Vector2 worldPos = m_panel->mapToWorld(event->globalPosition());
         const auto& viewport = m_panel->m_glWidget->viewport();
         float zoom = viewport.camera().zoom();
-        aether::TransformSnapContext snapContext;
-        snapContext.canvasSize = m_panel->m_glWidget->canvas().size();
-        snapContext.snapToCanvasCenter = true;
-        snapContext.snapToCanvasEdges = m_panel->m_glWidget->hasFiniteDocumentBounds();
         m_panel->m_glWidget->latchSelectionCopyMoveTransformIfNeeded(worldPos, event->modifiers());
         if (m_panel->m_glWidget->transformController().mouseMove(
-                worldPos, zoom, event->modifiers(), &viewport, &snapContext)) {
+                worldPos, zoom, event->modifiers(), &viewport)) {
+            m_panel->m_glWidget->syncTransformSnapMetricLabel();
             m_panel->requestRender();
         }
         event->accept();
@@ -1302,8 +1298,9 @@ bool CanvasMouseInputHandler::handleMouseRelease(QMouseEvent* event)
         && event->button() == Qt::LeftButton) {
         const bool hadTransformGuides
             = m_panel->m_glWidget->transformController().moveAxisGuideActive()
-            || m_panel->m_glWidget->transformController().autoSnapGuideState().active();
+            || m_panel->m_glWidget->transformController().snapVisualState().active();
         m_panel->m_glWidget->transformController().mouseRelease();
+        m_panel->m_glWidget->syncTransformSnapMetricLabel();
         m_panel->m_glWidget->commitTransformUndoStep();
         m_panel->m_transformDragCursorValid = false;
         if (hadTransformGuides) {

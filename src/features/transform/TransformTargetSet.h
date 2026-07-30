@@ -10,6 +10,7 @@
 #include "features/layers/model/LayerModel.h"
 #include "features/layers/model/LayerData.h"
 #include "features/transform/TransformState.h"
+#include "features/transform/TransformGeometry.h"
 
 #include <QSet>
 #include <QUuid>
@@ -105,21 +106,6 @@ inline TransformTargetInfo::Kind transformTargetKind(const ruwa::core::layers::L
     return TransformTargetInfo::Kind::Raster;
 }
 
-inline Rect unionTransformRects(const Rect& a, const Rect& b)
-{
-    if (a.width <= 0.0f || a.height <= 0.0f) {
-        return b;
-    }
-    if (b.width <= 0.0f || b.height <= 0.0f) {
-        return a;
-    }
-    const float left = std::min(a.left(), b.left());
-    const float top = std::min(a.top(), b.top());
-    const float right = std::max(a.right(), b.right());
-    const float bottom = std::max(a.bottom(), b.bottom());
-    return { left, top, right - left, bottom - top };
-}
-
 inline bool hasSelectedAncestor(
     const ruwa::core::layers::LayerData* layer, const QSet<QUuid>& selectedIds)
 {
@@ -205,7 +191,7 @@ inline TransformTargetSet buildTransformTargetSet(const ruwa::core::layers::Laye
     }
 
     for (const TransformTargetInfo& target : set.visualTargets) {
-        set.contentBounds = unionTransformRects(set.contentBounds, target.contentBounds);
+        set.contentBounds = unionTransformBounds(set.contentBounds, target.contentBounds);
         set.visualTargetIds.insert(target.layerId);
         set.visualTargetRootIds.insert(target.rootLayerId);
     }
@@ -235,7 +221,7 @@ inline TransformTargetSet buildTransformTargetSet(const ruwa::core::layers::Laye
             if (target.layerId != layerId) {
                 continue;
             }
-            block.sourceBounds = unionTransformRects(block.sourceBounds, target.contentBounds);
+            block.sourceBounds = unionTransformBounds(block.sourceBounds, target.contentBounds);
             if (std::find(block.rootLayerIds.begin(), block.rootLayerIds.end(), target.rootLayerId)
                 == block.rootLayerIds.end()) {
                 block.rootLayerIds.push_back(target.rootLayerId);

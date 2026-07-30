@@ -10,6 +10,7 @@
 #include "TransformState.h"
 #include "TransformApplicator.h"
 #include "features/transform/TransformCommand.h"
+#include "features/transform/TransformSnapSession.h"
 #include "shared/tiles/TileGrid.h"
 #include "features/canvas/scene/Viewport.h"
 #include "features/layers/model/LayerData.h"
@@ -22,6 +23,7 @@
 #include <cstring>
 #include <cmath>
 #include <limits>
+#include <memory>
 
 namespace ruwa::core::layers {
 class LayerModel;
@@ -34,28 +36,6 @@ class Canvas;
 
 enum class TransformInteractionMode { Classic, Deform };
 
-struct TransformSnapContext {
-    Vector2 canvasSize {};
-    bool snapToCanvasCenter = false;
-    bool snapToCanvasEdges = false;
-};
-
-struct TransformAutoSnapGuideState {
-    bool hasVertical = false;
-    bool hasSecondVertical = false;
-    bool hasHorizontal = false;
-    bool hasSecondHorizontal = false;
-    float verticalX = 0.0f;
-    float secondVerticalX = 0.0f;
-    float horizontalY = 0.0f;
-    float secondHorizontalY = 0.0f;
-
-    bool active() const
-    {
-        return hasVertical || hasSecondVertical || hasHorizontal || hasSecondHorizontal;
-    }
-};
-
 class TransformController {
 public:
     TransformController() = default;
@@ -63,7 +43,6 @@ public:
     static constexpr float ROTATION_SNAP_STEP_RADIANS = 15.0f * 3.14159265358979323846f / 180.0f;
     static constexpr float ROTATION_SMOOTH_SPEED = 22.0f;
     static constexpr float SCALE_ANIMATION_DURATION = 0.18f;
-    static constexpr float AUTO_SNAP_SCREEN_THRESHOLD_PX = 10.0f;
     /// Shift-move axis guide fade (same exponential style as rotation smoothing).
     static constexpr float MOVE_AXIS_GUIDE_OPACITY_SPEED = 28.0f;
     /// Screen-space half-width of invisible Shift-move axis trigger zones.
@@ -90,6 +69,7 @@ public:
     bool enter(const QUuid& layerId, TileGrid* sourceGrid, const TileGrid* selectionMask = nullptr,
         bool moveOnly = false)
     {
+        endSnapSession();
         if (layerId.isNull() || !sourceGrid || sourceGrid->empty())
             return false;
         m_active = true;
@@ -149,6 +129,7 @@ public:
     bool enter(const QUuid& layerId, const Rect& contentBounds, const TileGrid* selectionMask,
         bool moveOnly = false)
     {
+        endSnapSession();
         if (layerId.isNull() || contentBounds.width <= 0.0f || contentBounds.height <= 0.0f) {
             return false;
         }
@@ -197,6 +178,7 @@ public:
     /// Apply the transform and exit mode. Returns a snapshot for undo.
     TransformSnapshot applyAndExit(Canvas& canvas, ruwa::core::layers::LayerModel* layerModel)
     {
+        endSnapSession();
         TransformSnapshot snapshot;
         snapshot.layerId = m_layerId;
         captureBeforeSnapshotIfNeeded();
@@ -252,6 +234,7 @@ public:
     /// Cancel transform (restore original state) and exit mode
     void cancelAndExit()
     {
+        endSnapSession();
         if (!m_active || !m_grid) {
             m_active = false;
             m_grid = nullptr;
@@ -475,8 +458,7 @@ public:
 
     /// Continue drag. Returns true if state changed.
     bool mouseMove(const Vector2& worldPos, float screenZoom,
-        Qt::KeyboardModifiers mods = Qt::NoModifier, const Viewport* viewport = nullptr,
-        const TransformSnapContext* snapContext = nullptr)
+        Qt::KeyboardModifiers mods = Qt::NoModifier, const Viewport* viewport = nullptr)
     {
         if (!m_active || !m_dragging)
             return false;
@@ -485,13 +467,16 @@ public:
             && m_activeDeformPoint >= 0) {
             const bool changed = handleDeformPointDrag(worldPos);
             if (changed) {
-                (void) applyAutoSnap(snapContext, viewport, screenZoom, mods, worldPos);
+                (void) applyAutoSnap(viewport, screenZoom, mods, worldPos);
             }
             return changed;
         }
 
         if (m_interactionMode == TransformInteractionMode::Deform && m_state.hasDeformMesh()
             && m_deformRegionActive) {
+            if (m_snapSession) {
+                m_snapSession->clear();
+            }
             return handleDeformRegionDrag(worldPos);
         }
 
@@ -504,7 +489,7 @@ public:
         if (m_ctrlFreeDragActive && m_state.hasFreeQuad() && isCornerHandle(m_activeHandle)) {
             const bool changed = handleFreeCornerDrag(worldPos, mods);
             if (changed)
-                (void) applyAutoSnap(snapContext, viewport, screenZoom, mods, worldPos);
+                (void) applyAutoSnap(viewport, screenZoom, mods, worldPos);
             return changed;
         }
 
@@ -512,7 +497,7 @@ public:
         if (m_ctrlFreeDragActive && m_state.hasFreeQuad() && isSideHandle(m_activeHandle)) {
             const bool changed = handleFreeSideDrag(worldPos, mods);
             if (changed)
-                (void) applyAutoSnap(snapContext, viewport, screenZoom, mods, worldPos);
+                (void) applyAutoSnap(viewport, screenZoom, mods, worldPos);
             return changed;
         }
 
@@ -521,7 +506,7 @@ public:
         if (m_state.hasFreeQuad() && m_activeHandle == TransformHandle::Move) {
             const bool r = handleFreeMoveDrag(worldPos, mods, screenZoom, viewport);
             const bool snapHandledByMoveTarget
-                = r && applyMoveTargetAutoSnap(snapContext, viewport, screenZoom, mods, worldPos);
+                = r && applyMoveTargetAutoSnap(viewport, screenZoom, mods, worldPos);
             if (r && (((mods & Qt::ShiftModifier) != 0) || snapHandledByMoveTarget)) {
                 m_moveTranslationAnimActive = true;
             }
@@ -544,7 +529,7 @@ public:
             && (isCornerHandle(m_activeHandle) || isSideHandle(m_activeHandle))) {
             const bool changed = handleQuadResize(worldPos, mods);
             if (changed)
-                (void) applyAutoSnap(snapContext, viewport, screenZoom, mods, worldPos);
+                (void) applyAutoSnap(viewport, screenZoom, mods, worldPos);
             return changed;
         }
 
@@ -555,7 +540,7 @@ public:
 
         switch (m_activeHandle) {
         case TransformHandle::Move: {
-            const Vector2 rawOff = pixelAlignedMoveOffset(
+            const Vector2 rawOff = moveOffsetForPolicy(
                 { worldPos.x - m_dragStartWorld.x, worldPos.y - m_dragStartWorld.y });
             const bool shift = (mods & Qt::ShiftModifier) != 0;
             if (shift) {
@@ -563,7 +548,7 @@ public:
                 updateShiftMoveLineAxis(worldPos, rawOff, screenZoom, viewport);
                 const Vector2 pivotWorldDragStart = { m_state.pivot.x + m_dragStartTranslation.x,
                     m_state.pivot.y + m_dragStartTranslation.y };
-                m_moveTargetOffset = pixelAlignedMoveOffset(
+                m_moveTargetOffset = moveOffsetForPolicy(
                     shiftConstrainedMoveAlongFixedAxis(worldPos, m_dragStartWorld,
                         shiftMoveReferenceWorld(), pivotWorldDragStart, m_moveShiftLineUnit));
                 m_moveTranslationAnimActive = true;
@@ -575,7 +560,7 @@ public:
             m_wasShiftHeldForMove = shift;
             updateMoveAxisGuideForShiftMove(mods);
             const bool snapHandledByMoveTarget
-                = applyMoveTargetAutoSnap(snapContext, viewport, screenZoom, mods, worldPos);
+                = applyMoveTargetAutoSnap(viewport, screenZoom, mods, worldPos);
             if (shift || snapHandledByMoveTarget) {
                 m_moveTranslationAnimActive = true;
             }
@@ -601,7 +586,7 @@ public:
         case TransformHandle::Right: {
             const bool changed = handleResize(worldPos, mods);
             if (changed)
-                (void) applyAutoSnap(snapContext, viewport, screenZoom, mods, worldPos);
+                (void) applyAutoSnap(viewport, screenZoom, mods, worldPos);
             return changed;
         }
 
@@ -624,6 +609,7 @@ public:
         m_wasAltHeld = false;
         resetMoveAxisGuideState();
         resetMoveShiftSmoothState();
+        endSnapSession();
     }
 
     // ---- State access ----
@@ -645,6 +631,7 @@ public:
 
         m_interactionMode = mode;
         m_state = state;
+        endSnapSession();
         m_dragging = false;
         m_activeHandle = TransformHandle::None;
         m_classicCornerRotateFromIcon = false;
@@ -675,6 +662,7 @@ public:
             }
         }
         m_interactionMode = mode;
+        endSnapSession();
         m_dragging = false;
         m_activeHandle = TransformHandle::None;
         m_classicCornerRotateFromIcon = false;
@@ -697,7 +685,7 @@ public:
         if (!m_active || !m_dragging || m_activeHandle != TransformHandle::Move) {
             return false;
         }
-        const Vector2 offset = pixelAlignedMoveOffset(
+        const Vector2 offset = moveOffsetForPolicy(
             { worldPos.x - m_dragStartWorld.x, worldPos.y - m_dragStartWorld.y });
         return offset.x != 0.0f || offset.y != 0.0f;
     }
@@ -725,7 +713,26 @@ public:
     {
         return { std::cos(m_moveGuideDisplayAngle), std::sin(m_moveGuideDisplayAngle) };
     }
-    const TransformAutoSnapGuideState& autoSnapGuideState() const { return m_autoSnapGuide; }
+    const TransformSnapVisualState& snapVisualState() const
+    {
+        static const TransformSnapVisualState empty;
+        return m_snapSession ? m_snapSession->visualState() : empty;
+    }
+
+    void beginSnapSession(SnapSettings settings, SnapScene scene,
+        SnapCoordinatePolicy coordinatePolicy,
+        std::optional<QUuid> sourceParentId = std::nullopt)
+    {
+        m_snapSession = std::make_unique<TransformSnapSession>(
+            std::move(settings), std::move(scene), coordinatePolicy, std::move(sourceParentId));
+    }
+
+    void endSnapSession()
+    {
+        m_snapSession.reset();
+    }
+
+    bool hasSnapSession() const { return m_snapSession != nullptr; }
 
     bool animateFlipHorizontal()
     {
@@ -912,13 +919,6 @@ private:
 
         bool valid() const { return hasX || hasY; }
     };
-
-    struct AutoSnapTargetCandidate {
-        bool valid = false;
-        float target = 0.0f;
-        float screenDistanceSq = std::numeric_limits<float>::max();
-    };
-
     struct ResizeAutoSnapCandidate {
         bool hasX = false;
         bool hasY = false;
@@ -930,520 +930,51 @@ private:
         bool valid() const { return hasX || hasY; }
     };
 
-    std::array<Vector2, 5> transformSnapPoints() const
+    bool applyMoveTargetAutoSnap(const Viewport* viewport, float screenZoom,
+        Qt::KeyboardModifiers mods, const Vector2& cursorWorldPos)
     {
-        if (m_state.hasDeformMesh()) {
-            const Rect aabb = m_state.transformedAABB();
-            const float l = aabb.left();
-            const float r = aabb.right();
-            const float t = aabb.top();
-            const float b = aabb.bottom();
-            return { { { l, t }, { r, t }, { r, b }, { l, b }, aabb.center() } };
-        }
-
-        const auto corners = m_state.transformedCorners();
-        return { { { corners[0].x, corners[0].y }, { corners[1].x, corners[1].y },
-            { corners[2].x, corners[2].y }, { corners[3].x, corners[3].y }, quadCenter(corners) } };
-    }
-
-    static Vector2 screenPointForWorld(
-        const Vector2& worldPos, const Viewport* viewport, float screenZoom)
-    {
-        if (viewport) {
-            return viewport->worldToScreen(worldPos);
-        }
-        const float z = (screenZoom > 1.0e-6f) ? screenZoom : 1.0f;
-        return { worldPos.x * z, worldPos.y * z };
-    }
-
-    static float screenDistanceSq(
-        const Vector2& a, const Vector2& b, const Viewport* viewport, float screenZoom)
-    {
-        const Vector2 as = screenPointForWorld(a, viewport, screenZoom);
-        const Vector2 bs = screenPointForWorld(b, viewport, screenZoom);
-        const float dx = as.x - bs.x;
-        const float dy = as.y - bs.y;
-        return dx * dx + dy * dy;
-    }
-
-    static void considerAutoSnapX(const Vector2& source, float targetX, const Viewport* viewport,
-        float screenZoom, float thresholdSq, AutoSnapCandidate& best)
-    {
-        const float distSq = screenDistanceSq(source, { targetX, source.y }, viewport, screenZoom);
-        if (distSq <= thresholdSq && distSq < best.screenDistanceXSq) {
-            best.hasX = true;
-            best.offset.x = targetX - source.x;
-            best.guideX = targetX;
-            best.screenDistanceXSq = distSq;
-        }
-    }
-
-    static void considerAutoSnapY(const Vector2& source, float targetY, const Viewport* viewport,
-        float screenZoom, float thresholdSq, AutoSnapCandidate& best)
-    {
-        const float distSq = screenDistanceSq(source, { source.x, targetY }, viewport, screenZoom);
-        if (distSq <= thresholdSq && distSq < best.screenDistanceYSq) {
-            best.hasY = true;
-            best.offset.y = targetY - source.y;
-            best.guideY = targetY;
-            best.screenDistanceYSq = distSq;
-        }
-    }
-
-    static AutoSnapCandidate findAutoSnapOffsetForPoint(const Vector2& point,
-        const TransformSnapContext& snap, const Viewport* viewport, float screenZoom,
-        bool allowCanvasCenterX = true, bool allowCanvasCenterY = true)
-    {
-        AutoSnapCandidate best;
-        const float w = snap.canvasSize.x;
-        const float h = snap.canvasSize.y;
-        if (w <= 0.0f || h <= 0.0f) {
-            return best;
-        }
-
-        const float thresholdSq = AUTO_SNAP_SCREEN_THRESHOLD_PX * AUTO_SNAP_SCREEN_THRESHOLD_PX;
-
-        const float z = (screenZoom > 1.0e-6f) ? screenZoom : 1.0f;
-        const float worldMargin = AUTO_SNAP_SCREEN_THRESHOLD_PX / z;
-
-        if (snap.snapToCanvasCenter) {
-            if (allowCanvasCenterX && point.y >= -worldMargin && point.y <= h + worldMargin) {
-                considerAutoSnapX(point, w * 0.5f, viewport, screenZoom, thresholdSq, best);
-            }
-            if (allowCanvasCenterY && point.x >= -worldMargin && point.x <= w + worldMargin) {
-                considerAutoSnapY(point, h * 0.5f, viewport, screenZoom, thresholdSq, best);
-            }
-        }
-
-        if (snap.snapToCanvasEdges) {
-            if (point.y >= -worldMargin && point.y <= h + worldMargin) {
-                considerAutoSnapX(point, 0.0f, viewport, screenZoom, thresholdSq, best);
-                considerAutoSnapX(point, w, viewport, screenZoom, thresholdSq, best);
-            }
-            if (point.x >= -worldMargin && point.x <= w + worldMargin) {
-                considerAutoSnapY(point, 0.0f, viewport, screenZoom, thresholdSq, best);
-                considerAutoSnapY(point, h, viewport, screenZoom, thresholdSq, best);
-            }
-        }
-
-        return best;
-    }
-
-    static void considerAutoSnapTargetX(const Vector2& source, float targetX,
-        const Viewport* viewport, float screenZoom, float thresholdSq,
-        AutoSnapTargetCandidate& best)
-    {
-        const float distSq = screenDistanceSq(source, { targetX, source.y }, viewport, screenZoom);
-        if (distSq <= thresholdSq && distSq < best.screenDistanceSq) {
-            best.valid = true;
-            best.target = targetX;
-            best.screenDistanceSq = distSq;
-        }
-    }
-
-    static void considerAutoSnapTargetY(const Vector2& source, float targetY,
-        const Viewport* viewport, float screenZoom, float thresholdSq,
-        AutoSnapTargetCandidate& best)
-    {
-        const float distSq = screenDistanceSq(source, { source.x, targetY }, viewport, screenZoom);
-        if (distSq <= thresholdSq && distSq < best.screenDistanceSq) {
-            best.valid = true;
-            best.target = targetY;
-            best.screenDistanceSq = distSq;
-        }
-    }
-
-    static AutoSnapTargetCandidate findAutoSnapTargetX(const Vector2& point,
-        const TransformSnapContext& snap, const Viewport* viewport, float screenZoom)
-    {
-        AutoSnapTargetCandidate best;
-        const float w = snap.canvasSize.x;
-        const float h = snap.canvasSize.y;
-        if (w <= 0.0f || h <= 0.0f) {
-            return best;
-        }
-
-        const float thresholdSq = AUTO_SNAP_SCREEN_THRESHOLD_PX * AUTO_SNAP_SCREEN_THRESHOLD_PX;
-        const float z = (screenZoom > 1.0e-6f) ? screenZoom : 1.0f;
-        const float worldMargin = AUTO_SNAP_SCREEN_THRESHOLD_PX / z;
-        if (point.y < -worldMargin || point.y > h + worldMargin) {
-            return best;
-        }
-
-        if (snap.snapToCanvasCenter) {
-            considerAutoSnapTargetX(point, w * 0.5f, viewport, screenZoom, thresholdSq, best);
-        }
-        if (snap.snapToCanvasEdges) {
-            considerAutoSnapTargetX(point, 0.0f, viewport, screenZoom, thresholdSq, best);
-            considerAutoSnapTargetX(point, w, viewport, screenZoom, thresholdSq, best);
-        }
-        return best;
-    }
-
-    static AutoSnapTargetCandidate findAutoSnapTargetY(const Vector2& point,
-        const TransformSnapContext& snap, const Viewport* viewport, float screenZoom)
-    {
-        AutoSnapTargetCandidate best;
-        const float w = snap.canvasSize.x;
-        const float h = snap.canvasSize.y;
-        if (w <= 0.0f || h <= 0.0f) {
-            return best;
-        }
-
-        const float thresholdSq = AUTO_SNAP_SCREEN_THRESHOLD_PX * AUTO_SNAP_SCREEN_THRESHOLD_PX;
-        const float z = (screenZoom > 1.0e-6f) ? screenZoom : 1.0f;
-        const float worldMargin = AUTO_SNAP_SCREEN_THRESHOLD_PX / z;
-        if (point.x < -worldMargin || point.x > w + worldMargin) {
-            return best;
-        }
-
-        if (snap.snapToCanvasCenter) {
-            considerAutoSnapTargetY(point, h * 0.5f, viewport, screenZoom, thresholdSq, best);
-        }
-        if (snap.snapToCanvasEdges) {
-            considerAutoSnapTargetY(point, 0.0f, viewport, screenZoom, thresholdSq, best);
-            considerAutoSnapTargetY(point, h, viewport, screenZoom, thresholdSq, best);
-        }
-        return best;
-    }
-
-    static bool verticalGuideTouchesShiftTriggerCenter(
-        float guideX, const Vector2& centerWorld, const Viewport* viewport, float screenZoom)
-    {
-        if (viewport) {
-            const Vector2 centerScreen = viewport->worldToScreen(centerWorld);
-            const Vector2 guideOriginScreen = viewport->worldToScreen({ guideX, centerWorld.y });
-            const Vector2 guideAxisScreen
-                = viewport->worldToScreen({ guideX, centerWorld.y + 1.0f });
-            return screenDistanceToAxis(centerScreen, guideOriginScreen, guideAxisScreen)
-                <= SHIFT_MOVE_AXIS_TRIGGER_SCREEN_PX;
-        }
-
-        const float z = (screenZoom > 1.0e-6f) ? screenZoom : 1.f;
-        return std::abs((guideX - centerWorld.x) * z) <= SHIFT_MOVE_AXIS_TRIGGER_SCREEN_PX;
-    }
-
-    static bool horizontalGuideTouchesShiftTriggerCenter(
-        float guideY, const Vector2& centerWorld, const Viewport* viewport, float screenZoom)
-    {
-        if (viewport) {
-            const Vector2 centerScreen = viewport->worldToScreen(centerWorld);
-            const Vector2 guideOriginScreen = viewport->worldToScreen({ centerWorld.x, guideY });
-            const Vector2 guideAxisScreen
-                = viewport->worldToScreen({ centerWorld.x + 1.0f, guideY });
-            return screenDistanceToAxis(centerScreen, guideOriginScreen, guideAxisScreen)
-                <= SHIFT_MOVE_AXIS_TRIGGER_SCREEN_PX;
-        }
-
-        const float z = (screenZoom > 1.0e-6f) ? screenZoom : 1.f;
-        return std::abs((guideY - centerWorld.y) * z) <= SHIFT_MOVE_AXIS_TRIGGER_SCREEN_PX;
-    }
-
-    AutoSnapCandidate filterMoveAutoSnapCandidateForShiftLock(
-        const AutoSnapCandidate& candidate, const Viewport* viewport, float screenZoom) const
-    {
-        if (m_activeHandle != TransformHandle::Move || !m_moveShiftReferenceValid
-            || m_moveShiftLineSlot == ShiftMoveLineSlot::None) {
-            return candidate;
-        }
-
-        AutoSnapCandidate filtered = candidate;
-        const Vector2& centerWorld = shiftMoveReferenceWorld();
-
-        if (filtered.hasX) {
-            const bool suppressVerticalGuide = m_moveShiftLineSlot == ShiftMoveLineSlot::Vertical
-                || verticalGuideTouchesShiftTriggerCenter(
-                    candidate.guideX, centerWorld, viewport, screenZoom);
-            if (suppressVerticalGuide) {
-                filtered.hasX = false;
-                filtered.offset.x = 0.0f;
-                filtered.screenDistanceXSq = std::numeric_limits<float>::max();
-            }
-        }
-
-        if (filtered.hasY) {
-            const bool suppressHorizontalGuide
-                = m_moveShiftLineSlot == ShiftMoveLineSlot::Horizontal
-                || horizontalGuideTouchesShiftTriggerCenter(
-                    candidate.guideY, centerWorld, viewport, screenZoom);
-            if (suppressHorizontalGuide) {
-                filtered.hasY = false;
-                filtered.offset.y = 0.0f;
-                filtered.screenDistanceYSq = std::numeric_limits<float>::max();
-            }
-        }
-
-        return filtered;
-    }
-
-    void pruneAutoSnapGuideStateForShiftLock(const Viewport* viewport, float screenZoom)
-    {
-        if (m_activeHandle != TransformHandle::Move || !m_moveShiftReferenceValid
-            || m_moveShiftLineSlot == ShiftMoveLineSlot::None) {
-            return;
-        }
-
-        const Vector2& centerWorld = shiftMoveReferenceWorld();
-        auto suppressVertical = [&](float guideX) {
-            return m_moveShiftLineSlot == ShiftMoveLineSlot::Vertical
-                || verticalGuideTouchesShiftTriggerCenter(
-                    guideX, centerWorld, viewport, screenZoom);
-        };
-        auto suppressHorizontal = [&](float guideY) {
-            return m_moveShiftLineSlot == ShiftMoveLineSlot::Horizontal
-                || horizontalGuideTouchesShiftTriggerCenter(
-                    guideY, centerWorld, viewport, screenZoom);
-        };
-
-        if (m_autoSnapGuide.hasVertical && suppressVertical(m_autoSnapGuide.verticalX)) {
-            m_autoSnapGuide.hasVertical = false;
-        }
-        if (m_autoSnapGuide.hasSecondVertical
-            && suppressVertical(m_autoSnapGuide.secondVerticalX)) {
-            m_autoSnapGuide.hasSecondVertical = false;
-        }
-        if (m_autoSnapGuide.hasHorizontal && suppressHorizontal(m_autoSnapGuide.horizontalY)) {
-            m_autoSnapGuide.hasHorizontal = false;
-        }
-        if (m_autoSnapGuide.hasSecondHorizontal
-            && suppressHorizontal(m_autoSnapGuide.secondHorizontalY)) {
-            m_autoSnapGuide.hasSecondHorizontal = false;
-        }
-    }
-
-    AutoSnapCandidate findAutoSnapOffset(
-        const TransformSnapContext& snap, const Viewport* viewport, float screenZoom) const
-    {
-        AutoSnapCandidate best;
-        const auto points = transformSnapPoints();
-        float minX = points[0].x;
-        float maxX = points[0].x;
-        float minY = points[0].y;
-        float maxY = points[0].y;
-        for (const Vector2& point : points) {
-            minX = std::min(minX, point.x);
-            maxX = std::max(maxX, point.x);
-            minY = std::min(minY, point.y);
-            maxY = std::max(maxY, point.y);
-        }
-
-        const float z = (screenZoom > 1.0e-6f) ? screenZoom : 1.0f;
-        const float sizeTolerance = std::max(0.001f, 0.5f / z);
-        const bool contentMatchesCanvasWidth
-            = std::abs((maxX - minX) - snap.canvasSize.x) <= sizeTolerance;
-        const bool contentMatchesCanvasHeight
-            = std::abs((maxY - minY) - snap.canvasSize.y) <= sizeTolerance;
-        const bool suppressCenterPointX = snap.snapToCanvasEdges && contentMatchesCanvasWidth;
-        const bool suppressCenterPointY = snap.snapToCanvasEdges && contentMatchesCanvasHeight;
-
-        for (size_t i = 0; i < points.size(); ++i) {
-            const Vector2& point = points[i];
-            const bool centerPoint = (i == points.size() - 1);
-            const AutoSnapCandidate candidate
-                = findAutoSnapOffsetForPoint(point, snap, viewport, screenZoom,
-                    !centerPoint || !suppressCenterPointX, !centerPoint || !suppressCenterPointY);
-            if (candidate.hasX && candidate.screenDistanceXSq < best.screenDistanceXSq) {
-                best.hasX = true;
-                best.offset.x = candidate.offset.x;
-                best.guideX = candidate.guideX;
-                best.screenDistanceXSq = candidate.screenDistanceXSq;
-            }
-            if (candidate.hasY && candidate.screenDistanceYSq < best.screenDistanceYSq) {
-                best.hasY = true;
-                best.offset.y = candidate.offset.y;
-                best.guideY = candidate.guideY;
-                best.screenDistanceYSq = candidate.screenDistanceYSq;
-            }
-        }
-        return best;
-    }
-
-    void clearAutoSnapGuide() { m_autoSnapGuide = {}; }
-
-    void setAutoSnapGuide(const AutoSnapCandidate& candidate)
-    {
-        m_autoSnapGuide.hasVertical = candidate.hasX;
-        m_autoSnapGuide.verticalX = candidate.guideX;
-        m_autoSnapGuide.hasSecondVertical = false;
-        m_autoSnapGuide.secondVerticalX = 0.0f;
-        m_autoSnapGuide.hasHorizontal = candidate.hasY;
-        m_autoSnapGuide.horizontalY = candidate.guideY;
-        m_autoSnapGuide.hasSecondHorizontal = false;
-        m_autoSnapGuide.secondHorizontalY = 0.0f;
-    }
-
-    void setMoveAutoSnapGuide(
-        const AutoSnapCandidate& candidate, const TransformSnapContext& snap, float screenZoom)
-    {
-        setAutoSnapGuide(candidate);
-        if (!snap.snapToCanvasEdges) {
-            return;
-        }
-
-        const float w = snap.canvasSize.x;
-        const float h = snap.canvasSize.y;
-        if (w <= 0.0f || h <= 0.0f) {
-            return;
-        }
-
-        const float z = (screenZoom > 1.0e-6f) ? screenZoom : 1.0f;
-        const float edgeTolerance = std::max(0.001f, 0.5f / z);
-        const float rangeMargin = AUTO_SNAP_SCREEN_THRESHOLD_PX / z;
-        const auto points = transformSnapPoints();
-
-        auto guideMatches = [edgeTolerance](float guide, float edge) {
-            return std::abs(guide - edge) <= edgeTolerance;
-        };
-
-        if (candidate.hasX) {
-            const bool primaryLeft = guideMatches(candidate.guideX, 0.0f);
-            const bool primaryRight = guideMatches(candidate.guideX, w);
-            if (primaryLeft != primaryRight) {
-                const float opposite = primaryLeft ? w : 0.0f;
-                for (const Vector2& point : points) {
-                    const float snappedX = point.x + candidate.offset.x;
-                    const float snappedY = point.y + (candidate.hasY ? candidate.offset.y : 0.0f);
-                    if (std::abs(snappedX - opposite) <= edgeTolerance && snappedY >= -rangeMargin
-                        && snappedY <= h + rangeMargin) {
-                        m_autoSnapGuide.hasSecondVertical = true;
-                        m_autoSnapGuide.secondVerticalX = opposite;
-                        break;
-                    }
-                }
-            }
-        }
-
-        if (candidate.hasY) {
-            const bool primaryTop = guideMatches(candidate.guideY, 0.0f);
-            const bool primaryBottom = guideMatches(candidate.guideY, h);
-            if (primaryTop != primaryBottom) {
-                const float opposite = primaryTop ? h : 0.0f;
-                for (const Vector2& point : points) {
-                    const float snappedX = point.x + (candidate.hasX ? candidate.offset.x : 0.0f);
-                    const float snappedY = point.y + candidate.offset.y;
-                    if (std::abs(snappedY - opposite) <= edgeTolerance && snappedX >= -rangeMargin
-                        && snappedX <= w + rangeMargin) {
-                        m_autoSnapGuide.hasSecondHorizontal = true;
-                        m_autoSnapGuide.secondHorizontalY = opposite;
-                        break;
-                    }
-                }
-            }
-        }
-    }
-
-    void setResizeAutoSnapGuide(const ResizeAutoSnapCandidate& candidate,
-        const TransformSnapContext& snap, const Viewport* viewport, float screenZoom,
-        const Vector2& oppositeWorld)
-    {
-        m_autoSnapGuide = {};
-        if (candidate.hasX) {
-            m_autoSnapGuide.hasVertical = true;
-            m_autoSnapGuide.verticalX = candidate.targetX;
-
-            const AutoSnapTargetCandidate opposite
-                = findAutoSnapTargetX(oppositeWorld, snap, viewport, screenZoom);
-            if (opposite.valid && std::abs(opposite.target - candidate.targetX) > 0.001f) {
-                m_autoSnapGuide.hasSecondVertical = true;
-                m_autoSnapGuide.secondVerticalX = opposite.target;
-            }
-        }
-        if (candidate.hasY) {
-            m_autoSnapGuide.hasHorizontal = true;
-            m_autoSnapGuide.horizontalY = candidate.targetY;
-
-            const AutoSnapTargetCandidate opposite
-                = findAutoSnapTargetY(oppositeWorld, snap, viewport, screenZoom);
-            if (opposite.valid && std::abs(opposite.target - candidate.targetY) > 0.001f) {
-                m_autoSnapGuide.hasSecondHorizontal = true;
-                m_autoSnapGuide.secondHorizontalY = opposite.target;
-            }
-        }
-    }
-
-    void translateCurrentTransform(const Vector2& offset)
-    {
-        if (std::abs(offset.x) <= 1.0e-6f && std::abs(offset.y) <= 1.0e-6f) {
-            return;
-        }
-
-        if (m_state.hasDeformMesh()) {
-            m_state.translateDeformMesh(offset);
-            return;
-        }
-
-        if (m_state.hasFreeQuad()) {
-            auto q = *m_state.freeCorners;
-            for (auto& corner : q) {
-                corner.x += offset.x;
-                corner.y += offset.y;
-            }
-            m_state.freeCorners = q;
-            return;
-        }
-
-        m_state.translation
-            = { m_state.translation.x + offset.x, m_state.translation.y + offset.y };
-    }
-
-    void keepMoveSmoothingAlignedWithSnap(const Vector2& offset)
-    {
-        if (m_activeHandle != TransformHandle::Move || !m_moveTranslationAnimActive) {
-            return;
-        }
-
-        m_moveSmoothOffset.x += offset.x;
-        m_moveSmoothOffset.y += offset.y;
-        m_moveTargetOffset.x += offset.x;
-        m_moveTargetOffset.y += offset.y;
-        m_moveSmoothOffset = pixelAlignedMoveOffset(m_moveSmoothOffset);
-        m_moveTargetOffset = pixelAlignedMoveOffset(m_moveTargetOffset);
-    }
-
-    bool applyMoveTargetAutoSnap(const TransformSnapContext* snapContext, const Viewport* viewport,
-        float screenZoom, Qt::KeyboardModifiers mods, const Vector2& cursorWorldPos)
-    {
-        if (!snapContext || (!snapContext->snapToCanvasCenter && !snapContext->snapToCanvasEdges)) {
-            clearAutoSnapGuide();
+        (void) cursorWorldPos;
+        if (!m_snapSession) {
             return false;
         }
         if (m_activeHandle == TransformHandle::Move && (mods & Qt::AltModifier)) {
-            clearAutoSnapGuide();
+            m_snapSession->clear();
             return false;
         }
-        const bool allowNewSnapConnections
-            = autoSnapSpeedAllowsNewConnections(cursorWorldPos, viewport, screenZoom);
 
         const TransformState savedState = m_state;
         const Vector2 savedSmoothOffset = m_moveSmoothOffset;
 
         m_moveSmoothOffset = m_moveTargetOffset;
         applyMoveSmoothOffsetToState();
-        AutoSnapCandidate candidate = findAutoSnapOffset(*snapContext, viewport, screenZoom);
-        candidate = filterMoveAutoSnapCandidateForShiftLock(candidate, viewport, screenZoom);
-        candidate = filterAutoSnapCandidateForSpeed(candidate, allowNewSnapConnections, screenZoom);
-        if (candidate.valid()) {
-            const TransformAutoSnapGuideState previousGuide = m_autoSnapGuide;
-            setMoveAutoSnapGuide(candidate, *snapContext, screenZoom);
-            pruneAutoSnapGuideStateForSpeed(previousGuide, allowNewSnapConnections, screenZoom);
-            pruneAutoSnapGuideStateForShiftLock(viewport, screenZoom);
+        bool allowX = true;
+        bool allowY = true;
+        if ((mods & Qt::ShiftModifier) && m_moveShiftLineSlot != ShiftMoveLineSlot::None) {
+            allowX = m_moveShiftLineSlot == ShiftMoveLineSlot::Horizontal;
+            allowY = m_moveShiftLineSlot == ShiftMoveLineSlot::Vertical;
         }
+        const SnapResult result
+            = m_snapSession->solveMove(m_state.transformedAABB(), viewport, screenZoom, allowX, allowY);
 
         m_state = savedState;
         m_moveSmoothOffset = savedSmoothOffset;
 
-        if (!candidate.valid()) {
-            clearAutoSnapGuide();
+        if (!result.active()) {
             return false;
         }
 
-        m_moveTargetOffset = pixelAlignedMoveOffset({ m_moveTargetOffset.x + candidate.offset.x,
-            m_moveTargetOffset.y + candidate.offset.y });
+        m_moveTargetOffset = { m_moveTargetOffset.x + result.correction.x,
+            m_moveTargetOffset.y + result.correction.y };
+        if (m_snapSession->coordinatePolicy() == SnapCoordinatePolicy::PixelAligned) {
+            m_moveTargetOffset = pixelAlignedMoveOffset(m_moveTargetOffset);
+        }
+        // Keep the rendered geometry on the relation represented by the guide.
+        m_moveSmoothOffset = m_moveTargetOffset;
+        applyMoveSmoothOffsetToState();
         return true;
     }
 
-    bool snapActiveFreeCornerOnly(const TransformSnapContext& snap, const Viewport* viewport,
-        float screenZoom, bool allowNewSnapConnections)
+    bool snapActiveFreeCornerOnly(const Viewport* viewport, float screenZoom)
     {
         if (!m_state.hasFreeQuad() || !m_ctrlFreeDragActive || !isCornerHandle(m_activeHandle)) {
             return false;
@@ -1455,22 +986,25 @@ private:
         }
 
         auto q = *m_state.freeCorners;
-        AutoSnapCandidate candidate
-            = findAutoSnapOffsetForPoint(q[static_cast<size_t>(idx)], snap, viewport, screenZoom);
-        candidate = filterAutoSnapCandidateForSpeed(candidate, allowNewSnapConnections, screenZoom);
+        const Vector2 point = q[static_cast<size_t>(idx)];
+        const SnapResult result = m_snapSession->solvePoint(point, viewport, screenZoom);
+        AutoSnapCandidate candidate;
+        candidate.hasX = result.xRelation.has_value();
+        candidate.hasY = result.yRelation.has_value();
+        candidate.offset = result.correction;
+        candidate.guideX = point.x + result.correction.x;
+        candidate.guideY = point.y + result.correction.y;
         if (!candidate.valid()) {
             return false;
         }
 
-        setAutoSnapGuide(candidate);
         q[static_cast<size_t>(idx)].x += candidate.offset.x;
         q[static_cast<size_t>(idx)].y += candidate.offset.y;
         m_state.freeCorners = q;
         return true;
     }
 
-    AutoSnapCandidate findFreeSideAutoSnapOffset(
-        const TransformSnapContext& snap, const Viewport* viewport, float screenZoom) const
+    AutoSnapCandidate findFreeSideAutoSnapOffset(const Viewport* viewport, float screenZoom)
     {
         AutoSnapCandidate best;
         if (!m_state.hasFreeQuad() || !isSideHandle(m_activeHandle)) {
@@ -1488,28 +1022,20 @@ private:
                 { (q[static_cast<size_t>(i)].x + q[static_cast<size_t>(j)].x) * 0.5f,
                     (q[static_cast<size_t>(i)].y + q[static_cast<size_t>(j)].y) * 0.5f } } };
 
-        for (const Vector2& point : points) {
-            const AutoSnapCandidate candidate
-                = findAutoSnapOffsetForPoint(point, snap, viewport, screenZoom);
-            if (candidate.hasX && candidate.screenDistanceXSq < best.screenDistanceXSq) {
-                best.hasX = true;
-                best.offset.x = candidate.offset.x;
-                best.guideX = candidate.guideX;
-                best.screenDistanceXSq = candidate.screenDistanceXSq;
-            }
-            if (candidate.hasY && candidate.screenDistanceYSq < best.screenDistanceYSq) {
-                best.hasY = true;
-                best.offset.y = candidate.offset.y;
-                best.guideY = candidate.guideY;
-                best.screenDistanceYSq = candidate.screenDistanceYSq;
-            }
-        }
-
+        const Vector2 point = points.back();
+        const SnapResult result = m_snapSession->solvePoint(point, viewport, screenZoom);
+        best.hasX = result.xRelation.has_value();
+        best.hasY = result.yRelation.has_value();
+        best.offset = result.correction;
+        best.guideX = point.x + result.correction.x;
+        best.guideY = point.y + result.correction.y;
+        best.screenDistanceXSq = result.correction.x * result.correction.x;
+        best.screenDistanceYSq = result.correction.y * result.correction.y;
         return best;
     }
 
-    ResizeAutoSnapCandidate findResizeAutoSnapCandidate(const TransformSnapContext& snap,
-        const Viewport* viewport, float screenZoom, Qt::KeyboardModifiers mods) const
+    ResizeAutoSnapCandidate findResizeAutoSnapCandidate(
+        const Viewport* viewport, float screenZoom, Qt::KeyboardModifiers mods)
     {
         ResizeAutoSnapCandidate candidate;
         if (!isCornerHandle(m_activeHandle) && !isSideHandle(m_activeHandle)) {
@@ -1522,26 +1048,26 @@ private:
         const bool allowY = isCornerHandle(m_activeHandle) || m_activeHandle == TransformHandle::Top
             || m_activeHandle == TransformHandle::Bottom;
 
-        if (allowX) {
-            const AutoSnapTargetCandidate x
-                = findAutoSnapTargetX(activePoint, snap, viewport, screenZoom);
-            if (x.valid) {
-                candidate.hasX = true;
-                candidate.targetX = x.target;
-                candidate.screenDistanceXSq = x.screenDistanceSq;
-            }
+        SnapResult result
+            = m_snapSession->solvePoint(activePoint, viewport, screenZoom, false, allowX, allowY);
+        const bool freeResize = (mods & Qt::ShiftModifier);
+        if (!freeResize && isCornerHandle(m_activeHandle) && result.xRelation
+            && result.yRelation) {
+            const bool keepX = std::abs(result.correction.x) <= std::abs(result.correction.y);
+            result = m_snapSession->solvePoint(
+                activePoint, viewport, screenZoom, false, keepX, !keepX);
         }
-        if (allowY) {
-            const AutoSnapTargetCandidate y
-                = findAutoSnapTargetY(activePoint, snap, viewport, screenZoom);
-            if (y.valid) {
-                candidate.hasY = true;
-                candidate.targetY = y.target;
-                candidate.screenDistanceYSq = y.screenDistanceSq;
-            }
+        if (result.xRelation) {
+            candidate.hasX = true;
+            candidate.targetX = activePoint.x + result.correction.x;
+            candidate.screenDistanceXSq = result.correction.x * result.correction.x;
+        }
+        if (result.yRelation) {
+            candidate.hasY = true;
+            candidate.targetY = activePoint.y + result.correction.y;
+            candidate.screenDistanceYSq = result.correction.y * result.correction.y;
         }
 
-        const bool freeResize = (mods & Qt::ShiftModifier);
         if (!freeResize && isCornerHandle(m_activeHandle) && candidate.hasX && candidate.hasY) {
             if (candidate.screenDistanceXSq <= candidate.screenDistanceYSq) {
                 candidate.hasY = false;
@@ -1552,8 +1078,8 @@ private:
         return candidate;
     }
 
-    bool applyClassicResizeAutoSnap(const TransformSnapContext& snap, const Viewport* viewport,
-        float screenZoom, Qt::KeyboardModifiers mods, bool allowNewSnapConnections)
+    bool applyClassicResizeAutoSnap(
+        const Viewport* viewport, float screenZoom, Qt::KeyboardModifiers mods)
     {
         if (m_state.hasFreeQuad() || m_state.hasDeformMesh() || m_ctrlFreeDragActive
             || (!isCornerHandle(m_activeHandle) && !isSideHandle(m_activeHandle))) {
@@ -1561,9 +1087,7 @@ private:
         }
 
         ResizeAutoSnapCandidate candidate
-            = findResizeAutoSnapCandidate(snap, viewport, screenZoom, mods);
-        candidate
-            = filterResizeAutoSnapCandidateForSpeed(candidate, allowNewSnapConnections, screenZoom);
+            = findResizeAutoSnapCandidate(viewport, screenZoom, mods);
         if (!candidate.valid()) {
             return false;
         }
@@ -1658,11 +1182,6 @@ private:
                 m_dragStartTranslation.y + (anchorWorld.y - anchorWorldNew.y) };
         }
 
-        const Vector2 oppositeWorld = contentToWorld(
-            oppositeAnchor(m_activeHandle), m_state.scale, m_state.rotation, m_state.translation);
-        const TransformAutoSnapGuideState previousGuide = m_autoSnapGuide;
-        setResizeAutoSnapGuide(candidate, snap, viewport, screenZoom, oppositeWorld);
-        pruneAutoSnapGuideStateForSpeed(previousGuide, allowNewSnapConnections, screenZoom);
         return true;
     }
 
@@ -1698,8 +1217,8 @@ private:
         }
     }
 
-    bool applyFreeQuadSideResizeAutoSnap(const TransformSnapContext& snap, const Viewport* viewport,
-        float screenZoom, Qt::KeyboardModifiers mods, bool allowNewSnapConnections)
+    bool applyFreeQuadSideResizeAutoSnap(
+        const Viewport* viewport, float screenZoom, Qt::KeyboardModifiers mods)
     {
         if (!m_state.hasFreeQuad() || !m_dragStartQuad || m_ctrlFreeDragActive
             || !isSideHandle(m_activeHandle)) {
@@ -1707,9 +1226,7 @@ private:
         }
 
         ResizeAutoSnapCandidate candidate
-            = findResizeAutoSnapCandidate(snap, viewport, screenZoom, mods);
-        candidate
-            = filterResizeAutoSnapCandidateForSpeed(candidate, allowNewSnapConnections, screenZoom);
+            = findResizeAutoSnapCandidate(viewport, screenZoom, mods);
         if (!candidate.valid()) {
             return false;
         }
@@ -1786,24 +1303,17 @@ private:
             return false;
         }
 
-        const TransformHandle opposite = oppositeSideHandle(m_activeHandle);
-        const Vector2 oppositeWorld = m_state.handlePosition(opposite);
-        const TransformAutoSnapGuideState previousGuide = m_autoSnapGuide;
-        setResizeAutoSnapGuide(candidate, snap, viewport, screenZoom, oppositeWorld);
-        pruneAutoSnapGuideStateForSpeed(previousGuide, allowNewSnapConnections, screenZoom);
         return true;
     }
 
-    bool snapActiveFreeSideOnly(const TransformSnapContext& snap, const Viewport* viewport,
-        float screenZoom, Qt::KeyboardModifiers mods, bool allowNewSnapConnections)
+    bool snapActiveFreeSideOnly(
+        const Viewport* viewport, float screenZoom, Qt::KeyboardModifiers mods)
     {
-        if (!m_state.hasFreeQuad() || !m_ctrlFreeDragActive || !isSideHandle(m_activeHandle)
-            || (mods & Qt::AltModifier)) {
+        if (!m_state.hasFreeQuad() || !m_ctrlFreeDragActive || !isSideHandle(m_activeHandle)) {
             return false;
         }
 
-        AutoSnapCandidate candidate = findFreeSideAutoSnapOffset(snap, viewport, screenZoom);
-        candidate = filterAutoSnapCandidateForSpeed(candidate, allowNewSnapConnections, screenZoom);
+        AutoSnapCandidate candidate = findFreeSideAutoSnapOffset(viewport, screenZoom);
         if (!candidate.valid()) {
             return false;
         }
@@ -1815,7 +1325,6 @@ private:
 
         const Vector2 activePoint = m_state.handlePosition(m_activeHandle);
         Vector2 offset { 0.0f, 0.0f };
-        AutoSnapCandidate guideCandidate = candidate;
         if (mods & Qt::ShiftModifier) {
             const auto& qCurrent = *m_state.freeCorners;
             Vector2 sideDir
@@ -1832,15 +1341,14 @@ private:
             if (std::abs(coeff) <= 0.001f) {
                 return false;
             }
+            if (m_snapSession) {
+                (void) m_snapSession->solvePoint(
+                    activePoint, viewport, screenZoom, false, snapX, !snapX);
+            }
             const float target = snapX ? candidate.guideX : candidate.guideY;
             const float current = snapX ? activePoint.x : activePoint.y;
             const float amount = (target - current) / coeff;
             offset = { normal.x * amount, normal.y * amount };
-            if (snapX) {
-                guideCandidate.hasY = false;
-            } else {
-                guideCandidate.hasX = false;
-            }
         } else {
             if (candidate.hasX) {
                 offset.x = candidate.offset.x;
@@ -1857,84 +1365,61 @@ private:
         q[static_cast<size_t>(j)].y += offset.y;
         m_state.freeCorners = q;
 
-        const TransformAutoSnapGuideState previousGuide = m_autoSnapGuide;
-        setAutoSnapGuide(guideCandidate);
-        pruneAutoSnapGuideStateForSpeed(previousGuide, allowNewSnapConnections, screenZoom);
         return true;
     }
 
-    bool applyAutoSnap(const TransformSnapContext* snapContext, const Viewport* viewport,
-        float screenZoom, Qt::KeyboardModifiers mods, const Vector2& cursorWorldPos)
+    bool applyAutoSnap(const Viewport* viewport, float screenZoom, Qt::KeyboardModifiers mods,
+        const Vector2& cursorWorldPos)
     {
-        if (!snapContext || (!snapContext->snapToCanvasCenter && !snapContext->snapToCanvasEdges)) {
-            clearAutoSnapGuide();
+        if (!m_snapSession) {
             return false;
         }
         if (m_activeHandle == TransformHandle::Rotate) {
-            clearAutoSnapGuide();
             return false;
         }
         if (m_activeHandle == TransformHandle::Move && (mods & Qt::AltModifier)) {
-            clearAutoSnapGuide();
+            m_snapSession->clear();
             return false;
         }
-        // Auto snap is disabled in deform mode — it isn't useful there and behaves buggily.
+        // Deform points use canvas-only snap; deform-region drags remain unsnapped.
+        if (m_state.hasDeformMesh() && m_activeDeformPoint >= 0) {
+            auto& vertices = m_state.deformMesh->vertices;
+            const size_t index = static_cast<size_t>(m_activeDeformPoint);
+            if (index >= vertices.size()) {
+                m_snapSession->clear();
+                return false;
+            }
+            const Vector2 point = vertices[index].target;
+            const SnapResult result
+                = m_snapSession->solvePoint(point, viewport, screenZoom, true);
+            vertices[index].target.x += result.correction.x;
+            vertices[index].target.y += result.correction.y;
+            return result.active();
+        }
         if (m_state.hasDeformMesh()) {
-            clearAutoSnapGuide();
+            m_snapSession->clear();
             return false;
         }
-        const bool allowNewSnapConnections
-            = autoSnapSpeedAllowsNewConnections(cursorWorldPos, viewport, screenZoom);
+        (void) cursorWorldPos;
 
-        if (applyClassicResizeAutoSnap(
-                *snapContext, viewport, screenZoom, mods, allowNewSnapConnections)) {
+        if (applyClassicResizeAutoSnap(viewport, screenZoom, mods)) {
             return true;
         }
 
-        if (applyFreeQuadSideResizeAutoSnap(
-                *snapContext, viewport, screenZoom, mods, allowNewSnapConnections)) {
+        if (applyFreeQuadSideResizeAutoSnap(viewport, screenZoom, mods)) {
             return true;
         }
 
-        if (snapActiveFreeSideOnly(
-                *snapContext, viewport, screenZoom, mods, allowNewSnapConnections)) {
+        if (snapActiveFreeSideOnly(viewport, screenZoom, mods)) {
             return true;
         }
 
-        const bool freeCornerScalarMode = m_ctrlFreeDragActive && isCornerHandle(m_activeHandle)
-            && ((mods & (Qt::ShiftModifier | Qt::AltModifier)) != 0);
-        if (!freeCornerScalarMode
-            && snapActiveFreeCornerOnly(
-                *snapContext, viewport, screenZoom, allowNewSnapConnections)) {
+        if (snapActiveFreeCornerOnly(viewport, screenZoom)) {
             return true;
         }
 
-        if (isCornerHandle(m_activeHandle) || isSideHandle(m_activeHandle)) {
-            clearAutoSnapGuide();
-            return false;
-        }
-
-        AutoSnapCandidate candidate = findAutoSnapOffset(*snapContext, viewport, screenZoom);
-        if (m_activeHandle == TransformHandle::Move) {
-            candidate = filterMoveAutoSnapCandidateForShiftLock(candidate, viewport, screenZoom);
-        }
-        candidate = filterAutoSnapCandidateForSpeed(candidate, allowNewSnapConnections, screenZoom);
-        if (!candidate.valid()) {
-            clearAutoSnapGuide();
-            return false;
-        }
-
-        if (m_activeHandle == TransformHandle::Move) {
-            const TransformAutoSnapGuideState previousGuide = m_autoSnapGuide;
-            setMoveAutoSnapGuide(candidate, *snapContext, screenZoom);
-            pruneAutoSnapGuideStateForSpeed(previousGuide, allowNewSnapConnections, screenZoom);
-            pruneAutoSnapGuideStateForShiftLock(viewport, screenZoom);
-        } else {
-            setAutoSnapGuide(candidate);
-        }
-        translateCurrentTransform(candidate.offset);
-        keepMoveSmoothingAlignedWithSnap(candidate.offset);
-        return true;
+        m_snapSession->clear();
+        return false;
     }
 
     bool handleDeformPointDrag(const Vector2& worldPos)
@@ -2293,18 +1778,18 @@ private:
         const bool shiftHeld = (mods & Qt::ShiftModifier);
 
         if (shiftHeld && m_dragStartQuad) {
-            const Vector2 rawOff = pixelAlignedMoveOffset(
+            const Vector2 rawOff = moveOffsetForPolicy(
                 { worldPos.x - m_dragStartWorld.x, worldPos.y - m_dragStartWorld.y });
             beginShiftMoveReferenceIfNeeded();
             updateShiftMoveLineAxis(worldPos, rawOff, screenZoom, viewport);
             const Vector2 centerDragStart = quadCenter(*m_dragStartQuad);
-            m_moveTargetOffset = pixelAlignedMoveOffset(shiftConstrainedMoveAlongFixedAxis(worldPos,
+            m_moveTargetOffset = moveOffsetForPolicy(shiftConstrainedMoveAlongFixedAxis(worldPos,
                 m_dragStartWorld, shiftMoveReferenceWorld(), centerDragStart, m_moveShiftLineUnit));
             if (!m_wasShiftHeldForMove) {
                 const auto& q0 = *m_dragStartQuad;
                 const auto& qc = *m_state.freeCorners;
                 m_moveSmoothOffset
-                    = pixelAlignedMoveOffset({ qc[0].x - q0[0].x, qc[0].y - q0[0].y });
+                    = moveOffsetForPolicy({ qc[0].x - q0[0].x, qc[0].y - q0[0].y });
             }
             m_moveTranslationAnimActive = true;
             m_wasShiftHeldForMove = true;
@@ -2317,7 +1802,7 @@ private:
         clearShiftMoveReference();
         m_moveTranslationAnimActive = false;
         if (m_dragStartQuad) {
-            m_moveTargetOffset = pixelAlignedMoveOffset(
+            m_moveTargetOffset = moveOffsetForPolicy(
                 { worldPos.x - m_dragStartWorld.x, worldPos.y - m_dragStartWorld.y });
             m_dragPrevWorld = worldPos;
         } else {
@@ -2966,138 +2451,13 @@ private:
         return { std::round(offset.x), std::round(offset.y) };
     }
 
-    void resetAutoSnapSpeedGate() { m_autoSnapSpeedSampleValid = false; }
-
-    static bool sameAutoSnapGuideValue(float a, float b, float screenZoom)
+    Vector2 moveOffsetForPolicy(const Vector2& offset) const
     {
-        const float z = (screenZoom > 1.0e-6f) ? screenZoom : 1.0f;
-        const float tolerance = std::max(0.001f, 0.5f / z);
-        return std::abs(a - b) <= tolerance;
-    }
-
-    static bool autoSnapStateHasVerticalGuide(
-        const TransformAutoSnapGuideState& state, float guideX, float screenZoom)
-    {
-        return (state.hasVertical && sameAutoSnapGuideValue(state.verticalX, guideX, screenZoom))
-            || (state.hasSecondVertical
-                && sameAutoSnapGuideValue(state.secondVerticalX, guideX, screenZoom));
-    }
-
-    static bool autoSnapStateHasHorizontalGuide(
-        const TransformAutoSnapGuideState& state, float guideY, float screenZoom)
-    {
-        return (state.hasHorizontal
-                   && sameAutoSnapGuideValue(state.horizontalY, guideY, screenZoom))
-            || (state.hasSecondHorizontal
-                && sameAutoSnapGuideValue(state.secondHorizontalY, guideY, screenZoom));
-    }
-
-    bool currentAutoSnapHasVerticalGuide(float guideX, float screenZoom) const
-    {
-        return autoSnapStateHasVerticalGuide(m_autoSnapGuide, guideX, screenZoom);
-    }
-
-    bool currentAutoSnapHasHorizontalGuide(float guideY, float screenZoom) const
-    {
-        return autoSnapStateHasHorizontalGuide(m_autoSnapGuide, guideY, screenZoom);
-    }
-
-    AutoSnapCandidate filterAutoSnapCandidateForSpeed(
-        const AutoSnapCandidate& candidate, bool allowNewSnapConnections, float screenZoom) const
-    {
-        if (allowNewSnapConnections) {
-            return candidate;
+        if (m_snapSession
+            && m_snapSession->coordinatePolicy() == SnapCoordinatePolicy::Continuous) {
+            return offset;
         }
-
-        AutoSnapCandidate filtered = candidate;
-        if (filtered.hasX && !currentAutoSnapHasVerticalGuide(filtered.guideX, screenZoom)) {
-            filtered.hasX = false;
-            filtered.offset.x = 0.0f;
-            filtered.screenDistanceXSq = std::numeric_limits<float>::max();
-        }
-        if (filtered.hasY && !currentAutoSnapHasHorizontalGuide(filtered.guideY, screenZoom)) {
-            filtered.hasY = false;
-            filtered.offset.y = 0.0f;
-            filtered.screenDistanceYSq = std::numeric_limits<float>::max();
-        }
-        return filtered;
-    }
-
-    ResizeAutoSnapCandidate filterResizeAutoSnapCandidateForSpeed(
-        const ResizeAutoSnapCandidate& candidate, bool allowNewSnapConnections,
-        float screenZoom) const
-    {
-        if (allowNewSnapConnections) {
-            return candidate;
-        }
-
-        ResizeAutoSnapCandidate filtered = candidate;
-        if (filtered.hasX && !currentAutoSnapHasVerticalGuide(filtered.targetX, screenZoom)) {
-            filtered.hasX = false;
-            filtered.screenDistanceXSq = std::numeric_limits<float>::max();
-        }
-        if (filtered.hasY && !currentAutoSnapHasHorizontalGuide(filtered.targetY, screenZoom)) {
-            filtered.hasY = false;
-            filtered.screenDistanceYSq = std::numeric_limits<float>::max();
-        }
-        return filtered;
-    }
-
-    void pruneAutoSnapGuideStateForSpeed(const TransformAutoSnapGuideState& previousGuide,
-        bool allowNewSnapConnections, float screenZoom)
-    {
-        if (allowNewSnapConnections) {
-            return;
-        }
-
-        if (m_autoSnapGuide.hasVertical
-            && !autoSnapStateHasVerticalGuide(
-                previousGuide, m_autoSnapGuide.verticalX, screenZoom)) {
-            m_autoSnapGuide.hasVertical = false;
-        }
-        if (m_autoSnapGuide.hasSecondVertical
-            && !autoSnapStateHasVerticalGuide(
-                previousGuide, m_autoSnapGuide.secondVerticalX, screenZoom)) {
-            m_autoSnapGuide.hasSecondVertical = false;
-        }
-        if (m_autoSnapGuide.hasHorizontal
-            && !autoSnapStateHasHorizontalGuide(
-                previousGuide, m_autoSnapGuide.horizontalY, screenZoom)) {
-            m_autoSnapGuide.hasHorizontal = false;
-        }
-        if (m_autoSnapGuide.hasSecondHorizontal
-            && !autoSnapStateHasHorizontalGuide(
-                previousGuide, m_autoSnapGuide.secondHorizontalY, screenZoom)) {
-            m_autoSnapGuide.hasSecondHorizontal = false;
-        }
-    }
-
-    bool autoSnapSpeedAllowsNewConnections(
-        const Vector2& worldPos, const Viewport* viewport, float screenZoom)
-    {
-        const Vector2 screenPos = screenPointForWorld(worldPos, viewport, screenZoom);
-        const auto now = std::chrono::steady_clock::now();
-
-        if (!m_autoSnapSpeedSampleValid) {
-            m_autoSnapLastScreenPos = screenPos;
-            m_autoSnapLastSpeedTime = now;
-            m_autoSnapSpeedSampleValid = true;
-            return true;
-        }
-
-        const float dt = std::chrono::duration<float>(now - m_autoSnapLastSpeedTime).count();
-        const Vector2 delta { screenPos.x - m_autoSnapLastScreenPos.x,
-            screenPos.y - m_autoSnapLastScreenPos.y };
-        const float dist = std::sqrt(delta.x * delta.x + delta.y * delta.y);
-
-        m_autoSnapLastScreenPos = screenPos;
-        m_autoSnapLastSpeedTime = now;
-
-        if (dt <= 0.001f) {
-            return dist <= 1.0f;
-        }
-
-        return (dist / dt) <= SHIFT_MOVE_AXIS_SWITCH_MAX_SPEED_SCREEN_PX_PER_SEC;
+        return pixelAlignedMoveOffset(offset);
     }
 
     void resetMoveAxisGuideState()
@@ -3107,8 +2467,6 @@ private:
         m_moveGuideOpacityTarget = 0.f;
         m_moveGuideDisplayAngle = 0.f;
         m_moveGuideTargetAngle = 0.f;
-        clearAutoSnapGuide();
-        resetAutoSnapSpeedGate();
     }
 
     void resetMoveShiftSmoothState()
@@ -3125,7 +2483,7 @@ private:
 
     void applyMoveSmoothOffsetToState()
     {
-        const Vector2 offset = pixelAlignedMoveOffset(m_moveSmoothOffset);
+        const Vector2 offset = moveOffsetForPolicy(m_moveSmoothOffset);
         if (m_state.hasDeformMesh() && m_dragStartDeformMesh) {
             auto mesh = *m_dragStartDeformMesh;
             for (auto& vertex : mesh.vertices) {
@@ -3457,15 +2815,11 @@ private:
     Vector2 m_moveShiftLastScreenPos {};
     std::chrono::steady_clock::time_point m_moveShiftLastSpeedTime {};
 
-    bool m_autoSnapSpeedSampleValid = false;
-    Vector2 m_autoSnapLastScreenPos {};
-    std::chrono::steady_clock::time_point m_autoSnapLastSpeedTime {};
-
     float m_moveGuideTargetAngle = 0.f;
     float m_moveGuideDisplayAngle = 0.f;
     float m_moveGuideOpacity = 0.f;
     float m_moveGuideOpacityTarget = 0.f;
-    TransformAutoSnapGuideState m_autoSnapGuide;
+    std::unique_ptr<TransformSnapSession> m_snapSession;
 };
 
 } // namespace aether

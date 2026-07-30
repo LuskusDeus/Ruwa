@@ -8,6 +8,10 @@ add_executable(RuwaTests
     ../src/services/updates/SemanticVersion.cpp
     ../src/services/updates/UpdateManifest.cpp
     ../src/services/updates/UpdateSecurity.cpp
+    ../src/features/transform/TransformSnapSolver.cpp
+    ../src/features/transform/TransformSnapSession.cpp
+    ../src/features/canvas/scene/Camera2D.cpp
+    ../src/features/canvas/scene/Viewport.cpp
     ../src/shell/docking/layout/DockLayoutCalculator.cpp
     ../src/shell/docking/layout/DockSplitNode.cpp
     dab_shape_falloff_test.cpp
@@ -18,6 +22,7 @@ add_executable(RuwaTests
     project_serializer_test.cpp
     smoke_test.cpp
     taper_state_test.cpp
+    transform_snap_solver_test.cpp
     texture_replacement_math_test.cpp
     update_manifest_test.cpp
     update_security_test.cpp

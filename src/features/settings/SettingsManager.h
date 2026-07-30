@@ -84,6 +84,10 @@ public:
     // === EDITOR SETTERS ===
     void setAutoSaveInterval(int minutes); // 0=Off, 2=2min, 5=5min, 10=10min
     void setQuickshapesEnabled(bool enabled);
+    void setAutoSnapCanvasEnabled(bool enabled);
+    void setAutoSnapLayersEnabled(bool enabled);
+    void setAutoSnapEqualSpacingEnabled(bool enabled);
+    void setPixelAlignRasterMovesEnabled(bool enabled);
 
     // === PERFORMANCE SETTERS ===
     void setUndoMemoryLimitMb(int megabytes); // 300, 1024, 3072, 8192

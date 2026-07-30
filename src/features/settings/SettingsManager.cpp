@@ -171,6 +171,12 @@ void SettingsManager::saveAsync()
         settings.beginGroup("Editor");
         settings.setValue("autoSaveInterval", snapshot.editor.autoSaveInterval);
         settings.setValue("quickshapesEnabled", snapshot.editor.quickshapesEnabled);
+        settings.setValue("autoSnapCanvasEnabled", snapshot.editor.autoSnapCanvasEnabled);
+        settings.setValue("autoSnapLayersEnabled", snapshot.editor.autoSnapLayersEnabled);
+        settings.setValue(
+            "autoSnapEqualSpacingEnabled", snapshot.editor.autoSnapEqualSpacingEnabled);
+        settings.setValue(
+            "pixelAlignRasterMovesEnabled", snapshot.editor.pixelAlignRasterMovesEnabled);
         settings.endGroup();
 
         // Onboarding
@@ -598,6 +604,14 @@ void SettingsManager::loadEditor(QSettings& settings)
     m_settings.editor.autoSaveInterval = interval;
 
     m_settings.editor.quickshapesEnabled = settings.value("quickshapesEnabled", true).toBool();
+    m_settings.editor.autoSnapCanvasEnabled
+        = settings.value("autoSnapCanvasEnabled", true).toBool();
+    m_settings.editor.autoSnapLayersEnabled
+        = settings.value("autoSnapLayersEnabled", true).toBool();
+    m_settings.editor.autoSnapEqualSpacingEnabled
+        = settings.value("autoSnapEqualSpacingEnabled", true).toBool();
+    m_settings.editor.pixelAlignRasterMovesEnabled
+        = settings.value("pixelAlignRasterMovesEnabled", true).toBool();
 
     settings.endGroup();
 }
@@ -625,6 +639,12 @@ void SettingsManager::saveEditor(QSettings& settings)
 
     settings.setValue("autoSaveInterval", m_settings.editor.autoSaveInterval);
     settings.setValue("quickshapesEnabled", m_settings.editor.quickshapesEnabled);
+    settings.setValue("autoSnapCanvasEnabled", m_settings.editor.autoSnapCanvasEnabled);
+    settings.setValue("autoSnapLayersEnabled", m_settings.editor.autoSnapLayersEnabled);
+    settings.setValue(
+        "autoSnapEqualSpacingEnabled", m_settings.editor.autoSnapEqualSpacingEnabled);
+    settings.setValue(
+        "pixelAlignRasterMovesEnabled", m_settings.editor.pixelAlignRasterMovesEnabled);
 
     settings.endGroup();
 }
@@ -654,6 +674,38 @@ void SettingsManager::setQuickshapesEnabled(bool enabled)
 {
     if (m_settings.editor.quickshapesEnabled != enabled) {
         m_settings.editor.quickshapesEnabled = enabled;
+        emit settingsChanged();
+    }
+}
+
+void SettingsManager::setAutoSnapCanvasEnabled(bool enabled)
+{
+    if (m_settings.editor.autoSnapCanvasEnabled != enabled) {
+        m_settings.editor.autoSnapCanvasEnabled = enabled;
+        emit settingsChanged();
+    }
+}
+
+void SettingsManager::setAutoSnapLayersEnabled(bool enabled)
+{
+    if (m_settings.editor.autoSnapLayersEnabled != enabled) {
+        m_settings.editor.autoSnapLayersEnabled = enabled;
+        emit settingsChanged();
+    }
+}
+
+void SettingsManager::setAutoSnapEqualSpacingEnabled(bool enabled)
+{
+    if (m_settings.editor.autoSnapEqualSpacingEnabled != enabled) {
+        m_settings.editor.autoSnapEqualSpacingEnabled = enabled;
+        emit settingsChanged();
+    }
+}
+
+void SettingsManager::setPixelAlignRasterMovesEnabled(bool enabled)
+{
+    if (m_settings.editor.pixelAlignRasterMovesEnabled != enabled) {
+        m_settings.editor.pixelAlignRasterMovesEnabled = enabled;
         emit settingsChanged();
     }
 }

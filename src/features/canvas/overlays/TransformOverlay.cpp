@@ -436,9 +436,10 @@ void TransformOverlay::renderInternal(const TransformState& state, const Viewpor
         drawMoveAxisGuides(
             *moveAxisGuide, viewport, zoom, r, g, b, a, vpMatrix, documentWorldFromScreen);
     }
-    if (autoSnapGuides && autoSnapGuides->opacity > 0.002f) {
-        drawAutoSnapGuides(
-            *autoSnapGuides, viewport, zoom, r, g, b, a, vpMatrix, documentWorldFromScreen);
+    if (autoSnapGuides && autoSnapGuides->active()) {
+        const QColor accent = colors.accent;
+        drawAutoSnapGuides(*autoSnapGuides, viewport, zoom, accent.redF(), accent.greenF(),
+            accent.blueF(), 0.95f * accent.alphaF(), vpMatrix, documentWorldFromScreen);
     }
 
     if (!drawTransformChrome) {
@@ -579,30 +580,59 @@ void TransformOverlay::drawAutoSnapGuides(const TransformAutoSnapGuides& guides,
     const std::array<float, 16>& vpMatrix,
     const std::function<Vector2(const Vector2&)>* documentWorldFromScreen)
 {
-    if (!guides.hasVertical && !guides.hasSecondVertical && !guides.hasHorizontal
-        && !guides.hasSecondHorizontal)
+    if (!guides.active())
         return;
 
-    const float lineThicknessWorld = 2.5f / zoom;
-    const float ao = std::clamp(guides.opacity, 0.f, 1.f) * a;
+    (void) viewport;
+    (void) documentWorldFromScreen;
+    const float lineThicknessWorld = 1.5f / zoom;
+    const float lineExtensionWorld = 4.0f / zoom;
+    const float markerRadiusWorld = 3.0f / zoom;
+    const float tickHalfWorld = 4.0f / zoom;
 
-    auto drawGuide = [&](const Vector2& origin, const Vector2& dir) {
-        if (!isFinite(origin) || !isFinite(dir))
-            return;
-        Vector2 lineA, lineB;
-        spanAxisThroughViewport(viewport, documentWorldFromScreen, origin, dir, &lineA, &lineB);
-        if (isFinite(lineA) && isFinite(lineB))
-            drawCapsule(lineA, lineB, lineThicknessWorld, r, g, b, ao, vpMatrix);
-    };
-
-    if (guides.hasVertical)
-        drawGuide({ guides.verticalX, 0.0f }, { 0.0f, 1.0f });
-    if (guides.hasSecondVertical)
-        drawGuide({ guides.secondVerticalX, 0.0f }, { 0.0f, 1.0f });
-    if (guides.hasHorizontal)
-        drawGuide({ 0.0f, guides.horizontalY }, { 1.0f, 0.0f });
-    if (guides.hasSecondHorizontal)
-        drawGuide({ 0.0f, guides.secondHorizontalY }, { 1.0f, 0.0f });
+    for (const SnapGuideSegment& segment : guides.alignmentSegments) {
+        if (isFinite(segment.from) && isFinite(segment.to)) {
+            const Vector2 delta { segment.to.x - segment.from.x, segment.to.y - segment.from.y };
+            const float length = std::sqrt(delta.x * delta.x + delta.y * delta.y);
+            const Vector2 direction = length > 0.0001f
+                ? Vector2 { delta.x / length, delta.y / length }
+                : (segment.axis == SnapAxis::X ? Vector2 { 0.0f, 1.0f }
+                                               : Vector2 { 1.0f, 0.0f });
+            const Vector2 from { segment.from.x - direction.x * lineExtensionWorld,
+                segment.from.y - direction.y * lineExtensionWorld };
+            const Vector2 to { segment.to.x + direction.x * lineExtensionWorld,
+                segment.to.y + direction.y * lineExtensionWorld };
+            drawCapsule(from, to, lineThicknessWorld, r, g, b, a, vpMatrix);
+        }
+    }
+    for (const SnapGuideMarker& marker : guides.markers) {
+        if (isFinite(marker.position)) {
+            drawCircle(marker.position.x, marker.position.y,
+                marker.center ? markerRadiusWorld * 1.25f : markerRadiusWorld, 16, r, g, b, a,
+                vpMatrix);
+        }
+    }
+    for (const SnapSpacingDimension& dimension : guides.spacingDimensions) {
+        if (!isFinite(dimension.from) || !isFinite(dimension.to)) {
+            continue;
+        }
+        drawCapsule(
+            dimension.from, dimension.to, lineThicknessWorld, r, g, b, a, vpMatrix);
+        const Vector2 delta { dimension.to.x - dimension.from.x,
+            dimension.to.y - dimension.from.y };
+        const float length = std::sqrt(delta.x * delta.x + delta.y * delta.y);
+        if (length <= 0.0001f) {
+            continue;
+        }
+        const Vector2 perpendicular { -delta.y / length, delta.x / length };
+        for (const Vector2& endpoint : { dimension.from, dimension.to }) {
+            const Vector2 tickA { endpoint.x - perpendicular.x * tickHalfWorld,
+                endpoint.y - perpendicular.y * tickHalfWorld };
+            const Vector2 tickB { endpoint.x + perpendicular.x * tickHalfWorld,
+                endpoint.y + perpendicular.y * tickHalfWorld };
+            drawCapsule(tickA, tickB, lineThicknessWorld, r, g, b, a, vpMatrix);
+        }
+    }
 }
 
 void TransformOverlay::drawDeformMesh(const TransformState& state, float zoom, float r, float g,

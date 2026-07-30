@@ -39,6 +39,7 @@
 #include "features/canvas/selection/SelectionMaskOps.h"
 #include "features/canvas/scene/CanvasDisplayTransforms.h"
 #include "features/transform/TransformApplicator.h"
+#include "features/transform/TransformGeometry.h"
 #include "features/transform/TransformSessionCommand.h"
 
 #include <QDebug>
@@ -93,7 +94,6 @@
 #include <QPainterPath>
 #include <QPointer>
 #include <QPropertyAnimation>
-#include <QStringList>
 #include <QShowEvent>
 #include <QSet>
 #include <QThread>
@@ -102,10 +102,12 @@
 #include "platform/windows/WindowsInkFeedback.h"
 #include "features/canvas/rendering/LayerCompositingBuilder.h"
 #include "features/canvas/selection/CanvasSelectionController.h"
+#include "features/canvas/ui/CanvasMetricLabelOverlay.h"
 #include <algorithm>
 #include <atomic>
 #include <cmath>
 #include <cstring>
+#include <functional>
 #include <limits>
 #include <mutex>
 #include <unordered_map>
@@ -189,34 +191,6 @@ std::unordered_set<aether::TileKey, aether::TileKeyHash> retainedTextTileKeys(
     return aether::retainedCoverageTileKeys(layer->runtimeRetainedPayload->worldBounds);
 }
 
-aether::TransformState stateWithSourceBounds(
-    const aether::TransformState& storedState, const aether::Rect& sourceBounds)
-{
-    aether::TransformState state = storedState;
-    if (state.contentBounds.width <= 0.0f || state.contentBounds.height <= 0.0f) {
-        state.contentBounds = sourceBounds;
-        state.pivot = sourceBounds.center();
-        state.reset();
-        return state;
-    }
-
-    state.contentBounds = sourceBounds;
-    if (!state.hasFreeQuad() && !state.hasDeformMesh()) {
-        const aether::Vector2 oldPivot = state.pivot;
-        const aether::Vector2 newPivot = sourceBounds.center();
-        const float dpx = newPivot.x - oldPivot.x;
-        const float dpy = newPivot.y - oldPivot.y;
-        const float sdx = dpx * state.scale.x;
-        const float sdy = dpy * state.scale.y;
-        const float cosR = std::cos(state.rotation);
-        const float sinR = std::sin(state.rotation);
-        state.translation.x += (sdx * cosR - sdy * sinR) - dpx;
-        state.translation.y += (sdx * sinR + sdy * cosR) - dpy;
-        state.pivot = newPivot;
-    }
-    return state;
-}
-
 bool nearlyEqual(float a, float b, float epsilon = 0.0001f)
 {
     return std::abs(a - b) <= epsilon;
@@ -278,39 +252,6 @@ bool transformStatesNearlyEqual(const aether::TransformState& a, const aether::T
         && vectorNearlyEqual(a.scale, b.scale) && vectorNearlyEqual(a.pivot, b.pivot)
         && freeCornersNearlyEqual(a.freeCorners, b.freeCorners)
         && deformMeshesNearlyEqual(a.deformMesh, b.deformMesh);
-}
-
-std::optional<aether::Rect> transformBoundsForLayer(const ruwa::core::layers::LayerData* layer)
-{
-    if (!layer) {
-        return std::nullopt;
-    }
-    if (layer->isRaster()) {
-        const auto* grid = layer->pixelGrid();
-        if (!grid || grid->empty()) {
-            return std::nullopt;
-        }
-        return aether::TransformState::computeContentBounds(*grid);
-    }
-    if (layer->isIsolatedPixelLayer()) {
-        const auto* grid = layer->smartContentGrid.get();
-        if (!grid || grid->empty()) {
-            return std::nullopt;
-        }
-        const aether::Rect sourceBounds = aether::TransformState::computeContentBounds(*grid);
-        if (sourceBounds.width <= 0.0f || sourceBounds.height <= 0.0f) {
-            return std::nullopt;
-        }
-        return stateWithSourceBounds(layer->smartTransform, sourceBounds).transformedAABB();
-    }
-    if (layer->isText() && layer->textData) {
-        const aether::Rect sourceBounds = aether::computeTextLayoutSourceBounds(*layer->textData);
-        if (sourceBounds.width <= 0.0f || sourceBounds.height <= 0.0f) {
-            return std::nullopt;
-        }
-        return stateWithSourceBounds(layer->textData->transform, sourceBounds).transformedAABB();
-    }
-    return std::nullopt;
 }
 
 struct MoveToolContentHit {
@@ -411,7 +352,7 @@ bool layerHasPixelAt(ruwa::core::layers::LayerData* layer, const aether::Vector2
 
         aether::Vector2 sourcePos;
         const aether::TransformState state
-            = stateWithSourceBounds(layer->smartTransform, sourceBounds);
+            = aether::transformStateWithSourceBounds(layer->smartTransform, sourceBounds);
         return state.tryInverseTransformPoint(worldPos, sourcePos)
             && gridPixelAlphaAt(layer->smartContentGrid.get(), sourcePos) > 0.0f;
     }
@@ -449,7 +390,7 @@ MoveToolContentHit hitTestMoveToolContentLayerList(
             continue;
         }
 
-        const std::optional<aether::Rect> bounds = transformBoundsForLayer(layer);
+        const std::optional<aether::Rect> bounds = aether::transformBoundsForLayer(layer);
         if (!bounds.has_value() || bounds->width <= 0.0f || bounds->height <= 0.0f
             || !bounds->contains(worldPos) || !layerHasPixelAt(layer, worldPos)) {
             continue;
@@ -472,12 +413,12 @@ aether::TransformState currentNonRasterTransformState(const ruwa::core::layers::
     }
     if (layer->isText() && layer->textData) {
         const aether::Rect sourceBounds = aether::computeTextLayoutSourceBounds(*layer->textData);
-        return stateWithSourceBounds(layer->textData->transform, sourceBounds);
+        return aether::transformStateWithSourceBounds(layer->textData->transform, sourceBounds);
     }
     if (layer->isIsolatedPixelLayer() && layer->smartContentGrid) {
         const aether::Rect sourceBounds
             = aether::TransformState::computeContentBounds(*layer->smartContentGrid);
-        return stateWithSourceBounds(layer->smartTransform, sourceBounds);
+        return aether::transformStateWithSourceBounds(layer->smartTransform, sourceBounds);
     }
     return {};
 }
@@ -2204,7 +2145,6 @@ OpenGLCanvasWidget::OpenGLCanvasWidget(QWidget* parent)
 
     setMouseTracking(true);
     setFocusPolicy(Qt::StrongFocus);
-
     m_brushSession = createDefaultBrushSession();
     m_brush = pixelBrushFromSession(m_brushSession.get());
     if (!m_brush) {
@@ -3596,7 +3536,8 @@ bool OpenGLCanvasWidget::offerRasterizeForSelectionTransformTargets(bool hasSele
     }
 
     if (rasterizedAny) {
-        m_transformTargetSet = buildTransformTargetSet(*m_layerModel, transformBoundsForLayer);
+        m_transformTargetSet
+            = buildTransformTargetSet(*m_layerModel, aether::transformBoundsForLayer);
     }
     return true;
 }
@@ -8341,7 +8282,8 @@ bool OpenGLCanvasWidget::latchLayerCopyMoveTransform()
         return false;
     }
 
-    m_transformTargetSet = buildTransformTargetSet(*m_layerModel, transformBoundsForLayer);
+    m_transformTargetSet
+        = buildTransformTargetSet(*m_layerModel, aether::transformBoundsForLayer);
     if (m_transformTargetSet.empty()) {
         m_layerCopyMoveTransform = true;
         m_layerCopyMoveAddedIds = addedIds;
@@ -8464,6 +8406,144 @@ void OpenGLCanvasWidget::beginTransformUndoStep()
     m_transformUndoStepBeforeMode = m_transformController.interactionMode();
 }
 
+void OpenGLCanvasWidget::beginTransformSnapSession()
+{
+    if (!m_transformController.isActive() || !m_transformController.isDragging()) {
+        m_transformController.endSnapSession();
+        return;
+    }
+
+    const auto& editor = ruwa::core::SettingsManager::instance().settings().editor;
+    SnapSettings settings;
+    settings.canvasEnabled = editor.autoSnapCanvasEnabled;
+    settings.layersEnabled = editor.autoSnapLayersEnabled;
+    settings.equalSpacingEnabled = editor.autoSnapEqualSpacingEnabled;
+    settings.pixelAlignRasterMovesEnabled = editor.pixelAlignRasterMovesEnabled;
+
+    SnapScene scene;
+    scene.canvasSize = m_canvas.size();
+    scene.finiteCanvas = hasFiniteDocumentBounds();
+
+    std::optional<QUuid> sourceParentId;
+    bool rootsShareParent = true;
+    if (m_layerModel) {
+        for (const QUuid& rootId : m_transformTargetSet.rootLayerIds) {
+            const auto* source = m_layerModel->layerById(rootId);
+            const QUuid parentId = source && source->parent ? source->parent->id : QUuid {};
+            if (!sourceParentId.has_value()) {
+                sourceParentId = parentId;
+            } else if (*sourceParentId != parentId) {
+                rootsShareParent = false;
+                break;
+            }
+        }
+    }
+    if (!rootsShareParent) {
+        sourceParentId.reset();
+    }
+
+    auto belongsToMovingHierarchy = [this](const ruwa::core::layers::LayerData* layer) {
+        if (!layer || !m_layerModel) {
+            return false;
+        }
+        if (m_transformTargetSet.visualTargetIds.find(layer->id)
+            != m_transformTargetSet.visualTargetIds.end()) {
+            return true;
+        }
+        for (const QUuid& rootId : m_transformTargetSet.rootLayerIds) {
+            const auto* root = m_layerModel->layerById(rootId);
+            if (root && (layer == root || layer->isAncestorOf(root) || root->isAncestorOf(layer))) {
+                return true;
+            }
+        }
+        return false;
+    };
+
+    auto effectivelyVisible = [](const ruwa::core::layers::LayerData* layer) {
+        for (auto* current = layer; current; current = current->parent) {
+            if (!current->visible || current->opacity <= 0.0 || current->isBackground()) {
+                return false;
+            }
+        }
+        return layer != nullptr;
+    };
+
+    std::function<std::optional<Rect>(const ruwa::core::layers::LayerData*)> visibleBounds;
+    visibleBounds = [&](const ruwa::core::layers::LayerData* layer) -> std::optional<Rect> {
+        if (!effectivelyVisible(layer)) {
+            return std::nullopt;
+        }
+        Rect bounds {};
+        if (const auto ownBounds = aether::transformBoundsForLayer(layer)) {
+            bounds = *ownBounds;
+        }
+        for (const auto& child : layer->children) {
+            if (const auto childBounds = visibleBounds(child.get())) {
+                bounds = unionTransformBounds(bounds, *childBounds);
+            }
+        }
+        return bounds.width > 0.0f && bounds.height > 0.0f
+            ? std::optional<Rect>(bounds)
+            : std::nullopt;
+    };
+
+    if (m_layerModel && settings.layersEnabled) {
+        const QList<ruwa::core::layers::LayerData*> layers = m_layerModel->allLayersFlattened();
+        scene.targets.reserve(static_cast<size_t>(layers.size()));
+        for (const auto* layer : layers) {
+            if (!effectivelyVisible(layer) || belongsToMovingHierarchy(layer)
+                || (!transformIsVisualTarget(layer) && !layer->isGroup())) {
+                continue;
+            }
+            const auto bounds = layer->isGroup() ? visibleBounds(layer)
+                                                 : aether::transformBoundsForLayer(layer);
+            if (!bounds) {
+                continue;
+            }
+            SnapTarget target;
+            target.bounds = *bounds;
+            target.id = layer->id;
+            target.parentId = layer->parent ? layer->parent->id : QUuid {};
+            target.type = layer->isGroup() ? SnapTargetType::Group
+                : layer->isText()           ? SnapTargetType::Text
+                : layer->isIsolatedPixelLayer()
+                ? SnapTargetType::IsolatedPixel
+                : SnapTargetType::Raster;
+            scene.targets.push_back(std::move(target));
+        }
+    }
+
+    bool rasterOnly = !m_transformTargetSet.visualTargets.empty();
+    for (const TransformTargetInfo& target : m_transformTargetSet.visualTargets) {
+        rasterOnly = rasterOnly && target.kind == TransformTargetInfo::Kind::Raster;
+    }
+    const SnapCoordinatePolicy policy
+        = settings.pixelAlignRasterMovesEnabled && rasterOnly
+        ? SnapCoordinatePolicy::PixelAligned
+        : SnapCoordinatePolicy::Continuous;
+    m_transformController.beginSnapSession(
+        std::move(settings), std::move(scene), policy, sourceParentId);
+}
+
+void OpenGLCanvasWidget::syncTransformSnapMetricLabel()
+{
+    const auto& labels = m_transformController.snapVisualState().labels;
+    while (m_transformSnapMetricLabels.size() < labels.size()) {
+        m_transformSnapMetricLabels.push_back(
+            new ruwa::ui::widgets::CanvasMetricLabelOverlay(this));
+    }
+
+    for (size_t i = 0; i < labels.size(); ++i) {
+        const SnapMetricLabel& label = labels[i];
+        const Vector2 screen = screenFromDocumentWorld(label.position);
+        m_transformSnapMetricLabels[i]->presentAtPoint(
+            label.text, QPointF(screen.x, screen.y));
+    }
+    for (size_t i = labels.size(); i < m_transformSnapMetricLabels.size(); ++i) {
+        m_transformSnapMetricLabels[i]->dismiss();
+    }
+}
+
 void OpenGLCanvasWidget::commitTransformUndoStep()
 {
     if (!m_transformController.isActive() || !m_transformUndoManager
@@ -8518,7 +8598,8 @@ bool OpenGLCanvasWidget::enterSelectedTransformMode(bool moveOnly)
     m_selectionCopyMoveTransform = false;
     m_transformEditingMask = false;
     clearLayerCopyMoveState();
-    m_transformTargetSet = buildTransformTargetSet(*m_layerModel, transformBoundsForLayer);
+    m_transformTargetSet
+        = buildTransformTargetSet(*m_layerModel, aether::transformBoundsForLayer);
     if (m_transformTargetSet.empty() || m_transformTargetSet.contentBounds.width <= 0.0f
         || m_transformTargetSet.contentBounds.height <= 0.0f) {
         m_transformTargetSet.clear();
@@ -8592,7 +8673,8 @@ bool OpenGLCanvasWidget::enterSelectedTransformMode(bool moveOnly)
             entered = m_transformController.enter(layer->id, sourceBounds, moveOnly);
             if (entered) {
                 m_transformController.state()
-                    = stateWithSourceBounds(layer->textData->transform, sourceBounds);
+                    = aether::transformStateWithSourceBounds(
+                        layer->textData->transform, sourceBounds);
                 m_transformController.syncAnimatedState();
                 m_transformController.captureTransformModeEntryReference();
             }
@@ -8625,7 +8707,7 @@ bool OpenGLCanvasWidget::enterSelectedTransformMode(bool moveOnly)
             if (entered && !editingMask && layer->isIsolatedPixelLayer()) {
                 const Rect sourceBounds = m_transformController.state().contentBounds;
                 m_transformController.state()
-                    = stateWithSourceBounds(layer->smartTransform, sourceBounds);
+                    = aether::transformStateWithSourceBounds(layer->smartTransform, sourceBounds);
                 m_transformController.syncAnimatedState();
                 m_transformController.captureTransformModeEntryReference();
             }
@@ -8784,6 +8866,7 @@ void OpenGLCanvasWidget::confirmTransform()
     if (!m_transformController.hasChanges()) {
         // No changes
         m_transformController.cancelAndExit();
+        syncTransformSnapMetricLabel();
         destroyTransformUndoStack();
         m_transformTargetSet.clear();
         m_selectionCopyMoveTransform = false;
@@ -9009,9 +9092,10 @@ void OpenGLCanvasWidget::confirmTransform()
         }
 
         m_transformController.cancelAndExit();
+        syncTransformSnapMetricLabel();
         destroyTransformUndoStack();
         const Rect cacheBounds
-            = unionTransformRects(m_transformTargetSet.contentBounds, stateCopy.transformedAABB());
+            = unionTransformBounds(m_transformTargetSet.contentBounds, stateCopy.transformedAABB());
         m_transformTargetSet.clear();
         m_selectionCopyMoveTransform = false;
         clearTransformViewportPreview();
@@ -9103,6 +9187,7 @@ void OpenGLCanvasWidget::confirmTransform()
         layer->runtimeRetainedPayloadKey.clear();
 
         m_transformController.cancelAndExit();
+        syncTransformSnapMetricLabel();
         destroyTransformUndoStack();
         m_transformTargetSet.clear();
         m_selectionCopyMoveTransform = false;
@@ -9175,6 +9260,7 @@ void OpenGLCanvasWidget::confirmTransform()
         layer->smartTransform = stateCopy;
 
         m_transformController.cancelAndExit();
+        syncTransformSnapMetricLabel();
         destroyTransformUndoStack();
         m_transformTargetSet.clear();
         m_selectionCopyMoveTransform = false;
@@ -9276,6 +9362,7 @@ void OpenGLCanvasWidget::confirmTransform()
 
         // 6. Exit transform mode (without CPU apply â€” already done on GPU)
         m_transformController.cancelAndExit();
+        syncTransformSnapMetricLabel();
         destroyTransformUndoStack();
         m_transformTargetSet.clear();
         m_selectionCopyMoveTransform = false;
@@ -9371,6 +9458,7 @@ void OpenGLCanvasWidget::cancelTransform(std::optional<bool> moveOnlyStateForOve
     Rect transformedAABB = m_transformController.state().transformedAABB();
 
     m_transformController.cancelAndExit();
+    syncTransformSnapMetricLabel();
     destroyTransformUndoStack();
     m_transformTargetSet.clear();
     m_selectionCopyMoveTransform = false;
@@ -9950,7 +10038,7 @@ void OpenGLCanvasWidget::paintGL_renderOverlays(GLuint sceneTarget)
         ensureCursorOverlayInitialized(eyedropperCursorOverlay, "eyedropper cursor overlay");
     }
     const bool moveAxisGuideActive = m_transformController.moveAxisGuideActive();
-    const auto& autoSnapGuideState = m_transformController.autoSnapGuideState();
+    const auto& autoSnapGuideState = m_transformController.snapVisualState();
     const bool autoSnapGuideActive = autoSnapGuideState.active();
     const bool drawTransformChrome = !m_moveOnlyTransform;
     const bool drawTransformOverlay
@@ -9979,19 +10067,9 @@ void OpenGLCanvasWidget::paintGL_renderOverlays(GLuint sceneTarget)
         moveAxisGuide.opacity = m_transformController.moveAxisGuideOpacity();
         moveAxisGuidePtr = &moveAxisGuide;
     }
-    TransformAutoSnapGuides autoSnapGuides;
     const TransformAutoSnapGuides* autoSnapGuidesPtr = nullptr;
     if (autoSnapGuideActive) {
-        autoSnapGuides.hasVertical = autoSnapGuideState.hasVertical;
-        autoSnapGuides.hasSecondVertical = autoSnapGuideState.hasSecondVertical;
-        autoSnapGuides.hasHorizontal = autoSnapGuideState.hasHorizontal;
-        autoSnapGuides.hasSecondHorizontal = autoSnapGuideState.hasSecondHorizontal;
-        autoSnapGuides.verticalX = autoSnapGuideState.verticalX;
-        autoSnapGuides.secondVerticalX = autoSnapGuideState.secondVerticalX;
-        autoSnapGuides.horizontalY = autoSnapGuideState.horizontalY;
-        autoSnapGuides.secondHorizontalY = autoSnapGuideState.secondHorizontalY;
-        autoSnapGuides.opacity = 1.0f;
-        autoSnapGuidesPtr = &autoSnapGuides;
+        autoSnapGuidesPtr = &autoSnapGuideState;
     }
     std::function<Vector2(const Vector2&)> docWorldFromScreenFn
         = [this](const Vector2& s) { return documentWorldFromScreen(s); };
@@ -11634,7 +11712,7 @@ void OpenGLCanvasWidget::paintGL()
         ensureCursorOverlayInitialized(eyedropperCursorOverlay, "eyedropper cursor overlay");
     }
     const bool moveAxisGuideActivePre = m_transformController.moveAxisGuideActive();
-    const bool autoSnapGuideActivePre = m_transformController.autoSnapGuideState().active();
+    const bool autoSnapGuideActivePre = m_transformController.snapVisualState().active();
     const bool drawTransformChromePre = !m_moveOnlyTransform;
     const bool drawTransformOverlay
         = (transformOverlay && transformOverlay->isInitialized() && !m_autoApplyingTransform

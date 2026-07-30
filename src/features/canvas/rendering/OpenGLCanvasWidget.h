@@ -79,6 +79,9 @@ struct LayerData;
 namespace ruwa::core::brushes {
 class IBrushEngineSession;
 }
+namespace ruwa::ui::widgets {
+class CanvasMetricLabelOverlay;
+}
 
 namespace aether {
 
@@ -334,6 +337,9 @@ public:
     /// used for overlay exit animation.
     void cancelTransform(std::optional<bool> moveOnlyStateForOverlay = std::nullopt);
     void beginTransformUndoStep();
+    /// Freeze canvas/layer snap targets and current editor settings for this drag.
+    void beginTransformSnapSession();
+    void syncTransformSnapMetricLabel();
     void commitTransformUndoStep();
     void discardTransformUndoStep();
     TransformController& transformController() { return m_transformController; }
@@ -686,6 +692,7 @@ private:
     // Transform mode
     TransformController m_transformController;
     TransformTargetSet m_transformTargetSet;
+    std::vector<ruwa::ui::widgets::CanvasMetricLabelOverlay*> m_transformSnapMetricLabels;
     std::unique_ptr<UndoManager> m_transformUndoManager;
     std::optional<TransformState> m_transformUndoStepBefore;
     std::optional<TransformInteractionMode> m_transformUndoStepBeforeMode;

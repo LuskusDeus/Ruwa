@@ -56,6 +56,10 @@ struct AppSettings {
     struct Editor {
         int autoSaveInterval = 5; // 0=Off, 2=2min, 5=5min, 10=10min
         bool quickshapesEnabled = true; // Hold stroke to morph into line/circle/triangle/square
+        bool autoSnapCanvasEnabled = true;
+        bool autoSnapLayersEnabled = true;
+        bool autoSnapEqualSpacingEnabled = true;
+        bool pixelAlignRasterMovesEnabled = true;
     } editor;
 
     // === PERFORMANCE ===

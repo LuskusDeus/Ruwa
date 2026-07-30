@@ -391,6 +391,26 @@ void SettingsContent::retranslateUi()
         m_quickshapesToggle->setDescription(
             tr("Hold stroke to morph into straight line, circle, triangle, or square"));
     }
+    if (m_autoSnapCanvasToggle) {
+        m_autoSnapCanvasToggle->setLabel(tr("Snap to canvas"));
+        m_autoSnapCanvasToggle->setDescription(
+            tr("Align transformed content to the canvas center and finite edges"));
+    }
+    if (m_autoSnapLayersToggle) {
+        m_autoSnapLayersToggle->setLabel(tr("Snap to layers"));
+        m_autoSnapLayersToggle->setDescription(
+            tr("Align transformed content to visible layers and groups"));
+    }
+    if (m_autoSnapEqualSpacingToggle) {
+        m_autoSnapEqualSpacingToggle->setLabel(tr("Snap to equal spacing"));
+        m_autoSnapEqualSpacingToggle->setDescription(
+            tr("Repeat nearby gaps and center content between neighboring objects"));
+    }
+    if (m_pixelAlignRasterMovesToggle) {
+        m_pixelAlignRasterMovesToggle->setLabel(tr("Pixel-align raster moves"));
+        m_pixelAlignRasterMovesToggle->setDescription(
+            tr("Keep raster and selection moves on whole-pixel coordinates"));
+    }
 
     // Performance
     if (m_undoMemoryChoice) {
@@ -692,6 +712,29 @@ void SettingsContent::createEditorCategory()
     });
     category->addSettingsWidget(m_quickshapesToggle);
 
+    auto addSnapToggle = [this, category](SettingsToggle*& toggle, const QString& label,
+                             const QString& description, auto setter) {
+        toggle = new SettingsToggle(label, description, true);
+        connect(toggle, &SettingsToggle::toggled, this, [setter](bool checked) {
+            auto& settings = ruwa::core::SettingsManager::instance();
+            (settings.*setter)(checked);
+            settings.save();
+        });
+        category->addSettingsWidget(toggle);
+    };
+    addSnapToggle(m_autoSnapCanvasToggle, tr("Snap to canvas"),
+        tr("Align transformed content to the canvas center and finite edges"),
+        &ruwa::core::SettingsManager::setAutoSnapCanvasEnabled);
+    addSnapToggle(m_autoSnapLayersToggle, tr("Snap to layers"),
+        tr("Align transformed content to visible layers and groups"),
+        &ruwa::core::SettingsManager::setAutoSnapLayersEnabled);
+    addSnapToggle(m_autoSnapEqualSpacingToggle, tr("Snap to equal spacing"),
+        tr("Repeat nearby gaps and center content between neighboring objects"),
+        &ruwa::core::SettingsManager::setAutoSnapEqualSpacingEnabled);
+    addSnapToggle(m_pixelAlignRasterMovesToggle, tr("Pixel-align raster moves"),
+        tr("Keep raster and selection moves on whole-pixel coordinates"),
+        &ruwa::core::SettingsManager::setPixelAlignRasterMovesEnabled);
+
     m_categories.append(category);
 }
 
@@ -814,6 +857,18 @@ void SettingsContent::loadSettings()
         m_quickshapesToggle->setChecked(current.editor.quickshapesEnabled);
         m_quickshapesToggle->blockSignals(false);
     }
+    auto loadToggle = [](SettingsToggle* toggle, bool checked) {
+        if (!toggle) {
+            return;
+        }
+        toggle->blockSignals(true);
+        toggle->setChecked(checked);
+        toggle->blockSignals(false);
+    };
+    loadToggle(m_autoSnapCanvasToggle, current.editor.autoSnapCanvasEnabled);
+    loadToggle(m_autoSnapLayersToggle, current.editor.autoSnapLayersEnabled);
+    loadToggle(m_autoSnapEqualSpacingToggle, current.editor.autoSnapEqualSpacingEnabled);
+    loadToggle(m_pixelAlignRasterMovesToggle, current.editor.pixelAlignRasterMovesEnabled);
     if (m_autoSaveChoice) {
         int index = 2;
         if (current.editor.autoSaveInterval == 0)

@@ -95,6 +95,10 @@ private:
     SettingsChoice* m_topBarTabAlignmentChoice { nullptr };
     SettingsChoice* m_autoSaveChoice { nullptr };
     SettingsToggle* m_quickshapesToggle { nullptr };
+    SettingsToggle* m_autoSnapCanvasToggle { nullptr };
+    SettingsToggle* m_autoSnapLayersToggle { nullptr };
+    SettingsToggle* m_autoSnapEqualSpacingToggle { nullptr };
+    SettingsToggle* m_pixelAlignRasterMovesToggle { nullptr };
     SettingsChoice* m_undoMemoryChoice { nullptr };
     SettingsChoice* m_tabletBackendChoice { nullptr };
 

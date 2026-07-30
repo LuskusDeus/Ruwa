@@ -8,6 +8,7 @@
 #define RUWA_CORE_TRANSFORM_TRANSFORMOVERLAY_H
 
 #include "features/transform/TransformState.h"
+#include "features/transform/TransformSnapTypes.h"
 #include "shared/types/Result.h"
 #include "features/canvas/scene/Viewport.h"
 #include "features/canvas/overlays/OverlayVisualBase.h"
@@ -27,18 +28,7 @@ struct TransformMoveAxisGuide {
     float opacity = 1.f;
 };
 
-/// Auto-snap guides: full-viewport canvas X/Y alignment lines.
-struct TransformAutoSnapGuides {
-    bool hasVertical = false;
-    bool hasSecondVertical = false;
-    bool hasHorizontal = false;
-    bool hasSecondHorizontal = false;
-    float verticalX = 0.0f;
-    float secondVerticalX = 0.0f;
-    float horizontalY = 0.0f;
-    float secondHorizontalY = 0.0f;
-    float opacity = 1.f;
-};
+using TransformAutoSnapGuides = TransformSnapVisualState;
 
 class TransformOverlay : public OverlayVisualBase {
 public:
