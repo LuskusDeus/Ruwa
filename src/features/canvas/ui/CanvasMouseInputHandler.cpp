@@ -178,6 +178,7 @@ void CanvasMouseInputHandler::clearPendingMoveToolContentHit()
     m_pendingMoveToolContentLayerId = QUuid();
     m_pendingMoveToolContentPressGlobalPos = {};
     m_pendingMoveToolContentPressWorldPos = {};
+    m_pendingMoveToolContentPressModifiers = Qt::NoModifier;
 }
 
 void CanvasMouseInputHandler::handleTextToolPress(const aether::Vector2& worldPos)
@@ -520,6 +521,7 @@ bool CanvasMouseInputHandler::handleMousePress(QMouseEvent* event)
                     m_pendingMoveToolContentLayerId = hitLayerId;
                     m_pendingMoveToolContentPressGlobalPos = event->globalPosition().toPoint();
                     m_pendingMoveToolContentPressWorldPos = worldPos;
+                    m_pendingMoveToolContentPressModifiers = event->modifiers();
                     event->accept();
                     return true;
                 }
@@ -897,6 +899,7 @@ bool CanvasMouseInputHandler::handleMouseMove(QMouseEvent* event)
 
         const QUuid targetLayerId = m_pendingMoveToolContentLayerId;
         const aether::Vector2 pressWorldPos = m_pendingMoveToolContentPressWorldPos;
+        const Qt::KeyboardModifiers pressModifiers = m_pendingMoveToolContentPressModifiers;
         clearPendingMoveToolContentHit();
 
         if (m_panel->m_layerModel->contains(targetLayerId)) {
@@ -906,7 +909,7 @@ bool CanvasMouseInputHandler::handleMouseMove(QMouseEvent* event)
                 const auto& viewport = glWidget->viewport();
                 const float zoom = viewport.camera().zoom();
                 glWidget->beginTransformUndoStep();
-                if (ctrl.mousePress(pressWorldPos, zoom, event->modifiers())) {
+                if (ctrl.mousePress(pressWorldPos, zoom, pressModifiers)) {
                     glWidget->beginTransformSnapSession();
                     m_panel->m_transformDragCursorValid = true;
                     m_panel->m_transformDragCursor = Qt::SizeAllCursor;
@@ -915,7 +918,7 @@ bool CanvasMouseInputHandler::handleMouseMove(QMouseEvent* event)
                     }
 
                     const aether::Vector2 worldPos = m_panel->mapToWorld(globalPos);
-                    glWidget->latchSelectionCopyMoveTransformIfNeeded(worldPos, event->modifiers());
+                    glWidget->latchSelectionCopyMoveTransformIfNeeded(worldPos);
                     if (ctrl.mouseMove(worldPos, zoom, event->modifiers(), &viewport)) {
                         glWidget->syncTransformSnapMetricLabel();
                         m_panel->requestRender();
@@ -1212,7 +1215,7 @@ bool CanvasMouseInputHandler::handleMouseMove(QMouseEvent* event)
         aether::Vector2 worldPos = m_panel->mapToWorld(event->globalPosition());
         const auto& viewport = m_panel->m_glWidget->viewport();
         float zoom = viewport.camera().zoom();
-        m_panel->m_glWidget->latchSelectionCopyMoveTransformIfNeeded(worldPos, event->modifiers());
+        m_panel->m_glWidget->latchSelectionCopyMoveTransformIfNeeded(worldPos);
         if (m_panel->m_glWidget->transformController().mouseMove(
                 worldPos, zoom, event->modifiers(), &viewport)) {
             m_panel->m_glWidget->syncTransformSnapMetricLabel();

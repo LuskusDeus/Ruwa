@@ -8189,14 +8189,15 @@ void OpenGLCanvasWidget::invalidateTransformViewportPreviewSelectionMask()
     m_transformViewportPreview.selectionMaskDirty = true;
 }
 
-bool OpenGLCanvasWidget::latchSelectionCopyMoveTransformIfNeeded(
-    const Vector2& worldPos, Qt::KeyboardModifiers mods)
+bool OpenGLCanvasWidget::latchSelectionCopyMoveTransformIfNeeded(const Vector2& worldPos)
 {
     if (m_selectionCopyMoveTransform || m_layerCopyMoveTransform) {
         return false;
     }
+    // Copy is a drag-start decision. A later Alt press belongs to the active
+    // transform and only suppresses auto snap.
     const Qt::KeyboardModifiers required = Qt::ControlModifier | Qt::AltModifier;
-    if ((mods & required) != required) {
+    if (!m_transformController.moveDragStartedWithModifiers(required)) {
         return false;
     }
     const bool hasSelectionMask = m_selectionController

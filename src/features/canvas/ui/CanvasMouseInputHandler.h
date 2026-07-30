@@ -10,6 +10,7 @@
 #include <functional>
 #include <QPoint>
 #include <QUuid>
+#include <Qt>
 
 #include "shared/types/Types.h"
 
@@ -65,6 +66,7 @@ private:
     QUuid m_pendingMoveToolContentLayerId;
     QPoint m_pendingMoveToolContentPressGlobalPos;
     aether::Vector2 m_pendingMoveToolContentPressWorldPos;
+    Qt::KeyboardModifiers m_pendingMoveToolContentPressModifiers = Qt::NoModifier;
 
     // Pressure of the previous *real* (non-recovered) pointer sample of the
     // current stroke, plus its stroke-elapsed time. Recovered WM_MOUSEMOVE

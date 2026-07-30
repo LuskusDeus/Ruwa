@@ -345,8 +345,7 @@ public:
     TransformController& transformController() { return m_transformController; }
     const TransformController& transformController() const { return m_transformController; }
     bool isSelectionCopyMoveTransform() const { return m_selectionCopyMoveTransform; }
-    bool latchSelectionCopyMoveTransformIfNeeded(
-        const Vector2& worldPos, Qt::KeyboardModifiers mods);
+    bool latchSelectionCopyMoveTransformIfNeeded(const Vector2& worldPos);
 
     /// Rebuild the transform source atlas from the active layer's current tile grid.
     /// Used to update the preview after text re-rasterization at a different scale.

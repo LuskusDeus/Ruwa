@@ -324,6 +324,10 @@ public:
         if (!m_active)
             return false;
 
+        // Modifier-driven drag actions are chosen at press time. In particular,
+        // Alt pressed later during a move is reserved for temporarily disabling
+        // auto snap and must not turn an already-started move into an Alt-copy.
+        m_dragStartModifiers = mods;
         m_ctrlFreeDragActive = false;
         m_classicCornerRotateFromIcon = false;
         m_activeDeformPoint = -1;
@@ -607,6 +611,7 @@ public:
         m_dragStartDeformMesh.reset();
         m_dragStartQuad.reset();
         m_wasAltHeld = false;
+        m_dragStartModifiers = Qt::NoModifier;
         resetMoveAxisGuideState();
         resetMoveShiftSmoothState();
         endSnapSession();
@@ -680,6 +685,11 @@ public:
     const QUuid& layerId() const { return m_layerId; }
     bool hasChanges() const { return !m_state.isIdentity(); }
     bool usesSelectionMask() const { return m_selectionMask != nullptr; }
+    bool moveDragStartedWithModifiers(Qt::KeyboardModifiers required) const
+    {
+        return m_active && m_dragging && m_activeHandle == TransformHandle::Move
+            && (m_dragStartModifiers & required) == required;
+    }
     bool moveDragHasNonzeroPixelAlignedOffset(const Vector2& worldPos) const
     {
         if (!m_active || !m_dragging || m_activeHandle != TransformHandle::Move) {
@@ -2767,6 +2777,7 @@ private:
     std::vector<float> m_deformRegionWeights;
     bool m_ctrlFreeDragActive = false;
     bool m_freeSideShiftHeld = false;
+    Qt::KeyboardModifiers m_dragStartModifiers = Qt::NoModifier;
     Vector2 m_dragStartWorld;
     Vector2 m_dragPrevWorld; // For relative side drag (Ctrl+side)
     std::optional<std::array<Vector2, 4>> m_dragStartQuad; // For free-form rotate
