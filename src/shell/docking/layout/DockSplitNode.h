@@ -152,12 +152,26 @@ public:
     // === Handle Drag ===
 
     /**
-     * @brief Handle drag operation
+     * @brief Start a handle drag session
+     *
+     * Captures the child sizes that all movements in this gesture are calculated from.
+     *
+     * @param handleIndex Index of handle being dragged
+     */
+    void beginHandleDrag(int handleIndex);
+
+    /**
+     * @brief Apply an incremental handle movement
      *
      * @param handleIndex Index of handle being dragged
      * @param delta Pixels to move (positive = grow first item)
      */
     void handleDrag(int handleIndex, int delta);
+
+    /**
+     * @brief Finish the current handle drag session
+     */
+    void endHandleDrag();
 
     // === Layout ===
 
@@ -253,6 +267,12 @@ private:
     QList<int> m_sizes; // Size of each child in split direction
     int m_handleSize = 6;
     HandleGeometryCallback m_handleGeometryCallback;
+
+    // Handle drag session. Keeping the original sizes makes push-through reversible
+    // when the pointer changes direction before the mouse button is released.
+    QList<int> m_dragStartSizes;
+    int m_dragHandleIndex = -1;
+    int m_dragAppliedOffset = 0;
 };
 
 } // namespace ruwa::ui::docking

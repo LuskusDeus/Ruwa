@@ -177,6 +177,17 @@ void DockSplitNode::setSizes(const QList<int>& sizes)
     layoutChildren();
 }
 
+void DockSplitNode::beginHandleDrag(int handleIndex)
+{
+    if (handleIndex < 0 || handleIndex >= static_cast<int>(m_children.size()) - 1) {
+        return;
+    }
+
+    m_dragStartSizes = m_sizes;
+    m_dragHandleIndex = handleIndex;
+    m_dragAppliedOffset = 0;
+}
+
 void DockSplitNode::handleDrag(int handleIndex, int delta)
 {
     if (handleIndex < 0 || handleIndex >= static_cast<int>(m_children.size()) - 1) {
@@ -187,18 +198,44 @@ void DockSplitNode::handleDrag(int handleIndex, int delta)
         return;
     }
 
+    if (m_dragHandleIndex != handleIndex || m_dragStartSizes.size() != m_sizes.size()) {
+        beginHandleDrag(handleIndex);
+    }
+
+    if (m_dragHandleIndex != handleIndex) {
+        return;
+    }
+
     // Build constraints list
     QList<NodeSizeConstraints> constraints;
     for (const auto& child : m_children) {
         constraints.append(child->sizeConstraints());
     }
 
-    // Calculate new sizes with push effect
+    // Recalculate the complete gesture from its original sizes. Applying the reverse
+    // movement to the already-mutated sizes would grow the nearest minimum-sized child
+    // instead of restoring the farther child that previously supplied the pushed space.
+    const int targetOffset = m_dragAppliedOffset + delta;
     QList<int> newSizes = DockLayoutCalculator::calculateDragWithPush(
-        m_sizes, handleIndex, delta, constraints, m_direction);
+        m_dragStartSizes, handleIndex, targetOffset, constraints, m_direction);
+
+    int startHandlePosition = 0;
+    int newHandlePosition = 0;
+    for (int i = 0; i <= handleIndex; ++i) {
+        startHandlePosition += m_dragStartSizes[i];
+        newHandlePosition += newSizes[i];
+    }
+    m_dragAppliedOffset = newHandlePosition - startHandlePosition;
 
     // Apply new sizes
     applySizes(newSizes);
+}
+
+void DockSplitNode::endHandleDrag()
+{
+    m_dragStartSizes.clear();
+    m_dragHandleIndex = -1;
+    m_dragAppliedOffset = 0;
 }
 
 void DockSplitNode::setBounds(const QRect& bounds)

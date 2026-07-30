@@ -722,8 +722,10 @@ bool DockLayoutRoot::sanitizeSplitNode(DockSplitNode* split, QSet<DockPanel*>& s
 
 void DockLayoutRoot::onHandleDragStarted(DockSplitNode* node, int handleIndex)
 {
-    Q_UNUSED(node)
-    Q_UNUSED(handleIndex)
+    if (node) {
+        node->beginHandleDrag(handleIndex);
+    }
+
     // Suppress the canvas custom cursor for the duration of the resize: the panel edge
     // trails the pointer slightly, so the cursor keeps crossing onto the canvas and would
     // otherwise flicker the brush/tool cursor on. The split cursor stays (handle keeps the
@@ -752,6 +754,8 @@ void DockLayoutRoot::onHandleDragFinished(DockSplitNode* node, int handleIndex)
     if (!node) {
         return;
     }
+
+    node->endHandleDrag();
 
     // Save the new sizes of affected panels as their user preferred docked sizes
     // This ensures that when a panel is re-docked later, it gets its last user-set size
