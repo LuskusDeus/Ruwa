@@ -34,6 +34,10 @@ inline QStringList welcomeBannerBuiltInPaths()
     return {
         QStringLiteral(":/images/WelcomeBanner"),
         QStringLiteral(":/images/WelcomeBanner2"),
+        QStringLiteral(":/images/WelcomeBanner3"),
+        QStringLiteral(":/images/WelcomeBanner4"),
+        QStringLiteral(":/images/WelcomeBanner5"),
+        QStringLiteral(":/images/WelcomeBanner6"),
         QStringLiteral(":/images/Banner1April"),
     };
 }

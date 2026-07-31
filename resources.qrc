@@ -129,6 +129,10 @@
         <file alias="FirstIntegrationHero">resources/pictures/FirstIntegrationHero.png</file>
         <file alias="WelcomeBanner">resources/pictures/WelcomeBanner.png</file>
         <file alias="WelcomeBanner2">resources/pictures/WelcomeBanner2.png</file>
+        <file alias="WelcomeBanner3">resources/pictures/WelcomeBanner3.png</file>
+        <file alias="WelcomeBanner4">resources/pictures/WelcomeBanner4.png</file>
+        <file alias="WelcomeBanner5">resources/pictures/WelcomeBanner5.png</file>
+        <file alias="WelcomeBanner6">resources/pictures/WelcomeBanner6.png</file>
         <file alias="UpdateBanner">resources/pictures/UpdateBanner.png</file>
         <file alias="UpdateMessageBanner">resources/pictures/UpdateMessageBanner.png</file>
         <file alias="Banner1April">resources/pictures/Banner1April.png</file>

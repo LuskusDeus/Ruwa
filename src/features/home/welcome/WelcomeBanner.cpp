@@ -80,6 +80,10 @@ bool isLightBannerForKey(const QString& key, const QPixmap& pm)
     if (key
         == ruwa::ui::core::ResourceManager::instance().getBuiltInImagePath(
             ruwa::ui::core::ResourceManager::BuiltInImage::WelcomeBannerAlt)) {
+        return false;
+    }
+    if (key == QLatin1String(":/images/WelcomeBanner3")
+        || key == QLatin1String(":/images/WelcomeBanner5")) {
         return true;
     }
     if (pm.isNull()) {
