@@ -231,8 +231,7 @@ protected:
 
         const int rightMargin = theme.scaled(10);
         const int warningWidth = m_suppressedByOverride ? theme.scaled(10) : 0;
-        painter.drawText(rect().adjusted(
-                             theme.scaled(29), 0, -(rightMargin + warningWidth), 0),
+        painter.drawText(rect().adjusted(theme.scaled(29), 0, -(rightMargin + warningWidth), 0),
             Qt::AlignLeft | Qt::AlignVCenter, text());
         if (m_suppressedByOverride) {
             painter.drawText(rect().adjusted(0, 0, -rightMargin, 0),
@@ -325,8 +324,7 @@ BrushEditorParameterOverlay::BrushDynamicsBinding BrushEditorParameterOverlay::d
     BrushDynamicsBinding binding;
     binding.setting = setting;
     binding.source = BrushInputSourceKey::Time;
-    binding.mode
-        = ruwa::core::brushes::defaultBrushDynamicsBlendMode(setting, binding.source);
+    binding.mode = ruwa::core::brushes::defaultBrushDynamicsBlendMode(setting, binding.source);
     binding.enabled = false;
     binding.durationSec = 1.0f;
     binding.endAction = BrushTimeEndAction::Stop;
@@ -351,8 +349,7 @@ BrushEditorParameterOverlay::BrushDynamicsBinding BrushEditorParameterOverlay::d
     BrushDynamicsBinding binding;
     binding.setting = setting;
     binding.source = BrushInputSourceKey::RandomValue;
-    binding.mode
-        = ruwa::core::brushes::defaultBrushDynamicsBlendMode(setting, binding.source);
+    binding.mode = ruwa::core::brushes::defaultBrushDynamicsBlendMode(setting, binding.source);
     binding.enabled = false;
     ruwa::core::brushes::setBrushDynamicsRandomRange(binding, 0.0f, 0.0f);
     return binding;
@@ -365,8 +362,7 @@ BrushEditorParameterOverlay::defaultStrokeDirectionBinding(
     BrushDynamicsBinding binding;
     binding.setting = setting;
     binding.source = BrushInputSourceKey::StrokeDirection;
-    binding.mode
-        = ruwa::core::brushes::defaultBrushDynamicsBlendMode(setting, binding.source);
+    binding.mode = ruwa::core::brushes::defaultBrushDynamicsBlendMode(setting, binding.source);
     binding.enabled = false;
     if (setting == BrushDynamicsSettingKey::ShapeAngle) {
         binding.curve.points = {
@@ -407,15 +403,12 @@ BrushEditorParameterOverlay::BrushDynamicsBinding BrushEditorParameterOverlay::d
             auto fallback = defaultRandomBinding(binding.setting);
             fallback.enabled = binding.enabled;
             fallback.mode = binding.mode;
-            const float neutralValue
-                = binding.mode == BrushDynamicsBlendMode::Add ? 0.0f : 1.0f;
-            ruwa::core::brushes::setBrushDynamicsRandomRange(
-                fallback, neutralValue, neutralValue);
+            const float neutralValue = binding.mode == BrushDynamicsBlendMode::Add ? 0.0f : 1.0f;
+            ruwa::core::brushes::setBrushDynamicsRandomRange(fallback, neutralValue, neutralValue);
             binding = fallback;
         } else {
             const auto range = ruwa::core::brushes::brushDynamicsRandomRange(binding);
-            ruwa::core::brushes::setBrushDynamicsRandomRange(
-                binding, range.minimum, range.maximum);
+            ruwa::core::brushes::setBrushDynamicsRandomRange(binding, range.minimum, range.maximum);
         }
     } else if (binding.source == BrushInputSourceKey::StrokeDirection
         && !binding.hasStoredCurve()) {
@@ -777,8 +770,7 @@ BrushEditorParameterOverlay::BrushEditorParameterOverlay(QWidget* parent)
     m_randomModeLabel->setObjectName(
         QStringLiteral("brush_editor_parameter_overlay_random_mode_label"));
     m_randomModeSelector = new widgets::SegmentedOptionSelector(randomModeRow);
-    m_randomModeSelector->setDisplayMode(
-        widgets::SegmentedOptionSelector::DisplayMode::TextOnly);
+    m_randomModeSelector->setDisplayMode(widgets::SegmentedOptionSelector::DisplayMode::TextOnly);
     randomModeLayout->addWidget(m_randomModeLabel);
     randomModeLayout->addWidget(m_randomModeSelector, 1);
 
@@ -1315,8 +1307,7 @@ void BrushEditorParameterOverlay::storeCurrentBinding(
         normalized.setting, normalized.source, normalized.mode);
     if (normalized.source == BrushInputSourceKey::RandomValue) {
         const auto range = ruwa::core::brushes::brushDynamicsRandomRange(normalized);
-        ruwa::core::brushes::setBrushDynamicsRandomRange(
-            normalized, range.minimum, range.maximum);
+        ruwa::core::brushes::setBrushDynamicsRandomRange(normalized, range.minimum, range.maximum);
     }
     normalized.durationSec
         = ruwa::core::brushes::clampBrushTimeDurationSeconds(normalized.durationSec);
@@ -1418,8 +1409,8 @@ void BrushEditorParameterOverlay::syncEditorFromCurrentBinding()
         const float maximum = ruwa::core::brushes::brushDynamicsBindingValueMax(
             randomBinding.setting, randomBinding.mode);
         const auto range = ruwa::core::brushes::brushDynamicsRandomRange(randomBinding);
-        m_randomRangeSlider->setRange(sliderValueFromRandomRangeValue(minimum),
-            sliderValueFromRandomRangeValue(maximum));
+        m_randomRangeSlider->setRange(
+            sliderValueFromRandomRangeValue(minimum), sliderValueFromRandomRangeValue(maximum));
         m_randomRangeSlider->setRangeValues(sliderValueFromRandomRangeValue(range.minimum),
             sliderValueFromRandomRangeValue(range.maximum));
         m_randomRangeSlider->setCustomDisplayText(formatRandomRange(range));
@@ -1587,11 +1578,10 @@ void BrushEditorParameterOverlay::updateTexts()
 void BrushEditorParameterOverlay::updateSourceButtons()
 {
     const auto* overrideBinding = m_slot.activeOverrideBinding();
-    const auto isSuppressedByOverride
-        = [this, overrideBinding](BrushInputSourceKey source) {
-              return overrideBinding && overrideBinding->source != source
-                  && m_slot.binding(source).isActive();
-          };
+    const auto isSuppressedByOverride = [this, overrideBinding](BrushInputSourceKey source) {
+        return overrideBinding && overrideBinding->source != source
+            && m_slot.binding(source).isActive();
+    };
 
     if (auto* tabletPressureButton
         = static_cast<BrushEditorOverlaySourceButton*>(m_tabletPressureButton)) {
@@ -1611,8 +1601,7 @@ void BrushEditorParameterOverlay::updateSourceButtons()
         timeButton->setVisible(true);
         timeButton->setEnabled(true);
         timeButton->setSourceAvailable(enabled);
-        timeButton->setSuppressedByOverride(
-            isSuppressedByOverride(BrushInputSourceKey::Time));
+        timeButton->setSuppressedByOverride(isSuppressedByOverride(BrushInputSourceKey::Time));
         timeButton->setActive(enabled && m_activeSource == BrushInputSourceKey::Time);
     }
     if (auto* randomButton = static_cast<BrushEditorOverlaySourceButton*>(m_randomButton)) {

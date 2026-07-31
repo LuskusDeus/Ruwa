@@ -99,9 +99,9 @@ private:
             return layerId == other.layerId && layerRevision == other.layerRevision
                 && effectChainRevision == other.effectChainRevision
                 && previewOverrideRevision == other.previewOverrideRevision
-                && viewportRevision == other.viewportRevision
-                && textureWidth == other.textureWidth && textureHeight == other.textureHeight
-                && kind == other.kind && sourcePurpose == other.sourcePurpose;
+                && viewportRevision == other.viewportRevision && textureWidth == other.textureWidth
+                && textureHeight == other.textureHeight && kind == other.kind
+                && sourcePurpose == other.sourcePurpose;
         }
     };
 

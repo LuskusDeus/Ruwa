@@ -53,8 +53,8 @@ void addAlignment(std::vector<SnapRelation>& out, const Rect& sourceBounds,
             && *sourceParentId == target.parentId
         ? 1
         : 0;
-    relation.stableKey = relationKey(relation.type, axis, sourceAnchor, targetAnchor, target.id,
-        relation.targetCoordinate);
+    relation.stableKey = relationKey(
+        relation.type, axis, sourceAnchor, targetAnchor, target.id, relation.targetCoordinate);
     out.push_back(std::move(relation));
 }
 
@@ -84,8 +84,8 @@ int matchingAdjacentGapCount(
 {
     int confirmations = 0;
     for (size_t i = 1; i < targets.size(); ++i) {
-        const float gap = axisStart(targets[i]->bounds, axis)
-            - axisEnd(targets[i - 1]->bounds, axis);
+        const float gap
+            = axisStart(targets[i]->bounds, axis) - axisEnd(targets[i - 1]->bounds, axis);
         if (gap >= 0.0f && std::abs(gap - expectedGap) <= 0.001f) {
             ++confirmations;
         }
@@ -114,8 +114,7 @@ void addSpacingRelation(std::vector<SnapRelation>& out, SnapAxis axis, float cor
     relation.correction = correction;
     relation.spacing = spacing;
     relation.confirmationCount = confirmations;
-    relation.hierarchyPriority
-        = sourceParentId && *sourceParentId == target.parentId ? 1 : 0;
+    relation.hierarchyPriority = sourceParentId && *sourceParentId == target.parentId ? 1 : 0;
     relation.stableKey = QStringLiteral("spacing:%1:%2:%3")
                              .arg(static_cast<int>(axis))
                              .arg(target.id.toString(QUuid::WithoutBraces))
@@ -130,9 +129,8 @@ std::vector<SnapRelation> TransformSnapSolver::alignmentCandidates(const SnapSce
     const std::optional<QUuid>& sourceParentId, bool canvasOnly, float coordinateSearchRadius)
 {
     std::vector<SnapRelation> result;
-    constexpr std::array<SnapAnchor, 3> anchors {
-        SnapAnchor::Start, SnapAnchor::Center, SnapAnchor::End
-    };
+    constexpr std::array<SnapAnchor, 3> anchors { SnapAnchor::Start, SnapAnchor::Center,
+        SnapAnchor::End };
 
     if (settings.canvasEnabled && scene.canvasSize.x > 0.0f && scene.canvasSize.y > 0.0f) {
         const SnapTarget canvas = canvasTarget(scene);
@@ -142,8 +140,8 @@ std::vector<SnapRelation> TransformSnapSolver::alignmentCandidates(const SnapSce
                 addAlignment(result, sourceBounds, canvas, axis, sourceAnchor, center.front(),
                     sourceParentId);
                 if (scene.finiteCanvas) {
-                    addAlignment(result, sourceBounds, canvas, axis, sourceAnchor, SnapAnchor::Start,
-                        sourceParentId);
+                    addAlignment(result, sourceBounds, canvas, axis, sourceAnchor,
+                        SnapAnchor::Start, sourceParentId);
                     addAlignment(result, sourceBounds, canvas, axis, sourceAnchor, SnapAnchor::End,
                         sourceParentId);
                 }
@@ -154,8 +152,7 @@ std::vector<SnapRelation> TransformSnapSolver::alignmentCandidates(const SnapSce
     if (!canvasOnly && settings.layersEnabled) {
         auto appendIndex = [&](SnapAxis axis, const std::vector<SnapAxisEntry>& index) {
             for (SnapAnchor sourceAnchor : anchors) {
-                const float sourceCoordinate
-                    = anchorCoordinate(sourceBounds, axis, sourceAnchor);
+                const float sourceCoordinate = anchorCoordinate(sourceBounds, axis, sourceAnchor);
                 auto it = index.begin();
                 if (std::isfinite(coordinateSearchRadius)) {
                     it = std::lower_bound(index.begin(), index.end(),
@@ -198,15 +195,16 @@ std::vector<SnapRelation> TransformSnapSolver::alignmentCandidates(const SnapSce
 }
 
 std::vector<SnapRelation> TransformSnapSolver::pointCandidates(const SnapScene& scene,
-    const SnapSettings& settings, const Vector2& point,
-    const std::optional<QUuid>& sourceParentId, bool canvasOnly, float coordinateSearchRadius)
+    const SnapSettings& settings, const Vector2& point, const std::optional<QUuid>& sourceParentId,
+    bool canvasOnly, float coordinateSearchRadius)
 {
     const Rect pointBounds { point.x, point.y, 0.0f, 0.0f };
     std::vector<SnapRelation> all = alignmentCandidates(
         scene, settings, pointBounds, sourceParentId, canvasOnly, coordinateSearchRadius);
-    all.erase(std::remove_if(all.begin(), all.end(), [](const SnapRelation& relation) {
-                  return relation.sourceAnchor != SnapAnchor::Start;
-              }),
+    all.erase(std::remove_if(all.begin(), all.end(),
+                  [](const SnapRelation& relation) {
+                      return relation.sourceAnchor != SnapAnchor::Start;
+                  }),
         all.end());
     return all;
 }
@@ -216,8 +214,7 @@ std::vector<size_t> TransformSnapSolver::orderedSpacingTargetIndices(
 {
     const SnapAxis perpendicular = axis == SnapAxis::X ? SnapAxis::Y : SnapAxis::X;
     std::vector<size_t> result;
-    const std::vector<SnapAxisEntry>& index
-        = axis == SnapAxis::X ? scene.xIndex : scene.yIndex;
+    const std::vector<SnapAxisEntry>& index = axis == SnapAxis::X ? scene.xIndex : scene.yIndex;
     if (!index.empty()) {
         for (const SnapAxisEntry& entry : index) {
             if (entry.anchor != SnapAnchor::Start || entry.targetIndex >= scene.targets.size()) {
@@ -275,22 +272,25 @@ std::vector<SnapRelation> TransformSnapSolver::spacingCandidates(const SnapScene
             const Rect& bounds = targets[static_cast<size_t>(i)]->bounds;
             const float start = axis == SnapAxis::X ? bounds.left() : bounds.top();
             const float end = axis == SnapAxis::X ? bounds.right() : bounds.bottom();
-            if (end <= sourceStart && (!left || end > (axis == SnapAxis::X
-                        ? left->bounds.right()
-                        : left->bounds.bottom()))) {
+            if (end <= sourceStart
+                && (!left
+                    || end
+                        > (axis == SnapAxis::X ? left->bounds.right() : left->bounds.bottom()))) {
                 left = targets[static_cast<size_t>(i)];
                 leftIndex = i;
             }
-            if (start >= sourceEnd && (!right || start < (axis == SnapAxis::X
-                        ? right->bounds.left()
-                        : right->bounds.top()))) {
+            if (start >= sourceEnd
+                && (!right
+                    || start
+                        < (axis == SnapAxis::X ? right->bounds.left() : right->bounds.top()))) {
                 right = targets[static_cast<size_t>(i)];
                 rightIndex = i;
             }
         }
 
         if (left && right) {
-            const float leftEnd = axis == SnapAxis::X ? left->bounds.right() : left->bounds.bottom();
+            const float leftEnd
+                = axis == SnapAxis::X ? left->bounds.right() : left->bounds.bottom();
             const float rightStart
                 = axis == SnapAxis::X ? right->bounds.left() : right->bounds.top();
             const float leftGap = sourceStart - leftEnd;
@@ -308,7 +308,8 @@ std::vector<SnapRelation> TransformSnapSolver::spacingCandidates(const SnapScene
             const float previousEnd
                 = axis == SnapAxis::X ? previous.bounds.right() : previous.bounds.bottom();
             const float leftStart = axis == SnapAxis::X ? left->bounds.left() : left->bounds.top();
-            const float leftEnd = axis == SnapAxis::X ? left->bounds.right() : left->bounds.bottom();
+            const float leftEnd
+                = axis == SnapAxis::X ? left->bounds.right() : left->bounds.bottom();
             const float gap = leftStart - previousEnd;
             addSpacingRelation(result, axis, leftEnd + gap - sourceStart, gap, *left,
                 sourceParentId, matchingAdjacentGapCount(targets, axis, gap),

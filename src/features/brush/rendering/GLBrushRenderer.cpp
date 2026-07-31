@@ -2085,9 +2085,9 @@ void GLBrushRenderer::stampGPU(TileGrid& strokeBuffer, GLTileRenderer* tileRende
         // full-res ones, and it reads them from a level scaled to its own sigma.
         const float peakOffsetPx = blurPeakSigma * 1.15470054f;
         const int maxUsefulLevel = static_cast<int>(m_blurScratchLevels) - 1;
-        const int pyramidLevels = std::clamp(
-            static_cast<int>(std::ceil(std::log2(std::max(peakOffsetPx, 1.0f)))), 0,
-            std::max(maxUsefulLevel, 0));
+        const int pyramidLevels
+            = std::clamp(static_cast<int>(std::ceil(std::log2(std::max(peakOffsetPx, 1.0f)))), 0,
+                std::max(maxUsefulLevel, 0));
 
         if (pyramidLevels > 0) {
             m_blurDownsampleProgram->use();
@@ -5153,10 +5153,8 @@ bool GLBrushRenderer::stampLiquifySegmentGPU(TileGrid& strokeBuffer, GLTileRende
         // the same capacity too by migrating through the other ping-pong side.
         const bool reuseStorage = haveField && oldSourceFormat == liquifyContentFormat
             && m_liquifyTexW >= newRoiW && m_liquifyTexH >= newRoiH;
-        const GLsizei newTexW
-            = reuseStorage ? m_liquifyTexW : std::max(m_liquifyTexW, newRoiW);
-        const GLsizei newTexH
-            = reuseStorage ? m_liquifyTexH : std::max(m_liquifyTexH, newRoiH);
+        const GLsizei newTexW = reuseStorage ? m_liquifyTexW : std::max(m_liquifyTexW, newRoiW);
+        const GLsizei newTexH = reuseStorage ? m_liquifyTexH : std::max(m_liquifyTexH, newRoiH);
 
         auto createTex = [&](GLenum internalFmt, GLenum fmt, GLenum type) -> GLuint {
             TextureParams params;
@@ -5197,21 +5195,21 @@ bool GLBrushRenderer::stampLiquifySegmentGPU(TileGrid& strokeBuffer, GLTileRende
 
         const float zeroField[2] = { 0.0f, 0.0f };
         auto clearFieldRegion = [&](GLuint texture) {
-            m_gl->glClearTexSubImage(texture, 0, 0, 0, 0, newRoiW, newRoiH, 1, GL_RG, GL_FLOAT,
-                zeroField);
+            m_gl->glClearTexSubImage(
+                texture, 0, 0, 0, 0, newRoiW, newRoiH, 1, GL_RG, GL_FLOAT, zeroField);
         };
         uint8_t clearR = 0;
         uint8_t clearG = 0;
         uint8_t clearB = 0;
         uint8_t clearA = 0;
-        TileData::unpackColor(layerGrid ? layerGrid->defaultFillPacked() : 0u, clearR, clearG,
-            clearB, clearA);
-        const float sourceClear[4] = { static_cast<float>(clearR) / 255.0f,
-            static_cast<float>(clearG) / 255.0f, static_cast<float>(clearB) / 255.0f,
-            static_cast<float>(clearA) / 255.0f };
+        TileData::unpackColor(
+            layerGrid ? layerGrid->defaultFillPacked() : 0u, clearR, clearG, clearB, clearA);
+        const float sourceClear[4]
+            = { static_cast<float>(clearR) / 255.0f, static_cast<float>(clearG) / 255.0f,
+                  static_cast<float>(clearB) / 255.0f, static_cast<float>(clearA) / 255.0f };
         auto clearSourceRegion = [&]() {
-            m_gl->glClearTexSubImage(newSource, 0, 0, 0, 0, newRoiW, newRoiH, 1, GL_RGBA,
-                GL_FLOAT, sourceClear);
+            m_gl->glClearTexSubImage(
+                newSource, 0, 0, 0, 0, newRoiW, newRoiH, 1, GL_RGBA, GL_FLOAT, sourceClear);
         };
 
         int32_t carryOffX = 0;
@@ -5224,8 +5222,7 @@ bool GLBrushRenderer::stampLiquifySegmentGPU(TileGrid& strokeBuffer, GLTileRende
                 const int migrationDstIdx = reuseStorage ? (oldFieldSrcIdx ^ 1) : 0;
                 const GLuint migrationDst = migrationDstIdx == 0 ? newField0 : newField1;
                 clearFieldRegion(migrationDst);
-                const GLuint migrationSrc
-                    = oldFieldSrcIdx == 0 ? oldFieldTex0 : oldFieldTex1;
+                const GLuint migrationSrc = oldFieldSrcIdx == 0 ? oldFieldTex0 : oldFieldTex1;
                 m_gl->glCopyImageSubData(migrationSrc, GL_TEXTURE_2D, 0, 0, 0, 0, migrationDst,
                     GL_TEXTURE_2D, 0, offX, offY, 0, oldRoiW, oldRoiH, 1);
                 m_liquifyFieldSrcIdx = migrationDstIdx;

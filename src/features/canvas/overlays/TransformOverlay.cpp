@@ -596,8 +596,7 @@ void TransformOverlay::drawAutoSnapGuides(const TransformAutoSnapGuides& guides,
             const float length = std::sqrt(delta.x * delta.x + delta.y * delta.y);
             const Vector2 direction = length > 0.0001f
                 ? Vector2 { delta.x / length, delta.y / length }
-                : (segment.axis == SnapAxis::X ? Vector2 { 0.0f, 1.0f }
-                                               : Vector2 { 1.0f, 0.0f });
+                : (segment.axis == SnapAxis::X ? Vector2 { 0.0f, 1.0f } : Vector2 { 1.0f, 0.0f });
             const Vector2 from { segment.from.x - direction.x * lineExtensionWorld,
                 segment.from.y - direction.y * lineExtensionWorld };
             const Vector2 to { segment.to.x + direction.x * lineExtensionWorld,
@@ -616,8 +615,7 @@ void TransformOverlay::drawAutoSnapGuides(const TransformAutoSnapGuides& guides,
         if (!isFinite(dimension.from) || !isFinite(dimension.to)) {
             continue;
         }
-        drawCapsule(
-            dimension.from, dimension.to, lineThicknessWorld, r, g, b, a, vpMatrix);
+        drawCapsule(dimension.from, dimension.to, lineThicknessWorld, r, g, b, a, vpMatrix);
         const Vector2 delta { dimension.to.x - dimension.from.x,
             dimension.to.y - dimension.from.y };
         const float length = std::sqrt(delta.x * delta.x + delta.y * delta.y);

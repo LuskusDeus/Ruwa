@@ -14,14 +14,12 @@ class TransformSnapSolver {
 public:
     static std::vector<SnapRelation> alignmentCandidates(const SnapScene& scene,
         const SnapSettings& settings, const Rect& sourceBounds,
-        const std::optional<QUuid>& sourceParentId,
-        bool canvasOnly = false,
+        const std::optional<QUuid>& sourceParentId, bool canvasOnly = false,
         float coordinateSearchRadius = std::numeric_limits<float>::infinity());
 
     static std::vector<SnapRelation> pointCandidates(const SnapScene& scene,
         const SnapSettings& settings, const Vector2& point,
-        const std::optional<QUuid>& sourceParentId,
-        bool canvasOnly = false,
+        const std::optional<QUuid>& sourceParentId, bool canvasOnly = false,
         float coordinateSearchRadius = std::numeric_limits<float>::infinity());
 
     static std::vector<SnapRelation> spacingCandidates(const SnapScene& scene,

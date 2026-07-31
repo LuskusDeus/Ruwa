@@ -59,8 +59,8 @@ private:
     QImage renderCurrentComposition() const;
     void drawComposition(
         QPainter& painter, const QRectF& displayRect, const QRectF& presentedFrame) const;
-    QRectF mapWorldFrameToDisplayRect(const QRectF& worldFrame,
-        const QRectF& presentedFrame, const QRectF& displayRect) const;
+    QRectF mapWorldFrameToDisplayRect(
+        const QRectF& worldFrame, const QRectF& presentedFrame, const QRectF& displayRect) const;
     QRect overviewPixelRectForWorldRect(const QRect& worldRect) const;
     QRectF mapOverviewPixelRectToDisplayRect(
         const QRect& pixelRect, const QRectF& displayRect) const;

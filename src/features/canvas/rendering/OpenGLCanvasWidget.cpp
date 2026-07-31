@@ -5799,30 +5799,28 @@ void OpenGLCanvasWidget::handleFillWorkerResult(uint64_t requestSequence, const 
     m_fillPreview.pendingResult = {};
     m_fillPreview.job = job;
 
-    std::thread(
-        [job, result = std::move(result), originX, originY, readyRadiusAtResult]() mutable {
-            if (job->cancelled.load(std::memory_order_acquire)) {
-                return;
-            }
+    std::thread([job, result = std::move(result), originX, originY, readyRadiusAtResult]() mutable {
+        if (job->cancelled.load(std::memory_order_acquire)) {
+            return;
+        }
 
-            std::deque<FillPreviewState::ProgressBatch> preparedBatches
-                = OpenGLCanvasWidget::buildFillPreviewBatches(
-                    result.afterTiles, result.fillMaskTiles, originX, originY, readyRadiusAtResult);
-            if (job->cancelled.load(std::memory_order_acquire)) {
-                return;
-            }
+        std::deque<FillPreviewState::ProgressBatch> preparedBatches
+            = OpenGLCanvasWidget::buildFillPreviewBatches(
+                result.afterTiles, result.fillMaskTiles, originX, originY, readyRadiusAtResult);
+        if (job->cancelled.load(std::memory_order_acquire)) {
+            return;
+        }
 
-            {
-                std::lock_guard<std::mutex> lock(job->resultMutex);
-                while (!preparedBatches.empty()) {
-                    job->pendingBatches.push_back(std::move(preparedBatches.front()));
-                    preparedBatches.pop_front();
-                }
-                job->result = std::move(result);
+        {
+            std::lock_guard<std::mutex> lock(job->resultMutex);
+            while (!preparedBatches.empty()) {
+                job->pendingBatches.push_back(std::move(preparedBatches.front()));
+                preparedBatches.pop_front();
             }
-            job->done.store(true, std::memory_order_release);
-        })
-        .detach();
+            job->result = std::move(result);
+        }
+        job->done.store(true, std::memory_order_release);
+    }).detach();
 
     if (!m_fillPreview.previewActive) {
         beginFillPreviewAnimation(FloodFillResult {});
@@ -6920,7 +6918,8 @@ void OpenGLCanvasWidget::releaseFillPreviewGpuResources()
 
 void OpenGLCanvasWidget::flushPendingFillPreviewTextureDeletes()
 {
-    if (m_pendingFillPreviewTextureDeletes.empty() || QOpenGLContext::currentContext() != context()) {
+    if (m_pendingFillPreviewTextureDeletes.empty()
+        || QOpenGLContext::currentContext() != context()) {
         return;
     }
     glDeleteTextures(static_cast<GLsizei>(m_pendingFillPreviewTextureDeletes.size()),
@@ -8283,8 +8282,7 @@ bool OpenGLCanvasWidget::latchLayerCopyMoveTransform()
         return false;
     }
 
-    m_transformTargetSet
-        = buildTransformTargetSet(*m_layerModel, aether::transformBoundsForLayer);
+    m_transformTargetSet = buildTransformTargetSet(*m_layerModel, aether::transformBoundsForLayer);
     if (m_transformTargetSet.empty()) {
         m_layerCopyMoveTransform = true;
         m_layerCopyMoveAddedIds = addedIds;
@@ -8483,9 +8481,8 @@ void OpenGLCanvasWidget::beginTransformSnapSession()
                 bounds = unionTransformBounds(bounds, *childBounds);
             }
         }
-        return bounds.width > 0.0f && bounds.height > 0.0f
-            ? std::optional<Rect>(bounds)
-            : std::nullopt;
+        return bounds.width > 0.0f && bounds.height > 0.0f ? std::optional<Rect>(bounds)
+                                                           : std::nullopt;
     };
 
     if (m_layerModel && settings.layersEnabled) {
@@ -8496,8 +8493,8 @@ void OpenGLCanvasWidget::beginTransformSnapSession()
                 || (!transformIsVisualTarget(layer) && !layer->isGroup())) {
                 continue;
             }
-            const auto bounds = layer->isGroup() ? visibleBounds(layer)
-                                                 : aether::transformBoundsForLayer(layer);
+            const auto bounds
+                = layer->isGroup() ? visibleBounds(layer) : aether::transformBoundsForLayer(layer);
             if (!bounds) {
                 continue;
             }
@@ -8505,11 +8502,10 @@ void OpenGLCanvasWidget::beginTransformSnapSession()
             target.bounds = *bounds;
             target.id = layer->id;
             target.parentId = layer->parent ? layer->parent->id : QUuid {};
-            target.type = layer->isGroup() ? SnapTargetType::Group
-                : layer->isText()           ? SnapTargetType::Text
-                : layer->isIsolatedPixelLayer()
-                ? SnapTargetType::IsolatedPixel
-                : SnapTargetType::Raster;
+            target.type = layer->isGroup()      ? SnapTargetType::Group
+                : layer->isText()               ? SnapTargetType::Text
+                : layer->isIsolatedPixelLayer() ? SnapTargetType::IsolatedPixel
+                                                : SnapTargetType::Raster;
             scene.targets.push_back(std::move(target));
         }
     }
@@ -8518,8 +8514,7 @@ void OpenGLCanvasWidget::beginTransformSnapSession()
     for (const TransformTargetInfo& target : m_transformTargetSet.visualTargets) {
         rasterOnly = rasterOnly && target.kind == TransformTargetInfo::Kind::Raster;
     }
-    const SnapCoordinatePolicy policy
-        = settings.pixelAlignRasterMovesEnabled && rasterOnly
+    const SnapCoordinatePolicy policy = settings.pixelAlignRasterMovesEnabled && rasterOnly
         ? SnapCoordinatePolicy::PixelAligned
         : SnapCoordinatePolicy::Continuous;
     m_transformController.beginSnapSession(
@@ -8537,8 +8532,7 @@ void OpenGLCanvasWidget::syncTransformSnapMetricLabel()
     for (size_t i = 0; i < labels.size(); ++i) {
         const SnapMetricLabel& label = labels[i];
         const Vector2 screen = screenFromDocumentWorld(label.position);
-        m_transformSnapMetricLabels[i]->presentAtPoint(
-            label.text, QPointF(screen.x, screen.y));
+        m_transformSnapMetricLabels[i]->presentAtPoint(label.text, QPointF(screen.x, screen.y));
     }
     for (size_t i = labels.size(); i < m_transformSnapMetricLabels.size(); ++i) {
         m_transformSnapMetricLabels[i]->dismiss();
@@ -8599,8 +8593,7 @@ bool OpenGLCanvasWidget::enterSelectedTransformMode(bool moveOnly)
     m_selectionCopyMoveTransform = false;
     m_transformEditingMask = false;
     clearLayerCopyMoveState();
-    m_transformTargetSet
-        = buildTransformTargetSet(*m_layerModel, aether::transformBoundsForLayer);
+    m_transformTargetSet = buildTransformTargetSet(*m_layerModel, aether::transformBoundsForLayer);
     if (m_transformTargetSet.empty() || m_transformTargetSet.contentBounds.width <= 0.0f
         || m_transformTargetSet.contentBounds.height <= 0.0f) {
         m_transformTargetSet.clear();
@@ -8673,9 +8666,8 @@ bool OpenGLCanvasWidget::enterSelectedTransformMode(bool moveOnly)
             }
             entered = m_transformController.enter(layer->id, sourceBounds, moveOnly);
             if (entered) {
-                m_transformController.state()
-                    = aether::transformStateWithSourceBounds(
-                        layer->textData->transform, sourceBounds);
+                m_transformController.state() = aether::transformStateWithSourceBounds(
+                    layer->textData->transform, sourceBounds);
                 m_transformController.syncAnimatedState();
                 m_transformController.captureTransformModeEntryReference();
             }
@@ -10918,9 +10910,8 @@ void OpenGLCanvasWidget::paintGL_renderTransformViewportPreview(
 void OpenGLCanvasWidget::paintGL_renderFillPreviewOverlay(
     const std::vector<CompositeLayerInfo>& layerStack, GLuint sceneTarget, GLint defaultFbo)
 {
-    if (!m_fillPreview.active || !m_fillPreview.previewActive
-        || !m_fillPreview.previewContentGrid || !m_fillPreview.fillMaskGrid
-        || m_fillPreview.fillMaskGrid->empty() || !m_renderer
+    if (!m_fillPreview.active || !m_fillPreview.previewActive || !m_fillPreview.previewContentGrid
+        || !m_fillPreview.fillMaskGrid || m_fillPreview.fillMaskGrid->empty() || !m_renderer
         || !m_layerScreenSourceCache) {
         return;
     }
@@ -11047,10 +11038,9 @@ void OpenGLCanvasWidget::paintGL_renderFillPreviewOverlay(
                 ruwa::core::effects::LayerSourcePurpose::RawContent);
         }
 
-        const GLuint replacedTexture
-            = targetPreviewPass->renderTextureReplacement(replacementBaseTexture, afterTexture,
-                coverageTexture, static_cast<uint32_t>(viewportWidth),
-                static_cast<uint32_t>(viewportHeight));
+        const GLuint replacedTexture = targetPreviewPass->renderTextureReplacement(
+            replacementBaseTexture, afterTexture, coverageTexture,
+            static_cast<uint32_t>(viewportWidth), static_cast<uint32_t>(viewportHeight));
         if (!replacedTexture) {
             failFillPreviewGpuPipeline();
             return;
@@ -11120,16 +11110,15 @@ void OpenGLCanvasWidget::paintGL_renderFillPreviewOverlay(
     }
     affectedBounds.adjust(
         -effectPadDocument, -effectPadDocument, effectPadDocument, effectPadDocument);
-    const std::array<Vector2, 4> documentCorners {
-        Vector2 { static_cast<float>(affectedBounds.left()),
-            static_cast<float>(affectedBounds.top()) },
+    const std::array<Vector2, 4> documentCorners { Vector2 {
+                                                       static_cast<float>(affectedBounds.left()),
+                                                       static_cast<float>(affectedBounds.top()) },
         Vector2 { static_cast<float>(affectedBounds.right() + 1),
             static_cast<float>(affectedBounds.top()) },
         Vector2 { static_cast<float>(affectedBounds.right() + 1),
             static_cast<float>(affectedBounds.bottom() + 1) },
         Vector2 { static_cast<float>(affectedBounds.left()),
-            static_cast<float>(affectedBounds.bottom() + 1) }
-    };
+            static_cast<float>(affectedBounds.bottom() + 1) } };
     float minScreenX = std::numeric_limits<float>::max();
     float minScreenY = std::numeric_limits<float>::max();
     float maxScreenX = std::numeric_limits<float>::lowest();
@@ -11179,8 +11168,9 @@ void OpenGLCanvasWidget::paintGL_renderFillPreviewOverlay(
     checkerBackdrop.viewportColor = m_backgroundColor;
     checkerBackdrop.size = m_checkerSize;
 
-    const GLuint targetFbo
-        = sceneTarget == m_sceneFboManager.sceneFbo() ? sceneTarget : static_cast<GLuint>(defaultFbo);
+    const GLuint targetFbo = sceneTarget == m_sceneFboManager.sceneFbo()
+        ? sceneTarget
+        : static_cast<GLuint>(defaultFbo);
     glBindFramebuffer(GL_FRAMEBUFFER, targetFbo);
     glViewport(0, 0, viewportWidth, viewportHeight);
 

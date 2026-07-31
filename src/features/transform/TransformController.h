@@ -730,17 +730,13 @@ public:
     }
 
     void beginSnapSession(SnapSettings settings, SnapScene scene,
-        SnapCoordinatePolicy coordinatePolicy,
-        std::optional<QUuid> sourceParentId = std::nullopt)
+        SnapCoordinatePolicy coordinatePolicy, std::optional<QUuid> sourceParentId = std::nullopt)
     {
         m_snapSession = std::make_unique<TransformSnapSession>(
             std::move(settings), std::move(scene), coordinatePolicy, std::move(sourceParentId));
     }
 
-    void endSnapSession()
-    {
-        m_snapSession.reset();
-    }
+    void endSnapSession() { m_snapSession.reset(); }
 
     bool hasSnapSession() const { return m_snapSession != nullptr; }
 
@@ -963,8 +959,8 @@ private:
             allowX = m_moveShiftLineSlot == ShiftMoveLineSlot::Horizontal;
             allowY = m_moveShiftLineSlot == ShiftMoveLineSlot::Vertical;
         }
-        const SnapResult result
-            = m_snapSession->solveMove(m_state.transformedAABB(), viewport, screenZoom, allowX, allowY);
+        const SnapResult result = m_snapSession->solveMove(
+            m_state.transformedAABB(), viewport, screenZoom, allowX, allowY);
 
         m_state = savedState;
         m_moveSmoothOffset = savedSmoothOffset;
@@ -1061,8 +1057,7 @@ private:
         SnapResult result
             = m_snapSession->solvePoint(activePoint, viewport, screenZoom, false, allowX, allowY);
         const bool freeResize = (mods & Qt::ShiftModifier);
-        if (!freeResize && isCornerHandle(m_activeHandle) && result.xRelation
-            && result.yRelation) {
+        if (!freeResize && isCornerHandle(m_activeHandle) && result.xRelation && result.yRelation) {
             const bool keepX = std::abs(result.correction.x) <= std::abs(result.correction.y);
             result = m_snapSession->solvePoint(
                 activePoint, viewport, screenZoom, false, keepX, !keepX);
@@ -1096,8 +1091,7 @@ private:
             return false;
         }
 
-        ResizeAutoSnapCandidate candidate
-            = findResizeAutoSnapCandidate(viewport, screenZoom, mods);
+        ResizeAutoSnapCandidate candidate = findResizeAutoSnapCandidate(viewport, screenZoom, mods);
         if (!candidate.valid()) {
             return false;
         }
@@ -1235,8 +1229,7 @@ private:
             return false;
         }
 
-        ResizeAutoSnapCandidate candidate
-            = findResizeAutoSnapCandidate(viewport, screenZoom, mods);
+        ResizeAutoSnapCandidate candidate = findResizeAutoSnapCandidate(viewport, screenZoom, mods);
         if (!candidate.valid()) {
             return false;
         }
@@ -1400,8 +1393,7 @@ private:
                 return false;
             }
             const Vector2 point = vertices[index].target;
-            const SnapResult result
-                = m_snapSession->solvePoint(point, viewport, screenZoom, true);
+            const SnapResult result = m_snapSession->solvePoint(point, viewport, screenZoom, true);
             vertices[index].target.x += result.correction.x;
             vertices[index].target.y += result.correction.y;
             return result.active();
@@ -1798,8 +1790,7 @@ private:
             if (!m_wasShiftHeldForMove) {
                 const auto& q0 = *m_dragStartQuad;
                 const auto& qc = *m_state.freeCorners;
-                m_moveSmoothOffset
-                    = moveOffsetForPolicy({ qc[0].x - q0[0].x, qc[0].y - q0[0].y });
+                m_moveSmoothOffset = moveOffsetForPolicy({ qc[0].x - q0[0].x, qc[0].y - q0[0].y });
             }
             m_moveTranslationAnimActive = true;
             m_wasShiftHeldForMove = true;

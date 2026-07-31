@@ -56,8 +56,7 @@ Result<void> GLTileRenderer::initialize(const QString& shaderDir)
         m_tileProgram.reset();
         return { ErrorCode::PipelineCreationFailed, "Failed to create tile display sampler" };
     }
-    m_gl->glSamplerParameteri(
-        m_displaySampler, GL_TEXTURE_MIN_FILTER, GL_LINEAR_MIPMAP_LINEAR);
+    m_gl->glSamplerParameteri(m_displaySampler, GL_TEXTURE_MIN_FILTER, GL_LINEAR_MIPMAP_LINEAR);
     m_gl->glSamplerParameteri(m_displaySampler, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
     m_gl->glSamplerParameteri(m_displaySampler, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
     m_gl->glSamplerParameteri(m_displaySampler, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
@@ -325,8 +324,8 @@ void GLTileRenderer::render(const TileGrid& grid, const Viewport& viewport, uint
         if (tile && tile->hasTexture()) {
             GLuint tileSampler = useDisplayFiltering ? m_levelZeroLinearSampler : 0;
             if (minifying && tile->displayMipmapsDirty()) {
-                const bool budgetAvailable = m_displayMipRegenerationsThisFrame
-                    < m_displayMipRegenerationBudget;
+                const bool budgetAvailable
+                    = m_displayMipRegenerationsThisFrame < m_displayMipRegenerationBudget;
                 if (!m_deferDisplayMipRegeneration && budgetAvailable) {
                     m_gl->glGenerateTextureMipmap(tile->textureId());
                     tile->clearDisplayMipmapsDirty();

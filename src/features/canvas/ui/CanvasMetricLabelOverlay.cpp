@@ -55,8 +55,8 @@ CanvasMetricLabelOverlay::CanvasMetricLabelOverlay(QWidget* parent)
             hide();
         }
     });
-    connect(&ruwa::ui::core::ThemeManager::instance(),
-        &ruwa::ui::core::ThemeManager::themeChanged, this, [this]() { applyTheme(); });
+    connect(&ruwa::ui::core::ThemeManager::instance(), &ruwa::ui::core::ThemeManager::themeChanged,
+        this, [this]() { applyTheme(); });
     applyTheme();
     hide();
 }
@@ -102,8 +102,7 @@ void CanvasMetricLabelOverlay::moveClamped(int x, int y)
     if (!parent) {
         return;
     }
-    const int margin
-        = ruwa::ui::core::ThemeManager::instance().scaled(kEdgeMarginBase);
+    const int margin = ruwa::ui::core::ThemeManager::instance().scaled(kEdgeMarginBase);
     x = qBound(margin, x, qMax(margin, parent->width() - width() - margin));
     y = qBound(margin, y, qMax(margin, parent->height() - height() - margin));
     move(x, y);
@@ -140,10 +139,10 @@ void CanvasMetricLabelOverlay::paintEvent(QPaintEvent* event)
     const qreal radius = qMax(0.0, bounds.height() * 0.5 - 0.5);
     painter.setPen(Qt::NoPen);
     painter.setBrush(background);
-    painter.drawRoundedRect(bounds.adjusted(1.0, 1.0, -1.0, -1.0),
-        qMax(0.0, radius - 1.0), qMax(0.0, radius - 1.0));
-    ruwa::ui::painting::drawGradientBorder(painter,
-        bounds.adjusted(0.5, 0.5, -0.5, -0.5), radius, borderTop, borderBottom);
+    painter.drawRoundedRect(
+        bounds.adjusted(1.0, 1.0, -1.0, -1.0), qMax(0.0, radius - 1.0), qMax(0.0, radius - 1.0));
+    ruwa::ui::painting::drawGradientBorder(
+        painter, bounds.adjusted(0.5, 0.5, -0.5, -0.5), radius, borderTop, borderBottom);
 }
 
 void CanvasMetricLabelOverlay::applyTheme()
@@ -161,9 +160,9 @@ void CanvasMetricLabelOverlay::applyTheme()
     m_label->setMinimumWidth(theme.scaled(kMinimumWidthBase));
     m_label->setStyleSheet(QStringLiteral(
         "QLabel#canvasMetricLabel { background: transparent; color: rgb(%1, %2, %3); }")
-                               .arg(colors.text.red())
-                               .arg(colors.text.green())
-                               .arg(colors.text.blue()));
+            .arg(colors.text.red())
+            .arg(colors.text.green())
+            .arg(colors.text.blue()));
     adjustSize();
     update();
 }

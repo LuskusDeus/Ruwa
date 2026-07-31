@@ -681,10 +681,7 @@ public:
         }
         return it->second.alpha;
     }
-    bool hasTaperEffect() const
-    {
-        return strokeTaperState().hasEffect();
-    }
+    bool hasTaperEffect() const { return strokeTaperState().hasEffect(); }
     bool requiresRealtimeTaperReplay() const
     {
         // Keep the replay pipeline stable while a dynamic end taper can cross
@@ -700,16 +697,15 @@ public:
         }
 
         const auto& dynamics = m_brushSettingsModel.dynamics;
-        const bool startMayProduceTaper = dynamicsSlotMayProduceTaper(
-            m_brushSettingsModel.startTaper,
-            dynamics.slotForSetting(
-                ruwa::core::brushes::BrushDynamicsSettingKey::StrokeStartTaper));
+        const bool startMayProduceTaper
+            = dynamicsSlotMayProduceTaper(m_brushSettingsModel.startTaper,
+                dynamics.slotForSetting(
+                    ruwa::core::brushes::BrushDynamicsSettingKey::StrokeStartTaper));
         const bool endNeedsReplay = dynamicsSlotMayProduceTaper(m_brushSettingsModel.endTaper,
-            dynamics.slotForSetting(
-                ruwa::core::brushes::BrushDynamicsSettingKey::StrokeEndTaper));
+            dynamics.slotForSetting(ruwa::core::brushes::BrushDynamicsSettingKey::StrokeEndTaper));
         return stroke_taper::requiresReplay(applicable, !m_strokeDabs.empty(),
-            m_strokeDabs.empty() ? 0.0f : m_strokeDabs.front().startTaper,
-            startMayProduceTaper, endNeedsReplay);
+            m_strokeDabs.empty() ? 0.0f : m_strokeDabs.front().startTaper, startMayProduceTaper,
+            endNeedsReplay);
     }
     StrokeTaperState strokeTaperState() const
     {
@@ -736,8 +732,7 @@ public:
             endValue = m_endTaper;
         }
 
-        return stroke_taper::makeState(
-            m_strokeDabs.size(), startValue, endValue, applicable);
+        return stroke_taper::makeState(m_strokeDabs.size(), startValue, endValue, applicable);
     }
     bool hasEndpointCorrectionEffect() const
     {
@@ -916,15 +911,9 @@ public:
         }
     }
 
-    size_t startTaperDabCount() const
-    {
-        return strokeTaperState().startDabCount;
-    }
+    size_t startTaperDabCount() const { return strokeTaperState().startDabCount; }
 
-    size_t endTaperDabCount() const
-    {
-        return strokeTaperState().endDabCount;
-    }
+    size_t endTaperDabCount() const { return strokeTaperState().endDabCount; }
 
     bool applyStrokeTaperToDabRange(size_t startDabIndex, size_t dabCount)
     {

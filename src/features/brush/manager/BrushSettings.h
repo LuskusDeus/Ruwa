@@ -484,12 +484,12 @@ inline BrushDynamicsBlendMode normalizeBrushDynamicsBlendMode(
                                                          : defaultBrushDynamicsBlendMode(setting);
 }
 
-inline BrushDynamicsBlendMode normalizeBrushDynamicsBlendMode(BrushDynamicsSettingKey setting,
-    BrushInputSourceKey source, BrushDynamicsBlendMode mode)
+inline BrushDynamicsBlendMode normalizeBrushDynamicsBlendMode(
+    BrushDynamicsSettingKey setting, BrushInputSourceKey source, BrushDynamicsBlendMode mode)
 {
-    return supportsBrushDynamicsBlendMode(setting, mode) ? mode
-                                                         : defaultBrushDynamicsBlendMode(
-                                                               setting, source);
+    return supportsBrushDynamicsBlendMode(setting, mode)
+        ? mode
+        : defaultBrushDynamicsBlendMode(setting, source);
 }
 
 inline float finalizeBrushDynamicsResultValue(BrushDynamicsSettingKey setting, float value)
@@ -791,8 +791,7 @@ inline BrushDynamicsRandomRange brushDynamicsRandomRange(const BrushDynamicsBind
     return hasFiniteValue ? range : BrushDynamicsRandomRange { neutralValue, neutralValue };
 }
 
-inline void setBrushDynamicsRandomRange(
-    BrushDynamicsBinding& binding, float minimum, float maximum)
+inline void setBrushDynamicsRandomRange(BrushDynamicsBinding& binding, float minimum, float maximum)
 {
     binding.source = BrushInputSourceKey::RandomValue;
     const float neutralValue = binding.mode == BrushDynamicsBlendMode::Add ? 0.0f : 1.0f;
@@ -1300,8 +1299,8 @@ inline void normalizeBrushDynamics(BrushDynamicsModel& dynamics)
             auto& binding = slotItem.bindings[sourceIndex];
             binding.setting = slotItem.setting;
             binding.source = brushInputSourceFromIndex(sourceIndex);
-            binding.mode = normalizeBrushDynamicsBlendMode(
-                slotItem.setting, binding.source, binding.mode);
+            binding.mode
+                = normalizeBrushDynamicsBlendMode(slotItem.setting, binding.source, binding.mode);
             if (binding.source == BrushInputSourceKey::RandomValue) {
                 if (binding.enabled || binding.hasStoredCurve()) {
                     const auto range = brushDynamicsRandomRange(binding);

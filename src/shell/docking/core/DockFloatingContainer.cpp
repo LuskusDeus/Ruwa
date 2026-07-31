@@ -154,8 +154,7 @@ private:
     void ensureCache()
     {
         const qreal dpr = devicePixelRatioF();
-        const QSize deviceSize(
-            qMax(1, qCeil(width() * dpr)), qMax(1, qCeil(height() * dpr)));
+        const QSize deviceSize(qMax(1, qCeil(width() * dpr)), qMax(1, qCeil(height() * dpr)));
         if (!m_cache.isNull() && m_cache.size() == deviceSize
             && qFuzzyCompare(m_cache.devicePixelRatio(), dpr)) {
             return;
@@ -179,8 +178,7 @@ private:
             p.setPen(Qt::NoPen);
             p.setBrush(m_color);
             const QRectF body((m + kFloatingOuterInset) * dpr,
-                (m + kFloatingOuterInset + kFloatingShadowOffsetY) * dpr, bodyW * dpr,
-                bodyH * dpr);
+                (m + kFloatingOuterInset + kFloatingShadowOffsetY) * dpr, bodyW * dpr, bodyH * dpr);
             const qreal r = m_cornerRadius * dpr;
             p.drawRoundedRect(body, r, r);
         }
@@ -855,8 +853,8 @@ void DockFloatingContainer::refreshShadowAppearance()
         return;
     }
     static_cast<FloatingShadowLayer*>(m_shadowLayer.data())
-        ->setAppearance(m_shadowColor.isValid() ? m_shadowColor : QColor(0, 0, 0, 80),
-            shadowCornerRadius());
+        ->setAppearance(
+            m_shadowColor.isValid() ? m_shadowColor : QColor(0, 0, 0, 80), shadowCornerRadius());
 }
 
 void DockFloatingContainer::syncShadowGeometry()

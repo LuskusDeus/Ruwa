@@ -16,9 +16,7 @@ CanvasSelectionSizeOverlay::~CanvasSelectionSizeOverlay() = default;
 void CanvasSelectionSizeOverlay::present(
     int widthPx, int heightPx, const QRectF& selectionRectPanel)
 {
-    presentNearRect(QStringLiteral("%1 × %2")
-                        .arg(std::max(0, widthPx))
-                        .arg(std::max(0, heightPx)),
+    presentNearRect(QStringLiteral("%1 × %2").arg(std::max(0, widthPx)).arg(std::max(0, heightPx)),
         selectionRectPanel);
 }
 

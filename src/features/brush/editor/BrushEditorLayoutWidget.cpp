@@ -236,8 +236,7 @@ ruwa::core::brushes::BrushDynamicsSlot defaultDynamicsSlotForSetting(const QStri
     auto& binding = slot.binding(ruwa::core::brushes::BrushInputSourceKey::TabletPressure);
     binding.setting = slot.setting;
     binding.source = ruwa::core::brushes::BrushInputSourceKey::TabletPressure;
-    binding.mode = ruwa::core::brushes::defaultBrushDynamicsBlendMode(
-        slot.setting, binding.source);
+    binding.mode = ruwa::core::brushes::defaultBrushDynamicsBlendMode(slot.setting, binding.source);
     if (slot.setting == ruwa::core::brushes::BrushDynamicsSettingKey::ShapeAngle
         || slot.setting == ruwa::core::brushes::BrushDynamicsSettingKey::ColorHue) {
         binding.curve.points = {

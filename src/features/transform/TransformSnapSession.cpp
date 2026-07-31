@@ -119,8 +119,7 @@ std::optional<SnapRelation> TransformSnapSession::choose(SnapAxis axis,
     candidates.erase(std::remove_if(candidates.begin(), candidates.end(),
                          [axis, this, enforceCoordinatePolicy](SnapRelation& relation) {
                              return relation.axis != axis
-                                 || (enforceCoordinatePolicy
-                                     && !coordinatePolicyAllows(relation));
+                                 || (enforceCoordinatePolicy && !coordinatePolicyAllows(relation));
                          }),
         candidates.end());
 
@@ -139,8 +138,8 @@ std::optional<SnapRelation> TransformSnapSession::choose(SnapAxis axis,
                 confirmingTargets.push_back(targetKey);
             }
         }
-        candidate.confirmationCount = std::max(
-            candidate.confirmationCount, static_cast<int>(confirmingTargets.size()));
+        candidate.confirmationCount
+            = std::max(candidate.confirmationCount, static_cast<int>(confirmingTargets.size()));
     }
 
     auto collectMatchingRelations = [&](const SnapRelation& primary) {
@@ -183,24 +182,24 @@ std::optional<SnapRelation> TransformSnapSession::choose(SnapAxis axis,
     return best;
 }
 
-SnapResult TransformSnapSession::solveMove(const Rect& sourceBounds, const Viewport* viewport,
-    float screenZoom, bool allowX, bool allowY)
+SnapResult TransformSnapSession::solveMove(
+    const Rect& sourceBounds, const Viewport* viewport, float screenZoom, bool allowX, bool allowY)
 {
-    const float zoom = viewport ? viewport->camera().zoom()
-                                : (screenZoom > 1.0e-6f ? screenZoom : 1.0f);
+    const float zoom
+        = viewport ? viewport->camera().zoom() : (screenZoom > 1.0e-6f ? screenZoom : 1.0f);
     const float searchRadius = m_settings.releaseThresholdScreenPx / std::abs(zoom);
     std::vector<SnapRelation> candidates = TransformSnapSolver::alignmentCandidates(
         m_scene, m_settings, sourceBounds, m_sourceParentId, false, searchRadius);
-    std::vector<SnapRelation> spacing
-        = TransformSnapSolver::spacingCandidates(m_scene, m_settings, sourceBounds, m_sourceParentId);
+    std::vector<SnapRelation> spacing = TransformSnapSolver::spacingCandidates(
+        m_scene, m_settings, sourceBounds, m_sourceParentId);
     candidates.insert(candidates.end(), spacing.begin(), spacing.end());
 
     const Vector2 reference = sourceBounds.center();
     SnapResult result;
-    result.xRelation = choose(SnapAxis::X, candidates, reference, viewport, screenZoom, allowX,
-        true, result.xRelations);
-    result.yRelation = choose(SnapAxis::Y, candidates, reference, viewport, screenZoom, allowY,
-        true, result.yRelations);
+    result.xRelation = choose(
+        SnapAxis::X, candidates, reference, viewport, screenZoom, allowX, true, result.xRelations);
+    result.yRelation = choose(
+        SnapAxis::Y, candidates, reference, viewport, screenZoom, allowY, true, result.yRelations);
     if (result.xRelation) {
         result.correction.x = result.xRelation->correction;
     }
@@ -215,16 +214,16 @@ SnapResult TransformSnapSession::solveMove(const Rect& sourceBounds, const Viewp
 SnapResult TransformSnapSession::solvePoint(const Vector2& point, const Viewport* viewport,
     float screenZoom, bool canvasOnly, bool allowX, bool allowY)
 {
-    const float zoom = viewport ? viewport->camera().zoom()
-                                : (screenZoom > 1.0e-6f ? screenZoom : 1.0f);
+    const float zoom
+        = viewport ? viewport->camera().zoom() : (screenZoom > 1.0e-6f ? screenZoom : 1.0f);
     const float searchRadius = m_settings.releaseThresholdScreenPx / std::abs(zoom);
     std::vector<SnapRelation> candidates = TransformSnapSolver::pointCandidates(
         m_scene, m_settings, point, m_sourceParentId, canvasOnly, searchRadius);
     SnapResult result;
-    result.xRelation = choose(SnapAxis::X, candidates, point, viewport, screenZoom, allowX, false,
-        result.xRelations);
-    result.yRelation = choose(SnapAxis::Y, candidates, point, viewport, screenZoom, allowY, false,
-        result.yRelations);
+    result.xRelation = choose(
+        SnapAxis::X, candidates, point, viewport, screenZoom, allowX, false, result.xRelations);
+    result.yRelation = choose(
+        SnapAxis::Y, candidates, point, viewport, screenZoom, allowY, false, result.yRelations);
     if (result.xRelation) {
         result.correction.x = result.xRelation->correction;
     }
@@ -239,8 +238,8 @@ SnapResult TransformSnapSession::solvePoint(const Vector2& point, const Viewport
 void TransformSnapSession::buildVisualState(const Rect& sourceBounds, SnapResult& result)
 {
     result.visualState = {};
-    const Rect snapped { sourceBounds.x + result.correction.x,
-        sourceBounds.y + result.correction.y, sourceBounds.width, sourceBounds.height };
+    const Rect snapped { sourceBounds.x + result.correction.x, sourceBounds.y + result.correction.y,
+        sourceBounds.width, sourceBounds.height };
 
     auto append = [&](const SnapRelation& relation) {
         if (relation.type == SnapRelationType::EqualSpacing) {
@@ -255,8 +254,7 @@ void TransformSnapSession::buildVisualState(const Rect& sourceBounds, SnapResult
             };
             std::vector<SpacingItem> items;
             const std::vector<size_t> targetIndices
-                = TransformSnapSolver::orderedSpacingTargetIndices(
-                    m_scene, snapped, relation.axis);
+                = TransformSnapSolver::orderedSpacingTargetIndices(m_scene, snapped, relation.axis);
             items.reserve(targetIndices.size() + 1);
             for (size_t targetIndex : targetIndices) {
                 items.push_back({ m_scene.targets[targetIndex].bounds, false });
@@ -310,8 +308,7 @@ void TransformSnapSession::buildVisualState(const Rect& sourceBounds, SnapResult
                     dimension.to = { snapped.center().x, items[i + 1].bounds.top() };
                 }
                 dimension.value = std::abs(relation.spacing);
-                const bool duplicate = std::any_of(
-                    result.visualState.spacingDimensions.begin(),
+                const bool duplicate = std::any_of(result.visualState.spacingDimensions.begin(),
                     result.visualState.spacingDimensions.end(),
                     [&](const SnapSpacingDimension& existing) {
                         return samePoint(existing.from, dimension.from)
@@ -337,8 +334,7 @@ void TransformSnapSession::buildVisualState(const Rect& sourceBounds, SnapResult
             const float bottom = relation.targetType == SnapTargetType::Canvas
                 ? snapped.bottom()
                 : std::max(snapped.bottom(), relation.targetBounds.bottom());
-            segment = { { relation.targetCoordinate, top },
-                { relation.targetCoordinate, bottom } };
+            segment = { { relation.targetCoordinate, top }, { relation.targetCoordinate, bottom } };
         } else {
             const float left = relation.targetType == SnapTargetType::Canvas
                 ? snapped.left()
@@ -346,8 +342,7 @@ void TransformSnapSession::buildVisualState(const Rect& sourceBounds, SnapResult
             const float right = relation.targetType == SnapTargetType::Canvas
                 ? snapped.right()
                 : std::max(snapped.right(), relation.targetBounds.right());
-            segment = { { left, relation.targetCoordinate },
-                { right, relation.targetCoordinate } };
+            segment = { { left, relation.targetCoordinate }, { right, relation.targetCoordinate } };
         }
         segment.axis = relation.axis;
         const auto samePoint = [](const Vector2& a, const Vector2& b) {
@@ -355,18 +350,15 @@ void TransformSnapSession::buildVisualState(const Rect& sourceBounds, SnapResult
         };
         if (std::none_of(result.visualState.alignmentSegments.begin(),
                 result.visualState.alignmentSegments.end(), [&](const SnapGuideSegment& existing) {
-                    return existing.axis == segment.axis
-                        && samePoint(existing.from, segment.from)
+                    return existing.axis == segment.axis && samePoint(existing.from, segment.from)
                         && samePoint(existing.to, segment.to);
                 })) {
             result.visualState.alignmentSegments.push_back(segment);
         }
-        const SnapGuideMarker marker {
-            relation.axis == SnapAxis::X
+        const SnapGuideMarker marker { relation.axis == SnapAxis::X
                 ? Vector2 { relation.targetCoordinate, snapped.center().y }
                 : Vector2 { snapped.center().x, relation.targetCoordinate },
-            relation.targetAnchor == SnapAnchor::Center
-        };
+            relation.targetAnchor == SnapAnchor::Center };
         if (std::none_of(result.visualState.markers.begin(), result.visualState.markers.end(),
                 [&](const SnapGuideMarker& existing) {
                     return existing.center == marker.center

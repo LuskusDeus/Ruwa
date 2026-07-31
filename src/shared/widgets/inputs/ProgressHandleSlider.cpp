@@ -290,8 +290,7 @@ void ProgressHandleSlider::paintEvent(QPaintEvent* event)
         const QRectF lowerHandle = rangeHandleRect(track, progress, true);
         const QRectF upperHandle = rangeHandleRect(track, progress, false);
         const auto drawRangeHandle = [&p, &colors](const QRectF& handle) {
-            const qreal radius
-                = qMax<qreal>(1.2, qMin(handle.width(), handle.height()) * 0.45);
+            const qreal radius = qMax<qreal>(1.2, qMin(handle.width(), handle.height()) * 0.45);
             p.setBrush(colors.textOnPrimary());
             p.setPen(QPen(colors.shadow(70), 1.0));
             p.drawRoundedRect(handle, radius, radius);
@@ -300,8 +299,7 @@ void ProgressHandleSlider::paintEvent(QPaintEvent* event)
         drawRangeHandle(upperHandle);
     } else {
         const QRectF handle = handleRect(track, progress);
-        const qreal handleRadius
-            = qMax<qreal>(1.2, qMin(handle.width(), handle.height()) * 0.45);
+        const qreal handleRadius = qMax<qreal>(1.2, qMin(handle.width(), handle.height()) * 0.45);
 
         QColor handleOnFilled = colors.textOnPrimary();
         QColor handleOnEmpty = colors.text;
@@ -612,21 +610,20 @@ QRectF ProgressHandleSlider::rangeHandleRect(
         const qreal handleWidth
             = qBound<qreal>(tm.scaled(2.0), track.height() * 0.20, tm.scaled(4.0));
         const qreal handleHeight = qMax<qreal>(handleWidth * 2.6, track.height() - inset * 2.0);
-        const qreal preferredLeft = lowerHandle ? progress.left() + inset
-                                                : progress.right() - inset - handleWidth;
-        const qreal handleLeft = qBound(
-            track.left() + inset, preferredLeft, track.right() - inset - handleWidth);
+        const qreal preferredLeft
+            = lowerHandle ? progress.left() + inset : progress.right() - inset - handleWidth;
+        const qreal handleLeft
+            = qBound(track.left() + inset, preferredLeft, track.right() - inset - handleWidth);
         return QRectF(
             handleLeft, track.center().y() - handleHeight * 0.5, handleWidth, handleHeight);
     }
 
-    const qreal handleHeight
-        = qBound<qreal>(tm.scaled(2.0), track.width() * 0.20, tm.scaled(4.0));
+    const qreal handleHeight = qBound<qreal>(tm.scaled(2.0), track.width() * 0.20, tm.scaled(4.0));
     const qreal handleWidth = qMax<qreal>(handleHeight * 2.6, track.width() - inset * 2.0);
-    const qreal preferredTop = lowerHandle ? progress.bottom() - inset - handleHeight
-                                           : progress.top() + inset;
-    const qreal handleTop = qBound(
-        track.top() + inset, preferredTop, track.bottom() - inset - handleHeight);
+    const qreal preferredTop
+        = lowerHandle ? progress.bottom() - inset - handleHeight : progress.top() + inset;
+    const qreal handleTop
+        = qBound(track.top() + inset, preferredTop, track.bottom() - inset - handleHeight);
     return QRectF(track.center().x() - handleWidth * 0.5, handleTop, handleWidth, handleHeight);
 }
 

@@ -74,9 +74,8 @@ QRectF OverviewCache::presentedWorldFrame() const
     }
 
     const qreal progress = frameTransitionProgress();
-    const auto interpolate = [progress](qreal from, qreal to) {
-        return from + (to - from) * progress;
-    };
+    const auto interpolate
+        = [progress](qreal from, qreal to) { return from + (to - from) * progress; };
     const QRectF target(m_worldFrame);
     return QRectF(interpolate(m_frameTransitionStart.x(), target.x()),
         interpolate(m_frameTransitionStart.y(), target.y()),
@@ -200,8 +199,7 @@ void OverviewCache::storeTile(const QPoint& tileCoord, const QImage& image)
     if (!m_transitionClock.isValid()) {
         m_transitionClock.start();
     }
-    m_transitionTiles.insert(
-        tileCoord, TransitionTile { image, m_transitionClock.elapsed() });
+    m_transitionTiles.insert(tileCoord, TransitionTile { image, m_transitionClock.elapsed() });
 }
 
 bool OverviewCache::hasActiveTransitions() const
@@ -281,8 +279,8 @@ void OverviewCache::drawComposition(
         // The retained generation follows the same interpolated world transform as
         // the new tiles, so the old content resizes continuously until replacement
         // tiles have faded in.
-        const QRectF previousDisplayRect = mapWorldFrameToDisplayRect(
-            QRectF(m_previousWorldFrame), presentedFrame, displayRect);
+        const QRectF previousDisplayRect
+            = mapWorldFrameToDisplayRect(QRectF(m_previousWorldFrame), presentedFrame, displayRect);
         painter.drawImage(previousDisplayRect, m_previousOverview);
     }
 
@@ -311,23 +309,22 @@ void OverviewCache::drawComposition(
         }
 
         const qreal fadeProgress = qBound<qreal>(0.0,
-            static_cast<qreal>(now - it->startedAtMs)
-                / static_cast<qreal>(TileFadeDurationMs),
+            static_cast<qreal>(now - it->startedAtMs) / static_cast<qreal>(TileFadeDurationMs),
             1.0);
         if (fadeProgress <= 0.0) {
             continue;
         }
 
         painter.setOpacity(originalOpacity * fadeProgress);
-        painter.drawImage(mapOverviewPixelRectToDisplayRect(pixelRect, currentDisplayRect),
-            it->image);
+        painter.drawImage(
+            mapOverviewPixelRectToDisplayRect(pixelRect, currentDisplayRect), it->image);
     }
     painter.setOpacity(originalOpacity);
     painter.restore();
 }
 
-QRectF OverviewCache::mapWorldFrameToDisplayRect(const QRectF& worldFrame,
-    const QRectF& presentedFrame, const QRectF& displayRect) const
+QRectF OverviewCache::mapWorldFrameToDisplayRect(
+    const QRectF& worldFrame, const QRectF& presentedFrame, const QRectF& displayRect) const
 {
     if (!worldFrame.isValid() || worldFrame.isEmpty() || !presentedFrame.isValid()
         || presentedFrame.isEmpty() || displayRect.isEmpty()) {

@@ -1931,8 +1931,8 @@ static FloodFillResult floodFillImpl(TileGrid& grid, int seedX, int seedY, uint8
 FloodFillResult floodFill(TileGrid& grid, int seedX, int seedY, uint8_t fillR, uint8_t fillG,
     uint8_t fillB, uint8_t fillA, const TileGrid* selectionMask, int canvasWidth, int canvasHeight)
 {
-    return floodFillImpl(grid, seedX, seedY, fillR, fillG, fillB, fillA, selectionMask, canvasWidth,
-        canvasHeight);
+    return floodFillImpl(
+        grid, seedX, seedY, fillR, fillG, fillB, fillA, selectionMask, canvasWidth, canvasHeight);
 }
 
 FloodFillResult classicFloodFill(TileGrid& grid, int seedX, int seedY, uint8_t fillR, uint8_t fillG,

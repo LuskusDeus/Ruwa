@@ -513,8 +513,8 @@ private:
     void paintGL_renderLassoOverlay();
     void paintGL_renderTransformViewportPreview(const std::vector<CompositeLayerInfo>& layerStack,
         const std::vector<CompositeLayerInfo>& boardLayerStack, GLint defaultFbo);
-    void paintGL_renderFillPreviewOverlay(const std::vector<CompositeLayerInfo>& layerStack,
-        GLuint sceneTarget, GLint defaultFbo);
+    void paintGL_renderFillPreviewOverlay(
+        const std::vector<CompositeLayerInfo>& layerStack, GLuint sceneTarget, GLint defaultFbo);
     void paintGL_renderLassoFillOverlay(const std::vector<CompositeLayerInfo>& layerStack,
         const std::vector<CompositeLayerInfo>& boardLayerStack, GLint defaultFbo);
     // Resolves a painted layer mask to the standard viewport. GLViewportCompositor

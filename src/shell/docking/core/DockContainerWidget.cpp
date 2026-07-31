@@ -824,8 +824,7 @@ bool DockContainerWidget::isPointOverFloatingContainer(const QPoint& globalPos) 
         if (!container || !container->isVisible()) {
             continue;
         }
-        const QRect globalRect(
-            container->mapToGlobal(QPoint(0, 0)), container->size());
+        const QRect globalRect(container->mapToGlobal(QPoint(0, 0)), container->size());
         if (globalRect.contains(globalPos)) {
             return true;
         }
@@ -947,8 +946,7 @@ void DockContainerWidget::setupUI()
 {
     m_freezeWatchdog = new QTimer(this);
     m_freezeWatchdog->setSingleShot(true);
-    connect(m_freezeWatchdog, &QTimer::timeout, this,
-        [this]() { setFloatingPanelsFrozen(false); });
+    connect(m_freezeWatchdog, &QTimer::timeout, this, [this]() { setFloatingPanelsFrozen(false); });
 
     QVBoxLayout* layout = new QVBoxLayout(this);
     layout->setContentsMargins(0, 0, 0, 0);

@@ -293,8 +293,7 @@ QPointF NavigatorWidget::widgetToWorld(const QPointF& widgetPos) const
 
     const float nx = (widgetPos.x() - disp.x()) / disp.width();
     const float ny = (widgetPos.y() - disp.y()) / disp.height();
-    return QPointF(
-        static_cast<float>(frame.x()) + nx * static_cast<float>(frame.width()),
+    return QPointF(static_cast<float>(frame.x()) + nx * static_cast<float>(frame.width()),
         static_cast<float>(frame.y()) + ny * static_cast<float>(frame.height()));
 }
 

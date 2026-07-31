@@ -76,8 +76,7 @@ private:
     QRectF trackRect(const QRectF& content) const;
     QRectF progressRect(const QRectF& track) const;
     QRectF handleRect(const QRectF& track, const QRectF& progress) const;
-    QRectF rangeHandleRect(
-        const QRectF& track, const QRectF& progress, bool lowerHandle) const;
+    QRectF rangeHandleRect(const QRectF& track, const QRectF& progress, bool lowerHandle) const;
     qreal valueToRatio(int value) const;
     int ratioToValue(qreal ratio) const;
     qreal positionToRatio(const QPointF& position, const QRectF& track) const;

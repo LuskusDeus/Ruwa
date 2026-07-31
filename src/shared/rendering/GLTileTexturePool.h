@@ -54,8 +54,7 @@ private:
     struct PoolKeyHash {
         size_t operator()(const PoolKey& key) const
         {
-            return (static_cast<size_t>(key.internalFormat) << 8)
-                ^ static_cast<size_t>(key.levels);
+            return (static_cast<size_t>(key.internalFormat) << 8) ^ static_cast<size_t>(key.levels);
         }
     };
 

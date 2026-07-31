@@ -92,8 +92,7 @@ private:
     int randomRangeSliderFactor() const;
     int sliderValueFromRandomRangeValue(float value) const;
     float randomRangeValueFromSliderValue(int sliderValue) const;
-    QString formatRandomRange(
-        const ruwa::core::brushes::BrushDynamicsRandomRange& range) const;
+    QString formatRandomRange(const ruwa::core::brushes::BrushDynamicsRandomRange& range) const;
     widgets::ToggleSwitch* activeToggle() const;
     widgets::SegmentedOptionSelector* activeModeSelector() const;
     widgets::CurveEditorWidget* activeCurveEditor() const;

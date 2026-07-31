@@ -163,7 +163,8 @@ bool pixelCovered(const uint8_t* px, uint32_t lx, uint32_t ly)
 bool uniformTilePixel(const uint8_t* px)
 {
     static_assert(TILE_BYTE_SIZE % sizeof(uint64_t) == 0);
-    static_assert(TILE_CHANNELS * 2 == sizeof(uint64_t), "the probe pattern holds exactly 2 pixels");
+    static_assert(
+        TILE_CHANNELS * 2 == sizeof(uint64_t), "the probe pattern holds exactly 2 pixels");
     uint8_t pair[sizeof(uint64_t)];
     std::memcpy(pair, px, TILE_CHANNELS);
     std::memcpy(pair + TILE_CHANNELS, px, TILE_CHANNELS);
@@ -708,18 +709,14 @@ void LassoSelectionManager::rebuildEdges(uint32_t canvasWidth, uint32_t canvasHe
             const RowBits left = shiftedFromLeft(cur, pixelCovered(pxL, TS - 1, ly));
             const RowBits right = shiftedFromRight(cur, pixelCovered(pxR, 0, ly));
 
-            forEachUncovered(cur, up, [&](uint32_t lx) {
-                hRaw.push_back({ baseX + static_cast<int32_t>(lx), y });
-            });
-            forEachUncovered(cur, down, [&](uint32_t lx) {
-                hRaw.push_back({ baseX + static_cast<int32_t>(lx), y + 1 });
-            });
-            forEachUncovered(cur, left, [&](uint32_t lx) {
-                vRaw.push_back({ baseX + static_cast<int32_t>(lx), y });
-            });
-            forEachUncovered(cur, right, [&](uint32_t lx) {
-                vRaw.push_back({ baseX + static_cast<int32_t>(lx) + 1, y });
-            });
+            forEachUncovered(cur, up,
+                [&](uint32_t lx) { hRaw.push_back({ baseX + static_cast<int32_t>(lx), y }); });
+            forEachUncovered(cur, down,
+                [&](uint32_t lx) { hRaw.push_back({ baseX + static_cast<int32_t>(lx), y + 1 }); });
+            forEachUncovered(cur, left,
+                [&](uint32_t lx) { vRaw.push_back({ baseX + static_cast<int32_t>(lx), y }); });
+            forEachUncovered(cur, right,
+                [&](uint32_t lx) { vRaw.push_back({ baseX + static_cast<int32_t>(lx) + 1, y }); });
         }
     }
 

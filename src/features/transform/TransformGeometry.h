@@ -41,8 +41,7 @@ inline TransformState transformStateWithSourceBounds(
     return state;
 }
 
-inline std::optional<Rect> transformBoundsForLayer(
-    const ruwa::core::layers::LayerData* layer)
+inline std::optional<Rect> transformBoundsForLayer(const ruwa::core::layers::LayerData* layer)
 {
     if (!layer) {
         return std::nullopt;
@@ -63,7 +62,8 @@ inline std::optional<Rect> transformBoundsForLayer(
         if (sourceBounds.width <= 0.0f || sourceBounds.height <= 0.0f) {
             return std::nullopt;
         }
-        return transformStateWithSourceBounds(layer->smartTransform, sourceBounds).transformedAABB();
+        return transformStateWithSourceBounds(layer->smartTransform, sourceBounds)
+            .transformedAABB();
     }
     if (layer->isText() && layer->textData) {
         const Rect sourceBounds = computeTextLayoutSourceBounds(*layer->textData);

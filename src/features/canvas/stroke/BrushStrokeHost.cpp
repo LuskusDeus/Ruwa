@@ -1933,8 +1933,7 @@ bool BrushStrokeHost::rebuildStrokePreviewFromDabs(TileGrid* grid, TileGrid* sel
             m_lastRealtimeTaperTailStart = taperState.endRangeStart();
             m_lastRealtimeTaperPreviewDabCount = taperState.dabCount;
             const size_t previewDabLimit
-                = allowPreviewSampling
-                    && taperState.dabCount > TileBrush::kMaxTaperAffectedDabs
+                = allowPreviewSampling && taperState.dabCount > TileBrush::kMaxTaperAffectedDabs
                 ? TileBrush::kMaxTaperAffectedDabs
                 : 0;
             m_lastRealtimeTaperPreviewWasSampled = previewDabLimit > 0;
@@ -1969,8 +1968,8 @@ bool BrushStrokeHost::rebuildStrokePreviewFromDabs(TileGrid* grid, TileGrid* sel
             return rebuildFullPreview(0);
         }
 
-        const size_t updateStart = stroke_taper::updateRangeStart(taperState,
-            m_lastRealtimeTaperPreviewDabCount, m_lastRealtimeTaperTailStart);
+        const size_t updateStart = stroke_taper::updateRangeStart(
+            taperState, m_lastRealtimeTaperPreviewDabCount, m_lastRealtimeTaperTailStart);
         const size_t updateCount = strokeDabCount - updateStart;
         m_lastRealtimeTaperTailStart = tailStart;
         m_lastRealtimeTaperPreviewDabCount = strokeDabCount;

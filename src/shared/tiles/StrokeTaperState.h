@@ -27,8 +27,7 @@ struct State {
             return false;
         }
         return startDabCount >= dabCount || endDabCount >= dabCount
-            || (startDabCount > 0 && endDabCount > 0
-                && (startDabCount + endDabCount) >= dabCount);
+            || (startDabCount > 0 && endDabCount > 0 && (startDabCount + endDabCount) >= dabCount);
     }
 
     std::size_t endRangeStart() const
@@ -54,8 +53,7 @@ inline std::size_t affectedDabCount(float taper, std::size_t dabCount)
     return std::min(dabCount, std::max<std::size_t>(1, affected));
 }
 
-inline State makeState(
-    std::size_t dabCount, float startTaper, float endTaper, bool applicable)
+inline State makeState(std::size_t dabCount, float startTaper, float endTaper, bool applicable)
 {
     State state;
     state.dabCount = dabCount;
@@ -83,8 +81,8 @@ inline float scaleForEdgeIndex(std::size_t edgeIndex, std::size_t affectedCount)
     if (affectedCount <= 1) {
         return 0.0f;
     }
-    return std::clamp(static_cast<float>(edgeIndex) / static_cast<float>(affectedCount - 1),
-        0.0f, 1.0f);
+    return std::clamp(
+        static_cast<float>(edgeIndex) / static_cast<float>(affectedCount - 1), 0.0f, 1.0f);
 }
 
 inline float scaleForDab(const State& state, std::size_t dabIndex)

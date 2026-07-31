@@ -186,9 +186,9 @@ bool CanvasPanel::createGLContent()
         m_glWidget->brush().setColor(static_cast<uint8_t>(color.red()),
             static_cast<uint8_t>(color.green()), static_cast<uint8_t>(color.blue()),
             static_cast<uint8_t>(color.alpha()));
-        m_glWidget->brush().setRadius(ruwa::ui::widgets::brushRadiusFromNormalizedSizeForCanvasMode(
-            brushSizeNormalized(), m_canvasSize.width(), m_canvasSize.height(),
-            hasFiniteDocumentBounds()));
+        m_glWidget->brush().setRadius(
+            ruwa::ui::widgets::brushRadiusFromNormalizedSizeForCanvasMode(brushSizeNormalized(),
+                m_canvasSize.width(), m_canvasSize.height(), hasFiniteDocumentBounds()));
         applyBrushSettings({});
 
         // Same-frame GPU backdrop blur. Geometry is sampled from the real

@@ -641,8 +641,7 @@ void SettingsManager::saveEditor(QSettings& settings)
     settings.setValue("quickshapesEnabled", m_settings.editor.quickshapesEnabled);
     settings.setValue("autoSnapCanvasEnabled", m_settings.editor.autoSnapCanvasEnabled);
     settings.setValue("autoSnapLayersEnabled", m_settings.editor.autoSnapLayersEnabled);
-    settings.setValue(
-        "autoSnapEqualSpacingEnabled", m_settings.editor.autoSnapEqualSpacingEnabled);
+    settings.setValue("autoSnapEqualSpacingEnabled", m_settings.editor.autoSnapEqualSpacingEnabled);
     settings.setValue(
         "pixelAlignRasterMovesEnabled", m_settings.editor.pixelAlignRasterMovesEnabled);
 

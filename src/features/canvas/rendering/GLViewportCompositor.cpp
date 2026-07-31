@@ -193,12 +193,11 @@ void GLViewportCompositor::drawTexture(GLuint texture, const CanvasClipParams& c
     m_blitProgram->setUniform("uContentFlipH", radialReveal.flipH ? 1 : 0);
     m_blitProgram->setUniform("uContentFlipV", radialReveal.flipV ? 1 : 0);
     m_blitProgram->setUniform("uUseCheckerBackdrop", checkerBackdrop.enabled ? 1 : 0);
-    m_blitProgram->setUniform(
-        "uCheckerDocumentSpace", checkerBackdrop.documentSpace ? 1 : 0);
-    m_blitProgram->setUniform("uCheckerColor1", checkerBackdrop.color1.r,
-        checkerBackdrop.color1.g, checkerBackdrop.color1.b, checkerBackdrop.color1.a);
-    m_blitProgram->setUniform("uCheckerColor2", checkerBackdrop.color2.r,
-        checkerBackdrop.color2.g, checkerBackdrop.color2.b, checkerBackdrop.color2.a);
+    m_blitProgram->setUniform("uCheckerDocumentSpace", checkerBackdrop.documentSpace ? 1 : 0);
+    m_blitProgram->setUniform("uCheckerColor1", checkerBackdrop.color1.r, checkerBackdrop.color1.g,
+        checkerBackdrop.color1.b, checkerBackdrop.color1.a);
+    m_blitProgram->setUniform("uCheckerColor2", checkerBackdrop.color2.r, checkerBackdrop.color2.g,
+        checkerBackdrop.color2.b, checkerBackdrop.color2.a);
     m_blitProgram->setUniform("uCheckerViewportColor", checkerBackdrop.viewportColor.r,
         checkerBackdrop.viewportColor.g, checkerBackdrop.viewportColor.b,
         checkerBackdrop.viewportColor.a);
@@ -229,9 +228,8 @@ bool GLViewportCompositor::saveTexture(
         return false;
     }
 
-    m_gl->glCopyImageSubData(sourceTexture, GL_TEXTURE_2D, 0, 0, 0, 0, stableTexture,
-        GL_TEXTURE_2D, 0, 0, 0, 0, static_cast<GLsizei>(m_width),
-        static_cast<GLsizei>(m_height), 1);
+    m_gl->glCopyImageSubData(sourceTexture, GL_TEXTURE_2D, 0, 0, 0, 0, stableTexture, GL_TEXTURE_2D,
+        0, 0, 0, 0, static_cast<GLsizei>(m_width), static_cast<GLsizei>(m_height), 1);
     return true;
 }
 
