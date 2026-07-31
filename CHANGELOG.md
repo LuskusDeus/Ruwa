@@ -15,6 +15,72 @@ a release.
 
 ## [Unreleased]
 
+## [0.2.8-alpha] — 2026-07-31 — "Smarter snapping, smoother zoom, and a faster paint loop"
+
+This update rebuilds auto snapping around other layers and equal spacing, adds
+unified range controls for brush dynamics, and makes canvas rendering smooth at
+every zoom level. Painting, selections, Liquify, and floating panels were made
+measurably faster, and stylus contact, the hue ring, and the updater's recovery
+behaviour were fixed.
+
+### Added
+- Auto snapping was rebuilt on a new solver. It previously aligned content to
+  the canvas centre and edges only; it now also aligns to the edges and centres
+  of other visible layers and groups, and to equal spacing between neighbouring
+  objects, with live guides and an on-canvas measurement capsule. Hold `Alt`
+  while dragging content to suppress snapping for that move; `Ctrl+Alt` pressed
+  at drag start still begins a copy-move, and rotation is never snapped.
+- Four Editor settings for the new system: `Snap to canvas`, `Snap to layers`,
+  `Snap to equal spacing`, and `Pixel-align raster moves`. All are on by
+  default.
+- A unified range control for brush dynamics. Dynamics that previously exposed a
+  single amount now use a two-handle range slider, and the random and
+  stroke-direction sources accept the same blend modes as the other sources.
+- Four additional built-in welcome banners, and a smaller re-encode of the
+  existing one.
+
+### Improved
+- The window now reopens on the monitor it was last used on, and the splash
+  screen and startup animation follow it.
+- Canvas tiles are rendered with mipmapped sampling, so zoomed-out views stay
+  smooth instead of aliasing, and mipmap generation no longer stalls live edits.
+- The navigator animates its viewport frame and tile updates instead of jumping,
+  and its cache is populated correctly on the first frame.
+- Theme and welcome-banner selectors expand, collapse, and cross-fade smoothly
+  instead of snapping between states.
+- The animated fill preview is now rendered in screen space, matching the rest
+  of the live preview path.
+- Painting is faster: per-dab and per-event work in the paint loop was reduced,
+  large-stroke commits no longer stall, and dynamic taper previews are rebuilt
+  far less often.
+- Selection commits no longer pay per-pixel and whole-mask overhead, and Liquify
+  reuses displacement-field textures and advects only the area under the dab.
+- Multi-layer transform previews keep a stable source size, so cached renders are
+  reused across the drag.
+- Floating panels are no longer repainted on every canvas frame.
+
+### Fixed
+- A pen no longer loses contact mid-stroke when the cursor crosses the window
+  boundary: context-only WinTab proximity events are separated from real
+  hardware transitions.
+- The hue ring and the vertical hue bar now use the intended colour layout.
+- The Blur brush drives its strength from a per-pixel sigma instead of an
+  opacity cross-fade, so soft brushes no longer ghost.
+- Magic Wand region detection now matches Classic Fill.
+- Stationary pressure packets no longer accumulate stacked src-over dabs.
+- A tool switch made an instant before drawing is honoured by the stroke that
+  follows.
+- Smart layers are no longer reprojected while their effects are being edited.
+- Transform preview pixel sampling is aligned with the applied result.
+- Dock panel push resizing is reversible again: pushing a neighbouring panel and
+  dragging back restores the original sizes.
+- Recursive scroll layout refreshes no longer re-enter while a list is being laid
+  out.
+- A failed cleanup step after a successful update no longer rolls the healthy
+  installation back; the startup health check is now the commit point, and the
+  updater refuses to proceed while another instance is running from the same
+  installation.
+
 ## [0.2.7-alpha] — 2026-07-26 — "Magic Wand, procedural textures, and smarter selections"
 
 This update adds a Magic Wand selection tool and a procedural texture editor for

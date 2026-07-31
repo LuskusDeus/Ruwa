@@ -58,6 +58,59 @@ QVector<ReleaseNoteEntry> releaseNoteEntries()
 {
     return {
         { QCoreApplication::translate(
+              "ReleaseNotesOverlay", "Smarter snapping, smoother zoom, and a faster paint loop"),
+            QStringLiteral("0.2.8-alpha"), QStringLiteral("31.07.2026"),
+            QCoreApplication::translate("ReleaseNotesOverlay",
+                "<p><b>This update rebuilds auto snapping around other layers and equal spacing, "
+                "adds unified range controls for brush dynamics, and makes canvas rendering "
+                "smooth at every zoom level, along with a faster paint loop and fixes for stylus "
+                "contact, the hue ring, and the updater.</b></p>"
+                "<p><b>New</b></p>"
+                "<ul>"
+                "<li>Auto snapping now reaches past the canvas: content also aligns to other "
+                "visible layers and groups and to equal spacing between neighbours, with live "
+                "guides and an on-canvas measurement. Hold Alt while dragging to move without "
+                "snapping.</li>"
+                "<li>Four Editor settings for it: snap to canvas, snap to layers, snap to equal "
+                "spacing, and pixel-aligned raster moves — all on by default.</li>"
+                "<li>A unified range control for brush dynamics: single-amount dynamics now use a "
+                "two-handle range slider, and the random and stroke-direction sources accept the "
+                "same blend modes as the rest.</li>"
+                "<li>Four more built-in welcome banners.</li>"
+                "</ul>"
+                "<p><b>Improved</b></p>"
+                "<ul>"
+                "<li>Ruwa reopens on the monitor it was last used on, splash screen and startup "
+                "animation included.</li>"
+                "<li>Canvas tiles are sampled from mipmaps, so zoomed-out views stay smooth "
+                "instead of aliasing — without stalling live edits.</li>"
+                "<li>The navigator animates its viewport frame and its tile updates instead of "
+                "jumping.</li>"
+                "<li>Theme and welcome-banner selectors expand, collapse, and cross-fade "
+                "smoothly.</li>"
+                "<li>Faster painting: less per-dab and per-event work, no large-stroke commit "
+                "stalls, and far fewer taper preview rebuilds.</li>"
+                "<li>Faster selection commits, Liquify dabs, and multi-layer transform "
+                "previews.</li>"
+                "<li>Floating panels are no longer repainted on every canvas frame.</li>"
+                "</ul>"
+                "<p><b>Fixes</b></p>"
+                "<ul>"
+                "<li>The pen no longer loses contact mid-stroke when the cursor crosses the "
+                "window boundary.</li>"
+                "<li>The hue ring and vertical hue bar use the intended color layout.</li>"
+                "<li>Soft Blur brushes no longer ghost: strength is driven by a per-pixel sigma "
+                "instead of an opacity cross-fade.</li>"
+                "<li>Magic Wand now selects the same region Classic Fill would fill.</li>"
+                "<li>A tool switch made an instant before drawing is honored by the stroke that "
+                "follows.</li>"
+                "<li>Holding a stationary pen no longer stacks dabs on one spot.</li>"
+                "<li>Transform preview sampling matches the applied result.</li>"
+                "<li>Dock panel push resizing is reversible again.</li>"
+                "<li>A failed cleanup step after a successful update no longer rolls the healthy "
+                "installation back.</li>"
+                "</ul>") },
+        { QCoreApplication::translate(
               "ReleaseNotesOverlay", "Magic Wand, procedural textures, and smarter selections"),
             QStringLiteral("0.2.7-alpha"), QStringLiteral("26.07.2026"),
             QCoreApplication::translate("ReleaseNotesOverlay",

@@ -50,6 +50,9 @@ locked features.
   through transforms.
 - **An open-ended workspace.** Infinite canvas, Board Layers, reusable layouts,
   dockable panels, and configurable shortcuts keep tools and references close.
+- **Precise placement.** Auto snapping aligns moves and transforms to the canvas,
+  to other layers, and to equal spacing between neighbours, with live guides and
+  measurements.
 - **Tablet-oriented input.** Ruwa supports stylus workflows and includes a
   custom Windows WinTab backend.
 - **Native effect plugins.** A stable C ABI lets bundled and third-party effects
@@ -59,7 +62,7 @@ locked features.
 
 | Item | Detail |
 | --- | --- |
-| Current release | `0.2.7-alpha` |
+| Current release | `0.2.8-alpha` |
 | Primary platform | Windows 10/11 x64 |
 | Graphics requirement | OpenGL 4.5 |
 | Technology | C++23, Qt 6, CMake |

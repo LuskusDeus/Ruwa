@@ -34,109 +34,110 @@
 <context>
     <name>BrushEditorParameterOverlay</name>
     <message>
-        <location filename="../src/features/brush/editor/BrushEditorParameterOverlay.cpp" line="529"/>
+        <location filename="../src/features/brush/editor/BrushEditorParameterOverlay.cpp" line="542"/>
         <source>Parameter Dynamics</source>
         <translation>Динамика параметра</translation>
     </message>
     <message>
-        <location filename="../src/features/brush/editor/BrushEditorParameterOverlay.cpp" line="532"/>
-        <location filename="../src/features/brush/editor/BrushEditorParameterOverlay.cpp" line="1541"/>
+        <location filename="../src/features/brush/editor/BrushEditorParameterOverlay.cpp" line="545"/>
+        <location filename="../src/features/brush/editor/BrushEditorParameterOverlay.cpp" line="1539"/>
         <source>Reset</source>
         <translation>Сбросить</translation>
     </message>
     <message>
-        <location filename="../src/features/brush/editor/BrushEditorParameterOverlay.cpp" line="575"/>
-        <location filename="../src/features/brush/editor/BrushEditorParameterOverlay.cpp" line="1546"/>
+        <location filename="../src/features/brush/editor/BrushEditorParameterOverlay.cpp" line="588"/>
+        <location filename="../src/features/brush/editor/BrushEditorParameterOverlay.cpp" line="1544"/>
         <source>Pressure</source>
         <translation>Нажим</translation>
     </message>
     <message>
-        <location filename="../src/features/brush/editor/BrushEditorParameterOverlay.cpp" line="577"/>
-        <location filename="../src/features/brush/editor/BrushEditorParameterOverlay.cpp" line="1549"/>
+        <location filename="../src/features/brush/editor/BrushEditorParameterOverlay.cpp" line="590"/>
+        <location filename="../src/features/brush/editor/BrushEditorParameterOverlay.cpp" line="1547"/>
         <source>Time</source>
         <translation>Время</translation>
     </message>
     <message>
-        <location filename="../src/features/brush/editor/BrushEditorParameterOverlay.cpp" line="579"/>
-        <location filename="../src/features/brush/editor/BrushEditorParameterOverlay.cpp" line="1553"/>
+        <location filename="../src/features/brush/editor/BrushEditorParameterOverlay.cpp" line="592"/>
+        <location filename="../src/features/brush/editor/BrushEditorParameterOverlay.cpp" line="1551"/>
         <source>Random</source>
         <translation>Случайно</translation>
     </message>
     <message>
-        <location filename="../src/features/brush/editor/BrushEditorParameterOverlay.cpp" line="581"/>
-        <location filename="../src/features/brush/editor/BrushEditorParameterOverlay.cpp" line="1557"/>
+        <location filename="../src/features/brush/editor/BrushEditorParameterOverlay.cpp" line="594"/>
+        <location filename="../src/features/brush/editor/BrushEditorParameterOverlay.cpp" line="1555"/>
         <source>Direction</source>
         <translation>Направление</translation>
     </message>
     <message>
-        <location filename="../src/features/brush/editor/BrushEditorParameterOverlay.cpp" line="714"/>
+        <location filename="../src/features/brush/editor/BrushEditorParameterOverlay.cpp" line="727"/>
         <source>Select</source>
         <translation>Выбрать</translation>
     </message>
     <message>
-        <location filename="../src/features/brush/editor/BrushEditorParameterOverlay.cpp" line="716"/>
+        <location filename="../src/features/brush/editor/BrushEditorParameterOverlay.cpp" line="729"/>
         <source>Stop</source>
         <translation>Стоп</translation>
     </message>
     <message>
-        <location filename="../src/features/brush/editor/BrushEditorParameterOverlay.cpp" line="719"/>
+        <location filename="../src/features/brush/editor/BrushEditorParameterOverlay.cpp" line="732"/>
         <source>Reverse</source>
         <translation>Реверс</translation>
     </message>
     <message>
-        <location filename="../src/features/brush/editor/BrushEditorParameterOverlay.cpp" line="722"/>
+        <location filename="../src/features/brush/editor/BrushEditorParameterOverlay.cpp" line="735"/>
         <source>Restart</source>
         <translation>Перезапустить</translation>
     </message>
     <message>
-        <location filename="../src/features/brush/editor/BrushEditorParameterOverlay.cpp" line="1469"/>
+        <location filename="../src/features/brush/editor/BrushEditorParameterOverlay.cpp" line="1467"/>
         <source>Multiply</source>
         <translation>Умножение</translation>
     </message>
     <message>
-        <location filename="../src/features/brush/editor/BrushEditorParameterOverlay.cpp" line="1472"/>
+        <location filename="../src/features/brush/editor/BrushEditorParameterOverlay.cpp" line="1470"/>
         <source>Add</source>
         <translation>Сложение</translation>
     </message>
     <message>
-        <location filename="../src/features/brush/editor/BrushEditorParameterOverlay.cpp" line="1476"/>
+        <location filename="../src/features/brush/editor/BrushEditorParameterOverlay.cpp" line="1474"/>
         <source>Override</source>
         <translation>Замена</translation>
     </message>
     <message>
-        <location filename="../src/features/brush/editor/BrushEditorParameterOverlay.cpp" line="1523"/>
-        <location filename="../src/features/brush/editor/BrushEditorParameterOverlay.cpp" line="1530"/>
-        <location filename="../src/features/brush/editor/BrushEditorParameterOverlay.cpp" line="1569"/>
-        <location filename="../src/features/brush/editor/BrushEditorParameterOverlay.cpp" line="1577"/>
+        <location filename="../src/features/brush/editor/BrushEditorParameterOverlay.cpp" line="1521"/>
+        <location filename="../src/features/brush/editor/BrushEditorParameterOverlay.cpp" line="1528"/>
+        <location filename="../src/features/brush/editor/BrushEditorParameterOverlay.cpp" line="1567"/>
+        <location filename="../src/features/brush/editor/BrushEditorParameterOverlay.cpp" line="1579"/>
         <source>Enabled</source>
         <translation>Включено</translation>
     </message>
     <message>
-        <location filename="../src/features/brush/editor/BrushEditorParameterOverlay.cpp" line="1526"/>
-        <location filename="../src/features/brush/editor/BrushEditorParameterOverlay.cpp" line="1534"/>
-        <location filename="../src/features/brush/editor/BrushEditorParameterOverlay.cpp" line="1581"/>
+        <location filename="../src/features/brush/editor/BrushEditorParameterOverlay.cpp" line="1524"/>
+        <location filename="../src/features/brush/editor/BrushEditorParameterOverlay.cpp" line="1532"/>
+        <location filename="../src/features/brush/editor/BrushEditorParameterOverlay.cpp" line="1571"/>
+        <location filename="../src/features/brush/editor/BrushEditorParameterOverlay.cpp" line="1583"/>
         <source>Mode</source>
         <translation>Режим</translation>
     </message>
     <message>
-        <location filename="../src/features/brush/editor/BrushEditorParameterOverlay.cpp" line="1538"/>
+        <location filename="../src/features/brush/editor/BrushEditorParameterOverlay.cpp" line="1536"/>
         <source>INPUTS</source>
         <translation>ВХОДЫ</translation>
     </message>
     <message>
-        <location filename="../src/features/brush/editor/BrushEditorParameterOverlay.cpp" line="1561"/>
+        <location filename="../src/features/brush/editor/BrushEditorParameterOverlay.cpp" line="1559"/>
         <source>Duration (sec)</source>
         <translation>Длительность (сек)</translation>
     </message>
     <message>
-        <location filename="../src/features/brush/editor/BrushEditorParameterOverlay.cpp" line="1565"/>
+        <location filename="../src/features/brush/editor/BrushEditorParameterOverlay.cpp" line="1563"/>
         <source>End Action</source>
         <translation>Действие в конце</translation>
     </message>
     <message>
-        <location filename="../src/features/brush/editor/BrushEditorParameterOverlay.cpp" line="1573"/>
-        <source>Amount</source>
-        <translation>Интенсивность</translation>
+        <location filename="../src/features/brush/editor/BrushEditorParameterOverlay.cpp" line="1575"/>
+        <source>Range</source>
+        <translation>Диапазон</translation>
     </message>
 </context>
 <context>
@@ -245,8 +246,8 @@
     <message>
         <location filename="../src/commands/definitions/FileCommands.cpp" line="234"/>
         <location filename="../src/commands/definitions/FileCommands.cpp" line="509"/>
-        <location filename="../src/shell/main-window/MainWindow.cpp" line="851"/>
-        <location filename="../src/shell/main-window/MainWindow.cpp" line="897"/>
+        <location filename="../src/shell/main-window/MainWindow.cpp" line="857"/>
+        <location filename="../src/shell/main-window/MainWindow.cpp" line="903"/>
         <source>RGB Color</source>
         <translation>RGB цвет</translation>
     </message>
@@ -365,12 +366,12 @@
 <context>
     <name>OpenGLCanvasWidget</name>
     <message>
-        <location filename="../src/features/canvas/rendering/OpenGLCanvasWidget.cpp" line="719"/>
+        <location filename="../src/features/canvas/rendering/OpenGLCanvasWidget.cpp" line="644"/>
         <source>Filling the area. Live preview is paused. Please wait.</source>
         <translation>Заливка области. Предпросмотр приостановлен. Пожалуйста, подождите.</translation>
     </message>
     <message>
-        <location filename="../src/features/canvas/rendering/OpenGLCanvasWidget.cpp" line="749"/>
+        <location filename="../src/features/canvas/rendering/OpenGLCanvasWidget.cpp" line="674"/>
         <source>Done!</source>
         <translation>Готово!</translation>
     </message>
@@ -398,7 +399,7 @@ Try Square Selection first to restrict the area.</source>
         <translation>ОК</translation>
     </message>
     <message>
-        <location filename="../src/features/canvas/rendering/OpenGLCanvasWidget.cpp" line="2825"/>
+        <location filename="../src/features/canvas/rendering/OpenGLCanvasWidget.cpp" line="2752"/>
         <source>please wait</source>
         <translation>пожалуйста, подождите</translation>
     </message>
@@ -522,48 +523,48 @@ Try Square Selection first to restrict the area.</source>
         <translation>Название кисти</translation>
     </message>
     <message>
-        <location filename="../src/features/canvas/rendering/OpenGLCanvasWidget.cpp" line="1922"/>
-        <location filename="../src/features/canvas/rendering/OpenGLCanvasWidget.cpp" line="1933"/>
+        <location filename="../src/features/canvas/rendering/OpenGLCanvasWidget.cpp" line="1847"/>
+        <location filename="../src/features/canvas/rendering/OpenGLCanvasWidget.cpp" line="1858"/>
         <source>Imported object</source>
         <translation>Импортированный объект</translation>
     </message>
     <message>
-        <location filename="../src/features/canvas/rendering/OpenGLCanvasWidget.cpp" line="1925"/>
+        <location filename="../src/features/canvas/rendering/OpenGLCanvasWidget.cpp" line="1850"/>
         <source>Board layer</source>
         <translation>Слой доски</translation>
     </message>
     <message>
-        <location filename="../src/features/canvas/rendering/OpenGLCanvasWidget.cpp" line="1928"/>
+        <location filename="../src/features/canvas/rendering/OpenGLCanvasWidget.cpp" line="1853"/>
         <source>Smart object</source>
         <translation>Смарт-объект</translation>
     </message>
     <message>
-        <location filename="../src/features/canvas/rendering/OpenGLCanvasWidget.cpp" line="1931"/>
+        <location filename="../src/features/canvas/rendering/OpenGLCanvasWidget.cpp" line="1856"/>
         <source>Text layer</source>
         <translation>Текстовый слой</translation>
     </message>
     <message>
-        <location filename="../src/features/canvas/rendering/OpenGLCanvasWidget.cpp" line="1939"/>
+        <location filename="../src/features/canvas/rendering/OpenGLCanvasWidget.cpp" line="1864"/>
         <source>Convert Board Layer</source>
         <translation>Преобразовать слой доски</translation>
     </message>
     <message>
-        <location filename="../src/features/canvas/rendering/OpenGLCanvasWidget.cpp" line="1942"/>
+        <location filename="../src/features/canvas/rendering/OpenGLCanvasWidget.cpp" line="1867"/>
         <source>Convert Text Layer</source>
         <translation>Преобразовать текстовый слой</translation>
     </message>
     <message>
-        <location filename="../src/features/canvas/rendering/OpenGLCanvasWidget.cpp" line="1944"/>
+        <location filename="../src/features/canvas/rendering/OpenGLCanvasWidget.cpp" line="1869"/>
         <source>Convert Smart Object</source>
         <translation>Преобразовать смарт-объект</translation>
     </message>
     <message>
-        <location filename="../src/features/canvas/ui/CanvasMouseInputHandler.cpp" line="427"/>
+        <location filename="../src/features/canvas/ui/CanvasMouseInputHandler.cpp" line="429"/>
         <source>Classic</source>
         <translation>Классический</translation>
     </message>
     <message>
-        <location filename="../src/features/canvas/ui/CanvasMouseInputHandler.cpp" line="437"/>
+        <location filename="../src/features/canvas/ui/CanvasMouseInputHandler.cpp" line="439"/>
         <source>Deform</source>
         <translation>Деформация</translation>
     </message>
@@ -823,266 +824,272 @@ Try Square Selection first to restrict the area.</source>
 <context>
     <name>ReleaseNotesOverlay</name>
     <message>
+        <location filename="../src/shell/update-message/ReleaseNotesOverlay.cpp" line="60"/>
+        <source>Smarter snapping, smoother zoom, and a faster paint loop</source>
+        <translation>Умная привязка, плавный зум и быстрый цикл рисования</translation>
+    </message>
+    <message>
         <location filename="../src/shell/update-message/ReleaseNotesOverlay.cpp" line="63"/>
+        <source>&lt;p&gt;&lt;b&gt;This update rebuilds auto snapping around other layers and equal spacing, adds unified range controls for brush dynamics, and makes canvas rendering smooth at every zoom level, along with a faster paint loop and fixes for stylus contact, the hue ring, and the updater.&lt;/b&gt;&lt;/p&gt;&lt;p&gt;&lt;b&gt;New&lt;/b&gt;&lt;/p&gt;&lt;ul&gt;&lt;li&gt;Auto snapping now reaches past the canvas: content also aligns to other visible layers and groups and to equal spacing between neighbours, with live guides and an on-canvas measurement. Hold Alt while dragging to move without snapping.&lt;/li&gt;&lt;li&gt;Four Editor settings for it: snap to canvas, snap to layers, snap to equal spacing, and pixel-aligned raster moves — all on by default.&lt;/li&gt;&lt;li&gt;A unified range control for brush dynamics: single-amount dynamics now use a two-handle range slider, and the random and stroke-direction sources accept the same blend modes as the rest.&lt;/li&gt;&lt;li&gt;Four more built-in welcome banners.&lt;/li&gt;&lt;/ul&gt;&lt;p&gt;&lt;b&gt;Improved&lt;/b&gt;&lt;/p&gt;&lt;ul&gt;&lt;li&gt;Ruwa reopens on the monitor it was last used on, splash screen and startup animation included.&lt;/li&gt;&lt;li&gt;Canvas tiles are sampled from mipmaps, so zoomed-out views stay smooth instead of aliasing — without stalling live edits.&lt;/li&gt;&lt;li&gt;The navigator animates its viewport frame and its tile updates instead of jumping.&lt;/li&gt;&lt;li&gt;Theme and welcome-banner selectors expand, collapse, and cross-fade smoothly.&lt;/li&gt;&lt;li&gt;Faster painting: less per-dab and per-event work, no large-stroke commit stalls, and far fewer taper preview rebuilds.&lt;/li&gt;&lt;li&gt;Faster selection commits, Liquify dabs, and multi-layer transform previews.&lt;/li&gt;&lt;li&gt;Floating panels are no longer repainted on every canvas frame.&lt;/li&gt;&lt;/ul&gt;&lt;p&gt;&lt;b&gt;Fixes&lt;/b&gt;&lt;/p&gt;&lt;ul&gt;&lt;li&gt;The pen no longer loses contact mid-stroke when the cursor crosses the window boundary.&lt;/li&gt;&lt;li&gt;The hue ring and vertical hue bar use the intended color layout.&lt;/li&gt;&lt;li&gt;Soft Blur brushes no longer ghost: strength is driven by a per-pixel sigma instead of an opacity cross-fade.&lt;/li&gt;&lt;li&gt;Magic Wand now selects the same region Classic Fill would fill.&lt;/li&gt;&lt;li&gt;A tool switch made an instant before drawing is honored by the stroke that follows.&lt;/li&gt;&lt;li&gt;Holding a stationary pen no longer stacks dabs on one spot.&lt;/li&gt;&lt;li&gt;Transform preview sampling matches the applied result.&lt;/li&gt;&lt;li&gt;Dock panel push resizing is reversible again.&lt;/li&gt;&lt;li&gt;A failed cleanup step after a successful update no longer rolls the healthy installation back.&lt;/li&gt;&lt;/ul&gt;</source>
+        <translation>&lt;p&gt;&lt;b&gt;Это обновление перестраивает автопривязку вокруг других слоёв и равных отступов, добавляет единые диапазонные регуляторы динамики кистей и делает отрисовку холста плавной на любом масштабе, а также ускоряет цикл рисования и исправляет контакт пера, цветовое кольцо и обновление.&lt;/b&gt;&lt;/p&gt;&lt;p&gt;&lt;b&gt;Новое&lt;/b&gt;&lt;/p&gt;&lt;ul&gt;&lt;li&gt;Автопривязка теперь выходит за пределы холста: содержимое также выравнивается по другим видимым слоям и группам и по равным отступам между соседями, с живыми направляющими и измерением на холсте. Удерживайте Alt при перетаскивании, чтобы перемещать без привязки.&lt;/li&gt;&lt;li&gt;Четыре настройки для неё в разделе «Редактор»: привязка к холсту, привязка к слоям, привязка к равным отступам и пиксельное выравнивание растровых перемещений — все включены по умолчанию.&lt;/li&gt;&lt;li&gt;Единый диапазонный регулятор динамики кистей: динамики с одной величиной теперь используют ползунок с двумя ручками, а источники «Случайно» и «Направление штриха» принимают те же режимы наложения, что и остальные.&lt;/li&gt;&lt;li&gt;Ещё четыре встроенных приветственных баннера.&lt;/li&gt;&lt;/ul&gt;&lt;p&gt;&lt;b&gt;Улучшения&lt;/b&gt;&lt;/p&gt;&lt;ul&gt;&lt;li&gt;Ruwa открывается на том мониторе, где использовалась в прошлый раз, включая заставку и анимацию запуска.&lt;/li&gt;&lt;li&gt;Тайлы холста сэмплируются из мипмапов, поэтому отдалённый вид остаётся плавным без алиасинга — и не тормозит живое редактирование.&lt;/li&gt;&lt;li&gt;Навигатор анимирует рамку области просмотра и обновление тайлов вместо скачков.&lt;/li&gt;&lt;li&gt;Селекторы тем и приветственных баннеров плавно раскрываются, сворачиваются и перетекают друг в друга.&lt;/li&gt;&lt;li&gt;Рисование быстрее: меньше работы на каждый отпечаток и событие, нет задержек при фиксации длинных мазков и намного реже перестраивается предпросмотр заострения.&lt;/li&gt;&lt;li&gt;Быстрее фиксация выделений, отпечатки пластики и предпросмотр трансформации нескольких слоёв.&lt;/li&gt;&lt;li&gt;Плавающие панели больше не перерисовываются на каждом кадре холста.&lt;/li&gt;&lt;/ul&gt;&lt;p&gt;&lt;b&gt;Исправления&lt;/b&gt;&lt;/p&gt;&lt;ul&gt;&lt;li&gt;Перо больше не теряет контакт посреди мазка, когда курсор пересекает границу окна.&lt;/li&gt;&lt;li&gt;Цветовое кольцо и вертикальная полоса оттенка используют задуманную раскладку цветов.&lt;/li&gt;&lt;li&gt;Мягкие кисти размытия больше не оставляют призраков: сила берётся из попиксельной сигмы вместо кроссфейда непрозрачности.&lt;/li&gt;&lt;li&gt;Волшебная палочка выделяет ту же область, которую залила бы классическая заливка.&lt;/li&gt;&lt;li&gt;Переключение инструмента за мгновение до рисования учитывается следующим мазком.&lt;/li&gt;&lt;li&gt;Удержание неподвижного пера больше не накладывает отпечатки в одной точке.&lt;/li&gt;&lt;li&gt;Сэмплирование предпросмотра трансформации совпадает с применённым результатом.&lt;/li&gt;&lt;li&gt;Изменение размера доков выталкиванием снова обратимо.&lt;/li&gt;&lt;li&gt;Сбой очистки после успешного обновления больше не откатывает исправную установку.&lt;/li&gt;&lt;/ul&gt;</translation>
+    </message>
+    <message>
+        <location filename="../src/shell/update-message/ReleaseNotesOverlay.cpp" line="116"/>
         <source>&lt;p&gt;&lt;b&gt;This update adds a Magic Wand selection tool and a procedural texture editor for brushes, extends copy, cut, paste, and Delete to layer masks and selection pixels, reorganizes the tool bar, gives the workspace an animated entrance, and modernizes canvas rendering.&lt;/b&gt;&lt;/p&gt;&lt;p&gt;&lt;b&gt;New&lt;/b&gt;&lt;/p&gt;&lt;ul&gt;&lt;li&gt;Magic Wand (W). Selects a contiguous region of similar color on the active layer, with add and subtract modifiers, and computes large selections in the background.&lt;/li&gt;&lt;li&gt;A procedural texture editor in the Brush Editor with six generators — pencil grain, fractal noise, Perlin noise, dots, lines, and checkerboard — each with a live preview.&lt;/li&gt;&lt;li&gt;Copy, cut, and paste for layer masks and for the pixels inside a selection. Pasted pixels land as a new layer in place and go straight into transform mode.&lt;/li&gt;&lt;li&gt;Ctrl+click a mask thumbnail to load that mask as a selection, and a contextual Delete that removes the layer, its mask, or the selected pixels depending on focus.&lt;/li&gt;&lt;li&gt;Brush deletion from the Brushes panel, a new Stylized Brushes pack, and an animated entrance for the whole workspace on startup.&lt;/li&gt;&lt;/ul&gt;&lt;p&gt;&lt;b&gt;Improved&lt;/b&gt;&lt;/p&gt;&lt;ul&gt;&lt;li&gt;Reorganized tool groups: Blur, Smudge, and Liquify now share one slot, and the bar is split into navigation, drawing, selection, and other.&lt;/li&gt;&lt;li&gt;Adjustment layers are now applied in screen-space compositing, so they stay correct during strokes, transforms, and lasso fill.&lt;/li&gt;&lt;li&gt;Alt picks a color with the eyedropper while Lasso Fill is active.&lt;/li&gt;&lt;li&gt;Group and adjustment-layer effects now reuse cached composites while their source content is unchanged, avoiding repeated work during painting, panning, and effect editing.&lt;/li&gt;&lt;li&gt;The GPU rendering path now uses OpenGL 4.5 direct-state access, immutable textures, and persistent asynchronous readback buffers.&lt;/li&gt;&lt;/ul&gt;&lt;p&gt;&lt;b&gt;Fixes&lt;/b&gt;&lt;/p&gt;&lt;ul&gt;&lt;li&gt;Layer drag and drop no longer drops clipping masks partway through a multi-layer move.&lt;/li&gt;&lt;li&gt;Hiding a clipping-group base now also hides its clipped layers on the canvas, in live previews, and in exported content.&lt;/li&gt;&lt;li&gt;Copy, cut, paste, Delete, and the [ and ] brush shortcuts no longer act on the document while a text field has focus.&lt;/li&gt;&lt;li&gt;The first-run tab no longer starts blank, and the startup zoom-in animation no longer freezes when opening an existing project.&lt;/li&gt;&lt;li&gt;Fill now refreshes layer-effect caches on commit, so tiles on layers with effects no longer revert.&lt;/li&gt;&lt;li&gt;Transform and lasso previews no longer erase frosted canvas-widget backgrounds later in the same frame.&lt;/li&gt;&lt;/ul&gt;</source>
         <translation>&lt;p&gt;&lt;b&gt;Это обновление добавляет инструмент выделения «Волшебная палочка» и редактор процедурных текстур кистей, распространяет копирование, вырезание, вставку и Delete на маски слоёв и пиксели выделения, реорганизует панель инструментов, добавляет анимированное появление рабочей области и модернизирует отрисовку холста.&lt;/b&gt;&lt;/p&gt;&lt;p&gt;&lt;b&gt;Новое&lt;/b&gt;&lt;/p&gt;&lt;ul&gt;&lt;li&gt;Волшебная палочка (W) выделяет связную область похожего цвета на активном слое, поддерживает добавление и вычитание и вычисляет большие выделения в фоне.&lt;/li&gt;&lt;li&gt;Редактор процедурных текстур в редакторе кистей с шестью генераторами — карандашное зерно, фрактальный шум, шум Перлина, точки, линии и шахматный узор — каждый с живым предпросмотром.&lt;/li&gt;&lt;li&gt;Копирование, вырезание и вставка для масок слоёв и пикселей внутри выделения. Вставленные пиксели становятся новым слоем на прежнем месте и сразу переходят в режим трансформации.&lt;/li&gt;&lt;li&gt;Ctrl+клик по миниатюре маски загружает её как выделение, а контекстный Delete удаляет слой, его маску или выделенные пиксели в зависимости от фокуса.&lt;/li&gt;&lt;li&gt;Удаление кистей прямо из панели кистей, новый набор Stylized Brushes и анимированное появление всей рабочей области при запуске.&lt;/li&gt;&lt;/ul&gt;&lt;p&gt;&lt;b&gt;Улучшения&lt;/b&gt;&lt;/p&gt;&lt;ul&gt;&lt;li&gt;Переработаны группы инструментов: размытие, палец и пластика теперь находятся в одной ячейке, а панель разделена на навигацию, рисование, выделение и остальные инструменты.&lt;/li&gt;&lt;li&gt;Корректирующие слои теперь применяются и в экранной композиции, поэтому остаются корректными во время мазков, трансформаций и лассо-заливки.&lt;/li&gt;&lt;li&gt;Alt вызывает пипетку, пока активна лассо-заливка.&lt;/li&gt;&lt;li&gt;Эффекты групп и корректирующих слоёв повторно используют кэшированные композиции, пока исходное содержимое не изменилось, избегая лишней работы при рисовании, панорамировании и редактировании эффектов.&lt;/li&gt;&lt;li&gt;GPU-отрисовка теперь использует direct-state access OpenGL 4.5, неизменяемые текстуры и постоянные буферы асинхронного чтения.&lt;/li&gt;&lt;/ul&gt;&lt;p&gt;&lt;b&gt;Исправления&lt;/b&gt;&lt;/p&gt;&lt;ul&gt;&lt;li&gt;Перетаскивание слоёв больше не сбрасывает обтравочные маски в середине перемещения нескольких слоёв.&lt;/li&gt;&lt;li&gt;Скрытие основы обтравочной группы теперь также скрывает обтравочные слои на холсте, в живом предпросмотре и экспортированном изображении.&lt;/li&gt;&lt;li&gt;Копирование, вырезание, вставка, Delete и горячие клавиши [ и ] больше не действуют на документ, пока фокус находится в текстовом поле.&lt;/li&gt;&lt;li&gt;Вкладка первого запуска больше не остаётся пустой, а стартовая анимация приближения не замирает при открытии существующего проекта.&lt;/li&gt;&lt;li&gt;Заливка обновляет кэш эффектов слоя при применении, поэтому тайлы на слоях с эффектами больше не откатываются.&lt;/li&gt;&lt;li&gt;Предпросмотр трансформации и лассо больше не стирает матовый фон виджетов холста позже в том же кадре.&lt;/li&gt;&lt;/ul&gt;</translation>
     </message>
     <message>
-        <location filename="../src/shell/update-message/ReleaseNotesOverlay.cpp" line="113"/>
+        <location filename="../src/shell/update-message/ReleaseNotesOverlay.cpp" line="166"/>
         <source>Brush favorites, live settings, and smoother drawing</source>
         <translation>Избранные кисти, быстрые настройки и плавное рисование</translation>
     </message>
     <message>
-        <location filename="../src/shell/update-message/ReleaseNotesOverlay.cpp" line="116"/>
+        <location filename="../src/shell/update-message/ReleaseNotesOverlay.cpp" line="169"/>
         <source>&lt;p&gt;&lt;b&gt;This update makes brushes faster to organize and tune with favorites, pack filters, and a new Brush Settings panel, improves WinTab stroke smoothness and canvas performance, and restores crisp live blur across canvas widgets.&lt;/b&gt;&lt;/p&gt;&lt;p&gt;&lt;b&gt;New&lt;/b&gt;&lt;/p&gt;&lt;ul&gt;&lt;li&gt;Favorite brushes with a dedicated filter, persistence across sessions, and quick context-menu actions.&lt;/li&gt;&lt;li&gt;Pack filters for switching between favorites, all brushes, and individual packs.&lt;/li&gt;&lt;li&gt;A dockable Brush Settings panel with a live dab preview and responsive controls for starred brush settings.&lt;/li&gt;&lt;li&gt;One-click HEX color copying in the Color panel.&lt;/li&gt;&lt;/ul&gt;&lt;p&gt;&lt;b&gt;Improved&lt;/b&gt;&lt;/p&gt;&lt;ul&gt;&lt;li&gt;Sharper brush previews, clearer selection styling, and favorite markers.&lt;/li&gt;&lt;li&gt;Live color updates while entering valid three- or six-digit HEX values.&lt;/li&gt;&lt;li&gt;Smoother WinTab strokes, more reliable multi-device pressure, and lower canvas frame cost in maximized windows.&lt;/li&gt;&lt;/ul&gt;&lt;p&gt;&lt;b&gt;Fixes&lt;/b&gt;&lt;/p&gt;&lt;ul&gt;&lt;li&gt;Canvas widgets now use sharp, same-frame GPU blur that stays synchronized while controls move or fade.&lt;/li&gt;&lt;li&gt;Smudge and other effect strokes are finalized safely before switching tools.&lt;/li&gt;&lt;/ul&gt;</source>
         <translation>&lt;p&gt;&lt;b&gt;Это обновление ускоряет организацию и настройку кистей благодаря избранному, фильтрам наборов и новой панели «Настройки кисти», улучшает плавность штрихов WinTab и производительность холста, а также возвращает чёткое живое размытие виджетам холста.&lt;/b&gt;&lt;/p&gt;&lt;p&gt;&lt;b&gt;Новое&lt;/b&gt;&lt;/p&gt;&lt;ul&gt;&lt;li&gt;Избранные кисти с отдельным фильтром, сохранением между сеансами и быстрыми действиями в контекстном меню.&lt;/li&gt;&lt;li&gt;Фильтры для переключения между избранным, всеми кистями и отдельными наборами.&lt;/li&gt;&lt;li&gt;Док-панель «Настройки кисти» с живым предпросмотром отпечатка и адаптивными регуляторами отмеченных параметров.&lt;/li&gt;&lt;li&gt;Копирование HEX-кода цвета одним нажатием в панели цвета.&lt;/li&gt;&lt;/ul&gt;&lt;p&gt;&lt;b&gt;Улучшено&lt;/b&gt;&lt;/p&gt;&lt;ul&gt;&lt;li&gt;Более чёткие предпросмотры кистей, заметное выделение и маркеры избранного.&lt;/li&gt;&lt;li&gt;Мгновенное обновление цвета при вводе корректного трёх- или шестизначного HEX-кода.&lt;/li&gt;&lt;li&gt;Более плавные штрихи WinTab, надёжный нажим при работе с несколькими устройствами и меньшая стоимость кадра холста в развёрнутом окне.&lt;/li&gt;&lt;/ul&gt;&lt;p&gt;&lt;b&gt;Исправления&lt;/b&gt;&lt;/p&gt;&lt;ul&gt;&lt;li&gt;Виджеты холста теперь используют чёткое GPU-размытие из текущего кадра, синхронизированное с перемещением и затуханием элементов.&lt;/li&gt;&lt;li&gt;Smudge и другие кисти-эффекты безопасно завершают штрих перед сменой инструмента.&lt;/li&gt;&lt;/ul&gt;</translation>
     </message>
     <message>
-        <location filename="../src/shell/update-message/ReleaseNotesOverlay.cpp" line="146"/>
+        <location filename="../src/shell/update-message/ReleaseNotesOverlay.cpp" line="199"/>
         <source>Personalization, colour controls, and input fixes</source>
         <translation>Персонализация, управление цветом и исправления ввода</translation>
     </message>
     <message>
-        <location filename="../src/shell/update-message/ReleaseNotesOverlay.cpp" line="149"/>
+        <location filename="../src/shell/update-message/ReleaseNotesOverlay.cpp" line="202"/>
         <source>&lt;p&gt;&lt;b&gt;This update introduces a redesigned first-run personalization flow and compact RGB/HSV controls, improves brush startup and custom dab rendering, and fixes WinTab input, transform safety, and several canvas interaction issues.&lt;/b&gt;&lt;/p&gt;&lt;p&gt;&lt;b&gt;New&lt;/b&gt;&lt;/p&gt;&lt;ul&gt;&lt;li&gt;A redesigned first-run flow for choosing appearance, editor, performance, and tablet-input settings.&lt;/li&gt;&lt;li&gt;Compact RGB and HSV channel controls in the Color panel.&lt;/li&gt;&lt;/ul&gt;&lt;p&gt;&lt;b&gt;Improved&lt;/b&gt;&lt;/p&gt;&lt;ul&gt;&lt;li&gt;Nine additional default brush presets, improved startup selection, and expanded packs by default.&lt;/li&gt;&lt;li&gt;Favorite brush parameters stored in imported and exported packs.&lt;/li&gt;&lt;li&gt;Custom dab hardness and brush cursor previews.&lt;/li&gt;&lt;li&gt;The Composer panel is now named Navigator.&lt;/li&gt;&lt;/ul&gt;&lt;p&gt;&lt;b&gt;Fixes&lt;/b&gt;&lt;/p&gt;&lt;ul&gt;&lt;li&gt;More reliable undo handling in the Brush Editor.&lt;/li&gt;&lt;li&gt;Phantom and interrupted WinTab strokes, including mouse/pen handoff across the UI and canvas.&lt;/li&gt;&lt;li&gt;Transform finalization and several issues involving selections, alpha lock, Blur, and Navigator refreshes.&lt;/li&gt;&lt;/ul&gt;</source>
         <translation>&lt;p&gt;&lt;b&gt;Это обновление добавляет переработанную персонализацию при первом запуске и компактные регуляторы RGB/HSV, улучшает стартовую настройку кистей и отрисовку пользовательских отпечатков, а также исправляет ввод WinTab, применение трансформаций и несколько проблем взаимодействия с холстом.&lt;/b&gt;&lt;/p&gt;&lt;p&gt;&lt;b&gt;Новое&lt;/b&gt;&lt;/p&gt;&lt;ul&gt;&lt;li&gt;Переработанный первый запуск для выбора оформления, настроек редактора, производительности и планшетного ввода.&lt;/li&gt;&lt;li&gt;Компактные регуляторы каналов RGB и HSV в панели цвета.&lt;/li&gt;&lt;/ul&gt;&lt;p&gt;&lt;b&gt;Улучшено&lt;/b&gt;&lt;/p&gt;&lt;ul&gt;&lt;li&gt;Девять дополнительных стандартных кистей, улучшенный выбор кисти при запуске и раскрытые наборы по умолчанию.&lt;/li&gt;&lt;li&gt;Сохранение избранных параметров кисти в импортируемых и экспортируемых наборах.&lt;/li&gt;&lt;li&gt;Жёсткость пользовательских отпечатков и предпросмотр курсора кисти.&lt;/li&gt;&lt;li&gt;Панель Composer теперь называется «Навигатор».&lt;/li&gt;&lt;/ul&gt;&lt;p&gt;&lt;b&gt;Исправления&lt;/b&gt;&lt;/p&gt;&lt;ul&gt;&lt;li&gt;Более надёжная отмена действий в редакторе кистей.&lt;/li&gt;&lt;li&gt;Фантомные и прерывающиеся штрихи WinTab, включая переключение между мышью и пером в интерфейсе и на холсте.&lt;/li&gt;&lt;li&gt;Завершение трансформаций и несколько проблем с выделениями, блокировкой альфа-канала, Blur и обновлением Навигатора.&lt;/li&gt;&lt;/ul&gt;</translation>
     </message>
     <message>
-        <location filename="../src/shell/update-message/ReleaseNotesOverlay.cpp" line="176"/>
+        <location filename="../src/shell/update-message/ReleaseNotesOverlay.cpp" line="229"/>
         <source>Open-source release</source>
         <translation>Открытие исходного кода</translation>
     </message>
     <message>
-        <location filename="../src/shell/update-message/ReleaseNotesOverlay.cpp" line="178"/>
+        <location filename="../src/shell/update-message/ReleaseNotesOverlay.cpp" line="231"/>
         <source>&lt;p&gt;&lt;b&gt;Ruwa is now open source.&lt;/b&gt; The source code and contribution process are public on a fresh repository, the release ships alongside a brand-new website, and the licensing, security, governance, CI, and release infrastructure needed for public development are complete.&lt;/p&gt;&lt;p&gt;&lt;b&gt;New&lt;/b&gt;&lt;/p&gt;&lt;ul&gt;&lt;li&gt;A public source repository at github.com/LuskusDeus/Ruwa and a new project website at accretion.pro.&lt;/li&gt;&lt;/ul&gt;&lt;p&gt;&lt;b&gt;Changed&lt;/b&gt;&lt;/p&gt;&lt;ul&gt;&lt;li&gt;The proprietary Discord Game SDK has been replaced with a first-party Discord Rich Presence implementation over local IPC using Qt only.&lt;/li&gt;&lt;li&gt;The public contribution process now includes governance, security, code of conduct, DCO sign-off, issue templates, and pull request guidance.&lt;/li&gt;&lt;li&gt;Dependency and asset provenance, licence notices, and CI checks are documented in the repository, and all outstanding licensing issues have been resolved.&lt;/li&gt;&lt;/ul&gt;&lt;p&gt;&lt;b&gt;Fixes&lt;/b&gt;&lt;/p&gt;&lt;ul&gt;&lt;li&gt;The binary installer release now packages and installs correctly.&lt;/li&gt;&lt;li&gt;Fixed an event-handling bug in the Layers panel.&lt;/li&gt;&lt;/ul&gt;</source>
         <translation>&lt;p&gt;&lt;b&gt;Исходный код Ruwa теперь открыт.&lt;/b&gt; Исходный код и процесс внесения изменений опубликованы в новом репозитории, релиз выходит вместе с новым сайтом, а инфраструктура лицензирования, безопасности, управления проектом, CI и выпуска для публичной разработки полностью готова.&lt;/p&gt;&lt;p&gt;&lt;b&gt;Новое&lt;/b&gt;&lt;/p&gt;&lt;ul&gt;&lt;li&gt;Публичный репозиторий исходного кода на github.com/LuskusDeus/Ruwa и новый сайт проекта accretion.pro.&lt;/li&gt;&lt;/ul&gt;&lt;p&gt;&lt;b&gt;Изменено&lt;/b&gt;&lt;/p&gt;&lt;ul&gt;&lt;li&gt;Проприетарный Discord Game SDK заменён собственной реализацией Discord Rich Presence, которая работает через локальный IPC и использует только Qt.&lt;/li&gt;&lt;li&gt;Публичный процесс внесения изменений теперь включает правила управления проектом и безопасности, кодекс поведения, DCO-подпись, шаблоны задач и руководство по pull request.&lt;/li&gt;&lt;li&gt;В репозитории задокументированы происхождение зависимостей и ассетов, лицензионные уведомления и CI-проверки, а все нерешённые вопросы лицензирования устранены.&lt;/li&gt;&lt;/ul&gt;&lt;p&gt;&lt;b&gt;Исправления&lt;/b&gt;&lt;/p&gt;&lt;ul&gt;&lt;li&gt;Бинарный установщик теперь корректно собирает и устанавливает релиз.&lt;/li&gt;&lt;li&gt;Исправлена ошибка обработки событий в панели слоёв.&lt;/li&gt;&lt;/ul&gt;</translation>
     </message>
     <message>
-        <location filename="../src/shell/update-message/ReleaseNotesOverlay.cpp" line="258"/>
+        <location filename="../src/shell/update-message/ReleaseNotesOverlay.cpp" line="311"/>
         <source>Liquify, layer masks, and a canvas redesign</source>
         <translation>Liquify, маски слоев и редизайн холста</translation>
     </message>
     <message>
-        <location filename="../src/shell/update-message/ReleaseNotesOverlay.cpp" line="261"/>
+        <location filename="../src/shell/update-message/ReleaseNotesOverlay.cpp" line="314"/>
         <source>&lt;p&gt;&lt;b&gt;A major update. It introduces the Liquify tool and layer masks, gives every canvas widget a new frosted-glass look backed by a much more reliable layout system, and completely reworks the wet brush mechanics.&lt;/b&gt; It also refreshes the top bar popups and the color picker, improves floating panel and Canvas Resize performance, and fixes a large number of UI and visual bugs.&lt;/p&gt;&lt;p&gt;&lt;b&gt;New&lt;/b&gt;&lt;/p&gt;&lt;ul&gt;&lt;li&gt;Liquify. A new tool for warping the canvas, with Push, Rotate CW/CCW, Bloat, and Pucker modes.&lt;/li&gt;&lt;li&gt;Layer masks. You can now add and edit layer masks, transform them correctly, and invert a mask from the context menu.&lt;/li&gt;&lt;li&gt;The brush editor now has many more parameters for tuning wet brushes.&lt;/li&gt;&lt;/ul&gt;&lt;p&gt;&lt;b&gt;Reworked&lt;/b&gt;&lt;/p&gt;&lt;ul&gt;&lt;li&gt;The wet brush mechanics have been completely reworked.&lt;/li&gt;&lt;li&gt;Canvas widgets now use a new layout system and serialization that work far more reliably.&lt;/li&gt;&lt;li&gt;Every canvas widget was redesigned with a frosted-glass background. The Brush Control widget is now more compact, and the tool bar has a new capsule look.&lt;/li&gt;&lt;/ul&gt;&lt;p&gt;&lt;b&gt;Redesigned&lt;/b&gt;&lt;/p&gt;&lt;ul&gt;&lt;li&gt;New design for the top bar popups (the File, Edit, View, and Help menus, Layouts, and the tab context menu).&lt;/li&gt;&lt;li&gt;New design for the Color Picker popup.&lt;/li&gt;&lt;li&gt;The brush settings context menu on the canvas is now cleaner and easier to use.&lt;/li&gt;&lt;/ul&gt;&lt;p&gt;&lt;b&gt;Improved&lt;/b&gt;&lt;/p&gt;&lt;ul&gt;&lt;li&gt;Floating panel performance has been improved.&lt;/li&gt;&lt;li&gt;Canvas Resize performance has been improved.&lt;/li&gt;&lt;/ul&gt;&lt;p&gt;&lt;b&gt;Fixes&lt;/b&gt;&lt;/p&gt;&lt;ul&gt;&lt;li&gt;Fixed a large number of UI bugs.&lt;/li&gt;&lt;li&gt;Fixed bugs with the custom brush cursor on the canvas and with floating panels.&lt;/li&gt;&lt;li&gt;A large number of additional visual fixes across the application.&lt;/li&gt;&lt;/ul&gt;</source>
         <translation>&lt;p&gt;&lt;b&gt;Крупное обновление. Оно добавляет инструмент Liquify и маски слоев, дает всем canvas виджетам новый вид с эффектом тонированного стекла на основе намного более надежной системы лайаута и полностью перерабатывает механику мокрых кистей.&lt;/b&gt; Также обновлены попапы топбара и color picker, улучшена производительность плавающих панелей и Canvas Resize, и исправлено большое количество багов UI и визуальных багов.&lt;/p&gt;&lt;p&gt;&lt;b&gt;Новое&lt;/b&gt;&lt;/p&gt;&lt;ul&gt;&lt;li&gt;Liquify. Новый инструмент для деформации холста, с режимами Push, Rotate CW/CCW, Bloat и Pucker.&lt;/li&gt;&lt;li&gt;Маски слоев. Теперь можно добавлять и редактировать маски слоев, корректно их трансформировать и инвертировать маску через контекстное меню.&lt;/li&gt;&lt;li&gt;В редакторе кистей теперь намного больше параметров для настройки мокрых кистей.&lt;/li&gt;&lt;/ul&gt;&lt;p&gt;&lt;b&gt;Переработано&lt;/b&gt;&lt;/p&gt;&lt;ul&gt;&lt;li&gt;Механика мокрых кистей полностью переработана.&lt;/li&gt;&lt;li&gt;Canvas виджеты теперь используют новую систему лайаута и сериализации, которая работает намного надежнее.&lt;/li&gt;&lt;li&gt;Все canvas виджеты переделаны с фоном из тонированного стекла. Виджет Brush Control стал компактнее, а tool bar получил капсульный вид.&lt;/li&gt;&lt;/ul&gt;&lt;p&gt;&lt;b&gt;Редизайн&lt;/b&gt;&lt;/p&gt;&lt;ul&gt;&lt;li&gt;Новый дизайн попапов топбара (меню File, Edit, View и Help, Layouts и контекстное меню табов).&lt;/li&gt;&lt;li&gt;Новый дизайн попапа Color Picker.&lt;/li&gt;&lt;li&gt;Контекстное меню настроек кисти на холсте стало чище и удобнее.&lt;/li&gt;&lt;/ul&gt;&lt;p&gt;&lt;b&gt;Улучшено&lt;/b&gt;&lt;/p&gt;&lt;ul&gt;&lt;li&gt;Улучшена производительность плавающих панелей.&lt;/li&gt;&lt;li&gt;Улучшена производительность Canvas Resize.&lt;/li&gt;&lt;/ul&gt;&lt;p&gt;&lt;b&gt;Исправления&lt;/b&gt;&lt;/p&gt;&lt;ul&gt;&lt;li&gt;Исправлено большое количество багов UI.&lt;/li&gt;&lt;li&gt;Исправлены баги с кастомным курсором кисти на холсте и с плавающими панелями.&lt;/li&gt;&lt;li&gt;Большое количество других визуальных исправлений по приложению.&lt;/li&gt;&lt;/ul&gt;</translation>
     </message>
     <message>
-        <location filename="../src/shell/update-message/ReleaseNotesOverlay.cpp" line="303"/>
+        <location filename="../src/shell/update-message/ReleaseNotesOverlay.cpp" line="356"/>
         <source>Default brush and brush editor fixes</source>
         <translation>Исправления стандартных кистей и редактора кистей</translation>
     </message>
     <message>
-        <location filename="../src/shell/update-message/ReleaseNotesOverlay.cpp" line="306"/>
+        <location filename="../src/shell/update-message/ReleaseNotesOverlay.cpp" line="359"/>
         <source>&lt;p&gt;&lt;b&gt;This update fixes a number of bugs with the default brush presets and the brush editor.&lt;/b&gt;&lt;/p&gt;&lt;p&gt;&lt;b&gt;Fixes&lt;/b&gt;&lt;/p&gt;&lt;ul&gt;&lt;li&gt;Fixed bugs with the default brush presets.&lt;/li&gt;&lt;li&gt;Fixed bugs in the brush editor.&lt;/li&gt;&lt;/ul&gt;</source>
         <translation>&lt;p&gt;&lt;b&gt;Это обновление исправляет ряд багов со стандартными пресетами кистей и редактором кистей.&lt;/b&gt;&lt;/p&gt;&lt;p&gt;&lt;b&gt;Исправления&lt;/b&gt;&lt;/p&gt;&lt;ul&gt;&lt;li&gt;Исправлены баги со стандартными пресетами кистей.&lt;/li&gt;&lt;li&gt;Исправлены баги в редакторе кистей.&lt;/li&gt;&lt;/ul&gt;</translation>
     </message>
     <message>
-        <location filename="../src/shell/update-message/ReleaseNotesOverlay.cpp" line="314"/>
+        <location filename="../src/shell/update-message/ReleaseNotesOverlay.cpp" line="367"/>
         <source>Wet brushes and reworked input</source>
         <translation>Мокрые кисти и переработанный инпут</translation>
     </message>
     <message>
-        <location filename="../src/shell/update-message/ReleaseNotesOverlay.cpp" line="316"/>
+        <location filename="../src/shell/update-message/ReleaseNotesOverlay.cpp" line="369"/>
         <source>&lt;p&gt;&lt;b&gt;This update adds wet brushes, completely reworks the input system so drawing feels far better, completes the Deform transform, and greatly expands the set of default brushes.&lt;/b&gt; Theme switching is now much faster, the stabilizer no longer produces broken lines, and a large number of visual and performance bugs have been fixed.&lt;/p&gt;&lt;p&gt;&lt;b&gt;New&lt;/b&gt;&lt;/p&gt;&lt;ul&gt;&lt;li&gt;Wet brushes. The brush engine now supports wet, color-mixing brushes.&lt;/li&gt;&lt;/ul&gt;&lt;p&gt;&lt;b&gt;Reworked&lt;/b&gt;&lt;/p&gt;&lt;ul&gt;&lt;li&gt;The input system has been completely reworked. Drawing now feels significantly better.&lt;/li&gt;&lt;li&gt;The Deform transform is now complete. It was introduced as an early version in the previous update.&lt;/li&gt;&lt;li&gt;Reworked the default brushes, with many more now included.&lt;/li&gt;&lt;/ul&gt;&lt;p&gt;&lt;b&gt;Improved&lt;/b&gt;&lt;/p&gt;&lt;ul&gt;&lt;li&gt;Theme switching is now much faster.&lt;/li&gt;&lt;/ul&gt;&lt;p&gt;&lt;b&gt;Fixes&lt;/b&gt;&lt;/p&gt;&lt;ul&gt;&lt;li&gt;Fixed a stabilizer bug that caused broken, jagged lines.&lt;/li&gt;&lt;li&gt;Fixed the custom Ruwa WinTab backend.&lt;/li&gt;&lt;li&gt;A large number of additional visual and performance fixes across the application.&lt;/li&gt;&lt;/ul&gt;</source>
         <translation>&lt;p&gt;&lt;b&gt;Это обновление добавляет мокрые кисти, полностью перерабатывает систему инпута — рисование теперь ощущается в разы лучше — доводит до готовности Deform трансформ и сильно расширяет набор стандартных кистей.&lt;/b&gt; Переключение тем теперь намного быстрее, стабилизатор больше не создает ломаные линии, а также исправлено множество визуальных багов и багов производительности.&lt;/p&gt;&lt;p&gt;&lt;b&gt;Новое&lt;/b&gt;&lt;/p&gt;&lt;ul&gt;&lt;li&gt;Мокрые кисти. Brush engine теперь поддерживает мокрые кисти, смешивающие цвет.&lt;/li&gt;&lt;/ul&gt;&lt;p&gt;&lt;b&gt;Переработано&lt;/b&gt;&lt;/p&gt;&lt;ul&gt;&lt;li&gt;Система инпута полностью переработана. Рисование теперь ощущается значительно лучше.&lt;/li&gt;&lt;li&gt;Deform трансформ теперь полностью готов. В прошлом обновлении он был добавлен как ранняя версия.&lt;/li&gt;&lt;li&gt;Переработаны стандартные кисти — теперь их стало намного больше.&lt;/li&gt;&lt;/ul&gt;&lt;p&gt;&lt;b&gt;Улучшено&lt;/b&gt;&lt;/p&gt;&lt;ul&gt;&lt;li&gt;Переключение тем теперь намного быстрее.&lt;/li&gt;&lt;/ul&gt;&lt;p&gt;&lt;b&gt;Исправления&lt;/b&gt;&lt;/p&gt;&lt;ul&gt;&lt;li&gt;Исправлен баг стабилизатора, из-за которого появлялись ломаные линии.&lt;/li&gt;&lt;li&gt;Исправлен кастомный Ruwa WinTab backend.&lt;/li&gt;&lt;li&gt;Большое количество других исправлений визуальных багов и багов производительности по приложению.&lt;/li&gt;&lt;/ul&gt;</translation>
     </message>
     <message>
-        <location filename="../src/shell/update-message/ReleaseNotesOverlay.cpp" line="345"/>
+        <location filename="../src/shell/update-message/ReleaseNotesOverlay.cpp" line="398"/>
         <source>Smudge, deform, and shortcut presets</source>
         <translation>Smudge, deform и пресеты шорткатов</translation>
     </message>
     <message>
-        <location filename="../src/shell/update-message/ReleaseNotesOverlay.cpp" line="348"/>
+        <location filename="../src/shell/update-message/ReleaseNotesOverlay.cpp" line="401"/>
         <source>&lt;p&gt;&lt;b&gt;This update reworks the Smudge tool, introduces an early Deform transform, and adds shortcut presets.&lt;/b&gt; The brush cursor now follows the shape of the current dab, the Color panel and Keyboard Shortcuts tab have been redesigned, and a large number of bugs have been fixed.&lt;/p&gt;&lt;p&gt;&lt;b&gt;New&lt;/b&gt;&lt;/p&gt;&lt;ul&gt;&lt;li&gt;New Deform transform mode. It is still in progress and will be expanded in future updates.&lt;/li&gt;&lt;li&gt;Shortcuts can now be saved and switched between as presets.&lt;/li&gt;&lt;li&gt;The brush cursor now matches the shape of the current dab.&lt;/li&gt;&lt;/ul&gt;&lt;p&gt;&lt;b&gt;Reworked&lt;/b&gt;&lt;/p&gt;&lt;ul&gt;&lt;li&gt;The Smudge tool has been reworked.&lt;/li&gt;&lt;li&gt;Redesigned Keyboard Shortcuts tab.&lt;/li&gt;&lt;li&gt;New design for the Color panel.&lt;/li&gt;&lt;li&gt;Redesigned Layout Presets popup.&lt;/li&gt;&lt;li&gt;Small design refinements across the canvas widgets.&lt;/li&gt;&lt;/ul&gt;&lt;p&gt;&lt;b&gt;Improved&lt;/b&gt;&lt;/p&gt;&lt;ul&gt;&lt;li&gt;The ABR parser has been improved.&lt;/li&gt;&lt;/ul&gt;&lt;p&gt;&lt;b&gt;Fixes&lt;/b&gt;&lt;/p&gt;&lt;ul&gt;&lt;li&gt;Fixed visual bugs in Lasso Fill and the transform preview.&lt;/li&gt;&lt;li&gt;A large number of additional bug fixes across the application.&lt;/li&gt;&lt;/ul&gt;</source>
         <translation>&lt;p&gt;&lt;b&gt;Это обновление переделывает Smudge инструмент, вводит ранний Deform трансформ и добавляет пресеты для шорткатов.&lt;/b&gt; Курсор кисти теперь повторяет форму текущего даба, переработан дизайн Color панели и таба Keyboard Shortcuts, а также исправлено множество багов.&lt;/p&gt;&lt;p&gt;&lt;b&gt;Новое&lt;/b&gt;&lt;/p&gt;&lt;ul&gt;&lt;li&gt;Новый Deform трансформ. Пока в процессе разработки и будет расширяться в будущих обновлениях.&lt;/li&gt;&lt;li&gt;Шорткаты теперь можно сохранять и переключать как пресеты.&lt;/li&gt;&lt;li&gt;Курсор кисти теперь повторяет форму текущего даба.&lt;/li&gt;&lt;/ul&gt;&lt;p&gt;&lt;b&gt;Переработано&lt;/b&gt;&lt;/p&gt;&lt;ul&gt;&lt;li&gt;Smudge инструмент переработан.&lt;/li&gt;&lt;li&gt;Переделан дизайн таба Keyboard Shortcuts.&lt;/li&gt;&lt;li&gt;Новый дизайн Color панели.&lt;/li&gt;&lt;li&gt;Переделан попап Layout Presets.&lt;/li&gt;&lt;li&gt;Небольшие изменения в дизайне canvas виджетов.&lt;/li&gt;&lt;/ul&gt;&lt;p&gt;&lt;b&gt;Улучшено&lt;/b&gt;&lt;/p&gt;&lt;ul&gt;&lt;li&gt;ABR parser улучшен.&lt;/li&gt;&lt;/ul&gt;&lt;p&gt;&lt;b&gt;Исправления&lt;/b&gt;&lt;/p&gt;&lt;ul&gt;&lt;li&gt;Исправлены визуальные баги в Lasso Fill и в transform preview.&lt;/li&gt;&lt;li&gt;Большое количество других исправлений по приложению.&lt;/li&gt;&lt;/ul&gt;</translation>
     </message>
     <message>
-        <location filename="../src/shell/update-message/ReleaseNotesOverlay.cpp" line="377"/>
+        <location filename="../src/shell/update-message/ReleaseNotesOverlay.cpp" line="430"/>
         <source>Color, multi-layer transform, and alt-copy</source>
         <translation>Color, multi-layer transform и alt-copy</translation>
     </message>
     <message>
-        <location filename="../src/shell/update-message/ReleaseNotesOverlay.cpp" line="380"/>
+        <location filename="../src/shell/update-message/ReleaseNotesOverlay.cpp" line="433"/>
         <source>&lt;p&gt;&lt;b&gt;This update expands brush color control, makes multi-layer work much more complete, and adds alt-copy for faster layer duplication.&lt;/b&gt; It also fully reworks the brush stabilizer and includes bug fixes, an early ABR parser, a zoom overlay, and a redesigned installer.&lt;/p&gt;&lt;p&gt;&lt;b&gt;New&lt;/b&gt;&lt;/p&gt;&lt;ul&gt;&lt;li&gt;New Color tab in the brush engine with full HSL control and blend modes for brushes.&lt;/li&gt;&lt;li&gt;Alt-copy now works: hold Alt while moving layers on the canvas or in the Layers panel to duplicate the selected layers.&lt;/li&gt;&lt;li&gt;Added an early ABR parser. For now, it only parses dab textures.&lt;/li&gt;&lt;li&gt;Added an overlay that shows the current zoom.&lt;/li&gt;&lt;li&gt;The app now has a completely redesigned installer.&lt;/li&gt;&lt;/ul&gt;&lt;p&gt;&lt;b&gt;Improved&lt;/b&gt;&lt;/p&gt;&lt;ul&gt;&lt;li&gt;The brush stabilizer has been completely reworked.&lt;/li&gt;&lt;li&gt;Full multi-layer support: selected layers can now be transformed together, including whole groups with subgroups.&lt;/li&gt;&lt;/ul&gt;&lt;p&gt;&lt;b&gt;Fixes&lt;/b&gt;&lt;/p&gt;&lt;ul&gt;&lt;li&gt;Fixed bugs across the application.&lt;/li&gt;&lt;/ul&gt;</source>
         <translation>&lt;p&gt;&lt;b&gt;Это обновление расширяет настройки цвета кистей, делает multi-layer работу намного полноценнее и добавляет alt-copy для быстрого дублирования слоев.&lt;/b&gt; Также здесь полностью переработан stabilizer кисти, есть исправления багов, ранний ABR parser, оверлей зума и переделанный инсталлятор.&lt;/p&gt;&lt;p&gt;&lt;b&gt;Новое&lt;/b&gt;&lt;/p&gt;&lt;ul&gt;&lt;li&gt;Новая вкладка Color в brush engine с полной настройкой HSL и blend modes для кистей.&lt;/li&gt;&lt;li&gt;Теперь работает alt-copy: зажмите Alt при перемещении слоев на холсте или в панели слоев, чтобы продублировать выбранные слои.&lt;/li&gt;&lt;li&gt;Добавлен ранний ABR parser. Пока он парсит только текстуры дабов.&lt;/li&gt;&lt;li&gt;Добавлен оверлей, который показывает текущий зум.&lt;/li&gt;&lt;li&gt;У приложения теперь полностью переделанный инсталлятор.&lt;/li&gt;&lt;/ul&gt;&lt;p&gt;&lt;b&gt;Улучшено&lt;/b&gt;&lt;/p&gt;&lt;ul&gt;&lt;li&gt;Stabilizer кисти полностью переработан.&lt;/li&gt;&lt;li&gt;Полноценная поддержка multi-layer: выбранные слои теперь можно трансформировать вместе, включая целые группы с подгруппами.&lt;/li&gt;&lt;/ul&gt;&lt;p&gt;&lt;b&gt;Исправления&lt;/b&gt;&lt;/p&gt;&lt;ul&gt;&lt;li&gt;Исправлены баги по приложению.&lt;/li&gt;&lt;/ul&gt;</translation>
     </message>
     <message>
-        <location filename="../src/shell/update-message/ReleaseNotesOverlay.cpp" line="405"/>
+        <location filename="../src/shell/update-message/ReleaseNotesOverlay.cpp" line="458"/>
         <source>Text tool, Auto Snap, and brush sharing</source>
         <translation>Text инструмент, Auto Snap и обмен кистями</translation>
     </message>
     <message>
-        <location filename="../src/shell/update-message/ReleaseNotesOverlay.cpp" line="408"/>
+        <location filename="../src/shell/update-message/ReleaseNotesOverlay.cpp" line="461"/>
         <source>&lt;p&gt;&lt;b&gt;This update introduces a fully featured Text tool, Auto Snap for precise canvas placement, and brush sharing through the brush editor.&lt;/b&gt; Brush dynamics have been reworked with new input sources, and the About section has been redesigned.&lt;/p&gt;&lt;p&gt;&lt;b&gt;New&lt;/b&gt;&lt;/p&gt;&lt;ul&gt;&lt;li&gt;New Text tool with full text formatting support.&lt;/li&gt;&lt;li&gt;Auto Snap — a powerful axis snapping system that makes placing elements on the canvas much easier.&lt;/li&gt;&lt;li&gt;Brushes can now be exported and imported directly from the brush editor.&lt;/li&gt;&lt;li&gt;New About section with information about the program, its testers, and the tools used to build it.&lt;/li&gt;&lt;li&gt;New input source: Random (replaces the Jitter section, which has been removed entirely).&lt;/li&gt;&lt;li&gt;New input source: Stroke Direction.&lt;/li&gt;&lt;/ul&gt;&lt;p&gt;&lt;b&gt;Improved&lt;/b&gt;&lt;/p&gt;&lt;ul&gt;&lt;li&gt;Reworked brush stabilization in the brush editor.&lt;/li&gt;&lt;li&gt;Significant optimization improvements across several scenarios.&lt;/li&gt;&lt;/ul&gt;&lt;p&gt;&lt;b&gt;Removed&lt;/b&gt;&lt;/p&gt;&lt;ul&gt;&lt;li&gt;The Jitter section in the brush editor has been removed and replaced by the new Random input source.&lt;/li&gt;&lt;/ul&gt;&lt;p&gt;&lt;b&gt;Fixes&lt;/b&gt;&lt;/p&gt;&lt;ul&gt;&lt;li&gt;Fixed a large number of bugs across the application.&lt;/li&gt;&lt;/ul&gt;</source>
         <translation>&lt;p&gt;&lt;b&gt;В этом обновлении появился полноценный Text инструмент, Auto Snap для точного размещения на холсте и обмен кистями через brush editor.&lt;/b&gt; Динамика кистей переработана с новыми input sources, а раздел About получил новый дизайн.&lt;/p&gt;&lt;p&gt;&lt;b&gt;Новое&lt;/b&gt;&lt;/p&gt;&lt;ul&gt;&lt;li&gt;Новый Text инструмент с полной поддержкой форматирования текста.&lt;/li&gt;&lt;li&gt;Auto Snap — мощная система привязки по осям, которая значительно упрощает размещение элементов на холсте.&lt;/li&gt;&lt;li&gt;Кисти теперь можно экспортировать и импортировать прямо из brush editor.&lt;/li&gt;&lt;li&gt;Новый раздел About с информацией о программе, тестерах и инструментах, использованных при разработке.&lt;/li&gt;&lt;li&gt;Новый input source: Random (заменяет раздел Jitter, который был полностью удален).&lt;/li&gt;&lt;li&gt;Новый input source: Stroke Direction.&lt;/li&gt;&lt;/ul&gt;&lt;p&gt;&lt;b&gt;Улучшено&lt;/b&gt;&lt;/p&gt;&lt;ul&gt;&lt;li&gt;Переработан brush stabilization в brush editor.&lt;/li&gt;&lt;li&gt;Значительные улучшения оптимизации в нескольких сценариях.&lt;/li&gt;&lt;/ul&gt;&lt;p&gt;&lt;b&gt;Удалено&lt;/b&gt;&lt;/p&gt;&lt;ul&gt;&lt;li&gt;Раздел Jitter в brush editor удален и заменен новым input source Random.&lt;/li&gt;&lt;/ul&gt;&lt;p&gt;&lt;b&gt;Исправления&lt;/b&gt;&lt;/p&gt;&lt;ul&gt;&lt;li&gt;Исправлено большое количество багов по приложению.&lt;/li&gt;&lt;/ul&gt;</translation>
     </message>
     <message>
-        <location filename="../src/shell/update-message/ReleaseNotesOverlay.cpp" line="439"/>
+        <location filename="../src/shell/update-message/ReleaseNotesOverlay.cpp" line="492"/>
         <source>Layers, dabs, and smoother canvas</source>
         <translation>Слои, дабы и более плавный canvas</translation>
     </message>
     <message>
-        <location filename="../src/shell/update-message/ReleaseNotesOverlay.cpp" line="441"/>
+        <location filename="../src/shell/update-message/ReleaseNotesOverlay.cpp" line="494"/>
         <source>&lt;p&gt;&lt;b&gt;This update improves the layer workflow, adds custom image dabs for brushes, and makes canvas interaction smoother.&lt;/b&gt; It also introduces the in-app release notes panel and refreshes the first-launch experience for new users.&lt;/p&gt;&lt;p&gt;&lt;b&gt;New&lt;/b&gt;&lt;/p&gt;&lt;ul&gt;&lt;li&gt;Added an in-app release notes panel, available for the first time in this version.&lt;/li&gt;&lt;li&gt;Added a new update banner.&lt;/li&gt;&lt;li&gt;Added a new first-run integration for new users.&lt;/li&gt;&lt;li&gt;Added new default start banners.&lt;/li&gt;&lt;li&gt;Brushes can now use imported images as custom dabs.&lt;/li&gt;&lt;li&gt;Layers can now be marked with custom colors for visual organization.&lt;/li&gt;&lt;li&gt;Added Merge Down for layers.&lt;/li&gt;&lt;/ul&gt;&lt;p&gt;&lt;b&gt;Improved&lt;/b&gt;&lt;/p&gt;&lt;ul&gt;&lt;li&gt;Reworked the Layers panel so its main actions are now grouped in the top area.&lt;/li&gt;&lt;li&gt;Reworked brush stabilization.&lt;/li&gt;&lt;li&gt;Canvas movement now feels smoother.&lt;/li&gt;&lt;li&gt;Canvas Resize performance has been significantly improved.&lt;/li&gt;&lt;/ul&gt;&lt;p&gt;&lt;b&gt;Fixes and small changes&lt;/b&gt;&lt;/p&gt;&lt;ul&gt;&lt;li&gt;Stabilization settings are now saved for lasso-like tools.&lt;/li&gt;&lt;/ul&gt;</source>
         <translation>&lt;p&gt;&lt;b&gt;Это обновление улучшает работу со слоями, добавляет кастомные image дабы для кистей и делает взаимодействие с canvas более плавным.&lt;/b&gt; Также появилась встроенная панель release notes и обновлен первый запуск для новых пользователей.&lt;/p&gt;&lt;p&gt;&lt;b&gt;Новое&lt;/b&gt;&lt;/p&gt;&lt;ul&gt;&lt;li&gt;Добавлена встроенная панель release notes, доступная впервые в этой версии.&lt;/li&gt;&lt;li&gt;Добавлен новый update banner.&lt;/li&gt;&lt;li&gt;Добавлена новая интеграция первого запуска для новых пользователей.&lt;/li&gt;&lt;li&gt;Добавлены новые стартовые баннеры по умолчанию.&lt;/li&gt;&lt;li&gt;Кисти теперь могут использовать импортированные изображения как кастомные дабы.&lt;/li&gt;&lt;li&gt;Слои теперь можно отмечать кастомными цветами для визуальной организации.&lt;/li&gt;&lt;li&gt;Добавлен Merge Down для слоев.&lt;/li&gt;&lt;/ul&gt;&lt;p&gt;&lt;b&gt;Улучшено&lt;/b&gt;&lt;/p&gt;&lt;ul&gt;&lt;li&gt;Переработана панель слоев — основные действия теперь сгруппированы в верхней части.&lt;/li&gt;&lt;li&gt;Переработан brush stabilization.&lt;/li&gt;&lt;li&gt;Движение canvas теперь ощущается более плавным.&lt;/li&gt;&lt;li&gt;Производительность Canvas Resize значительно улучшена.&lt;/li&gt;&lt;/ul&gt;&lt;p&gt;&lt;b&gt;Исправления и мелкие изменения&lt;/b&gt;&lt;/p&gt;&lt;ul&gt;&lt;li&gt;Настройки stabilization теперь сохраняются для lasso-подобных инструментов.&lt;/li&gt;&lt;/ul&gt;</translation>
     </message>
     <message>
-        <location filename="../src/shell/update-message/ReleaseNotesOverlay.cpp" line="468"/>
+        <location filename="../src/shell/update-message/ReleaseNotesOverlay.cpp" line="521"/>
         <source>Brush engine foundations</source>
         <translation>Основы brush engine</translation>
     </message>
     <message>
-        <location filename="../src/shell/update-message/ReleaseNotesOverlay.cpp" line="470"/>
+        <location filename="../src/shell/update-message/ReleaseNotesOverlay.cpp" line="523"/>
         <source>&lt;p&gt;&lt;b&gt;This update expands brush control and adds faster access to brush selection.&lt;/b&gt; Brush parameters can now use curves, while the new panel and About section add more structure around the drawing workspace.&lt;/p&gt;&lt;p&gt;&lt;b&gt;New&lt;/b&gt;&lt;/p&gt;&lt;ul&gt;&lt;li&gt;New brush engine.&lt;/li&gt;&lt;li&gt;Added a Brushes panel for quicker access to brushes.&lt;/li&gt;&lt;li&gt;Added an About section with app information. The tester list is not complete yet and will be expanded later.&lt;/li&gt;&lt;/ul&gt;&lt;p&gt;&lt;b&gt;Expanded&lt;/b&gt;&lt;/p&gt;&lt;ul&gt;&lt;li&gt;Curves in the brush editor. Most parameters can now react to pen pressure or stroke age over time.&lt;/li&gt;&lt;li&gt;More input sources for brush dynamics will be added later.&lt;/li&gt;&lt;/ul&gt;&lt;p&gt;&lt;b&gt;Fixes and optimization&lt;/b&gt;&lt;/p&gt;&lt;ul&gt;&lt;li&gt;Fixed a large number of bugs and optimization issues.&lt;/li&gt;&lt;/ul&gt;</source>
         <translation>&lt;p&gt;&lt;b&gt;Это обновление расширяет управление кистями и добавляет более быстрый доступ к выбору кисти.&lt;/b&gt; Параметры кисти теперь могут использовать кривые, а новая панель и раздел About добавляют больше структуры вокруг рабочей области.&lt;/p&gt;&lt;p&gt;&lt;b&gt;Новое&lt;/b&gt;&lt;/p&gt;&lt;ul&gt;&lt;li&gt;Новый brush engine.&lt;/li&gt;&lt;li&gt;Добавлена панель Brushes для более быстрого доступа к кистям.&lt;/li&gt;&lt;li&gt;Добавлен раздел About с информацией о приложении. Список тестеров пока неполный и будет расширяться позже.&lt;/li&gt;&lt;/ul&gt;&lt;p&gt;&lt;b&gt;Расширено&lt;/b&gt;&lt;/p&gt;&lt;ul&gt;&lt;li&gt;Кривые в brush editor. Большинство параметров теперь могут реагировать на нажим пера или возраст штриха со временем.&lt;/li&gt;&lt;li&gt;Больше input sources для динамики кисти будут добавлены позже.&lt;/li&gt;&lt;/ul&gt;&lt;p&gt;&lt;b&gt;Исправления и оптимизация&lt;/b&gt;&lt;/p&gt;&lt;ul&gt;&lt;li&gt;Исправлено большое количество багов и проблем с оптимизацией.&lt;/li&gt;&lt;/ul&gt;</translation>
     </message>
     <message>
-        <location filename="../src/shell/update-message/ReleaseNotesOverlay.cpp" line="491"/>
+        <location filename="../src/shell/update-message/ReleaseNotesOverlay.cpp" line="544"/>
         <source>Brush workspace refresh</source>
         <translation>Обновление brush workspace</translation>
     </message>
     <message>
-        <location filename="../src/shell/update-message/ReleaseNotesOverlay.cpp" line="493"/>
+        <location filename="../src/shell/update-message/ReleaseNotesOverlay.cpp" line="546"/>
         <source>&lt;p&gt;&lt;b&gt;This update refreshes the brush panels and brush editor, and reworks Lasso Fill for infinite areas.&lt;/b&gt; It also includes a round of bug fixes across the application.&lt;/p&gt;&lt;p&gt;&lt;b&gt;Redesigned&lt;/b&gt;&lt;/p&gt;&lt;ul&gt;&lt;li&gt;New design for the brush panels and the brush editor.&lt;/li&gt;&lt;/ul&gt;&lt;p&gt;&lt;b&gt;Reworked&lt;/b&gt;&lt;/p&gt;&lt;ul&gt;&lt;li&gt;Reworked Lasso Fill. It is now optimized for comfortable use on infinite areas.&lt;/li&gt;&lt;/ul&gt;&lt;p&gt;&lt;b&gt;Fixes&lt;/b&gt;&lt;/p&gt;&lt;ul&gt;&lt;li&gt;Fixed many bugs across the application.&lt;/li&gt;&lt;/ul&gt;</source>
         <translation>&lt;p&gt;&lt;b&gt;Это обновление обновляет brush панели и brush editor, а также перерабатывает Lasso Fill для бесконечных областей.&lt;/b&gt; Также включает порцию исправлений багов по приложению.&lt;/p&gt;&lt;p&gt;&lt;b&gt;Переделано&lt;/b&gt;&lt;/p&gt;&lt;ul&gt;&lt;li&gt;Новый дизайн brush панелей и brush editor.&lt;/li&gt;&lt;/ul&gt;&lt;p&gt;&lt;b&gt;Переработано&lt;/b&gt;&lt;/p&gt;&lt;ul&gt;&lt;li&gt;Переработан Lasso Fill. Теперь оптимизирован для удобной работы на бесконечных областях.&lt;/li&gt;&lt;/ul&gt;&lt;p&gt;&lt;b&gt;Исправления&lt;/b&gt;&lt;/p&gt;&lt;ul&gt;&lt;li&gt;Исправлено множество багов по приложению.&lt;/li&gt;&lt;/ul&gt;</translation>
     </message>
     <message>
-        <location filename="../src/shell/update-message/ReleaseNotesOverlay.cpp" line="510"/>
+        <location filename="../src/shell/update-message/ReleaseNotesOverlay.cpp" line="563"/>
         <source>Infinite canvas preview</source>
         <translation>Превью бесконечного canvas</translation>
     </message>
     <message>
-        <location filename="../src/shell/update-message/ReleaseNotesOverlay.cpp" line="512"/>
+        <location filename="../src/shell/update-message/ReleaseNotesOverlay.cpp" line="565"/>
         <source>&lt;p&gt;&lt;b&gt;This update brings a cleaner UI style, infinite canvas support, and new canvas actions.&lt;/b&gt; It also expands customization, context menus, transforms, brush options, and project setup.&lt;/p&gt;&lt;p&gt;&lt;b&gt;New&lt;/b&gt;&lt;/p&gt;&lt;ul&gt;&lt;li&gt;New UI design with a cleaner visual style.&lt;/li&gt;&lt;li&gt;Infinite canvas.&lt;/li&gt;&lt;li&gt;Canvas mirroring.&lt;/li&gt;&lt;li&gt;New transform mode: Warp.&lt;/li&gt;&lt;li&gt;New blur brush.&lt;/li&gt;&lt;li&gt;New quick-actions canvas overlay.&lt;/li&gt;&lt;li&gt;New Board layer type.&lt;/li&gt;&lt;li&gt;Startup setup on first launch.&lt;/li&gt;&lt;li&gt;Layout presets.&lt;/li&gt;&lt;/ul&gt;&lt;p&gt;&lt;b&gt;Expanded&lt;/b&gt;&lt;/p&gt;&lt;ul&gt;&lt;li&gt;More customization options.&lt;/li&gt;&lt;li&gt;More context menus, including quick-action menus for the layer panel.&lt;/li&gt;&lt;li&gt;Axis-constrained movement for layer content with Shift.&lt;/li&gt;&lt;/ul&gt;&lt;p&gt;&lt;b&gt;Reworked&lt;/b&gt;&lt;/p&gt;&lt;ul&gt;&lt;li&gt;Reworked lasso tool with much better behavior.&lt;/li&gt;&lt;li&gt;Project file format changed from .uwa to .rwf.&lt;/li&gt;&lt;/ul&gt;&lt;p&gt;&lt;b&gt;Improved&lt;/b&gt;&lt;/p&gt;&lt;ul&gt;&lt;li&gt;More work on the Compositor panel.&lt;/li&gt;&lt;li&gt;Improved Russian localization.&lt;/li&gt;&lt;/ul&gt;&lt;p&gt;&lt;b&gt;Fixes&lt;/b&gt;&lt;/p&gt;&lt;ul&gt;&lt;li&gt;Various bug fixes.&lt;/li&gt;&lt;/ul&gt;</source>
         <translation>&lt;p&gt;&lt;b&gt;Это обновление приносит более чистый UI стиль, поддержку бесконечного canvas и новые действия для canvas.&lt;/b&gt; Также расширены кастомизация, контекстные меню, трансформации, опции кистей и настройка проекта.&lt;/p&gt;&lt;p&gt;&lt;b&gt;Новое&lt;/b&gt;&lt;/p&gt;&lt;ul&gt;&lt;li&gt;Новый дизайн UI с более чистым визуальным стилем.&lt;/li&gt;&lt;li&gt;Бесконечный canvas.&lt;/li&gt;&lt;li&gt;Зеркалирование canvas.&lt;/li&gt;&lt;li&gt;Новый режим трансформации: Warp.&lt;/li&gt;&lt;li&gt;Новая blur кисть.&lt;/li&gt;&lt;li&gt;Новый оверлей быстрых действий на canvas.&lt;/li&gt;&lt;li&gt;Новый тип слоя Board.&lt;/li&gt;&lt;li&gt;Стартовая настройка при первом запуске.&lt;/li&gt;&lt;li&gt;Пресеты layout.&lt;/li&gt;&lt;/ul&gt;&lt;p&gt;&lt;b&gt;Расширено&lt;/b&gt;&lt;/p&gt;&lt;ul&gt;&lt;li&gt;Больше опций кастомизации.&lt;/li&gt;&lt;li&gt;Больше контекстных меню, включая меню быстрых действий для панели слоев.&lt;/li&gt;&lt;li&gt;Движение содержимого слоя с привязкой к оси по Shift.&lt;/li&gt;&lt;/ul&gt;&lt;p&gt;&lt;b&gt;Переработано&lt;/b&gt;&lt;/p&gt;&lt;ul&gt;&lt;li&gt;Переработан lasso инструмент с гораздо лучшим поведением.&lt;/li&gt;&lt;li&gt;Формат файла проекта изменен с .uwa на .rwf.&lt;/li&gt;&lt;/ul&gt;&lt;p&gt;&lt;b&gt;Улучшено&lt;/b&gt;&lt;/p&gt;&lt;ul&gt;&lt;li&gt;Дополнительная работа над панелью Compositor.&lt;/li&gt;&lt;li&gt;Улучшена русская локализация.&lt;/li&gt;&lt;/ul&gt;&lt;p&gt;&lt;b&gt;Исправления&lt;/b&gt;&lt;/p&gt;&lt;ul&gt;&lt;li&gt;Разные исправления багов.&lt;/li&gt;&lt;/ul&gt;</translation>
     </message>
     <message>
-        <location filename="../src/shell/update-message/ReleaseNotesOverlay.cpp" line="548"/>
+        <location filename="../src/shell/update-message/ReleaseNotesOverlay.cpp" line="601"/>
         <source>Export and tablet polish</source>
         <translation>Экспорт и полировка планшетов</translation>
     </message>
     <message>
-        <location filename="../src/shell/update-message/ReleaseNotesOverlay.cpp" line="550"/>
+        <location filename="../src/shell/update-message/ReleaseNotesOverlay.cpp" line="603"/>
         <source>&lt;p&gt;&lt;b&gt;This update adds image export and improves several tablet, mask, color, and workspace systems.&lt;/b&gt; It also softens workspace visuals and includes small fixes.&lt;/p&gt;&lt;p&gt;&lt;b&gt;New&lt;/b&gt;&lt;/p&gt;&lt;ul&gt;&lt;li&gt;Image export now works. You can export to PNG, JPEG, and WebP.&lt;/li&gt;&lt;li&gt;Selected areas can now be flipped horizontally or vertically.&lt;/li&gt;&lt;li&gt;The color wheel panel now has new modes: hue ring, square, and triangle.&lt;/li&gt;&lt;/ul&gt;&lt;p&gt;&lt;b&gt;Reworked&lt;/b&gt;&lt;/p&gt;&lt;ul&gt;&lt;li&gt;Part of the input pipeline has been rewritten. Edge artifacts in masks should now either disappear or become much less noticeable. If you still see them, try switching the tablet backend in Settings - some backends are still unstable.&lt;/li&gt;&lt;/ul&gt;&lt;p&gt;&lt;b&gt;Improved&lt;/b&gt;&lt;/p&gt;&lt;ul&gt;&lt;li&gt;The custom Ruwa WinTab backend has been significantly improved.&lt;/li&gt;&lt;li&gt;Workspace serialization for saving and loading has been improved.&lt;/li&gt;&lt;li&gt;The workspace now looks cleaner visually: panel outlines are softer and no longer clip on soft edges.&lt;/li&gt;&lt;/ul&gt;&lt;p&gt;&lt;b&gt;Fixes&lt;/b&gt;&lt;/p&gt;&lt;ul&gt;&lt;li&gt;Small fixes.&lt;/li&gt;&lt;/ul&gt;</source>
         <translation>&lt;p&gt;&lt;b&gt;Это обновление добавляет экспорт изображений и улучшает несколько систем планшетов, масок, цвета и workspace.&lt;/b&gt; Также смягчает визуал workspace и включает небольшие исправления.&lt;/p&gt;&lt;p&gt;&lt;b&gt;Новое&lt;/b&gt;&lt;/p&gt;&lt;ul&gt;&lt;li&gt;Экспорт изображений теперь работает. Можно экспортировать в PNG, JPEG и WebP.&lt;/li&gt;&lt;li&gt;Выделенные области теперь можно отражать по горизонтали или вертикали.&lt;/li&gt;&lt;li&gt;В панели color wheel появились новые режимы: hue ring, square и triangle.&lt;/li&gt;&lt;/ul&gt;&lt;p&gt;&lt;b&gt;Переработано&lt;/b&gt;&lt;/p&gt;&lt;ul&gt;&lt;li&gt;Часть input pipeline переписана. Артефакты по краям в масках теперь должны либо исчезнуть, либо стать гораздо менее заметными. Если вы их все еще видите, попробуйте переключить tablet backend в Settings — некоторые backends пока нестабильны.&lt;/li&gt;&lt;/ul&gt;&lt;p&gt;&lt;b&gt;Улучшено&lt;/b&gt;&lt;/p&gt;&lt;ul&gt;&lt;li&gt;Кастомный Ruwa WinTab backend значительно улучшен.&lt;/li&gt;&lt;li&gt;Сериализация workspace для сохранения и загрузки улучшена.&lt;/li&gt;&lt;li&gt;Workspace теперь визуально выглядит чище: контуры панелей мягче и больше не обрезаются на мягких краях.&lt;/li&gt;&lt;/ul&gt;&lt;p&gt;&lt;b&gt;Исправления&lt;/b&gt;&lt;/p&gt;&lt;ul&gt;&lt;li&gt;Небольшие исправления.&lt;/li&gt;&lt;/ul&gt;</translation>
     </message>
     <message>
-        <location filename="../src/shell/update-message/ReleaseNotesOverlay.cpp" line="577"/>
+        <location filename="../src/shell/update-message/ReleaseNotesOverlay.cpp" line="630"/>
         <source>Tools and tablet backend</source>
         <translation>Инструменты и tablet backend</translation>
     </message>
     <message>
-        <location filename="../src/shell/update-message/ReleaseNotesOverlay.cpp" line="579"/>
+        <location filename="../src/shell/update-message/ReleaseNotesOverlay.cpp" line="632"/>
         <source>&lt;p&gt;&lt;b&gt;This update improves the layer panel, adds a custom Windows WinTab backend, and reorganizes tools into folders.&lt;/b&gt; Flood Fill performance and transform snapping were also improved.&lt;/p&gt;&lt;p&gt;&lt;b&gt;New&lt;/b&gt;&lt;/p&gt;&lt;ul&gt;&lt;li&gt;Added a custom Windows WinTab backend for tablets, improving compatibility with supported devices.&lt;/li&gt;&lt;li&gt;Tools are now grouped into folders.&lt;/li&gt;&lt;li&gt;In transform mode, holding Shift now snaps the rotation angle in 15-degree steps.&lt;/li&gt;&lt;/ul&gt;&lt;p&gt;&lt;b&gt;Reworked&lt;/b&gt;&lt;/p&gt;&lt;ul&gt;&lt;li&gt;Reworked the startup panel appearance animation, which used to be bugged.&lt;/li&gt;&lt;/ul&gt;&lt;p&gt;&lt;b&gt;Improved&lt;/b&gt;&lt;/p&gt;&lt;ul&gt;&lt;li&gt;Improved layer panel animations.&lt;/li&gt;&lt;li&gt;Flood Fill performance has been significantly improved, with up to 10x faster processing.&lt;/li&gt;&lt;/ul&gt;&lt;p&gt;&lt;b&gt;Fixes&lt;/b&gt;&lt;/p&gt;&lt;ul&gt;&lt;li&gt;Fixed visual bugs in the layer panel.&lt;/li&gt;&lt;li&gt;Minor bug fixes.&lt;/li&gt;&lt;/ul&gt;</source>
         <translation>&lt;p&gt;&lt;b&gt;Это обновление улучшает панель слоев, добавляет кастомный Windows WinTab backend и реорганизует инструменты в папки.&lt;/b&gt; Также улучшены производительность Flood Fill и привязка трансформации.&lt;/p&gt;&lt;p&gt;&lt;b&gt;Новое&lt;/b&gt;&lt;/p&gt;&lt;ul&gt;&lt;li&gt;Добавлен кастомный Windows WinTab backend для планшетов, улучшающий совместимость с поддерживаемыми устройствами.&lt;/li&gt;&lt;li&gt;Инструменты теперь сгруппированы в папки.&lt;/li&gt;&lt;li&gt;В режиме трансформации удержание Shift теперь привязывает угол поворота с шагом 15 градусов.&lt;/li&gt;&lt;/ul&gt;&lt;p&gt;&lt;b&gt;Переработано&lt;/b&gt;&lt;/p&gt;&lt;ul&gt;&lt;li&gt;Переработана анимация появления стартовой панели, которая раньше была багнутой.&lt;/li&gt;&lt;/ul&gt;&lt;p&gt;&lt;b&gt;Улучшено&lt;/b&gt;&lt;/p&gt;&lt;ul&gt;&lt;li&gt;Улучшены анимации панели слоев.&lt;/li&gt;&lt;li&gt;Производительность Flood Fill значительно улучшена, до 10 раз быстрее.&lt;/li&gt;&lt;/ul&gt;&lt;p&gt;&lt;b&gt;Исправления&lt;/b&gt;&lt;/p&gt;&lt;ul&gt;&lt;li&gt;Исправлены визуальные баги в панели слоев.&lt;/li&gt;&lt;li&gt;Мелкие исправления багов.&lt;/li&gt;&lt;/ul&gt;</translation>
     </message>
     <message>
-        <location filename="../src/shell/update-message/ReleaseNotesOverlay.cpp" line="606"/>
+        <location filename="../src/shell/update-message/ReleaseNotesOverlay.cpp" line="659"/>
         <source>Async app flow</source>
         <translation>Асинхронная работа приложения</translation>
     </message>
     <message>
-        <location filename="../src/shell/update-message/ReleaseNotesOverlay.cpp" line="608"/>
+        <location filename="../src/shell/update-message/ReleaseNotesOverlay.cpp" line="661"/>
         <source>&lt;p&gt;&lt;b&gt;This update moves a significant part of the app to asynchronous behavior and rewrites the update manager.&lt;/b&gt; It also addresses Flood Fill issues and improves pressure detection.&lt;/p&gt;&lt;p&gt;&lt;b&gt;Reworked&lt;/b&gt;&lt;/p&gt;&lt;ul&gt;&lt;li&gt;A significant part of the app is now asynchronous, which makes the program feel smoother and reduces UI freezes.&lt;/li&gt;&lt;li&gt;The update manager has been fully rewritten, so update-related errors should now be gone. It may ask for admin permissions.&lt;/li&gt;&lt;/ul&gt;&lt;p&gt;&lt;b&gt;Improved&lt;/b&gt;&lt;/p&gt;&lt;ul&gt;&lt;li&gt;Pressure detection has been significantly improved.&lt;/li&gt;&lt;/ul&gt;&lt;p&gt;&lt;b&gt;Fixes&lt;/b&gt;&lt;/p&gt;&lt;ul&gt;&lt;li&gt;Fixed critical issues with Flood Fill. Its calculations were moved to the CPU, which made it slower and introduced a maximum radius limit. This will be improved in future updates.&lt;/li&gt;&lt;li&gt;Minor bug fixes.&lt;/li&gt;&lt;/ul&gt;</source>
         <translation>&lt;p&gt;&lt;b&gt;Это обновление переводит значительную часть приложения на асинхронное поведение и переписывает update manager.&lt;/b&gt; Также устраняет проблемы с Flood Fill и улучшает определение нажима.&lt;/p&gt;&lt;p&gt;&lt;b&gt;Переработано&lt;/b&gt;&lt;/p&gt;&lt;ul&gt;&lt;li&gt;Значительная часть приложения теперь асинхронная, что делает программу более плавной и уменьшает зависания UI.&lt;/li&gt;&lt;li&gt;Update manager полностью переписан, так что ошибки, связанные с обновлениями, теперь должны исчезнуть. Он может запрашивать права администратора.&lt;/li&gt;&lt;/ul&gt;&lt;p&gt;&lt;b&gt;Улучшено&lt;/b&gt;&lt;/p&gt;&lt;ul&gt;&lt;li&gt;Определение нажима значительно улучшено.&lt;/li&gt;&lt;/ul&gt;&lt;p&gt;&lt;b&gt;Исправления&lt;/b&gt;&lt;/p&gt;&lt;ul&gt;&lt;li&gt;Исправлены критические проблемы с Flood Fill. Его вычисления были перенесены на CPU, что сделало его медленнее и ввело ограничение максимального радиуса. Это будет улучшено в будущих обновлениях.&lt;/li&gt;&lt;li&gt;Мелкие исправления багов.&lt;/li&gt;&lt;/ul&gt;</translation>
     </message>
     <message>
-        <location filename="../src/shell/update-message/ReleaseNotesOverlay.cpp" line="630"/>
+        <location filename="../src/shell/update-message/ReleaseNotesOverlay.cpp" line="683"/>
         <source>Fill and quick shapes</source>
         <translation>Fill и quick shapes</translation>
     </message>
     <message>
-        <location filename="../src/shell/update-message/ReleaseNotesOverlay.cpp" line="632"/>
+        <location filename="../src/shell/update-message/ReleaseNotesOverlay.cpp" line="685"/>
         <source>&lt;p&gt;&lt;b&gt;This update reworks Flood Fill and Quick Shapes, and adds Smart Fill for semi-transparent pixels.&lt;/b&gt; It also includes minor bug fixes.&lt;/p&gt;&lt;p&gt;&lt;b&gt;New&lt;/b&gt;&lt;/p&gt;&lt;ul&gt;&lt;li&gt;Added Smart Fill. This is a separate tool designed for working with semi-transparent pixels, especially with soft brushes. It is quite demanding.&lt;/li&gt;&lt;li&gt;New shapes are now available: square and triangle variants for all directions.&lt;/li&gt;&lt;/ul&gt;&lt;p&gt;&lt;b&gt;Reworked&lt;/b&gt;&lt;/p&gt;&lt;ul&gt;&lt;li&gt;Flood Fill has been reworked. It is not fully finished yet and may still have bugs, but it should no longer crash the app and should work at a basic usable level.&lt;/li&gt;&lt;li&gt;Quick Shapes has also been reworked.&lt;/li&gt;&lt;/ul&gt;&lt;p&gt;&lt;b&gt;Fixes&lt;/b&gt;&lt;/p&gt;&lt;ul&gt;&lt;li&gt;Fixed minor bugs.&lt;/li&gt;&lt;/ul&gt;</source>
         <translation>&lt;p&gt;&lt;b&gt;Это обновление перерабатывает Flood Fill и Quick Shapes, а также добавляет Smart Fill для полупрозрачных пикселей.&lt;/b&gt; Также включает мелкие исправления багов.&lt;/p&gt;&lt;p&gt;&lt;b&gt;Новое&lt;/b&gt;&lt;/p&gt;&lt;ul&gt;&lt;li&gt;Добавлен Smart Fill. Это отдельный инструмент, предназначенный для работы с полупрозрачными пикселями, особенно с мягкими кистями. Он довольно требовательный.&lt;/li&gt;&lt;li&gt;Появились новые фигуры: варианты square и triangle для всех направлений.&lt;/li&gt;&lt;/ul&gt;&lt;p&gt;&lt;b&gt;Переработано&lt;/b&gt;&lt;/p&gt;&lt;ul&gt;&lt;li&gt;Flood Fill переработан. Он еще не полностью готов и может содержать баги, но больше не должен крашить приложение и должен работать на базовом рабочем уровне.&lt;/li&gt;&lt;li&gt;Quick Shapes также переработан.&lt;/li&gt;&lt;/ul&gt;&lt;p&gt;&lt;b&gt;Исправления&lt;/b&gt;&lt;/p&gt;&lt;ul&gt;&lt;li&gt;Исправлены мелкие баги.&lt;/li&gt;&lt;/ul&gt;</translation>
     </message>
     <message>
-        <location filename="../src/shell/update-message/ReleaseNotesOverlay.cpp" line="653"/>
+        <location filename="../src/shell/update-message/ReleaseNotesOverlay.cpp" line="706"/>
         <source>Layout reliability pass</source>
         <translation>Надежность layout</translation>
     </message>
     <message>
-        <location filename="../src/shell/update-message/ReleaseNotesOverlay.cpp" line="655"/>
+        <location filename="../src/shell/update-message/ReleaseNotesOverlay.cpp" line="708"/>
         <source>&lt;p&gt;&lt;b&gt;This update focuses on layout reliability, stylus interaction, and brush stabilization.&lt;/b&gt; It also adds Brush Feather and stylus swipe scrolling for lists.&lt;/p&gt;&lt;p&gt;&lt;b&gt;New&lt;/b&gt;&lt;/p&gt;&lt;ul&gt;&lt;li&gt;Added the Brush Feather parameter for brushes, which controls edge smoothing.&lt;/li&gt;&lt;li&gt;Lists can now be scrolled with stylus swipes.&lt;/li&gt;&lt;/ul&gt;&lt;p&gt;&lt;b&gt;Improved&lt;/b&gt;&lt;/p&gt;&lt;ul&gt;&lt;li&gt;Layout saving and loading are now more reliable.&lt;/li&gt;&lt;li&gt;Significantly improved UI interaction with the stylus.&lt;/li&gt;&lt;li&gt;Significantly improved brush stabilization.&lt;/li&gt;&lt;/ul&gt;&lt;p&gt;&lt;b&gt;Fixes&lt;/b&gt;&lt;/p&gt;&lt;ul&gt;&lt;li&gt;Fixed many layout-related bugs, including panel positioning, docking, and general behavior. If you already have layout issues, this update may not fix existing ones - it mainly prevents them from happening again. A complete reinstall is recommended.&lt;/li&gt;&lt;/ul&gt;</source>
         <translation>&lt;p&gt;&lt;b&gt;Это обновление сфокусировано на надежности layout, взаимодействии со стилусом и brush stabilization.&lt;/b&gt; Также добавляет Brush Feather и скролл списков свайпом стилуса.&lt;/p&gt;&lt;p&gt;&lt;b&gt;Новое&lt;/b&gt;&lt;/p&gt;&lt;ul&gt;&lt;li&gt;Добавлен параметр Brush Feather для кистей, который контролирует сглаживание краев.&lt;/li&gt;&lt;li&gt;Списки теперь можно скроллить свайпами стилуса.&lt;/li&gt;&lt;/ul&gt;&lt;p&gt;&lt;b&gt;Улучшено&lt;/b&gt;&lt;/p&gt;&lt;ul&gt;&lt;li&gt;Сохранение и загрузка layout теперь надежнее.&lt;/li&gt;&lt;li&gt;Значительно улучшено взаимодействие UI со стилусом.&lt;/li&gt;&lt;li&gt;Значительно улучшен brush stabilization.&lt;/li&gt;&lt;/ul&gt;&lt;p&gt;&lt;b&gt;Исправления&lt;/b&gt;&lt;/p&gt;&lt;ul&gt;&lt;li&gt;Исправлено множество багов, связанных с layout, включая позиционирование панелей, докинг и общее поведение. Если у вас уже есть проблемы с layout, это обновление может не исправить существующие — оно в основном предотвращает их повторное появление. Рекомендуется полная переустановка.&lt;/li&gt;&lt;/ul&gt;</translation>
     </message>
     <message>
-        <location filename="../src/shell/update-message/ReleaseNotesOverlay.cpp" line="678"/>
+        <location filename="../src/shell/update-message/ReleaseNotesOverlay.cpp" line="731"/>
         <source>Layer workflow update</source>
         <translation>Обновление работы со слоями</translation>
     </message>
     <message>
-        <location filename="../src/shell/update-message/ReleaseNotesOverlay.cpp" line="680"/>
+        <location filename="../src/shell/update-message/ReleaseNotesOverlay.cpp" line="733"/>
         <source>&lt;p&gt;&lt;b&gt;The biggest update so far.&lt;/b&gt; This update expands layer operations, selection-mask undo, canvas navigation, and layout serialization.&lt;/p&gt;&lt;p&gt;&lt;b&gt;New&lt;/b&gt;&lt;/p&gt;&lt;ul&gt;&lt;li&gt;Added layer gestures: swipe on the right side of a layer for the actions menu, and on the left side to toggle the clipping mask.&lt;/li&gt;&lt;li&gt;Added layer locking and alpha-channel locking.&lt;/li&gt;&lt;li&gt;Added a movable camera joystick.&lt;/li&gt;&lt;li&gt;Added a new Lasso Fill tool.&lt;/li&gt;&lt;/ul&gt;&lt;p&gt;&lt;b&gt;Expanded&lt;/b&gt;&lt;/p&gt;&lt;ul&gt;&lt;li&gt;Undo now works for both layers and selection masks.&lt;/li&gt;&lt;li&gt;Improved workflow for handling multiple layers in the layer panel.&lt;/li&gt;&lt;/ul&gt;&lt;p&gt;&lt;b&gt;Fixes&lt;/b&gt;&lt;/p&gt;&lt;ul&gt;&lt;li&gt;Fixed layout serialization for the canvas and floating panels.&lt;/li&gt;&lt;li&gt;Various small fixes.&lt;/li&gt;&lt;/ul&gt;</source>
         <translation>&lt;p&gt;&lt;b&gt;Самое большое обновление на данный момент.&lt;/b&gt; Это обновление расширяет операции со слоями, undo для selection mask, навигацию по canvas и сериализацию layout.&lt;/p&gt;&lt;p&gt;&lt;b&gt;Новое&lt;/b&gt;&lt;/p&gt;&lt;ul&gt;&lt;li&gt;Добавлены жесты на слоях: свайп по правой стороне слоя для меню действий, и по левой — для переключения clipping mask.&lt;/li&gt;&lt;li&gt;Добавлена блокировка слоев и блокировка альфа-канала.&lt;/li&gt;&lt;li&gt;Добавлен перемещаемый joystick камеры.&lt;/li&gt;&lt;li&gt;Добавлен новый инструмент Lasso Fill.&lt;/li&gt;&lt;/ul&gt;&lt;p&gt;&lt;b&gt;Расширено&lt;/b&gt;&lt;/p&gt;&lt;ul&gt;&lt;li&gt;Undo теперь работает как для слоев, так и для selection masks.&lt;/li&gt;&lt;li&gt;Улучшен workflow работы с несколькими слоями в панели слоев.&lt;/li&gt;&lt;/ul&gt;&lt;p&gt;&lt;b&gt;Исправления&lt;/b&gt;&lt;/p&gt;&lt;ul&gt;&lt;li&gt;Исправлена сериализация layout для canvas и плавающих панелей.&lt;/li&gt;&lt;li&gt;Разные мелкие исправления.&lt;/li&gt;&lt;/ul&gt;</translation>
     </message>
     <message>
-        <location filename="../src/shell/update-message/ReleaseNotesOverlay.cpp" line="701"/>
+        <location filename="../src/shell/update-message/ReleaseNotesOverlay.cpp" line="754"/>
         <source>Lightweight updates</source>
         <translation>Легковесные обновления</translation>
     </message>
     <message>
-        <location filename="../src/shell/update-message/ReleaseNotesOverlay.cpp" line="703"/>
+        <location filename="../src/shell/update-message/ReleaseNotesOverlay.cpp" line="756"/>
         <source>&lt;p&gt;&lt;b&gt;This update adds direct website downloads and lightweight app updates through Settings.&lt;/b&gt; It also includes a rename, small quality-of-life changes, and bug fixes.&lt;/p&gt;&lt;p&gt;&lt;b&gt;New&lt;/b&gt;&lt;/p&gt;&lt;ul&gt;&lt;li&gt;The latest version of the app can now be downloaded directly from the website.&lt;/li&gt;&lt;li&gt;Added the ability to update the app without downloading a new installer every time. To get a new version, open Settings and install the available update there.&lt;/li&gt;&lt;/ul&gt;&lt;p&gt;&lt;b&gt;Changed&lt;/b&gt;&lt;/p&gt;&lt;ul&gt;&lt;li&gt;Small rename: chanterelle -&gt; accretion.&lt;/li&gt;&lt;li&gt;Updates are lightweight, around 5-10 MB, so they download quickly.&lt;/li&gt;&lt;/ul&gt;&lt;p&gt;&lt;b&gt;Quality of life&lt;/b&gt;&lt;/p&gt;&lt;ul&gt;&lt;li&gt;Added a few small quality-of-life features.&lt;/li&gt;&lt;/ul&gt;&lt;p&gt;&lt;b&gt;Fixes&lt;/b&gt;&lt;/p&gt;&lt;ul&gt;&lt;li&gt;Fixed bugs.&lt;/li&gt;&lt;/ul&gt;</source>
         <translation>&lt;p&gt;&lt;b&gt;Это обновление добавляет прямую загрузку с сайта и легковесные обновления приложения через Settings.&lt;/b&gt; Также включает переименование, мелкие quality-of-life изменения и исправления багов.&lt;/p&gt;&lt;p&gt;&lt;b&gt;Новое&lt;/b&gt;&lt;/p&gt;&lt;ul&gt;&lt;li&gt;Последнюю версию приложения теперь можно скачать прямо с сайта.&lt;/li&gt;&lt;li&gt;Добавлена возможность обновлять приложение без скачивания нового инсталлятора каждый раз. Чтобы получить новую версию, откройте Settings и установите доступное обновление оттуда.&lt;/li&gt;&lt;/ul&gt;&lt;p&gt;&lt;b&gt;Изменено&lt;/b&gt;&lt;/p&gt;&lt;ul&gt;&lt;li&gt;Небольшое переименование: chanterelle -&gt; accretion.&lt;/li&gt;&lt;li&gt;Обновления легковесные, около 5–10 МБ, так что скачиваются быстро.&lt;/li&gt;&lt;/ul&gt;&lt;p&gt;&lt;b&gt;Quality of life&lt;/b&gt;&lt;/p&gt;&lt;ul&gt;&lt;li&gt;Добавлено несколько небольших quality-of-life фич.&lt;/li&gt;&lt;/ul&gt;&lt;p&gt;&lt;b&gt;Исправления&lt;/b&gt;&lt;/p&gt;&lt;ul&gt;&lt;li&gt;Исправлены баги.&lt;/li&gt;&lt;/ul&gt;</translation>
     </message>
     <message>
-        <location filename="../src/shell/update-message/ReleaseNotesOverlay.cpp" line="728"/>
+        <location filename="../src/shell/update-message/ReleaseNotesOverlay.cpp" line="781"/>
         <source>Camera tools</source>
         <translation>Инструменты камеры</translation>
     </message>
     <message>
-        <location filename="../src/shell/update-message/ReleaseNotesOverlay.cpp" line="730"/>
+        <location filename="../src/shell/update-message/ReleaseNotesOverlay.cpp" line="783"/>
         <source>&lt;p&gt;&lt;b&gt;This update adds camera capture tools and expands brush settings.&lt;/b&gt; It also refreshes the default brush list and fixes small issues.&lt;/p&gt;&lt;p&gt;&lt;b&gt;New&lt;/b&gt;&lt;/p&gt;&lt;ul&gt;&lt;li&gt;Added a camera tool that instantly copies the image to the clipboard when clicked.&lt;/li&gt;&lt;li&gt;Added an overlay for easier camera control.&lt;/li&gt;&lt;li&gt;Added a new setting to the brush engine: Dab.&lt;/li&gt;&lt;/ul&gt;&lt;p&gt;&lt;b&gt;Changed&lt;/b&gt;&lt;/p&gt;&lt;ul&gt;&lt;li&gt;The list of default brushes has been updated. If you already installed the app and want to see the new default brushes, press Reset at the very bottom of Settings.&lt;/li&gt;&lt;/ul&gt;&lt;p&gt;&lt;b&gt;Fixes&lt;/b&gt;&lt;/p&gt;&lt;ul&gt;&lt;li&gt;Fixed small bugs and issues.&lt;/li&gt;&lt;/ul&gt;</source>
         <translation>&lt;p&gt;&lt;b&gt;Это обновление добавляет инструменты захвата с камеры и расширяет настройки кистей.&lt;/b&gt; Также обновляет список кистей по умолчанию и исправляет мелкие проблемы.&lt;/p&gt;&lt;p&gt;&lt;b&gt;Новое&lt;/b&gt;&lt;/p&gt;&lt;ul&gt;&lt;li&gt;Добавлен camera инструмент, который мгновенно копирует изображение в буфер обмена при клике.&lt;/li&gt;&lt;li&gt;Добавлен оверлей для более удобного управления камерой.&lt;/li&gt;&lt;li&gt;Добавлена новая настройка в brush engine: Dab.&lt;/li&gt;&lt;/ul&gt;&lt;p&gt;&lt;b&gt;Изменено&lt;/b&gt;&lt;/p&gt;&lt;ul&gt;&lt;li&gt;Список кистей по умолчанию обновлен. Если вы уже установили приложение и хотите увидеть новые кисти по умолчанию, нажмите Reset в самом низу Settings.&lt;/li&gt;&lt;/ul&gt;&lt;p&gt;&lt;b&gt;Исправления&lt;/b&gt;&lt;/p&gt;&lt;ul&gt;&lt;li&gt;Исправлены мелкие баги и проблемы.&lt;/li&gt;&lt;/ul&gt;</translation>
     </message>
     <message>
-        <location filename="../src/shell/update-message/ReleaseNotesOverlay.cpp" line="750"/>
+        <location filename="../src/shell/update-message/ReleaseNotesOverlay.cpp" line="803"/>
         <source>Stability and functionality</source>
         <translation>Стабильность и функциональность</translation>
     </message>
     <message>
-        <location filename="../src/shell/update-message/ReleaseNotesOverlay.cpp" line="752"/>
+        <location filename="../src/shell/update-message/ReleaseNotesOverlay.cpp" line="805"/>
         <source>&lt;p&gt;&lt;b&gt;This update fixes bugs that were seriously affecting the app and adds new functionality.&lt;/b&gt;&lt;/p&gt;&lt;p&gt;&lt;b&gt;New&lt;/b&gt;&lt;/p&gt;&lt;ul&gt;&lt;li&gt;Added new functionality.&lt;/li&gt;&lt;/ul&gt;&lt;p&gt;&lt;b&gt;Fixes&lt;/b&gt;&lt;/p&gt;&lt;ul&gt;&lt;li&gt;Fixed bugs that were seriously affecting the app.&lt;/li&gt;&lt;/ul&gt;</source>
         <translation>&lt;p&gt;&lt;b&gt;Это обновление исправляет баги, которые серьезно влияли на приложение, и добавляет новую функциональность.&lt;/b&gt;&lt;/p&gt;&lt;p&gt;&lt;b&gt;Новое&lt;/b&gt;&lt;/p&gt;&lt;ul&gt;&lt;li&gt;Добавлена новая функциональность.&lt;/li&gt;&lt;/ul&gt;&lt;p&gt;&lt;b&gt;Исправления&lt;/b&gt;&lt;/p&gt;&lt;ul&gt;&lt;li&gt;Исправлены баги, которые серьезно влияли на приложение.&lt;/li&gt;&lt;/ul&gt;</translation>
     </message>
     <message>
-        <location filename="../src/shell/update-message/ReleaseNotesOverlay.cpp" line="763"/>
+        <location filename="../src/shell/update-message/ReleaseNotesOverlay.cpp" line="816"/>
         <source>Public testing</source>
         <translation>Публичное тестирование</translation>
     </message>
     <message>
-        <location filename="../src/shell/update-message/ReleaseNotesOverlay.cpp" line="765"/>
+        <location filename="../src/shell/update-message/ReleaseNotesOverlay.cpp" line="818"/>
         <source>&lt;p&gt;&lt;b&gt;Ruwa is now available for anyone who wants to download it and help test it.&lt;/b&gt;&lt;/p&gt;&lt;p&gt;&lt;b&gt;Available&lt;/b&gt;&lt;/p&gt;&lt;ul&gt;&lt;li&gt;The app is available to download and test.&lt;/li&gt;&lt;/ul&gt;&lt;p&gt;&lt;b&gt;Testing feedback&lt;/b&gt;&lt;/p&gt;&lt;ul&gt;&lt;li&gt;If you find any bugs, please report them in the appropriate channels.&lt;/li&gt;&lt;li&gt;Feedback, suggestions, and ideas are welcome.&lt;/li&gt;&lt;/ul&gt;</source>
         <translation>&lt;p&gt;&lt;b&gt;Ruwa теперь доступна всем, кто хочет ее скачать и помочь с тестированием.&lt;/b&gt;&lt;/p&gt;&lt;p&gt;&lt;b&gt;Доступно&lt;/b&gt;&lt;/p&gt;&lt;ul&gt;&lt;li&gt;Приложение доступно для скачивания и тестирования.&lt;/li&gt;&lt;/ul&gt;&lt;p&gt;&lt;b&gt;Обратная связь по тестированию&lt;/b&gt;&lt;/p&gt;&lt;ul&gt;&lt;li&gt;Если вы найдете баги, пожалуйста, сообщите о них в соответствующих каналах.&lt;/li&gt;&lt;li&gt;Отзывы, предложения и идеи приветствуются.&lt;/li&gt;&lt;/ul&gt;</translation>
     </message>
     <message>
-        <location filename="../src/shell/update-message/ReleaseNotesOverlay.cpp" line="203"/>
+        <location filename="../src/shell/update-message/ReleaseNotesOverlay.cpp" line="256"/>
         <source>Non-destructive effects, adjustment layers, and deeper colour</source>
         <translation>Неразрушающие эффекты, корректирующие слои и расширенная работа с цветом</translation>
     </message>
     <message>
-        <location filename="../src/shell/update-message/ReleaseNotesOverlay.cpp" line="60"/>
+        <location filename="../src/shell/update-message/ReleaseNotesOverlay.cpp" line="113"/>
         <source>Magic Wand, procedural textures, and smarter selections</source>
         <translation>Волшебная палочка, процедурные текстуры и умные выделения</translation>
     </message>
     <message>
-        <source>&lt;p&gt;&lt;b&gt;This update adds a Magic Wand selection tool and a procedural texture editor for brushes, extends copy, paste, and Delete to layer masks and selection pixels, reorganizes the tool bar, and gives the workspace an animated entrance.&lt;/b&gt;&lt;/p&gt;&lt;p&gt;&lt;b&gt;New&lt;/b&gt;&lt;/p&gt;&lt;ul&gt;&lt;li&gt;Magic Wand (W). Selects a contiguous region of similar color on the active layer, with add and subtract modifiers, and computes large selections in the background.&lt;/li&gt;&lt;li&gt;A procedural texture editor in the Brush Editor with six generators — pencil grain, fractal noise, Perlin noise, dots, lines, and checkerboard — each with a live preview.&lt;/li&gt;&lt;li&gt;Copy, cut, and paste for layer masks and for the pixels inside a selection. Pasted pixels land as a new layer in place and go straight into transform mode.&lt;/li&gt;&lt;li&gt;Ctrl+click a mask thumbnail to load that mask as a selection, and a contextual Delete that removes the layer, its mask, or the selected pixels depending on focus.&lt;/li&gt;&lt;li&gt;Brush deletion from the Brushes panel, a new Stylized Brushes pack, and an animated entrance for the whole workspace on startup.&lt;/li&gt;&lt;/ul&gt;&lt;p&gt;&lt;b&gt;Improved&lt;/b&gt;&lt;/p&gt;&lt;ul&gt;&lt;li&gt;Reorganized tool groups: Blur, Smudge, and Liquify now share one slot, and the bar is split into navigation, drawing, selection, and other.&lt;/li&gt;&lt;li&gt;Adjustment layers are now applied in screen-space compositing, so they stay correct during strokes, transforms, and lasso fill.&lt;/li&gt;&lt;li&gt;Alt picks a color with the eyedropper while Lasso Fill is active.&lt;/li&gt;&lt;/ul&gt;&lt;p&gt;&lt;b&gt;Fixes&lt;/b&gt;&lt;/p&gt;&lt;ul&gt;&lt;li&gt;Layer drag and drop no longer drops clipping masks partway through a multi-layer move.&lt;/li&gt;&lt;li&gt;Copy, paste, Delete, and the [ and ] brush shortcuts no longer act on the document while a text field has focus.&lt;/li&gt;&lt;li&gt;The first-run tab no longer starts blank, and the startup zoom-in animation no longer freezes when opening an existing project.&lt;/li&gt;&lt;li&gt;Fill now refreshes layer-effect caches on commit, so tiles on layers with effects no longer revert.&lt;/li&gt;&lt;/ul&gt;</source>
-        <translation type="vanished">&lt;p&gt;&lt;b&gt;Это обновление добавляет инструмент выделения «Волшебная палочка» и редактор процедурных текстур для кистей, распространяет копирование, вставку и Delete на маски слоёв и пиксели выделения, реорганизует панель инструментов и добавляет анимированное появление рабочей области.&lt;/b&gt;&lt;/p&gt;&lt;p&gt;&lt;b&gt;Новое&lt;/b&gt;&lt;/p&gt;&lt;ul&gt;&lt;li&gt;Волшебная палочка (W). Выделяет связную область похожего цвета на активном слое, поддерживает добавление и вычитание и считает большие выделения в фоне.&lt;/li&gt;&lt;li&gt;Редактор процедурных текстур в редакторе кистей с шестью генераторами — карандашное зерно, фрактальный шум, шум Перлина, точки, линии и шахматный узор — каждый с живым предпросмотром.&lt;/li&gt;&lt;li&gt;Копирование, вырезание и вставка для масок слоёв и для пикселей внутри выделения. Вставленные пиксели становятся новым слоем на прежнем месте и сразу переходят в режим трансформации.&lt;/li&gt;&lt;li&gt;Ctrl+клик по миниатюре маски загружает эту маску как выделение, а Delete теперь контекстный: удаляет слой, его маску или выделенные пиксели — в зависимости от фокуса.&lt;/li&gt;&lt;li&gt;Удаление кистей прямо из панели кистей, новый набор Stylized Brushes и анимированное появление всей рабочей области при запуске.&lt;/li&gt;&lt;/ul&gt;&lt;p&gt;&lt;b&gt;Улучшения&lt;/b&gt;&lt;/p&gt;&lt;ul&gt;&lt;li&gt;Переработаны группы инструментов: размытие, палец и пластика теперь в одной ячейке, а панель разделена на навигацию, рисование, выделение и остальное.&lt;/li&gt;&lt;li&gt;Корректирующие слои теперь применяются и в экранной композиции, поэтому остаются верными во время мазков, трансформаций и лассо-заливки.&lt;/li&gt;&lt;li&gt;Alt вызывает пипетку, пока активна лассо-заливка.&lt;/li&gt;&lt;/ul&gt;&lt;p&gt;&lt;b&gt;Исправления&lt;/b&gt;&lt;/p&gt;&lt;ul&gt;&lt;li&gt;Перетаскивание слоёв больше не сбрасывает обтравочные маски в середине перемещения нескольких слоёв.&lt;/li&gt;&lt;li&gt;Копирование, вставка, Delete и горячие клавиши [ и ] больше не действуют на документ, пока фокус в текстовом поле.&lt;/li&gt;&lt;li&gt;Вкладка первого запуска больше не остаётся пустой, а стартовая анимация приближения больше не замирает при открытии существующего проекта.&lt;/li&gt;&lt;li&gt;Заливка обновляет кэш эффектов слоя при применении, поэтому тайлы на слоях с эффектами больше не откатываются.&lt;/li&gt;&lt;/ul&gt;</translation>
-    </message>
-    <message>
-        <location filename="../src/shell/update-message/ReleaseNotesOverlay.cpp" line="206"/>
+        <location filename="../src/shell/update-message/ReleaseNotesOverlay.cpp" line="259"/>
         <source>&lt;p&gt;&lt;b&gt;A major update. It introduces a non-destructive effects system with real-time previews, adds adjustment layers and pixel-perfect layer picking, and rebuilds the tile core so documents can use any colour depth from 8-bit to 32-bit float.&lt;/b&gt; It also ships a completely new icon set, a custom pigment-mixing engine, a more accurate WinTab backend, and a long list of fixes.&lt;/p&gt;&lt;p&gt;&lt;b&gt;New&lt;/b&gt;&lt;/p&gt;&lt;ul&gt;&lt;li&gt;Non-destructive effects. Add any number of effects to a layer, reorder and edit them, and see the result on the canvas in real time. Effects can also be applied to groups, and the whole chain can be baked into the layer at any time.&lt;/li&gt;&lt;li&gt;Adjustment layers for applying corrections across the layers beneath them.&lt;/li&gt;&lt;li&gt;Pixel-perfect layer picking. The Move tool now identifies which layer owns the pixel under the cursor and moves exactly that layer.&lt;/li&gt;&lt;li&gt;The rectangular selection tool now shows the size of the selection on a small badge next to the cursor.&lt;/li&gt;&lt;/ul&gt;&lt;p&gt;&lt;b&gt;Reworked&lt;/b&gt;&lt;/p&gt;&lt;ul&gt;&lt;li&gt;The tile system was rebuilt from the ground up. Documents can now use any colour depth from 8-bit up to 32-bit float.&lt;/li&gt;&lt;li&gt;Groups now isolate blend modes correctly, so effects composite over them the way they should.&lt;/li&gt;&lt;li&gt;A new, in-house pigment-mixing system replaces the previous one — it mixes better and carries no third-party licensing.&lt;/li&gt;&lt;li&gt;The old layer-picking system based on content bounds was inaccurate and has been removed entirely in favour of pixel-perfect picking.&lt;/li&gt;&lt;/ul&gt;&lt;p&gt;&lt;b&gt;Improved&lt;/b&gt;&lt;/p&gt;&lt;ul&gt;&lt;li&gt;A brand-new icon set across the whole application, adopted to resolve licensing on the previous icons.&lt;/li&gt;&lt;li&gt;Nearly every panel now has its own dedicated icon instead of a placeholder tool icon.&lt;/li&gt;&lt;li&gt;The custom WinTab backend is more accurate and less buggy.&lt;/li&gt;&lt;li&gt;Undo now covers layer rasterisation, so it can be undone like any other action.&lt;/li&gt;&lt;/ul&gt;&lt;p&gt;&lt;b&gt;Fixes&lt;/b&gt;&lt;/p&gt;&lt;ul&gt;&lt;li&gt;Board layers now flip correctly when the canvas is mirrored.&lt;/li&gt;&lt;li&gt;Smudge no longer clips dabs or leaves white streaks on brushes that have jitter enabled.&lt;/li&gt;&lt;li&gt;Fixed an undo bug where moving a masked layer region could roll the selection mask back several steps ahead of its contents.&lt;/li&gt;&lt;li&gt;Fixed a visual glitch in the curve editor of the brush engine.&lt;/li&gt;&lt;li&gt;Fixed odd cursor behaviour on a monitor positioned to the left of the primary display.&lt;/li&gt;&lt;li&gt;Text layers no longer turn low-poly after a warp or free transform.&lt;/li&gt;&lt;/ul&gt;</source>
         <translation>&lt;p&gt;&lt;b&gt;Крупное обновление: оно добавляет систему неразрушающих эффектов с предпросмотром в реальном времени, корректирующие слои и точный выбор слоя по пикселям, а также перестраивает ядро тайлов для глубины цвета от 8 бит до 32-битного float.&lt;/b&gt; Кроме того, в выпуск вошли полностью новый набор иконок, собственный движок смешивания пигментов, более точный WinTab и множество исправлений.&lt;/p&gt;&lt;p&gt;&lt;b&gt;Новое&lt;/b&gt;&lt;/p&gt;&lt;ul&gt;&lt;li&gt;Неразрушающие эффекты: добавляйте к слою любое количество эффектов, меняйте их порядок и параметры и сразу наблюдайте результат на холсте. Эффекты также поддерживаются группами, а всю цепочку можно в любой момент запечь в слой.&lt;/li&gt;&lt;li&gt;Корректирующие слои для применения коррекций ко всем нижележащим слоям.&lt;/li&gt;&lt;li&gt;Точный выбор слоя по пикселям: инструмент «Перемещение» определяет владельца пикселя под курсором и перемещает именно этот слой.&lt;/li&gt;&lt;li&gt;Прямоугольное выделение теперь показывает размер области на метке рядом с курсором.&lt;/li&gt;&lt;/ul&gt;&lt;p&gt;&lt;b&gt;Переработано&lt;/b&gt;&lt;/p&gt;&lt;ul&gt;&lt;li&gt;Система тайлов полностью перестроена; документы теперь поддерживают любую глубину цвета от 8 бит до 32-битного float.&lt;/li&gt;&lt;li&gt;Группы корректно изолируют режимы наложения, поэтому эффекты компонуются поверх них ожидаемым образом.&lt;/li&gt;&lt;li&gt;Предыдущая система смешивания заменена собственной моделью пигментов без сторонних лицензионных ограничений.&lt;/li&gt;&lt;li&gt;Неточная система выбора слоя по границам содержимого полностью удалена в пользу выбора по пикселям.&lt;/li&gt;&lt;/ul&gt;&lt;p&gt;&lt;b&gt;Улучшено&lt;/b&gt;&lt;/p&gt;&lt;ul&gt;&lt;li&gt;Полностью новый набор иконок во всём приложении, созданный для решения лицензионных вопросов предыдущего набора.&lt;/li&gt;&lt;li&gt;Почти каждая панель получила собственную иконку вместо общей заглушки.&lt;/li&gt;&lt;li&gt;Пользовательский WinTab стал точнее и надёжнее.&lt;/li&gt;&lt;li&gt;Растрирование слоя теперь входит в историю действий и может быть отменено.&lt;/li&gt;&lt;/ul&gt;&lt;p&gt;&lt;b&gt;Исправления&lt;/b&gt;&lt;/p&gt;&lt;ul&gt;&lt;li&gt;Слои Board теперь корректно отражаются вместе с холстом.&lt;/li&gt;&lt;li&gt;Smudge больше не обрезает отпечатки и не оставляет белые полосы у кистей с разбросом.&lt;/li&gt;&lt;li&gt;Исправлена ошибка отмены, при которой перемещение области слоя с маской могло откатить маску выделения на несколько шагов дальше содержимого.&lt;/li&gt;&lt;li&gt;Исправлен визуальный дефект редактора кривых кисти.&lt;/li&gt;&lt;li&gt;Исправлено необычное поведение курсора на мониторе слева от основного.&lt;/li&gt;&lt;li&gt;Текстовые слои больше не теряют качество после Warp или свободной трансформации.&lt;/li&gt;&lt;/ul&gt;</translation>
     </message>
     <message>
-        <location filename="../src/shell/update-message/ReleaseNotesOverlay.cpp" line="1131"/>
+        <location filename="../src/shell/update-message/ReleaseNotesOverlay.cpp" line="1184"/>
         <source>Release notes</source>
         <translation>История версий</translation>
     </message>
     <message>
-        <location filename="../src/shell/update-message/ReleaseNotesOverlay.cpp" line="1134"/>
+        <location filename="../src/shell/update-message/ReleaseNotesOverlay.cpp" line="1187"/>
         <source>Close</source>
         <translation>Закрыть</translation>
     </message>
@@ -1235,45 +1242,33 @@ Try Square Selection first to restrict the area.</source>
     </message>
     <message>
         <location filename="../src/shell/update-message/UpdateMessageOverlay.cpp" line="701"/>
-        <source>Magic Wand, procedural textures, and smarter selections.</source>
-        <translation>Волшебная палочка, процедурные текстуры и умные выделения.</translation>
+        <source>Smarter snapping, smoother zoom, and a faster paint loop.</source>
+        <translation>Умная привязка, плавный зум и быстрый цикл рисования.</translation>
     </message>
     <message>
         <location filename="../src/shell/update-message/UpdateMessageOverlay.cpp" line="718"/>
-        <source>This update adds a Magic Wand selection tool and procedural brush textures, extends copy, cut, paste, and Delete to masks and selection pixels, and modernizes canvas rendering.</source>
-        <translation>Это обновление добавляет инструмент выделения «Волшебная палочка» и процедурные текстуры кистей, распространяет копирование, вырезание, вставку и Delete на маски и пиксели выделения и модернизирует отрисовку холста.</translation>
-    </message>
-    <message>
-        <location filename="../src/shell/update-message/UpdateMessageOverlay.cpp" line="746"/>
-        <source>Reorganized tool groups, an animated workspace entrance, and faster OpenGL 4.5 rendering with smarter effect caches.</source>
-        <translation>Переработанные группы инструментов, анимированное появление рабочей области и более быстрая отрисовка OpenGL 4.5 с улучшенным кэшированием эффектов.</translation>
-    </message>
-    <message>
-        <location filename="../src/shell/update-message/UpdateMessageOverlay.cpp" line="751"/>
-        <source>Clipping groups now follow hidden bases, canvas blur survives live previews, and shortcuts no longer edit while you type.</source>
-        <translation>Обтравочные группы теперь скрываются вместе с основой, размытие виджетов холста сохраняется в живом предпросмотре, а горячие клавиши больше не правят документ во время ввода текста.</translation>
-    </message>
-    <message>
-        <source>This update adds a Magic Wand selection tool and procedural brush textures, extends copy, paste, and Delete to masks and selection pixels, and gives the workspace an animated entrance.</source>
-        <translation type="vanished">Это обновление добавляет инструмент выделения «Волшебная палочка» и процедурные текстуры кистей, распространяет копирование, вставку и Delete на маски и пиксели выделения и добавляет анимированное появление рабочей области.</translation>
+        <source>This update rebuilds auto snapping around other layers and equal spacing, adds unified range controls for brush dynamics, and makes canvas rendering smooth at every zoom level.</source>
+        <translation>Это обновление перестраивает автопривязку вокруг других слоёв и равных отступов, добавляет единые диапазонные регуляторы динамики кистей и делает отрисовку холста плавной на любом масштабе.</translation>
     </message>
     <message>
         <location filename="../src/shell/update-message/UpdateMessageOverlay.cpp" line="736"/>
-        <source>Magic Wand selection and a procedural texture editor with six brush pattern generators.</source>
-        <translation>Выделение волшебной палочкой и редактор процедурных текстур с шестью генераторами узоров для кистей.</translation>
+        <source>Auto snapping now covers other layers and equal spacing, with live guides and measurements.</source>
+        <translation>Автопривязка теперь охватывает другие слои и равные отступы, с живыми направляющими и измерениями.</translation>
     </message>
     <message>
         <location filename="../src/shell/update-message/UpdateMessageOverlay.cpp" line="741"/>
-        <source>Copy, cut, paste, and Delete now work on layer masks and on the pixels inside a selection.</source>
-        <translation>Копирование, вырезание, вставка и Delete теперь работают с масками слоёв и пикселями внутри выделения.</translation>
+        <source>Brush dynamics now use a single two-handle range control instead of separate amounts.</source>
+        <translation>Динамика кистей теперь использует один диапазонный регулятор с двумя ручками вместо отдельных величин.</translation>
     </message>
     <message>
-        <source>Reorganized tool groups, adjustment layers in live previews, and an animated workspace entrance.</source>
-        <translation type="vanished">Переработанные группы инструментов, корректирующие слои в живом предпросмотре и анимированное появление рабочей области.</translation>
+        <location filename="../src/shell/update-message/UpdateMessageOverlay.cpp" line="746"/>
+        <source>Mipmapped canvas rendering, an animated navigator, and faster painting, selections, and Liquify.</source>
+        <translation>Отрисовка холста через мипмапы, анимированный навигатор и более быстрые рисование, выделения и пластика.</translation>
     </message>
     <message>
-        <source>Clipping masks survive layer moves, and shortcuts no longer edit the document while you type.</source>
-        <translation type="vanished">Обтравочные маски переживают перемещение слоёв, а горячие клавиши больше не правят документ, пока вы печатаете.</translation>
+        <location filename="../src/shell/update-message/UpdateMessageOverlay.cpp" line="751"/>
+        <source>The pen keeps contact across the window edge, the hue ring is oriented correctly, and updates survive a failed cleanup.</source>
+        <translation>Перо сохраняет контакт на границе окна, цветовое кольцо ориентировано правильно, а обновление переживает сбой очистки.</translation>
     </message>
     <message>
         <location filename="../src/shell/update-message/UpdateMessageOverlay.cpp" line="764"/>
@@ -1297,7 +1292,7 @@ Try Square Selection first to restrict the area.</source>
 <context>
     <name>WorkspaceTab</name>
     <message>
-        <location filename="../src/shell/tab-system/WorkspaceTab.cpp" line="3665"/>
+        <location filename="../src/shell/tab-system/WorkspaceTab.cpp" line="3673"/>
         <source>Loading Project</source>
         <translation>Загрузка проекта</translation>
     </message>
@@ -1305,21 +1300,21 @@ Try Square Selection first to restrict the area.</source>
 <context>
     <name>aether::OpenGLCanvasWidget</name>
     <message>
-        <location filename="../src/features/canvas/rendering/OpenGLCanvasWidget.cpp" line="3381"/>
+        <location filename="../src/features/canvas/rendering/OpenGLCanvasWidget.cpp" line="3387"/>
         <source>%1 must be rasterized before painting.
 Convert the selected layer to a raster layer?</source>
         <translation>%1 нужно растрировать перед рисованием.
 Преобразовать выбранный слой в растровый?</translation>
     </message>
     <message>
-        <location filename="../src/features/canvas/rendering/OpenGLCanvasWidget.cpp" line="3464"/>
+        <location filename="../src/features/canvas/rendering/OpenGLCanvasWidget.cpp" line="3470"/>
         <source>%1 does not support transforming a selection.
 Rasterize the layer to transform the selection?</source>
         <translation>%1 не поддерживает трансформацию выделения.
 Растрировать слой, чтобы трансформировать выделение?</translation>
     </message>
     <message>
-        <location filename="../src/features/canvas/rendering/OpenGLCanvasWidget.cpp" line="9520"/>
+        <location filename="../src/features/canvas/rendering/OpenGLCanvasWidget.cpp" line="9515"/>
         <source>Shader Loading Error</source>
         <translation>Ошибка загрузки шейдера</translation>
     </message>
@@ -1546,102 +1541,102 @@ Rasterize the layer to transform the selection?</source>
         <translation>Поворот</translation>
     </message>
     <message>
-        <location filename="../src/features/brush/engine/PixelBrushModule.cpp" line="370"/>
+        <location filename="../src/features/brush/engine/PixelBrushModule.cpp" line="369"/>
         <source>Brush Feather</source>
         <translation>Смягчение кисти</translation>
     </message>
     <message>
-        <location filename="../src/features/brush/engine/PixelBrushModule.cpp" line="371"/>
+        <location filename="../src/features/brush/engine/PixelBrushModule.cpp" line="370"/>
         <source>Slight edge softening so brush is not pixel-perfect</source>
         <translation>Лёгкое смягчение краёв, чтобы кисть не была идеально пиксельной</translation>
     </message>
     <message>
-        <location filename="../src/features/brush/engine/PixelBrushModule.cpp" line="373"/>
+        <location filename="../src/features/brush/engine/PixelBrushModule.cpp" line="372"/>
         <source>Color</source>
         <translation>Цвет</translation>
     </message>
     <message>
-        <location filename="../src/features/brush/engine/PixelBrushModule.cpp" line="373"/>
+        <location filename="../src/features/brush/engine/PixelBrushModule.cpp" line="372"/>
         <source>Brush color adjustments</source>
         <translation>Коррекция цвета кисти</translation>
     </message>
     <message>
-        <location filename="../src/features/brush/engine/PixelBrushModule.cpp" line="375"/>
+        <location filename="../src/features/brush/engine/PixelBrushModule.cpp" line="374"/>
         <source>Blend Mode</source>
         <translation>Режим наложения</translation>
     </message>
     <message>
-        <location filename="../src/features/brush/engine/PixelBrushModule.cpp" line="378"/>
+        <location filename="../src/features/brush/engine/PixelBrushModule.cpp" line="377"/>
         <source>HUE</source>
         <translation>ТОН</translation>
     </message>
     <message>
-        <location filename="../src/features/brush/engine/PixelBrushModule.cpp" line="381"/>
+        <location filename="../src/features/brush/engine/PixelBrushModule.cpp" line="379"/>
         <source>Lightness</source>
         <translation>Светлота</translation>
     </message>
     <message>
-        <location filename="../src/features/brush/engine/PixelBrushModule.cpp" line="384"/>
+        <location filename="../src/features/brush/engine/PixelBrushModule.cpp" line="382"/>
         <source>Saturation</source>
         <translation>Насыщенность</translation>
     </message>
     <message>
-        <location filename="../src/features/brush/engine/PixelBrushModule.cpp" line="388"/>
+        <location filename="../src/features/brush/engine/PixelBrushModule.cpp" line="386"/>
         <source>Mixing</source>
         <translation>Замешивание</translation>
     </message>
     <message>
-        <location filename="../src/features/brush/engine/PixelBrushModule.cpp" line="388"/>
+        <location filename="../src/features/brush/engine/PixelBrushModule.cpp" line="386"/>
         <source>Wet color blending</source>
         <translation>Смешивание влажных красок</translation>
     </message>
     <message>
-        <location filename="../src/features/brush/engine/PixelBrushModule.cpp" line="390"/>
+        <location filename="../src/features/brush/engine/PixelBrushModule.cpp" line="388"/>
         <source>Color Blending</source>
         <translation>Смешивание цветов</translation>
     </message>
     <message>
-        <location filename="../src/features/brush/engine/PixelBrushModule.cpp" line="393"/>
+        <location filename="../src/features/brush/engine/PixelBrushModule.cpp" line="391"/>
         <source>Length</source>
         <translation>Длина</translation>
     </message>
     <message>
-        <location filename="../src/features/brush/engine/PixelBrushModule.cpp" line="394"/>
+        <location filename="../src/features/brush/engine/PixelBrushModule.cpp" line="392"/>
         <source>Dilution</source>
         <translation>Разбавление</translation>
     </message>
     <message>
-        <location filename="../src/features/brush/engine/PixelBrushModule.cpp" line="396"/>
+        <location filename="../src/features/brush/engine/PixelBrushModule.cpp" line="394"/>
         <source>Color Spread</source>
         <translation>Растекание цвета</translation>
     </message>
     <message>
-        <location filename="../src/features/brush/engine/PixelBrushModule.cpp" line="399"/>
+        <location filename="../src/features/brush/engine/PixelBrushModule.cpp" line="397"/>
         <source>Buildup</source>
         <translation>Накопление</translation>
     </message>
     <message>
-        <location filename="../src/features/brush/engine/PixelBrushModule.cpp" line="401"/>
+        <location filename="../src/features/brush/engine/PixelBrushModule.cpp" line="399"/>
         <source>Drying</source>
         <translation>Высыхание</translation>
     </message>
     <message>
-        <location filename="../src/features/brush/engine/PixelBrushModule.cpp" line="402"/>
+        <location filename="../src/features/brush/engine/PixelBrushModule.cpp" line="400"/>
         <source>Wet Flow</source>
         <translation>Влажный поток</translation>
     </message>
     <message>
-        <location filename="../src/features/brush/engine/PixelBrushModule.cpp" line="405"/>
+        <location filename="../src/features/brush/engine/PixelBrushModule.cpp" line="403"/>
         <source>Texture</source>
         <translation>Текстура</translation>
     </message>
     <message>
-        <location filename="../src/features/brush/engine/PixelBrushModule.cpp" line="405"/>
+        <location filename="../src/features/brush/engine/PixelBrushModule.cpp" line="403"/>
         <source>Texture overlay on brush stamps</source>
         <translation>Текстура поверх отпечатков кисти</translation>
     </message>
     <message>
-        <location filename="../src/features/brush/engine/PixelBrushModule.cpp" line="424"/>
+        <location filename="../src/features/brush/engine/PixelBrushModule.cpp" line="422"/>
         <source>Type</source>
         <translation>Тип</translation>
     </message>
@@ -1651,163 +1646,163 @@ Rasterize the layer to transform the selection?</source>
         <translation>Шум</translation>
     </message>
     <message>
-        <location filename="../src/features/brush/engine/PixelBrushModule.cpp" line="407"/>
+        <location filename="../src/features/brush/engine/PixelBrushModule.cpp" line="405"/>
         <source>Amount</source>
         <translation>Интенсивность</translation>
     </message>
     <message>
-        <location filename="../src/features/brush/engine/PixelBrushModule.cpp" line="409"/>
+        <location filename="../src/features/brush/engine/PixelBrushModule.cpp" line="407"/>
         <source>Scale</source>
         <translation>Масштаб</translation>
     </message>
     <message>
-        <location filename="../src/features/brush/engine/PixelBrushModule.cpp" line="411"/>
+        <location filename="../src/features/brush/engine/PixelBrushModule.cpp" line="409"/>
         <source>Contrast</source>
         <translation>Контраст</translation>
     </message>
     <message>
-        <location filename="../src/features/brush/engine/PixelBrushModule.cpp" line="414"/>
+        <location filename="../src/features/brush/engine/PixelBrushModule.cpp" line="412"/>
         <source>Depth</source>
         <translation>Глубина</translation>
     </message>
     <message>
-        <location filename="../src/features/brush/engine/PixelBrushModule.cpp" line="416"/>
+        <location filename="../src/features/brush/engine/PixelBrushModule.cpp" line="414"/>
         <source>Blend</source>
         <translation>Смешивание</translation>
     </message>
     <message>
-        <location filename="../src/features/brush/engine/PixelBrushModule.cpp" line="418"/>
+        <location filename="../src/features/brush/engine/PixelBrushModule.cpp" line="416"/>
         <source>Edge Boost</source>
         <translation>Усиление краёв</translation>
     </message>
     <message>
-        <location filename="../src/features/brush/engine/PixelBrushModule.cpp" line="422"/>
+        <location filename="../src/features/brush/engine/PixelBrushModule.cpp" line="420"/>
         <source>Dab</source>
         <translation>Отпечаток</translation>
     </message>
     <message>
-        <location filename="../src/features/brush/engine/PixelBrushModule.cpp" line="422"/>
+        <location filename="../src/features/brush/engine/PixelBrushModule.cpp" line="420"/>
         <source>Dab shape and type</source>
         <translation>Форма и тип отпечатка</translation>
     </message>
     <message>
-        <location filename="../src/features/brush/engine/PixelBrushModule.cpp" line="425"/>
+        <location filename="../src/features/brush/engine/PixelBrushModule.cpp" line="423"/>
         <source>0</source>
         <translation>0</translation>
     </message>
     <message>
-        <location filename="../src/features/brush/engine/PixelBrushModule.cpp" line="425"/>
+        <location filename="../src/features/brush/engine/PixelBrushModule.cpp" line="423"/>
         <source>1</source>
         <translation>1</translation>
     </message>
     <message>
-        <location filename="../src/features/brush/engine/PixelBrushModule.cpp" line="425"/>
+        <location filename="../src/features/brush/engine/PixelBrushModule.cpp" line="423"/>
         <source>2</source>
         <translation>2</translation>
     </message>
     <message>
-        <location filename="../src/features/brush/engine/PixelBrushModule.cpp" line="425"/>
+        <location filename="../src/features/brush/engine/PixelBrushModule.cpp" line="423"/>
         <source>3</source>
         <translation>3</translation>
     </message>
     <message>
-        <location filename="../src/features/brush/engine/PixelBrushModule.cpp" line="426"/>
+        <location filename="../src/features/brush/engine/PixelBrushModule.cpp" line="424"/>
         <source>4</source>
         <translation>4</translation>
     </message>
     <message>
-        <location filename="../src/features/brush/engine/PixelBrushModule.cpp" line="426"/>
+        <location filename="../src/features/brush/engine/PixelBrushModule.cpp" line="424"/>
         <source>5</source>
         <translation>5</translation>
     </message>
     <message>
-        <location filename="../src/features/brush/engine/PixelBrushModule.cpp" line="428"/>
+        <location filename="../src/features/brush/engine/PixelBrushModule.cpp" line="426"/>
         <source>Dab placement variation</source>
         <translation>Вариация размещения отпечатков</translation>
     </message>
     <message>
-        <location filename="../src/features/brush/engine/PixelBrushModule.cpp" line="430"/>
+        <location filename="../src/features/brush/engine/PixelBrushModule.cpp" line="428"/>
         <source>Position Scatter</source>
         <translation>Разброс позиции</translation>
     </message>
     <message>
-        <location filename="../src/features/brush/engine/PixelBrushModule.cpp" line="434"/>
+        <location filename="../src/features/brush/engine/PixelBrushModule.cpp" line="432"/>
         <source>Stroke taper</source>
         <translation>Заострение штриха</translation>
     </message>
     <message>
-        <location filename="../src/features/brush/engine/PixelBrushModule.cpp" line="443"/>
-        <location filename="../src/features/brush/engine/PixelBrushModule.cpp" line="446"/>
+        <location filename="../src/features/brush/engine/PixelBrushModule.cpp" line="441"/>
+        <location filename="../src/features/brush/engine/PixelBrushModule.cpp" line="444"/>
         <source>Stabilization</source>
         <translation>Стабилизация</translation>
     </message>
     <message>
-        <location filename="../src/features/brush/engine/PixelBrushModule.cpp" line="444"/>
+        <location filename="../src/features/brush/engine/PixelBrushModule.cpp" line="442"/>
         <source>Realtime stabilization and post-stroke correction</source>
         <translation>Стабилизация в реальном времени и коррекция после штриха</translation>
     </message>
     <message>
-        <location filename="../src/features/brush/engine/PixelBrushModule.cpp" line="449"/>
+        <location filename="../src/features/brush/engine/PixelBrushModule.cpp" line="447"/>
         <source>Post Correction</source>
         <translation>Пост-коррекция</translation>
     </message>
     <message>
-        <location filename="../src/features/brush/engine/PixelBrushModule.cpp" line="454"/>
+        <location filename="../src/features/brush/engine/PixelBrushModule.cpp" line="452"/>
         <source>Adjust by Speed</source>
         <translation>Учитывать скорость</translation>
     </message>
     <message>
-        <location filename="../src/features/brush/engine/PixelBrushModule.cpp" line="455"/>
+        <location filename="../src/features/brush/engine/PixelBrushModule.cpp" line="453"/>
         <source>Slow strokes receive stronger post correction than fast strokes</source>
         <translation>Медленные штрихи получают более сильную коррекцию, чем быстрые</translation>
     </message>
     <message>
-        <location filename="../src/features/brush/engine/PixelBrushModule.cpp" line="458"/>
+        <location filename="../src/features/brush/engine/PixelBrushModule.cpp" line="456"/>
         <source>Start</source>
         <translation>Начало</translation>
     </message>
     <message>
-        <location filename="../src/features/brush/engine/PixelBrushModule.cpp" line="459"/>
+        <location filename="../src/features/brush/engine/PixelBrushModule.cpp" line="457"/>
         <source>Enable endpoint correction near the beginning of the stroke</source>
         <translation>Включить коррекцию концов у начала штриха</translation>
     </message>
     <message>
-        <location filename="../src/features/brush/engine/PixelBrushModule.cpp" line="461"/>
+        <location filename="../src/features/brush/engine/PixelBrushModule.cpp" line="459"/>
         <source>Start Length</source>
         <translation>Длина начала</translation>
     </message>
     <message>
-        <location filename="../src/features/brush/engine/PixelBrushModule.cpp" line="466"/>
+        <location filename="../src/features/brush/engine/PixelBrushModule.cpp" line="464"/>
         <source>End</source>
         <translation>Конец</translation>
     </message>
     <message>
-        <location filename="../src/features/brush/engine/PixelBrushModule.cpp" line="467"/>
+        <location filename="../src/features/brush/engine/PixelBrushModule.cpp" line="465"/>
         <source>Enable endpoint correction near the end of the stroke</source>
         <translation>Включить коррекцию концов у конца штриха</translation>
     </message>
     <message>
-        <location filename="../src/features/brush/engine/PixelBrushModule.cpp" line="468"/>
+        <location filename="../src/features/brush/engine/PixelBrushModule.cpp" line="466"/>
         <source>End Length</source>
         <translation>Длина конца</translation>
     </message>
     <message>
-        <location filename="../src/features/brush/engine/PixelBrushModule.cpp" line="428"/>
+        <location filename="../src/features/brush/engine/PixelBrushModule.cpp" line="426"/>
         <source>Scatter</source>
         <translation>Разброс</translation>
     </message>
     <message>
-        <location filename="../src/features/brush/engine/PixelBrushModule.cpp" line="434"/>
+        <location filename="../src/features/brush/engine/PixelBrushModule.cpp" line="432"/>
         <source>Stroke</source>
         <translation>Штрих</translation>
     </message>
     <message>
-        <location filename="../src/features/brush/engine/PixelBrushModule.cpp" line="436"/>
+        <location filename="../src/features/brush/engine/PixelBrushModule.cpp" line="434"/>
         <source>Start Taper</source>
         <translation>Заострение начала</translation>
     </message>
     <message>
-        <location filename="../src/features/brush/engine/PixelBrushModule.cpp" line="439"/>
+        <location filename="../src/features/brush/engine/PixelBrushModule.cpp" line="437"/>
         <source>End Taper</source>
         <translation>Заострение конца</translation>
     </message>
@@ -2573,7 +2568,7 @@ Please choose a different shortcut.</source>
     </message>
     <message>
         <location filename="../src/shell/tab-system/WorkspaceTab.cpp" line="1216"/>
-        <location filename="../src/shell/tab-system/WorkspaceTab.cpp" line="3705"/>
+        <location filename="../src/shell/tab-system/WorkspaceTab.cpp" line="3713"/>
         <source>Loading workspace</source>
         <translation>Загрузка рабочей области</translation>
     </message>
@@ -2604,64 +2599,64 @@ Please choose a different shortcut.</source>
         <translation>Построение рабочей области...</translation>
     </message>
     <message>
-        <location filename="../src/shell/tab-system/WorkspaceTab.cpp" line="3609"/>
+        <location filename="../src/shell/tab-system/WorkspaceTab.cpp" line="3617"/>
         <source>Failed to save project:
 %1</source>
         <translation>Не удалось сохранить проект:
 %1</translation>
     </message>
     <message>
-        <location filename="../src/shell/tab-system/WorkspaceTab.cpp" line="3611"/>
+        <location filename="../src/shell/tab-system/WorkspaceTab.cpp" line="3619"/>
         <source>OK</source>
         <translation>ОК</translation>
     </message>
     <message>
-        <location filename="../src/shell/tab-system/WorkspaceTab.cpp" line="3707"/>
+        <location filename="../src/shell/tab-system/WorkspaceTab.cpp" line="3715"/>
         <source>Preparing project data...</source>
         <translation>Подготовка данных проекта...</translation>
     </message>
     <message>
-        <location filename="../src/shell/tab-system/WorkspaceTab.cpp" line="4087"/>
+        <location filename="../src/shell/tab-system/WorkspaceTab.cpp" line="4095"/>
         <source>Internal error: missing export target.</source>
         <translation>Внутренняя ошибка: отсутствует цель экспорта.</translation>
     </message>
     <message>
-        <location filename="../src/shell/tab-system/WorkspaceTab.cpp" line="4093"/>
+        <location filename="../src/shell/tab-system/WorkspaceTab.cpp" line="4101"/>
         <source>Workspace is not ready.</source>
         <translation>Рабочая область не готова.</translation>
     </message>
     <message>
-        <location filename="../src/shell/tab-system/WorkspaceTab.cpp" line="4099"/>
+        <location filename="../src/shell/tab-system/WorkspaceTab.cpp" line="4107"/>
         <source>Saving this layout is not supported.</source>
         <translation>Сохранение этого макета не поддерживается.</translation>
     </message>
     <message>
-        <location filename="../src/shell/tab-system/WorkspaceTab.cpp" line="4106"/>
+        <location filename="../src/shell/tab-system/WorkspaceTab.cpp" line="4114"/>
         <source>My layout</source>
         <translation>Мой макет</translation>
     </message>
     <message>
-        <location filename="../src/shell/tab-system/WorkspaceTab.cpp" line="4121"/>
+        <location filename="../src/shell/tab-system/WorkspaceTab.cpp" line="4129"/>
         <source>Nothing to save (empty layout).</source>
         <translation>Нечего сохранять (пустой макет).</translation>
     </message>
     <message>
-        <location filename="../src/shell/tab-system/WorkspaceTab.cpp" line="4400"/>
+        <location filename="../src/shell/tab-system/WorkspaceTab.cpp" line="4408"/>
         <source>Infinite</source>
         <translation>Бесконечный</translation>
     </message>
     <message>
-        <location filename="../src/shell/tab-system/WorkspaceTab.cpp" line="4400"/>
+        <location filename="../src/shell/tab-system/WorkspaceTab.cpp" line="4408"/>
         <source>Classic</source>
         <translation>Классический</translation>
     </message>
     <message>
-        <location filename="../src/shell/tab-system/WorkspaceTab.cpp" line="4404"/>
+        <location filename="../src/shell/tab-system/WorkspaceTab.cpp" line="4412"/>
         <source>Switch to classic</source>
         <translation>Переключить на классический</translation>
     </message>
     <message>
-        <location filename="../src/shell/tab-system/WorkspaceTab.cpp" line="4404"/>
+        <location filename="../src/shell/tab-system/WorkspaceTab.cpp" line="4412"/>
         <source>Switch to infinite</source>
         <translation>Переключить на бесконечный</translation>
     </message>
@@ -3029,7 +3024,7 @@ Ruwa использует фреймворк Qt (версия %1), динами�
     <name>ruwa::ui::widgets::ColorPicker</name>
     <message>
         <location filename="../src/features/color/ColorPicker.cpp" line="719"/>
-        <location filename="../src/features/color/ColorPicker.cpp" line="2166"/>
+        <location filename="../src/features/color/ColorPicker.cpp" line="2170"/>
         <source>Color</source>
         <translation>Цвет</translation>
     </message>
@@ -3772,271 +3767,319 @@ Ruwa использует фреймворк Qt (версия %1), динами�
     </message>
     <message>
         <location filename="../src/features/settings/SettingsContent.cpp" line="233"/>
-        <location filename="../src/features/settings/SettingsContent.cpp" line="410"/>
-        <location filename="../src/features/settings/SettingsContent.cpp" line="419"/>
+        <location filename="../src/features/settings/SettingsContent.cpp" line="430"/>
+        <location filename="../src/features/settings/SettingsContent.cpp" line="439"/>
         <source>Reset all</source>
         <translation>Сбросить всё</translation>
     </message>
     <message>
-        <location filename="../src/features/settings/SettingsContent.cpp" line="416"/>
+        <location filename="../src/features/settings/SettingsContent.cpp" line="436"/>
         <source>Are you sure you want to reset all settings to default? The program will restart. This cannot be undone.</source>
         <translation>Сбросить все настройки к значениям по умолчанию? Программа перезапустится. Это действие нельзя отменить.</translation>
     </message>
     <message>
-        <location filename="../src/features/settings/SettingsContent.cpp" line="418"/>
-        <location filename="../src/features/settings/SettingsContent.cpp" line="555"/>
+        <location filename="../src/features/settings/SettingsContent.cpp" line="438"/>
+        <location filename="../src/features/settings/SettingsContent.cpp" line="575"/>
         <source>Cancel</source>
         <translation>Отмена</translation>
     </message>
     <message>
         <location filename="../src/features/settings/SettingsContent.cpp" line="345"/>
-        <location filename="../src/features/settings/SettingsContent.cpp" line="500"/>
+        <location filename="../src/features/settings/SettingsContent.cpp" line="520"/>
         <source>Updates</source>
         <translation>Обновления</translation>
     </message>
     <message>
-        <location filename="../src/features/settings/SettingsContent.cpp" line="554"/>
+        <location filename="../src/features/settings/SettingsContent.cpp" line="574"/>
         <source>Apply update and restart?</source>
         <translation>Применить обновление и перезапустить?</translation>
     </message>
     <message>
-        <location filename="../src/features/settings/SettingsContent.cpp" line="556"/>
+        <location filename="../src/features/settings/SettingsContent.cpp" line="576"/>
         <source>Restart</source>
         <translation>Перезапустить</translation>
     </message>
     <message>
-        <location filename="../src/features/settings/SettingsContent.cpp" line="539"/>
+        <location filename="../src/features/settings/SettingsContent.cpp" line="559"/>
         <source>The update could not be downloaded.</source>
         <translation>Не удалось загрузить обновление.</translation>
     </message>
     <message>
-        <location filename="../src/features/settings/SettingsContent.cpp" line="540"/>
+        <location filename="../src/features/settings/SettingsContent.cpp" line="560"/>
         <source>The update could not be downloaded:
 %1</source>
         <translation>Не удалось загрузить обновление:
 %1</translation>
     </message>
     <message>
-        <location filename="../src/features/settings/SettingsContent.cpp" line="541"/>
+        <location filename="../src/features/settings/SettingsContent.cpp" line="561"/>
         <source>Close</source>
         <translation>Закрыть</translation>
     </message>
     <message>
         <location filename="../src/features/settings/SettingsContent.cpp" line="346"/>
-        <location filename="../src/features/settings/SettingsContent.cpp" line="605"/>
+        <location filename="../src/features/settings/SettingsContent.cpp" line="625"/>
         <source>Appearance</source>
         <translation>Внешний вид</translation>
     </message>
     <message>
         <location filename="../src/features/settings/SettingsContent.cpp" line="364"/>
-        <location filename="../src/features/settings/SettingsContent.cpp" line="629"/>
+        <location filename="../src/features/settings/SettingsContent.cpp" line="649"/>
         <source>UI Scale</source>
         <translation>Масштаб интерфейса</translation>
     </message>
     <message>
         <location filename="../src/features/settings/SettingsContent.cpp" line="365"/>
-        <location filename="../src/features/settings/SettingsContent.cpp" line="629"/>
+        <location filename="../src/features/settings/SettingsContent.cpp" line="649"/>
         <source>Adjust the size of UI elements</source>
         <translation>Настройка размера элементов интерфейса</translation>
     </message>
     <message>
         <location filename="../src/features/settings/SettingsContent.cpp" line="366"/>
-        <location filename="../src/features/settings/SettingsContent.cpp" line="630"/>
+        <location filename="../src/features/settings/SettingsContent.cpp" line="650"/>
         <source>Small</source>
         <translation>Маленький</translation>
     </message>
     <message>
         <location filename="../src/features/settings/SettingsContent.cpp" line="366"/>
-        <location filename="../src/features/settings/SettingsContent.cpp" line="630"/>
+        <location filename="../src/features/settings/SettingsContent.cpp" line="650"/>
         <source>Medium</source>
         <translation>Средний</translation>
     </message>
     <message>
         <location filename="../src/features/settings/SettingsContent.cpp" line="366"/>
-        <location filename="../src/features/settings/SettingsContent.cpp" line="630"/>
+        <location filename="../src/features/settings/SettingsContent.cpp" line="650"/>
         <source>Large</source>
         <translation>Большой</translation>
     </message>
     <message>
         <location filename="../src/features/settings/SettingsContent.cpp" line="369"/>
-        <location filename="../src/features/settings/SettingsContent.cpp" line="639"/>
+        <location filename="../src/features/settings/SettingsContent.cpp" line="659"/>
         <source>Language</source>
         <translation>Язык</translation>
     </message>
     <message>
         <location filename="../src/features/settings/SettingsContent.cpp" line="370"/>
-        <location filename="../src/features/settings/SettingsContent.cpp" line="639"/>
+        <location filename="../src/features/settings/SettingsContent.cpp" line="659"/>
         <source>Interface language</source>
         <translation>Язык интерфейса</translation>
     </message>
     <message>
         <location filename="../src/features/settings/SettingsContent.cpp" line="376"/>
-        <location filename="../src/features/settings/SettingsContent.cpp" line="651"/>
+        <location filename="../src/features/settings/SettingsContent.cpp" line="671"/>
         <source>Top bar tab alignment</source>
         <translation>Выравнивание топбара</translation>
     </message>
     <message>
         <location filename="../src/features/settings/SettingsContent.cpp" line="378"/>
-        <location filename="../src/features/settings/SettingsContent.cpp" line="652"/>
+        <location filename="../src/features/settings/SettingsContent.cpp" line="672"/>
         <source>Place the tab strip at the left of the title bar or centered in the free space</source>
         <translation>Слева — как сейчас; по центру — вкладки в центре свободной области заголовка</translation>
     </message>
     <message>
         <location filename="../src/features/settings/SettingsContent.cpp" line="379"/>
-        <location filename="../src/features/settings/SettingsContent.cpp" line="653"/>
+        <location filename="../src/features/settings/SettingsContent.cpp" line="673"/>
         <source>Left</source>
         <translation>Слева</translation>
     </message>
     <message>
         <location filename="../src/features/settings/SettingsContent.cpp" line="379"/>
-        <location filename="../src/features/settings/SettingsContent.cpp" line="653"/>
+        <location filename="../src/features/settings/SettingsContent.cpp" line="673"/>
         <source>Center</source>
         <translation>По центру</translation>
     </message>
     <message>
         <location filename="../src/features/settings/SettingsContent.cpp" line="387"/>
-        <location filename="../src/features/settings/SettingsContent.cpp" line="675"/>
+        <location filename="../src/features/settings/SettingsContent.cpp" line="695"/>
         <source>2 min</source>
         <translation>2 мин</translation>
     </message>
     <message>
         <location filename="../src/features/settings/SettingsContent.cpp" line="390"/>
-        <location filename="../src/features/settings/SettingsContent.cpp" line="686"/>
+        <location filename="../src/features/settings/SettingsContent.cpp" line="706"/>
         <source>Quick Shapes</source>
         <translation>Быстрые фигуры</translation>
     </message>
     <message>
         <location filename="../src/features/settings/SettingsContent.cpp" line="392"/>
-        <location filename="../src/features/settings/SettingsContent.cpp" line="687"/>
+        <location filename="../src/features/settings/SettingsContent.cpp" line="707"/>
         <source>Hold stroke to morph into straight line, circle, triangle, or square</source>
         <translation>Удерживайте штрих, чтобы превратить его в прямую линию, круг, треугольник или квадрат</translation>
     </message>
     <message>
         <location filename="../src/features/settings/SettingsContent.cpp" line="348"/>
-        <location filename="../src/features/settings/SettingsContent.cpp" line="700"/>
+        <location filename="../src/features/settings/SettingsContent.cpp" line="743"/>
         <source>Keyboard Shortcuts</source>
         <translation>Горячие клавиши</translation>
     </message>
     <message>
+        <location filename="../src/features/settings/SettingsContent.cpp" line="395"/>
+        <location filename="../src/features/settings/SettingsContent.cpp" line="725"/>
+        <source>Snap to canvas</source>
+        <translation>Привязка к холсту</translation>
+    </message>
+    <message>
+        <location filename="../src/features/settings/SettingsContent.cpp" line="397"/>
+        <location filename="../src/features/settings/SettingsContent.cpp" line="726"/>
+        <source>Align transformed content to the canvas center and finite edges</source>
+        <translation>Выравнивать перемещаемое содержимое по центру и краям холста</translation>
+    </message>
+    <message>
+        <location filename="../src/features/settings/SettingsContent.cpp" line="400"/>
+        <location filename="../src/features/settings/SettingsContent.cpp" line="728"/>
+        <source>Snap to layers</source>
+        <translation>Привязка к слоям</translation>
+    </message>
+    <message>
         <location filename="../src/features/settings/SettingsContent.cpp" line="402"/>
-        <location filename="../src/features/settings/SettingsContent.cpp" line="733"/>
+        <location filename="../src/features/settings/SettingsContent.cpp" line="729"/>
+        <source>Align transformed content to visible layers and groups</source>
+        <translation>Выравнивать перемещаемое содержимое по видимым слоям и группам</translation>
+    </message>
+    <message>
+        <location filename="../src/features/settings/SettingsContent.cpp" line="405"/>
+        <location filename="../src/features/settings/SettingsContent.cpp" line="731"/>
+        <source>Snap to equal spacing</source>
+        <translation>Привязка к равным отступам</translation>
+    </message>
+    <message>
+        <location filename="../src/features/settings/SettingsContent.cpp" line="407"/>
+        <location filename="../src/features/settings/SettingsContent.cpp" line="732"/>
+        <source>Repeat nearby gaps and center content between neighboring objects</source>
+        <translation>Повторять соседние отступы и центрировать содержимое между соседними объектами</translation>
+    </message>
+    <message>
+        <location filename="../src/features/settings/SettingsContent.cpp" line="410"/>
+        <location filename="../src/features/settings/SettingsContent.cpp" line="734"/>
+        <source>Pixel-align raster moves</source>
+        <translation>Пиксельное выравнивание растровых перемещений</translation>
+    </message>
+    <message>
+        <location filename="../src/features/settings/SettingsContent.cpp" line="412"/>
+        <location filename="../src/features/settings/SettingsContent.cpp" line="735"/>
+        <source>Keep raster and selection moves on whole-pixel coordinates</source>
+        <translation>Удерживать перемещение растра и выделений на целых пикселях</translation>
+    </message>
+    <message>
+        <location filename="../src/features/settings/SettingsContent.cpp" line="422"/>
+        <location filename="../src/features/settings/SettingsContent.cpp" line="776"/>
         <source>Tablet Input Backend</source>
         <translation>Ввод стилуса</translation>
     </message>
     <message>
-        <location filename="../src/features/settings/SettingsContent.cpp" line="404"/>
-        <location filename="../src/features/settings/SettingsContent.cpp" line="734"/>
+        <location filename="../src/features/settings/SettingsContent.cpp" line="424"/>
+        <location filename="../src/features/settings/SettingsContent.cpp" line="777"/>
         <source>Choose the stylus input backend. Restart is required to apply this setting.</source>
         <translation>Выберите способ ввода стилуса. Чтобы применить настройку, требуется перезапуск программы.</translation>
     </message>
     <message>
-        <location filename="../src/features/settings/SettingsContent.cpp" line="406"/>
-        <location filename="../src/features/settings/SettingsContent.cpp" line="735"/>
+        <location filename="../src/features/settings/SettingsContent.cpp" line="426"/>
+        <location filename="../src/features/settings/SettingsContent.cpp" line="778"/>
         <source>WinTab (Qt)</source>
         <translation>WinTab (Qt)</translation>
     </message>
     <message>
-        <location filename="../src/features/settings/SettingsContent.cpp" line="406"/>
-        <location filename="../src/features/settings/SettingsContent.cpp" line="735"/>
+        <location filename="../src/features/settings/SettingsContent.cpp" line="426"/>
+        <location filename="../src/features/settings/SettingsContent.cpp" line="778"/>
         <source>Windows Ink</source>
         <translation>Windows Ink</translation>
     </message>
     <message>
-        <location filename="../src/features/settings/SettingsContent.cpp" line="406"/>
-        <location filename="../src/features/settings/SettingsContent.cpp" line="735"/>
+        <location filename="../src/features/settings/SettingsContent.cpp" line="426"/>
+        <location filename="../src/features/settings/SettingsContent.cpp" line="778"/>
         <source>WinTab (Ruwa)</source>
         <translation>WinTab (Ruwa)</translation>
     </message>
     <message>
-        <location filename="../src/features/settings/SettingsContent.cpp" line="747"/>
+        <location filename="../src/features/settings/SettingsContent.cpp" line="790"/>
         <source>Tablet backend was changed. Restart is required to apply this setting.</source>
         <translation>Способ ввода стилуса изменён. Чтобы применить настройку, требуется перезапуск программы.</translation>
     </message>
     <message>
-        <location filename="../src/features/settings/SettingsContent.cpp" line="748"/>
+        <location filename="../src/features/settings/SettingsContent.cpp" line="791"/>
         <source>Later</source>
         <translation>Позже</translation>
     </message>
     <message>
-        <location filename="../src/features/settings/SettingsContent.cpp" line="749"/>
+        <location filename="../src/features/settings/SettingsContent.cpp" line="792"/>
         <source>Restart now</source>
         <translation>Перезапустить сейчас</translation>
     </message>
     <message>
         <location filename="../src/features/settings/SettingsContent.cpp" line="347"/>
-        <location filename="../src/features/settings/SettingsContent.cpp" line="666"/>
+        <location filename="../src/features/settings/SettingsContent.cpp" line="686"/>
         <source>Editor</source>
         <translation>Редактор</translation>
     </message>
     <message>
         <location filename="../src/features/settings/SettingsContent.cpp" line="384"/>
-        <location filename="../src/features/settings/SettingsContent.cpp" line="674"/>
+        <location filename="../src/features/settings/SettingsContent.cpp" line="694"/>
         <source>Auto-Save</source>
         <translation>Автосохранение</translation>
     </message>
     <message>
         <location filename="../src/features/settings/SettingsContent.cpp" line="386"/>
-        <location filename="../src/features/settings/SettingsContent.cpp" line="674"/>
+        <location filename="../src/features/settings/SettingsContent.cpp" line="694"/>
         <source>Automatically save your work at the selected interval</source>
         <translation>Автоматически сохранять работу с выбранным интервалом</translation>
     </message>
     <message>
         <location filename="../src/features/settings/SettingsContent.cpp" line="387"/>
-        <location filename="../src/features/settings/SettingsContent.cpp" line="675"/>
+        <location filename="../src/features/settings/SettingsContent.cpp" line="695"/>
         <source>Off</source>
         <translation>Выкл</translation>
     </message>
     <message>
         <location filename="../src/features/settings/SettingsContent.cpp" line="387"/>
-        <location filename="../src/features/settings/SettingsContent.cpp" line="675"/>
+        <location filename="../src/features/settings/SettingsContent.cpp" line="695"/>
         <source>5 min</source>
         <translation>5 мин</translation>
     </message>
     <message>
         <location filename="../src/features/settings/SettingsContent.cpp" line="387"/>
-        <location filename="../src/features/settings/SettingsContent.cpp" line="675"/>
+        <location filename="../src/features/settings/SettingsContent.cpp" line="695"/>
         <source>10 min</source>
         <translation>10 мин</translation>
     </message>
     <message>
         <location filename="../src/features/settings/SettingsContent.cpp" line="349"/>
-        <location filename="../src/features/settings/SettingsContent.cpp" line="715"/>
+        <location filename="../src/features/settings/SettingsContent.cpp" line="758"/>
         <source>Performance</source>
         <translation>Производительность</translation>
     </message>
     <message>
-        <location filename="../src/features/settings/SettingsContent.cpp" line="397"/>
-        <location filename="../src/features/settings/SettingsContent.cpp" line="721"/>
+        <location filename="../src/features/settings/SettingsContent.cpp" line="417"/>
+        <location filename="../src/features/settings/SettingsContent.cpp" line="764"/>
         <source>Undo Memory Limit</source>
         <translation>Лимит памяти для отмены</translation>
     </message>
     <message>
-        <location filename="../src/features/settings/SettingsContent.cpp" line="398"/>
-        <location filename="../src/features/settings/SettingsContent.cpp" line="721"/>
+        <location filename="../src/features/settings/SettingsContent.cpp" line="418"/>
+        <location filename="../src/features/settings/SettingsContent.cpp" line="764"/>
         <source>Maximum memory available for undo history</source>
         <translation>Максимальный объём памяти для истории отмены</translation>
     </message>
     <message>
-        <location filename="../src/features/settings/SettingsContent.cpp" line="399"/>
-        <location filename="../src/features/settings/SettingsContent.cpp" line="722"/>
+        <location filename="../src/features/settings/SettingsContent.cpp" line="419"/>
+        <location filename="../src/features/settings/SettingsContent.cpp" line="765"/>
         <source>300 MB</source>
         <translation>300 МБ</translation>
     </message>
     <message>
-        <location filename="../src/features/settings/SettingsContent.cpp" line="399"/>
-        <location filename="../src/features/settings/SettingsContent.cpp" line="722"/>
+        <location filename="../src/features/settings/SettingsContent.cpp" line="419"/>
+        <location filename="../src/features/settings/SettingsContent.cpp" line="765"/>
         <source>1 GB</source>
         <translation>1 ГБ</translation>
     </message>
     <message>
-        <location filename="../src/features/settings/SettingsContent.cpp" line="399"/>
-        <location filename="../src/features/settings/SettingsContent.cpp" line="722"/>
+        <location filename="../src/features/settings/SettingsContent.cpp" line="419"/>
+        <location filename="../src/features/settings/SettingsContent.cpp" line="765"/>
         <source>3 GB</source>
         <translation>3 ГБ</translation>
     </message>
     <message>
-        <location filename="../src/features/settings/SettingsContent.cpp" line="399"/>
-        <location filename="../src/features/settings/SettingsContent.cpp" line="722"/>
+        <location filename="../src/features/settings/SettingsContent.cpp" line="419"/>
+        <location filename="../src/features/settings/SettingsContent.cpp" line="765"/>
         <source>8 GB</source>
         <translation>8 ГБ</translation>
     </message>
@@ -4115,20 +4158,20 @@ Ruwa использует фреймворк Qt (версия %1), динами�
 <context>
     <name>ruwa::ui::widgets::ThemeSelectorWidget</name>
     <message>
-        <location filename="../src/features/theme/editor/ThemeSelectorWidget.cpp" line="24"/>
-        <location filename="../src/features/theme/editor/ThemeSelectorWidget.cpp" line="150"/>
+        <location filename="../src/features/theme/editor/ThemeSelectorWidget.cpp" line="28"/>
+        <location filename="../src/features/theme/editor/ThemeSelectorWidget.cpp" line="287"/>
         <source>Theme</source>
         <translation>Тема</translation>
     </message>
     <message>
-        <location filename="../src/features/theme/editor/ThemeSelectorWidget.cpp" line="24"/>
-        <location filename="../src/features/theme/editor/ThemeSelectorWidget.cpp" line="151"/>
+        <location filename="../src/features/theme/editor/ThemeSelectorWidget.cpp" line="28"/>
+        <location filename="../src/features/theme/editor/ThemeSelectorWidget.cpp" line="288"/>
         <source>Choose a color theme for the interface</source>
         <translation>Выберите цветовую тему для интерфейса</translation>
     </message>
     <message>
-        <location filename="../src/features/theme/editor/ThemeSelectorWidget.cpp" line="120"/>
-        <location filename="../src/features/theme/editor/ThemeSelectorWidget.cpp" line="153"/>
+        <location filename="../src/features/theme/editor/ThemeSelectorWidget.cpp" line="139"/>
+        <location filename="../src/features/theme/editor/ThemeSelectorWidget.cpp" line="290"/>
         <source>or</source>
         <translation>или</translation>
     </message>
@@ -4424,26 +4467,26 @@ Ruwa использует фреймворк Qt (версия %1), динами�
 <context>
     <name>ruwa::ui::widgets::WelcomeBanner</name>
     <message>
-        <location filename="../src/features/home/welcome/WelcomeBanner.cpp" line="284"/>
-        <location filename="../src/features/home/welcome/WelcomeBanner.cpp" line="347"/>
+        <location filename="../src/features/home/welcome/WelcomeBanner.cpp" line="288"/>
+        <location filename="../src/features/home/welcome/WelcomeBanner.cpp" line="351"/>
         <source>Digital Painting Reimagined</source>
         <translation>Цифровая живопись по-новому</translation>
     </message>
     <message>
-        <location filename="../src/features/home/welcome/WelcomeBanner.cpp" line="290"/>
-        <location filename="../src/features/home/welcome/WelcomeBanner.cpp" line="349"/>
+        <location filename="../src/features/home/welcome/WelcomeBanner.cpp" line="294"/>
+        <location filename="../src/features/home/welcome/WelcomeBanner.cpp" line="353"/>
         <source>Free, open-source, and limitless.</source>
         <translation>Бесплатно, с открытым кодом и без ограничений.</translation>
     </message>
     <message>
-        <location filename="../src/features/home/welcome/WelcomeBanner.cpp" line="304"/>
-        <location filename="../src/features/home/welcome/WelcomeBanner.cpp" line="351"/>
+        <location filename="../src/features/home/welcome/WelcomeBanner.cpp" line="308"/>
+        <location filename="../src/features/home/welcome/WelcomeBanner.cpp" line="355"/>
         <source>Create Project</source>
         <translation>Создать проект</translation>
     </message>
     <message>
-        <location filename="../src/features/home/welcome/WelcomeBanner.cpp" line="312"/>
-        <location filename="../src/features/home/welcome/WelcomeBanner.cpp" line="355"/>
+        <location filename="../src/features/home/welcome/WelcomeBanner.cpp" line="316"/>
+        <location filename="../src/features/home/welcome/WelcomeBanner.cpp" line="359"/>
         <source>Open Project</source>
         <translation>Открыть проект</translation>
     </message>
@@ -4495,60 +4538,60 @@ Ruwa использует фреймворк Qt (версия %1), динами�
 <context>
     <name>ruwa::ui::widgets::WelcomeBannerSelectorWidget</name>
     <message>
-        <location filename="../src/features/home/welcome/WelcomeBannerSelectorWidget.cpp" line="127"/>
-        <location filename="../src/features/home/welcome/WelcomeBannerSelectorWidget.cpp" line="664"/>
+        <location filename="../src/features/home/welcome/WelcomeBannerSelectorWidget.cpp" line="128"/>
+        <location filename="../src/features/home/welcome/WelcomeBannerSelectorWidget.cpp" line="789"/>
         <source>Welcome banner</source>
         <translation>Приветственный баннер</translation>
     </message>
     <message>
-        <location filename="../src/features/home/welcome/WelcomeBannerSelectorWidget.cpp" line="129"/>
-        <location filename="../src/features/home/welcome/WelcomeBannerSelectorWidget.cpp" line="666"/>
+        <location filename="../src/features/home/welcome/WelcomeBannerSelectorWidget.cpp" line="130"/>
+        <location filename="../src/features/home/welcome/WelcomeBannerSelectorWidget.cpp" line="791"/>
         <source>Background for the welcome screen. Use built-in art or your own images; adjust text contrast below.</source>
         <translation>Фон экрана приветствия: встроенные изображения или свои файлы; ниже можно настроить контраст текста.</translation>
     </message>
     <message>
-        <location filename="../src/features/home/welcome/WelcomeBannerSelectorWidget.cpp" line="349"/>
-        <location filename="../src/features/home/welcome/WelcomeBannerSelectorWidget.cpp" line="670"/>
+        <location filename="../src/features/home/welcome/WelcomeBannerSelectorWidget.cpp" line="368"/>
+        <location filename="../src/features/home/welcome/WelcomeBannerSelectorWidget.cpp" line="795"/>
         <source>or</source>
         <translation>или</translation>
     </message>
     <message>
-        <location filename="../src/features/home/welcome/WelcomeBannerSelectorWidget.cpp" line="452"/>
+        <location filename="../src/features/home/welcome/WelcomeBannerSelectorWidget.cpp" line="587"/>
         <source>Images (*.png *.jpg *.jpeg *.webp *.bmp)</source>
         <translation>Изображения (*.png *.jpg *.jpeg *.webp *.bmp)</translation>
     </message>
     <message>
-        <location filename="../src/features/home/welcome/WelcomeBannerSelectorWidget.cpp" line="454"/>
+        <location filename="../src/features/home/welcome/WelcomeBannerSelectorWidget.cpp" line="589"/>
         <source>Add welcome banner image</source>
         <translation>Добавить изображение баннера</translation>
     </message>
     <message>
-        <location filename="../src/features/home/welcome/WelcomeBannerSelectorWidget.cpp" line="674"/>
+        <location filename="../src/features/home/welcome/WelcomeBannerSelectorWidget.cpp" line="799"/>
         <source>Image selection</source>
         <translation>Выбор изображения</translation>
     </message>
     <message>
-        <location filename="../src/features/home/welcome/WelcomeBannerSelectorWidget.cpp" line="678"/>
+        <location filename="../src/features/home/welcome/WelcomeBannerSelectorWidget.cpp" line="803"/>
         <source>Random</source>
         <translation>Случайно</translation>
     </message>
     <message>
-        <location filename="../src/features/home/welcome/WelcomeBannerSelectorWidget.cpp" line="679"/>
+        <location filename="../src/features/home/welcome/WelcomeBannerSelectorWidget.cpp" line="804"/>
         <source>Fixed</source>
         <translation>Фиксированное</translation>
     </message>
     <message>
-        <location filename="../src/features/home/welcome/WelcomeBannerSelectorWidget.cpp" line="683"/>
+        <location filename="../src/features/home/welcome/WelcomeBannerSelectorWidget.cpp" line="808"/>
         <source>Banner text</source>
         <translation>Текст на баннере</translation>
     </message>
     <message>
-        <location filename="../src/features/home/welcome/WelcomeBannerSelectorWidget.cpp" line="686"/>
+        <location filename="../src/features/home/welcome/WelcomeBannerSelectorWidget.cpp" line="811"/>
         <source>Basic</source>
         <translation>Обычный</translation>
     </message>
     <message>
-        <location filename="../src/features/home/welcome/WelcomeBannerSelectorWidget.cpp" line="687"/>
+        <location filename="../src/features/home/welcome/WelcomeBannerSelectorWidget.cpp" line="812"/>
         <source>Inverted</source>
         <translation>Инвертированный</translation>
     </message>
@@ -4648,242 +4691,242 @@ Ruwa использует фреймворк Qt (версия %1), динами�
 <context>
     <name>ruwa::ui::windows::BrushEditorLayoutWidget</name>
     <message>
-        <location filename="../src/features/brush/editor/BrushEditorLayoutWidget.cpp" line="570"/>
-        <location filename="../src/features/brush/editor/BrushEditorLayoutWidget.cpp" line="1230"/>
+        <location filename="../src/features/brush/editor/BrushEditorLayoutWidget.cpp" line="571"/>
+        <location filename="../src/features/brush/editor/BrushEditorLayoutWidget.cpp" line="1222"/>
         <source>Brush Library</source>
         <translation>Библиотека кистей</translation>
     </message>
     <message>
-        <location filename="../src/features/brush/editor/BrushEditorLayoutWidget.cpp" line="571"/>
-        <location filename="../src/features/brush/editor/BrushEditorLayoutWidget.cpp" line="1231"/>
+        <location filename="../src/features/brush/editor/BrushEditorLayoutWidget.cpp" line="572"/>
+        <location filename="../src/features/brush/editor/BrushEditorLayoutWidget.cpp" line="1223"/>
         <source>Search brushes</source>
         <translation>Поиск кистей</translation>
     </message>
     <message>
-        <location filename="../src/features/brush/editor/BrushEditorLayoutWidget.cpp" line="573"/>
-        <location filename="../src/features/brush/editor/BrushEditorLayoutWidget.cpp" line="1233"/>
+        <location filename="../src/features/brush/editor/BrushEditorLayoutWidget.cpp" line="574"/>
+        <location filename="../src/features/brush/editor/BrushEditorLayoutWidget.cpp" line="1225"/>
         <source>No brushes found</source>
         <translation>Кисти не найдены</translation>
     </message>
     <message>
-        <location filename="../src/features/brush/editor/BrushEditorLayoutWidget.cpp" line="573"/>
-        <location filename="../src/features/brush/editor/BrushEditorLayoutWidget.cpp" line="1233"/>
+        <location filename="../src/features/brush/editor/BrushEditorLayoutWidget.cpp" line="574"/>
+        <location filename="../src/features/brush/editor/BrushEditorLayoutWidget.cpp" line="1225"/>
         <source>Try a different search or create a new brush.</source>
         <translation>Измените запрос или создайте новую кисть.</translation>
     </message>
     <message>
-        <location filename="../src/features/brush/editor/BrushEditorLayoutWidget.cpp" line="580"/>
         <location filename="../src/features/brush/editor/BrushEditorLayoutWidget.cpp" line="581"/>
-        <location filename="../src/features/brush/editor/BrushEditorLayoutWidget.cpp" line="1240"/>
-        <location filename="../src/features/brush/editor/BrushEditorLayoutWidget.cpp" line="1241"/>
+        <location filename="../src/features/brush/editor/BrushEditorLayoutWidget.cpp" line="582"/>
+        <location filename="../src/features/brush/editor/BrushEditorLayoutWidget.cpp" line="1232"/>
+        <location filename="../src/features/brush/editor/BrushEditorLayoutWidget.cpp" line="1233"/>
         <source>Add Pack</source>
         <translation>Добавить набор</translation>
     </message>
     <message>
-        <location filename="../src/features/brush/editor/BrushEditorLayoutWidget.cpp" line="588"/>
         <location filename="../src/features/brush/editor/BrushEditorLayoutWidget.cpp" line="589"/>
-        <location filename="../src/features/brush/editor/BrushEditorLayoutWidget.cpp" line="1248"/>
-        <location filename="../src/features/brush/editor/BrushEditorLayoutWidget.cpp" line="1249"/>
+        <location filename="../src/features/brush/editor/BrushEditorLayoutWidget.cpp" line="590"/>
+        <location filename="../src/features/brush/editor/BrushEditorLayoutWidget.cpp" line="1240"/>
+        <location filename="../src/features/brush/editor/BrushEditorLayoutWidget.cpp" line="1241"/>
         <source>Add Brush</source>
         <translation>Добавить кисть</translation>
     </message>
     <message>
-        <location filename="../src/features/brush/editor/BrushEditorLayoutWidget.cpp" line="595"/>
         <location filename="../src/features/brush/editor/BrushEditorLayoutWidget.cpp" line="596"/>
-        <location filename="../src/features/brush/editor/BrushEditorLayoutWidget.cpp" line="1255"/>
-        <location filename="../src/features/brush/editor/BrushEditorLayoutWidget.cpp" line="1256"/>
+        <location filename="../src/features/brush/editor/BrushEditorLayoutWidget.cpp" line="597"/>
+        <location filename="../src/features/brush/editor/BrushEditorLayoutWidget.cpp" line="1247"/>
+        <location filename="../src/features/brush/editor/BrushEditorLayoutWidget.cpp" line="1248"/>
         <source>Import Pack</source>
         <translation>Импорт набора</translation>
     </message>
     <message>
-        <location filename="../src/features/brush/editor/BrushEditorLayoutWidget.cpp" line="1281"/>
+        <location filename="../src/features/brush/editor/BrushEditorLayoutWidget.cpp" line="1273"/>
         <source>Brush name</source>
         <translation>Название кисти</translation>
     </message>
     <message>
-        <location filename="../src/features/brush/editor/BrushEditorLayoutWidget.cpp" line="1285"/>
+        <location filename="../src/features/brush/editor/BrushEditorLayoutWidget.cpp" line="1277"/>
         <source>Reset</source>
         <translation>Сбросить</translation>
     </message>
     <message>
-        <location filename="../src/features/brush/editor/BrushEditorLayoutWidget.cpp" line="1292"/>
+        <location filename="../src/features/brush/editor/BrushEditorLayoutWidget.cpp" line="1284"/>
         <source>Save</source>
         <translation>Сохранить</translation>
     </message>
     <message>
-        <location filename="../src/features/brush/editor/BrushEditorLayoutWidget.cpp" line="1309"/>
+        <location filename="../src/features/brush/editor/BrushEditorLayoutWidget.cpp" line="1301"/>
         <source>Brush Preview</source>
         <translation>Превью кисти</translation>
     </message>
     <message>
-        <location filename="../src/features/brush/editor/BrushEditorLayoutWidget.cpp" line="1417"/>
-        <location filename="../src/features/brush/editor/BrushEditorLayoutWidget.cpp" line="1543"/>
-        <location filename="../src/features/brush/editor/BrushEditorLayoutWidget.cpp" line="1664"/>
+        <location filename="../src/features/brush/editor/BrushEditorLayoutWidget.cpp" line="1409"/>
+        <location filename="../src/features/brush/editor/BrushEditorLayoutWidget.cpp" line="1535"/>
+        <location filename="../src/features/brush/editor/BrushEditorLayoutWidget.cpp" line="1656"/>
         <source>Image</source>
         <translation>Изображение</translation>
     </message>
     <message>
-        <location filename="../src/features/brush/editor/BrushEditorLayoutWidget.cpp" line="1416"/>
-        <location filename="../src/features/brush/editor/BrushEditorLayoutWidget.cpp" line="1544"/>
+        <location filename="../src/features/brush/editor/BrushEditorLayoutWidget.cpp" line="1408"/>
+        <location filename="../src/features/brush/editor/BrushEditorLayoutWidget.cpp" line="1536"/>
         <source>Procedural</source>
         <translation>Процедурная</translation>
     </message>
     <message>
-        <location filename="../src/features/brush/editor/BrushEditorLayoutWidget.cpp" line="1481"/>
+        <location filename="../src/features/brush/editor/BrushEditorLayoutWidget.cpp" line="1473"/>
         <source>Image-based brush textures will be available in upcoming releases of Ruwa.</source>
         <translation>Текстуры кистей на основе изображений появятся в следующих версиях Ruwa.</translation>
     </message>
     <message>
-        <location filename="../src/features/brush/editor/BrushEditorLayoutWidget.cpp" line="1545"/>
+        <location filename="../src/features/brush/editor/BrushEditorLayoutWidget.cpp" line="1537"/>
         <source>Text</source>
         <translation>Текст</translation>
     </message>
     <message>
-        <location filename="../src/features/brush/editor/BrushEditorLayoutWidget.cpp" line="1579"/>
+        <location filename="../src/features/brush/editor/BrushEditorLayoutWidget.cpp" line="1571"/>
         <source>Select Dab Image</source>
         <translation>Выбрать изображение отпечатка</translation>
     </message>
     <message>
-        <location filename="../src/features/brush/editor/BrushEditorLayoutWidget.cpp" line="1583"/>
+        <location filename="../src/features/brush/editor/BrushEditorLayoutWidget.cpp" line="1575"/>
         <source>No image loaded</source>
         <translation>Изображение не загружено</translation>
     </message>
     <message>
-        <location filename="../src/features/brush/editor/BrushEditorLayoutWidget.cpp" line="1583"/>
+        <location filename="../src/features/brush/editor/BrushEditorLayoutWidget.cpp" line="1575"/>
         <source>Click to load a dab image or drop one here</source>
         <translation>Нажмите, чтобы загрузить изображение отпечатка, или перетащите его сюда</translation>
     </message>
     <message>
-        <location filename="../src/features/brush/editor/BrushEditorLayoutWidget.cpp" line="1595"/>
+        <location filename="../src/features/brush/editor/BrushEditorLayoutWidget.cpp" line="1587"/>
         <source>or</source>
         <translation>или</translation>
     </message>
     <message>
-        <location filename="../src/features/brush/editor/BrushEditorLayoutWidget.cpp" line="1601"/>
+        <location filename="../src/features/brush/editor/BrushEditorLayoutWidget.cpp" line="1593"/>
         <source>Circle</source>
         <translation>Круг</translation>
     </message>
     <message>
-        <location filename="../src/features/brush/editor/BrushEditorLayoutWidget.cpp" line="1630"/>
+        <location filename="../src/features/brush/editor/BrushEditorLayoutWidget.cpp" line="1622"/>
         <source>X Scale</source>
         <translation>Масштаб по X</translation>
     </message>
     <message>
-        <location filename="../src/features/brush/editor/BrushEditorLayoutWidget.cpp" line="1632"/>
+        <location filename="../src/features/brush/editor/BrushEditorLayoutWidget.cpp" line="1624"/>
         <source>Y Scale</source>
         <translation>Масштаб по Y</translation>
     </message>
     <message>
-        <location filename="../src/features/brush/editor/BrushEditorLayoutWidget.cpp" line="1634"/>
+        <location filename="../src/features/brush/editor/BrushEditorLayoutWidget.cpp" line="1626"/>
         <source>Rotation</source>
         <translation>Поворот</translation>
     </message>
     <message>
-        <location filename="../src/features/brush/editor/BrushEditorLayoutWidget.cpp" line="1643"/>
+        <location filename="../src/features/brush/editor/BrushEditorLayoutWidget.cpp" line="1635"/>
         <source>Transform</source>
         <translation>Трансформация</translation>
     </message>
     <message>
-        <location filename="../src/features/brush/editor/BrushEditorLayoutWidget.cpp" line="1651"/>
+        <location filename="../src/features/brush/editor/BrushEditorLayoutWidget.cpp" line="1643"/>
         <source>Threshold</source>
         <translation>Порог</translation>
     </message>
     <message>
-        <location filename="../src/features/brush/editor/BrushEditorLayoutWidget.cpp" line="1653"/>
+        <location filename="../src/features/brush/editor/BrushEditorLayoutWidget.cpp" line="1645"/>
         <source>Compression</source>
         <translation>Сжатие</translation>
     </message>
     <message>
-        <location filename="../src/features/brush/editor/BrushEditorLayoutWidget.cpp" line="1655"/>
+        <location filename="../src/features/brush/editor/BrushEditorLayoutWidget.cpp" line="1647"/>
         <source>Interpolation</source>
         <translation>Интерполяция</translation>
     </message>
     <message>
-        <location filename="../src/features/brush/editor/BrushEditorLayoutWidget.cpp" line="1656"/>
+        <location filename="../src/features/brush/editor/BrushEditorLayoutWidget.cpp" line="1648"/>
         <source>Bilinear</source>
         <translation>Билинейная</translation>
     </message>
     <message>
-        <location filename="../src/features/brush/editor/BrushEditorLayoutWidget.cpp" line="1656"/>
+        <location filename="../src/features/brush/editor/BrushEditorLayoutWidget.cpp" line="1648"/>
         <source>Nearest</source>
         <translation>Ближайшая</translation>
     </message>
     <message>
-        <location filename="../src/features/brush/editor/BrushEditorLayoutWidget.cpp" line="1480"/>
-        <location filename="../src/features/brush/editor/BrushEditorLayoutWidget.cpp" line="1682"/>
-        <location filename="../src/features/brush/editor/BrushEditorLayoutWidget.cpp" line="1686"/>
+        <location filename="../src/features/brush/editor/BrushEditorLayoutWidget.cpp" line="1472"/>
+        <location filename="../src/features/brush/editor/BrushEditorLayoutWidget.cpp" line="1674"/>
+        <location filename="../src/features/brush/editor/BrushEditorLayoutWidget.cpp" line="1678"/>
         <source>Coming in a future version</source>
         <translation>Появится в будущей версии</translation>
     </message>
     <message>
-        <location filename="../src/features/brush/editor/BrushEditorLayoutWidget.cpp" line="1683"/>
+        <location filename="../src/features/brush/editor/BrushEditorLayoutWidget.cpp" line="1675"/>
         <source>Procedural dab generation will be available in upcoming releases of Ruwa.</source>
         <translation>Процедурная генерация отпечатков появится в будущих версиях Ruwa.</translation>
     </message>
     <message>
-        <location filename="../src/features/brush/editor/BrushEditorLayoutWidget.cpp" line="1687"/>
+        <location filename="../src/features/brush/editor/BrushEditorLayoutWidget.cpp" line="1679"/>
         <source>Text-based dab rendering will be available in upcoming releases of Ruwa.</source>
         <translation>Отрисовка отпечатков на основе текста появится в будущих версиях Ruwa.</translation>
     </message>
     <message>
-        <location filename="../src/features/brush/editor/BrushEditorLayoutWidget.cpp" line="2348"/>
+        <location filename="../src/features/brush/editor/BrushEditorLayoutWidget.cpp" line="2340"/>
         <source>Remove Pack</source>
         <translation>Удалить набор</translation>
     </message>
     <message>
-        <location filename="../src/features/brush/editor/BrushEditorLayoutWidget.cpp" line="2355"/>
+        <location filename="../src/features/brush/editor/BrushEditorLayoutWidget.cpp" line="2347"/>
         <source>Import Brushes Here</source>
         <translation>Импортировать кисти сюда</translation>
     </message>
     <message>
-        <location filename="../src/features/brush/editor/BrushEditorLayoutWidget.cpp" line="2361"/>
-        <location filename="../src/features/brush/editor/BrushEditorLayoutWidget.cpp" line="2947"/>
-        <location filename="../src/features/brush/editor/BrushEditorLayoutWidget.cpp" line="2952"/>
-        <location filename="../src/features/brush/editor/BrushEditorLayoutWidget.cpp" line="2961"/>
+        <location filename="../src/features/brush/editor/BrushEditorLayoutWidget.cpp" line="2353"/>
+        <location filename="../src/features/brush/editor/BrushEditorLayoutWidget.cpp" line="2939"/>
+        <location filename="../src/features/brush/editor/BrushEditorLayoutWidget.cpp" line="2944"/>
+        <location filename="../src/features/brush/editor/BrushEditorLayoutWidget.cpp" line="2953"/>
         <source>Export Pack</source>
         <translation>Экспорт набора</translation>
     </message>
     <message>
-        <location filename="../src/features/brush/editor/BrushEditorLayoutWidget.cpp" line="2368"/>
+        <location filename="../src/features/brush/editor/BrushEditorLayoutWidget.cpp" line="2360"/>
         <source>Empty pack</source>
         <translation>Пустой набор</translation>
     </message>
     <message>
-        <location filename="../src/features/brush/editor/BrushEditorLayoutWidget.cpp" line="2370"/>
+        <location filename="../src/features/brush/editor/BrushEditorLayoutWidget.cpp" line="2362"/>
         <source>Pack</source>
         <translation>Набор</translation>
     </message>
     <message>
-        <location filename="../src/features/brush/editor/BrushEditorLayoutWidget.cpp" line="2398"/>
-        <location filename="../src/features/brush/editor/BrushEditorLayoutWidget.cpp" line="2921"/>
-        <location filename="../src/features/brush/editor/BrushEditorLayoutWidget.cpp" line="2931"/>
+        <location filename="../src/features/brush/editor/BrushEditorLayoutWidget.cpp" line="2390"/>
+        <location filename="../src/features/brush/editor/BrushEditorLayoutWidget.cpp" line="2913"/>
+        <location filename="../src/features/brush/editor/BrushEditorLayoutWidget.cpp" line="2923"/>
         <source>Export Brush</source>
         <translation>Экспорт кисти</translation>
     </message>
     <message>
-        <location filename="../src/features/brush/editor/BrushEditorLayoutWidget.cpp" line="2788"/>
-        <location filename="../src/features/brush/editor/BrushEditorLayoutWidget.cpp" line="2812"/>
-        <location filename="../src/features/brush/editor/BrushEditorLayoutWidget.cpp" line="2825"/>
-        <location filename="../src/features/brush/editor/BrushEditorLayoutWidget.cpp" line="2854"/>
-        <location filename="../src/features/brush/editor/BrushEditorLayoutWidget.cpp" line="2859"/>
-        <location filename="../src/features/brush/editor/BrushEditorLayoutWidget.cpp" line="2877"/>
-        <location filename="../src/features/brush/editor/BrushEditorLayoutWidget.cpp" line="2890"/>
+        <location filename="../src/features/brush/editor/BrushEditorLayoutWidget.cpp" line="2780"/>
+        <location filename="../src/features/brush/editor/BrushEditorLayoutWidget.cpp" line="2804"/>
+        <location filename="../src/features/brush/editor/BrushEditorLayoutWidget.cpp" line="2817"/>
+        <location filename="../src/features/brush/editor/BrushEditorLayoutWidget.cpp" line="2846"/>
+        <location filename="../src/features/brush/editor/BrushEditorLayoutWidget.cpp" line="2851"/>
+        <location filename="../src/features/brush/editor/BrushEditorLayoutWidget.cpp" line="2869"/>
+        <location filename="../src/features/brush/editor/BrushEditorLayoutWidget.cpp" line="2882"/>
         <source>Import Brushes</source>
         <translation>Импорт кистей</translation>
     </message>
     <message>
-        <location filename="../src/features/brush/editor/BrushEditorLayoutWidget.cpp" line="2788"/>
-        <location filename="../src/features/brush/editor/BrushEditorLayoutWidget.cpp" line="2854"/>
+        <location filename="../src/features/brush/editor/BrushEditorLayoutWidget.cpp" line="2780"/>
+        <location filename="../src/features/brush/editor/BrushEditorLayoutWidget.cpp" line="2846"/>
         <source>Brush import is already running.</source>
         <translation>Импорт кистей уже выполняется.</translation>
     </message>
     <message>
-        <location filename="../src/features/brush/editor/BrushEditorLayoutWidget.cpp" line="2793"/>
+        <location filename="../src/features/brush/editor/BrushEditorLayoutWidget.cpp" line="2785"/>
         <source>Import Brush Pack</source>
         <translation>Импорт набора кистей</translation>
     </message>
     <message>
-        <location filename="../src/features/brush/editor/BrushEditorLayoutWidget.cpp" line="2947"/>
+        <location filename="../src/features/brush/editor/BrushEditorLayoutWidget.cpp" line="2939"/>
         <source>There are no brushes to export.</source>
         <translation>Нет кистей для экспорта.</translation>
     </message>
@@ -4990,22 +5033,22 @@ Ruwa использует фреймворк Qt (версия %1), динами�
         <translation>Не удалось импортировать макет.</translation>
     </message>
     <message>
-        <location filename="../src/shell/main-window/MainWindow.cpp" line="861"/>
+        <location filename="../src/shell/main-window/MainWindow.cpp" line="867"/>
         <source>Dropped image</source>
         <translation>Перетащенное изображение</translation>
     </message>
     <message>
-        <location filename="../src/shell/main-window/MainWindow.cpp" line="1172"/>
+        <location filename="../src/shell/main-window/MainWindow.cpp" line="1178"/>
         <source>Images (%1)</source>
         <translation>Изображения (%1)</translation>
     </message>
     <message>
-        <location filename="../src/shell/main-window/MainWindow.cpp" line="1172"/>
+        <location filename="../src/shell/main-window/MainWindow.cpp" line="1178"/>
         <source>All Files (*)</source>
         <translation>Все файлы (*)</translation>
     </message>
     <message>
-        <location filename="../src/shell/main-window/MainWindow.cpp" line="1175"/>
+        <location filename="../src/shell/main-window/MainWindow.cpp" line="1181"/>
         <source>Import images</source>
         <translation>Импорт изображений</translation>
     </message>
@@ -5114,58 +5157,58 @@ Ruwa использует фреймворк Qt (версия %1), динами�
 <context>
     <name>ruwa::ui::workspace::CanvasPanel</name>
     <message>
-        <location filename="../src/features/canvas/ui/CanvasPanel.cpp" line="508"/>
+        <location filename="../src/features/canvas/ui/CanvasPanel.cpp" line="501"/>
         <source>Parameters for transform mode are not available yet.</source>
         <translation>Параметры для режима трансформации пока недоступны.</translation>
     </message>
     <message>
-        <location filename="../src/features/canvas/ui/CanvasPanel.cpp" line="515"/>
+        <location filename="../src/features/canvas/ui/CanvasPanel.cpp" line="508"/>
         <source>Parameters for this canvas mode are not available yet.</source>
         <translation>Параметры для этого режима холста пока недоступны.</translation>
     </message>
     <message>
-        <location filename="../src/features/canvas/ui/CanvasPanel.cpp" line="2256"/>
+        <location filename="../src/features/canvas/ui/CanvasPanel.cpp" line="2305"/>
         <source>Pasted</source>
         <translation>Вставленное</translation>
     </message>
     <message>
-        <location filename="../src/features/canvas/ui/CanvasPanel.cpp" line="2389"/>
+        <location filename="../src/features/canvas/ui/CanvasPanel.cpp" line="2438"/>
         <source>Select Layer Below</source>
         <translation>Выбрать слой ниже</translation>
     </message>
     <message>
-        <location filename="../src/features/canvas/ui/CanvasPanel.cpp" line="2396"/>
+        <location filename="../src/features/canvas/ui/CanvasPanel.cpp" line="2445"/>
         <source>OK</source>
         <translation>ОК</translation>
     </message>
     <message>
-        <location filename="../src/features/canvas/ui/CanvasPanel.cpp" line="2400"/>
+        <location filename="../src/features/canvas/ui/CanvasPanel.cpp" line="2449"/>
         <source>The selected group cannot be drawn on. Select the layer below instead?</source>
         <translation>На выбранной группе нельзя рисовать. Выбрать слой ниже?</translation>
     </message>
     <message>
-        <location filename="../src/features/canvas/ui/CanvasPanel.cpp" line="2401"/>
+        <location filename="../src/features/canvas/ui/CanvasPanel.cpp" line="2450"/>
         <source>The selected group cannot be drawn on, and there is no drawable raster layer below it.</source>
         <translation>На выбранной группе нельзя рисовать, и ниже нет растрового слоя для рисования.</translation>
     </message>
     <message>
-        <location filename="../src/features/canvas/ui/CanvasPanel.cpp" line="2410"/>
+        <location filename="../src/features/canvas/ui/CanvasPanel.cpp" line="2459"/>
         <source>The Background layer cannot be drawn on. Create a new empty layer above it?</source>
         <translation>На слое фона нельзя рисовать. Создать новый пустой слой над ним?</translation>
     </message>
     <message>
-        <location filename="../src/features/canvas/ui/CanvasPanel.cpp" line="2388"/>
-        <location filename="../src/features/canvas/ui/CanvasPanel.cpp" line="2411"/>
+        <location filename="../src/features/canvas/ui/CanvasPanel.cpp" line="2437"/>
+        <location filename="../src/features/canvas/ui/CanvasPanel.cpp" line="2460"/>
         <source>Cancel</source>
         <translation>Отмена</translation>
     </message>
     <message>
-        <location filename="../src/features/canvas/ui/CanvasPanel.cpp" line="2412"/>
+        <location filename="../src/features/canvas/ui/CanvasPanel.cpp" line="2461"/>
         <source>Create New Layer</source>
         <translation>Создать новый слой</translation>
     </message>
     <message>
-        <location filename="../src/features/canvas/ui/CanvasPanel.cpp" line="2416"/>
+        <location filename="../src/features/canvas/ui/CanvasPanel.cpp" line="2465"/>
         <source>Layer</source>
         <translation>Слой</translation>
     </message>
@@ -5211,12 +5254,12 @@ Ruwa использует фреймворк Qt (версия %1), динами�
         <translation>Экспорт холста</translation>
     </message>
     <message>
-        <location filename="../src/features/canvas/ui/CanvasPanelGLContentCreation.cpp" line="150"/>
+        <location filename="../src/features/canvas/ui/CanvasPanelGLContentCreation.cpp" line="164"/>
         <source>Yes</source>
         <translation>Да</translation>
     </message>
     <message>
-        <location filename="../src/features/canvas/ui/CanvasPanelGLContentCreation.cpp" line="150"/>
+        <location filename="../src/features/canvas/ui/CanvasPanelGLContentCreation.cpp" line="164"/>
         <source>No</source>
         <translation>Нет</translation>
     </message>
