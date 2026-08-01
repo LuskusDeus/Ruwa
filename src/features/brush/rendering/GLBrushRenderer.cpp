@@ -204,6 +204,33 @@ GLsizei computeSmudgeReservoirLogicalSize(const TileBrush& brush)
     return std::max<GLsizei>(side, 4);
 }
 
+// Dither offset handed to the stamp shaders, in [0, 1).
+//
+// GL_MAX runs must pass 0: a per-pixel-constant rounding offset keeps the
+// quantizer monotone, so dithering every dab is exactly dithering their union
+// and overlap picks up no bias. src-over runs blend a dithered SOURCE into the
+// tile once per write, so they need an offset that differs between writes —
+// with a fixed one the same pixels round the same way N times and a ±0.5 LSB
+// rounding grows into several LSB of fixed-pattern noise along the stroke.
+// Seeding from the dab's world position rather than a loop counter keeps the
+// result stable across stroke replays and partial rebuilds.
+float dabDitherSeed(bool useMaxBlend, float worldX, float worldY)
+{
+    if (useMaxBlend) {
+        return 0.0f;
+    }
+    // R2 low-discrepancy constants: consecutive dabs land far apart in [0, 1).
+    const float raw = worldX * 0.7548776662f + worldY * 0.5698402909f;
+    return raw - std::floor(raw);
+}
+
+// The stroke buffer only quantizes on 8-bit documents; 16F/32F tiles hold the
+// ramp at full precision and must not be forced onto the 1/255 grid.
+int quantizeTo8BitFlag(const TileGrid& strokeBuffer)
+{
+    return strokeBuffer.format() == TilePixelFormat::RGBA8 ? 1 : 0;
+}
+
 // Two geometries share one program:
 //   uInstancedDabs == 0 — a single quad spanning uQuadMin..uQuadMax, and the
 //     fragment stage walks all uDabCount dabs. Accumulation happens in float
@@ -268,12 +295,29 @@ const QString kBatchRebuildFrag = QStringLiteral(
     "uniform float uTextureBlend;\n"
     "uniform float uTextureAmount;\n"
     "uniform float uInvTileSize;\n"
+    "uniform vec2  uTileOriginPx;\n"
+    "uniform int   uQuantizeTo8Bit;\n"
+    "uniform float uDitherSeed;\n"
     "in vec2 fragPixelCoord;\n"
     // >= 0 when the vertex stage emitted one quad per dab: evaluate only that
     // dab and let the hardware blend. -1 for the single-quad geometry, where
     // the whole uDabCount run is accumulated here in float.
     "flat in int fragDabIndex;\n"
     "out vec4 outColor;\n"
+    // Quantization-aware dither for the 8-bit stroke buffer — see the long
+    // rationale on ditherPremultiplied in brush_stamp.frag.glsl; keep the two
+    // in step. uDitherSeed is 0 for GL_MAX runs (a per-pixel-constant offset
+    // makes the quantizer monotone, so it commutes with max) and varies per
+    // src-over write, where the tile is blended into once per chunk.
+    "vec4 ditherPremultiplied(vec4 color, vec2 worldPixelCoord) {\n"
+    "    if (uQuantizeTo8Bit == 0 || color.a <= 0.0) return color;\n"
+    "    float n = fract(52.9829189\n"
+    "        * fract(dot(floor(worldPixelCoord), vec2(0.06711056, 0.00583715)) + uDitherSeed));\n"
+    "    color.rgb = floor(color.rgb * 255.0 + n) / 255.0;\n"
+    "    color.a = floor(color.a * 255.0 + n) / 255.0;\n"
+    "    color.rgb = min(color.rgb, vec3(color.a));\n"
+    "    return color;\n"
+    "}\n"
     "float hardnessFalloff(float edgeDistance, float hardness) {\n"
     "    hardness = clamp(hardness, 0.0, 1.0);\n"
     "    float softness = max(1.0 - hardness, 0.0);\n"
@@ -383,7 +427,7 @@ const QString kBatchRebuildFrag = QStringLiteral(
     "            if (src.a > accum.a) accum = src;\n"
     "        }\n"
     "    }\n"
-    "    outColor = accum;\n"
+    "    outColor = ditherPremultiplied(accum, uTileOriginPx + fragPixelCoord);\n"
     "}\n");
 
 const QString kBrushStampVert
@@ -1515,8 +1559,24 @@ Result<void> GLBrushRenderer::initialize(const QString& shaderDir)
         "uniform int uClipMaskAsAlphaCap;\n"
         "uniform vec4 uBackdropColor;\n"
         "uniform vec2 uTileWorldOrigin;\n"
+        "uniform int uQuantizeTo8Bit;\n"
         "in vec2 fragTexCoord;\n"
         "out vec4 outColor;\n"
+        // Flatten is where the stroke's alpha ramp becomes permanent layer
+        // pixels, and every branch below multiplies it by the stroke opacity
+        // before the 8-bit write — which lands neighbouring ramp values on the
+        // same level and re-creates contours even from an already-dithered
+        // stroke buffer. Dither the final value here too, same quantization-
+        // aware rounding as the stamp shaders.
+        "vec4 ditherPremultiplied(vec4 color, vec2 worldPixelCoord) {\n"
+        "    if (uQuantizeTo8Bit == 0 || color.a <= 0.0) return color;\n"
+        "    float n = fract(52.9829189\n"
+        "        * fract(dot(floor(worldPixelCoord), vec2(0.06711056, 0.00583715))));\n"
+        "    color.rgb = floor(color.rgb * 255.0 + n) / 255.0;\n"
+        "    color.a = floor(color.a * 255.0 + n) / 255.0;\n"
+        "    color.rgb = min(color.rgb, vec3(color.a));\n"
+        "    return color;\n"
+        "}\n"
         "const vec3 kLumWeights = vec3(0.299, 0.587, 0.114);\n"
         "float lum(vec3 c) { return dot(c, kLumWeights); }\n"
         "float sat(vec3 c) { return max(c.r, max(c.g, c.b)) - min(c.r, min(c.g, c.b)); }\n"
@@ -1590,7 +1650,9 @@ Result<void> GLBrushRenderer::initialize(const QString& shaderDir)
         "    float r = float(hashPixel(uvec2(p)) & 0x00ffffffu) / 16777215.0;\n"
         "    return (r <= a) ? 1.0 : 0.0;\n"
         "}\n"
-        "void main() {\n"
+        // Writes outColor and returns early in a dozen places; main() below
+        // wraps it so the dither sits on the one value that reaches the tile.
+        "void flattenBody() {\n"
         "    float opacity = clamp(uStrokeOpacity, 0.0, 1.0);\n"
         "    vec4 src = texture(uSrcTexture, fragTexCoord);\n"
         "    float maskA = 1.0;\n"
@@ -1645,6 +1707,11 @@ Result<void> GLBrushRenderer::initialize(const QString& shaderDir)
         "    vec3 co = as * strokeColor + (1.0 - as) * dst.rgb;\n"
         "    float ao = as + ad * (1.0 - as);\n"
         "    outColor = vec4(clamp(co, vec3(0.0), vec3(ao)), ao);\n"
+        "}\n"
+        "void main() {\n"
+        "    flattenBody();\n"
+        "    outColor = ditherPremultiplied(\n"
+        "        outColor, uTileWorldOrigin + fragTexCoord * vec2(textureSize(uSrcTexture, 0)));\n"
         "}\n");
 
     m_flattenProgram = std::make_unique<GLShaderProgram>(m_gl);
@@ -2790,6 +2857,8 @@ void GLBrushRenderer::stampGPU(TileGrid& strokeBuffer, GLTileRenderer* tileRende
     prog->setUniform("uBrushAngleRad", angleDegrees * (3.14159265358979323846f / 180.0f));
     prog->setUniform("uBrushAlpha", alpha);
     prog->setUniform("uBrushColorRGB", colorR, colorG, colorB);
+    prog->setUniform("uQuantizeTo8Bit", quantizeTo8BitFlag(strokeBuffer));
+    prog->setUniform("uDitherSeed", dabDitherSeed(useMaxBlend, worldX, worldY));
 
     const bool useTexture = brush.usesProceduralTexture();
     const bool useDabShape = (brush.dabType() > 0);
@@ -2905,6 +2974,7 @@ void GLBrushRenderer::stampGPU(TileGrid& strokeBuffer, GLTileRenderer* tileRende
             prog->setUniform("uBrushCenter", localCenterX, localCenterY);
             prog->setUniform("uQuadMin", quadMinX, quadMinY);
             prog->setUniform("uQuadMax", quadMaxX, quadMaxY);
+            prog->setUniform("uTileOriginPx", tileOriginX, tileOriginY);
 
             m_gl->glDrawArrays(GL_TRIANGLES, 0, 6);
             ++m_drawCallEstimate;
@@ -3033,6 +3103,7 @@ bool GLBrushRenderer::stampDabSegmentGPU(TileGrid& strokeBuffer, GLTileRenderer*
     m_rebuildBatchProgram->setUniform("uTextureAmount", brush.textureAmount());
     m_rebuildBatchProgram->setUniform("uDabShapeScale", brush.dabXScale(), brush.dabYScale());
     m_rebuildBatchProgram->setUniform("uInvTileSize", 1.0f / static_cast<float>(TILE_SIZE));
+    m_rebuildBatchProgram->setUniform("uQuantizeTo8Bit", quantizeTo8BitFlag(strokeBuffer));
 
     if (useDabShape) {
         m_rebuildBatchProgram->setUniform("uDabShapeTexture", 3);
@@ -3235,6 +3306,7 @@ void GLBrushRenderer::rebuildStrokeBufferFromDabsGPU(TileGrid& strokeBuffer,
     m_rebuildBatchProgram->setUniform("uTextureAmount", brush.textureAmount());
     m_rebuildBatchProgram->setUniform("uDabShapeScale", brush.dabXScale(), brush.dabYScale());
     m_rebuildBatchProgram->setUniform("uInvTileSize", 1.0f / static_cast<float>(TILE_SIZE));
+    m_rebuildBatchProgram->setUniform("uQuantizeTo8Bit", quantizeTo8BitFlag(strokeBuffer));
     m_rebuildBatchProgram->setUniform("uQuadMin", 0.0f, 0.0f);
     m_rebuildBatchProgram->setUniform(
         "uQuadMax", static_cast<float>(TILE_SIZE), static_cast<float>(TILE_SIZE));
@@ -3473,6 +3545,7 @@ void GLBrushRenderer::rebuildStrokeBufferRangeFromDabsGPU(TileGrid& strokeBuffer
     m_rebuildBatchProgram->setUniform("uTextureAmount", brush.textureAmount());
     m_rebuildBatchProgram->setUniform("uDabShapeScale", brush.dabXScale(), brush.dabYScale());
     m_rebuildBatchProgram->setUniform("uInvTileSize", 1.0f / static_cast<float>(TILE_SIZE));
+    m_rebuildBatchProgram->setUniform("uQuantizeTo8Bit", quantizeTo8BitFlag(strokeBuffer));
     m_rebuildBatchProgram->setUniform("uQuadMin", 0.0f, 0.0f);
     m_rebuildBatchProgram->setUniform(
         "uQuadMax", static_cast<float>(TILE_SIZE), static_cast<float>(TILE_SIZE));
@@ -3657,6 +3730,7 @@ std::unordered_set<TileKey, TileKeyHash> GLBrushRenderer::flattenStrokeGPU(TileG
     m_flattenProgram->setUniform("uDstTexture", 2);
     m_flattenProgram->setUniform("uFinalSourceMaskTexture", 3);
     m_flattenProgram->setUniform("uStrokeOpacity", std::clamp(strokeOpacity, 0.0f, 1.0f));
+    m_flattenProgram->setUniform("uQuantizeTo8Bit", quantizeTo8BitFlag(layerGrid));
     m_flattenProgram->setUniform("uUseFinalSourceMask", finalSourceMask ? 1 : 0);
     m_flattenProgram->setUniform("uReplaceWithBaseMix", blurMode ? 1 : 0);
     m_flattenProgram->setUniform("uUseProgrammaticBlend", programmaticStrokeBlend ? 1 : 0);
@@ -4080,6 +4154,8 @@ GLBrushRenderer::DabBatchUniforms GLBrushRenderer::resolveDabBatchUniforms() con
     uniforms.dabColor = m_gl->glGetUniformLocation(program, "uDabColor");
     uniforms.dabExtent = m_gl->glGetUniformLocation(program, "uDabExtent");
     uniforms.instancedDabs = m_gl->glGetUniformLocation(program, "uInstancedDabs");
+    uniforms.tileOriginPx = m_gl->glGetUniformLocation(program, "uTileOriginPx");
+    uniforms.ditherSeed = m_gl->glGetUniformLocation(program, "uDitherSeed");
     return uniforms;
 }
 
@@ -4091,6 +4167,8 @@ void GLBrushRenderer::renderDabBatchForTile(const TileBrush& brush,
     std::vector<float>& centers = scratch.centers;
     std::vector<float>& params = scratch.params;
     std::vector<float>& colors = scratch.colors;
+
+    m_gl->glUniform2f(uniforms.tileOriginPx, tileOriginX, tileOriginY);
 
     size_t cursor = 0;
     while (cursor < indices.size()) {
@@ -4145,6 +4223,15 @@ void GLBrushRenderer::renderDabBatchForTile(const TileBrush& brush,
                 m_gl->glBlendEquation(GL_FUNC_ADD);
                 m_gl->glBlendFunc(GL_ONE, GL_ONE_MINUS_SRC_ALPHA);
             }
+
+            // One dither offset per draw: a max run keeps 0 (monotone, so it
+            // commutes with GL_MAX), while a src-over chunk — which the shader
+            // accumulates in float and writes to the tile exactly once — takes
+            // the offset of its leading dab so consecutive chunks round
+            // independently instead of stacking the same error.
+            const TileBrush::DabPoint& seedDab = dabs[indices[runCursor]];
+            m_gl->glUniform1f(uniforms.ditherSeed,
+                dabDitherSeed(blendAsMax, seedDab.worldX, seedDab.worldY));
 
             for (size_t i = 0; i < chunkCount; ++i) {
                 const TileBrush::DabPoint& dab = dabs[indices[runCursor + i]];

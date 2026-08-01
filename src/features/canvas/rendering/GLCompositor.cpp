@@ -1144,6 +1144,19 @@ void GLCompositor::blendPass(const BlendPassParams& p)
     tileWorldOrigin(p.key, tileOriginX, tileOriginY);
     m_compositeProgram->setUniform("uTileWorldOrigin", tileOriginX, tileOriginY);
 
+    // The ping-pong and cache tiles are kDefaultTileFormat, so the composite
+    // target is 8-bit even for a 16F/32F document.
+    m_compositeProgram->setUniform(
+        "uQuantizeTo8Bit", kDefaultTileFormat == TilePixelFormat::RGBA8 ? 1 : 0);
+    if (!(p.key == m_ditherPassKey)) {
+        m_ditherPassKey = p.key;
+        m_ditherPassIndex = 0;
+    }
+    // Golden-ratio step: consecutive passes land far apart in [0, 1) after the
+    // shader's fract, so their rounding errors cancel rather than accumulate.
+    m_compositeProgram->setUniform(
+        "uDitherSeed", static_cast<float>(m_ditherPassIndex++) * 0.6180339887f);
+
     m_gl->glBindTextureUnit(0, p.baseTex);
 
     m_gl->glBindTextureUnit(1, p.srcTex);

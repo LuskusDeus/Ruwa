@@ -33,10 +33,44 @@ uniform float uTextureDepth;
 uniform float uTextureBlend;
 uniform float uTextureAmount;
 uniform float uInvTileSize;
+uniform vec2  uTileOriginPx;    // tile origin in document pixels (dither seed)
+uniform int   uQuantizeTo8Bit;  // 1 when the stroke buffer is RGBA8
+uniform float uDitherSeed;      // [0,1) — see ditherPremultiplied
 
 in vec2 fragPixelCoord;       // tile-local pixel position (from vertex shader)
 
 out vec4 outColor;
+
+// Quantization-aware dither for the 8-bit stroke buffer. The noise is a
+// rounding OFFSET, not an additive perturbation: floor(v*255 + n)/255 keeps 0.0
+// and 1.0 exact — an empty pixel stays empty and an opaque core stays opaque —
+// and is unbiased in between, so only the falloff ramp is touched. The offset
+// is seeded from document-space pixel coords, so the pattern is pinned to the
+// canvas and does not crawl when a tile is re-rendered.
+//
+// uDitherSeed decorrelates the offset between dabs and is chosen by the
+// renderer:
+//   * 0 for GL_MAX runs. A per-pixel-constant offset makes the quantizer
+//     monotone at that pixel, so max(q(a), q(b)) == q(max(a, b)): dithering
+//     every dab is exactly dithering their union, with no bias on overlap.
+//   * per-dab for src-over runs, where the hardware blends our dithered SOURCE
+//     into the tile once per dab. A fixed offset would nudge the same pixels
+//     the same way N times and grow a ±0.5 LSB rounding into several LSB of
+//     fixed-pattern noise; independent offsets cancel instead of accumulate.
+// Duplicated in kBatchRebuildFrag (GLBrushRenderer.cpp); keep the two in step.
+vec4 ditherPremultiplied(vec4 color, vec2 worldPixelCoord) {
+    if (uQuantizeTo8Bit == 0 || color.a <= 0.0) {
+        return color;
+    }
+    float n = fract(52.9829189
+        * fract(dot(floor(worldPixelCoord), vec2(0.06711056, 0.00583715)) + uDitherSeed));
+    color.rgb = floor(color.rgb * 255.0 + n) / 255.0;
+    color.a = floor(color.a * 255.0 + n) / 255.0;
+    // rgb is alpha scaled by factors <= 1, so the shared offset cannot round it
+    // above alpha; re-assert the premultiplied invariant anyway.
+    color.rgb = min(color.rgb, vec3(color.a));
+    return color;
+}
 
 float hardnessFalloff(float edgeDistance, float hardness) {
     hardness = clamp(hardness, 0.0, 1.0);
@@ -135,7 +169,8 @@ void main() {
         if (uMaskAffectsAlpha != 0) {
             colorScale = 1.0;
         }
-        outColor = vec4(uBrushColorRGB * alpha * colorScale, alpha);
+        outColor = ditherPremultiplied(
+            vec4(uBrushColorRGB * alpha * colorScale, alpha), uTileOriginPx + fragPixelCoord);
         return;
     } else {
         float t = length(local) / uBrushRadius;
@@ -177,5 +212,6 @@ void main() {
     if (uMaskAffectsAlpha != 0) {
         colorScale = 1.0;
     }
-    outColor = vec4(uBrushColorRGB * alpha * colorScale, alpha);
+    outColor = ditherPremultiplied(
+        vec4(uBrushColorRGB * alpha * colorScale, alpha), uTileOriginPx + fragPixelCoord);
 }

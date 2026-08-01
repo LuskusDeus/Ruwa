@@ -189,6 +189,14 @@ private:
 
     void clearTexture(GLuint tex);
 
+    // Dither bookkeeping for blendPass. Each layer pass writes an 8-bit tile,
+    // so each one re-quantizes the composited ramp; the offset has to differ
+    // between passes or their rounding errors stack into a fixed pattern. The
+    // counter restarts on every new tile, which keeps a tile's composition
+    // reproducible frame to frame no matter how many tiles preceded it.
+    TileKey m_ditherPassKey { INT32_MIN, INT32_MIN };
+    uint32_t m_ditherPassIndex = 0;
+
     struct BlendPassParams {
         GLuint baseTex = 0;
         GLuint srcTex = 0;

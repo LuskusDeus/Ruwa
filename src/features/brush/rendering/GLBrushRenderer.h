@@ -174,6 +174,8 @@ private:
         GLint dabColor = -1;
         GLint dabExtent = -1;
         GLint instancedDabs = -1;
+        GLint tileOriginPx = -1;
+        GLint ditherSeed = -1;
     };
     // Reusable per-chunk upload staging, kept across tiles so a stroke segment
     // does not reallocate for every tile it touches.

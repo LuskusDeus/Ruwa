@@ -73,9 +73,33 @@ uniform float     uRadialRevealRadius;
 uniform float     uRadialRevealFeather;
 uniform vec2      uTileWorldOrigin;
 uniform vec4      uBackdropColor;
+uniform int       uQuantizeTo8Bit; // 1 when the composite target is RGBA8
+uniform float     uDitherSeed;     // decorrelates the offset between passes
 
 in vec2 fragTexCoord;
 out vec4 outColor;
+
+// Quantization-aware dither for the 8-bit composite target — the same rounding
+// offset the brush stamp and flatten shaders use (see brush_stamp.frag.glsl).
+//
+// Each layer is one pass writing an 8-bit tile, so a smooth alpha ramp gets
+// re-quantized once per pass — every `mix(base, src, opacity)` snaps
+// neighbouring ramp values onto the same level and grows contours that follow
+// the composited result rather than any single stroke. Dithering here is what
+// the user actually sees while painting; the stroke buffer being clean is not
+// enough on its own. uDitherSeed varies per pass so the passes' rounding errors
+// stay independent instead of stacking into a fixed pattern.
+vec4 ditherPremultiplied(vec4 color, vec2 worldPixelCoord) {
+    if (uQuantizeTo8Bit == 0 || color.a <= 0.0) {
+        return color;
+    }
+    float n = fract(52.9829189
+        * fract(dot(floor(worldPixelCoord), vec2(0.06711056, 0.00583715)) + uDitherSeed));
+    color.rgb = floor(color.rgb * 255.0 + n) / 255.0;
+    color.a = floor(color.a * 255.0 + n) / 255.0;
+    color.rgb = min(color.rgb, vec3(color.a));
+    return color;
+}
 
 const vec3 kLumWeights = vec3(0.299, 0.587, 0.114);
 
@@ -403,7 +427,9 @@ vec4 applySelectionAlphaCap(vec4 c, float cap) {
     return vec4(clamp(c.rgb * scale, vec3(0.0), vec3(cap)), cap);
 }
 
-void main() {
+// Writes outColor and returns early in a dozen places; main() below wraps it so
+// the dither sits on the one value that actually reaches the tile.
+void compositeBody() {
     vec4 base = texture(uBaseTexture, fragTexCoord);
     vec4 src  = texture(uSrcTexture,  fragTexCoord);
     vec4 srcRaw = src;            // src before any mask reveal multiply
@@ -607,4 +633,10 @@ void main() {
         : visibleAo;
     vec3 Co = visibleCo - backdrop.rgb * (1.0 - ao);
     outColor = applySelectionAlphaCap(vec4(clamp(Co, vec3(0.0), vec3(ao)), ao), clipAlpha);
+}
+
+void main() {
+    compositeBody();
+    outColor = ditherPremultiplied(
+        outColor, uTileWorldOrigin + fragTexCoord * vec2(textureSize(uSrcTexture, 0)));
 }
