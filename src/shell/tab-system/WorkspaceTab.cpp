@@ -2682,6 +2682,8 @@ void WorkspaceTab::connectPanelSignals()
     });
     connect(m_brushesPanel, &workspace::BrushesPanel::panelStateChanged, this,
         [this]() { scheduleDockLayoutSave(); });
+    connect(m_toolsPanel, &workspace::ToolsPanel::panelStateChanged, this,
+        [this]() { scheduleDockLayoutSave(); });
     connect(m_layersPanel->layerModel(), &ruwa::core::layers::LayerModel::layersChanged, this,
         [this]() {
             if (!m_pendingNavigatorRemovedTiles.isEmpty()) {

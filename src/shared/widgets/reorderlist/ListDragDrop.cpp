@@ -18,6 +18,8 @@
 #include <QGraphicsPixmapItem>
 #include <QImage>
 
+#include <utility>
+
 namespace ruwa::ui::widgets {
 
 using namespace ruwa::ui::core;
@@ -65,6 +67,9 @@ DragGhostWidget::DragGhostWidget(QWidget* parent)
     if (!parent) {
         setWindowFlags(Qt::FramelessWindowHint | Qt::Tool | Qt::WindowStaysOnTopHint);
     }
+    m_followTimer.setInterval(12);
+    m_followTimer.setTimerType(Qt::PreciseTimer);
+    connect(&m_followTimer, &QTimer::timeout, this, &DragGhostWidget::advanceFollow);
 }
 
 void DragGhostWidget::setSnapshot(const QPixmap& pixmap)
@@ -168,6 +173,146 @@ void DragGhostWidget::setBackdropOpacity(qreal v)
         return;
     m_backdropOpacity = v;
     update();
+}
+
+void DragGhostWidget::startFollowing(const QPoint& startPos)
+{
+    if (m_transitionAnimation) {
+        m_transitionAnimation->stop();
+        m_transitionAnimation->deleteLater();
+        m_transitionAnimation = nullptr;
+    }
+    m_followPosition = startPos;
+    m_followTarget = startPos;
+    m_followVelocity = QPointF(0.0, 0.0);
+    move(startPos);
+    m_followElapsed.start();
+    if (!m_followTimer.isActive()) {
+        m_followTimer.start();
+    }
+}
+
+void DragGhostWidget::setFollowTarget(const QPoint& targetPos)
+{
+    m_followTarget = targetPos;
+    if (!m_followTimer.isActive()) {
+        m_followPosition = pos();
+        m_followVelocity = QPointF(0.0, 0.0);
+        m_followElapsed.start();
+        m_followTimer.start();
+    }
+}
+
+void DragGhostWidget::stopFollowing()
+{
+    m_followTimer.stop();
+    m_followElapsed.invalidate();
+    m_followVelocity = QPointF(0.0, 0.0);
+}
+
+void DragGhostWidget::captureBackdrop(QWidget* backdropWidget)
+{
+    if (!backdropWidget) {
+        return;
+    }
+    setBlurredBackdrop(blurPixmap(backdropWidget->grab(), 14.0));
+    setBackdropOpacity(0.0);
+
+    if (m_backdropFadeAnimation) {
+        m_backdropFadeAnimation->stop();
+    }
+    m_backdropFadeAnimation = new QPropertyAnimation(this, "backdropOpacity", this);
+    m_backdropFadeAnimation->setDuration(300);
+    m_backdropFadeAnimation->setStartValue(0.0);
+    m_backdropFadeAnimation->setEndValue(1.0);
+    m_backdropFadeAnimation->setEasingCurve(QEasingCurve::OutCubic);
+    connect(m_backdropFadeAnimation, &QPropertyAnimation::finished, this,
+        [this]() { m_backdropFadeAnimation = nullptr; });
+    m_backdropFadeAnimation->start(QAbstractAnimation::DeleteWhenStopped);
+}
+
+void DragGhostWidget::animateTo(
+    const QPoint& targetPos, Transition transition, std::function<void()> finished)
+{
+    stopFollowing();
+    if (m_backdropFadeAnimation) {
+        m_backdropFadeAnimation->stop();
+        m_backdropFadeAnimation = nullptr;
+    }
+    if (m_transitionAnimation) {
+        m_transitionAnimation->stop();
+        m_transitionAnimation->deleteLater();
+    }
+
+    const bool returning = transition == Transition::Return;
+    auto* group = new QParallelAnimationGroup(this);
+    m_transitionAnimation = group;
+
+    auto* positionAnimation = new QPropertyAnimation(this, "pos", group);
+    positionAnimation->setDuration(300);
+    positionAnimation->setEasingCurve(QEasingCurve::InOutCubic);
+    positionAnimation->setStartValue(pos());
+    positionAnimation->setEndValue(targetPos);
+    group->addAnimation(positionAnimation);
+
+    auto* opacityAnimation = new QPropertyAnimation(this, "ghostOpacity", group);
+    opacityAnimation->setDuration(returning ? 300 : 80);
+    opacityAnimation->setEasingCurve(
+        returning ? QEasingCurve::InOutCubic : QEasingCurve::OutCubic);
+    opacityAnimation->setStartValue(ghostOpacity());
+    opacityAnimation->setEndValue(returning ? 0.0 : 1.0);
+    group->addAnimation(opacityAnimation);
+
+    auto* backdropAnimation = new QPropertyAnimation(this, "backdropOpacity", group);
+    backdropAnimation->setDuration(300);
+    backdropAnimation->setEasingCurve(QEasingCurve::InOutCubic);
+    backdropAnimation->setStartValue(backdropOpacity());
+    backdropAnimation->setEndValue(0.0);
+    group->addAnimation(backdropAnimation);
+
+    auto* rotationAnimation = new QPropertyAnimation(this, "ghostRotation", group);
+    rotationAnimation->setDuration(returning ? 200 : 160);
+    rotationAnimation->setEasingCurve(QEasingCurve::OutCubic);
+    rotationAnimation->setStartValue(ghostRotation());
+    rotationAnimation->setEndValue(0.0);
+    group->addAnimation(rotationAnimation);
+
+    connect(group, &QParallelAnimationGroup::finished, this,
+        [this, finished = std::move(finished)]() mutable {
+            m_transitionAnimation = nullptr;
+            if (finished) {
+                finished();
+            }
+        });
+    group->start(QAbstractAnimation::DeleteWhenStopped);
+}
+
+void DragGhostWidget::advanceFollow()
+{
+    if (!m_followElapsed.isValid()) {
+        stopFollowing();
+        return;
+    }
+
+    const qreal dt = qBound(0.006, m_followElapsed.restart() / 1000.0, 0.025);
+    const QPointF delta = m_followTarget - m_followPosition;
+    const qreal stiffness = 620.0;
+    const qreal damping = 32.0;
+    const QPointF acceleration(delta.x() * stiffness - m_followVelocity.x() * damping,
+        delta.y() * stiffness - m_followVelocity.y() * damping);
+
+    m_followVelocity += acceleration * dt;
+    m_followPosition += m_followVelocity * dt;
+
+    if (qAbs(delta.x()) < 0.35 && qAbs(delta.y()) < 0.35 && qAbs(m_followVelocity.x()) < 6.0
+        && qAbs(m_followVelocity.y()) < 6.0) {
+        m_followPosition = m_followTarget;
+        m_followVelocity = QPointF(0.0, 0.0);
+    }
+
+    move(qRound(m_followPosition.x()), qRound(m_followPosition.y()));
+    const qreal targetTilt = qBound(-7.5, m_followVelocity.x() * 0.0105, 7.5);
+    setGhostRotation(ghostRotation() + (targetTilt - ghostRotation()) * 0.22);
 }
 
 void DragGhostWidget::paintEvent(QPaintEvent* e)
@@ -502,9 +647,6 @@ ListDragDrop::ListDragDrop(QWidget* viewport, AnimatedListLayout* layout, QObjec
     , m_viewport(viewport)
     , m_layout(layout)
 {
-    m_dragFollowTimer.setInterval(12);
-    m_dragFollowTimer.setTimerType(Qt::PreciseTimer);
-    connect(&m_dragFollowTimer, &QTimer::timeout, this, &ListDragDrop::tickGhostFollow);
 }
 
 ListDragDrop::~ListDragDrop()
@@ -634,15 +776,12 @@ void ListDragDrop::createGhost(ReorderableRowWidget* sourceWidget, const QPoint&
 
     // Position ghost
     QPoint ghostPos = mapGhostTargetPos(globalPos);
-    m_dragGhostPos = ghostPos;
-    m_dragGhostTargetPos = ghostPos;
-    m_dragGhostVelocity = QPointF(0.0, 0.0);
     m_ghost->setGhostRotation(0.0);
-    m_ghost->move(ghostPos);
+    m_ghost->startFollowing(ghostPos);
 
     // Frosted-glass backdrop: grab parent window BEFORE showing the ghost so
     // the ghost itself is not part of the captured backdrop. Then blur and
-    // fade it in over 1 sec under the snapshot.
+    // fade it in under the snapshot.
     if (topLevel) {
         QPixmap windowGrab = topLevel->grab();
         QPixmap blurred = blurPixmap(windowGrab, 14.0);
@@ -661,8 +800,6 @@ void ListDragDrop::createGhost(ReorderableRowWidget* sourceWidget, const QPoint&
 
     m_ghost->show();
     m_ghost->raise();
-    startGhostFollow();
-
     // Drop indicator
     m_indicator = new DropIndicatorWidget(m_viewport->parentWidget());
     m_indicator->setFixedWidth(m_viewport->width());
@@ -678,10 +815,7 @@ void ListDragDrop::updateDrag(const QPoint& globalPos)
     if (!m_dragging || !m_ghost)
         return;
 
-    m_dragGhostTargetPos = mapGhostTargetPos(globalPos);
-    if (!m_dragFollowTimer.isActive()) {
-        startGhostFollow();
-    }
+    m_ghost->setFollowTarget(mapGhostTargetPos(globalPos));
 
     // Calculate drop target in viewport coordinates.
     // Throttle updateDropTarget to ~40 Hz — the layout iteration and signal
@@ -725,52 +859,11 @@ QPoint ListDragDrop::mapGhostTargetPos(const QPoint& globalPos) const
     return contentTargetPos;
 }
 
-void ListDragDrop::startGhostFollow()
-{
-    m_dragFollowElapsed.start();
-    if (!m_dragFollowTimer.isActive()) {
-        m_dragFollowTimer.start();
-    }
-}
-
 void ListDragDrop::stopGhostFollow()
 {
-    m_dragFollowTimer.stop();
-    m_dragFollowElapsed.invalidate();
-    m_dragGhostVelocity = QPointF(0.0, 0.0);
-}
-
-void ListDragDrop::tickGhostFollow()
-{
-    if (!m_dragging || !m_ghost) {
-        stopGhostFollow();
-        return;
+    if (m_ghost) {
+        m_ghost->stopFollowing();
     }
-
-    const qreal dt = qBound(0.006, m_dragFollowElapsed.restart() / 1000.0, 0.025);
-    const QPointF delta = m_dragGhostTargetPos - m_dragGhostPos;
-
-    // Slightly softer spring-damper follow so the ghost feels smoother.
-    const qreal stiffness = 620.0;
-    const qreal damping = 32.0;
-    const QPointF accel(delta.x() * stiffness - m_dragGhostVelocity.x() * damping,
-        delta.y() * stiffness - m_dragGhostVelocity.y() * damping);
-
-    m_dragGhostVelocity += accel * dt;
-    m_dragGhostPos += m_dragGhostVelocity * dt;
-
-    if (qAbs(delta.x()) < 0.35 && qAbs(delta.y()) < 0.35 && qAbs(m_dragGhostVelocity.x()) < 6.0
-        && qAbs(m_dragGhostVelocity.y()) < 6.0) {
-        m_dragGhostPos = m_dragGhostTargetPos;
-        m_dragGhostVelocity = QPointF(0.0, 0.0);
-    }
-
-    m_ghost->move(qRound(m_dragGhostPos.x()), qRound(m_dragGhostPos.y()));
-
-    const qreal targetTilt = qBound(-7.5, m_dragGhostVelocity.x() * 0.0105, 7.5);
-    const qreal smoothedTilt
-        = m_ghost->ghostRotation() + (targetTilt - m_ghost->ghostRotation()) * 0.22;
-    m_ghost->setGhostRotation(smoothedTilt);
 }
 
 void ListDragDrop::updateDropTarget(const QPoint& viewportPos)

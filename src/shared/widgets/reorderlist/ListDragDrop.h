@@ -8,6 +8,7 @@
 #include <QWidget>
 #include <QPoint>
 #include <QPointF>
+#include <QParallelAnimationGroup>
 #include <QPropertyAnimation>
 #include <QPointer>
 #include <QList>
@@ -25,7 +26,7 @@ class ReorderableRowWidget;
 class AnimatedListLayout;
 
 /**
- * @brief Ghost widget shown during drag.
+ * @brief Shared animated ghost widget shown during reorder drags.
  *
  * For single drag: renders a snapshot of the dragged row.
  * For multi-drag: renders "Dragging N layers" label, then morphs
@@ -40,10 +41,12 @@ class DragGhostWidget : public QWidget {
     Q_PROPERTY(qreal backdropOpacity READ backdropOpacity WRITE setBackdropOpacity)
 
 public:
+    enum class Transition { Settle, Return };
+
     explicit DragGhostWidget(QWidget* parent = nullptr);
 
     void setSnapshot(const QPixmap& pixmap);
-    /** @param width Layer row width (viewport width); -1 = use default pill width */
+    /** @param width Row width (viewport width); -1 = use default pill width */
     void setMultiDragCount(int count, int width = -1);
     QSize visualContentSize() const { return m_visualContentSize; }
     void setVisualContentSize(const QSize& size);
@@ -95,6 +98,16 @@ public:
     qreal backdropOpacity() const { return m_backdropOpacity; }
     void setBackdropOpacity(qreal v);
 
+    /// Shared spring-damper cursor following used by every reorderable surface.
+    void startFollowing(const QPoint& startPos);
+    void setFollowTarget(const QPoint& targetPos);
+    void stopFollowing();
+    /// Capture and fade in the same frosted backdrop used by layer/effect drags.
+    void captureBackdrop(QWidget* backdropWidget);
+    /// Fly to the final slot, or return to the source and fade away.
+    void animateTo(
+        const QPoint& targetPos, Transition transition, std::function<void()> finished = {});
+
 signals:
     void morphFinished();
 
@@ -103,6 +116,7 @@ protected:
 
 private:
     int visualPadding() const;
+    void advanceFollow();
 
     QPixmap m_snapshot;
     QSize m_visualContentSize;
@@ -120,6 +134,13 @@ private:
     // Frosted-glass backdrop
     QPixmap m_blurredBackdrop; // full topLevel window pixmap, blurred
     qreal m_backdropOpacity = 0.0;
+    QTimer m_followTimer;
+    QElapsedTimer m_followElapsed;
+    QPointF m_followPosition;
+    QPointF m_followTarget;
+    QPointF m_followVelocity;
+    QPointer<QPropertyAnimation> m_backdropFadeAnimation;
+    QPointer<QParallelAnimationGroup> m_transitionAnimation;
 };
 
 /**
@@ -341,9 +362,7 @@ public:
 private:
     void createGhost(ReorderableRowWidget* sourceWidget, const QPoint& globalPos);
     QPoint mapGhostTargetPos(const QPoint& globalPos) const;
-    void startGhostFollow();
     void stopGhostFollow();
-    void tickGhostFollow();
     void updateDropTarget(const QPoint& viewportPos);
     void animateGhostToTarget();
     void animateGhostToSource();
@@ -379,12 +398,6 @@ private:
     // Ghost
     QPointer<DragGhostWidget> m_ghost;
     QPointer<DropIndicatorWidget> m_indicator;
-    QTimer m_dragFollowTimer;
-    QElapsedTimer m_dragFollowElapsed;
-    QPointF m_dragGhostPos;
-    QPointF m_dragGhostTargetPos;
-    QPointF m_dragGhostVelocity;
-
     // Drop-target resolution strategy + metrics
     DropResolveFn m_dropResolver;
     int m_indentPerLevel = 0; // 0 = flat list (no depth from X)

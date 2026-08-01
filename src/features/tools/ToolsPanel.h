@@ -10,16 +10,14 @@
 #include "shared/widgets/ToolButton.h"
 
 #include <QList>
-#include <QLayout>
 #include <QMap>
-#include <QRect>
-#include <QSet>
+#include <QPoint>
+#include <QPointer>
+#include <QStringList>
 
 class QButtonGroup;
-class QBoxLayout;
 class QEvent;
 class QObject;
-class QTimer;
 class QWidget;
 
 namespace ruwa::ui::workspace {
@@ -28,11 +26,17 @@ class CanvasPanel;
 class LayersPanel;
 class ToolGroupPopup;
 
+} // namespace ruwa::ui::workspace
+
+namespace ruwa::ui::widgets {
+class AnimatedFlowWidget;
+class DragGhostWidget;
+}
+
+namespace ruwa::ui::workspace {
+
 /**
- * @brief Panel containing drawing tools with adaptive flow layout
- *
- * Automatically switches between vertical and horizontal orientation
- * based on panel aspect ratio. Separators rotate accordingly.
+ * @brief Panel containing drawing tools in one reorderable animated flow
  */
 class ToolsPanel : public ruwa::ui::docking::DockPanel {
     Q_OBJECT
@@ -47,25 +51,27 @@ public:
 
 signals:
     void toolRequested(ToolId tool);
+    void panelStateChanged();
 
 protected:
     QWidget* createContent() override;
     void onThemeChanged() override;
     bool eventFilter(QObject* watched, QEvent* event) override;
-    void resizeEvent(QResizeEvent* event) override;
+    QJsonObject savePanelState() const override;
+    void restorePanelState(const QJsonObject& state) override;
 
 private:
-    enum class Orientation { Vertical, Horizontal };
-
     void addTool(ToolId tool);
     void addGroupTool(ToolId tool);
     void updateIcons();
-    void rebuildLayout(bool animate = false);
-    void positionLayout(bool animate);
-    void setAnimatedGeometry(QWidget* widget, const QRect& target, bool animate);
-    void advanceLayoutAnimation();
-    void stopLayoutAnimation(QWidget* widget);
-    void updateOrientation(bool animate = true);
+    void applyToolOrder(bool animate);
+    void startToolDrag(ToolId tool, ToolButton* button, const QPoint& globalPos);
+    void updateToolDrag(const QPoint& globalPos);
+    void finishToolDrag(bool accepted, const QPoint& globalPos);
+    QPoint ghostTargetPosition(const QPoint& globalPos) const;
+    int toolInsertIndexAt(const QPoint& contentPos) const;
+    void moveDraggedToolTo(int insertIndex);
+    void cancelToolDragCandidate();
     void updateGroupButtons();
     void ensureGroupPopup();
     void openToolGroupPopup(ToolId representativeTool, QWidget* anchor);
@@ -76,7 +82,7 @@ private:
     ruwa::ui::core::IconProvider::StandardIcon iconForTool(ToolId tool) const;
 
 private:
-    QWidget* m_contentWidget = nullptr;
+    ruwa::ui::widgets::AnimatedFlowWidget* m_contentWidget = nullptr;
     QButtonGroup* m_buttonGroup = nullptr;
 
     struct ToolButtonInfo {
@@ -84,19 +90,25 @@ private:
         ruwa::ui::core::IconProvider::StandardIcon iconType;
     };
     QMap<ToolId, ToolButtonInfo> m_toolsData;
-    QList<QWidget*> m_separators;
-    QMap<QWidget*, QRect> m_layoutTargets;
-    QSet<QWidget*> m_layoutTrackedWidgets;
-    QTimer* m_layoutAnimationTimer = nullptr;
+    QList<ToolId> m_toolOrder;
+    QList<ToolId> m_dragStartOrder;
     QMap<ToolId, ToolId> m_groupSelections;
     ToolGroupPopup* m_groupPopup = nullptr;
     CanvasPanel* m_canvasPanel = nullptr;
     LayersPanel* m_layersPanel = nullptr;
 
     ToolId m_currentTool = ToolId::Brush;
-    Orientation m_orientation = Orientation::Vertical;
+    ToolButton* m_dragCandidateButton = nullptr;
+    ToolButton* m_draggedButton = nullptr;
+    QPointer<ruwa::ui::widgets::DragGhostWidget> m_dragGhost;
+    QPoint m_dragPressPosition;
+    QPoint m_dragOffset;
+    ToolId m_draggedTool = ToolId::Hand;
+    bool m_dragActive = false;
+    bool m_dragSettling = false;
+    bool m_dragInsideContent = false;
+    bool m_dragCursorOverride = false;
     bool m_contentCreated = false;
-    bool m_layoutBoundsInitialized = false;
 };
 
 } // namespace ruwa::ui::workspace

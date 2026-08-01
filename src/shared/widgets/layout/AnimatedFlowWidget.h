@@ -35,7 +35,9 @@ public:
     ~AnimatedFlowWidget() override;
 
     void setFlowSpacing(int horizontal, int vertical);
-    void setItems(const QList<QWidget*>& flowItems, const QList<QWidget*>& pinnedItems = {});
+    /// Replaces the ordered items. Existing widgets glide to their new slots when requested.
+    void setItems(const QList<QWidget*>& flowItems, const QList<QWidget*>& pinnedItems = {},
+        bool animateReorder = false);
     void clearItems(ItemDisposal disposal = ItemDisposal::Keep);
 
     void setHeightCallback(std::function<void(int)> callback);
@@ -43,6 +45,8 @@ public:
     void setSeparatorPropertyName(QByteArray propertyName);
 
     int targetHeightForWidth(int width) const;
+    /// Returns the final geometry even while an item is still moving toward it.
+    QRect itemTargetGeometry(const QWidget* widget) const;
     void shutdown();
 
     bool hasHeightForWidth() const override { return true; }

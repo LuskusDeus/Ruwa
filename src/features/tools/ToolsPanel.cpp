@@ -6,28 +6,34 @@
 #include "features/canvas/ui/CanvasPanel.h"
 #include "features/layers/ui/LayersPanel.h"
 #include "shared/widgets/ToolButton.h"
+#include "shared/widgets/layout/AnimatedFlowWidget.h"
+#include "shared/widgets/reorderlist/ListDragDrop.h"
 #include "shell/context-menu/ContextMenuSystem.h"
 
 #include "shared/resources/IconProvider.h"
 #include "features/theme/manager/ThemeManager.h"
 #include "shared/style/WidgetStyleManager.h"
 
+#include <QApplication>
 #include <QContextMenuEvent>
 #include <QCoreApplication>
+#include <QGraphicsOpacityEffect>
+#include <QKeyEvent>
+#include <QJsonArray>
 #include <QList>
-#include <QLayout>
 #include <QButtonGroup>
 #include <QTimer>
 #include <QElapsedTimer>
 #include <QCursor>
 #include <QEvent>
-#include <QPainter>
-#include <QResizeEvent>
 #include <QMouseEvent>
+#include <QPixmap>
+#include <QSizePolicy>
 #include <QtGlobal>
 #include <array>
 #include <functional>
 #include <optional>
+#include <utility>
 
 namespace ruwa::ui::workspace {
 
@@ -37,12 +43,9 @@ namespace {
 const int BASE_PANEL_MIN_WIDTH = 56;
 const int BASE_PANEL_MIN_HEIGHT = 56; // content: 1 row + margins
 const int BASE_PANEL_HEADER_HEIGHT = 19; // DockPanelTitleBar default
-const int BASE_BUTTON_SIZE = 36;
-const int BASE_ICON_SIZE = 20;
 const int BASE_MARGIN_V = 8;
 const int BASE_MARGIN_H = 8;
 const int BASE_SPACING = 6;
-const int BASE_BORDER_RADIUS = 6;
 const int GROUP_HOLD_DELAY_MS = 350;
 
 struct ToolPresentation {
@@ -229,6 +232,12 @@ public:
     }
 
     void setPopupCallback(std::function<void()> callback) { m_popupCallback = std::move(callback); }
+    void cancelPopupGesture()
+    {
+        m_holdTimer.stop();
+        m_popupTriggered = false;
+        m_suppressContextMenuEvent = false;
+    }
 
 protected:
     void mousePressEvent(QMouseEvent* event) override
@@ -314,94 +323,41 @@ private:
     std::function<void()> m_popupCallback;
 };
 
-// --- Adaptive Separator ---
-// Draws either horizontal or vertical line depending on orientation
-class AdaptiveSeparator : public QWidget {
-public:
-    enum class SepOrientation { Horizontal, Vertical };
+const QList<ToolId>& defaultToolOrder()
+{
+    static const QList<ToolId> order { ToolId::Hand, ToolId::RotateView, ToolId::Zoom,
+        ToolId::Brush, ToolId::Eraser, ToolId::Fill, ToolId::Eyedropper, ToolId::Blur,
+        ToolId::Move, ToolId::SquareSelection, ToolId::Lasso, ToolId::MagicWand, ToolId::Text,
+        ToolId::CanvasResize };
+    return order;
+}
 
-    explicit AdaptiveSeparator(QWidget* parent = nullptr)
-        : QWidget(parent)
-    {
-        setAttribute(Qt::WA_TranslucentBackground);
-        setAutoFillBackground(false);
-        applyOrientation(SepOrientation::Horizontal);
-    }
-
-    void setOrientation(SepOrientation orient)
-    {
-        if (m_orient == orient)
-            return;
-        applyOrientation(orient);
-    }
-
-    void setMarginSize(int m)
-    {
-        m_margin = m;
-        update();
-    }
-
-protected:
-    void paintEvent(QPaintEvent*) override
-    {
-        QPainter painter(this);
-        const auto& colors = ThemeManager::instance().colors();
-        QColor color = colors.borderDark();
-
-        if (m_orient == SepOrientation::Horizontal) {
-            int y = height() / 2;
-            int x1 = m_margin;
-            int x2 = width() - m_margin;
-            if (x2 > x1) {
-                painter.setPen(QPen(color, 1));
-                painter.drawLine(x1, y, x2, y);
-            }
-        } else {
-            int x = width() / 2;
-            int y1 = m_margin;
-            int y2 = height() - m_margin;
-            if (y2 > y1) {
-                painter.setPen(QPen(color, 1));
-                painter.drawLine(x, y1, x, y2);
-            }
+QList<ToolId> normalizedToolOrder(const QJsonArray& values)
+{
+    QList<ToolId> result;
+    const QList<ToolId>& defaults = defaultToolOrder();
+    for (const QJsonValue& value : values) {
+        const std::optional<ToolId> tool = toolIdFromPersistentValue(value.toInt(-1));
+        if (tool && defaults.contains(*tool) && !result.contains(*tool)) {
+            result.append(*tool);
         }
     }
-
-private:
-    void applyOrientation(SepOrientation orient)
-    {
-        m_orient = orient;
-        if (m_orient == SepOrientation::Horizontal) {
-            setFixedHeight(5);
-            setMaximumHeight(5);
-            setMinimumHeight(5);
-            setMaximumWidth(QWIDGETSIZE_MAX);
-            setMinimumWidth(0);
-            setSizePolicy(QSizePolicy::Expanding, QSizePolicy::Fixed);
-        } else {
-            setFixedWidth(5);
-            setMaximumWidth(5);
-            setMinimumWidth(5);
-            setMaximumHeight(QWIDGETSIZE_MAX);
-            setMinimumHeight(0);
-            setSizePolicy(QSizePolicy::Fixed, QSizePolicy::Expanding);
+    for (ToolId tool : defaults) {
+        if (!result.contains(tool)) {
+            result.append(tool);
         }
-        updateGeometry();
-        update();
     }
+    return result;
+}
 
-    SepOrientation m_orient = SepOrientation::Horizontal;
-    int m_margin = 4;
-};
-
-// ToolId groups for layout (separators between groups)
-static const QList<QList<ToolId>> TOOL_GROUPS = {
-    { ToolId::Hand, ToolId::RotateView, ToolId::Zoom }, // Navigation
-    { ToolId::Brush, ToolId::Eraser, ToolId::Fill, ToolId::Eyedropper, ToolId::Blur }, // Drawing
-    { ToolId::Move, ToolId::SquareSelection, ToolId::Lasso,
-        ToolId::MagicWand }, // Selection and movement
-    { ToolId::Text, ToolId::CanvasResize } // Other
-};
+QJsonArray serializedToolOrder(const QList<ToolId>& order)
+{
+    QJsonArray values;
+    for (ToolId tool : order) {
+        values.append(persistentValueForToolId(tool));
+    }
+    return values;
+}
 
 bool isToolSwitchProfilingEnabled()
 {
@@ -433,18 +389,25 @@ ToolsPanel::ToolsPanel(QWidget* parent)
     m_groupSelections[ToolId::Lasso] = ToolId::Lasso;
     m_groupSelections[ToolId::SquareSelection] = ToolId::SquareSelection;
 
-    m_layoutAnimationTimer = new QTimer(this);
-    m_layoutAnimationTimer->setInterval(16);
-    connect(m_layoutAnimationTimer, &QTimer::timeout, this, &ToolsPanel::advanceLayoutAnimation);
+    m_toolOrder = defaultToolOrder();
 }
 
 ToolsPanel::~ToolsPanel()
 {
-    if (m_layoutAnimationTimer) {
-        m_layoutAnimationTimer->stop();
+    if (m_dragActive) {
+        qApp->removeEventFilter(this);
     }
-    m_layoutTargets.clear();
-    m_layoutTrackedWidgets.clear();
+    if (m_dragCursorOverride) {
+        QApplication::restoreOverrideCursor();
+        m_dragCursorOverride = false;
+    }
+    if (m_dragGhost) {
+        delete m_dragGhost.data();
+        m_dragGhost = nullptr;
+    }
+    if (m_contentWidget) {
+        m_contentWidget->shutdown();
+    }
     delete m_groupPopup;
 }
 
@@ -461,6 +424,27 @@ void ToolsPanel::preparePresentationSnapshot()
             info.button->finishVisualTransitions();
         }
     }
+}
+
+QJsonObject ToolsPanel::savePanelState() const
+{
+    QJsonObject state;
+    state[QStringLiteral("version")] = 1;
+    state[QStringLiteral("toolOrder")] = serializedToolOrder(m_toolOrder);
+    return state;
+}
+
+void ToolsPanel::restorePanelState(const QJsonObject& state)
+{
+    const QList<ToolId> restoredOrder = state.contains(QStringLiteral("toolOrder"))
+        ? normalizedToolOrder(state.value(QStringLiteral("toolOrder")).toArray())
+        : defaultToolOrder();
+    if (restoredOrder == m_toolOrder) {
+        return;
+    }
+
+    m_toolOrder = restoredOrder;
+    applyToolOrder(false);
 }
 
 void ToolsPanel::setActiveTool(ToolId tool)
@@ -491,9 +475,17 @@ void ToolsPanel::setActiveTool(ToolId tool)
 
 QWidget* ToolsPanel::createContent()
 {
-    m_contentWidget = new QWidget();
+    m_contentWidget = new ruwa::ui::widgets::AnimatedFlowWidget(
+        ruwa::ui::widgets::AnimatedFlowWidget::LayoutStyle::UniformWrap);
+    // AnimatedFlowWidget defaults to content-height sizing for expandable lists.
+    // A dock panel instead owns the available height and must let the flow fill it.
+    m_contentWidget->setSizePolicy(QSizePolicy::Expanding, QSizePolicy::Expanding);
     m_contentWidget->setTabletTracking(true);
     m_contentWidget->setStyleSheet("background: transparent;");
+    auto& style = WidgetStyleManager::instance();
+    m_contentWidget->setContentsMargins(style.scaled(BASE_MARGIN_H), style.scaled(BASE_MARGIN_V),
+        style.scaled(BASE_MARGIN_H), style.scaled(BASE_MARGIN_V));
+    m_contentWidget->setFlowSpacing(style.scaled(BASE_SPACING), style.scaled(BASE_SPACING));
     m_contentWidget->installEventFilter(this);
 
     m_buttonGroup = new QButtonGroup(this);
@@ -529,19 +521,7 @@ QWidget* ToolsPanel::createContent()
     addTool(ToolId::Zoom);
 
     m_contentCreated = true;
-
-    // Build layout for current orientation
-    rebuildLayout();
-
-    QTimer::singleShot(0, this, [this]() {
-        if (!m_contentWidget || !m_contentCreated) {
-            return;
-        }
-
-        updateOrientation(false);
-        positionLayout(false);
-        m_layoutBoundsInitialized = !m_contentWidget->geometry().isEmpty();
-    });
+    applyToolOrder(false);
 
     // Default selection
     if (m_toolsData.contains(m_currentTool)) {
@@ -558,315 +538,297 @@ QWidget* ToolsPanel::createContent()
     return m_contentWidget;
 }
 
-void ToolsPanel::rebuildLayout(bool animate)
+void ToolsPanel::applyToolOrder(bool animate)
 {
-    if (!m_contentWidget)
+    if (!m_contentWidget || !m_contentCreated) {
         return;
+    }
+    QList<QWidget*> buttons;
+    buttons.reserve(m_toolOrder.size());
+    for (ToolId tool : m_toolOrder) {
+        if (m_toolsData.contains(tool)) {
+            buttons.append(m_toolsData[tool].button);
+        }
+    }
+    m_contentWidget->setItems(buttons, {}, animate);
+}
+
+void ToolsPanel::startToolDrag(ToolId tool, ToolButton* button, const QPoint& globalPos)
+{
+    if (!button || m_dragActive || m_dragSettling || !m_toolOrder.contains(tool)) {
+        return;
+    }
 
     hideToolGroupPopup(true);
-
-    auto& mgr = WidgetStyleManager::instance();
-    int sepMargin = mgr.scaled(4);
-
-    // Remove old layout and child containers (but NOT the buttons themselves).
-    // The panel now positions direct children manually so geometry can be animated
-    // between layout states during resize.
-    if (auto* oldLayout = m_contentWidget->layout()) {
-        // Reparent all buttons to m_contentWidget directly so they survive layout destruction
-        for (auto& info : m_toolsData) {
-            info.button->setParent(m_contentWidget);
-            info.button->show();
-        }
-        // Delete all layout items and child containers
-        QLayoutItem* item;
-        while ((item = oldLayout->takeAt(0))) {
-            if (QWidget* w = item->widget()) {
-                // Only delete container widgets, not buttons
-                bool isButton = false;
-                for (auto& info : m_toolsData) {
-                    if (info.button == w) {
-                        isButton = true;
-                        break;
-                    }
-                }
-                if (!isButton) {
-                    delete w;
-                }
-            }
-            delete item;
-        }
-        delete oldLayout;
+    if (auto* groupButton = dynamic_cast<GroupToolButton*>(button)) {
+        groupButton->cancelPopupGesture();
     }
+    button->cancelPointerInteraction();
 
-    for (QWidget* separator : m_separators) {
-        stopLayoutAnimation(separator);
-        delete separator;
-    }
-    m_separators.clear();
+    const QPixmap snapshot = button->grab();
+    m_dragActive = true;
+    m_draggedTool = tool;
+    m_draggedButton = button;
+    m_dragStartOrder = m_toolOrder;
+    m_dragOffset = button->mapToGlobal(QPoint(0, 0)) - globalPos;
 
-    const bool horizontal = (m_orientation == Orientation::Horizontal);
-    for (int g = 1; g < TOOL_GROUPS.size(); ++g) {
-        auto* sep = new AdaptiveSeparator(m_contentWidget);
-        sep->setOrientation(horizontal ? AdaptiveSeparator::SepOrientation::Vertical
-                                       : AdaptiveSeparator::SepOrientation::Horizontal);
-        sep->setMarginSize(sepMargin);
-        sep->show();
-        m_separators.append(sep);
-    }
+    auto* opacityEffect = new QGraphicsOpacityEffect(button);
+    opacityEffect->setOpacity(0.25);
+    button->setGraphicsEffect(opacityEffect);
 
-    for (auto& info : m_toolsData) {
-        info.button->setParent(m_contentWidget);
-        info.button->show();
-        info.button->raise();
-    }
+    QWidget* topLevel = m_contentWidget->window();
+    m_dragGhost = new ruwa::ui::widgets::DragGhostWidget(topLevel);
+    m_dragGhost->setSnapshot(snapshot);
+    const QPoint sourcePosition = topLevel->mapFromGlobal(button->mapToGlobal(QPoint(0, 0)))
+        - m_dragGhost->contentTopLeft();
+    m_dragGhost->startFollowing(sourcePosition);
+    m_dragGhost->captureBackdrop(topLevel);
+    m_dragGhost->show();
+    m_dragGhost->raise();
+    m_dragGhost->setFollowTarget(ghostTargetPosition(globalPos));
 
-    positionLayout(animate);
-}
-
-void ToolsPanel::positionLayout(bool animate)
-{
-    if (!m_contentWidget)
-        return;
-
-    auto& mgr = WidgetStyleManager::instance();
-    const int margin = mgr.scaled(BASE_MARGIN_H);
-    const int spacing = mgr.scaled(BASE_SPACING);
-    const int separatorThickness = 5;
-
-    const int contentWidth = m_contentWidget->width() > 0 ? m_contentWidget->width() : width();
-    int contentHeight = m_contentWidget->height();
-    if (contentHeight <= 0) {
-        contentHeight = height() - mgr.scaled(BASE_PANEL_HEADER_HEIGHT);
-    }
-
-    int separatorIndex = 0;
-
-    if (m_orientation == Orientation::Horizontal) {
-        int x = margin;
-        const int availableHeight = qMax(0, contentHeight - margin * 2);
-
-        for (int g = 0; g < TOOL_GROUPS.size(); ++g) {
-            if (g > 0 && separatorIndex < m_separators.size()) {
-                x += spacing;
-                setAnimatedGeometry(m_separators[separatorIndex++],
-                    QRect(x, margin, separatorThickness, availableHeight), animate);
-                x += separatorThickness + spacing;
-            }
-
-            int visibleCount = 0;
-            int buttonHeight = 0;
-            int buttonWidth = 0;
-            for (ToolId tool : TOOL_GROUPS[g]) {
-                if (m_toolsData.contains(tool)) {
-                    const QSize hint = m_toolsData[tool].button->sizeHint();
-                    ++visibleCount;
-                    buttonHeight = qMax(buttonHeight, hint.height());
-                    buttonWidth = qMax(buttonWidth, hint.width());
-                }
-            }
-
-            int maxRowsPerColumn = 1;
-            if (visibleCount > 0 && buttonHeight > 0) {
-                maxRowsPerColumn = qMax(1, (availableHeight + spacing) / (buttonHeight + spacing));
-                maxRowsPerColumn = qMin(maxRowsPerColumn, visibleCount);
-            }
-
-            int visibleIndex = 0;
-            for (ToolId tool : TOOL_GROUPS[g]) {
-                if (!m_toolsData.contains(tool)) {
-                    continue;
-                }
-
-                auto& info = m_toolsData[tool];
-                const QSize hint = info.button->sizeHint();
-                const int row = visibleIndex % maxRowsPerColumn;
-                const int column = visibleIndex / maxRowsPerColumn;
-                setAnimatedGeometry(info.button,
-                    QRect(QPoint(x + column * (buttonWidth + spacing),
-                              margin + row * (buttonHeight + spacing)),
-                        hint),
-                    animate);
-                ++visibleIndex;
-            }
-
-            if (visibleCount > 0) {
-                const int columns = (visibleCount + maxRowsPerColumn - 1) / maxRowsPerColumn;
-                x += columns * buttonWidth + qMax(0, columns - 1) * spacing;
-            }
-        }
-
-        return;
-    }
-
-    const int availableWidth = qMax(0, contentWidth - margin * 2);
-    const int rightEdge = margin + availableWidth;
-    int y = margin;
-
-    for (int g = 0; g < TOOL_GROUPS.size(); ++g) {
-        if (g > 0 && separatorIndex < m_separators.size()) {
-            y += spacing;
-            setAnimatedGeometry(m_separators[separatorIndex++],
-                QRect(margin, y, availableWidth, separatorThickness), animate);
-            y += separatorThickness + spacing;
-        }
-
-        int x = margin;
-        int lineHeight = 0;
-        bool hasGroupButtons = false;
-
-        for (ToolId tool : TOOL_GROUPS[g]) {
-            if (!m_toolsData.contains(tool)) {
-                continue;
-            }
-
-            auto& info = m_toolsData[tool];
-            const QSize hint = info.button->sizeHint();
-            if (hasGroupButtons && x + hint.width() > rightEdge) {
-                x = margin;
-                y += lineHeight + spacing;
-                lineHeight = 0;
-            }
-
-            setAnimatedGeometry(info.button, QRect(QPoint(x, y), hint), animate);
-            x += hint.width() + spacing;
-            lineHeight = qMax(lineHeight, hint.height());
-            hasGroupButtons = true;
-        }
-
-        if (hasGroupButtons) {
-            y += lineHeight;
-        }
+    m_dragInsideContent
+        = m_contentWidget->rect().contains(m_contentWidget->mapFromGlobal(globalPos));
+    qApp->installEventFilter(this);
+    if (!m_dragCursorOverride) {
+        QApplication::setOverrideCursor(Qt::ClosedHandCursor);
+        m_dragCursorOverride = true;
     }
 }
 
-void ToolsPanel::setAnimatedGeometry(QWidget* widget, const QRect& target, bool animate)
+void ToolsPanel::updateToolDrag(const QPoint& globalPos)
 {
-    if (!widget)
-        return;
-
-    widget->show();
-
-    if (!animate || !isVisible() || !m_contentWidget || !m_contentWidget->isVisible()) {
-        m_layoutTargets.remove(widget);
-        widget->setGeometry(target);
+    if (!m_dragActive || !m_dragGhost || !m_contentWidget) {
         return;
     }
-
-    const QRect current = widget->geometry();
-    if (current == target) {
-        m_layoutTargets.remove(widget);
-        return;
-    }
-
-    if (!m_layoutTrackedWidgets.contains(widget)) {
-        m_layoutTrackedWidgets.insert(widget);
-        QWidget* key = widget;
-        connect(widget, &QObject::destroyed, this, [this, key]() { stopLayoutAnimation(key); });
-    }
-
-    m_layoutTargets[widget] = target;
-    if (m_layoutAnimationTimer && !m_layoutAnimationTimer->isActive()) {
-        m_layoutAnimationTimer->start();
+    m_dragGhost->setFollowTarget(ghostTargetPosition(globalPos));
+    const QPoint contentPos = m_contentWidget->mapFromGlobal(globalPos);
+    m_dragInsideContent = m_contentWidget->rect().contains(contentPos);
+    if (m_dragInsideContent) {
+        moveDraggedToolTo(toolInsertIndexAt(contentPos));
     }
 }
 
-void ToolsPanel::advanceLayoutAnimation()
+void ToolsPanel::finishToolDrag(bool accepted, const QPoint& globalPos)
 {
-    if (m_layoutTargets.isEmpty()) {
-        if (m_layoutAnimationTimer) {
-            m_layoutAnimationTimer->stop();
-        }
+    if (!m_dragActive) {
         return;
     }
+    updateToolDrag(globalPos);
+    accepted = accepted && m_dragInsideContent;
 
-    auto advanceValue = [](int current, int target) {
-        const int delta = target - current;
-        if (qAbs(delta) <= 1) {
-            return target;
-        }
+    qApp->removeEventFilter(this);
+    if (m_dragCursorOverride) {
+        QApplication::restoreOverrideCursor();
+        m_dragCursorOverride = false;
+    }
+    m_dragActive = false;
+    m_dragSettling = true;
 
-        int step = qRound(delta * 0.35);
-        if (step == 0) {
-            step = delta > 0 ? 1 : -1;
+    const bool orderChanged = accepted && m_toolOrder != m_dragStartOrder;
+    if (!accepted) {
+        m_toolOrder = m_dragStartOrder;
+        applyToolOrder(true);
+    } else if (orderChanged) {
+        emit panelStateChanged();
+    }
+
+    const QRect targetRect
+        = m_contentWidget->itemTargetGeometry(m_toolsData[m_draggedTool].button);
+    const QPoint targetGlobal = m_contentWidget->mapToGlobal(targetRect.topLeft());
+    QWidget* topLevel = m_contentWidget->window();
+    QPoint targetPosition = topLevel->mapFromGlobal(targetGlobal);
+    if (m_dragGhost) {
+        targetPosition -= m_dragGhost->contentTopLeft();
+    }
+
+    QPointer<ToolsPanel> guard(this);
+    auto finish = [guard]() {
+        if (!guard) {
+            return;
         }
-        return current + step;
+        if (guard->m_draggedButton) {
+            guard->m_draggedButton->setGraphicsEffect(nullptr);
+            guard->m_draggedButton->cancelPointerInteraction();
+        }
+        if (guard->m_dragGhost) {
+            guard->m_dragGhost->deleteLater();
+            guard->m_dragGhost = nullptr;
+        }
+        guard->m_draggedButton = nullptr;
+        guard->m_dragStartOrder.clear();
+        guard->m_dragSettling = false;
+        guard->m_dragInsideContent = false;
+        guard->cancelToolDragCandidate();
     };
 
-    for (auto it = m_layoutTargets.begin(); it != m_layoutTargets.end();) {
-        QWidget* widget = it.key();
-        if (!widget) {
-            it = m_layoutTargets.erase(it);
+    if (!m_dragGhost) {
+        finish();
+        return;
+    }
+    m_dragGhost->animateTo(targetPosition,
+        accepted ? ruwa::ui::widgets::DragGhostWidget::Transition::Settle
+                 : ruwa::ui::widgets::DragGhostWidget::Transition::Return,
+        std::move(finish));
+}
+
+QPoint ToolsPanel::ghostTargetPosition(const QPoint& globalPos) const
+{
+    if (!m_dragGhost || !m_contentWidget) {
+        return {};
+    }
+    QWidget* topLevel = m_contentWidget->window();
+    return topLevel->mapFromGlobal(globalPos + m_dragOffset) - m_dragGhost->contentTopLeft();
+}
+
+void ToolsPanel::cancelToolDragCandidate()
+{
+    m_dragCandidateButton = nullptr;
+    m_dragPressPosition = {};
+}
+
+/*
+ * The insertion resolver intentionally uses the flow's final target rectangles,
+ * not the transient on-screen positions. This keeps fast pointer movement stable
+ * while neighbouring tools are still gliding to their new slots.
+ */
+int ToolsPanel::toolInsertIndexAt(const QPoint& contentPos) const
+{
+    struct Placement {
+        int stationaryIndex = 0;
+        QRect rect;
+    };
+
+    QList<Placement> placements;
+    int stationaryIndex = 0;
+    for (ToolId tool : m_toolOrder) {
+        if (tool == m_draggedTool || !m_toolsData.contains(tool)) {
             continue;
         }
+        const QRect rect = m_contentWidget->itemTargetGeometry(m_toolsData[tool].button);
+        if (rect.isValid()) {
+            placements.append({ stationaryIndex, rect });
+        }
+        ++stationaryIndex;
+    }
 
-        const QRect target = it.value();
-        const QRect current = widget->geometry();
-        const QRect next(advanceValue(current.x(), target.x()),
-            advanceValue(current.y(), target.y()), advanceValue(current.width(), target.width()),
-            advanceValue(current.height(), target.height()));
+    if (placements.isEmpty()) {
+        return 0;
+    }
+    if (contentPos.y() < placements.front().rect.top()) {
+        return 0;
+    }
+    if (contentPos.y() > placements.back().rect.bottom()) {
+        return static_cast<int>(placements.size());
+    }
 
-        widget->setGeometry(next);
-
-        if (next == target) {
-            it = m_layoutTargets.erase(it);
-        } else {
-            ++it;
+    int closestRowCenter = placements.front().rect.center().y();
+    int closestDistance = qAbs(contentPos.y() - closestRowCenter);
+    for (const Placement& placement : placements) {
+        const int center = placement.rect.center().y();
+        const int distance = qAbs(contentPos.y() - center);
+        if (distance < closestDistance) {
+            closestDistance = distance;
+            closestRowCenter = center;
         }
     }
 
-    if (m_layoutTargets.isEmpty() && m_layoutAnimationTimer) {
-        m_layoutAnimationTimer->stop();
+    int indexAfterRow = 0;
+    for (const Placement& placement : placements) {
+        if (placement.rect.center().y() != closestRowCenter) {
+            continue;
+        }
+        if (contentPos.x() < placement.rect.center().x()) {
+            return placement.stationaryIndex;
+        }
+        indexAfterRow = placement.stationaryIndex + 1;
     }
+    return indexAfterRow;
 }
 
-void ToolsPanel::stopLayoutAnimation(QWidget* widget)
+void ToolsPanel::moveDraggedToolTo(int insertIndex)
 {
-    m_layoutTargets.remove(widget);
-    m_layoutTrackedWidgets.remove(widget);
-    if (m_layoutTargets.isEmpty() && m_layoutAnimationTimer) {
-        m_layoutAnimationTimer->stop();
-    }
-}
-
-void ToolsPanel::updateOrientation(bool animate)
-{
-    if (!m_contentWidget || !m_contentCreated)
+    QList<ToolId> reordered = m_toolOrder;
+    if (!reordered.removeOne(m_draggedTool)) {
         return;
-
-    // Use panel size, not content widget: at resizeEvent/content creation time
-    // the content may not yet have valid dimensions from the layout.
-    const int w = width();
-    const int h = height();
-    constexpr int kMinDimension = 20;
-    if (w < kMinDimension || h < kMinDimension)
-        return;
-
-    Orientation newOrient = (w > h) ? Orientation::Horizontal : Orientation::Vertical;
-
-    if (newOrient != m_orientation) {
-        m_orientation = newOrient;
-        rebuildLayout(animate);
     }
+    reordered.insert(
+        qBound(0, insertIndex, static_cast<int>(reordered.size())), m_draggedTool);
+    if (reordered == m_toolOrder) {
+        return;
+    }
+    m_toolOrder = reordered;
+    applyToolOrder(true);
 }
 
 bool ToolsPanel::eventFilter(QObject* watched, QEvent* event)
 {
-    if (watched == m_contentWidget && m_contentCreated) {
+    if (m_dragActive && m_dragGhost) {
         switch (event->type()) {
-        case QEvent::Resize:
-        case QEvent::Show:
-        case QEvent::LayoutRequest: {
-            const Orientation previousOrientation = m_orientation;
-            updateOrientation(m_layoutBoundsInitialized);
-
-            if (previousOrientation == m_orientation) {
-                const bool animate = m_layoutBoundsInitialized && isVisible()
-                    && m_contentWidget->isVisible() && !m_contentWidget->geometry().isEmpty();
-                positionLayout(animate);
+        case QEvent::MouseMove: {
+            auto* mouseEvent = static_cast<QMouseEvent*>(event);
+            updateToolDrag(mouseEvent->globalPosition().toPoint());
+            return true;
+        }
+        case QEvent::MouseButtonRelease: {
+            auto* mouseEvent = static_cast<QMouseEvent*>(event);
+            if (mouseEvent->button() == Qt::LeftButton) {
+                finishToolDrag(true, mouseEvent->globalPosition().toPoint());
+                return true;
             }
-            m_layoutBoundsInitialized = !m_contentWidget->geometry().isEmpty();
             break;
         }
+        case QEvent::KeyPress: {
+            auto* keyEvent = static_cast<QKeyEvent*>(event);
+            if (keyEvent->key() == Qt::Key_Escape) {
+                finishToolDrag(false, QCursor::pos());
+                return true;
+            }
+            break;
+        }
+        case QEvent::ApplicationDeactivate:
+            finishToolDrag(false, QCursor::pos());
+            break;
+        default:
+            break;
+        }
+    }
+
+    if (watched == m_contentWidget && m_contentCreated) {
+        if (event->type() == QEvent::Resize) {
+            hideToolGroupPopup(true);
+        }
+    }
+
+    ToolButton* button = qobject_cast<ToolButton*>(watched);
+    if (button && m_contentCreated) {
+        switch (event->type()) {
+        case QEvent::MouseButtonPress: {
+            auto* mouseEvent = static_cast<QMouseEvent*>(event);
+            if (mouseEvent->button() == Qt::LeftButton && !m_dragSettling) {
+                m_dragCandidateButton = button;
+                m_dragPressPosition = mouseEvent->position().toPoint();
+            }
+            break;
+        }
+        case QEvent::MouseMove: {
+            auto* mouseEvent = static_cast<QMouseEvent*>(event);
+            if (m_dragCandidateButton == button && (mouseEvent->buttons() & Qt::LeftButton)
+                && (mouseEvent->position().toPoint() - m_dragPressPosition).manhattanLength()
+                    >= QApplication::startDragDistance()) {
+                for (auto it = m_toolsData.cbegin(); it != m_toolsData.cend(); ++it) {
+                    if (it->button == button) {
+                        startToolDrag(it.key(), button, mouseEvent->globalPosition().toPoint());
+                        return true;
+                    }
+                }
+            }
+            break;
+        }
+        case QEvent::MouseButtonRelease:
+        case QEvent::Hide:
+            cancelToolDragCandidate();
+            break;
         default:
             break;
         }
@@ -875,18 +837,10 @@ bool ToolsPanel::eventFilter(QObject* watched, QEvent* event)
     return DockPanel::eventFilter(watched, event);
 }
 
-void ToolsPanel::resizeEvent(QResizeEvent* event)
-{
-    DockPanel::resizeEvent(event);
-    hideToolGroupPopup(true);
-
-    const Orientation previousOrientation = m_orientation;
-    updateOrientation(m_layoutBoundsInitialized);
-
-    if (m_contentCreated && previousOrientation == m_orientation) {
-        positionLayout(m_layoutBoundsInitialized);
-    }
-}
+/*
+ * Tool construction and variant-popup behaviour stay independent from the
+ * reorder lifecycle below.
+ */
 
 void ToolsPanel::addTool(ToolId tool)
 {
@@ -897,6 +851,7 @@ void ToolsPanel::addTool(ToolId tool)
     button->setCheckable(true);
     button->setIconType(presentation.icon);
     button->setCursor(Qt::PointingHandCursor);
+    button->installEventFilter(this);
 
     m_buttonGroup->addButton(button, static_cast<int>(tool));
     m_toolsData[tool] = { button, presentation.icon };
@@ -912,11 +867,15 @@ void ToolsPanel::addGroupTool(ToolId tool)
     button->setIconType(presentation.icon);
     button->setHasGroupIndicator(true);
     button->setCursor(Qt::PointingHandCursor);
+    button->installEventFilter(this);
     // Tools with variants handle their own right-click (the variant-selection popup).
     // Opt out of the global ContextMenuSystem so its "No actions for this" menu
     // doesn't overlay the variant popup. Regular ToolButtons keep the generic menu.
     button->setProperty("ruwaContextMenuSystemBypass", true);
-    button->setPopupCallback([this, tool, button]() { openToolGroupPopup(tool, button); });
+    button->setPopupCallback([this, tool, button]() {
+        cancelToolDragCandidate();
+        openToolGroupPopup(tool, button);
+    });
 
     m_buttonGroup->addButton(button, static_cast<int>(tool));
     m_toolsData[tool] = { button, presentation.icon };
@@ -929,7 +888,11 @@ void ToolsPanel::onThemeChanged()
         info.button->update();
     }
     if (m_contentCreated) {
-        positionLayout(false);
+        auto& style = WidgetStyleManager::instance();
+        m_contentWidget->setContentsMargins(style.scaled(BASE_MARGIN_H), style.scaled(BASE_MARGIN_V),
+            style.scaled(BASE_MARGIN_H), style.scaled(BASE_MARGIN_V));
+        m_contentWidget->setFlowSpacing(style.scaled(BASE_SPACING), style.scaled(BASE_SPACING));
+        applyToolOrder(false);
     }
 }
 

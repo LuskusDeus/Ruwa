@@ -56,7 +56,7 @@ void AnimatedFlowWidget::setFlowSpacing(int horizontal, int vertical)
 }
 
 void AnimatedFlowWidget::setItems(
-    const QList<QWidget*>& flowItems, const QList<QWidget*>& pinnedItems)
+    const QList<QWidget*>& flowItems, const QList<QWidget*>& pinnedItems, bool animateReorder)
 {
     if (m_shuttingDown) {
         return;
@@ -82,8 +82,9 @@ void AnimatedFlowWidget::setItems(
     adoptItems(flowItems, m_flowItems);
     adoptItems(pinnedItems, m_pinnedItems);
 
-    m_initialized = false;
-    relayout(false);
+    const bool animate = animateReorder && m_initialized && isVisible();
+    relayout(animate);
+    m_initialized = true;
     updateGeometry();
 }
 
@@ -133,6 +134,19 @@ int AnimatedFlowWidget::targetHeightForWidth(int width) const
         width = naturalWidth();
     }
     return buildPlacements(width, nullptr);
+}
+
+QRect AnimatedFlowWidget::itemTargetGeometry(const QWidget* widget) const
+{
+    if (!widget) {
+        return {};
+    }
+    for (const AnimatedTarget& target : m_targets) {
+        if (target.widget.data() == widget) {
+            return target.rect;
+        }
+    }
+    return widget->geometry();
 }
 
 void AnimatedFlowWidget::shutdown()

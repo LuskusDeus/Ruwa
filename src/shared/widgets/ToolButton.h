@@ -44,6 +44,8 @@ public:
     void setPressFeedbackEnabled(bool enabled);
     void setHasGroupIndicator(bool hasGroupIndicator);
     bool hasGroupIndicator() const { return m_hasGroupIndicator; }
+    /// Reset a mouse press that has transitioned into a drag operation.
+    void cancelPointerInteraction();
 
     // Smoothly fades the icon between its enabled and disabled appearance when
     // the button's enabled state toggles (e.g. undo/redo arrows becoming

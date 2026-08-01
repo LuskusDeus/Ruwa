@@ -6,6 +6,7 @@
 #include "shared/style/WidgetStyleManager.h"
 
 #include <QEasingCurve>
+#include <QCursor>
 #include <QEvent>
 #include <QPainter>
 #include <QPainterPath>
@@ -161,6 +162,14 @@ void ToolButton::setHasGroupIndicator(bool hasGroupIndicator)
         return;
     }
     m_hasGroupIndicator = hasGroupIndicator;
+    update();
+}
+
+void ToolButton::cancelPointerInteraction()
+{
+    setDown(false);
+    m_isPressed = false;
+    setHovered(rect().contains(mapFromGlobal(QCursor::pos())));
     update();
 }
 
