@@ -18,6 +18,7 @@
 #include "services/updates/UpdateManager.h"
 #include "shared/rendering/GLProgramBinaryCache.h"
 #include "shared/rendering/GLShaderWarmup.h"
+#include "shared/widgets/overlays/ToolTipController.h"
 
 #include <QEventLoop>
 #include <QFileOpenEvent>
@@ -111,6 +112,11 @@ Application::Application(int& argc, char** argv)
     // Synthesize mouse events from stylus outside canvas
     // (AA_SynthesizeMouseForUnhandledTabletEvents is false)
     installEventFilter(new TabletToMouseEventFilter(this));
+
+    // Keep QWidget::setToolTip() as the single tooltip API while replacing only
+    // the native presentation with Ruwa's themed glass surface.
+    m_toolTipController = new ui::widgets::ToolTipController(this);
+    installEventFilter(m_toolTipController);
     services::input::StylusInputManager::instance().initialize(this);
 }
 

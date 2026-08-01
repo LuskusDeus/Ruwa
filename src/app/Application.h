@@ -21,6 +21,10 @@ class QOpenGLWidget;
 
 namespace ruwa {
 
+namespace ui::widgets {
+class ToolTipController;
+}
+
 class Application : public QApplication {
     Q_OBJECT
 
@@ -92,6 +96,7 @@ private:
     // Hidden OpenGL widget to pre-warm Qt's OpenGL subsystem
     // This prevents window recreation when first OpenGL widget is shown
     class QOpenGLWidget* m_glWarmup = nullptr;
+    ui::widgets::ToolTipController* m_toolTipController = nullptr;
 };
 
 } // namespace ruwa
