@@ -478,19 +478,10 @@ Result<void> GLTransformRenderer::initialize()
     m_gl->glBindBuffer(GL_ARRAY_BUFFER, 0);
     m_gl->glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, 0);
 
-    // Create temp texture for single-tile preview rendering
-    m_gl->glGenTextures(1, &m_tempTex);
-    m_gl->glBindTexture(GL_TEXTURE_2D, m_tempTex);
-    m_gl->glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
-    m_gl->glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
-    m_gl->glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
-    m_gl->glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
-    // Initial placeholder format; re-specified per transform in buildSourceAtlas
-    // to match the source grid's per-document format (glCopyImageSubData /
-    // sampling need format-compatible textures, not just convertible).
-    m_gl->glTexImage2D(GL_TEXTURE_2D, 0, tileGLInternalFormat(kDefaultTileFormat), TILE_SIZE,
-        TILE_SIZE, 0, GL_RGBA, tileGLPixelType(kDefaultTileFormat), nullptr);
-    m_gl->glBindTexture(GL_TEXTURE_2D, 0);
+    // Create the single-tile preview target in the default document format. It
+    // is recreated below when a source grid uses a different pixel format.
+    m_tempTex = createTexture2D(m_gl, TILE_SIZE, TILE_SIZE,
+        tileTextureParams(kDefaultTileFormat, GL_NEAREST, GL_NEAREST));
 
     m_initialized = true;
     return Result<void>::ok();
@@ -571,10 +562,8 @@ void GLTransformRenderer::buildSourceAtlas(
     // from / is composited against (glCopyImageSubData / sampling).
     if (m_tempTex != 0 && srcGrid.format() != m_tempTexFormat) {
         m_tempTexFormat = srcGrid.format();
-        m_gl->glBindTexture(GL_TEXTURE_2D, m_tempTex);
-        m_gl->glTexImage2D(GL_TEXTURE_2D, 0, tileGLInternalFormat(srcGrid.format()), TILE_SIZE,
-            TILE_SIZE, 0, GL_RGBA, tileGLPixelType(srcGrid.format()), nullptr);
-        m_gl->glBindTexture(GL_TEXTURE_2D, 0);
+        recreateTexture2D(m_gl, m_tempTex, TILE_SIZE, TILE_SIZE,
+            tileTextureParams(srcGrid.format(), GL_NEAREST, GL_NEAREST));
     }
 
     if (srcGrid.empty() || !tileRenderer)
@@ -601,19 +590,9 @@ void GLTransformRenderer::buildSourceAtlas(
     m_atlasHeight = m_atlasRows * TILE_SIZE;
 
     // 2. Create atlas texture
-    m_gl->glGenTextures(1, &m_atlasTexture);
-    m_gl->glBindTexture(GL_TEXTURE_2D, m_atlasTexture);
     const GLint filter = useNearestFilter ? GL_NEAREST : GL_LINEAR;
-    m_gl->glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, filter);
-    m_gl->glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, filter);
-    m_gl->glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
-    m_gl->glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
-
-    // Allocate with transparent black. Internal format must match the source
-    // tiles' format — glCopyImageSubData below copies raw texels (no conversion)
-    // and requires format-compatible src/dst.
-    m_gl->glTexImage2D(GL_TEXTURE_2D, 0, tileGLInternalFormat(srcGrid.format()), m_atlasWidth,
-        m_atlasHeight, 0, GL_RGBA, tileGLPixelType(srcGrid.format()), nullptr);
+    m_atlasTexture = createTexture2D(m_gl, m_atlasWidth, m_atlasHeight,
+        tileTextureParams(srcGrid.format(), filter, filter));
 
     // Clear to transparent
     GLint prevFBO = 0;
@@ -665,7 +644,6 @@ void GLTransformRenderer::buildSourceAtlas(
     // Restore state
     m_gl->glBindFramebuffer(GL_FRAMEBUFFER, prevFBO);
     m_gl->glViewport(prevViewport[0], prevViewport[1], prevViewport[2], prevViewport[3]);
-    m_gl->glBindTexture(GL_TEXTURE_2D, 0);
 }
 
 void GLTransformRenderer::buildMaskAtlas(const TileGrid& maskGrid, GLTileRenderer* tileRenderer)
@@ -707,15 +685,9 @@ void GLTransformRenderer::buildMaskAtlas(const TileGrid& maskGrid, GLTileRendere
     m_maskAtlasWidth = m_maskAtlasCols * TILE_SIZE;
     m_maskAtlasHeight = m_maskAtlasRows * TILE_SIZE;
 
-    m_gl->glGenTextures(1, &m_maskAtlasTexture);
-    m_gl->glBindTexture(GL_TEXTURE_2D, m_maskAtlasTexture);
-    m_gl->glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
-    m_gl->glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
-    m_gl->glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
-    m_gl->glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
     // Match mask grid format (glCopyImageSubData requires format-compatible).
-    m_gl->glTexImage2D(GL_TEXTURE_2D, 0, tileGLInternalFormat(maskGrid.format()), m_maskAtlasWidth,
-        m_maskAtlasHeight, 0, GL_RGBA, tileGLPixelType(maskGrid.format()), nullptr);
+    m_maskAtlasTexture = createTexture2D(m_gl, m_maskAtlasWidth, m_maskAtlasHeight,
+        tileTextureParams(maskGrid.format(), GL_NEAREST, GL_NEAREST));
 
     GLint prevFBO = 0;
     m_gl->glGetIntegerv(GL_FRAMEBUFFER_BINDING, &prevFBO);
@@ -752,7 +724,6 @@ void GLTransformRenderer::buildMaskAtlas(const TileGrid& maskGrid, GLTileRendere
 
     m_gl->glBindFramebuffer(GL_FRAMEBUFFER, prevFBO);
     m_gl->glViewport(prevViewport[0], prevViewport[1], prevViewport[2], prevViewport[3]);
-    m_gl->glBindTexture(GL_TEXTURE_2D, 0);
 }
 
 void GLTransformRenderer::destroySourceAtlas()
@@ -1105,7 +1076,6 @@ GLuint GLTransformRenderer::renderTransformedTile(
     m_gl->glBindTextureUnit(0, m_atlasTexture);
     if (useMask) {
         m_gl->glBindTextureUnit(1, m_maskAtlasTexture);
-        m_gl->glActiveTexture(GL_TEXTURE0);
     }
 
     if (useForwardMesh) {
@@ -1113,7 +1083,6 @@ GLuint GLTransformRenderer::renderTransformedTile(
             m_gl->glBindTextureUnit(0, 0);
             if (useMask) {
                 m_gl->glBindTextureUnit(1, 0);
-                m_gl->glActiveTexture(GL_TEXTURE0);
             }
             m_gl->glBindFramebuffer(GL_FRAMEBUFFER, prevFBO);
             m_gl->glViewport(prevViewport[0], prevViewport[1], prevViewport[2], prevViewport[3]);
@@ -1129,7 +1098,6 @@ GLuint GLTransformRenderer::renderTransformedTile(
     m_gl->glBindTextureUnit(0, 0);
     if (useMask) {
         m_gl->glBindTextureUnit(1, 0);
-        m_gl->glActiveTexture(GL_TEXTURE0);
     }
     m_gl->glBindFramebuffer(GL_FRAMEBUFFER, prevFBO);
     m_gl->glViewport(prevViewport[0], prevViewport[1], prevViewport[2], prevViewport[3]);
@@ -1217,7 +1185,6 @@ std::unordered_set<TileKey, TileKeyHash> GLTransformRenderer::applyGPU(const Tra
     m_gl->glBindTextureUnit(0, m_atlasTexture);
     if (useMask) {
         m_gl->glBindTextureUnit(1, m_maskAtlasTexture);
-        m_gl->glActiveTexture(GL_TEXTURE0);
     }
     m_gl->glBindVertexArray(m_emptyVAO);
 
@@ -1238,11 +1205,10 @@ std::unordered_set<TileKey, TileKeyHash> GLTransformRenderer::applyGPU(const Tra
             TileData& tile = destGrid.getOrCreateTile(key);
             if (!tile.hasTexture()) {
                 tileRenderer->ensureTileTexture(tile);
-                // ensureTileTexture unbinds GL_TEXTURE0 — re-bind atlas
+                // Keep the pass inputs explicit after allocating the destination.
                 m_gl->glBindTextureUnit(0, m_atlasTexture);
                 if (useMask) {
                     m_gl->glBindTextureUnit(1, m_maskAtlasTexture);
-                    m_gl->glActiveTexture(GL_TEXTURE0);
                 }
             }
 
@@ -1286,7 +1252,6 @@ std::unordered_set<TileKey, TileKeyHash> GLTransformRenderer::applyGPU(const Tra
     m_gl->glBindTextureUnit(0, 0);
     if (useMask) {
         m_gl->glBindTextureUnit(1, 0);
-        m_gl->glActiveTexture(GL_TEXTURE0);
     }
     m_gl->glBindFramebuffer(GL_FRAMEBUFFER, prevFBO);
     m_gl->glViewport(prevViewport[0], prevViewport[1], prevViewport[2], prevViewport[3]);

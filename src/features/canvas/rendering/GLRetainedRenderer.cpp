@@ -3,6 +3,7 @@
 #include "features/canvas/rendering/GLRetainedRenderer.h"
 
 #include "shared/rendering/GLShaderProgram.h"
+#include "shared/rendering/GLTextureFactory.h"
 
 #include <QPainter>
 #include <QPainterPath>
@@ -488,15 +489,7 @@ void GLRetainedRenderer::ensureRenderTarget()
         return;
     }
 
-    m_gl->glGenTextures(1, &m_texture);
-    m_gl->glBindTexture(GL_TEXTURE_2D, m_texture);
-    m_gl->glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
-    m_gl->glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
-    m_gl->glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
-    m_gl->glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
-    m_gl->glTexImage2D(
-        GL_TEXTURE_2D, 0, GL_RGBA8, TILE_SIZE, TILE_SIZE, 0, GL_RGBA, GL_UNSIGNED_BYTE, nullptr);
-    m_gl->glBindTexture(GL_TEXTURE_2D, 0);
+    m_texture = createTexture2D(m_gl, TILE_SIZE, TILE_SIZE);
 }
 
 void GLRetainedRenderer::clearRenderTarget()
@@ -557,11 +550,9 @@ bool GLRetainedRenderer::renderGlyphPayloadTile(
 
 void GLRetainedRenderer::uploadGlyphImage(const QImage& image)
 {
-    m_gl->glBindTexture(GL_TEXTURE_2D, m_texture);
     m_gl->glPixelStorei(GL_UNPACK_ALIGNMENT, 1);
-    m_gl->glTexSubImage2D(
-        GL_TEXTURE_2D, 0, 0, 0, TILE_SIZE, TILE_SIZE, GL_RGBA, GL_UNSIGNED_BYTE, image.constBits());
-    m_gl->glBindTexture(GL_TEXTURE_2D, 0);
+    m_gl->glTextureSubImage2D(
+        m_texture, 0, 0, 0, TILE_SIZE, TILE_SIZE, GL_RGBA, GL_UNSIGNED_BYTE, image.constBits());
 }
 
 } // namespace aether

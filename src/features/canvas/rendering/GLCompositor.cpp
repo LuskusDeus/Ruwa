@@ -1053,6 +1053,17 @@ void GLCompositor::compositeDirtyKeys(const std::vector<CompositeLayerInfo>& lay
         ++m_lastCompositedTiles;
     }
 
+    // Individual passes fully specify their inputs before drawing. Return the
+    // optional texture units and VAO to the compositor's established neutral
+    // boundary state once per batch instead of once per layer draw.
+    m_gl->glBindTextureUnit(7, 0);
+    m_gl->glBindTextureUnit(6, 0);
+    m_gl->glBindTextureUnit(5, 0);
+    m_gl->glBindTextureUnit(4, 0);
+    m_gl->glBindTextureUnit(3, 0);
+    m_gl->glBindTextureUnit(2, 0);
+    m_gl->glBindVertexArray(0);
+
     const qint64 dbgBatchUs = dbgBatchTimer.nsecsElapsed() / 1000;
     if (dbgBatchUs > 2000 && m_dbgTileCount > 0) { }
 }
@@ -1106,16 +1117,12 @@ void GLCompositor::blendPass(const BlendPassParams& p)
     m_gl->glDisable(GL_BLEND);
 
     m_compositeProgram->use();
-    m_compositeProgram->setUniform("uBaseTexture", 0);
-    m_compositeProgram->setUniform("uSrcTexture", 1);
-    m_compositeProgram->setUniform("uClipMaskTexture", 2);
     m_compositeProgram->setUniform("uBlendMode", p.blendMode);
     m_compositeProgram->setUniform("uOpacity", p.opacity);
     m_compositeProgram->setUniform("uUseClipMask", p.useClipMask ? 1 : 0);
     m_compositeProgram->setUniform("uClipMaskAlphaOnly", p.clipMaskAlphaOnly ? 1 : 0);
     m_compositeProgram->setUniform("uClipMaskAsAlphaCap", p.clipMaskAsAlphaCap ? 1 : 0);
     m_compositeProgram->setUniform("uClipMaskLuminanceReveal", p.clipMaskLuminanceReveal ? 1 : 0);
-    m_compositeProgram->setUniform("uClipMaskTexture2", 4);
     m_compositeProgram->setUniform("uClipMaskEditPreview", p.clipMaskEditPreview ? 1 : 0);
     m_compositeProgram->setUniform("uClipMaskEditReplace", p.clipMaskEditReplace ? 1 : 0);
     m_compositeProgram->setUniform("uClipMaskEditStrokeOpacity", p.clipMaskEditStrokeOpacity);
@@ -1125,11 +1132,7 @@ void GLCompositor::blendPass(const BlendPassParams& p)
     m_compositeProgram->setUniform("uReplaceBase", p.replaceBase ? 1 : 0);
     m_compositeProgram->setUniform("uReplaceBaseMixReveal", p.replaceBaseMixReveal ? 1 : 0);
     m_compositeProgram->setUniform("uUseGroupComposite", p.useGroupComposite ? 1 : 0);
-    m_compositeProgram->setUniform("uGroupPassThroughTexture", 5);
-    m_compositeProgram->setUniform("uGroupCoverageTexture", 6);
-    m_compositeProgram->setUniform("uGroupSourceCoverageTexture", 7);
     m_compositeProgram->setUniform("uUseProgrammaticBlendBase", p.useProgrammaticBlendBase ? 1 : 0);
-    m_compositeProgram->setUniform("uProgrammaticBlendBaseTexture", 3);
     m_compositeProgram->setUniform("uSrcAtop", p.srcAtop ? 1 : 0);
     m_compositeProgram->setUniform("uUseRadialReveal", p.useRadialReveal ? 1 : 0);
     m_compositeProgram->setUniform("uRadialRevealInvert", p.radialRevealInvert ? 1 : 0);
@@ -1173,16 +1176,7 @@ void GLCompositor::blendPass(const BlendPassParams& p)
 
     m_gl->glBindVertexArray(m_emptyVAO);
     m_gl->glDrawArrays(GL_TRIANGLES, 0, 6);
-    m_gl->glBindVertexArray(0);
     ++m_lastCompositeDrawCalls;
-
-    m_gl->glBindTextureUnit(7, 0);
-    m_gl->glBindTextureUnit(6, 0);
-    m_gl->glBindTextureUnit(5, 0);
-    m_gl->glBindTextureUnit(4, 0);
-    m_gl->glBindTextureUnit(3, 0);
-    m_gl->glBindTextureUnit(2, 0);
-    m_gl->glActiveTexture(GL_TEXTURE0);
 }
 
 ruwa::core::effects::EffectRegionFrame GLCompositor::effectRegionForTile(const TileKey& key) const
@@ -3061,23 +3055,6 @@ GLuint GLCompositor::applyAdjustmentNeighborhoodEffects(const TileKey& key,
         adjustment.liveEditedEffectId, prefixCacheVariant);
 }
 
-void GLCompositor::copyTextureToCache(GLuint srcTex, TileData& cacheTile)
-{
-    if (!cacheTile.hasTexture())
-        return;
-
-    // Attach source texture to FBO and copy to cache tile texture
-    m_gl->glBindFramebuffer(GL_READ_FRAMEBUFFER, m_fbo);
-    m_gl->glFramebufferTexture2D(
-        GL_READ_FRAMEBUFFER, GL_COLOR_ATTACHMENT0, GL_TEXTURE_2D, srcTex, 0);
-
-    m_gl->glBindTexture(GL_TEXTURE_2D, cacheTile.textureId());
-    m_gl->glCopyTexSubImage2D(GL_TEXTURE_2D, 0, 0, 0, 0, 0, TILE_SIZE, TILE_SIZE);
-    m_gl->glBindTexture(GL_TEXTURE_2D, 0);
-
-    m_gl->glBindFramebuffer(GL_READ_FRAMEBUFFER, 0);
-}
-
 GLuint GLCompositor::solidClipColorTexture(GLuint& slot, const Color& color)
 {
     if (!slot) {
@@ -3085,8 +3062,6 @@ GLuint GLCompositor::solidClipColorTexture(GLuint& slot, const Color& color)
         if (!slot)
             return 0;
     }
-    m_gl->glBindTexture(GL_TEXTURE_2D, slot);
-
     const float clampedR = std::clamp(color.r, 0.0f, 1.0f);
     const float clampedG = std::clamp(color.g, 0.0f, 1.0f);
     const float clampedB = std::clamp(color.b, 0.0f, 1.0f);
@@ -3096,8 +3071,7 @@ GLuint GLCompositor::solidClipColorTexture(GLuint& slot, const Color& color)
         static_cast<uint8_t>(clampedG * 255.0f + 0.5f),
         static_cast<uint8_t>(clampedB * 255.0f + 0.5f),
         static_cast<uint8_t>(clampedA * 255.0f + 0.5f) };
-    m_gl->glTexSubImage2D(GL_TEXTURE_2D, 0, 0, 0, 1, 1, GL_RGBA, GL_UNSIGNED_BYTE, rgba);
-    m_gl->glBindTexture(GL_TEXTURE_2D, 0);
+    m_gl->glTextureSubImage2D(slot, 0, 0, 0, 1, 1, GL_RGBA, GL_UNSIGNED_BYTE, rgba);
     return slot;
 }
 

@@ -133,7 +133,9 @@ public:
     void shutdown();
 
     /// Composite a single tile position from the layer stack into the cache.
-    /// The tileRenderer is used to ensure layer tiles have GPU textures.
+    /// The tileRenderer is used to ensure layer tiles have GPU textures. This is
+    /// a low-level entry point and intentionally does not restore GL state; the
+    /// batch APIs below provide the normal guarded operation boundary.
     void compositeTile(const TileKey& key, const std::vector<CompositeLayerInfo>& layers,
         CompositionCache& cache, GLTileRenderer* tileRenderer,
         const Color& backdropColor = Color::transparent());
@@ -424,7 +426,6 @@ private:
     void destroyEffectBlockCache();
     GLuint renderStrokeBlendBase(GLuint outerBaseTex, GLuint layerContentTex, const TileKey& key,
         int layerBlendMode, float layerOpacity, const Color& backdropColor);
-    void copyTextureToCache(GLuint srcTex, TileData& cacheTile);
     GLuint transparentTexture();
     GLuint solidColorTexture(const Color& color);
     // Dedicated 1x1 solid-color textures for the clip-mask slots. Separate from

@@ -155,6 +155,17 @@ GLuint GLViewportCompositor::compositeLayers(const std::vector<CompositeLayerInf
         layers, 1.0f, false, sourceResolver, layerMaskResolver, backdropColor);
     m_groupCompositeDepth = 0;
     m_overscanResolver = nullptr;
+
+    // Keep cleanup at the public operation boundary. Every blend pass binds all
+    // of its inputs explicitly, so clearing these after every layer only doubles
+    // the binding work on the hot path.
+    m_gl->glBindTextureUnit(7, 0);
+    m_gl->glBindTextureUnit(6, 0);
+    m_gl->glBindTextureUnit(5, 0);
+    m_gl->glBindTextureUnit(2, 0);
+    m_gl->glBindTextureUnit(1, 0);
+    m_gl->glBindTextureUnit(0, 0);
+    m_gl->glBindVertexArray(0);
     return result;
 }
 
@@ -264,9 +275,6 @@ GLuint GLViewportCompositor::applyLuminanceRevealMask(
     // has already done src *= reveal. So the base texture is unused; bind colorTex
     // to both slots to avoid sampling an unbound unit.
     m_compositeProgram->use();
-    m_compositeProgram->setUniform("uBaseTexture", 0);
-    m_compositeProgram->setUniform("uSrcTexture", 1);
-    m_compositeProgram->setUniform("uClipMaskTexture", 2);
     m_compositeProgram->setUniform("uBlendMode", 0);
     m_compositeProgram->setUniform("uOpacity", 1.0f);
     m_compositeProgram->setUniform("uUseClipMask", 1);
@@ -702,9 +710,6 @@ void GLViewportCompositor::blendPass(const BlendPassParams& params)
     m_gl->glDisable(GL_BLEND);
 
     m_compositeProgram->use();
-    m_compositeProgram->setUniform("uBaseTexture", 0);
-    m_compositeProgram->setUniform("uSrcTexture", 1);
-    m_compositeProgram->setUniform("uClipMaskTexture", 2);
     m_compositeProgram->setUniform("uBlendMode", params.blendMode);
     m_compositeProgram->setUniform("uOpacity", params.opacity);
     const bool useLayerMask = params.layerMaskTexture != 0 && params.layerMaskLuminanceReveal;
@@ -720,9 +725,6 @@ void GLViewportCompositor::blendPass(const BlendPassParams& params)
     m_compositeProgram->setUniform("uReplaceBase", params.replaceBase ? 1 : 0);
     m_compositeProgram->setUniform("uReplaceBaseMixReveal", params.replaceBaseMixReveal ? 1 : 0);
     m_compositeProgram->setUniform("uUseGroupComposite", params.useGroupComposite ? 1 : 0);
-    m_compositeProgram->setUniform("uGroupPassThroughTexture", 5);
-    m_compositeProgram->setUniform("uGroupCoverageTexture", 6);
-    m_compositeProgram->setUniform("uGroupSourceCoverageTexture", 7);
     m_compositeProgram->setUniform("uSrcAtop", params.srcAtop ? 1 : 0);
     m_compositeProgram->setUniform("uUseRadialReveal", 0);
     m_compositeProgram->setUniform("uRadialRevealInvert", 0);
@@ -742,14 +744,6 @@ void GLViewportCompositor::blendPass(const BlendPassParams& params)
 
     m_gl->glBindVertexArray(m_emptyVao);
     m_gl->glDrawArrays(GL_TRIANGLES, 0, 6);
-    m_gl->glBindVertexArray(0);
-
-    m_gl->glBindTextureUnit(7, 0);
-    m_gl->glBindTextureUnit(6, 0);
-    m_gl->glBindTextureUnit(5, 0);
-    m_gl->glBindTextureUnit(2, 0);
-    m_gl->glBindTextureUnit(1, 0);
-    m_gl->glBindTextureUnit(0, 0);
 }
 
 bool GLViewportCompositor::ensureAdjustmentTargets()

@@ -20,11 +20,11 @@
 
 #version 450 core
 
-uniform sampler2D uBaseTexture;   // current composited result (premultiplied)
-uniform sampler2D uSrcTexture;    // layer tile being blended (premultiplied)
-uniform sampler2D uClipMaskTexture; // optional alpha mask for clipping
-uniform sampler2D uClipMaskTexture2; // secondary clip mask (mask-edit preview: committed mask)
-uniform sampler2D uProgrammaticBlendBaseTexture; // visible base used by stroke preview blend modes
+layout(binding = 0) uniform sampler2D uBaseTexture;   // current composited result (premultiplied)
+layout(binding = 1) uniform sampler2D uSrcTexture;    // layer tile being blended (premultiplied)
+layout(binding = 2) uniform sampler2D uClipMaskTexture; // optional alpha mask for clipping
+layout(binding = 3) uniform sampler2D uProgrammaticBlendBaseTexture; // visible base used by stroke preview blend modes
+layout(binding = 4) uniform sampler2D uClipMaskTexture2; // secondary clip mask (mask-edit preview: committed mask)
 uniform int       uBlendMode;     // blend mode index
 uniform float     uOpacity;       // layer opacity [0..1]
 uniform int       uUseClipMask;   // 0 = disabled, 1 = enabled
@@ -61,9 +61,9 @@ uniform int       uReplaceBase;   // 1 = src already stores the final tile
 // reveal scales the mix factor between base and src instead of darkening src.
 uniform int       uReplaceBaseMixReveal;
 uniform int       uUseGroupComposite;
-uniform sampler2D uGroupPassThroughTexture;
-uniform sampler2D uGroupCoverageTexture;
-uniform sampler2D uGroupSourceCoverageTexture;
+layout(binding = 5) uniform sampler2D uGroupPassThroughTexture;
+layout(binding = 6) uniform sampler2D uGroupCoverageTexture;
+layout(binding = 7) uniform sampler2D uGroupSourceCoverageTexture;
 uniform int       uUseProgrammaticBlendBase; // 1 = match commit-time stroke blend flattening
 uniform int       uSrcAtop;       // 1 = Porter-Duff src-atop (ao = ab) for clip-group passes
 uniform int       uUseRadialReveal;
