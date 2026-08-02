@@ -572,6 +572,7 @@ void DrawCommand::applyState(const RawTileMap* rawData, const CompressedTileMap*
         return;
 
     RawTileMap decompressedTarget;
+    RawTileMap preparedTarget;
     const RawTileMap* targetMap = rawData;
 
     qint64 lockAcquireUs = 0;
@@ -589,7 +590,14 @@ void DrawCommand::applyState(const RawTileMap* rawData, const CompressedTileMap*
         if (wasCompressed) {
             sourceTiles = compressedData->size();
             if (m_preparedDirection == preparedDirection) {
-                targetMap = &m_preparedTiles;
+                // Take ownership of the prefetched map instead of pointing at
+                // the member: applyResolvedState runs with the lock released,
+                // and a prefetch thread preparing the OTHER direction for this
+                // same command reassigns m_preparedTiles underneath it.
+                preparedTarget = std::move(m_preparedTiles);
+                RawTileMap {}.swap(m_preparedTiles);
+                m_preparedDirection = PreparedDirection::None;
+                targetMap = &preparedTarget;
                 usedPrepared = true;
             } else {
                 const auto tD0 = Clock::now();

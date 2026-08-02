@@ -66,7 +66,7 @@ void UndoManager::push(std::unique_ptr<IUndoCommand> cmd)
 
     // Discard redo stack (everything after current index)
     while (static_cast<int>(m_commands.size()) > m_index) {
-        m_commands.pop_back();
+        popBackCommand();
     }
 
     // Invalidate clean state if we discarded commands past it
@@ -273,7 +273,7 @@ void UndoManager::discardRedoStack()
 {
     bool changed = false;
     while (static_cast<int>(m_commands.size()) > m_index) {
-        m_commands.pop_back();
+        popBackCommand();
         changed = true;
     }
 
@@ -366,7 +366,7 @@ void UndoManager::enforceMemoryLimit()
 
     while (m_currentMemory > m_memoryLimit && !m_commands.empty()) {
         m_currentMemory -= m_commands.front()->memorySize();
-        m_commands.pop_front();
+        popFrontCommand();
         removed++;
 
         if (m_index > 0)
@@ -588,6 +588,61 @@ void UndoManager::finishPrefetch()
     if (!m_prefetchTimer.isActive()) {
         m_prefetchTimer.start();
     }
+}
+
+void UndoManager::waitForBackgroundWorkOn(const IUndoCommand* command)
+{
+    if (!command) {
+        return;
+    }
+
+    // Prepare/prefetch futures run prepareUndo()/prepareRedo() through a RAW
+    // command pointer, so destroying the command while such a future is still
+    // executing is a use-after-free: the worker walks the command's compressed
+    // tile map and faults inside qUncompress (or corrupts the heap when it
+    // frees the reallocated snapshot). A fast undo burst reaches this because
+    // undo finalizes a pending stroke, and that push() discards the redo tail
+    // the redo-side prefetch is decompressing right then.
+    bool clearedPreparation = false;
+
+    if (m_prefetchCommand == command && m_prefetchWatcher && m_prefetchWatcher->isRunning()) {
+        m_prefetchWatcher->waitForFinished();
+        m_prefetchOperation = PendingOperation::None;
+        m_prefetchCommand = nullptr;
+        clearedPreparation = true;
+    }
+
+    if (m_preparingCommand == command && m_prepareWatcher && m_prepareWatcher->isRunning()) {
+        m_prepareWatcher->waitForFinished();
+        m_preparingOperation = PendingOperation::None;
+        m_preparingCommand = nullptr;
+        m_undoRedoInProgress = false;
+        clearedPreparation = true;
+    }
+
+    // The watchers' finished() signals arrive queued and will now early-return,
+    // so re-arm the pending undo/redo drain that they would otherwise have run.
+    if (clearedPreparation) {
+        scheduleNextPending();
+    }
+}
+
+void UndoManager::popBackCommand()
+{
+    if (m_commands.empty()) {
+        return;
+    }
+    waitForBackgroundWorkOn(m_commands.back().get());
+    m_commands.pop_back();
+}
+
+void UndoManager::popFrontCommand()
+{
+    if (m_commands.empty()) {
+        return;
+    }
+    waitForBackgroundWorkOn(m_commands.front().get());
+    m_commands.pop_front();
 }
 
 void UndoManager::waitForPendingPreparation()

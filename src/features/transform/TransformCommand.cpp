@@ -781,12 +781,20 @@ void TransformCommand::applyState(const RawTileMap* rawData,
         return;
 
     RawTileMap decompressedTarget;
+    RawTileMap preparedTarget;
     const RawTileMap* targetMap = rawData;
     {
         std::lock_guard<std::mutex> lock(m_mutex);
         if (m_compressionDone.load(std::memory_order_acquire)) {
             if (m_preparedDirection == preparedDirection) {
-                targetMap = &m_preparedTiles;
+                // Own the prefetched map for the duration of the apply: the
+                // lock is released below, and a prefetch of the other direction
+                // on this same command would reassign m_preparedTiles mid-loop
+                // (same use-after-free as DrawCommand::applyState).
+                preparedTarget = std::move(m_preparedTiles);
+                RawTileMap {}.swap(m_preparedTiles);
+                m_preparedDirection = PreparedDirection::None;
+                targetMap = &preparedTarget;
             } else {
                 decompressedTarget = decompressTiles(*compressedData, m_contentFormat);
                 targetMap = &decompressedTarget;

@@ -136,6 +136,11 @@ private:
     void startPrefetch(PendingOperation operation, IUndoCommand* command);
     void finishPrefetch();
     void waitForPendingPreparation();
+    /// Block until no background prepare/prefetch future is still executing on
+    /// `command`. MUST be called before the command is destroyed.
+    void waitForBackgroundWorkOn(const IUndoCommand* command);
+    void popBackCommand();
+    void popFrontCommand();
 
     std::deque<std::unique_ptr<IUndoCommand>> m_commands;
     int m_index = 0; // Number of applied commands (undo pops from here)
