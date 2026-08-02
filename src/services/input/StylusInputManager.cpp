@@ -7,6 +7,7 @@
 #include "features/layers/ui/LayerRowWidget.h"
 #include "shared/widgets/inputs/ProgressHandleSlider.h"
 #include "shared/widgets/layout/SmoothScrollArea.h"
+#include "shared/widgets/SyntheticMouseFocus.h"
 
 #include <algorithm>
 #include <iterator>
@@ -706,6 +707,8 @@ bool StylusInputManager::handleNativeEvent(void* message)
         if (addedButtons != Qt::NoButton) {
             QWidget* pressTarget = target;
             if (pressTarget && button != Qt::NoButton) {
+                ruwa::ui::widgets::applySyntheticMousePressFocus(pressTarget);
+
                 if (auto* scrollArea = findSmoothScrollArea(pressTarget);
                     scrollArea && shouldUseStylusSwipeForWidget(pressTarget)) {
                     clearPendingStylusSwipe();

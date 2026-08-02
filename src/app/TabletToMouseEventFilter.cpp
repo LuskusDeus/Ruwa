@@ -13,6 +13,7 @@
 #include "features/layers/ui/LayerRowWidget.h"
 #include "shared/widgets/inputs/ProgressHandleSlider.h"
 #include "shared/widgets/layout/SmoothScrollArea.h"
+#include "shared/widgets/SyntheticMouseFocus.h"
 
 #include <QAbstractButton>
 #include <QAbstractItemView>
@@ -612,6 +613,8 @@ bool TabletToMouseEventFilter::eventFilter(QObject* watched, QEvent* event)
     case QEvent::TabletPress: {
         const Qt::MouseButton button = effectiveButton();
         if (button != Qt::NoButton) {
+            ui::widgets::applySyntheticMousePressFocus(target);
+
             if (auto* scrollArea = findSmoothScrollArea(target);
                 scrollArea && shouldUseStylusSwipeForWidget(target)) {
                 clearPendingStylusSwipe();
