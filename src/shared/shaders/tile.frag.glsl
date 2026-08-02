@@ -71,9 +71,26 @@ float bayer8(ivec2 c) {
 // alone therefore does nothing to the visible gradient no matter how large the
 // amplitude, which is exactly why banding stayed legible underneath a ±16 LSB
 // test pattern. One shared offset for all four channels keeps hue stable.
+
+// A value that is ALREADY on the 1/255 grid must round, not dither — at 1:1
+// zoom every sample here comes straight from an 8-bit composition tile and must
+// survive bit-exact, and a value left a hundredth of an LSB short by 16F/32F
+// storage upstream would otherwise be reproduced as a sparse off-by-one speckle
+// instead of being rounded away. The deadband is wider than any half-float
+// residue (0.062 LSB at worst) and narrower than anything that could band.
+// Duplicated in composite.frag.glsl, brush_stamp.frag.glsl and the two embedded
+// shaders in GLBrushRenderer.cpp; keep the copies in step.
+const float kDitherDeadband = 0.1;
+
+vec4 quantizeTo8Bit(vec4 v, float n) {
+    vec4 s = v * 255.0;
+    vec4 nearest = round(s);
+    return mix(floor(s + n), nearest, step(abs(s - nearest), vec4(kDitherDeadband))) / 255.0;
+}
+
 vec4 ditherForDisplay(vec4 premultiplied) {
     float n = (bayer8(ivec2(gl_FragCoord.xy)) - 0.5) * kDitherAmplitude + 0.5;
-    vec4 q = floor(premultiplied * 255.0 + n) / 255.0;
+    vec4 q = quantizeTo8Bit(premultiplied, n);
     q.rgb = min(q.rgb, vec3(q.a));
     return q;
 }

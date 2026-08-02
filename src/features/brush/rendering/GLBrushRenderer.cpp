@@ -310,12 +310,28 @@ const QString kBatchRebuildFrag = QStringLiteral(
     // in step. uDitherSeed is 0 for GL_MAX runs (a per-pixel-constant offset
     // makes the quantizer monotone, so it commutes with max) and varies per
     // src-over write, where the tile is blended into once per chunk.
+    // A value that is ALREADY on the 1/255 grid must round, not dither: 16F/32F
+    // storage leaves 97/255 at 96.99463, and the plain floor form reproduces
+    // that residue as a sparse off-by-one speckle over a flat area. See the
+    // long form in brush_stamp.frag.glsl; keep every copy in step.
+    "const float kDitherDeadband = 0.1;\n"
+    "float quantizeTo8Bit(float v, float n) {\n"
+    "    float s = v * 255.0;\n"
+    "    float nearest = round(s);\n"
+    "    return mix(floor(s + n), nearest, step(abs(s - nearest), kDitherDeadband)) / 255.0;\n"
+    "}\n"
+    "vec3 quantizeTo8Bit(vec3 v, float n) {\n"
+    "    vec3 s = v * 255.0;\n"
+    "    vec3 nearest = round(s);\n"
+    "    return mix(floor(s + n), nearest, step(abs(s - nearest), vec3(kDitherDeadband)))\n"
+    "        / 255.0;\n"
+    "}\n"
     "vec4 ditherPremultiplied(vec4 color, vec2 worldPixelCoord) {\n"
     "    if (uQuantizeTo8Bit == 0 || color.a <= 0.0) return color;\n"
     "    float n = fract(52.9829189\n"
     "        * fract(dot(floor(worldPixelCoord), vec2(0.06711056, 0.00583715)) + uDitherSeed));\n"
-    "    color.rgb = floor(color.rgb * 255.0 + n) / 255.0;\n"
-    "    color.a = floor(color.a * 255.0 + n) / 255.0;\n"
+    "    color.rgb = quantizeTo8Bit(color.rgb, n);\n"
+    "    color.a = quantizeTo8Bit(color.a, n);\n"
     "    color.rgb = min(color.rgb, vec3(color.a));\n"
     "    return color;\n"
     "}\n"
@@ -1569,12 +1585,30 @@ Result<void> GLBrushRenderer::initialize(const QString& shaderDir)
         // same level and re-creates contours even from an already-dithered
         // stroke buffer. Dither the final value here too, same quantization-
         // aware rounding as the stamp shaders.
+        //
+        // The deadband matters most at THIS stage on an 8-bit document: the
+        // stroke buffer is now 16F (see strokeBufferFormatFor), so the solid
+        // core of a stroke arrives a hundredth of an LSB off the grid — without
+        // it that residue would be baked into the layer as a sparse
+        // off-by-one speckle. See brush_stamp.frag.glsl for the full rationale.
+        "const float kDitherDeadband = 0.1;\n"
+        "float quantizeTo8Bit(float v, float n) {\n"
+        "    float s = v * 255.0;\n"
+        "    float nearest = round(s);\n"
+        "    return mix(floor(s + n), nearest, step(abs(s - nearest), kDitherDeadband)) / 255.0;\n"
+        "}\n"
+        "vec3 quantizeTo8Bit(vec3 v, float n) {\n"
+        "    vec3 s = v * 255.0;\n"
+        "    vec3 nearest = round(s);\n"
+        "    return mix(floor(s + n), nearest, step(abs(s - nearest), vec3(kDitherDeadband)))\n"
+        "        / 255.0;\n"
+        "}\n"
         "vec4 ditherPremultiplied(vec4 color, vec2 worldPixelCoord) {\n"
         "    if (uQuantizeTo8Bit == 0 || color.a <= 0.0) return color;\n"
         "    float n = fract(52.9829189\n"
         "        * fract(dot(floor(worldPixelCoord), vec2(0.06711056, 0.00583715))));\n"
-        "    color.rgb = floor(color.rgb * 255.0 + n) / 255.0;\n"
-        "    color.a = floor(color.a * 255.0 + n) / 255.0;\n"
+        "    color.rgb = quantizeTo8Bit(color.rgb, n);\n"
+        "    color.a = quantizeTo8Bit(color.a, n);\n"
         "    color.rgb = min(color.rgb, vec3(color.a));\n"
         "    return color;\n"
         "}\n"

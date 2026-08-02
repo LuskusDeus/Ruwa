@@ -79,6 +79,35 @@ uniform float     uDitherSeed;     // decorrelates the offset between passes
 in vec2 fragTexCoord;
 out vec4 outColor;
 
+// Rounding-offset dither with a deadband around the grid points. Duplicated
+// verbatim in brush_stamp.frag.glsl, tile.frag.glsl and the two embedded
+// shaders in GLBrushRenderer.cpp; keep the copies in step.
+//
+// A value that is ALREADY on the 1/255 grid must round, not dither. 16F/32F
+// storage cannot hold a byte-exact colour: 97/255 reads back as 96.99463 and
+// 192/255 as 191.99707. Plain floor(v * 255 + n) reproduces that residue
+// faithfully — as a sparse -1 speckle over an otherwise flat area (0.5% of the
+// pixels in the first case, 0.3% in the second), which is what left isolated
+// off-by-one pixels on a solidly painted canvas.
+//
+// The deadband is wider than any half-float residue (0.062 LSB at worst) and
+// far narrower than the range where dithering earns its keep: inside it the
+// quantization error is below 0.1 LSB by construction, so no ramp that could
+// band is touched.
+const float kDitherDeadband = 0.1;
+
+float quantizeTo8Bit(float v, float n) {
+    float s = v * 255.0;
+    float nearest = round(s);
+    return mix(floor(s + n), nearest, step(abs(s - nearest), kDitherDeadband)) / 255.0;
+}
+
+vec3 quantizeTo8Bit(vec3 v, float n) {
+    vec3 s = v * 255.0;
+    vec3 nearest = round(s);
+    return mix(floor(s + n), nearest, step(abs(s - nearest), vec3(kDitherDeadband))) / 255.0;
+}
+
 // Quantization-aware dither for the 8-bit composite target — the same rounding
 // offset the brush stamp and flatten shaders use (see brush_stamp.frag.glsl).
 //
@@ -95,8 +124,8 @@ vec4 ditherPremultiplied(vec4 color, vec2 worldPixelCoord) {
     }
     float n = fract(52.9829189
         * fract(dot(floor(worldPixelCoord), vec2(0.06711056, 0.00583715)) + uDitherSeed));
-    color.rgb = floor(color.rgb * 255.0 + n) / 255.0;
-    color.a = floor(color.a * 255.0 + n) / 255.0;
+    color.rgb = quantizeTo8Bit(color.rgb, n);
+    color.a = quantizeTo8Bit(color.a, n);
     color.rgb = min(color.rgb, vec3(color.a));
     return color;
 }
