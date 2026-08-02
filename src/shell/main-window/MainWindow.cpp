@@ -29,6 +29,7 @@
 #include "shared/widgets/layout/AnimatedTabWidget.h"
 #include "shell/context-menu/ContextMenuSystem.h"
 #include "platform/windows/WindowsInkFeedback.h"
+#include "platform/windows/WindowRestoreMonitor.h"
 #include "services/input/StylusDebugService.h"
 #include "services/input/StylusInputManager.h"
 #include "services/updates/UpdateManager.h"
@@ -357,9 +358,16 @@ MainWindow::~MainWindow()
     if (m_firstLaunchUpdateDismissSyncFuture.isRunning()) {
         m_firstLaunchUpdateDismissSyncFuture.waitForFinished();
     }
-    if (!ruwa::Application::isFactoryResetRestartInProgress()) {
-        m_setupCoordinator->saveWindowState(this);
+    persistWindowState();
+}
+
+void MainWindow::persistWindowState()
+{
+    if (m_windowStateSaved || ruwa::Application::isFactoryResetRestartInProgress()) {
+        return;
     }
+    m_windowStateSaved = true;
+    m_setupCoordinator->saveWindowState(this);
 }
 
 void MainWindow::showEvent(QShowEvent* event)
@@ -375,6 +383,9 @@ void MainWindow::showEvent(QShowEvent* event)
 bool MainWindow::nativeEvent(const QByteArray& eventType, void* message, qintptr* result)
 {
     Q_UNUSED(eventType);
+    // Purely observational: keeps the window's restore rectangle on the display the
+    // window is currently on, so minimize/restore stays where the user put it.
+    aether::platform::trackWindowRestoreMonitor(message);
     if (useWinTabCapture()) {
         // Feed the direct backend with full-resolution WinTab packets. In Ruwa mode
         // StylusInputManager routes this stream and the application filter suppresses
@@ -706,9 +717,7 @@ void MainWindow::closeEvent(QCloseEvent* event)
 {
     auto* tm = m_tabCoordinator->tabManager();
     if (!tm) {
-        if (!ruwa::Application::isFactoryResetRestartInProgress()) {
-            m_setupCoordinator->saveWindowState(this);
-        }
+        persistWindowState();
         event->accept();
         return;
     }
@@ -756,9 +765,7 @@ void MainWindow::closeEvent(QCloseEvent* event)
         tm->confirmTabClosed(tab->id());
     }
 
-    if (!ruwa::Application::isFactoryResetRestartInProgress()) {
-        m_setupCoordinator->saveWindowState(this);
-    }
+    persistWindowState();
     event->accept();
 }
 

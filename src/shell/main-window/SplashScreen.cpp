@@ -22,6 +22,7 @@
 #include <QPropertyAnimation>
 #include <QScreen>
 #include <QTimer>
+#include <QWindow>
 #include <QtMath>
 #include <QGraphicsOpacityEffect>
 
@@ -56,8 +57,17 @@ SplashScreen::SplashScreen(QWidget* parent)
         screen = QGuiApplication::primaryScreen();
     }
     if (screen) {
-        QRect screenRect = screen->availableGeometry();
+        const QRect screenRect = screen->availableGeometry();
         setGeometry(screenRect);
+
+        // Create the native surface here, at that geometry, and pin it once more
+        // afterwards. A frameless translucent window that is first placed by show()
+        // gets positioned by the window manager, which puts it on the primary display
+        // and made the startup animation ignore the remembered monitor.
+        createWinId();
+        if (QWindow* handle = windowHandle()) {
+            handle->setGeometry(screenRect);
+        }
 
         m_contentRect = QRectF((screenRect.width() - SPLASH_WIDTH) / 2.0,
             (screenRect.height() - SPLASH_HEIGHT) / 2.0, SPLASH_WIDTH, SPLASH_HEIGHT);

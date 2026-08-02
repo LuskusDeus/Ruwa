@@ -136,6 +136,8 @@ private:
     ruwa::ui::tabs::WorkspaceTab* activeWorkspaceTab() const;
     /// Version gate + overlay (assumes onboarding already completed when relevant).
     void presentFirstLaunchUpdateMessageIfNeeded();
+    /// Writes geometry + monitor once per session (first caller wins).
+    void persistWindowState();
 #if defined(Q_OS_WIN)
     void configureWindowsInkFeedback();
     void attachStylusDebugBackend();
@@ -177,6 +179,10 @@ private:
     QFuture<void> m_firstLaunchUpdateDismissSyncFuture;
     QNetworkAccessManager* m_imageDropNetworkManager = nullptr;
     quint64 m_imageDropLoadGeneration = 0;
+
+    /// closeEvent() is the last moment the window still reports its real monitor;
+    /// the destructor must not overwrite that with whatever is left by then.
+    bool m_windowStateSaved = false;
 };
 
 } // namespace ruwa::ui::windows
