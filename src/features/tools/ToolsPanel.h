@@ -18,6 +18,7 @@
 class QButtonGroup;
 class QEvent;
 class QObject;
+class QVariantAnimation;
 class QWidget;
 
 namespace ruwa::ui::workspace {
@@ -49,6 +50,12 @@ public:
     void setRelatedPanels(CanvasPanel* canvasPanel, LayersPanel* layersPanel);
     void preparePresentationSnapshot();
 
+    static QList<ToolId> configurableTools();
+    static QString toolDisplayName(ToolId tool);
+    static ruwa::ui::core::IconProvider::StandardIcon toolIconType(ToolId tool);
+    bool isToolVisible(ToolId tool) const;
+    void setToolVisible(ToolId tool, bool visible);
+
 signals:
     void toolRequested(ToolId tool);
     void panelStateChanged();
@@ -65,6 +72,11 @@ private:
     void addGroupTool(ToolId tool);
     void updateIcons();
     void applyToolOrder(bool animate);
+    void animateToolButtonVisibility(ToolId displayTool, bool visible);
+    void cancelToolButtonVisibilityAnimation(ToolId displayTool);
+    bool isDisplayToolVisible(ToolId displayTool) const;
+    QList<ToolId> visibleGroupMembers(ToolId representative) const;
+    void normalizeGroupSelections();
     void startToolDrag(ToolId tool, ToolButton* button, const QPoint& globalPos);
     void updateToolDrag(const QPoint& globalPos);
     void finishToolDrag(bool accepted, const QPoint& globalPos);
@@ -78,8 +90,6 @@ private:
     void hideToolGroupPopup(bool immediate = true);
     ToolId resolveSelectedTool(ToolId tool) const;
     ToolId displayToolFor(ToolId tool) const;
-    QString tooltipForTool(ToolId tool) const;
-    ruwa::ui::core::IconProvider::StandardIcon iconForTool(ToolId tool) const;
 
 private:
     ruwa::ui::widgets::AnimatedFlowWidget* m_contentWidget = nullptr;
@@ -91,7 +101,10 @@ private:
     };
     QMap<ToolId, ToolButtonInfo> m_toolsData;
     QList<ToolId> m_toolOrder;
+    QList<ToolId> m_appliedToolOrder;
     QList<ToolId> m_dragStartOrder;
+    QList<ToolId> m_hiddenTools;
+    QMap<ToolId, QPointer<QVariantAnimation>> m_visibilityAnimations;
     QMap<ToolId, ToolId> m_groupSelections;
     ToolGroupPopup* m_groupPopup = nullptr;
     CanvasPanel* m_canvasPanel = nullptr;

@@ -2,6 +2,7 @@
 
 #include "DockPanelContextMenu.h"
 
+#include "features/tools/ToolsPanel.h"
 #include "shell/docking/widgets/DockPanel.h"
 #include "shared/resources/IconProvider.h"
 #include "shared/widgets/BaseStyledWidget.h"
@@ -9,6 +10,7 @@
 #include "shared/widgets/HorizontalSeparator.h"
 #include "features/theme/manager/ThemeManager.h"
 
+#include <QGridLayout>
 #include <QHBoxLayout>
 #include <QLabel>
 #include <QMouseEvent>
@@ -70,15 +72,17 @@ void DockPanelContextMenu::applyChrome()
     const auto& theme = ruwa::ui::core::ThemeManager::instance();
     const auto& colors = theme.colors();
 
-    if (m_sectionLabel) {
-        QFont f = colors.fonts.getUIFont(theme.scaledFontSize(10));
-        f.setWeight(QFont::DemiBold);
-        f.setCapitalization(QFont::AllUppercase);
-        f.setLetterSpacing(QFont::AbsoluteSpacing, theme.scaled(1.8));
-        m_sectionLabel->setFont(f);
-        QPalette pal = m_sectionLabel->palette();
-        pal.setColor(QPalette::WindowText, colors.textMuted);
-        m_sectionLabel->setPalette(pal);
+    for (QLabel* sectionLabel : { m_sectionLabel, m_toolsSectionLabel }) {
+        if (sectionLabel) {
+            QFont f = colors.fonts.getUIFont(theme.scaledFontSize(10));
+            f.setWeight(QFont::DemiBold);
+            f.setCapitalization(QFont::AllUppercase);
+            f.setLetterSpacing(QFont::AbsoluteSpacing, theme.scaled(1.8));
+            sectionLabel->setFont(f);
+            QPalette pal = sectionLabel->palette();
+            pal.setColor(QPalette::WindowText, colors.textMuted);
+            sectionLabel->setPalette(pal);
+        }
     }
 
     const int rr = theme.scaled(4);
@@ -89,23 +93,23 @@ void DockPanelContextMenu::applyChrome()
                               .arg(rr)
                               .arg(hoverBg);
 
-    for (const BehaviorToggleRowDesc& br : m_behaviorToggleRows) {
+    for (const BehaviorToggleRowDesc& br : m_toggleRows) {
         if (br.rowWidget) {
             br.rowWidget->setStyleSheet(sheet);
         }
     }
 
-    updateBehaviorToggleRowsChrome();
+    updateToggleRowsChrome();
 }
 
-void DockPanelContextMenu::updateBehaviorToggleRowsChrome()
+void DockPanelContextMenu::updateToggleRowsChrome()
 {
     const auto& theme = ruwa::ui::core::ThemeManager::instance();
     const auto& colors = theme.colors();
     auto& icons = ruwa::ui::core::IconProvider::instance();
     const int iconPx = theme.scaled(16);
 
-    for (const BehaviorToggleRowDesc& br : m_behaviorToggleRows) {
+    for (const BehaviorToggleRowDesc& br : m_toggleRows) {
         if (!br.iconLabel || !br.textLabel || !br.toggle) {
             continue;
         }
@@ -118,16 +122,16 @@ void DockPanelContextMenu::updateBehaviorToggleRowsChrome()
     }
 }
 
-QWidget* DockPanelContextMenu::addBehaviorToggleRow(QVBoxLayout* column,
+QWidget* DockPanelContextMenu::createToggleRow(QWidget* parent,
     ruwa::ui::core::IconProvider::StandardIcon iconKind, const QString& text,
     ToggleSwitch*& outToggle)
 {
     const auto& theme = ruwa::ui::core::ThemeManager::instance();
     const auto& colors = theme.colors();
 
-    QWidget* columnHost = column->parentWidget();
-    auto* row = new BehaviorToggleRow(columnHost ? columnHost : contentWidget());
+    auto* row = new BehaviorToggleRow(parent ? parent : contentWidget());
     row->setAttribute(Qt::WA_TranslucentBackground);
+    row->setAccessibleName(text);
 
     auto* rowLayout = new QHBoxLayout(row);
     // Horizontal inset matches StandardContextMenuAction basePadding (10), scaled.
@@ -149,6 +153,7 @@ QWidget* DockPanelContextMenu::addBehaviorToggleRow(QVBoxLayout* column,
     label->setAttribute(Qt::WA_TransparentForMouseEvents);
 
     outToggle = new ToggleSwitch(row);
+    outToggle->setAccessibleName(text);
     {
         // Between compact and full default (52×28); scales with UI like other menu chrome.
         auto& st = outToggle->style();
@@ -169,9 +174,7 @@ QWidget* DockPanelContextMenu::addBehaviorToggleRow(QVBoxLayout* column,
     desc.textLabel = label;
     desc.toggle = outToggle;
     desc.iconKind = iconKind;
-    m_behaviorToggleRows.append(desc);
-
-    column->addWidget(row);
+    m_toggleRows.append(desc);
     return row;
 }
 
@@ -198,12 +201,14 @@ void DockPanelContextMenu::buildUi()
     behaviorLayout->setSpacing(theme.scaled(2));
     contentLayout()->addWidget(behaviorColumn);
 
-    addBehaviorToggleRow(behaviorLayout, ruwa::ui::core::IconProvider::StandardIcon::Move,
-        tr("Movable"), m_movableToggle);
-    addBehaviorToggleRow(behaviorLayout, ruwa::ui::core::IconProvider::StandardIcon::DockLayout,
-        tr("Dockable"), m_dockableToggle);
-    addBehaviorToggleRow(behaviorLayout, ruwa::ui::core::IconProvider::StandardIcon::Resize,
-        tr("Resizable"), m_resizableToggle);
+    behaviorLayout->addWidget(createToggleRow(behaviorColumn,
+        ruwa::ui::core::IconProvider::StandardIcon::Move, tr("Movable"), m_movableToggle));
+    behaviorLayout->addWidget(createToggleRow(behaviorColumn,
+        ruwa::ui::core::IconProvider::StandardIcon::DockLayout, tr("Dockable"),
+        m_dockableToggle));
+    behaviorLayout->addWidget(createToggleRow(behaviorColumn,
+        ruwa::ui::core::IconProvider::StandardIcon::Resize, tr("Resizable"),
+        m_resizableToggle));
 
     connect(m_movableToggle, &ToggleSwitch::toggled, this, [this](bool enabled) {
         if (m_panel) {
@@ -247,6 +252,61 @@ void DockPanelContextMenu::buildUi()
         }
         hideAnimated();
     });
+
+    m_sepBeforeTools = new HorizontalSeparator(contentWidget());
+    m_sepBeforeTools->setMargins(theme.scaled(4), theme.scaled(4));
+    contentLayout()->addWidget(m_sepBeforeTools);
+
+    m_toolsSectionHost = new QWidget(contentWidget());
+    m_toolsSectionHost->setAttribute(Qt::WA_TranslucentBackground);
+    auto* toolsSectionLayout = new QVBoxLayout(m_toolsSectionHost);
+    toolsSectionLayout->setContentsMargins(0, 0, 0, 0);
+    toolsSectionLayout->setSpacing(theme.scaled(2));
+
+    auto* toolsHeader = new QWidget(m_toolsSectionHost);
+    toolsHeader->setAttribute(Qt::WA_TranslucentBackground);
+    auto* toolsHeaderLayout = new QVBoxLayout(toolsHeader);
+    toolsHeaderLayout->setContentsMargins(
+        theme.scaled(10), theme.scaled(8), theme.scaled(10), theme.scaled(4));
+    toolsHeaderLayout->setSpacing(0);
+    m_toolsSectionLabel = new QLabel(tr("Visible tools"), toolsHeader);
+    toolsHeaderLayout->addWidget(m_toolsSectionLabel);
+    toolsSectionLayout->addWidget(toolsHeader);
+
+    auto* toolsGridHost = new QWidget(m_toolsSectionHost);
+    toolsGridHost->setAttribute(Qt::WA_TranslucentBackground);
+    auto* toolsGrid = new QGridLayout(toolsGridHost);
+    toolsGrid->setContentsMargins(0, 0, 0, 0);
+    toolsGrid->setHorizontalSpacing(theme.scaled(4));
+    toolsGrid->setVerticalSpacing(theme.scaled(2));
+    toolsGrid->setColumnStretch(0, 1);
+    toolsGrid->setColumnStretch(1, 1);
+
+    const QList<ruwa::ui::workspace::ToolId> tools
+        = ruwa::ui::workspace::ToolsPanel::configurableTools();
+    const int rowsPerColumn = (tools.size() + 1) / 2;
+    for (int index = 0; index < tools.size(); ++index) {
+        const ruwa::ui::workspace::ToolId tool = tools[index];
+        ToggleSwitch* toggle = nullptr;
+        QWidget* row = createToggleRow(toolsGridHost,
+            ruwa::ui::workspace::ToolsPanel::toolIconType(tool),
+            ruwa::ui::workspace::ToolsPanel::toolDisplayName(tool), toggle);
+        const int column = index / rowsPerColumn;
+        const int rowIndex = index % rowsPerColumn;
+        toolsGrid->addWidget(row, rowIndex, column);
+        m_toolToggles.append({ tool, toggle });
+
+        connect(toggle, &ToggleSwitch::toggled, this, [this, tool](bool visible) {
+            if (m_toolsPanel) {
+                m_toolsPanel->setToolVisible(tool, visible);
+            }
+        });
+    }
+    toolsSectionLayout->addWidget(toolsGridHost);
+    contentLayout()->addWidget(m_toolsSectionHost);
+
+    m_sepBeforeTools->hide();
+    m_toolsSectionHost->hide();
 }
 
 void DockPanelContextMenu::rebuildStandardMenu()
@@ -255,6 +315,7 @@ void DockPanelContextMenu::rebuildStandardMenu()
     const quintptr panelPtr
         = static_cast<quintptr>(ctx.value(QStringLiteral("dockPanelPtr")).toULongLong());
     m_panel = reinterpret_cast<ruwa::ui::docking::DockPanel*>(panelPtr);
+    m_toolsPanel = qobject_cast<ruwa::ui::workspace::ToolsPanel*>(m_panel.data());
 
     const bool hasPanel = !m_panel.isNull();
     const bool isFloating = hasPanel && m_panel->isFloating();
@@ -291,6 +352,16 @@ void DockPanelContextMenu::rebuildStandardMenu()
     const bool canClose = hasPanel && m_panel->isClosable();
     m_sepBeforeClose->setVisible(canClose);
     m_closeAction->setVisible(canClose);
+
+    const bool hasToolsPanel = !m_toolsPanel.isNull();
+    m_sepBeforeTools->setVisible(hasToolsPanel);
+    m_toolsSectionHost->setVisible(hasToolsPanel);
+    for (const ToolToggleDesc& desc : m_toolToggles) {
+        const QSignalBlocker blocker(desc.toggle);
+        desc.toggle->setEnabled(hasToolsPanel);
+        desc.toggle->setChecked(hasToolsPanel && m_toolsPanel->isToolVisible(desc.tool),
+            ToggleSwitch::TransitionMode::Instant);
+    }
 
     applyChrome();
     updateMenuSize();

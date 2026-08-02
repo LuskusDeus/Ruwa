@@ -29,6 +29,7 @@
 #include <QMouseEvent>
 #include <QPixmap>
 #include <QSizePolicy>
+#include <QVariantAnimation>
 #include <QtGlobal>
 #include <array>
 #include <functional>
@@ -47,6 +48,7 @@ const int BASE_MARGIN_V = 8;
 const int BASE_MARGIN_H = 8;
 const int BASE_SPACING = 6;
 const int GROUP_HOLD_DELAY_MS = 350;
+const int PANEL_STATE_VERSION = 2;
 
 struct ToolPresentation {
     ToolId tool;
@@ -359,6 +361,36 @@ QJsonArray serializedToolOrder(const QList<ToolId>& order)
     return values;
 }
 
+QList<ToolId> normalizedHiddenTools(const QJsonArray& values)
+{
+    QList<ToolId> requestedTools;
+    for (const QJsonValue& value : values) {
+        const std::optional<ToolId> tool = toolIdFromPersistentValue(value.toInt(-1));
+        if (tool && !requestedTools.contains(*tool)) {
+            requestedTools.append(*tool);
+        }
+    }
+
+    QList<ToolId> result;
+    for (ToolId tool : kToolIds) {
+        if (requestedTools.contains(tool)) {
+            result.append(tool);
+        }
+    }
+    return result;
+}
+
+QJsonArray serializedHiddenTools(const QList<ToolId>& hiddenTools)
+{
+    QJsonArray values;
+    for (ToolId tool : kToolIds) {
+        if (hiddenTools.contains(tool)) {
+            values.append(persistentValueForToolId(tool));
+        }
+    }
+    return values;
+}
+
 bool isToolSwitchProfilingEnabled()
 {
     static const bool enabled = qEnvironmentVariableIsSet("RUWA_PROFILE_TOOL_SWITCH");
@@ -419,18 +451,75 @@ void ToolsPanel::setRelatedPanels(CanvasPanel* canvasPanel, LayersPanel* layersP
 
 void ToolsPanel::preparePresentationSnapshot()
 {
-    for (const ToolButtonInfo& info : m_toolsData) {
-        if (info.button) {
-            info.button->finishVisualTransitions();
+    for (auto it = m_visibilityAnimations.begin(); it != m_visibilityAnimations.end(); ++it) {
+        if (it.value()) {
+            it.value()->stop();
+            it.value()->deleteLater();
         }
     }
+    m_visibilityAnimations.clear();
+
+    for (auto it = m_toolsData.begin(); it != m_toolsData.end(); ++it) {
+        if (it->button) {
+            if (it->button != m_draggedButton) {
+                it->button->setGraphicsEffect(nullptr);
+            }
+            it->button->setVisible(m_appliedToolOrder.contains(it.key()));
+            it->button->finishVisualTransitions();
+        }
+    }
+}
+
+QList<ToolId> ToolsPanel::configurableTools()
+{
+    QList<ToolId> tools;
+    tools.reserve(static_cast<qsizetype>(kToolPresentations.size()));
+    for (const ToolPresentation& presentation : kToolPresentations) {
+        tools.append(presentation.tool);
+    }
+    return tools;
+}
+
+QString ToolsPanel::toolDisplayName(ToolId tool)
+{
+    return translateToolTooltip(presentationForTool(tool).tooltip);
+}
+
+IconProvider::StandardIcon ToolsPanel::toolIconType(ToolId tool)
+{
+    return presentationForTool(tool).icon;
+}
+
+bool ToolsPanel::isToolVisible(ToolId tool) const
+{
+    return toolIdFromValue(static_cast<int>(tool)).has_value() && !m_hiddenTools.contains(tool);
+}
+
+void ToolsPanel::setToolVisible(ToolId tool, bool visible)
+{
+    if (!toolIdFromValue(static_cast<int>(tool)).has_value() || isToolVisible(tool) == visible) {
+        return;
+    }
+
+    hideToolGroupPopup(false);
+    if (visible) {
+        m_hiddenTools.removeOne(tool);
+    } else {
+        m_hiddenTools.append(tool);
+    }
+
+    normalizeGroupSelections();
+    updateGroupButtons();
+    applyToolOrder(true);
+    emit panelStateChanged();
 }
 
 QJsonObject ToolsPanel::savePanelState() const
 {
     QJsonObject state;
-    state[QStringLiteral("version")] = 1;
+    state[QStringLiteral("version")] = PANEL_STATE_VERSION;
     state[QStringLiteral("toolOrder")] = serializedToolOrder(m_toolOrder);
+    state[QStringLiteral("hiddenTools")] = serializedHiddenTools(m_hiddenTools);
     return state;
 }
 
@@ -439,11 +528,17 @@ void ToolsPanel::restorePanelState(const QJsonObject& state)
     const QList<ToolId> restoredOrder = state.contains(QStringLiteral("toolOrder"))
         ? normalizedToolOrder(state.value(QStringLiteral("toolOrder")).toArray())
         : defaultToolOrder();
-    if (restoredOrder == m_toolOrder) {
+    const QList<ToolId> restoredHiddenTools = state.contains(QStringLiteral("hiddenTools"))
+        ? normalizedHiddenTools(state.value(QStringLiteral("hiddenTools")).toArray())
+        : QList<ToolId> {};
+    if (restoredOrder == m_toolOrder && restoredHiddenTools == m_hiddenTools) {
         return;
     }
 
     m_toolOrder = restoredOrder;
+    m_hiddenTools = restoredHiddenTools;
+    normalizeGroupSelections();
+    updateGroupButtons();
     applyToolOrder(false);
 }
 
@@ -456,7 +551,7 @@ void ToolsPanel::setActiveTool(ToolId tool)
     }
 
     const ToolId displayTool = displayToolFor(tool);
-    if (isGroupRepresentative(displayTool)) {
+    if (isGroupRepresentative(displayTool) && isToolVisible(tool)) {
         m_groupSelections[displayTool] = tool;
     }
 
@@ -543,14 +638,144 @@ void ToolsPanel::applyToolOrder(bool animate)
     if (!m_contentWidget || !m_contentCreated) {
         return;
     }
+    QList<ToolId> visibleOrder;
     QList<QWidget*> buttons;
+    visibleOrder.reserve(m_toolOrder.size());
     buttons.reserve(m_toolOrder.size());
     for (ToolId tool : m_toolOrder) {
-        if (m_toolsData.contains(tool)) {
+        if (m_toolsData.contains(tool) && isDisplayToolVisible(tool)) {
+            visibleOrder.append(tool);
             buttons.append(m_toolsData[tool].button);
         }
     }
-    m_contentWidget->setItems(buttons, {}, animate);
+
+    const bool shouldAnimate
+        = animate && WidgetStyleManager::instance().animationsEnabled() && isVisible();
+    if (!shouldAnimate) {
+        for (auto it = m_visibilityAnimations.begin(); it != m_visibilityAnimations.end(); ++it) {
+            if (it.value()) {
+                it.value()->stop();
+                it.value()->deleteLater();
+            }
+        }
+        m_visibilityAnimations.clear();
+        m_contentWidget->setItems(buttons, {}, false);
+        for (auto it = m_toolsData.begin(); it != m_toolsData.end(); ++it) {
+            if (it->button != m_draggedButton) {
+                it->button->setGraphicsEffect(nullptr);
+            }
+            it->button->setVisible(visibleOrder.contains(it.key()));
+        }
+        m_appliedToolOrder = visibleOrder;
+        return;
+    }
+
+    for (ToolId tool : m_appliedToolOrder) {
+        if (!visibleOrder.contains(tool)) {
+            animateToolButtonVisibility(tool, false);
+        }
+    }
+    for (ToolId tool : visibleOrder) {
+        if (!m_appliedToolOrder.contains(tool)) {
+            animateToolButtonVisibility(tool, true);
+        }
+    }
+
+    m_contentWidget->setItems(buttons, {}, true);
+    m_appliedToolOrder = visibleOrder;
+}
+
+void ToolsPanel::cancelToolButtonVisibilityAnimation(ToolId displayTool)
+{
+    const auto it = m_visibilityAnimations.find(displayTool);
+    if (it == m_visibilityAnimations.end()) {
+        return;
+    }
+    if (it.value()) {
+        it.value()->stop();
+        it.value()->deleteLater();
+    }
+    m_visibilityAnimations.erase(it);
+}
+
+void ToolsPanel::animateToolButtonVisibility(ToolId displayTool, bool visible)
+{
+    if (!m_toolsData.contains(displayTool)) {
+        return;
+    }
+
+    ToolButton* button = m_toolsData[displayTool].button;
+    qreal startOpacity = visible ? 0.0 : 1.0;
+    if (auto* currentEffect = qobject_cast<QGraphicsOpacityEffect*>(button->graphicsEffect())) {
+        startOpacity = currentEffect->opacity();
+    }
+    cancelToolButtonVisibilityAnimation(displayTool);
+    if (button != m_draggedButton) {
+        button->setGraphicsEffect(nullptr);
+    }
+
+    auto* opacityEffect = new QGraphicsOpacityEffect(button);
+    opacityEffect->setOpacity(startOpacity);
+    button->setGraphicsEffect(opacityEffect);
+    button->show();
+
+    auto* animation = new QVariantAnimation(button);
+    animation->setDuration(160);
+    animation->setEasingCurve(visible ? QEasingCurve::OutCubic : QEasingCurve::InCubic);
+    animation->setStartValue(startOpacity);
+    animation->setEndValue(visible ? 1.0 : 0.0);
+    m_visibilityAnimations.insert(displayTool, animation);
+
+    const QPointer<ToolButton> buttonGuard(button);
+    const QPointer<QGraphicsOpacityEffect> effectGuard(opacityEffect);
+    connect(animation, &QVariantAnimation::valueChanged, this,
+        [buttonGuard, effectGuard](const QVariant& value) {
+            if (buttonGuard && effectGuard && buttonGuard->graphicsEffect() == effectGuard) {
+                effectGuard->setOpacity(value.toReal());
+            }
+        });
+    connect(animation, &QVariantAnimation::finished, this,
+        [this, displayTool, visible, buttonGuard, effectGuard, animation]() {
+            if (m_visibilityAnimations.value(displayTool).data() != animation) {
+                return;
+            }
+            m_visibilityAnimations.remove(displayTool);
+            if (buttonGuard && effectGuard && buttonGuard->graphicsEffect() == effectGuard) {
+                buttonGuard->setGraphicsEffect(nullptr);
+                buttonGuard->setVisible(visible);
+            }
+            animation->deleteLater();
+        });
+    animation->start();
+}
+
+bool ToolsPanel::isDisplayToolVisible(ToolId displayTool) const
+{
+    if (!isGroupRepresentative(displayTool)) {
+        return isToolVisible(displayTool);
+    }
+    return !visibleGroupMembers(displayTool).isEmpty();
+}
+
+QList<ToolId> ToolsPanel::visibleGroupMembers(ToolId representative) const
+{
+    QList<ToolId> visibleTools;
+    for (ToolId tool : groupMembers(representative)) {
+        if (isToolVisible(tool)) {
+            visibleTools.append(tool);
+        }
+    }
+    return visibleTools;
+}
+
+void ToolsPanel::normalizeGroupSelections()
+{
+    for (auto it = m_groupSelections.begin(); it != m_groupSelections.end(); ++it) {
+        const QList<ToolId> visibleTools = visibleGroupMembers(it.key());
+        if (!visibleTools.isEmpty() && !visibleTools.contains(it.value())) {
+            it.value() = visibleTools.front();
+        }
+    }
 }
 
 void ToolsPanel::startToolDrag(ToolId tool, ToolButton* button, const QPoint& globalPos)
@@ -917,10 +1142,11 @@ void ToolsPanel::updateGroupButtons()
         }
         auto& info = m_toolsData[it.key()];
         const ToolId currentGroupTool = it.value();
-        info.button->setToolTip(tooltipForTool(currentGroupTool));
+        const QList<ToolId> visibleTools = visibleGroupMembers(it.key());
+        info.button->setToolTip(toolDisplayName(currentGroupTool));
         info.button->setIcon(
-            ThemeManager::instance().icons().getIcon(iconForTool(currentGroupTool)));
-        info.button->setHasGroupIndicator(true);
+            ThemeManager::instance().icons().getIcon(toolIconType(currentGroupTool)));
+        info.button->setHasGroupIndicator(!visibleTools.isEmpty());
     }
 
     if (m_groupPopup && m_groupPopup->isPopupVisible()) {
@@ -940,6 +1166,11 @@ void ToolsPanel::ensureGroupPopup()
 
 void ToolsPanel::openToolGroupPopup(ToolId representativeTool, QWidget* anchor)
 {
+    const QList<ToolId> tools = visibleGroupMembers(representativeTool);
+    if (tools.isEmpty()) {
+        return;
+    }
+
     // A "No actions for this" menu may already be open from a prior right-click on a
     // regular tool. Since the variant popup is triggered by a separate path, dismiss
     // the global context menu so the two don't overlay each other.
@@ -951,10 +1182,9 @@ void ToolsPanel::openToolGroupPopup(ToolId representativeTool, QWidget* anchor)
     m_groupPopup->setLayoutMode(resolvePopupLayoutMode(this));
 
     QList<ToolGroupPopup::Item> items;
-    const QList<ToolId> tools = groupMembers(representativeTool);
     for (ToolId tool : tools) {
         items.append(ToolGroupPopup::Item {
-            .tool = tool, .iconType = iconForTool(tool), .tooltip = tooltipForTool(tool) });
+            .tool = tool, .iconType = toolIconType(tool), .tooltip = toolDisplayName(tool) });
     }
 
     m_groupPopup->setItems(items);
@@ -987,16 +1217,6 @@ ToolId ToolsPanel::resolveSelectedTool(ToolId tool) const
 ToolId ToolsPanel::displayToolFor(ToolId tool) const
 {
     return groupRepresentativeForTool(tool);
-}
-
-QString ToolsPanel::tooltipForTool(ToolId tool) const
-{
-    return translateToolTooltip(presentationForTool(tool).tooltip);
-}
-
-IconProvider::StandardIcon ToolsPanel::iconForTool(ToolId tool) const
-{
-    return presentationForTool(tool).icon;
 }
 
 } // namespace ruwa::ui::workspace

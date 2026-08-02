@@ -5,15 +5,19 @@
 
 #include "shell/context-menu/BaseContextMenu.h"
 #include "shared/resources/IconProvider.h"
+#include "shared/types/ToolId.h"
 
 #include <QPointer>
 #include <QVector>
-#include <QVBoxLayout>
 
 class QLabel;
 
 namespace ruwa::ui::docking {
 class DockPanel;
+}
+
+namespace ruwa::ui::workspace {
+class ToolsPanel;
 }
 
 namespace ruwa::ui::widgets {
@@ -34,8 +38,8 @@ protected:
 private:
     void buildUi();
     void applyChrome();
-    void updateBehaviorToggleRowsChrome();
-    QWidget* addBehaviorToggleRow(QVBoxLayout* column,
+    void updateToggleRowsChrome();
+    QWidget* createToggleRow(QWidget* parent,
         ruwa::ui::core::IconProvider::StandardIcon iconKind, const QString& text,
         ToggleSwitch*& outToggle);
 
@@ -48,16 +52,26 @@ private:
             = ruwa::ui::core::IconProvider::StandardIcon::Move;
     };
 
+    struct ToolToggleDesc {
+        ruwa::ui::workspace::ToolId tool = ruwa::ui::workspace::ToolId::Hand;
+        ToggleSwitch* toggle = nullptr;
+    };
+
 private:
     QPointer<ruwa::ui::docking::DockPanel> m_panel;
+    QPointer<ruwa::ui::workspace::ToolsPanel> m_toolsPanel;
     ToggleSwitch* m_movableToggle = nullptr;
     ToggleSwitch* m_resizableToggle = nullptr;
     ToggleSwitch* m_dockableToggle = nullptr;
 
     QLabel* m_sectionLabel = nullptr;
-    QVector<BehaviorToggleRowDesc> m_behaviorToggleRows;
+    QLabel* m_toolsSectionLabel = nullptr;
+    QVector<BehaviorToggleRowDesc> m_toggleRows;
+    QVector<ToolToggleDesc> m_toolToggles;
+    QWidget* m_toolsSectionHost = nullptr;
     HorizontalSeparator* m_sepBeforeFloat = nullptr;
     HorizontalSeparator* m_sepBeforeClose = nullptr;
+    HorizontalSeparator* m_sepBeforeTools = nullptr;
     BaseStyledWidget* m_floatAction = nullptr;
     BaseStyledWidget* m_closeAction = nullptr;
 };

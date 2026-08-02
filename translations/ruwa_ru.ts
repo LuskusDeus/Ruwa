@@ -3148,6 +3148,11 @@ Ruwa использует фреймворк Qt (версия %1), динами�
         <translation>Поведение</translation>
     </message>
     <message>
+        <location filename="../src/shell/context-menu/DockPanelContextMenu.cpp" line="270"/>
+        <source>Visible tools</source>
+        <translation>Видимые инструменты</translation>
+    </message>
+    <message>
         <location filename="../src/shell/context-menu/DockPanelContextMenu.cpp" line="202"/>
         <source>Movable</source>
         <translation>Перемещаемая</translation>
