@@ -12,15 +12,10 @@
 
 namespace {
 
-bool isUndoBlockedByCanvasInteraction(const ruwa::core::CommandContext& ctx)
+ruwa::ui::workspace::CanvasPanel* activeCanvasPanel(const ruwa::core::CommandContext& ctx)
 {
     auto* workspaceTab = ctx.activeTabAs<ruwa::ui::tabs::WorkspaceTab>();
-    if (!workspaceTab || !workspaceTab->canvasPanel()) {
-        return false;
-    }
-
-    auto* canvasPanel = workspaceTab->canvasPanel();
-    return canvasPanel->isDrawingActive();
+    return workspaceTab ? workspaceTab->canvasPanel() : nullptr;
 }
 
 } // namespace
@@ -33,21 +28,36 @@ namespace ruwa::core {
 
 bool UndoActionCommand::canExecute(const CommandContext& ctx) const
 {
-    if (isUndoBlockedByCanvasInteraction(ctx)) {
+    auto* canvasPanel = activeCanvasPanel(ctx);
+    if (canvasPanel && canvasPanel->isDrawingActive()) {
         return false;
     }
     auto* mgr = m_resolve ? m_resolve() : nullptr;
-    return mgr && mgr->canUndo();
+    return mgr && (mgr->canUndo()
+                      || (canvasPanel && canvasPanel->hasPendingStrokeFinalization()));
 }
 
 void UndoActionCommand::execute(const CommandContext& ctx, const QVariantMap& args)
 {
     Q_UNUSED(args);
-    if (isUndoBlockedByCanvasInteraction(ctx)) {
+    auto* canvasPanel = activeCanvasPanel(ctx);
+    if (canvasPanel && canvasPanel->isDrawingActive()) {
         return;
     }
+
+    // A released GPU stroke is visible before its DrawCommand reaches the undo
+    // stack. Finalize it first so undo always targets the latest visible edit,
+    // rather than racing its deferred tile readback and undoing the command below.
+    if (canvasPanel && canvasPanel->hasPendingStrokeFinalization()) {
+        canvasPanel->flushPendingStrokeFinalization();
+    }
+
+    // Finalization can push a command and discard the redo tail, so resolve and
+    // validate the manager only after the stack has reached its committed state.
     if (auto* mgr = m_resolve ? m_resolve() : nullptr) {
-        mgr->undo();
+        if (mgr->canUndo()) {
+            mgr->undo();
+        }
     }
 }
 
@@ -57,7 +67,9 @@ void UndoActionCommand::execute(const CommandContext& ctx, const QVariantMap& ar
 
 bool RedoActionCommand::canExecute(const CommandContext& ctx) const
 {
-    if (isUndoBlockedByCanvasInteraction(ctx)) {
+    auto* canvasPanel = activeCanvasPanel(ctx);
+    if (canvasPanel
+        && (canvasPanel->isDrawingActive() || canvasPanel->hasPendingStrokeFinalization())) {
         return false;
     }
     auto* mgr = m_resolve ? m_resolve() : nullptr;
@@ -67,11 +79,22 @@ bool RedoActionCommand::canExecute(const CommandContext& ctx) const
 void RedoActionCommand::execute(const CommandContext& ctx, const QVariantMap& args)
 {
     Q_UNUSED(args);
-    if (isUndoBlockedByCanvasInteraction(ctx)) {
+    auto* canvasPanel = activeCanvasPanel(ctx);
+    if (canvasPanel && canvasPanel->isDrawingActive()) {
         return;
     }
+
+    // A pending stroke is a new edit and therefore invalidates the redo tail.
+    // Commit it before re-checking the manager in case execute() is invoked
+    // directly rather than through canExecute().
+    if (canvasPanel && canvasPanel->hasPendingStrokeFinalization()) {
+        canvasPanel->flushPendingStrokeFinalization();
+    }
+
     if (auto* mgr = m_resolve ? m_resolve() : nullptr) {
-        mgr->redo();
+        if (mgr->canRedo()) {
+            mgr->redo();
+        }
     }
 }
 

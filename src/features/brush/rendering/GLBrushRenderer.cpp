@@ -3944,17 +3944,32 @@ void GLBrushRenderer::finishReadback(GLsync fence, TileGrid& grid, const std::ve
     if (!fence)
         return;
 
-    finishReadbackBatch(fence, grid, keys, 0, keys.size());
+    // This synchronous API promises a completed copy. Keep the fence alive on
+    // a finite client-wait timeout and retry instead of reading an in-flight PBO.
+    while (fence) {
+        finishReadbackBatch(fence, grid, keys, 0, keys.size());
+    }
 }
 
 size_t GLBrushRenderer::finishReadbackBatch(
-    GLsync fence, TileGrid& grid, const std::vector<TileKey>& keys, size_t firstKey, size_t maxKeys)
+    GLsync& fence, TileGrid& grid, const std::vector<TileKey>& keys, size_t firstKey, size_t maxKeys)
 {
     if (fence) {
         // The deferred path polls first, so this normally cannot block. A
         // forced flush retains the previous bounded wait behavior.
-        m_gl->glClientWaitSync(fence, GL_SYNC_FLUSH_COMMANDS_BIT, 500000000ULL);
+        const GLenum waitResult
+            = m_gl->glClientWaitSync(fence, GL_SYNC_FLUSH_COMMANDS_BIT, 500000000ULL);
+        if (waitResult == GL_TIMEOUT_EXPIRED) {
+            // Preserve the fence and the batch so the caller can retry. Reading
+            // the persistently mapped PBO before the DMA completes mixes tile
+            // generations and produces the same corruption as the undo race.
+            return firstKey;
+        }
         m_gl->glDeleteSync(fence);
+        fence = nullptr;
+        if (waitResult == GL_WAIT_FAILED) {
+            return firstKey;
+        }
     }
 
     if (firstKey >= keys.size() || maxKeys == 0) {

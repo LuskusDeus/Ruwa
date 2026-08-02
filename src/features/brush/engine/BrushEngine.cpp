@@ -355,7 +355,7 @@ void BrushExecutionBackend::finishReadback(
     m_brushRenderer->finishReadback(fence, grid, keys);
 }
 
-size_t BrushExecutionBackend::finishReadbackBatch(GLsync fence, TileGrid& grid,
+size_t BrushExecutionBackend::finishReadbackBatch(GLsync& fence, TileGrid& grid,
     const std::vector<TileKey>& keys, size_t firstKey, size_t maxKeys, bool usedGpuPath)
 {
     if (!usedGpuPath || !m_brushRenderer) {

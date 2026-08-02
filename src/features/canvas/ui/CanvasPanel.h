@@ -320,6 +320,8 @@ public:
     void commitTransformBeforeDocumentMutation();
     void cancelTransform();
     bool isDrawingActive() const override;
+    bool hasPendingStrokeFinalization() const;
+    void flushPendingStrokeFinalization();
     bool isTransformActive() const;
 
     /// Schedule appearance animation for new project (min zoom → zoom to fit).

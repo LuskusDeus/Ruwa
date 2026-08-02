@@ -1092,6 +1092,18 @@ bool CanvasPanel::isDrawingActive() const
     return m_isDrawing || (m_glWidget && m_glWidget->isDrawing());
 }
 
+bool CanvasPanel::hasPendingStrokeFinalization() const
+{
+    return m_glWidget && m_glWidget->hasPendingStrokeFinalization();
+}
+
+void CanvasPanel::flushPendingStrokeFinalization()
+{
+    if (m_glWidget) {
+        m_glWidget->flushPendingStrokeFinalization();
+    }
+}
+
 bool CanvasPanel::isTransformActive() const
 {
     return m_glWidget && m_glWidget->isTransformActive();

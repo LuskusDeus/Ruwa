@@ -100,7 +100,7 @@ public:
     bool isReadbackComplete(GLsync fence) const;
     void finishReadback(
         GLsync fence, TileGrid& grid, const std::vector<TileKey>& keys, bool usedGpuPath);
-    size_t finishReadbackBatch(GLsync fence, TileGrid& grid, const std::vector<TileKey>& keys,
+    size_t finishReadbackBatch(GLsync& fence, TileGrid& grid, const std::vector<TileKey>& keys,
         size_t firstKey, size_t maxKeys, bool usedGpuPath);
     void deleteFence(GLsync fence) const;
 

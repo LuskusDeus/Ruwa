@@ -120,10 +120,11 @@ public:
     void finishReadback(GLsync fence, TileGrid& grid, const std::vector<TileKey>& keys);
 
     /// Consume a bounded range from the persistent readback PBO. When `fence`
-    /// is non-null, waits for and deletes it before copying; subsequent batches
-    /// pass null and continue reading the same mapped storage. Returns the first
-    /// unconsumed key index.
-    size_t finishReadbackBatch(GLsync fence, TileGrid& grid, const std::vector<TileKey>& keys,
+    /// is non-null, waits before copying and clears it only after completion;
+    /// a finite wait timeout preserves the fence for a later retry. Subsequent
+    /// batches pass null and continue reading the same mapped storage. Returns
+    /// the first unconsumed key index.
+    size_t finishReadbackBatch(GLsync& fence, TileGrid& grid, const std::vector<TileKey>& keys,
         size_t firstKey, size_t maxKeys);
 
     /// Delete a GL fence without doing readback.

@@ -175,6 +175,10 @@ public:
 
     // Drawing state — brush writes to active layer's TileGrid
     bool isDrawing() const { return m_strokeHost && m_strokeHost->isDrawing(); }
+    bool hasPendingStrokeFinalization() const
+    {
+        return m_strokeHost && m_strokeHost->hasPendingFinalization();
+    }
     bool isQuickShapeTransformActive() const
     {
         return m_quickShapeMorph && m_quickShapeMorph->isActive();

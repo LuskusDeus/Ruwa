@@ -111,7 +111,12 @@ void StrokeFinalizationController::finalize(PendingStrokeFinalization& pending, 
             pending.readbackBatchKeys, 0, pending.readbackBatchKeys.size(), true);
         if (ctx.doneCurrent)
             ctx.doneCurrent();
-        pending.fence = nullptr;
+        if (pending.fence) {
+            // A forced flush may reach the finite client-wait timeout. Keep the
+            // batch intact and retry its fence rather than consuming an
+            // incomplete PBO or starting another readback over the same storage.
+            return;
+        }
         endKey = std::min(endKey, firstKey + consumed);
     }
 
