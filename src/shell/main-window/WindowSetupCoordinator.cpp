@@ -142,9 +142,15 @@ void WindowSetupCoordinator::setupWindowAgent(
     m_windowAgent->setup(mainWindow);
     mainWindow->setAttribute(Qt::WA_TranslucentBackground, false);
 
-    // Enable Windows 11 snap layouts support
+    // No DWM blur behind the window: it is fully opaque and paints every pixel.
+    //
+    // This must be a real bool. QWK reads the attribute with QVariant::toBool(), and
+    // any non-empty string that is not "0"/"false" is true - so passing "none" here
+    // switched blur-behind ON. That puts the window into DWM's translucent
+    // composition path, where every frame the window has not painted yet composites
+    // as black, which swallowed the startup expansion animation.
 #ifdef Q_OS_WIN
-    m_windowAgent->setWindowAttribute(QStringLiteral("dwm-blur"), QStringLiteral("none"));
+    m_windowAgent->setWindowAttribute(QStringLiteral("dwm-blur"), false);
 #endif
 
     m_windowAgent->setTitleBar(topBar);
