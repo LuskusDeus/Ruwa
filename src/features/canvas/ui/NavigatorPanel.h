@@ -13,8 +13,14 @@
 
 class QWidget;
 
+namespace ruwa::ui::widgets {
+class ProgressHandleSlider;
+}
+
 namespace ruwa::ui::workspace {
 class CanvasPanel;
+class NavigatorWidget;
+class ToolButton;
 }
 
 namespace ruwa::ui::workspace {
@@ -34,13 +40,26 @@ public:
 
     void setCanvasPanel(CanvasPanel* panel);
     CanvasPanel* canvasPanel() const { return m_canvasPanel; }
+    NavigatorWidget* navigatorWidget() const { return m_navigatorWidget; }
 
 protected:
     QWidget* createContent() override;
     void onThemeChanged() override;
+    void retranslateUi() override;
 
 private:
+    void syncZoomControls();
+    void syncZoomSlider(qreal zoom);
+    void setZoomLimits(qreal minZoom, qreal maxZoom);
+    void onZoomSliderValueChanged(int value);
+    void resetZoom();
+
     CanvasPanel* m_canvasPanel = nullptr;
+    NavigatorWidget* m_navigatorWidget = nullptr;
+    ruwa::ui::widgets::ProgressHandleSlider* m_zoomSlider = nullptr;
+    ToolButton* m_resetZoomButton = nullptr;
+    qreal m_minZoom = 0.8;
+    qreal m_maxZoom = 58.0;
     QTimer* m_refreshTimer = nullptr;
 };
 

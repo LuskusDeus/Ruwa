@@ -212,12 +212,14 @@ void CanvasViewController::applyZoomLimits()
     const bool ignoreMinZoom = m_panel->m_exportModeOverlayProgress > 1e-5;
 
     if (!m_panel->m_glWidget) {
+        const auto [minZoom, maxZoom]
+            = ruwa::core::canvas::computeZoomLimits(800, 800, maxBrush);
+        const qreal effectiveMinZoom = ignoreMinZoom ? 0.001 : static_cast<qreal>(minZoom);
         if (m_panel->m_stylusJoystick) {
-            const auto [minZoom, maxZoom]
-                = ruwa::core::canvas::computeZoomLimits(800, 800, maxBrush);
             m_panel->m_stylusJoystick->setZoomLimits(
-                ignoreMinZoom ? 0.001 : static_cast<qreal>(minZoom), maxZoom);
+                effectiveMinZoom, maxZoom);
         }
+        emit m_panel->zoomLimitsChanged(effectiveMinZoom, maxZoom);
         return;
     }
     const auto vpSize = m_panel->m_glWidget->viewport().size();
@@ -235,6 +237,7 @@ void CanvasViewController::applyZoomLimits()
                 static_cast<qreal>(m_panel->m_glWidget->viewport().camera().rotation()));
         }
     }
+    emit m_panel->zoomLimitsChanged(effectiveMinZoom, maxZoom);
 }
 
 void CanvasViewController::showZoomInfoOverlay()

@@ -4,6 +4,7 @@
 #include "features/canvas/ui/CanvasOverlayContextActions.h"
 #include "CanvasStylusJoystickWidget.h"
 #include "ZoomFitIconButton.h"
+#include "ZoomSliderMapping.h"
 #include "shared/widgets/inputs/ProgressHandleSlider.h"
 #include "shared/resources/IconProvider.h"
 #include "features/theme/manager/ThemeManager.h"
@@ -34,8 +35,6 @@ using namespace ruwa::ui::core;
 
 namespace {
 
-constexpr int kZoomSliderMin = 0;
-constexpr int kZoomSliderMax = 1000;
 constexpr int kPanelHeight = 40;
 constexpr int kHandleHeight = 16; // Extra height for drag handle (like BrushControlOverlay)
 constexpr int kZoomButtonSize = 28;
@@ -49,25 +48,6 @@ constexpr int kSliderTrackOpacityPercent = 0;
 constexpr int kSliderFillOpacityPercent = 85;
 
 } // namespace
-
-qreal CanvasStylusJoystickContainerWidget::sliderValueToZoom(int value) const
-{
-    const qreal ratio
-        = static_cast<qreal>(value - kZoomSliderMin) / (kZoomSliderMax - kZoomSliderMin);
-    const qreal logMin = std::log(m_minZoom);
-    const qreal logMax = std::log(m_maxZoom);
-    return std::exp(logMin + ratio * (logMax - logMin));
-}
-
-int CanvasStylusJoystickContainerWidget::zoomToSliderValue(qreal zoom) const
-{
-    const qreal clamped = qBound(m_minZoom, zoom, m_maxZoom);
-    const qreal logMin = std::log(m_minZoom);
-    const qreal logMax = std::log(m_maxZoom);
-    const qreal logZoom = std::log(clamped);
-    const qreal ratio = (logZoom - logMin) / (logMax - logMin);
-    return kZoomSliderMin + qRound(ratio * (kZoomSliderMax - kZoomSliderMin));
-}
 
 // Zoom panel container — rounded corners with mask, handle at top (like BrushControlOverlay)
 class ZoomPanelWidget : public QWidget {
@@ -198,8 +178,8 @@ CanvasStylusJoystickContainerWidget::CanvasStylusJoystickContainerWidget(QWidget
 
     m_zoomSlider = new ProgressHandleSlider(m_zoomPanel);
     m_zoomSlider->setOrientation(Qt::Horizontal);
-    m_zoomSlider->setRange(kZoomSliderMin, kZoomSliderMax);
-    m_zoomSlider->setValue(zoomToSliderValue(1.0));
+    m_zoomSlider->setRange(zoom_slider::kMinimum, zoom_slider::kMaximum);
+    m_zoomSlider->setValue(zoom_slider::zoomToValue(1.0, m_minZoom, m_maxZoom));
     m_zoomSlider->setShowValueText(false);
     m_zoomSlider->setBackgroundOpacity(
         kSliderSurfaceOpacityPercent / 100.0, kSliderTrackOpacityPercent / 100.0);
@@ -355,7 +335,7 @@ void CanvasStylusJoystickContainerWidget::setZoomLimits(qreal minZoom, qreal max
 void CanvasStylusJoystickContainerWidget::setZoom(qreal zoom)
 {
     m_sliderUpdateFromExternal = true;
-    const int newValue = zoomToSliderValue(zoom);
+    const int newValue = zoom_slider::zoomToValue(zoom, m_minZoom, m_maxZoom);
     if (m_zoomSlider->value() != newValue) {
         m_zoomSlider->blockSignals(true);
         m_zoomSlider->setValue(newValue);
@@ -379,7 +359,7 @@ void CanvasStylusJoystickContainerWidget::onZoomSliderValueChanged(int value)
     if (m_sliderUpdateFromExternal) {
         return;
     }
-    const qreal zoom = sliderValueToZoom(value);
+    const qreal zoom = zoom_slider::valueToZoom(value, m_minZoom, m_maxZoom);
     emit zoomChangeRequested(zoom);
 }
 

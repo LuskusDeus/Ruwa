@@ -139,7 +139,10 @@ public:
         LiquifyTwirlCW,
         LiquifyTwirlCCW,
         LiquifyGrow,
-        LiquifyShrink
+        LiquifyShrink,
+
+        // General actions
+        Reset
     };
 
     static IconProvider& instance();

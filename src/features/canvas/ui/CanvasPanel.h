@@ -404,6 +404,7 @@ signals:
     /// fires at display refresh rate while the canvas is streaming frames.
     void canvasFrameRendered();
     void zoomChanged(qreal zoom);
+    void zoomLimitsChanged(qreal minZoom, qreal maxZoom);
     void cursorPositionChanged(const QPoint& pos);
     void canvasSizeChanged(const QSize& size);
     void exportFrameChanged(const QRect& frame);

@@ -311,6 +311,10 @@ QString IconProvider::getStandardIconName(StandardIcon icon) const
         return "LiquifyGrow";
     case StandardIcon::LiquifyShrink:
         return "LiquifyShrink";
+
+    // General actions
+    case StandardIcon::Reset:
+        return "Reset";
     }
     return QString();
 }

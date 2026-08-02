@@ -59,6 +59,7 @@
         <file alias="Edit">resources/icons/Edit.png</file>
         <file alias="OpenedFolder">resources/icons/OpenedFolder.png</file>
         <file alias="UndoArrow">resources/icons/ArrowUndo.png</file>
+        <file alias="Reset">resources/icons/ArrowUndo.png</file>
         <file alias="Brushpack">resources/icons/Brushpack.png</file>
         <file alias="Eraser">resources/icons/Eraser.png</file>
         <file alias="Lasso">resources/icons/Lasso.png</file>

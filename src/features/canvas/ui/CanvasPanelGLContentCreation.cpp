@@ -380,6 +380,8 @@ bool CanvasPanel::createGLContent()
     connect(m_glWidget, &aether::OpenGLCanvasWidget::cameraZoomChanged, this,
         &CanvasPanel::updateBrushCursorOverlayRadius);
     connect(m_glWidget, &aether::OpenGLCanvasWidget::cameraZoomChanged, this,
+        &CanvasPanel::zoomChanged);
+    connect(m_glWidget, &aether::OpenGLCanvasWidget::cameraZoomChanged, this,
         [this](qreal) { syncZoomInfoOverlayValue(); });
     connect(m_glWidget, &aether::OpenGLCanvasWidget::cameraZoomChanged, this, [this]() {
         if (m_canvasResizeController && m_canvasResizeController->isActive()) {

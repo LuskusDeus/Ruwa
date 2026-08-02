@@ -569,10 +569,7 @@ void setUiDragActive(bool active)
 
 workspace::NavigatorWidget* WorkspaceTab::navigatorWidget() const
 {
-    if (!m_navigatorPanel || !m_navigatorPanel->contentWidget()) {
-        return nullptr;
-    }
-    return qobject_cast<workspace::NavigatorWidget*>(m_navigatorPanel->contentWidget());
+    return m_navigatorPanel ? m_navigatorPanel->navigatorWidget() : nullptr;
 }
 
 void WorkspaceTab::invalidateNavigatorTiles(const QList<QPoint>& tilePositions)
@@ -1160,9 +1157,8 @@ void WorkspaceTab::onTransitionFinishedImpl()
     }
 
     // Refresh navigator thumbnail as soon as GL content is ready
-    if (glContentCreated && m_navigatorPanel && m_navigatorPanel->contentWidget()) {
-        if (auto* w
-            = qobject_cast<workspace::NavigatorWidget*>(m_navigatorPanel->contentWidget())) {
+    if (glContentCreated) {
+        if (auto* w = navigatorWidget()) {
             w->refreshThumbnail();
         }
     }
@@ -2270,9 +2266,8 @@ void WorkspaceTab::updateInitialPresentationReadiness()
         }
     }
 
-    if (m_navigatorPanel && m_navigatorPanel->isVisible() && m_navigatorPanel->contentWidget()) {
-        if (auto* navigator
-            = qobject_cast<workspace::NavigatorWidget*>(m_navigatorPanel->contentWidget())) {
+    if (m_navigatorPanel && m_navigatorPanel->isVisible()) {
+        if (auto* navigator = navigatorWidget()) {
             connect(navigator, &workspace::NavigatorWidget::presentationReadyChanged, this,
                 &WorkspaceTab::updateInitialPresentationReadiness, Qt::UniqueConnection);
             if (!navigator->presentationReady()) {
@@ -2306,10 +2301,8 @@ void WorkspaceTab::updateInitialPresentationReadiness()
             updateInitialPresentationReadiness();
             return;
         }
-        if (m_navigatorPanel && m_navigatorPanel->isVisible()
-            && m_navigatorPanel->contentWidget()) {
-            if (auto* navigator
-                = qobject_cast<workspace::NavigatorWidget*>(m_navigatorPanel->contentWidget());
+        if (m_navigatorPanel && m_navigatorPanel->isVisible()) {
+            if (auto* navigator = navigatorWidget();
                 navigator && !navigator->presentationReady()) {
                 updateInitialPresentationReadiness();
                 return;
@@ -2645,9 +2638,8 @@ void WorkspaceTab::connectPanelSignals()
     connect(m_navigatorThumbnailRefreshTimer, &QTimer::timeout, this, [this]() {
         if (m_canvasPanel && !m_canvasPanel->isDrawingActive()
             && !m_canvasPanel->isTransformActive() && m_navigatorPanel
-            && m_navigatorPanel->contentWidget() && m_navigatorPanel->isVisible()) {
-            if (auto* w
-                = qobject_cast<workspace::NavigatorWidget*>(m_navigatorPanel->contentWidget())) {
+            && m_navigatorPanel->isVisible()) {
+            if (auto* w = navigatorWidget()) {
                 w->refreshThumbnail();
             }
         }

@@ -102,9 +102,6 @@ private:
     /// Animate the joystick/panel exchanging places (children slide instead of snapping).
     void animateLayoutSwap();
 
-    qreal sliderValueToZoom(int value) const;
-    int zoomToSliderValue(qreal zoom) const;
-
     CanvasStylusJoystickWidget* m_joystick = nullptr;
     ProgressHandleSlider* m_zoomSlider = nullptr;
     QWidget* m_zoomPanel = nullptr; ///< Panel with handle + zoom controls
