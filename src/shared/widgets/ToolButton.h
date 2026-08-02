@@ -13,7 +13,10 @@
 namespace ruwa::ui::workspace {
 
 /**
- * @brief Animated tool button with icon for ToolsPanel
+ * @brief Animated tool button with an icon and optional text label.
+ *
+ * Icon-only buttons retain the compact centred layout used by ToolsPanel. When
+ * QPushButton::text() is set, the icon and label are centred as one group.
  */
 class ToolButton : public ruwa::ui::widgets::BaseAnimatedButton {
     Q_OBJECT

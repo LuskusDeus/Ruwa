@@ -5402,34 +5402,28 @@ Ruwa uses the Qt framework (version %1), dynamically linked under the GNU Lesser
 <context>
     <name>ruwa::ui::workspace::LayerEffectsPanel</name>
     <message>
-        <location filename="../src/features/layers/ui/LayerEffectsPanel.cpp" line="64"/>
-        <location filename="../src/features/layers/ui/LayerEffectsPanel.cpp" line="66"/>
+        <location filename="../src/features/layers/ui/LayerEffectsPanel.cpp" line="27"/>
+        <location filename="../src/features/layers/ui/LayerEffectsPanel.cpp" line="29"/>
         <source>Layer Effects</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location filename="../src/features/layers/ui/LayerEffectsPanel.cpp" line="150"/>
-        <source>+  Add</source>
+        <location filename="../src/features/layers/ui/LayerEffectsPanel.cpp" line="112"/>
+        <source>Add effect</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location filename="../src/features/layers/ui/LayerEffectsPanel.cpp" line="159"/>
-        <source>Search effects...</source>
+        <location filename="../src/features/layers/ui/LayerEffectsPanel.cpp" line="138"/>
+        <source>No effects on this layer</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location filename="../src/features/layers/ui/LayerEffectsPanel.cpp" line="185"/>
-        <source>No effects yet.
-Press Add to apply one.</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <location filename="../src/features/layers/ui/LayerEffectsPanel.cpp" line="251"/>
+        <location filename="../src/features/layers/ui/LayerEffectsPanel.cpp" line="200"/>
         <source>Select a layer to add effects.</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location filename="../src/features/layers/ui/LayerEffectsPanel.cpp" line="256"/>
+        <location filename="../src/features/layers/ui/LayerEffectsPanel.cpp" line="205"/>
         <source>Layer effects are not available for this layer.</source>
         <translation type="unfinished"></translation>
     </message>

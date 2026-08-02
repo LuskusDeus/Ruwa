@@ -5415,35 +5415,28 @@ Ruwa использует фреймворк Qt (версия %1), динами�
 <context>
     <name>ruwa::ui::workspace::LayerEffectsPanel</name>
     <message>
-        <location filename="../src/features/layers/ui/LayerEffectsPanel.cpp" line="64"/>
-        <location filename="../src/features/layers/ui/LayerEffectsPanel.cpp" line="66"/>
+        <location filename="../src/features/layers/ui/LayerEffectsPanel.cpp" line="27"/>
+        <location filename="../src/features/layers/ui/LayerEffectsPanel.cpp" line="29"/>
         <source>Layer Effects</source>
         <translation>Эффекты слоя</translation>
     </message>
     <message>
-        <location filename="../src/features/layers/ui/LayerEffectsPanel.cpp" line="150"/>
-        <source>+  Add</source>
-        <translation>+  Добавить</translation>
+        <location filename="../src/features/layers/ui/LayerEffectsPanel.cpp" line="112"/>
+        <source>Add effect</source>
+        <translation>Добавить эффект</translation>
     </message>
     <message>
-        <location filename="../src/features/layers/ui/LayerEffectsPanel.cpp" line="159"/>
-        <source>Search effects...</source>
-        <translation>Поиск эффектов...</translation>
+        <location filename="../src/features/layers/ui/LayerEffectsPanel.cpp" line="138"/>
+        <source>No effects on this layer</source>
+        <translation>На этом слое нет эффектов</translation>
     </message>
     <message>
-        <location filename="../src/features/layers/ui/LayerEffectsPanel.cpp" line="185"/>
-        <source>No effects yet.
-Press Add to apply one.</source>
-        <translation>Пока нет эффектов.
-Нажмите «Добавить», чтобы применить.</translation>
-    </message>
-    <message>
-        <location filename="../src/features/layers/ui/LayerEffectsPanel.cpp" line="251"/>
+        <location filename="../src/features/layers/ui/LayerEffectsPanel.cpp" line="200"/>
         <source>Select a layer to add effects.</source>
         <translation>Выберите слой, чтобы добавить эффекты.</translation>
     </message>
     <message>
-        <location filename="../src/features/layers/ui/LayerEffectsPanel.cpp" line="256"/>
+        <location filename="../src/features/layers/ui/LayerEffectsPanel.cpp" line="205"/>
         <source>Layer effects are not available for this layer.</source>
         <translation>Эффекты слоя недоступны для этого слоя.</translation>
     </message>

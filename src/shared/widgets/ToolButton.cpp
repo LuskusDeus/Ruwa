@@ -8,6 +8,7 @@
 #include <QEasingCurve>
 #include <QCursor>
 #include <QEvent>
+#include <QFontMetrics>
 #include <QPainter>
 #include <QPainterPath>
 #include <QPropertyAnimation>
@@ -20,6 +21,8 @@ using namespace ruwa::ui::widgets;
 namespace {
 const int BASE_GROUP_INDICATOR_SIZE = 7;
 const int BASE_GROUP_INDICATOR_MARGIN = 4;
+const int BASE_LABEL_FONT_SIZE = 9;
+const int BASE_ICON_LABEL_SPACING = 7;
 } // namespace
 
 ToolButton::ToolButton(QWidget* parent)
@@ -218,6 +221,12 @@ void ToolButton::updateScaledSize()
 {
     auto& mgr = WidgetStyleManager::instance();
     m_iconSize = mgr.scaled(m_baseIconSize);
+
+    QFont labelFont = font();
+    labelFont.setPointSize(ThemeManager::instance().scaledFontSize(BASE_LABEL_FONT_SIZE));
+    labelFont.setWeight(QFont::Medium);
+    setFont(labelFont);
+
     setFixedSize(mgr.scaled(m_baseWidth), mgr.scaled(m_baseHeight));
 }
 
@@ -311,33 +320,49 @@ void ToolButton::paintEvent(QPaintEvent* event)
         painter.setPen(Qt::NoPen);
     }
 
-    // Draw icon with interpolated color
-    if (!m_sourceIcon.isNull()) {
-        auto lerpColor = [](const QColor& a, const QColor& b, qreal t) {
-            return QColor(qRound(a.red() + (b.red() - a.red()) * t),
-                qRound(a.green() + (b.green() - a.green()) * t),
-                qRound(a.blue() + (b.blue() - a.blue()) * t),
-                qRound(a.alpha() + (b.alpha() - a.alpha()) * t));
-        };
+    auto lerpColor = [](const QColor& a, const QColor& b, qreal t) {
+        return QColor(qRound(a.red() + (b.red() - a.red()) * t),
+            qRound(a.green() + (b.green() - a.green()) * t),
+            qRound(a.blue() + (b.blue() - a.blue()) * t),
+            qRound(a.alpha() + (b.alpha() - a.alpha()) * t));
+    };
 
-        // Enabled appearance (active-interpolated) ...
-        QColor normalColor = m_mutedNormalIcon ? colors.textMuted : colors.text;
-        if (m_chromeStyle == ChromeStyle::PrimaryHover) {
-            normalColor = lerpColor(normalColor, colors.primary, hoverProgress());
-        }
-        const QColor activeColor = colors.textOnPrimary();
-        const QColor enabledColor = lerpColor(normalColor, activeColor, activeProgress());
+    // Icon and optional label share the same animated colour and are centred as
+    // one content group. Existing icon-only buttons keep their original layout.
+    QColor normalContentColor = m_mutedNormalIcon ? colors.textMuted : colors.text;
+    if (m_chromeStyle == ChromeStyle::PrimaryHover) {
+        normalContentColor = lerpColor(normalContentColor, colors.primary, hoverProgress());
+    }
+    const QColor activeColor = colors.textOnPrimary();
+    const QColor enabledContentColor
+        = lerpColor(normalContentColor, activeColor, activeProgress());
+    const QColor contentColor
+        = lerpColor(colors.textDisabled(), enabledContentColor, m_enabledProgress);
 
-        // ... then fade between disabled and enabled as the button toggles state.
-        const QColor iconColor = lerpColor(colors.textDisabled(), enabledColor, m_enabledProgress);
+    const QString label = text();
+    const bool hasIcon = !m_sourceIcon.isNull();
+    const bool hasLabel = !label.isEmpty();
+    const int labelWidth = hasLabel ? QFontMetrics(font()).horizontalAdvance(label) : 0;
+    const int iconLabelSpacing
+        = hasIcon && hasLabel ? mgr.scaled(BASE_ICON_LABEL_SPACING) : 0;
+    const int contentWidth = (hasIcon ? m_iconSize : 0) + iconLabelSpacing + labelWidth;
+    int contentX = (width() - contentWidth) / 2;
 
+    if (hasIcon) {
         QPixmap basePix = m_sourceIcon.pixmap(m_iconSize, m_iconSize);
         QPixmap coloredPix
-            = m_colorizeIcon ? ruwa::ui::painting::tintedPixmap(basePix, iconColor) : basePix;
+            = m_colorizeIcon ? ruwa::ui::painting::tintedPixmap(basePix, contentColor) : basePix;
 
-        int x = (width() - coloredPix.width() / coloredPix.devicePixelRatio()) / 2;
         int y = (height() - coloredPix.height() / coloredPix.devicePixelRatio()) / 2;
-        painter.drawPixmap(x, y, coloredPix);
+        painter.drawPixmap(contentX, y, coloredPix);
+        contentX += m_iconSize + iconLabelSpacing;
+    }
+
+    if (hasLabel) {
+        painter.setFont(font());
+        painter.setPen(contentColor);
+        painter.drawText(QRect(contentX, 0, labelWidth, height()), Qt::AlignVCenter | Qt::AlignLeft,
+            label);
     }
 
     if (m_hasGroupIndicator) {

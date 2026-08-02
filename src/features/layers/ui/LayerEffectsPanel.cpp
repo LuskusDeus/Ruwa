@@ -10,12 +10,10 @@
 #include "features/layers/model/LayerModel.h"
 #include "shared/resources/IconProvider.h"
 #include "shared/undo/LayerEffectCommands.h"
-#include "shared/widgets/CapsuleButton.h"
-#include "shared/widgets/inputs/SearchBar.h"
+#include "shared/widgets/ToolButton.h"
 
 #include <QHBoxLayout>
 #include <QLabel>
-#include <QPainter>
 #include <QPushButton>
 #include <QTimer>
 #include <QVBoxLayout>
@@ -24,41 +22,6 @@ namespace ruwa::ui::workspace {
 
 using namespace ruwa::core::effects;
 using namespace ruwa::core::layers;
-
-namespace {
-
-/// Dashed rounded panel used for the "no effects yet" placeholder.
-class DashedPanel : public QWidget {
-public:
-    explicit DashedPanel(QColor border, QWidget* parent)
-        : QWidget(parent)
-        , m_border(border)
-    {
-    }
-    void setBorderColor(QColor color)
-    {
-        m_border = color;
-        update();
-    }
-
-protected:
-    void paintEvent(QPaintEvent*) override
-    {
-        QPainter p(this);
-        p.setRenderHint(QPainter::Antialiasing, true);
-        QPen pen(m_border, 1.4);
-        pen.setStyle(Qt::CustomDashLine);
-        pen.setDashPattern({ 4, 4 });
-        p.setPen(pen);
-        p.setBrush(Qt::NoBrush);
-        p.drawRoundedRect(QRectF(rect()).adjusted(1, 1, -1, -1), 8, 8);
-    }
-
-private:
-    QColor m_border;
-};
-
-} // namespace
 
 LayerEffectsPanel::LayerEffectsPanel(QWidget* parent)
     : DockPanel(tr("Layer Effects"), parent)
@@ -139,31 +102,31 @@ QWidget* LayerEffectsPanel::createContent()
     rootLayout->setContentsMargins(10, 10, 10, 10);
     rootLayout->setSpacing(10);
 
-    // --- Toolbar row: Add button + search field ---
-    auto* toolbar = new QHBoxLayout();
-    toolbar->setContentsMargins(0, 0, 0, 0);
-    toolbar->setSpacing(8);
+    // --- Subtitle: Add button ---
+    auto* controlsWidget = new QWidget();
+    auto* controlsLayout = new QHBoxLayout(controlsWidget);
+    controlsLayout->setContentsMargins(0, 0, 0, 0);
 
-    // Style matches the colour-input capsule in the Color panel (pill border +
-    // soft hover plate), i.e. the CapsuleButton Secondary variant.
-    m_addEffectButton = new ruwa::ui::widgets::CapsuleButton(
-        tr("+  Add"), ruwa::ui::widgets::CapsuleButton::Variant::Secondary, m_contentWidget);
-    m_addEffectButton->setBannerBaseHeight(34);
-    m_addEffectButton->setBaseMinimumWidth(0);
-    m_addEffectButton->setSecondaryRestingFillAlt(true);
-    m_addEffectButton->syncSizeToText();
+    // Same hover-only action style as BrushSettingsPanel's editor button.
+    m_addEffectButton = new ToolButton(ToolButton::Mode::Action, controlsWidget);
+    m_addEffectButton->setText(tr("Add effect"));
+    m_addEffectButton->setIcon(
+        ruwa::ui::core::IconProvider::instance().createPlusIcon(14));
+    m_addEffectButton->setBaseSize(168, 26, 14);
+    // The previous compact button was approximately 84 base pixels wide.
+    m_addEffectButton->setChromeStyle(ToolButton::ChromeStyle::PrimaryHover);
+    m_addEffectButton->setCircularChrome(true);
+    m_addEffectButton->setBorderVisible(false);
+    m_addEffectButton->setMutedNormalIcon(true);
+    m_addEffectButton->setFocusPolicy(Qt::NoFocus);
     connect(m_addEffectButton, &QPushButton::clicked, this, &LayerEffectsPanel::showAddEffectPopup);
-    toolbar->addWidget(m_addEffectButton);
+    controlsLayout->addStretch(1);
+    controlsLayout->addWidget(m_addEffectButton);
+    controlsLayout->addStretch(1);
 
-    m_searchBar = new ruwa::ui::widgets::SearchBar(m_contentWidget);
-    m_searchBar->setPlaceholder(tr("Search effects..."));
-    m_searchBar->setBarHeight(34);
-    m_searchBar->setMinimumBarWidth(0);
-    connect(m_searchBar, &ruwa::ui::widgets::SearchBar::textChanged, this,
-        &LayerEffectsPanel::applyCardFilter);
-    toolbar->addWidget(m_searchBar, 1);
-
-    rootLayout->addLayout(toolbar);
+    setSubtitleContentMargins(4, 4, 4, 4);
+    setSubtitleContentSpacing(0);
+    setSubtitleWidget(controlsWidget);
 
     // --- Message state (no layer / unavailable) ---
     m_messageLabel = new QLabel(m_contentWidget);
@@ -171,23 +134,10 @@ QWidget* LayerEffectsPanel::createContent()
     m_messageLabel->setAlignment(Qt::AlignCenter);
     rootLayout->addWidget(m_messageLabel, 1);
 
-    // --- Empty state (dashed placeholder) ---
-    m_emptyState = new DashedPanel(colors().border, m_contentWidget);
-    auto* emptyLayout = new QVBoxLayout(m_emptyState);
-    emptyLayout->setContentsMargins(16, 24, 16, 24);
-    emptyLayout->setSpacing(10);
-    emptyLayout->addStretch(1);
-    auto* plus = new QLabel(QStringLiteral("+"), m_emptyState);
-    plus->setAlignment(Qt::AlignCenter);
-    QFont plusFont = colors().fonts.getUIFont(22);
-    plus->setFont(plusFont);
-    emptyLayout->addWidget(plus);
-    auto* emptyText = new QLabel(tr("No effects yet.\nPress Add to apply one."), m_emptyState);
-    emptyText->setAlignment(Qt::AlignCenter);
-    emptyText->setWordWrap(true);
-    emptyText->setObjectName(QStringLiteral("effectsEmptyText"));
-    emptyLayout->addWidget(emptyText);
-    emptyLayout->addStretch(1);
+    // --- Empty state ---
+    m_emptyState = new QLabel(tr("No effects on this layer"), m_contentWidget);
+    m_emptyState->setAlignment(Qt::AlignCenter);
+    m_emptyState->setWordWrap(true);
     rootLayout->addWidget(m_emptyState, 1);
 
     // --- Effects list (animated, drag-reorderable) ---
@@ -216,7 +166,6 @@ void LayerEffectsPanel::showState(ViewState state, const QString& message)
     m_listView->setVisible(state == ViewState::Effects);
     const bool canAdd = state != ViewState::Message;
     m_addEffectButton->setEnabled(canAdd);
-    m_searchBar->setVisible(canAdd);
     if (state == ViewState::Message) {
         m_messageLabel->setText(message);
     }
@@ -397,40 +346,15 @@ void LayerEffectsPanel::syncCardsToLayer(bool animate)
         }
     }
 
-    // Apply the search filter to build the visible ordered rows.
-    const QString needle = m_cardFilter.trimmed();
-    QList<ruwa::ui::widgets::ReorderableRowWidget*> visibleRows;
-    QSet<QUuid> visibleNewIds;
+    QList<ruwa::ui::widgets::ReorderableRowWidget*> orderedRows;
     for (const QUuid& id : m_cardOrder) {
         EffectCard* card = m_cardById.value(id, nullptr);
-        if (!card) {
-            continue;
-        }
-        bool match = needle.isEmpty();
-        if (!match) {
-            for (QLabel* l : card->findChildren<QLabel*>()) {
-                if (l->text().contains(needle, Qt::CaseInsensitive)) {
-                    match = true;
-                    break;
-                }
-            }
-        }
-        if (match) {
-            visibleRows.append(card);
-            if (newIds.contains(id)) {
-                visibleNewIds.insert(id);
-            }
+        if (card) {
+            orderedRows.append(card);
         }
     }
 
-    m_listView->syncRows(visibleRows, visibleNewIds, removedRows, animate);
-}
-
-void LayerEffectsPanel::applyCardFilter(const QString& text)
-{
-    m_cardFilter = text;
-    // Filtering never animates and never adds/removes model cards.
-    syncCardsToLayer(false);
+    m_listView->syncRows(orderedRows, newIds, removedRows, animate);
 }
 
 template <typename CommandT, typename MutateFn>
@@ -679,18 +603,16 @@ void LayerEffectsPanel::applyTheme()
         return;
     }
     const auto& c = colors();
+    setSubtitleBackground(c.surface);
     m_contentWidget->setStyleSheet(
         QString("background: %1; color: %2;").arg(c.surface.name(), c.text.name()));
 
-    // m_addEffectButton is a CapsuleButton — it themes itself, no stylesheet.
+    // ToolButton reads the active theme directly; no stylesheet is needed here.
     if (m_messageLabel) {
         m_messageLabel->setStyleSheet(QString("color: %1;").arg(c.textMuted.name()));
     }
     if (m_emptyState) {
-        static_cast<DashedPanel*>(m_emptyState)->setBorderColor(c.border);
-        for (QLabel* l : m_emptyState->findChildren<QLabel*>()) {
-            l->setStyleSheet(QString("color: %1;").arg(c.textMuted.name()));
-        }
+        m_emptyState->setStyleSheet(QString("color: %1;").arg(c.textMuted.name()));
     }
 }
 

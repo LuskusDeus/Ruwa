@@ -32,12 +32,9 @@
 #include <QLabel>
 #include <QMessageBox>
 #include <QPainter>
-#include <QPixmap>
-#include <QPen>
 #include <QSet>
 #include <QSizePolicy>
 #include <QPaintEvent>
-#include <QPainter>
 #include <QResizeEvent>
 
 namespace ruwa::ui::tabs {
@@ -60,21 +57,6 @@ const int BASE_SHORTCUTS_META_FONT_SIZE = 10;
 const int BASE_SHORTCUTS_HEADER_GAP = 10;
 const int BASE_DIVIDER_VSPACE_TOP = 6;
 const int BASE_DIVIDER_VSPACE_BOTTOM = 8;
-
-QIcon makePlusIcon(int basePx)
-{
-    const int px = qMax(8, basePx);
-    QPixmap pm(px, px);
-    pm.fill(Qt::transparent);
-    QPainter p(&pm);
-    p.setRenderHint(QPainter::Antialiasing, true);
-    const qreal stroke = qMax(1.5, px / 8.0);
-    p.setPen(QPen(Qt::white, stroke, Qt::SolidLine, Qt::RoundCap));
-    const qreal m = px * 0.22;
-    p.drawLine(QPointF(px / 2.0, m), QPointF(px / 2.0, px - m));
-    p.drawLine(QPointF(m, px / 2.0), QPointF(px - m, px / 2.0));
-    return QIcon(pm);
-}
 
 } // namespace
 
@@ -323,7 +305,7 @@ void ShortcutManagerTab::createLayout()
     // Keep readable text but reduce height. Default min-width (168) keeps the
     // capsule visually elongated rather than squeezed around the short label.
     m_newPresetButton->setSizeScale(0.78);
-    m_newPresetButton->setIcon(makePlusIcon(theme.scaled(14)));
+    m_newPresetButton->setIcon(IconProvider::instance().createPlusIcon(theme.scaled(14)));
     connect(
         m_newPresetButton, &QPushButton::clicked, this, &ShortcutManagerTab::onNewPresetClicked);
 

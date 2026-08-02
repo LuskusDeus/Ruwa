@@ -5,6 +5,7 @@
 #include "features/theme/manager/ThemeManager.h"
 
 #include <QPainter>
+#include <QPen>
 #include <QFile>
 
 namespace ruwa::ui::core {
@@ -88,6 +89,22 @@ QPixmap IconProvider::getPixmap(const QString& name, const QSize& size) const
     }
 
     return pixmap;
+}
+
+QIcon IconProvider::createPlusIcon(int pixelSize) const
+{
+    const int px = qMax(8, pixelSize);
+    QPixmap pixmap(px, px);
+    pixmap.fill(Qt::transparent);
+
+    QPainter painter(&pixmap);
+    painter.setRenderHint(QPainter::Antialiasing, true);
+    const qreal stroke = qMax(1.5, px / 8.0);
+    painter.setPen(QPen(Qt::white, stroke, Qt::SolidLine, Qt::RoundCap));
+    const qreal margin = px * 0.22;
+    painter.drawLine(QPointF(px / 2.0, margin), QPointF(px / 2.0, px - margin));
+    painter.drawLine(QPointF(margin, px / 2.0), QPointF(px - margin, px / 2.0));
+    return QIcon(pixmap);
 }
 
 QPixmap IconProvider::getApplicationLogoPixmap(const QSize& size) const

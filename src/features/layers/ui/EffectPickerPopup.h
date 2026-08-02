@@ -42,7 +42,7 @@ public:
     explicit EffectPickerPopup(QWidget* parent = nullptr);
     ~EffectPickerPopup() override;
 
-    /// Rebuild the catalog and pop up just beneath \p anchor (clamped to the
+    /// Rebuild the catalog and pop up centred beneath \p anchor (clamped to the
     /// overlay). \p anchor also defines the window whose overlay hosts the popup.
     void popupUnder(QWidget* anchor);
 

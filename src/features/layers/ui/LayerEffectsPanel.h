@@ -25,11 +25,6 @@ class QWidget;
 class QLabel;
 class QPushButton;
 
-namespace ruwa::ui::widgets {
-class SearchBar;
-class CapsuleButton;
-} // namespace ruwa::ui::widgets
-
 namespace ruwa::core::layers {
 class LayerModel;
 }
@@ -39,6 +34,7 @@ namespace ruwa::ui::workspace {
 class EffectPickerPopup;
 class EffectCard;
 class EffectsListView;
+class ToolButton;
 
 class LayerEffectsPanel : public ruwa::ui::docking::DockPanel {
     Q_OBJECT
@@ -90,9 +86,8 @@ private:
     EffectCard* buildCard(const ruwa::core::layers::LayerData* layer,
         const ruwa::core::effects::LayerEffectState& effect, int index);
     /// Reconcile the persistent card set to the selected layer's effects and
-    /// hand the (filtered) ordered rows to the list view.
+    /// hand the ordered rows to the list view.
     void syncCardsToLayer(bool animate);
-    void applyCardFilter(const QString& text);
 
     template <typename CommandT, typename MutateFn>
     void applyEffectMutation(const ruwa::core::layers::LayerId& layerId, MutateFn mutate);
@@ -119,10 +114,9 @@ private:
 private:
     ruwa::core::layers::LayerModel* m_layerModel = nullptr;
     QWidget* m_contentWidget = nullptr;
-    ruwa::ui::widgets::CapsuleButton* m_addEffectButton = nullptr;
-    ruwa::ui::widgets::SearchBar* m_searchBar = nullptr;
+    ToolButton* m_addEffectButton = nullptr;
     QLabel* m_messageLabel = nullptr;
-    QWidget* m_emptyState = nullptr;
+    QLabel* m_emptyState = nullptr;
     EffectsListView* m_listView = nullptr;
     QHash<QUuid, EffectCard*> m_cardById; // persistent cards, keyed by effect instance id
     QList<QUuid> m_cardOrder; // current effect order (by instance id)
@@ -132,7 +126,6 @@ private:
     OnContentChangedFn m_onContentChanged;
     CanvasSizeProviderFn m_canvasSizeProvider;
     bool m_applyingMutation = false;
-    QString m_cardFilter;
 
     // Live-param-edit transaction (see applyParamLive).
     class QTimer* m_paramSessionTimer = nullptr;

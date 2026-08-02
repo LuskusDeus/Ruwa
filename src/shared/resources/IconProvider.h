@@ -161,6 +161,9 @@ public:
     QPixmap getPixmap(StandardIcon icon, const QSize& size = QSize(24, 24)) const;
     QPixmap getPixmap(const QString& name, const QSize& size = QSize(24, 24)) const;
 
+    /// Create the standard rounded plus glyph used by compact add actions.
+    QIcon createPlusIcon(int pixelSize) const;
+
     /// Application logo with transparent variant preferred, opaque as fallback.
     QPixmap getApplicationLogoPixmap(const QSize& size = QSize()) const;
 
