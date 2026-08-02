@@ -3,6 +3,7 @@
 #include "features/brush/engine/BrushEngine.h"
 
 #include "features/brush/rendering/GLBrushRenderer.h"
+#include "features/brush/rendering/StrokeBufferFormat.h"
 #include "features/canvas/rendering/GLTileRenderer.h"
 #include "shared/tiles/TileGrid.h"
 
@@ -64,6 +65,24 @@ bool BrushExecutionBackend::shouldUseGpu() const
     if (!hasGpuBackend())
         return false;
     return true;
+}
+
+void BrushExecutionBackend::prepareStrokeBuffer(
+    TileBrush& brush, const TileGrid& targetGrid, bool useGpu) const
+{
+    TileGrid& strokeBuffer = brush.strokeBuffer();
+    if (!strokeBuffer.empty()) {
+        // Dabs are already stamped in the current format, and setFormat() only
+        // applies to tiles created afterwards — changing it now would mix two
+        // formats inside one grid.
+        return;
+    }
+    // The CPU branch also matters when the GPU is available: a previous GPU
+    // stroke leaves the buffer on its own working format (flatten restores it,
+    // but a cancelled stroke does not), and the CPU rasterizer writes raw
+    // 8-bit bytes into whatever it finds.
+    strokeBuffer.setFormat(
+        useGpu ? strokeBufferFormatFor(brush, targetGrid.format()) : targetGrid.format());
 }
 
 bool BrushExecutionBackend::stamp(TileBrush& brush, TileGrid& layerGrid, float worldX, float worldY,

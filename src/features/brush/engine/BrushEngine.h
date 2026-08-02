@@ -34,6 +34,21 @@ public:
     BrushEngineCapabilities capabilities() const;
     bool shouldUseGpu() const;
 
+    /// Pick the storage format of the stroke buffer for a stroke about to start
+    /// against `targetGrid` (the grid the stroke will eventually flatten into —
+    /// the layer pixels, or the mask grid for a mask-edit stroke).
+    ///
+    /// Call once per stroke, after TileBrush::beginStroke() has emptied the
+    /// buffer and before the first dab. The stamp entry points cannot do it
+    /// themselves: the batched and deferred paths never receive the stroke
+    /// target, and the format must be settled before the first tile is created.
+    ///
+    /// The widening is GPU-only, deliberately: such a buffer is written by the
+    /// stamp shaders and read by flatten, while TileBrush's CPU rasterizer is
+    /// still hardcoded to 8-bit bytes. With `useGpu` false the buffer is pinned
+    /// to the target format, which is what that rasterizer expects.
+    void prepareStrokeBuffer(TileBrush& brush, const TileGrid& targetGrid, bool useGpu) const;
+
     // Returns true when the GPU path was used.
     bool stamp(TileBrush& brush, TileGrid& layerGrid, float worldX, float worldY,
         TileGrid* selectionMask, bool preferGpu, float strokeElapsedSeconds = 0.0f,

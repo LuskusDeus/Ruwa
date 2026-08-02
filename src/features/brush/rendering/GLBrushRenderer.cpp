@@ -11,6 +11,7 @@
 #include "shared/tiles/DabShapeFalloff.h"
 #include "features/canvas/rendering/GLTileRenderer.h"
 #include "features/brush/rendering/DabShapeCache.h"
+#include "features/brush/rendering/StrokeBufferFormat.h"
 #include "features/brush/rendering/WetPigmentGlsl.h"
 #include "features/brush/rendering/WetShaderSources.h"
 #include <QImage>
@@ -1981,13 +1982,13 @@ void GLBrushRenderer::stampGPU(TileGrid& strokeBuffer, GLTileRenderer* tileRende
         return;
 
     const bool wetMode = brush.isWetMode();
-    // Wet must retain low-alpha premultiplied RGB between dabs. RGBA8 rounds
-    // those channels to zero and turns the next unpremultiply into false black
-    // pigment, so the whole in-progress wet stroke lives in float storage.
-    // Other effects continue to use the document format.
+    // Storage of the in-progress stroke — see strokeBufferFormatFor() for why
+    // wet and 8-bit src-over need more than the document format. Only the modes
+    // that hand us a layer grid land here; plain paint is set up once at stroke
+    // begin (BrushExecutionBackend::prepareStrokeBuffer), because its stamp
+    // entry points do not carry the stroke target.
     if (layerGrid && strokeBuffer.empty()) {
-        strokeBuffer.setFormat(wetMode ? wet_pigment_gpu::workingColorFormat(layerGrid->format())
-                                       : layerGrid->format());
+        strokeBuffer.setFormat(strokeBufferFormatFor(brush, layerGrid->format()));
     }
 
     const float coverageExtent

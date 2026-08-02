@@ -396,6 +396,14 @@ void BrushStrokeHost::beginStroke(
             || currentBrush->isLiquifyMode() || backendWantsGpu);
     m_useGPUBrush = (executionBackend && useGpu);
 
+    // Settle the stroke buffer's storage format now, while it is still empty
+    // (TileBrush::beginStroke above cleared it) and before any dab is stamped.
+    // `grid` is the stroke's real target — the layer pixels, or the mask grid
+    // when the layer's mask is the active edit target.
+    if (executionBackend) {
+        executionBackend->prepareStrokeBuffer(*currentBrush, *grid, m_useGPUBrush);
+    }
+
     TileGrid* paintMask = effectivePaintMask(layer, grid);
     configureBrushSelectionMaskAlpha(*currentBrush, layer, paintMask);
     const bool realtimeRebuild = strokeNeedsRealtimeRebuild();
