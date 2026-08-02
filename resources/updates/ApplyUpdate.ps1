@@ -2,6 +2,10 @@
 # SPDX-License-Identifier: MPL-2.0
 
 $ErrorActionPreference = 'Stop'
+# This process must not keep the installation directory as its working directory: Windows holds
+# an open handle on it without FILE_SHARE_DELETE, which makes the backup rename fail. The host
+# already launches us elsewhere; this is the second line of defence.
+[Environment]::CurrentDirectory = [IO.Path]::GetTempPath()
 $configJson = [Text.Encoding]::UTF8.GetString(
     [Convert]::FromBase64String('__RUWA_CONFIG_BASE64__'))
 $config = $configJson | ConvertFrom-Json
@@ -168,6 +172,10 @@ try {
     $installDirectory = [IO.Path]::GetFullPath([string]$config.installDirectory).TrimEnd('\')
     $parentDirectory = [IO.Path]::GetDirectoryName($installDirectory)
     $installName = [IO.Path]::GetFileName($installDirectory)
+    if ([string]::IsNullOrEmpty($parentDirectory) -or [string]::IsNullOrEmpty($installName)) {
+        throw ('Ruwa cannot update itself when it is installed in a drive root: ' +
+            $installDirectory + '. Move the installation into a subfolder.')
+    }
     $suffix = ([string]$config.healthToken).ToLowerInvariant()
     $stageDirectory = Join-Path $parentDirectory ('.' + $installName + '.stage-' + $suffix)
     $backupDirectory = Join-Path $parentDirectory ('.' + $installName + '.backup-' + $suffix)

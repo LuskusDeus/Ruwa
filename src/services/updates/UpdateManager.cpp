@@ -208,20 +208,34 @@ bool installParentIsWritable()
     return QFile::remove(probePath);
 }
 
+// The installer renames the installation directory, so the process running it must never keep
+// that directory (or anything below it) as its working directory: Windows holds an open handle
+// on a process' current directory without FILE_SHARE_DELETE, which makes the rename fail.
+// A detached child inherits our working directory, which is normally the installation folder.
+QString installerWorkingDirectory()
+{
+    const QString tempPath = QDir::tempPath();
+    return QFileInfo(tempPath).isDir() ? tempPath : QDir::rootPath();
+}
+
 bool startWindowsInstallerProcess(const QStringList& arguments, bool requireElevation)
 {
+    const QString workingDirectory = installerWorkingDirectory();
     if (!requireElevation) {
-        return QProcess::startDetached(QStringLiteral("powershell.exe"), arguments);
+        return QProcess::startDetached(
+            QStringLiteral("powershell.exe"), arguments, workingDirectory);
     }
     const std::wstring verb = QStringLiteral("runas").toStdWString();
     const std::wstring file = QStringLiteral("powershell.exe").toStdWString();
     const std::wstring parameters = joinWindowsArguments(arguments).toStdWString();
+    const std::wstring directory = QDir::toNativeSeparators(workingDirectory).toStdWString();
     SHELLEXECUTEINFOW info {};
     info.cbSize = sizeof(info);
     info.fMask = SEE_MASK_NOASYNC;
     info.lpVerb = verb.c_str();
     info.lpFile = file.c_str();
     info.lpParameters = parameters.c_str();
+    info.lpDirectory = directory.c_str();
     info.nShow = SW_HIDE;
     return ShellExecuteExW(&info) == TRUE;
 }
