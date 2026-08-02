@@ -35,6 +35,9 @@ public:
     void rotateAround(
         const Vector2& anchorWorld, const Vector2& anchorScreen, const Vector2& viewportSize);
     void setRotationSmooth(float targetRadians);
+    /// Smoothly snap to the nearest rotation increment when it is within the capture distance.
+    /// Returns true when a snap target was accepted.
+    bool snapRotationSmooth(float incrementRadians, float captureDistanceRadians);
     float rotation() const { return m_rotation; }
 
     // === Instant zoom ===

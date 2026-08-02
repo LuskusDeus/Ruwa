@@ -14,6 +14,7 @@ add_executable(RuwaTests
     ../src/features/canvas/scene/Viewport.cpp
     ../src/shell/docking/layout/DockLayoutCalculator.cpp
     ../src/shell/docking/layout/DockSplitNode.cpp
+    camera_rotation_test.cpp
     dab_shape_falloff_test.cpp
     dock_split_push_drag_test.cpp
     flood_fill_alpha_lock_test.cpp

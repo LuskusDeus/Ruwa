@@ -127,6 +127,21 @@ void Camera2D::setRotationSmooth(float targetRadians)
     m_animating = true;
 }
 
+bool Camera2D::snapRotationSmooth(float incrementRadians, float captureDistanceRadians)
+{
+    if (!std::isfinite(incrementRadians) || !std::isfinite(captureDistanceRadians)
+        || incrementRadians <= 0.0f || captureDistanceRadians < 0.0f) {
+        return false;
+    }
+
+    const float target = std::round(m_rotation / incrementRadians) * incrementRadians;
+    if (angularDistance(m_rotation, target) > captureDistanceRadians)
+        return false;
+
+    setRotationSmooth(target);
+    return true;
+}
+
 // ==========================================================================
 //   I N S T A N T   Z O O M
 // ==========================================================================

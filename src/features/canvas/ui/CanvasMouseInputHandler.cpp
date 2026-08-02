@@ -40,6 +40,10 @@
 namespace ruwa::ui::workspace {
 namespace {
 
+constexpr float kPi = 3.14159265358979323846f;
+constexpr float kRotateViewSnapIncrement = kPi * 0.5f;
+constexpr float kRotateViewSnapCaptureDistance = 2.5f * kPi / 180.0f;
+
 struct MousePointerSample {
     bool stylusLike = false;
     bool isEraser = false;
@@ -567,6 +571,8 @@ bool CanvasMouseInputHandler::handleMousePress(QMouseEvent* event)
             return true;
         }
         if (m_host->currentInputTool() == ToolId::RotateView) {
+            auto& cam = glWidget->viewport().camera();
+            cam.stopAnimation();
             m_panel->m_isRotatingView = true;
             const QPoint widgetPos = glWidget->mapFromGlobal(event->globalPosition().toPoint());
             const QPoint center = glWidget->rect().center();
@@ -1367,6 +1373,11 @@ bool CanvasMouseInputHandler::handleMouseRelease(QMouseEvent* event)
     }
     if (m_panel->m_isRotatingView && event->button() == Qt::LeftButton) {
         m_panel->m_isRotatingView = false;
+        auto& cam = m_panel->m_glWidget->viewport().camera();
+        if (cam.snapRotationSmooth(
+                kRotateViewSnapIncrement, kRotateViewSnapCaptureDistance)) {
+            m_panel->requestRender();
+        }
         event->accept();
         return true;
     }
