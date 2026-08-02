@@ -5,6 +5,7 @@
 #include "features/theme/manager/ThemeColors.h"
 #include "features/theme/manager/ThemeManager.h"
 #include "shared/widgets/ToolButton.h"
+#include "shared/widgets/overlays/ToolTipController.h"
 #include "shared/style/PaintingUtils.h"
 
 #include <QApplication>
@@ -405,6 +406,7 @@ void ToolGroupPopup::rebuildButtons()
     for (const Item& item : std::as_const(m_items)) {
         auto* button = new ToolButton(this);
         button->setToolTip(item.tooltip);
+        ruwa::ui::widgets::ToolTipController::setShortcutCommand(button, item.commandId);
         button->setIconType(item.iconType);
         button->setCheckable(true);
         button->setHasGroupIndicator(false);

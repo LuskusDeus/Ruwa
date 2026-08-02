@@ -41,6 +41,15 @@ inline QColor withAlpha(QColor color, int alpha)
     color.setAlpha(qBound(0, alpha, 255));
     return color;
 }
+
+inline QColor interpolateColor(const QColor& from, const QColor& to, qreal progress)
+{
+    progress = qBound<qreal>(0.0, progress, 1.0);
+    return QColor(static_cast<int>(from.red() + (to.red() - from.red()) * progress),
+        static_cast<int>(from.green() + (to.green() - from.green()) * progress),
+        static_cast<int>(from.blue() + (to.blue() - from.blue()) * progress),
+        static_cast<int>(from.alpha() + (to.alpha() - from.alpha()) * progress));
+}
 } // namespace detail
 
 inline QPixmap tintedPixmap(const QPixmap& source, const QColor& color)
@@ -84,6 +93,68 @@ inline void drawGradientBorder(QPainter& painter, const QRectF& outerRect, qreal
     painter.setPen(pen);
     painter.setBrush(Qt::NoBrush);
     painter.drawPath(path);
+}
+
+/**
+ * Paints the shared raised-key frame used by shortcut inputs and tooltip
+ * shortcut hints. Text is intentionally left to the caller so the same frame
+ * can be used at different compact sizes.
+ */
+inline void drawKeycapFrame(QPainter& painter, const QRectF& rect, qreal radius, qreal bottomDepth,
+    const QColor& fill, const QColor& borderTop, const QColor& borderBottom)
+{
+    painter.setPen(Qt::NoPen);
+    painter.setBrush(fill);
+    painter.drawRoundedRect(rect, radius, radius);
+
+    const qreal depth = qBound<qreal>(0.0, bottomDepth, rect.height() * 0.35);
+    if (depth > 0.5) {
+        QColor bottomFill = detail::interpolateColor(fill, borderBottom, 0.55);
+        bottomFill.setAlpha(qMax(bottomFill.alpha(), borderBottom.alpha()));
+
+        painter.save();
+        painter.setClipRect(QRectF(rect.left(), rect.bottom() - depth, rect.width(), depth + 1.0));
+        painter.setBrush(bottomFill);
+        painter.drawRoundedRect(rect, radius, radius);
+        painter.restore();
+    }
+
+    constexpr qreal borderWidth = 1.0;
+    const QRectF outerRect = rect.adjusted(0.5, 0.5, -0.5, -0.5);
+    const QRectF innerRect
+        = outerRect.adjusted(borderWidth, borderWidth, -borderWidth, -borderWidth);
+    const qreal outerRadius = qMax<qreal>(0.0, radius - 0.5);
+    const qreal innerRadius = qMax<qreal>(0.0, outerRadius - borderWidth);
+
+    QPainterPath outerPath;
+    outerPath.addRoundedRect(outerRect, outerRadius, outerRadius);
+
+    QPainterPath innerPath;
+    if (innerRect.width() > 0 && innerRect.height() > 0) {
+        innerPath.addRoundedRect(innerRect, innerRadius, innerRadius);
+    }
+
+    QLinearGradient gradient(outerRect.topLeft(), outerRect.bottomLeft());
+    gradient.setColorAt(0.0, borderTop);
+    gradient.setColorAt(1.0, borderBottom);
+
+    painter.setBrush(gradient);
+    painter.drawPath(outerPath.subtracted(innerPath));
+
+    if (depth > 0.5) {
+        QPainterPath bottomClip;
+        bottomClip.addRect(
+            QRectF(outerRect.left(), outerRect.bottom() - depth, outerRect.width(), depth + 1.0));
+
+        QColor bottomAccent = borderBottom;
+        bottomAccent.setAlpha(qMin(255, qRound(bottomAccent.alpha() * 1.65)));
+        QLinearGradient bottomGradient(outerRect.topLeft(), outerRect.bottomLeft());
+        bottomGradient.setColorAt(0.0, borderBottom);
+        bottomGradient.setColorAt(1.0, bottomAccent);
+
+        painter.setBrush(bottomGradient);
+        painter.drawPath(outerPath.intersected(bottomClip));
+    }
 }
 
 // ----------------------------------------------------------------------------

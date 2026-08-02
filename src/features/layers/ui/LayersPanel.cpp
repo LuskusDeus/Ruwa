@@ -20,6 +20,7 @@
 #include "shared/widgets/inputs/AnimatedComboBox.h"
 #include "shared/widgets/inputs/OpacitySliderWidget.h"
 #include "shared/widgets/layout/AnimatedFlowWidget.h"
+#include "shared/widgets/overlays/ToolTipController.h"
 #include "shell/top-bar/MessagePopupManager.h"
 #include "shared/tiles/TilePixelAccess.h"
 
@@ -1645,6 +1646,14 @@ void LayersPanel::setupToolbar(QWidget* container)
         ruwa::ui::core::IconProvider::StandardIcon::ArrowDown, tr("Merge Layers"));
     m_btnDelete = makeBtn(LayerToolbarButton::Glyph::Trash,
         ruwa::ui::core::IconProvider::StandardIcon::Trash, tr("Delete Layer"));
+
+    using ruwa::ui::widgets::ToolTipController;
+    ToolTipController::setShortcutCommand(m_btnAdd, QStringLiteral("layers.add"));
+    ToolTipController::setShortcutCommand(m_btnAdjustment, QStringLiteral("layers.add-adjustment"));
+    ToolTipController::setShortcutCommand(m_btnGroup, QStringLiteral("layers.add-group"));
+    ToolTipController::setShortcutCommand(m_btnDuplicate, QStringLiteral("layers.duplicate"));
+    ToolTipController::setShortcutCommand(m_btnMergeDown, QStringLiteral("layers.merge-down"));
+    ToolTipController::setShortcutCommand(m_btnDelete, QStringLiteral("layers.delete"));
 
     connect(
         m_btnAdd, &ruwa::ui::widgets::BaseAnimatedButton::clicked, this, &LayersPanel::onAddLayer);

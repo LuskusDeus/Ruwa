@@ -6,6 +6,7 @@
 #include "features/theme/manager/ThemeColors.h"
 #include "features/theme/manager/ThemeManager.h"
 #include "shared/widgets/BaseAnimatedButton.h"
+#include "shared/widgets/overlays/ToolTipController.h"
 #include "shared/style/PaintingUtils.h"
 
 #include <QCoreApplication>
@@ -160,14 +161,17 @@ SelectionActionPopup::SelectionActionPopup(QWidget* parent)
 
     m_fillButton = new PopupActionButton(false, this, m_firstSection);
     m_fillButton->setToolTip(tr("Fill selected area"));
+    ToolTipController::setShortcutCommand(m_fillButton, QStringLiteral("selection.fill"));
     firstLayout->addWidget(m_fillButton);
 
     m_transformButton = new PopupActionButton(false, this, m_secondSection);
     m_transformButton->setToolTip(tr("Transform selected area"));
+    ToolTipController::setShortcutCommand(m_transformButton, QStringLiteral("edit.transform"));
     secondLayout->addWidget(m_transformButton);
 
     m_deleteButton = new PopupActionButton(false, this, m_secondSection);
     m_deleteButton->setToolTip(tr("Delete selected area"));
+    ToolTipController::setShortcutCommand(m_deleteButton, QStringLiteral("edit.delete"));
     secondLayout->addWidget(m_deleteButton);
 
     m_flipVerticalButton = new PopupActionButton(false, this, m_secondSection);

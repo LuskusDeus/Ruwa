@@ -5,6 +5,7 @@
 #include "commands/ShortcutManager.h"
 #include "features/theme/manager/ThemeColors.h"
 #include "features/theme/manager/ThemeManager.h"
+#include "shared/style/PaintingUtils.h"
 #include "shared/style/WidgetStyleManager.h"
 
 #include <QApplication>
@@ -12,10 +13,8 @@
 #include <QCursor>
 #include <QKeyCombination>
 #include <QKeyEvent>
-#include <QLinearGradient>
 #include <QMouseEvent>
 #include <QPainter>
-#include <QPainterPath>
 #include <QVector>
 
 namespace ruwa::ui::widgets {
@@ -40,62 +39,6 @@ const int BASE_PLUS_GAP = 5;
 const int BASE_PLUS_FONT_SIZE = 8;
 const int BASE_HOVER_PADDING_V = 5;
 
-void drawKeycapFrame(QPainter& painter, const QRectF& rect, qreal radius, qreal bottomDepth,
-    const QColor& fill, const QColor& borderTop, const QColor& borderBottom)
-{
-    painter.setPen(Qt::NoPen);
-    painter.setBrush(fill);
-    painter.drawRoundedRect(rect, radius, radius);
-
-    const qreal depth = qBound<qreal>(0.0, bottomDepth, rect.height() * 0.35);
-    if (depth > 0.5) {
-        QColor bottomFill = ThemeColors::interpolate(fill, borderBottom, 0.55);
-        bottomFill.setAlpha(qMax(bottomFill.alpha(), borderBottom.alpha()));
-
-        painter.save();
-        painter.setClipRect(QRectF(rect.left(), rect.bottom() - depth, rect.width(), depth + 1.0));
-        painter.setBrush(bottomFill);
-        painter.drawRoundedRect(rect, radius, radius);
-        painter.restore();
-    }
-
-    const qreal borderWidth = 1.0;
-    const QRectF outerRect = rect.adjusted(0.5, 0.5, -0.5, -0.5);
-    const QRectF innerRect
-        = outerRect.adjusted(borderWidth, borderWidth, -borderWidth, -borderWidth);
-    const qreal outerRadius = qMax<qreal>(0.0, radius - 0.5);
-    const qreal innerRadius = qMax<qreal>(0.0, outerRadius - borderWidth);
-
-    QPainterPath outerPath;
-    outerPath.addRoundedRect(outerRect, outerRadius, outerRadius);
-
-    QPainterPath innerPath;
-    if (innerRect.width() > 0 && innerRect.height() > 0) {
-        innerPath.addRoundedRect(innerRect, innerRadius, innerRadius);
-    }
-
-    QLinearGradient gradient(outerRect.topLeft(), outerRect.bottomLeft());
-    gradient.setColorAt(0.0, borderTop);
-    gradient.setColorAt(1.0, borderBottom);
-
-    painter.setBrush(gradient);
-    painter.drawPath(outerPath.subtracted(innerPath));
-
-    if (depth > 0.5) {
-        QPainterPath bottomClip;
-        bottomClip.addRect(
-            QRectF(outerRect.left(), outerRect.bottom() - depth, outerRect.width(), depth + 1.0));
-
-        QColor bottomAccent = borderBottom;
-        bottomAccent.setAlpha(qMin(255, qRound(bottomAccent.alpha() * 1.65)));
-        QLinearGradient bottomGradient(outerRect.topLeft(), outerRect.bottomLeft());
-        bottomGradient.setColorAt(0.0, borderBottom);
-        bottomGradient.setColorAt(1.0, bottomAccent);
-
-        painter.setBrush(bottomGradient);
-        painter.drawPath(outerPath.intersected(bottomClip));
-    }
-}
 } // namespace
 
 CommandInputWidget::CommandInputWidget(QWidget* parent, SizeVariant sizeVariant)
@@ -557,7 +500,7 @@ void CommandInputWidget::drawContentLayer(QPainter& painter, const QRectF& rect)
     for (int i = 0; i < parts.size(); ++i) {
         const QRectF keyRect(x, keyY, widths[i], keycapHeight);
 
-        drawKeycapFrame(
+        ruwa::ui::painting::drawKeycapFrame(
             painter, keyRect, keyRadius, keyDepth, keyBg, keyBorderTop, keyBorderBottom);
 
         painter.setPen(textColor);

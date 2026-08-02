@@ -1110,62 +1110,62 @@ Try Square Selection first to restrict the area.</source>
     <name>ToolsPanel</name>
     <message>
         <location filename="../src/features/tools/ToolsPanel.cpp" line="56"/>
-        <source>Hand (H)</source>
+        <source>Hand</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
         <location filename="../src/features/tools/ToolsPanel.cpp" line="58"/>
-        <source>Brush (B)</source>
+        <source>Brush</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
         <location filename="../src/features/tools/ToolsPanel.cpp" line="60"/>
-        <source>Eraser (E)</source>
+        <source>Eraser</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
         <location filename="../src/features/tools/ToolsPanel.cpp" line="62"/>
-        <source>Fill (G)</source>
+        <source>Fill</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
         <location filename="../src/features/tools/ToolsPanel.cpp" line="64"/>
-        <source>Classic Fill (Shift+G)</source>
+        <source>Classic Fill</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
         <location filename="../src/features/tools/ToolsPanel.cpp" line="66"/>
-        <source>Eyedropper (I)</source>
+        <source>Eyedropper</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
         <location filename="../src/features/tools/ToolsPanel.cpp" line="68"/>
-        <source>Lasso (L)</source>
+        <source>Lasso</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
         <location filename="../src/features/tools/ToolsPanel.cpp" line="70"/>
-        <source>Lasso Fill (Shift+L)</source>
+        <source>Lasso Fill</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
         <location filename="../src/features/tools/ToolsPanel.cpp" line="72"/>
-        <source>Square Selection (M)</source>
+        <source>Square Selection</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
         <location filename="../src/features/tools/ToolsPanel.cpp" line="74"/>
-        <source>Circle Selection (O)</source>
+        <source>Circle Selection</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
         <location filename="../src/features/tools/ToolsPanel.cpp" line="76"/>
-        <source>Move (V)</source>
+        <source>Move</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
         <location filename="../src/features/tools/ToolsPanel.cpp" line="78"/>
-        <source>Rotate View (R)</source>
+        <source>Rotate View</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
@@ -1175,7 +1175,7 @@ Try Square Selection first to restrict the area.</source>
     </message>
     <message>
         <location filename="../src/features/tools/ToolsPanel.cpp" line="82"/>
-        <source>Zoom (Z)</source>
+        <source>Zoom</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
@@ -1195,12 +1195,12 @@ Try Square Selection first to restrict the area.</source>
     </message>
     <message>
         <location filename="../src/features/tools/ToolsPanel.cpp" line="90"/>
-        <source>Text (T)</source>
+        <source>Text</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
         <location filename="../src/features/tools/ToolsPanel.cpp" line="92"/>
-        <source>Magic Wand (W)</source>
+        <source>Magic Wand</source>
         <translation type="unfinished"></translation>
     </message>
 </context>

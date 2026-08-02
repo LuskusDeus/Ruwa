@@ -32,6 +32,7 @@ public:
         ruwa::ui::core::IconProvider::StandardIcon iconType
             = ruwa::ui::core::IconProvider::StandardIcon::Hand;
         QString tooltip;
+        QString commandId;
     };
 
     explicit ToolGroupPopup(QWidget* parent = nullptr);

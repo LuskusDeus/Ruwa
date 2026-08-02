@@ -12,6 +12,7 @@
 #include "shared/style/WidgetStyleManager.h"
 #include "shared/widgets/ToolButton.h"
 #include "shared/widgets/inputs/ProgressHandleSlider.h"
+#include "shared/widgets/overlays/ToolTipController.h"
 
 #include <QHBoxLayout>
 #include <QSignalBlocker>
@@ -120,6 +121,8 @@ QWidget* NavigatorPanel::createContent()
     m_resetZoomButton->setBorderVisible(true);
     m_resetZoomButton->setMutedNormalIcon(true);
     m_resetZoomButton->setIconType(ruwa::ui::core::IconProvider::StandardIcon::Reset);
+    ruwa::ui::widgets::ToolTipController::setShortcutCommand(
+        m_resetZoomButton, QStringLiteral("view.zoomReset"));
     connect(m_resetZoomButton, &ToolButton::clicked, this, &NavigatorPanel::resetZoom);
     controlsLayout->addWidget(m_resetZoomButton);
 

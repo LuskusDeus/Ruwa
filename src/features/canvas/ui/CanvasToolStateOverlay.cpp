@@ -12,6 +12,7 @@
 #include "shared/widgets/inputs/OpacitySliderWidget.h"
 #include "shared/widgets/inputs/ProgressHandleSlider.h"
 #include "shared/widgets/layout/AnimatedStackedWidget.h"
+#include "shared/widgets/overlays/ToolTipController.h"
 #include "shared/style/PaintingUtils.h"
 
 #include <QAbstractButton>
@@ -811,19 +812,25 @@ void CanvasToolStateOverlay::setupUi()
 
     m_undoButton = createToolButton(IconProvider::StandardIcon::UndoArrow,
         workspace::ToolButton::Mode::Action, tr("Undo"), m_leftSection);
+    ToolTipController::setShortcutCommand(m_undoButton, QStringLiteral("edit.undo"));
     m_undoButton->setEnabled(false);
     leftLayout->addWidget(m_undoButton);
 
     m_redoButton = createRedoToolButton(tr("Redo"), m_leftSection);
+    ToolTipController::setShortcutCommand(m_redoButton, QStringLiteral("edit.redo"));
     m_redoButton->setEnabled(false);
     leftLayout->addWidget(m_redoButton);
 
     m_flipHorizontalButton = createToolButton(IconProvider::StandardIcon::FlipHorizontal,
         workspace::ToolButton::Mode::Toggle, tr("Mirror canvas horizontally"), m_leftSection);
+    ToolTipController::setShortcutCommand(
+        m_flipHorizontalButton, QStringLiteral("view.flipCanvasHorizontal"));
     leftLayout->addWidget(m_flipHorizontalButton);
 
     m_flipVerticalButton = createToolButton(IconProvider::StandardIcon::FlipVertical,
         workspace::ToolButton::Mode::Toggle, tr("Mirror canvas vertically"), m_leftSection);
+    ToolTipController::setShortcutCommand(
+        m_flipVerticalButton, QStringLiteral("view.flipCanvasVertical"));
     leftLayout->addWidget(m_flipVerticalButton);
 
     m_leftSeparator = createSectionSeparator(m_interactivePage);

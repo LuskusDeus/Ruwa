@@ -7,6 +7,7 @@
 #include "features/layers/ui/LayersPanel.h"
 #include "shared/widgets/ToolButton.h"
 #include "shared/widgets/layout/AnimatedFlowWidget.h"
+#include "shared/widgets/overlays/ToolTipController.h"
 #include "shared/widgets/reorderlist/ListDragDrop.h"
 #include "shell/context-menu/ContextMenuSystem.h"
 
@@ -54,47 +55,48 @@ struct ToolPresentation {
     ToolId tool;
     IconProvider::StandardIcon icon;
     const char* tooltip;
+    const char* commandId;
 };
 
 constexpr std::array kToolPresentations {
     ToolPresentation { ToolId::Hand, IconProvider::StandardIcon::Hand,
-        QT_TRANSLATE_NOOP("ToolsPanel", "Hand (H)") },
+        QT_TRANSLATE_NOOP("ToolsPanel", "Hand"), "tools.hand" },
     ToolPresentation { ToolId::Brush, IconProvider::StandardIcon::Brush,
-        QT_TRANSLATE_NOOP("ToolsPanel", "Brush (B)") },
+        QT_TRANSLATE_NOOP("ToolsPanel", "Brush"), "tools.brush" },
     ToolPresentation { ToolId::Eraser, IconProvider::StandardIcon::Eraser,
-        QT_TRANSLATE_NOOP("ToolsPanel", "Eraser (E)") },
+        QT_TRANSLATE_NOOP("ToolsPanel", "Eraser"), "tools.eraser" },
     ToolPresentation { ToolId::Fill, IconProvider::StandardIcon::SmartFillColor,
-        QT_TRANSLATE_NOOP("ToolsPanel", "Fill (G)") },
+        QT_TRANSLATE_NOOP("ToolsPanel", "Fill"), "tools.fill" },
     ToolPresentation { ToolId::ClassicFill, IconProvider::StandardIcon::FillColor,
-        QT_TRANSLATE_NOOP("ToolsPanel", "Classic Fill (Shift+G)") },
+        QT_TRANSLATE_NOOP("ToolsPanel", "Classic Fill"), "tools.classic-fill" },
     ToolPresentation { ToolId::Eyedropper, IconProvider::StandardIcon::Eyedropper,
-        QT_TRANSLATE_NOOP("ToolsPanel", "Eyedropper (I)") },
+        QT_TRANSLATE_NOOP("ToolsPanel", "Eyedropper"), "tools.eyedropper" },
     ToolPresentation { ToolId::Lasso, IconProvider::StandardIcon::Lasso,
-        QT_TRANSLATE_NOOP("ToolsPanel", "Lasso (L)") },
+        QT_TRANSLATE_NOOP("ToolsPanel", "Lasso"), "tools.lasso" },
     ToolPresentation { ToolId::LassoFill, IconProvider::StandardIcon::LassoFill,
-        QT_TRANSLATE_NOOP("ToolsPanel", "Lasso Fill (Shift+L)") },
+        QT_TRANSLATE_NOOP("ToolsPanel", "Lasso Fill"), "tools.lasso-fill" },
     ToolPresentation { ToolId::SquareSelection, IconProvider::StandardIcon::SquareSelection,
-        QT_TRANSLATE_NOOP("ToolsPanel", "Square Selection (M)") },
+        QT_TRANSLATE_NOOP("ToolsPanel", "Square Selection"), "tools.square-selection" },
     ToolPresentation { ToolId::CircleSelection, IconProvider::StandardIcon::CircleSelection,
-        QT_TRANSLATE_NOOP("ToolsPanel", "Circle Selection (O)") },
+        QT_TRANSLATE_NOOP("ToolsPanel", "Circle Selection"), "tools.circle-selection" },
     ToolPresentation { ToolId::Move, IconProvider::StandardIcon::Move,
-        QT_TRANSLATE_NOOP("ToolsPanel", "Move (V)") },
+        QT_TRANSLATE_NOOP("ToolsPanel", "Move"), "tools.move" },
     ToolPresentation { ToolId::RotateView, IconProvider::StandardIcon::RotateView,
-        QT_TRANSLATE_NOOP("ToolsPanel", "Rotate View (R)") },
+        QT_TRANSLATE_NOOP("ToolsPanel", "Rotate View"), "tools.rotate-view" },
     ToolPresentation { ToolId::CanvasResize, IconProvider::StandardIcon::Crop,
-        QT_TRANSLATE_NOOP("ToolsPanel", "Canvas Resize") },
+        QT_TRANSLATE_NOOP("ToolsPanel", "Canvas Resize"), "tools.canvas-resize" },
     ToolPresentation { ToolId::Zoom, IconProvider::StandardIcon::Zoom,
-        QT_TRANSLATE_NOOP("ToolsPanel", "Zoom (Z)") },
-    ToolPresentation {
-        ToolId::Blur, IconProvider::StandardIcon::Blur, QT_TRANSLATE_NOOP("ToolsPanel", "Blur") },
+        QT_TRANSLATE_NOOP("ToolsPanel", "Zoom"), "tools.zoom" },
+    ToolPresentation { ToolId::Blur, IconProvider::StandardIcon::Blur,
+        QT_TRANSLATE_NOOP("ToolsPanel", "Blur"), "tools.blur" },
     ToolPresentation { ToolId::Smudge, IconProvider::StandardIcon::Smudge,
-        QT_TRANSLATE_NOOP("ToolsPanel", "Smudge") },
+        QT_TRANSLATE_NOOP("ToolsPanel", "Smudge"), "tools.smudge" },
     ToolPresentation { ToolId::Liquify, IconProvider::StandardIcon::Liquify,
-        QT_TRANSLATE_NOOP("ToolsPanel", "Liquify") },
+        QT_TRANSLATE_NOOP("ToolsPanel", "Liquify"), "" },
     ToolPresentation { ToolId::Text, IconProvider::StandardIcon::Text,
-        QT_TRANSLATE_NOOP("ToolsPanel", "Text (T)") },
+        QT_TRANSLATE_NOOP("ToolsPanel", "Text"), "tools.text" },
     ToolPresentation { ToolId::MagicWand, IconProvider::StandardIcon::MagicWand,
-        QT_TRANSLATE_NOOP("ToolsPanel", "Magic Wand (W)") },
+        QT_TRANSLATE_NOOP("ToolsPanel", "Magic Wand"), "tools.magic-wand" },
 };
 
 constexpr bool hasCompleteToolPresentationSet()
@@ -1073,6 +1075,8 @@ void ToolsPanel::addTool(ToolId tool)
     auto* button = new ToolButton(m_contentWidget);
     button->setTabletTracking(true);
     button->setToolTip(translateToolTooltip(presentation.tooltip));
+    ruwa::ui::widgets::ToolTipController::setShortcutCommand(
+        button, QString::fromLatin1(presentation.commandId));
     button->setCheckable(true);
     button->setIconType(presentation.icon);
     button->setCursor(Qt::PointingHandCursor);
@@ -1088,6 +1092,8 @@ void ToolsPanel::addGroupTool(ToolId tool)
     auto* button = new GroupToolButton(m_contentWidget);
     button->setTabletTracking(true);
     button->setToolTip(translateToolTooltip(presentation.tooltip));
+    ruwa::ui::widgets::ToolTipController::setShortcutCommand(
+        button, QString::fromLatin1(presentation.commandId));
     button->setCheckable(true);
     button->setIconType(presentation.icon);
     button->setHasGroupIndicator(true);
@@ -1142,8 +1148,11 @@ void ToolsPanel::updateGroupButtons()
         }
         auto& info = m_toolsData[it.key()];
         const ToolId currentGroupTool = it.value();
+        const ToolPresentation& presentation = presentationForTool(currentGroupTool);
         const QList<ToolId> visibleTools = visibleGroupMembers(it.key());
         info.button->setToolTip(toolDisplayName(currentGroupTool));
+        ruwa::ui::widgets::ToolTipController::setShortcutCommand(
+            info.button, QString::fromLatin1(presentation.commandId));
         info.button->setIcon(
             ThemeManager::instance().icons().getIcon(toolIconType(currentGroupTool)));
         info.button->setHasGroupIndicator(!visibleTools.isEmpty());
@@ -1184,7 +1193,11 @@ void ToolsPanel::openToolGroupPopup(ToolId representativeTool, QWidget* anchor)
     QList<ToolGroupPopup::Item> items;
     for (ToolId tool : tools) {
         items.append(ToolGroupPopup::Item {
-            .tool = tool, .iconType = toolIconType(tool), .tooltip = toolDisplayName(tool) });
+            .tool = tool,
+            .iconType = toolIconType(tool),
+            .tooltip = toolDisplayName(tool),
+            .commandId = QString::fromLatin1(presentationForTool(tool).commandId),
+        });
     }
 
     m_groupPopup->setItems(items);

@@ -1114,63 +1114,63 @@ Try Square Selection first to restrict the area.</source>
     <name>ToolsPanel</name>
     <message>
         <location filename="../src/features/tools/ToolsPanel.cpp" line="56"/>
-        <source>Hand (H)</source>
-        <translation>Рука (H)</translation>
+        <source>Hand</source>
+        <translation>Рука</translation>
     </message>
     <message>
         <location filename="../src/features/tools/ToolsPanel.cpp" line="58"/>
-        <source>Brush (B)</source>
-        <translation>Кисть (B)</translation>
+        <source>Brush</source>
+        <translation>Кисть</translation>
     </message>
     <message>
         <location filename="../src/features/tools/ToolsPanel.cpp" line="60"/>
-        <source>Eraser (E)</source>
-        <translation>Ластик (E)</translation>
+        <source>Eraser</source>
+        <translation>Ластик</translation>
     </message>
     <message>
         <location filename="../src/features/tools/ToolsPanel.cpp" line="62"/>
-        <source>Fill (G)</source>
-        <translation>Заливка (G)</translation>
+        <source>Fill</source>
+        <translation>Заливка</translation>
     </message>
     <message>
         <location filename="../src/features/tools/ToolsPanel.cpp" line="64"/>
-        <source>Classic Fill (Shift+G)</source>
-        <translation>Классическая заливка (Shift+G)</translation>
+        <source>Classic Fill</source>
+        <translation>Классическая заливка</translation>
     </message>
     <message>
         <location filename="../src/features/tools/ToolsPanel.cpp" line="66"/>
-        <source>Eyedropper (I)</source>
-        <translation>Пипетка (I)</translation>
+        <source>Eyedropper</source>
+        <translation>Пипетка</translation>
     </message>
     <message>
         <location filename="../src/features/tools/ToolsPanel.cpp" line="68"/>
-        <source>Lasso (L)</source>
-        <translation>Лассо (L)</translation>
+        <source>Lasso</source>
+        <translation>Лассо</translation>
     </message>
     <message>
         <location filename="../src/features/tools/ToolsPanel.cpp" line="70"/>
-        <source>Lasso Fill (Shift+L)</source>
-        <translation>Лассо-заливка (Shift+L)</translation>
+        <source>Lasso Fill</source>
+        <translation>Лассо-заливка</translation>
     </message>
     <message>
         <location filename="../src/features/tools/ToolsPanel.cpp" line="72"/>
-        <source>Square Selection (M)</source>
-        <translation>Прямоугольное выделение (M)</translation>
+        <source>Square Selection</source>
+        <translation>Прямоугольное выделение</translation>
     </message>
     <message>
         <location filename="../src/features/tools/ToolsPanel.cpp" line="74"/>
-        <source>Circle Selection (O)</source>
-        <translation>Эллиптическое выделение (O)</translation>
+        <source>Circle Selection</source>
+        <translation>Эллиптическое выделение</translation>
     </message>
     <message>
         <location filename="../src/features/tools/ToolsPanel.cpp" line="76"/>
-        <source>Move (V)</source>
-        <translation>Перемещение (V)</translation>
+        <source>Move</source>
+        <translation>Перемещение</translation>
     </message>
     <message>
         <location filename="../src/features/tools/ToolsPanel.cpp" line="78"/>
-        <source>Rotate View (R)</source>
-        <translation>Поворот вида (R)</translation>
+        <source>Rotate View</source>
+        <translation>Поворот вида</translation>
     </message>
     <message>
         <location filename="../src/features/tools/ToolsPanel.cpp" line="80"/>
@@ -1179,8 +1179,8 @@ Try Square Selection first to restrict the area.</source>
     </message>
     <message>
         <location filename="../src/features/tools/ToolsPanel.cpp" line="82"/>
-        <source>Zoom (Z)</source>
-        <translation>Масштаб (Z)</translation>
+        <source>Zoom</source>
+        <translation>Масштаб</translation>
     </message>
     <message>
         <location filename="../src/features/tools/ToolsPanel.cpp" line="84"/>
@@ -1199,13 +1199,13 @@ Try Square Selection first to restrict the area.</source>
     </message>
     <message>
         <location filename="../src/features/tools/ToolsPanel.cpp" line="90"/>
-        <source>Text (T)</source>
-        <translation>Текст (T)</translation>
+        <source>Text</source>
+        <translation>Текст</translation>
     </message>
     <message>
         <location filename="../src/features/tools/ToolsPanel.cpp" line="92"/>
-        <source>Magic Wand (W)</source>
-        <translation>Волшебная палочка (W)</translation>
+        <source>Magic Wand</source>
+        <translation>Волшебная палочка</translation>
     </message>
 </context>
 <context>
