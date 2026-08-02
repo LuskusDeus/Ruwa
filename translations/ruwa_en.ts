@@ -1,6 +1,5 @@
 <?xml version="1.0" encoding="utf-8"?>
 <!-- SPDX-License-Identifier: MPL-2.0 -->
-
 <!DOCTYPE TS>
 <TS version="2.1" language="en">
 <context>
@@ -34,108 +33,108 @@
 <context>
     <name>BrushEditorParameterOverlay</name>
     <message>
-        <location filename="../src/features/brush/editor/BrushEditorParameterOverlay.cpp" line="542"/>
+        <location filename="../src/features/brush/editor/BrushEditorParameterOverlay.cpp" line="535"/>
         <source>Parameter Dynamics</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location filename="../src/features/brush/editor/BrushEditorParameterOverlay.cpp" line="545"/>
-        <location filename="../src/features/brush/editor/BrushEditorParameterOverlay.cpp" line="1539"/>
+        <location filename="../src/features/brush/editor/BrushEditorParameterOverlay.cpp" line="538"/>
+        <location filename="../src/features/brush/editor/BrushEditorParameterOverlay.cpp" line="1530"/>
         <source>Reset</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location filename="../src/features/brush/editor/BrushEditorParameterOverlay.cpp" line="588"/>
-        <location filename="../src/features/brush/editor/BrushEditorParameterOverlay.cpp" line="1544"/>
+        <location filename="../src/features/brush/editor/BrushEditorParameterOverlay.cpp" line="581"/>
+        <location filename="../src/features/brush/editor/BrushEditorParameterOverlay.cpp" line="1535"/>
         <source>Pressure</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location filename="../src/features/brush/editor/BrushEditorParameterOverlay.cpp" line="590"/>
-        <location filename="../src/features/brush/editor/BrushEditorParameterOverlay.cpp" line="1547"/>
+        <location filename="../src/features/brush/editor/BrushEditorParameterOverlay.cpp" line="583"/>
+        <location filename="../src/features/brush/editor/BrushEditorParameterOverlay.cpp" line="1538"/>
         <source>Time</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location filename="../src/features/brush/editor/BrushEditorParameterOverlay.cpp" line="592"/>
-        <location filename="../src/features/brush/editor/BrushEditorParameterOverlay.cpp" line="1551"/>
+        <location filename="../src/features/brush/editor/BrushEditorParameterOverlay.cpp" line="585"/>
+        <location filename="../src/features/brush/editor/BrushEditorParameterOverlay.cpp" line="1542"/>
         <source>Random</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location filename="../src/features/brush/editor/BrushEditorParameterOverlay.cpp" line="594"/>
-        <location filename="../src/features/brush/editor/BrushEditorParameterOverlay.cpp" line="1555"/>
+        <location filename="../src/features/brush/editor/BrushEditorParameterOverlay.cpp" line="587"/>
+        <location filename="../src/features/brush/editor/BrushEditorParameterOverlay.cpp" line="1546"/>
         <source>Direction</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location filename="../src/features/brush/editor/BrushEditorParameterOverlay.cpp" line="727"/>
+        <location filename="../src/features/brush/editor/BrushEditorParameterOverlay.cpp" line="720"/>
         <source>Select</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location filename="../src/features/brush/editor/BrushEditorParameterOverlay.cpp" line="729"/>
+        <location filename="../src/features/brush/editor/BrushEditorParameterOverlay.cpp" line="722"/>
         <source>Stop</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location filename="../src/features/brush/editor/BrushEditorParameterOverlay.cpp" line="732"/>
+        <location filename="../src/features/brush/editor/BrushEditorParameterOverlay.cpp" line="725"/>
         <source>Reverse</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location filename="../src/features/brush/editor/BrushEditorParameterOverlay.cpp" line="735"/>
+        <location filename="../src/features/brush/editor/BrushEditorParameterOverlay.cpp" line="728"/>
         <source>Restart</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location filename="../src/features/brush/editor/BrushEditorParameterOverlay.cpp" line="1467"/>
+        <location filename="../src/features/brush/editor/BrushEditorParameterOverlay.cpp" line="1458"/>
         <source>Multiply</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location filename="../src/features/brush/editor/BrushEditorParameterOverlay.cpp" line="1470"/>
+        <location filename="../src/features/brush/editor/BrushEditorParameterOverlay.cpp" line="1461"/>
         <source>Add</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location filename="../src/features/brush/editor/BrushEditorParameterOverlay.cpp" line="1474"/>
+        <location filename="../src/features/brush/editor/BrushEditorParameterOverlay.cpp" line="1465"/>
         <source>Override</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location filename="../src/features/brush/editor/BrushEditorParameterOverlay.cpp" line="1521"/>
-        <location filename="../src/features/brush/editor/BrushEditorParameterOverlay.cpp" line="1528"/>
-        <location filename="../src/features/brush/editor/BrushEditorParameterOverlay.cpp" line="1567"/>
-        <location filename="../src/features/brush/editor/BrushEditorParameterOverlay.cpp" line="1579"/>
+        <location filename="../src/features/brush/editor/BrushEditorParameterOverlay.cpp" line="1512"/>
+        <location filename="../src/features/brush/editor/BrushEditorParameterOverlay.cpp" line="1519"/>
+        <location filename="../src/features/brush/editor/BrushEditorParameterOverlay.cpp" line="1558"/>
+        <location filename="../src/features/brush/editor/BrushEditorParameterOverlay.cpp" line="1570"/>
         <source>Enabled</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location filename="../src/features/brush/editor/BrushEditorParameterOverlay.cpp" line="1524"/>
-        <location filename="../src/features/brush/editor/BrushEditorParameterOverlay.cpp" line="1532"/>
-        <location filename="../src/features/brush/editor/BrushEditorParameterOverlay.cpp" line="1571"/>
-        <location filename="../src/features/brush/editor/BrushEditorParameterOverlay.cpp" line="1583"/>
+        <location filename="../src/features/brush/editor/BrushEditorParameterOverlay.cpp" line="1515"/>
+        <location filename="../src/features/brush/editor/BrushEditorParameterOverlay.cpp" line="1523"/>
+        <location filename="../src/features/brush/editor/BrushEditorParameterOverlay.cpp" line="1562"/>
+        <location filename="../src/features/brush/editor/BrushEditorParameterOverlay.cpp" line="1574"/>
         <source>Mode</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location filename="../src/features/brush/editor/BrushEditorParameterOverlay.cpp" line="1536"/>
+        <location filename="../src/features/brush/editor/BrushEditorParameterOverlay.cpp" line="1527"/>
         <source>INPUTS</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location filename="../src/features/brush/editor/BrushEditorParameterOverlay.cpp" line="1559"/>
+        <location filename="../src/features/brush/editor/BrushEditorParameterOverlay.cpp" line="1550"/>
         <source>Duration (sec)</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location filename="../src/features/brush/editor/BrushEditorParameterOverlay.cpp" line="1563"/>
+        <location filename="../src/features/brush/editor/BrushEditorParameterOverlay.cpp" line="1554"/>
         <source>End Action</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location filename="../src/features/brush/editor/BrushEditorParameterOverlay.cpp" line="1575"/>
+        <location filename="../src/features/brush/editor/BrushEditorParameterOverlay.cpp" line="1566"/>
         <source>Range</source>
         <translation type="unfinished"></translation>
     </message>
@@ -232,9 +231,9 @@
     <message>
         <location filename="../src/commands/definitions/FileCommands.cpp" line="139"/>
         <location filename="../src/commands/definitions/FileCommands.cpp" line="493"/>
-        <location filename="../src/shell/main-window/MainWindow.cpp" line="274"/>
-        <location filename="../src/shell/main-window/MainWindow.cpp" line="278"/>
-        <location filename="../src/shell/main-window/MainWindow.cpp" line="284"/>
+        <location filename="../src/shell/main-window/MainWindow.cpp" line="276"/>
+        <location filename="../src/shell/main-window/MainWindow.cpp" line="280"/>
+        <location filename="../src/shell/main-window/MainWindow.cpp" line="286"/>
         <source>Untitled Project</source>
         <translation type="unfinished">Untitled Project</translation>
     </message>
@@ -246,8 +245,8 @@
     <message>
         <location filename="../src/commands/definitions/FileCommands.cpp" line="234"/>
         <location filename="../src/commands/definitions/FileCommands.cpp" line="509"/>
-        <location filename="../src/shell/main-window/MainWindow.cpp" line="857"/>
-        <location filename="../src/shell/main-window/MainWindow.cpp" line="903"/>
+        <location filename="../src/shell/main-window/MainWindow.cpp" line="867"/>
+        <location filename="../src/shell/main-window/MainWindow.cpp" line="913"/>
         <source>RGB Color</source>
         <translation type="unfinished"></translation>
     </message>
@@ -613,7 +612,7 @@ Try Square Selection first to restrict the area.</source>
         <location filename="../src/features/canvas/ui/CanvasImageImportHelper.cpp" line="389"/>
         <location filename="../src/features/canvas/ui/CanvasPanelHelpers.cpp" line="303"/>
         <location filename="../src/features/canvas/ui/CanvasPanelHelpers.cpp" line="811"/>
-        <location filename="../src/shell/tab-system/WorkspaceTab.cpp" line="1450"/>
+        <location filename="../src/shell/tab-system/WorkspaceTab.cpp" line="1446"/>
         <source>Dropped image</source>
         <translation type="unfinished"></translation>
     </message>
@@ -631,137 +630,137 @@ Try Square Selection first to restrict the area.</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location filename="../src/features/canvas/ui/CanvasMouseInputHandler.cpp" line="429"/>
+        <location filename="../src/features/canvas/ui/CanvasMouseInputHandler.cpp" line="433"/>
         <source>Classic</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location filename="../src/features/canvas/ui/CanvasMouseInputHandler.cpp" line="439"/>
+        <location filename="../src/features/canvas/ui/CanvasMouseInputHandler.cpp" line="443"/>
         <source>Deform</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location filename="../src/features/canvas/ui/CanvasToolStateOverlay.cpp" line="162"/>
+        <location filename="../src/features/canvas/ui/CanvasToolStateOverlay.cpp" line="163"/>
         <source>%1 action placeholder</source>
         <translation type="unfinished">%1 action placeholder</translation>
     </message>
     <message>
-        <location filename="../src/features/canvas/ui/CanvasToolStateOverlay.cpp" line="167"/>
+        <location filename="../src/features/canvas/ui/CanvasToolStateOverlay.cpp" line="168"/>
         <source>%1 toggle placeholder</source>
         <translation type="unfinished">%1 toggle placeholder</translation>
     </message>
     <message>
-        <location filename="../src/features/canvas/ui/CanvasToolStateOverlay.cpp" line="172"/>
+        <location filename="../src/features/canvas/ui/CanvasToolStateOverlay.cpp" line="173"/>
         <source>%1 lock placeholder</source>
         <translation type="unfinished">%1 lock placeholder</translation>
     </message>
     <message>
-        <location filename="../src/features/canvas/ui/CanvasToolStateOverlay.cpp" line="176"/>
+        <location filename="../src/features/canvas/ui/CanvasToolStateOverlay.cpp" line="177"/>
         <source>%1 opacity placeholder</source>
         <translation type="unfinished">%1 opacity placeholder</translation>
     </message>
     <message>
-        <location filename="../src/features/canvas/ui/CanvasToolStateOverlay.cpp" line="211"/>
+        <location filename="../src/features/canvas/ui/CanvasToolStateOverlay.cpp" line="212"/>
         <source>%1 %2</source>
         <translation type="unfinished">%1 %2</translation>
     </message>
     <message>
-        <location filename="../src/features/canvas/ui/CanvasToolStateOverlay.cpp" line="241"/>
+        <location filename="../src/features/canvas/ui/CanvasToolStateOverlay.cpp" line="242"/>
         <source>Erase with the current brush</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location filename="../src/features/canvas/ui/CanvasToolStateOverlay.cpp" line="247"/>
+        <location filename="../src/features/canvas/ui/CanvasToolStateOverlay.cpp" line="248"/>
         <source>Hardness:</source>
         <translation type="unfinished">Hardness:</translation>
     </message>
     <message>
-        <location filename="../src/features/canvas/ui/CanvasToolStateOverlay.cpp" line="247"/>
+        <location filename="../src/features/canvas/ui/CanvasToolStateOverlay.cpp" line="248"/>
         <source>hardness</source>
         <translation type="unfinished">hardness</translation>
     </message>
     <message>
-        <location filename="../src/features/canvas/ui/CanvasToolStateOverlay.cpp" line="249"/>
+        <location filename="../src/features/canvas/ui/CanvasToolStateOverlay.cpp" line="250"/>
         <source>Flow:</source>
         <translation type="unfinished">Flow:</translation>
     </message>
     <message>
-        <location filename="../src/features/canvas/ui/CanvasToolStateOverlay.cpp" line="249"/>
+        <location filename="../src/features/canvas/ui/CanvasToolStateOverlay.cpp" line="250"/>
         <source>flow</source>
         <translation type="unfinished">flow</translation>
     </message>
     <message>
-        <location filename="../src/features/canvas/ui/CanvasToolStateOverlay.cpp" line="271"/>
+        <location filename="../src/features/canvas/ui/CanvasToolStateOverlay.cpp" line="272"/>
         <source>Intensity:</source>
         <translation type="unfinished">Intensity:</translation>
     </message>
     <message>
-        <location filename="../src/features/canvas/ui/CanvasToolStateOverlay.cpp" line="271"/>
+        <location filename="../src/features/canvas/ui/CanvasToolStateOverlay.cpp" line="272"/>
         <source>intensity</source>
         <translation type="unfinished">intensity</translation>
     </message>
     <message>
-        <location filename="../src/features/canvas/ui/CanvasToolStateOverlay.cpp" line="275"/>
+        <location filename="../src/features/canvas/ui/CanvasToolStateOverlay.cpp" line="276"/>
         <source>Pickup:</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location filename="../src/features/canvas/ui/CanvasToolStateOverlay.cpp" line="275"/>
+        <location filename="../src/features/canvas/ui/CanvasToolStateOverlay.cpp" line="276"/>
         <source>color pickup</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location filename="../src/features/canvas/ui/CanvasToolStateOverlay.cpp" line="321"/>
+        <location filename="../src/features/canvas/ui/CanvasToolStateOverlay.cpp" line="322"/>
         <source>Push</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location filename="../src/features/canvas/ui/CanvasToolStateOverlay.cpp" line="322"/>
+        <location filename="../src/features/canvas/ui/CanvasToolStateOverlay.cpp" line="323"/>
         <source>Twirl clockwise</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location filename="../src/features/canvas/ui/CanvasToolStateOverlay.cpp" line="323"/>
+        <location filename="../src/features/canvas/ui/CanvasToolStateOverlay.cpp" line="324"/>
         <source>Twirl counter-clockwise</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location filename="../src/features/canvas/ui/CanvasToolStateOverlay.cpp" line="324"/>
+        <location filename="../src/features/canvas/ui/CanvasToolStateOverlay.cpp" line="325"/>
         <source>Bloat</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location filename="../src/features/canvas/ui/CanvasToolStateOverlay.cpp" line="325"/>
+        <location filename="../src/features/canvas/ui/CanvasToolStateOverlay.cpp" line="326"/>
         <source>Pucker</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location filename="../src/features/canvas/ui/CanvasToolStateOverlay.cpp" line="347"/>
+        <location filename="../src/features/canvas/ui/CanvasToolStateOverlay.cpp" line="348"/>
         <source>Strength:</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location filename="../src/features/canvas/ui/CanvasToolStateOverlay.cpp" line="347"/>
+        <location filename="../src/features/canvas/ui/CanvasToolStateOverlay.cpp" line="348"/>
         <source>strength</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location filename="../src/features/canvas/ui/CanvasToolStateOverlay.cpp" line="381"/>
+        <location filename="../src/features/canvas/ui/CanvasToolStateOverlay.cpp" line="382"/>
         <source>Old canvas size</source>
         <translation type="unfinished">Old canvas size</translation>
     </message>
     <message>
-        <location filename="../src/features/canvas/ui/CanvasToolStateOverlay.cpp" line="382"/>
+        <location filename="../src/features/canvas/ui/CanvasToolStateOverlay.cpp" line="383"/>
         <source>New canvas size</source>
         <translation type="unfinished">New canvas size</translation>
     </message>
     <message>
-        <location filename="../src/features/canvas/ui/CanvasToolStateOverlay.cpp" line="398"/>
+        <location filename="../src/features/canvas/ui/CanvasToolStateOverlay.cpp" line="399"/>
         <source>Parameters for this canvas mode are not available yet.</source>
         <translation type="unfinished">Parameters for this canvas mode are not available yet.</translation>
     </message>
     <message>
-        <location filename="../src/features/canvas/ui/CanvasToolStateOverlay.cpp" line="424"/>
+        <location filename="../src/features/canvas/ui/CanvasToolStateOverlay.cpp" line="425"/>
         <source>There are no advanced parameters for this tool yet.</source>
         <translation type="unfinished">There are no advanced parameters for this tool yet.</translation>
     </message>
@@ -1109,97 +1108,97 @@ Try Square Selection first to restrict the area.</source>
 <context>
     <name>ToolsPanel</name>
     <message>
-        <location filename="../src/features/tools/ToolsPanel.cpp" line="56"/>
+        <location filename="../src/features/tools/ToolsPanel.cpp" line="63"/>
         <source>Hand</source>
-        <translation type="unfinished"></translation>
+        <translation type="unfinished">Hand</translation>
     </message>
     <message>
-        <location filename="../src/features/tools/ToolsPanel.cpp" line="58"/>
+        <location filename="../src/features/tools/ToolsPanel.cpp" line="65"/>
         <source>Brush</source>
-        <translation type="unfinished"></translation>
+        <translation type="unfinished">Brush</translation>
     </message>
     <message>
-        <location filename="../src/features/tools/ToolsPanel.cpp" line="60"/>
+        <location filename="../src/features/tools/ToolsPanel.cpp" line="67"/>
         <source>Eraser</source>
-        <translation type="unfinished"></translation>
+        <translation type="unfinished">Eraser</translation>
     </message>
     <message>
-        <location filename="../src/features/tools/ToolsPanel.cpp" line="62"/>
+        <location filename="../src/features/tools/ToolsPanel.cpp" line="69"/>
         <source>Fill</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location filename="../src/features/tools/ToolsPanel.cpp" line="64"/>
+        <location filename="../src/features/tools/ToolsPanel.cpp" line="71"/>
         <source>Classic Fill</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location filename="../src/features/tools/ToolsPanel.cpp" line="66"/>
+        <location filename="../src/features/tools/ToolsPanel.cpp" line="73"/>
         <source>Eyedropper</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location filename="../src/features/tools/ToolsPanel.cpp" line="68"/>
+        <location filename="../src/features/tools/ToolsPanel.cpp" line="75"/>
         <source>Lasso</source>
-        <translation type="unfinished"></translation>
+        <translation type="unfinished">Lasso</translation>
     </message>
     <message>
-        <location filename="../src/features/tools/ToolsPanel.cpp" line="70"/>
+        <location filename="../src/features/tools/ToolsPanel.cpp" line="77"/>
         <source>Lasso Fill</source>
-        <translation type="unfinished"></translation>
+        <translation type="unfinished">Lasso Fill</translation>
     </message>
     <message>
-        <location filename="../src/features/tools/ToolsPanel.cpp" line="72"/>
+        <location filename="../src/features/tools/ToolsPanel.cpp" line="79"/>
         <source>Square Selection</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location filename="../src/features/tools/ToolsPanel.cpp" line="74"/>
+        <location filename="../src/features/tools/ToolsPanel.cpp" line="81"/>
         <source>Circle Selection</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location filename="../src/features/tools/ToolsPanel.cpp" line="76"/>
+        <location filename="../src/features/tools/ToolsPanel.cpp" line="83"/>
         <source>Move</source>
-        <translation type="unfinished"></translation>
+        <translation type="unfinished">Move</translation>
     </message>
     <message>
-        <location filename="../src/features/tools/ToolsPanel.cpp" line="78"/>
+        <location filename="../src/features/tools/ToolsPanel.cpp" line="85"/>
         <source>Rotate View</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location filename="../src/features/tools/ToolsPanel.cpp" line="80"/>
+        <location filename="../src/features/tools/ToolsPanel.cpp" line="87"/>
         <source>Canvas Resize</source>
         <translation type="unfinished">Canvas Resize</translation>
     </message>
     <message>
-        <location filename="../src/features/tools/ToolsPanel.cpp" line="82"/>
+        <location filename="../src/features/tools/ToolsPanel.cpp" line="89"/>
         <source>Zoom</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location filename="../src/features/tools/ToolsPanel.cpp" line="84"/>
+        <location filename="../src/features/tools/ToolsPanel.cpp" line="91"/>
         <source>Blur</source>
         <translation type="unfinished">Blur</translation>
     </message>
     <message>
-        <location filename="../src/features/tools/ToolsPanel.cpp" line="86"/>
+        <location filename="../src/features/tools/ToolsPanel.cpp" line="93"/>
         <source>Smudge</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location filename="../src/features/tools/ToolsPanel.cpp" line="88"/>
+        <location filename="../src/features/tools/ToolsPanel.cpp" line="95"/>
         <source>Liquify</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location filename="../src/features/tools/ToolsPanel.cpp" line="90"/>
+        <location filename="../src/features/tools/ToolsPanel.cpp" line="97"/>
         <source>Text</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location filename="../src/features/tools/ToolsPanel.cpp" line="92"/>
+        <location filename="../src/features/tools/ToolsPanel.cpp" line="99"/>
         <source>Magic Wand</source>
         <translation type="unfinished"></translation>
     </message>
@@ -1288,7 +1287,7 @@ Try Square Selection first to restrict the area.</source>
 <context>
     <name>WorkspaceTab</name>
     <message>
-        <location filename="../src/shell/tab-system/WorkspaceTab.cpp" line="3673"/>
+        <location filename="../src/shell/tab-system/WorkspaceTab.cpp" line="3667"/>
         <source>Loading Project</source>
         <translation type="unfinished"></translation>
     </message>
@@ -2159,155 +2158,155 @@ Rasterize the layer to transform the selection?</source>
 <context>
     <name>ruwa::ui::tabs::ShortcutManagerTab</name>
     <message>
-        <location filename="../src/features/settings/shortcuts/ShortcutManagerTab.cpp" line="174"/>
+        <location filename="../src/features/settings/shortcuts/ShortcutManagerTab.cpp" line="156"/>
         <location filename="../src/features/settings/shortcuts/ShortcutManagerTab.h" line="52"/>
         <location filename="../src/features/settings/shortcuts/ShortcutManagerTab.h" line="53"/>
         <source>Keyboard Shortcuts</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location filename="../src/features/settings/shortcuts/ShortcutManagerTab.cpp" line="183"/>
+        <location filename="../src/features/settings/shortcuts/ShortcutManagerTab.cpp" line="165"/>
         <source>Search shortcuts...</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location filename="../src/features/settings/shortcuts/ShortcutManagerTab.cpp" line="318"/>
+        <location filename="../src/features/settings/shortcuts/ShortcutManagerTab.cpp" line="300"/>
         <source>Presets</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location filename="../src/features/settings/shortcuts/ShortcutManagerTab.cpp" line="322"/>
+        <location filename="../src/features/settings/shortcuts/ShortcutManagerTab.cpp" line="304"/>
         <source>New</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location filename="../src/features/settings/shortcuts/ShortcutManagerTab.cpp" line="358"/>
+        <location filename="../src/features/settings/shortcuts/ShortcutManagerTab.cpp" line="340"/>
         <source>Categories</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location filename="../src/features/settings/shortcuts/ShortcutManagerTab.cpp" line="385"/>
+        <location filename="../src/features/settings/shortcuts/ShortcutManagerTab.cpp" line="367"/>
         <source>Reset section</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location filename="../src/features/settings/shortcuts/ShortcutManagerTab.cpp" line="523"/>
+        <location filename="../src/features/settings/shortcuts/ShortcutManagerTab.cpp" line="505"/>
         <source>All shortcuts</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location filename="../src/features/settings/shortcuts/ShortcutManagerTab.cpp" line="524"/>
+        <location filename="../src/features/settings/shortcuts/ShortcutManagerTab.cpp" line="506"/>
         <source>Everything in this preset</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location filename="../src/features/settings/shortcuts/ShortcutManagerTab.cpp" line="599"/>
+        <location filename="../src/features/settings/shortcuts/ShortcutManagerTab.cpp" line="581"/>
         <source>Shortcut Conflict</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location filename="../src/features/settings/shortcuts/ShortcutManagerTab.cpp" line="600"/>
+        <location filename="../src/features/settings/shortcuts/ShortcutManagerTab.cpp" line="582"/>
         <source>This shortcut is already used by &quot;%1&quot;.
 Please choose a different shortcut.</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location filename="../src/features/settings/shortcuts/ShortcutManagerTab.cpp" line="672"/>
+        <location filename="../src/features/settings/shortcuts/ShortcutManagerTab.cpp" line="654"/>
         <source>shortcut</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location filename="../src/features/settings/shortcuts/ShortcutManagerTab.cpp" line="672"/>
+        <location filename="../src/features/settings/shortcuts/ShortcutManagerTab.cpp" line="654"/>
         <source>shortcuts</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location filename="../src/features/settings/shortcuts/ShortcutManagerTab.cpp" line="673"/>
+        <location filename="../src/features/settings/shortcuts/ShortcutManagerTab.cpp" line="655"/>
         <source>customized</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location filename="../src/features/settings/shortcuts/ShortcutManagerTab.cpp" line="860"/>
+        <location filename="../src/features/settings/shortcuts/ShortcutManagerTab.cpp" line="842"/>
         <source>Delete preset &quot;%1&quot;?</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location filename="../src/features/settings/shortcuts/ShortcutManagerTab.cpp" line="862"/>
+        <location filename="../src/features/settings/shortcuts/ShortcutManagerTab.cpp" line="844"/>
         <source>Yes</source>
         <translation type="unfinished">Yes</translation>
     </message>
     <message>
-        <location filename="../src/features/settings/shortcuts/ShortcutManagerTab.cpp" line="862"/>
+        <location filename="../src/features/settings/shortcuts/ShortcutManagerTab.cpp" line="844"/>
         <source>No</source>
         <translation type="unfinished">No</translation>
     </message>
     <message>
-        <location filename="../src/features/settings/shortcuts/ShortcutManagerTab.cpp" line="882"/>
+        <location filename="../src/features/settings/shortcuts/ShortcutManagerTab.cpp" line="864"/>
         <source>Custom</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location filename="../src/features/settings/shortcuts/ShortcutManagerTab.cpp" line="903"/>
+        <location filename="../src/features/settings/shortcuts/ShortcutManagerTab.cpp" line="885"/>
         <source>Import shortcut preset</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location filename="../src/features/settings/shortcuts/ShortcutManagerTab.cpp" line="904"/>
-        <location filename="../src/features/settings/shortcuts/ShortcutManagerTab.cpp" line="929"/>
+        <location filename="../src/features/settings/shortcuts/ShortcutManagerTab.cpp" line="886"/>
+        <location filename="../src/features/settings/shortcuts/ShortcutManagerTab.cpp" line="911"/>
         <source>Ruwa shortcut preset (*.json)</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location filename="../src/features/settings/shortcuts/ShortcutManagerTab.cpp" line="924"/>
+        <location filename="../src/features/settings/shortcuts/ShortcutManagerTab.cpp" line="906"/>
         <source>preset</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location filename="../src/features/settings/shortcuts/ShortcutManagerTab.cpp" line="928"/>
+        <location filename="../src/features/settings/shortcuts/ShortcutManagerTab.cpp" line="910"/>
         <source>Export shortcut preset</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location filename="../src/features/settings/shortcuts/ShortcutManagerTab.cpp" line="940"/>
+        <location filename="../src/features/settings/shortcuts/ShortcutManagerTab.cpp" line="922"/>
         <source>Export Preset</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location filename="../src/features/settings/shortcuts/ShortcutManagerTab.cpp" line="940"/>
+        <location filename="../src/features/settings/shortcuts/ShortcutManagerTab.cpp" line="922"/>
         <source>Could not write file.</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location filename="../src/features/settings/shortcuts/ShortcutManagerTab.cpp" line="950"/>
-        <location filename="../src/features/settings/shortcuts/ShortcutManagerTab.cpp" line="957"/>
-        <location filename="../src/features/settings/shortcuts/ShortcutManagerTab.cpp" line="961"/>
-        <location filename="../src/features/settings/shortcuts/ShortcutManagerTab.cpp" line="969"/>
-        <location filename="../src/features/settings/shortcuts/ShortcutManagerTab.cpp" line="974"/>
+        <location filename="../src/features/settings/shortcuts/ShortcutManagerTab.cpp" line="932"/>
+        <location filename="../src/features/settings/shortcuts/ShortcutManagerTab.cpp" line="939"/>
+        <location filename="../src/features/settings/shortcuts/ShortcutManagerTab.cpp" line="943"/>
+        <location filename="../src/features/settings/shortcuts/ShortcutManagerTab.cpp" line="951"/>
+        <location filename="../src/features/settings/shortcuts/ShortcutManagerTab.cpp" line="956"/>
         <source>Import Preset</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location filename="../src/features/settings/shortcuts/ShortcutManagerTab.cpp" line="950"/>
+        <location filename="../src/features/settings/shortcuts/ShortcutManagerTab.cpp" line="932"/>
         <source>Could not read file.</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location filename="../src/features/settings/shortcuts/ShortcutManagerTab.cpp" line="961"/>
+        <location filename="../src/features/settings/shortcuts/ShortcutManagerTab.cpp" line="943"/>
         <source>Invalid file format.</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location filename="../src/features/settings/shortcuts/ShortcutManagerTab.cpp" line="969"/>
+        <location filename="../src/features/settings/shortcuts/ShortcutManagerTab.cpp" line="951"/>
         <source>This file is not a Ruwa shortcut preset.</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location filename="../src/features/settings/shortcuts/ShortcutManagerTab.cpp" line="974"/>
+        <location filename="../src/features/settings/shortcuts/ShortcutManagerTab.cpp" line="956"/>
         <source>Preset payload is missing.</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location filename="../src/features/settings/shortcuts/ShortcutManagerTab.cpp" line="991"/>
+        <location filename="../src/features/settings/shortcuts/ShortcutManagerTab.cpp" line="973"/>
         <source>Imported</source>
         <translation type="unfinished"></translation>
     </message>
@@ -2550,105 +2549,105 @@ Please choose a different shortcut.</source>
 <context>
     <name>ruwa::ui::tabs::WorkspaceTab</name>
     <message>
-        <location filename="../src/shell/tab-system/WorkspaceTab.cpp" line="808"/>
-        <location filename="../src/shell/tab-system/WorkspaceTab.cpp" line="1465"/>
+        <location filename="../src/shell/tab-system/WorkspaceTab.cpp" line="805"/>
+        <location filename="../src/shell/tab-system/WorkspaceTab.cpp" line="1461"/>
         <source>Draw here</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location filename="../src/shell/tab-system/WorkspaceTab.cpp" line="1016"/>
+        <location filename="../src/shell/tab-system/WorkspaceTab.cpp" line="1013"/>
         <source>Preparing workspace shell...</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location filename="../src/shell/tab-system/WorkspaceTab.cpp" line="1017"/>
+        <location filename="../src/shell/tab-system/WorkspaceTab.cpp" line="1014"/>
         <source>Creating workspace shell...</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location filename="../src/shell/tab-system/WorkspaceTab.cpp" line="1216"/>
-        <location filename="../src/shell/tab-system/WorkspaceTab.cpp" line="3713"/>
+        <location filename="../src/shell/tab-system/WorkspaceTab.cpp" line="1212"/>
+        <location filename="../src/shell/tab-system/WorkspaceTab.cpp" line="3707"/>
         <source>Loading workspace</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location filename="../src/shell/tab-system/WorkspaceTab.cpp" line="1217"/>
+        <location filename="../src/shell/tab-system/WorkspaceTab.cpp" line="1213"/>
         <source>Creating workspace</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location filename="../src/shell/tab-system/WorkspaceTab.cpp" line="1430"/>
+        <location filename="../src/shell/tab-system/WorkspaceTab.cpp" line="1426"/>
         <source>Background</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location filename="../src/shell/tab-system/WorkspaceTab.cpp" line="1513"/>
+        <location filename="../src/shell/tab-system/WorkspaceTab.cpp" line="1509"/>
         <source>Building workspace panels...</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location filename="../src/shell/tab-system/WorkspaceTab.cpp" line="1514"/>
+        <location filename="../src/shell/tab-system/WorkspaceTab.cpp" line="1510"/>
         <source>Building workspace...</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location filename="../src/shell/tab-system/WorkspaceTab.cpp" line="3617"/>
+        <location filename="../src/shell/tab-system/WorkspaceTab.cpp" line="3611"/>
         <source>Failed to save project:
 %1</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location filename="../src/shell/tab-system/WorkspaceTab.cpp" line="3619"/>
+        <location filename="../src/shell/tab-system/WorkspaceTab.cpp" line="3613"/>
         <source>OK</source>
         <translation type="unfinished">OK</translation>
     </message>
     <message>
-        <location filename="../src/shell/tab-system/WorkspaceTab.cpp" line="3715"/>
+        <location filename="../src/shell/tab-system/WorkspaceTab.cpp" line="3709"/>
         <source>Preparing project data...</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location filename="../src/shell/tab-system/WorkspaceTab.cpp" line="4095"/>
+        <location filename="../src/shell/tab-system/WorkspaceTab.cpp" line="4089"/>
         <source>Internal error: missing export target.</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location filename="../src/shell/tab-system/WorkspaceTab.cpp" line="4101"/>
+        <location filename="../src/shell/tab-system/WorkspaceTab.cpp" line="4095"/>
         <source>Workspace is not ready.</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location filename="../src/shell/tab-system/WorkspaceTab.cpp" line="4107"/>
+        <location filename="../src/shell/tab-system/WorkspaceTab.cpp" line="4101"/>
         <source>Saving this layout is not supported.</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location filename="../src/shell/tab-system/WorkspaceTab.cpp" line="4114"/>
+        <location filename="../src/shell/tab-system/WorkspaceTab.cpp" line="4108"/>
         <source>My layout</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location filename="../src/shell/tab-system/WorkspaceTab.cpp" line="4129"/>
+        <location filename="../src/shell/tab-system/WorkspaceTab.cpp" line="4123"/>
         <source>Nothing to save (empty layout).</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location filename="../src/shell/tab-system/WorkspaceTab.cpp" line="4408"/>
+        <location filename="../src/shell/tab-system/WorkspaceTab.cpp" line="4402"/>
         <source>Infinite</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location filename="../src/shell/tab-system/WorkspaceTab.cpp" line="4408"/>
+        <location filename="../src/shell/tab-system/WorkspaceTab.cpp" line="4402"/>
         <source>Classic</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location filename="../src/shell/tab-system/WorkspaceTab.cpp" line="4412"/>
+        <location filename="../src/shell/tab-system/WorkspaceTab.cpp" line="4406"/>
         <source>Switch to classic</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location filename="../src/shell/tab-system/WorkspaceTab.cpp" line="4412"/>
+        <location filename="../src/shell/tab-system/WorkspaceTab.cpp" line="4406"/>
         <source>Switch to infinite</source>
         <translation type="unfinished"></translation>
     </message>
@@ -2895,7 +2894,7 @@ Ruwa uses the Qt framework (version %1), dynamically linked under the GNU Lesser
 <context>
     <name>ruwa::ui::widgets::CanvasStylusJoystickContainerWidget</name>
     <message>
-        <location filename="../src/features/canvas/ui/CanvasStylusJoystickContainerWidget.cpp" line="279"/>
+        <location filename="../src/features/canvas/ui/CanvasStylusJoystickContainerWidget.cpp" line="259"/>
         <source>Hide widget</source>
         <translation type="unfinished">Hide widget</translation>
     </message>
@@ -2903,109 +2902,109 @@ Ruwa uses the Qt framework (version %1), dynamically linked under the GNU Lesser
 <context>
     <name>ruwa::ui::widgets::CanvasToolStateOverlay</name>
     <message>
-        <location filename="../src/features/canvas/ui/CanvasToolStateOverlay.cpp" line="962"/>
+        <location filename="../src/features/canvas/ui/CanvasToolStateOverlay.cpp" line="969"/>
         <source>Parameters for this canvas mode are not available yet.</source>
         <translation>Parameters for this canvas mode are not available yet.</translation>
     </message>
     <message>
-        <location filename="../src/features/canvas/ui/CanvasToolStateOverlay.cpp" line="482"/>
+        <location filename="../src/features/canvas/ui/CanvasToolStateOverlay.cpp" line="483"/>
         <source>Hide widget</source>
         <translation>Hide widget</translation>
     </message>
     <message>
-        <location filename="../src/features/canvas/ui/CanvasToolStateOverlay.cpp" line="849"/>
+        <location filename="../src/features/canvas/ui/CanvasToolStateOverlay.cpp" line="856"/>
         <source>Hand</source>
         <translation>Hand</translation>
     </message>
     <message>
-        <location filename="../src/features/canvas/ui/CanvasToolStateOverlay.cpp" line="851"/>
+        <location filename="../src/features/canvas/ui/CanvasToolStateOverlay.cpp" line="858"/>
         <source>Brush</source>
         <translation>Brush</translation>
     </message>
     <message>
-        <location filename="../src/features/canvas/ui/CanvasToolStateOverlay.cpp" line="854"/>
+        <location filename="../src/features/canvas/ui/CanvasToolStateOverlay.cpp" line="861"/>
         <source>Eraser</source>
         <translation>Eraser</translation>
     </message>
     <message>
-        <location filename="../src/features/canvas/ui/CanvasToolStateOverlay.cpp" line="874"/>
+        <location filename="../src/features/canvas/ui/CanvasToolStateOverlay.cpp" line="881"/>
         <source>Intensity:</source>
         <translation type="unfinished">Intensity:</translation>
     </message>
     <message>
-        <location filename="../src/features/canvas/ui/CanvasToolStateOverlay.cpp" line="874"/>
+        <location filename="../src/features/canvas/ui/CanvasToolStateOverlay.cpp" line="881"/>
         <source>intensity</source>
         <translation type="unfinished">intensity</translation>
     </message>
     <message>
-        <location filename="../src/features/canvas/ui/CanvasToolStateOverlay.cpp" line="876"/>
+        <location filename="../src/features/canvas/ui/CanvasToolStateOverlay.cpp" line="883"/>
         <source>Text</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location filename="../src/features/canvas/ui/CanvasToolStateOverlay.cpp" line="879"/>
+        <location filename="../src/features/canvas/ui/CanvasToolStateOverlay.cpp" line="886"/>
         <source>Smudge</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location filename="../src/features/canvas/ui/CanvasToolStateOverlay.cpp" line="882"/>
+        <location filename="../src/features/canvas/ui/CanvasToolStateOverlay.cpp" line="889"/>
         <source>Liquify</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location filename="../src/features/canvas/ui/CanvasToolStateOverlay.cpp" line="859"/>
+        <location filename="../src/features/canvas/ui/CanvasToolStateOverlay.cpp" line="866"/>
         <source>Lasso</source>
         <translation>Lasso</translation>
     </message>
     <message>
-        <location filename="../src/features/canvas/ui/CanvasToolStateOverlay.cpp" line="859"/>
-        <location filename="../src/features/canvas/ui/CanvasToolStateOverlay.cpp" line="862"/>
+        <location filename="../src/features/canvas/ui/CanvasToolStateOverlay.cpp" line="866"/>
+        <location filename="../src/features/canvas/ui/CanvasToolStateOverlay.cpp" line="869"/>
         <source>Stabilization:</source>
         <translation type="unfinished">Stabilization:</translation>
     </message>
     <message>
-        <location filename="../src/features/canvas/ui/CanvasToolStateOverlay.cpp" line="859"/>
-        <location filename="../src/features/canvas/ui/CanvasToolStateOverlay.cpp" line="862"/>
+        <location filename="../src/features/canvas/ui/CanvasToolStateOverlay.cpp" line="866"/>
+        <location filename="../src/features/canvas/ui/CanvasToolStateOverlay.cpp" line="869"/>
         <source>stabilization</source>
         <translation type="unfinished">stabilization</translation>
     </message>
     <message>
-        <location filename="../src/features/canvas/ui/CanvasToolStateOverlay.cpp" line="862"/>
+        <location filename="../src/features/canvas/ui/CanvasToolStateOverlay.cpp" line="869"/>
         <source>Lasso Fill</source>
         <translation>Lasso Fill</translation>
     </message>
     <message>
-        <location filename="../src/features/canvas/ui/CanvasToolStateOverlay.cpp" line="866"/>
+        <location filename="../src/features/canvas/ui/CanvasToolStateOverlay.cpp" line="873"/>
         <source>Move</source>
         <translation>Move</translation>
     </message>
     <message>
-        <location filename="../src/features/canvas/ui/CanvasToolStateOverlay.cpp" line="874"/>
+        <location filename="../src/features/canvas/ui/CanvasToolStateOverlay.cpp" line="881"/>
         <source>Blur</source>
         <translation>Blur</translation>
     </message>
     <message>
-        <location filename="../src/features/canvas/ui/CanvasToolStateOverlay.cpp" line="813"/>
+        <location filename="../src/features/canvas/ui/CanvasToolStateOverlay.cpp" line="814"/>
         <source>Undo</source>
         <translation>Undo</translation>
     </message>
     <message>
-        <location filename="../src/features/canvas/ui/CanvasToolStateOverlay.cpp" line="817"/>
+        <location filename="../src/features/canvas/ui/CanvasToolStateOverlay.cpp" line="819"/>
         <source>Redo</source>
         <translation>Redo</translation>
     </message>
     <message>
-        <location filename="../src/features/canvas/ui/CanvasToolStateOverlay.cpp" line="822"/>
+        <location filename="../src/features/canvas/ui/CanvasToolStateOverlay.cpp" line="825"/>
         <source>Mirror canvas horizontally</source>
         <translation>Mirror canvas horizontally</translation>
     </message>
     <message>
-        <location filename="../src/features/canvas/ui/CanvasToolStateOverlay.cpp" line="826"/>
+        <location filename="../src/features/canvas/ui/CanvasToolStateOverlay.cpp" line="831"/>
         <source>Mirror canvas vertically</source>
         <translation>Mirror canvas vertically</translation>
     </message>
     <message>
-        <location filename="../src/features/canvas/ui/CanvasToolStateOverlay.cpp" line="897"/>
+        <location filename="../src/features/canvas/ui/CanvasToolStateOverlay.cpp" line="904"/>
         <source>Copy canvas to clipboard</source>
         <translation>Copy canvas to clipboard</translation>
     </message>
@@ -3030,14 +3029,14 @@ Ruwa uses the Qt framework (version %1), dynamically linked under the GNU Lesser
 <context>
     <name>ruwa::ui::widgets::CommandInputWidget</name>
     <message>
-        <location filename="../src/shared/widgets/inputs/CommandInputWidget.cpp" line="224"/>
-        <location filename="../src/shared/widgets/inputs/CommandInputWidget.cpp" line="474"/>
+        <location filename="../src/shared/widgets/inputs/CommandInputWidget.cpp" line="167"/>
+        <location filename="../src/shared/widgets/inputs/CommandInputWidget.cpp" line="417"/>
         <source>Press shortcut...</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location filename="../src/shared/widgets/inputs/CommandInputWidget.cpp" line="228"/>
-        <location filename="../src/shared/widgets/inputs/CommandInputWidget.cpp" line="478"/>
+        <location filename="../src/shared/widgets/inputs/CommandInputWidget.cpp" line="171"/>
+        <location filename="../src/shared/widgets/inputs/CommandInputWidget.cpp" line="421"/>
         <source>Click to assign</source>
         <translation type="unfinished"></translation>
     </message>
@@ -3133,42 +3132,42 @@ Ruwa uses the Qt framework (version %1), dynamically linked under the GNU Lesser
 <context>
     <name>ruwa::ui::widgets::DockPanelContextMenu</name>
     <message>
-        <location filename="../src/shell/context-menu/DockPanelContextMenu.cpp" line="190"/>
+        <location filename="../src/shell/context-menu/DockPanelContextMenu.cpp" line="193"/>
         <source>Behavior</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location filename="../src/shell/context-menu/DockPanelContextMenu.cpp" line="270"/>
+        <location filename="../src/shell/context-menu/DockPanelContextMenu.cpp" line="272"/>
         <source>Visible tools</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location filename="../src/shell/context-menu/DockPanelContextMenu.cpp" line="202"/>
+        <location filename="../src/shell/context-menu/DockPanelContextMenu.cpp" line="205"/>
         <source>Movable</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location filename="../src/shell/context-menu/DockPanelContextMenu.cpp" line="204"/>
+        <location filename="../src/shell/context-menu/DockPanelContextMenu.cpp" line="207"/>
         <source>Dockable</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location filename="../src/shell/context-menu/DockPanelContextMenu.cpp" line="206"/>
+        <location filename="../src/shell/context-menu/DockPanelContextMenu.cpp" line="210"/>
         <source>Resizable</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location filename="../src/shell/context-menu/DockPanelContextMenu.cpp" line="243"/>
+        <location filename="../src/shell/context-menu/DockPanelContextMenu.cpp" line="248"/>
         <source>Close Panel</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location filename="../src/shell/context-menu/DockPanelContextMenu.cpp" line="281"/>
+        <location filename="../src/shell/context-menu/DockPanelContextMenu.cpp" line="342"/>
         <source>Dock to Layout</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location filename="../src/shell/context-menu/DockPanelContextMenu.cpp" line="285"/>
+        <location filename="../src/shell/context-menu/DockPanelContextMenu.cpp" line="346"/>
         <source>Detach from Layout</source>
         <translation type="unfinished"></translation>
     </message>
@@ -3218,79 +3217,213 @@ Ruwa uses the Qt framework (version %1), dynamically linked under the GNU Lesser
     </message>
 </context>
 <context>
+    <name>ruwa::ui::widgets::LayerPreviewPopup</name>
+    <message>
+        <location filename="../src/features/layers/ui/LayerPreviewPopup.cpp" line="458"/>
+        <source>Yes</source>
+        <translation type="unfinished">Yes</translation>
+    </message>
+    <message>
+        <location filename="../src/features/layers/ui/LayerPreviewPopup.cpp" line="458"/>
+        <source>No</source>
+        <translation type="unfinished">No</translation>
+    </message>
+    <message>
+        <location filename="../src/features/layers/ui/LayerPreviewPopup.cpp" line="467"/>
+        <source>Enabled</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location filename="../src/features/layers/ui/LayerPreviewPopup.cpp" line="468"/>
+        <source>Linked</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location filename="../src/features/layers/ui/LayerPreviewPopup.cpp" line="469"/>
+        <source>Editing</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location filename="../src/features/layers/ui/LayerPreviewPopup.cpp" line="470"/>
+        <source>Layer Visible</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location filename="../src/features/layers/ui/LayerPreviewPopup.cpp" line="474"/>
+        <source>Visible</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location filename="../src/features/layers/ui/LayerPreviewPopup.cpp" line="475"/>
+        <source>Locked</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location filename="../src/features/layers/ui/LayerPreviewPopup.cpp" line="477"/>
+        <source>Opacity</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location filename="../src/features/layers/ui/LayerPreviewPopup.cpp" line="477"/>
+        <source>%1%</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location filename="../src/features/layers/ui/LayerPreviewPopup.cpp" line="478"/>
+        <source>Blending Mode</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location filename="../src/features/layers/ui/LayerPreviewPopup.cpp" line="483"/>
+        <source>Alpha Locked</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location filename="../src/features/layers/ui/LayerPreviewPopup.cpp" line="486"/>
+        <source>Clipped</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location filename="../src/features/layers/ui/LayerPreviewPopup.cpp" line="130"/>
+        <location filename="../src/features/layers/ui/LayerPreviewPopup.cpp" line="490"/>
+        <source>Mask</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location filename="../src/features/layers/ui/LayerPreviewPopup.cpp" line="118"/>
+        <source>Group</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location filename="../src/features/layers/ui/LayerPreviewPopup.cpp" line="120"/>
+        <source>Smart</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location filename="../src/features/layers/ui/LayerPreviewPopup.cpp" line="122"/>
+        <source>Board</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location filename="../src/features/layers/ui/LayerPreviewPopup.cpp" line="124"/>
+        <source>Text</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location filename="../src/features/layers/ui/LayerPreviewPopup.cpp" line="126"/>
+        <source>Adjustment</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location filename="../src/features/layers/ui/LayerPreviewPopup.cpp" line="128"/>
+        <source>Vector</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location filename="../src/features/layers/ui/LayerPreviewPopup.cpp" line="132"/>
+        <source>Background</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location filename="../src/features/layers/ui/LayerPreviewPopup.cpp" line="490"/>
+        <source>On</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location filename="../src/features/layers/ui/LayerPreviewPopup.cpp" line="490"/>
+        <source>Off</source>
+        <translation type="unfinished">Off</translation>
+    </message>
+    <message>
+        <location filename="../src/features/layers/ui/LayerPreviewPopup.cpp" line="493"/>
+        <source>Effects</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location filename="../src/features/layers/ui/LayerPreviewPopup.cpp" line="544"/>
+        <source>%1 — Mask</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location filename="../src/features/layers/ui/LayerPreviewPopup.cpp" line="545"/>
+        <source>Layer</source>
+        <translation type="unfinished"></translation>
+    </message>
+</context>
+<context>
     <name>ruwa::ui::widgets::LayerRowWidget</name>
     <message>
-        <location filename="../src/features/layers/ui/LayerRowWidget.cpp" line="2927"/>
+        <location filename="../src/features/layers/ui/LayerRowWidget.cpp" line="2969"/>
         <source>Rename</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location filename="../src/features/layers/ui/LayerRowWidget.cpp" line="2936"/>
+        <location filename="../src/features/layers/ui/LayerRowWidget.cpp" line="2978"/>
         <source>Duplicate</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location filename="../src/features/layers/ui/LayerRowWidget.cpp" line="2944"/>
+        <location filename="../src/features/layers/ui/LayerRowWidget.cpp" line="2986"/>
         <source>Delete</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location filename="../src/features/layers/ui/LayerRowWidget.cpp" line="2955"/>
+        <location filename="../src/features/layers/ui/LayerRowWidget.cpp" line="2997"/>
         <source>Hide</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location filename="../src/features/layers/ui/LayerRowWidget.cpp" line="2955"/>
+        <location filename="../src/features/layers/ui/LayerRowWidget.cpp" line="2997"/>
         <source>Show</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location filename="../src/features/layers/ui/LayerRowWidget.cpp" line="2966"/>
+        <location filename="../src/features/layers/ui/LayerRowWidget.cpp" line="3008"/>
         <source>Rasterize</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location filename="../src/features/layers/ui/LayerRowWidget.cpp" line="2979"/>
+        <location filename="../src/features/layers/ui/LayerRowWidget.cpp" line="3021"/>
         <source>Apply all effects</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location filename="../src/features/layers/ui/LayerRowWidget.cpp" line="2992"/>
+        <location filename="../src/features/layers/ui/LayerRowWidget.cpp" line="3034"/>
         <source>Apply mask</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location filename="../src/features/layers/ui/LayerRowWidget.cpp" line="3003"/>
+        <location filename="../src/features/layers/ui/LayerRowWidget.cpp" line="3045"/>
         <source>Invert mask</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location filename="../src/features/layers/ui/LayerRowWidget.cpp" line="3016"/>
+        <location filename="../src/features/layers/ui/LayerRowWidget.cpp" line="3058"/>
         <source>Clipping mask</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location filename="../src/features/layers/ui/LayerRowWidget.cpp" line="3031"/>
+        <location filename="../src/features/layers/ui/LayerRowWidget.cpp" line="3073"/>
         <source>Clear layer</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location filename="../src/features/layers/ui/LayerRowWidget.cpp" line="3045"/>
+        <location filename="../src/features/layers/ui/LayerRowWidget.cpp" line="3087"/>
         <source>Unlock alpha</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location filename="../src/features/layers/ui/LayerRowWidget.cpp" line="3045"/>
+        <location filename="../src/features/layers/ui/LayerRowWidget.cpp" line="3087"/>
         <source>Lock alpha</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location filename="../src/features/layers/ui/LayerRowWidget.cpp" line="3055"/>
+        <location filename="../src/features/layers/ui/LayerRowWidget.cpp" line="3097"/>
         <source>Unlock layer</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location filename="../src/features/layers/ui/LayerRowWidget.cpp" line="3055"/>
+        <location filename="../src/features/layers/ui/LayerRowWidget.cpp" line="3097"/>
         <source>Lock layer</source>
         <translation type="unfinished"></translation>
     </message>
@@ -3702,37 +3835,37 @@ Ruwa uses the Qt framework (version %1), dynamically linked under the GNU Lesser
 <context>
     <name>ruwa::ui::widgets::SelectionActionPopup</name>
     <message>
-        <location filename="../src/features/selection/SelectionActionPopup.cpp" line="158"/>
+        <location filename="../src/features/selection/SelectionActionPopup.cpp" line="159"/>
         <source>Selection fill color</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location filename="../src/features/selection/SelectionActionPopup.cpp" line="162"/>
+        <location filename="../src/features/selection/SelectionActionPopup.cpp" line="163"/>
         <source>Fill selected area</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location filename="../src/features/selection/SelectionActionPopup.cpp" line="166"/>
+        <location filename="../src/features/selection/SelectionActionPopup.cpp" line="168"/>
         <source>Transform selected area</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location filename="../src/features/selection/SelectionActionPopup.cpp" line="170"/>
+        <location filename="../src/features/selection/SelectionActionPopup.cpp" line="173"/>
         <source>Delete selected area</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location filename="../src/features/selection/SelectionActionPopup.cpp" line="174"/>
+        <location filename="../src/features/selection/SelectionActionPopup.cpp" line="178"/>
         <source>Flip vertically</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location filename="../src/features/selection/SelectionActionPopup.cpp" line="178"/>
+        <location filename="../src/features/selection/SelectionActionPopup.cpp" line="182"/>
         <source>Flip horizontally</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location filename="../src/features/selection/SelectionActionPopup.cpp" line="185"/>
+        <location filename="../src/features/selection/SelectionActionPopup.cpp" line="189"/>
         <source>Hide selection actions</source>
         <translation type="unfinished"></translation>
     </message>
@@ -4173,115 +4306,115 @@ Ruwa uses the Qt framework (version %1), dynamically linked under the GNU Lesser
 <context>
     <name>ruwa::ui::widgets::TopBar</name>
     <message>
-        <location filename="../src/shell/top-bar/TopBar.cpp" line="534"/>
-        <location filename="../src/shell/top-bar/TopBar.cpp" line="1877"/>
+        <location filename="../src/shell/top-bar/TopBar.cpp" line="548"/>
+        <location filename="../src/shell/top-bar/TopBar.cpp" line="1879"/>
         <source>File</source>
         <translation>File</translation>
     </message>
     <message>
-        <location filename="../src/shell/top-bar/TopBar.cpp" line="535"/>
-        <location filename="../src/shell/top-bar/TopBar.cpp" line="1879"/>
+        <location filename="../src/shell/top-bar/TopBar.cpp" line="549"/>
+        <location filename="../src/shell/top-bar/TopBar.cpp" line="1881"/>
         <source>Edit</source>
         <translation>Edit</translation>
     </message>
     <message>
-        <location filename="../src/shell/top-bar/TopBar.cpp" line="536"/>
-        <location filename="../src/shell/top-bar/TopBar.cpp" line="1881"/>
+        <location filename="../src/shell/top-bar/TopBar.cpp" line="550"/>
+        <location filename="../src/shell/top-bar/TopBar.cpp" line="1883"/>
         <source>View</source>
         <translation>View</translation>
     </message>
     <message>
-        <location filename="../src/shell/top-bar/TopBar.cpp" line="739"/>
+        <location filename="../src/shell/top-bar/TopBar.cpp" line="738"/>
         <source>Panels</source>
         <translation>Panels</translation>
     </message>
     <message>
-        <location filename="../src/shell/top-bar/TopBar.cpp" line="843"/>
+        <location filename="../src/shell/top-bar/TopBar.cpp" line="842"/>
         <source>Canvas Widgets</source>
         <translation>Canvas Widgets</translation>
     </message>
     <message>
-        <location filename="../src/shell/top-bar/TopBar.cpp" line="743"/>
+        <location filename="../src/shell/top-bar/TopBar.cpp" line="742"/>
         <source>Tools</source>
         <translation>Tools</translation>
     </message>
     <message>
-        <location filename="../src/shell/top-bar/TopBar.cpp" line="682"/>
+        <location filename="../src/shell/top-bar/TopBar.cpp" line="696"/>
         <source>New...</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location filename="../src/shell/top-bar/TopBar.cpp" line="684"/>
+        <location filename="../src/shell/top-bar/TopBar.cpp" line="697"/>
         <source>Open...</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location filename="../src/shell/top-bar/TopBar.cpp" line="687"/>
+        <location filename="../src/shell/top-bar/TopBar.cpp" line="699"/>
         <source>Save</source>
         <translation type="unfinished">Save</translation>
     </message>
     <message>
-        <location filename="../src/shell/top-bar/TopBar.cpp" line="689"/>
+        <location filename="../src/shell/top-bar/TopBar.cpp" line="700"/>
         <source>Save As...</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location filename="../src/shell/top-bar/TopBar.cpp" line="691"/>
+        <location filename="../src/shell/top-bar/TopBar.cpp" line="701"/>
         <source>Export...</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location filename="../src/shell/top-bar/TopBar.cpp" line="693"/>
+        <location filename="../src/shell/top-bar/TopBar.cpp" line="703"/>
         <source>Fast Export as PNG</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location filename="../src/shell/top-bar/TopBar.cpp" line="695"/>
+        <location filename="../src/shell/top-bar/TopBar.cpp" line="704"/>
         <source>Import...</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location filename="../src/shell/top-bar/TopBar.cpp" line="698"/>
+        <location filename="../src/shell/top-bar/TopBar.cpp" line="707"/>
         <source>Close</source>
         <translation type="unfinished">Close</translation>
     </message>
     <message>
-        <location filename="../src/shell/top-bar/TopBar.cpp" line="700"/>
+        <location filename="../src/shell/top-bar/TopBar.cpp" line="708"/>
         <source>Exit</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location filename="../src/shell/top-bar/TopBar.cpp" line="707"/>
+        <location filename="../src/shell/top-bar/TopBar.cpp" line="714"/>
         <source>Undo</source>
         <translation type="unfinished">Undo</translation>
     </message>
     <message>
-        <location filename="../src/shell/top-bar/TopBar.cpp" line="709"/>
+        <location filename="../src/shell/top-bar/TopBar.cpp" line="715"/>
         <source>Redo</source>
         <translation type="unfinished">Redo</translation>
     </message>
     <message>
-        <location filename="../src/shell/top-bar/TopBar.cpp" line="712"/>
+        <location filename="../src/shell/top-bar/TopBar.cpp" line="717"/>
         <source>Cut</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location filename="../src/shell/top-bar/TopBar.cpp" line="714"/>
+        <location filename="../src/shell/top-bar/TopBar.cpp" line="718"/>
         <source>Copy</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location filename="../src/shell/top-bar/TopBar.cpp" line="716"/>
+        <location filename="../src/shell/top-bar/TopBar.cpp" line="719"/>
         <source>Paste</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location filename="../src/shell/top-bar/TopBar.cpp" line="719"/>
+        <location filename="../src/shell/top-bar/TopBar.cpp" line="721"/>
         <source>Preferences...</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location filename="../src/shell/top-bar/TopBar.cpp" line="726"/>
+        <location filename="../src/shell/top-bar/TopBar.cpp" line="727"/>
         <source>Zoom In</source>
         <translation type="unfinished"></translation>
     </message>
@@ -4296,73 +4429,73 @@ Ruwa uses the Qt framework (version %1), dynamically linked under the GNU Lesser
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location filename="../src/shell/top-bar/TopBar.cpp" line="753"/>
+        <location filename="../src/shell/top-bar/TopBar.cpp" line="752"/>
         <source>Brushes</source>
         <translation type="unfinished">Brushes</translation>
     </message>
     <message>
-        <location filename="../src/shell/top-bar/TopBar.cpp" line="763"/>
+        <location filename="../src/shell/top-bar/TopBar.cpp" line="762"/>
         <source>Brush Settings</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location filename="../src/shell/top-bar/TopBar.cpp" line="773"/>
+        <location filename="../src/shell/top-bar/TopBar.cpp" line="772"/>
         <source>Layers</source>
         <translation>Layers</translation>
     </message>
     <message>
-        <location filename="../src/shell/top-bar/TopBar.cpp" line="783"/>
+        <location filename="../src/shell/top-bar/TopBar.cpp" line="782"/>
         <source>Layer Properties</source>
         <translation>Layer Properties</translation>
     </message>
     <message>
-        <location filename="../src/shell/top-bar/TopBar.cpp" line="793"/>
+        <location filename="../src/shell/top-bar/TopBar.cpp" line="792"/>
         <source>Layer Effects</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location filename="../src/shell/top-bar/TopBar.cpp" line="803"/>
+        <location filename="../src/shell/top-bar/TopBar.cpp" line="802"/>
         <source>Color</source>
         <translation>Color</translation>
     </message>
     <message>
-        <location filename="../src/shell/top-bar/TopBar.cpp" line="813"/>
+        <location filename="../src/shell/top-bar/TopBar.cpp" line="812"/>
         <source>Navigator</source>
         <translation>Navigator</translation>
     </message>
     <message>
-        <location filename="../src/shell/top-bar/TopBar.cpp" line="831"/>
+        <location filename="../src/shell/top-bar/TopBar.cpp" line="830"/>
         <source>Joystick</source>
         <translation>Joystick</translation>
     </message>
     <message>
-        <location filename="../src/shell/top-bar/TopBar.cpp" line="833"/>
+        <location filename="../src/shell/top-bar/TopBar.cpp" line="832"/>
         <source>Brush Control</source>
         <translation>Brush Control</translation>
     </message>
     <message>
-        <location filename="../src/shell/top-bar/TopBar.cpp" line="835"/>
+        <location filename="../src/shell/top-bar/TopBar.cpp" line="834"/>
         <source>Tool bar</source>
         <translation>Tool bar</translation>
     </message>
     <message>
-        <location filename="../src/shell/top-bar/TopBar.cpp" line="865"/>
+        <location filename="../src/shell/top-bar/TopBar.cpp" line="864"/>
         <source>Documentation</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location filename="../src/shell/top-bar/TopBar.cpp" line="869"/>
+        <location filename="../src/shell/top-bar/TopBar.cpp" line="868"/>
         <source>About Ruwa</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location filename="../src/shell/top-bar/TopBar.cpp" line="1885"/>
+        <location filename="../src/shell/top-bar/TopBar.cpp" line="1887"/>
         <source>Workspace layout</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location filename="../src/shell/top-bar/TopBar.cpp" line="537"/>
-        <location filename="../src/shell/top-bar/TopBar.cpp" line="1883"/>
+        <location filename="../src/shell/top-bar/TopBar.cpp" line="551"/>
+        <location filename="../src/shell/top-bar/TopBar.cpp" line="1885"/>
         <source>Help</source>
         <translation>Help</translation>
     </message>
@@ -4675,7 +4808,7 @@ Ruwa uses the Qt framework (version %1), dynamically linked under the GNU Lesser
 <context>
     <name>ruwa::ui::widgets::ZoomFitIconButton</name>
     <message>
-        <location filename="../src/features/canvas/ui/ZoomFitIconButton.cpp" line="15"/>
+        <location filename="../src/features/canvas/ui/ZoomFitIconButton.cpp" line="16"/>
         <source>Zoom to Fit</source>
         <translation type="unfinished"></translation>
     </message>
@@ -4683,242 +4816,242 @@ Ruwa uses the Qt framework (version %1), dynamically linked under the GNU Lesser
 <context>
     <name>ruwa::ui::windows::BrushEditorLayoutWidget</name>
     <message>
-        <location filename="../src/features/brush/editor/BrushEditorLayoutWidget.cpp" line="571"/>
-        <location filename="../src/features/brush/editor/BrushEditorLayoutWidget.cpp" line="1222"/>
+        <location filename="../src/features/brush/editor/BrushEditorLayoutWidget.cpp" line="570"/>
+        <location filename="../src/features/brush/editor/BrushEditorLayoutWidget.cpp" line="1221"/>
         <source>Brush Library</source>
         <translation type="unfinished">Brush Library</translation>
     </message>
     <message>
-        <location filename="../src/features/brush/editor/BrushEditorLayoutWidget.cpp" line="572"/>
-        <location filename="../src/features/brush/editor/BrushEditorLayoutWidget.cpp" line="1223"/>
+        <location filename="../src/features/brush/editor/BrushEditorLayoutWidget.cpp" line="571"/>
+        <location filename="../src/features/brush/editor/BrushEditorLayoutWidget.cpp" line="1222"/>
         <source>Search brushes</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location filename="../src/features/brush/editor/BrushEditorLayoutWidget.cpp" line="574"/>
-        <location filename="../src/features/brush/editor/BrushEditorLayoutWidget.cpp" line="1225"/>
+        <location filename="../src/features/brush/editor/BrushEditorLayoutWidget.cpp" line="573"/>
+        <location filename="../src/features/brush/editor/BrushEditorLayoutWidget.cpp" line="1224"/>
         <source>No brushes found</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location filename="../src/features/brush/editor/BrushEditorLayoutWidget.cpp" line="574"/>
-        <location filename="../src/features/brush/editor/BrushEditorLayoutWidget.cpp" line="1225"/>
+        <location filename="../src/features/brush/editor/BrushEditorLayoutWidget.cpp" line="573"/>
+        <location filename="../src/features/brush/editor/BrushEditorLayoutWidget.cpp" line="1224"/>
         <source>Try a different search or create a new brush.</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
+        <location filename="../src/features/brush/editor/BrushEditorLayoutWidget.cpp" line="580"/>
         <location filename="../src/features/brush/editor/BrushEditorLayoutWidget.cpp" line="581"/>
-        <location filename="../src/features/brush/editor/BrushEditorLayoutWidget.cpp" line="582"/>
+        <location filename="../src/features/brush/editor/BrushEditorLayoutWidget.cpp" line="1231"/>
         <location filename="../src/features/brush/editor/BrushEditorLayoutWidget.cpp" line="1232"/>
-        <location filename="../src/features/brush/editor/BrushEditorLayoutWidget.cpp" line="1233"/>
         <source>Add Pack</source>
         <translation type="unfinished">Add Pack</translation>
     </message>
     <message>
+        <location filename="../src/features/brush/editor/BrushEditorLayoutWidget.cpp" line="588"/>
         <location filename="../src/features/brush/editor/BrushEditorLayoutWidget.cpp" line="589"/>
-        <location filename="../src/features/brush/editor/BrushEditorLayoutWidget.cpp" line="590"/>
+        <location filename="../src/features/brush/editor/BrushEditorLayoutWidget.cpp" line="1239"/>
         <location filename="../src/features/brush/editor/BrushEditorLayoutWidget.cpp" line="1240"/>
-        <location filename="../src/features/brush/editor/BrushEditorLayoutWidget.cpp" line="1241"/>
         <source>Add Brush</source>
         <translation type="unfinished">Add Brush</translation>
     </message>
     <message>
+        <location filename="../src/features/brush/editor/BrushEditorLayoutWidget.cpp" line="595"/>
         <location filename="../src/features/brush/editor/BrushEditorLayoutWidget.cpp" line="596"/>
-        <location filename="../src/features/brush/editor/BrushEditorLayoutWidget.cpp" line="597"/>
+        <location filename="../src/features/brush/editor/BrushEditorLayoutWidget.cpp" line="1246"/>
         <location filename="../src/features/brush/editor/BrushEditorLayoutWidget.cpp" line="1247"/>
-        <location filename="../src/features/brush/editor/BrushEditorLayoutWidget.cpp" line="1248"/>
         <source>Import Pack</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location filename="../src/features/brush/editor/BrushEditorLayoutWidget.cpp" line="1273"/>
+        <location filename="../src/features/brush/editor/BrushEditorLayoutWidget.cpp" line="1272"/>
         <source>Brush name</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location filename="../src/features/brush/editor/BrushEditorLayoutWidget.cpp" line="1277"/>
+        <location filename="../src/features/brush/editor/BrushEditorLayoutWidget.cpp" line="1276"/>
         <source>Reset</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location filename="../src/features/brush/editor/BrushEditorLayoutWidget.cpp" line="1284"/>
+        <location filename="../src/features/brush/editor/BrushEditorLayoutWidget.cpp" line="1283"/>
         <source>Save</source>
         <translation type="unfinished">Save</translation>
     </message>
     <message>
-        <location filename="../src/features/brush/editor/BrushEditorLayoutWidget.cpp" line="1301"/>
+        <location filename="../src/features/brush/editor/BrushEditorLayoutWidget.cpp" line="1300"/>
         <source>Brush Preview</source>
         <translation type="unfinished">Brush Preview</translation>
     </message>
     <message>
-        <location filename="../src/features/brush/editor/BrushEditorLayoutWidget.cpp" line="1409"/>
-        <location filename="../src/features/brush/editor/BrushEditorLayoutWidget.cpp" line="1535"/>
-        <location filename="../src/features/brush/editor/BrushEditorLayoutWidget.cpp" line="1656"/>
+        <location filename="../src/features/brush/editor/BrushEditorLayoutWidget.cpp" line="1408"/>
+        <location filename="../src/features/brush/editor/BrushEditorLayoutWidget.cpp" line="1534"/>
+        <location filename="../src/features/brush/editor/BrushEditorLayoutWidget.cpp" line="1655"/>
         <source>Image</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location filename="../src/features/brush/editor/BrushEditorLayoutWidget.cpp" line="1408"/>
-        <location filename="../src/features/brush/editor/BrushEditorLayoutWidget.cpp" line="1536"/>
+        <location filename="../src/features/brush/editor/BrushEditorLayoutWidget.cpp" line="1407"/>
+        <location filename="../src/features/brush/editor/BrushEditorLayoutWidget.cpp" line="1535"/>
         <source>Procedural</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location filename="../src/features/brush/editor/BrushEditorLayoutWidget.cpp" line="1473"/>
+        <location filename="../src/features/brush/editor/BrushEditorLayoutWidget.cpp" line="1472"/>
         <source>Image-based brush textures will be available in upcoming releases of Ruwa.</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location filename="../src/features/brush/editor/BrushEditorLayoutWidget.cpp" line="1537"/>
+        <location filename="../src/features/brush/editor/BrushEditorLayoutWidget.cpp" line="1536"/>
         <source>Text</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location filename="../src/features/brush/editor/BrushEditorLayoutWidget.cpp" line="1571"/>
+        <location filename="../src/features/brush/editor/BrushEditorLayoutWidget.cpp" line="1570"/>
         <source>Select Dab Image</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location filename="../src/features/brush/editor/BrushEditorLayoutWidget.cpp" line="1575"/>
+        <location filename="../src/features/brush/editor/BrushEditorLayoutWidget.cpp" line="1574"/>
         <source>No image loaded</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location filename="../src/features/brush/editor/BrushEditorLayoutWidget.cpp" line="1575"/>
+        <location filename="../src/features/brush/editor/BrushEditorLayoutWidget.cpp" line="1574"/>
         <source>Click to load a dab image or drop one here</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location filename="../src/features/brush/editor/BrushEditorLayoutWidget.cpp" line="1587"/>
+        <location filename="../src/features/brush/editor/BrushEditorLayoutWidget.cpp" line="1586"/>
         <source>or</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location filename="../src/features/brush/editor/BrushEditorLayoutWidget.cpp" line="1593"/>
+        <location filename="../src/features/brush/editor/BrushEditorLayoutWidget.cpp" line="1592"/>
         <source>Circle</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location filename="../src/features/brush/editor/BrushEditorLayoutWidget.cpp" line="1622"/>
+        <location filename="../src/features/brush/editor/BrushEditorLayoutWidget.cpp" line="1621"/>
         <source>X Scale</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location filename="../src/features/brush/editor/BrushEditorLayoutWidget.cpp" line="1624"/>
+        <location filename="../src/features/brush/editor/BrushEditorLayoutWidget.cpp" line="1623"/>
         <source>Y Scale</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location filename="../src/features/brush/editor/BrushEditorLayoutWidget.cpp" line="1626"/>
+        <location filename="../src/features/brush/editor/BrushEditorLayoutWidget.cpp" line="1625"/>
         <source>Rotation</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location filename="../src/features/brush/editor/BrushEditorLayoutWidget.cpp" line="1635"/>
+        <location filename="../src/features/brush/editor/BrushEditorLayoutWidget.cpp" line="1634"/>
         <source>Transform</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location filename="../src/features/brush/editor/BrushEditorLayoutWidget.cpp" line="1643"/>
+        <location filename="../src/features/brush/editor/BrushEditorLayoutWidget.cpp" line="1642"/>
         <source>Threshold</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location filename="../src/features/brush/editor/BrushEditorLayoutWidget.cpp" line="1645"/>
+        <location filename="../src/features/brush/editor/BrushEditorLayoutWidget.cpp" line="1644"/>
         <source>Compression</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location filename="../src/features/brush/editor/BrushEditorLayoutWidget.cpp" line="1647"/>
+        <location filename="../src/features/brush/editor/BrushEditorLayoutWidget.cpp" line="1646"/>
         <source>Interpolation</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location filename="../src/features/brush/editor/BrushEditorLayoutWidget.cpp" line="1648"/>
+        <location filename="../src/features/brush/editor/BrushEditorLayoutWidget.cpp" line="1647"/>
         <source>Bilinear</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location filename="../src/features/brush/editor/BrushEditorLayoutWidget.cpp" line="1648"/>
+        <location filename="../src/features/brush/editor/BrushEditorLayoutWidget.cpp" line="1647"/>
         <source>Nearest</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location filename="../src/features/brush/editor/BrushEditorLayoutWidget.cpp" line="1472"/>
-        <location filename="../src/features/brush/editor/BrushEditorLayoutWidget.cpp" line="1674"/>
-        <location filename="../src/features/brush/editor/BrushEditorLayoutWidget.cpp" line="1678"/>
+        <location filename="../src/features/brush/editor/BrushEditorLayoutWidget.cpp" line="1471"/>
+        <location filename="../src/features/brush/editor/BrushEditorLayoutWidget.cpp" line="1673"/>
+        <location filename="../src/features/brush/editor/BrushEditorLayoutWidget.cpp" line="1677"/>
         <source>Coming in a future version</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location filename="../src/features/brush/editor/BrushEditorLayoutWidget.cpp" line="1675"/>
+        <location filename="../src/features/brush/editor/BrushEditorLayoutWidget.cpp" line="1674"/>
         <source>Procedural dab generation will be available in upcoming releases of Ruwa.</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location filename="../src/features/brush/editor/BrushEditorLayoutWidget.cpp" line="1679"/>
+        <location filename="../src/features/brush/editor/BrushEditorLayoutWidget.cpp" line="1678"/>
         <source>Text-based dab rendering will be available in upcoming releases of Ruwa.</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location filename="../src/features/brush/editor/BrushEditorLayoutWidget.cpp" line="2340"/>
+        <location filename="../src/features/brush/editor/BrushEditorLayoutWidget.cpp" line="2339"/>
         <source>Remove Pack</source>
         <translation type="unfinished">Remove Pack</translation>
     </message>
     <message>
-        <location filename="../src/features/brush/editor/BrushEditorLayoutWidget.cpp" line="2347"/>
+        <location filename="../src/features/brush/editor/BrushEditorLayoutWidget.cpp" line="2346"/>
         <source>Import Brushes Here</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location filename="../src/features/brush/editor/BrushEditorLayoutWidget.cpp" line="2353"/>
-        <location filename="../src/features/brush/editor/BrushEditorLayoutWidget.cpp" line="2939"/>
-        <location filename="../src/features/brush/editor/BrushEditorLayoutWidget.cpp" line="2944"/>
-        <location filename="../src/features/brush/editor/BrushEditorLayoutWidget.cpp" line="2953"/>
+        <location filename="../src/features/brush/editor/BrushEditorLayoutWidget.cpp" line="2352"/>
+        <location filename="../src/features/brush/editor/BrushEditorLayoutWidget.cpp" line="2938"/>
+        <location filename="../src/features/brush/editor/BrushEditorLayoutWidget.cpp" line="2943"/>
+        <location filename="../src/features/brush/editor/BrushEditorLayoutWidget.cpp" line="2952"/>
         <source>Export Pack</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location filename="../src/features/brush/editor/BrushEditorLayoutWidget.cpp" line="2360"/>
+        <location filename="../src/features/brush/editor/BrushEditorLayoutWidget.cpp" line="2359"/>
         <source>Empty pack</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location filename="../src/features/brush/editor/BrushEditorLayoutWidget.cpp" line="2362"/>
+        <location filename="../src/features/brush/editor/BrushEditorLayoutWidget.cpp" line="2361"/>
         <source>Pack</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location filename="../src/features/brush/editor/BrushEditorLayoutWidget.cpp" line="2390"/>
-        <location filename="../src/features/brush/editor/BrushEditorLayoutWidget.cpp" line="2913"/>
-        <location filename="../src/features/brush/editor/BrushEditorLayoutWidget.cpp" line="2923"/>
+        <location filename="../src/features/brush/editor/BrushEditorLayoutWidget.cpp" line="2389"/>
+        <location filename="../src/features/brush/editor/BrushEditorLayoutWidget.cpp" line="2912"/>
+        <location filename="../src/features/brush/editor/BrushEditorLayoutWidget.cpp" line="2922"/>
         <source>Export Brush</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location filename="../src/features/brush/editor/BrushEditorLayoutWidget.cpp" line="2780"/>
-        <location filename="../src/features/brush/editor/BrushEditorLayoutWidget.cpp" line="2804"/>
-        <location filename="../src/features/brush/editor/BrushEditorLayoutWidget.cpp" line="2817"/>
-        <location filename="../src/features/brush/editor/BrushEditorLayoutWidget.cpp" line="2846"/>
-        <location filename="../src/features/brush/editor/BrushEditorLayoutWidget.cpp" line="2851"/>
-        <location filename="../src/features/brush/editor/BrushEditorLayoutWidget.cpp" line="2869"/>
-        <location filename="../src/features/brush/editor/BrushEditorLayoutWidget.cpp" line="2882"/>
+        <location filename="../src/features/brush/editor/BrushEditorLayoutWidget.cpp" line="2779"/>
+        <location filename="../src/features/brush/editor/BrushEditorLayoutWidget.cpp" line="2803"/>
+        <location filename="../src/features/brush/editor/BrushEditorLayoutWidget.cpp" line="2816"/>
+        <location filename="../src/features/brush/editor/BrushEditorLayoutWidget.cpp" line="2845"/>
+        <location filename="../src/features/brush/editor/BrushEditorLayoutWidget.cpp" line="2850"/>
+        <location filename="../src/features/brush/editor/BrushEditorLayoutWidget.cpp" line="2868"/>
+        <location filename="../src/features/brush/editor/BrushEditorLayoutWidget.cpp" line="2881"/>
         <source>Import Brushes</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location filename="../src/features/brush/editor/BrushEditorLayoutWidget.cpp" line="2780"/>
-        <location filename="../src/features/brush/editor/BrushEditorLayoutWidget.cpp" line="2846"/>
+        <location filename="../src/features/brush/editor/BrushEditorLayoutWidget.cpp" line="2779"/>
+        <location filename="../src/features/brush/editor/BrushEditorLayoutWidget.cpp" line="2845"/>
         <source>Brush import is already running.</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location filename="../src/features/brush/editor/BrushEditorLayoutWidget.cpp" line="2785"/>
+        <location filename="../src/features/brush/editor/BrushEditorLayoutWidget.cpp" line="2784"/>
         <source>Import Brush Pack</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location filename="../src/features/brush/editor/BrushEditorLayoutWidget.cpp" line="2939"/>
+        <location filename="../src/features/brush/editor/BrushEditorLayoutWidget.cpp" line="2938"/>
         <source>There are no brushes to export.</source>
         <translation type="unfinished"></translation>
     </message>
@@ -4946,101 +5079,101 @@ Ruwa uses the Qt framework (version %1), dynamically linked under the GNU Lesser
 <context>
     <name>ruwa::ui::windows::MainWindow</name>
     <message>
-        <location filename="../src/shell/main-window/MainWindow.cpp" line="511"/>
+        <location filename="../src/shell/main-window/MainWindow.cpp" line="523"/>
         <source>Open a project tab to save a layout.</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location filename="../src/shell/main-window/MainWindow.cpp" line="514"/>
+        <location filename="../src/shell/main-window/MainWindow.cpp" line="526"/>
         <source>Could not save layout.</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location filename="../src/shell/main-window/MainWindow.cpp" line="514"/>
-        <location filename="../src/shell/main-window/MainWindow.cpp" line="551"/>
-        <location filename="../src/shell/main-window/MainWindow.cpp" line="608"/>
+        <location filename="../src/shell/main-window/MainWindow.cpp" line="526"/>
+        <location filename="../src/shell/main-window/MainWindow.cpp" line="563"/>
+        <location filename="../src/shell/main-window/MainWindow.cpp" line="620"/>
         <source>OK</source>
         <translation type="unfinished">OK</translation>
     </message>
     <message>
-        <location filename="../src/shell/main-window/MainWindow.cpp" line="526"/>
+        <location filename="../src/shell/main-window/MainWindow.cpp" line="538"/>
         <source>Export Layout</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location filename="../src/shell/main-window/MainWindow.cpp" line="527"/>
-        <location filename="../src/shell/main-window/MainWindow.cpp" line="559"/>
+        <location filename="../src/shell/main-window/MainWindow.cpp" line="539"/>
+        <location filename="../src/shell/main-window/MainWindow.cpp" line="571"/>
         <source>Layout JSON (*.json)</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location filename="../src/shell/main-window/MainWindow.cpp" line="534"/>
-        <location filename="../src/shell/main-window/MainWindow.cpp" line="540"/>
+        <location filename="../src/shell/main-window/MainWindow.cpp" line="546"/>
+        <location filename="../src/shell/main-window/MainWindow.cpp" line="552"/>
         <source>Could not write layout file.</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location filename="../src/shell/main-window/MainWindow.cpp" line="547"/>
+        <location filename="../src/shell/main-window/MainWindow.cpp" line="559"/>
         <source>Open a project tab to export a layout.</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location filename="../src/shell/main-window/MainWindow.cpp" line="551"/>
+        <location filename="../src/shell/main-window/MainWindow.cpp" line="563"/>
         <source>Could not export layout.</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location filename="../src/shell/main-window/MainWindow.cpp" line="558"/>
+        <location filename="../src/shell/main-window/MainWindow.cpp" line="570"/>
         <source>Import Layout</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location filename="../src/shell/main-window/MainWindow.cpp" line="566"/>
+        <location filename="../src/shell/main-window/MainWindow.cpp" line="578"/>
         <source>Could not open layout file.</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location filename="../src/shell/main-window/MainWindow.cpp" line="574"/>
+        <location filename="../src/shell/main-window/MainWindow.cpp" line="586"/>
         <source>Layout file is not valid JSON.</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location filename="../src/shell/main-window/MainWindow.cpp" line="583"/>
+        <location filename="../src/shell/main-window/MainWindow.cpp" line="595"/>
         <source>Imported layout</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location filename="../src/shell/main-window/MainWindow.cpp" line="595"/>
+        <location filename="../src/shell/main-window/MainWindow.cpp" line="607"/>
         <source>Layout file does not contain a usable layout.</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location filename="../src/shell/main-window/MainWindow.cpp" line="604"/>
+        <location filename="../src/shell/main-window/MainWindow.cpp" line="616"/>
         <source>Open a project tab to import a layout.</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location filename="../src/shell/main-window/MainWindow.cpp" line="608"/>
+        <location filename="../src/shell/main-window/MainWindow.cpp" line="620"/>
         <source>Could not import layout.</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location filename="../src/shell/main-window/MainWindow.cpp" line="867"/>
+        <location filename="../src/shell/main-window/MainWindow.cpp" line="877"/>
         <source>Dropped image</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location filename="../src/shell/main-window/MainWindow.cpp" line="1178"/>
+        <location filename="../src/shell/main-window/MainWindow.cpp" line="1188"/>
         <source>Images (%1)</source>
         <translation type="unfinished">Images (%1)</translation>
     </message>
     <message>
-        <location filename="../src/shell/main-window/MainWindow.cpp" line="1178"/>
+        <location filename="../src/shell/main-window/MainWindow.cpp" line="1188"/>
         <source>All Files (*)</source>
         <translation type="unfinished">All Files (*)</translation>
     </message>
     <message>
-        <location filename="../src/shell/main-window/MainWindow.cpp" line="1181"/>
+        <location filename="../src/shell/main-window/MainWindow.cpp" line="1191"/>
         <source>Import images</source>
         <translation type="unfinished">Import images</translation>
     </message>
@@ -5149,58 +5282,58 @@ Ruwa uses the Qt framework (version %1), dynamically linked under the GNU Lesser
 <context>
     <name>ruwa::ui::workspace::CanvasPanel</name>
     <message>
-        <location filename="../src/features/canvas/ui/CanvasPanel.cpp" line="501"/>
+        <location filename="../src/features/canvas/ui/CanvasPanel.cpp" line="502"/>
         <source>Parameters for transform mode are not available yet.</source>
         <translation>Parameters for transform mode are not available yet.</translation>
     </message>
     <message>
-        <location filename="../src/features/canvas/ui/CanvasPanel.cpp" line="508"/>
+        <location filename="../src/features/canvas/ui/CanvasPanel.cpp" line="509"/>
         <source>Parameters for this canvas mode are not available yet.</source>
         <translation>Parameters for this canvas mode are not available yet.</translation>
     </message>
     <message>
-        <location filename="../src/features/canvas/ui/CanvasPanel.cpp" line="2305"/>
+        <location filename="../src/features/canvas/ui/CanvasPanel.cpp" line="2333"/>
         <source>Pasted</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location filename="../src/features/canvas/ui/CanvasPanel.cpp" line="2437"/>
-        <location filename="../src/features/canvas/ui/CanvasPanel.cpp" line="2460"/>
+        <location filename="../src/features/canvas/ui/CanvasPanel.cpp" line="2465"/>
+        <location filename="../src/features/canvas/ui/CanvasPanel.cpp" line="2488"/>
         <source>Cancel</source>
         <translation type="unfinished">Cancel</translation>
     </message>
     <message>
-        <location filename="../src/features/canvas/ui/CanvasPanel.cpp" line="2438"/>
+        <location filename="../src/features/canvas/ui/CanvasPanel.cpp" line="2466"/>
         <source>Select Layer Below</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location filename="../src/features/canvas/ui/CanvasPanel.cpp" line="2445"/>
+        <location filename="../src/features/canvas/ui/CanvasPanel.cpp" line="2473"/>
         <source>OK</source>
         <translation type="unfinished">OK</translation>
     </message>
     <message>
-        <location filename="../src/features/canvas/ui/CanvasPanel.cpp" line="2449"/>
+        <location filename="../src/features/canvas/ui/CanvasPanel.cpp" line="2477"/>
         <source>The selected group cannot be drawn on. Select the layer below instead?</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location filename="../src/features/canvas/ui/CanvasPanel.cpp" line="2450"/>
+        <location filename="../src/features/canvas/ui/CanvasPanel.cpp" line="2478"/>
         <source>The selected group cannot be drawn on, and there is no drawable raster layer below it.</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location filename="../src/features/canvas/ui/CanvasPanel.cpp" line="2459"/>
+        <location filename="../src/features/canvas/ui/CanvasPanel.cpp" line="2487"/>
         <source>The Background layer cannot be drawn on. Create a new empty layer above it?</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location filename="../src/features/canvas/ui/CanvasPanel.cpp" line="2461"/>
+        <location filename="../src/features/canvas/ui/CanvasPanel.cpp" line="2489"/>
         <source>Create New Layer</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location filename="../src/features/canvas/ui/CanvasPanel.cpp" line="2465"/>
+        <location filename="../src/features/canvas/ui/CanvasPanel.cpp" line="2493"/>
         <source>Layer</source>
         <translation type="unfinished"></translation>
     </message>
@@ -5450,98 +5583,98 @@ Ruwa uses the Qt framework (version %1), dynamically linked under the GNU Lesser
 <context>
     <name>ruwa::ui::workspace::LayersPanel</name>
     <message>
-        <location filename="../src/features/layers/ui/LayersPanel.cpp" line="1454"/>
-        <location filename="../src/features/layers/ui/LayersPanel.cpp" line="1711"/>
+        <location filename="../src/features/layers/ui/LayersPanel.cpp" line="1455"/>
+        <location filename="../src/features/layers/ui/LayersPanel.cpp" line="1720"/>
         <source>Layers</source>
         <translation>Layers</translation>
     </message>
     <message>
-        <location filename="../src/features/layers/ui/LayersPanel.cpp" line="1507"/>
-        <location filename="../src/features/layers/ui/LayersPanel.cpp" line="1713"/>
+        <location filename="../src/features/layers/ui/LayersPanel.cpp" line="1508"/>
+        <location filename="../src/features/layers/ui/LayersPanel.cpp" line="1722"/>
         <source>Blend mode</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location filename="../src/features/layers/ui/LayersPanel.cpp" line="1533"/>
-        <location filename="../src/features/layers/ui/LayersPanel.cpp" line="1729"/>
+        <location filename="../src/features/layers/ui/LayersPanel.cpp" line="1534"/>
+        <location filename="../src/features/layers/ui/LayersPanel.cpp" line="1738"/>
         <source>Alpha Lock</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location filename="../src/features/layers/ui/LayersPanel.cpp" line="1538"/>
-        <location filename="../src/features/layers/ui/LayersPanel.cpp" line="1731"/>
+        <location filename="../src/features/layers/ui/LayersPanel.cpp" line="1539"/>
+        <location filename="../src/features/layers/ui/LayersPanel.cpp" line="1740"/>
         <source>Lock</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location filename="../src/features/layers/ui/LayersPanel.cpp" line="1633"/>
-        <location filename="../src/features/layers/ui/LayersPanel.cpp" line="1717"/>
+        <location filename="../src/features/layers/ui/LayersPanel.cpp" line="1634"/>
+        <location filename="../src/features/layers/ui/LayersPanel.cpp" line="1726"/>
         <source>Add Layer</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location filename="../src/features/layers/ui/LayersPanel.cpp" line="1635"/>
-        <location filename="../src/features/layers/ui/LayersPanel.cpp" line="1719"/>
+        <location filename="../src/features/layers/ui/LayersPanel.cpp" line="1636"/>
+        <location filename="../src/features/layers/ui/LayersPanel.cpp" line="1728"/>
         <source>Add Adjustment Layer</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location filename="../src/features/layers/ui/LayersPanel.cpp" line="1637"/>
-        <location filename="../src/features/layers/ui/LayersPanel.cpp" line="1725"/>
+        <location filename="../src/features/layers/ui/LayersPanel.cpp" line="1638"/>
+        <location filename="../src/features/layers/ui/LayersPanel.cpp" line="1734"/>
         <source>Add Group</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location filename="../src/features/layers/ui/LayersPanel.cpp" line="1639"/>
-        <location filename="../src/features/layers/ui/LayersPanel.cpp" line="1727"/>
+        <location filename="../src/features/layers/ui/LayersPanel.cpp" line="1640"/>
+        <location filename="../src/features/layers/ui/LayersPanel.cpp" line="1736"/>
         <source>Add Mask</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location filename="../src/features/layers/ui/LayersPanel.cpp" line="1643"/>
-        <location filename="../src/features/layers/ui/LayersPanel.cpp" line="1721"/>
+        <location filename="../src/features/layers/ui/LayersPanel.cpp" line="1644"/>
+        <location filename="../src/features/layers/ui/LayersPanel.cpp" line="1730"/>
         <source>Duplicate Layer</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location filename="../src/features/layers/ui/LayersPanel.cpp" line="1645"/>
-        <location filename="../src/features/layers/ui/LayersPanel.cpp" line="1723"/>
-        <location filename="../src/features/layers/ui/LayersPanel.cpp" line="2326"/>
+        <location filename="../src/features/layers/ui/LayersPanel.cpp" line="1646"/>
+        <location filename="../src/features/layers/ui/LayersPanel.cpp" line="1732"/>
+        <location filename="../src/features/layers/ui/LayersPanel.cpp" line="2335"/>
         <source>Merge Layers</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location filename="../src/features/layers/ui/LayersPanel.cpp" line="1647"/>
-        <location filename="../src/features/layers/ui/LayersPanel.cpp" line="1733"/>
+        <location filename="../src/features/layers/ui/LayersPanel.cpp" line="1648"/>
+        <location filename="../src/features/layers/ui/LayersPanel.cpp" line="1742"/>
         <source>Delete Layer</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location filename="../src/features/layers/ui/LayersPanel.cpp" line="2316"/>
+        <location filename="../src/features/layers/ui/LayersPanel.cpp" line="2325"/>
         <source>Merge Visible</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location filename="../src/features/layers/ui/LayersPanel.cpp" line="2337"/>
+        <location filename="../src/features/layers/ui/LayersPanel.cpp" line="2346"/>
         <source>OK</source>
         <translation type="unfinished">OK</translation>
     </message>
     <message>
-        <location filename="../src/features/layers/ui/LayersPanel.cpp" line="2376"/>
+        <location filename="../src/features/layers/ui/LayersPanel.cpp" line="2385"/>
         <source>The Background layer can&apos;t be merged.</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location filename="../src/features/layers/ui/LayersPanel.cpp" line="2378"/>
+        <location filename="../src/features/layers/ui/LayersPanel.cpp" line="2387"/>
         <source>Smart and Board layers can&apos;t be merged. Rasterize the layer first.</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location filename="../src/features/layers/ui/LayersPanel.cpp" line="3272"/>
-        <location filename="../src/features/layers/ui/LayersPanel.cpp" line="3275"/>
-        <location filename="../src/features/layers/ui/LayersPanel.cpp" line="3282"/>
-        <location filename="../src/features/layers/ui/LayersPanel.cpp" line="3285"/>
-        <location filename="../src/features/layers/ui/LayersPanel.cpp" line="3287"/>
+        <location filename="../src/features/layers/ui/LayersPanel.cpp" line="3281"/>
+        <location filename="../src/features/layers/ui/LayersPanel.cpp" line="3284"/>
+        <location filename="../src/features/layers/ui/LayersPanel.cpp" line="3291"/>
+        <location filename="../src/features/layers/ui/LayersPanel.cpp" line="3294"/>
+        <location filename="../src/features/layers/ui/LayersPanel.cpp" line="3296"/>
         <source>Group</source>
         <translation type="unfinished"></translation>
     </message>
@@ -5549,17 +5682,22 @@ Ruwa uses the Qt framework (version %1), dynamically linked under the GNU Lesser
 <context>
     <name>ruwa::ui::workspace::NavigatorPanel</name>
     <message>
-        <location filename="../src/features/canvas/ui/NavigatorPanel.cpp" line="17"/>
-        <location filename="../src/features/canvas/ui/NavigatorPanel.cpp" line="19"/>
+        <location filename="../src/features/canvas/ui/NavigatorPanel.cpp" line="43"/>
+        <location filename="../src/features/canvas/ui/NavigatorPanel.cpp" line="45"/>
         <source>Navigator</source>
         <translation>Navigator</translation>
+    </message>
+    <message>
+        <location filename="../src/features/canvas/ui/NavigatorPanel.cpp" line="162"/>
+        <source>Reset zoom</source>
+        <translation type="unfinished"></translation>
     </message>
 </context>
 <context>
     <name>ruwa::ui::workspace::ToolsPanel</name>
     <message>
-        <location filename="../src/features/tools/ToolsPanel.cpp" line="415"/>
-        <location filename="../src/features/tools/ToolsPanel.cpp" line="417"/>
+        <location filename="../src/features/tools/ToolsPanel.cpp" line="405"/>
+        <location filename="../src/features/tools/ToolsPanel.cpp" line="407"/>
         <source>Tools</source>
         <translation>Tools</translation>
     </message>

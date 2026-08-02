@@ -4,6 +4,7 @@
 #include "LayerRowWidget.h"
 
 #include "features/layers/ui/LayerListView.h"
+#include "features/layers/ui/LayerPreviewPopup.h"
 #include "features/canvas/rendering/TextRetainedPayloadBuilder.h"
 #include "features/layers/model/BlendModeUtils.h"
 #include "features/layers/model/LayerModel.h"
@@ -26,6 +27,7 @@
 #include <QMouseEvent>
 #include <QResizeEvent>
 #include <QEnterEvent>
+#include <QHelpEvent>
 #include <QVariantList>
 #include <QVariantMap>
 #include <QApplication>
@@ -694,6 +696,7 @@ LayerRowWidget::LayerRowWidget(QWidget* parent)
 LayerRowWidget::~LayerRowWidget()
 {
     qApp->removeEventFilter(this);
+    LayerPreviewPopup::hidePreview(this);
 }
 
 // ============================================================================
@@ -704,6 +707,10 @@ void LayerRowWidget::setLayerData(LayerData* data)
 {
     const bool hadData = (m_data != nullptr);
     const bool dataReassigned = (m_data != data);
+    if (dataReassigned) {
+        // Row recycling: whatever the preview was showing no longer belongs here.
+        LayerPreviewPopup::hidePreview(this);
+    }
     m_data = data;
     // The mask preview cache is per-row; drop it only when the row is bound to a
     // different layer. Keeping it across same-layer refreshes lets the mask
@@ -901,6 +908,17 @@ QPixmap LayerRowWidget::buildThumbnailPixmap(
     return preview.isNull() ? QPixmap() : QPixmap::fromImage(preview);
 }
 
+QImage LayerRowWidget::buildMaskPreviewImage(
+    const LayerData* data, const QRect& displayFrame, const QSize& targetSize)
+{
+    return maskPreviewImage(data, displayFrame, targetSize);
+}
+
+QRect LayerRowWidget::previewSourceFrame(const LayerData* data, const QRect& displayFrame)
+{
+    return resolvedPreviewFrame(data, displayFrame);
+}
+
 void LayerRowWidget::setThumbnailLoading(bool loading)
 {
     if (m_thumbnailLoading == loading) {
@@ -968,6 +986,7 @@ void LayerRowWidget::setDragging(bool d)
             m_hoverAnim->stop();
         m_hoveredZone = HitZone::None;
         setHoverProgress(0.0);
+        LayerPreviewPopup::hidePreview(this);
     }
     update();
 }
@@ -1676,6 +1695,28 @@ void LayerRowWidget::updateThumbnailCtrlGlowState()
 // Events
 // ============================================================================
 
+bool LayerRowWidget::event(QEvent* e)
+{
+    if (e->type() == QEvent::ToolTip) {
+        const QPoint pos = static_cast<QHelpEvent*>(e)->pos();
+        const HitZone zone = hitTest(pos);
+        const bool onMaskThumb = zone == HitZone::MaskThumbnail && hasMaskThumbnail();
+        const bool onLayerThumb = zone == HitZone::Thumbnail;
+
+        if (m_data && !m_dragging && !m_renameEdit && (onLayerThumb || onMaskThumb)) {
+            const QRect local = onMaskThumb ? maskThumbnailRect() : thumbnailRect();
+            LayerPreviewPopup::showPreview(this, m_data, m_displayFrame, onMaskThumb,
+                QRect(mapToGlobal(local.topLeft()), local.size()));
+            // Accepting keeps Qt's fall-asleep window open, so moving on to the
+            // next thumbnail re-shows the preview without the full wake-up wait.
+            e->accept();
+            return true;
+        }
+        LayerPreviewPopup::hidePreview(this);
+    }
+    return ReorderableRowWidget::event(e);
+}
+
 void LayerRowWidget::enterEvent(QEnterEvent* e)
 {
     QWidget::enterEvent(e);
@@ -1690,6 +1731,7 @@ void LayerRowWidget::leaveEvent(QEvent* e)
     m_hoveredZone = HitZone::None;
     animateHover(false);
     animateThumbnailCtrlGlow(false);
+    LayerPreviewPopup::hidePreview(this);
 }
 
 void LayerRowWidget::mousePressEvent(QMouseEvent* e)

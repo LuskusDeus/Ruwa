@@ -110,6 +110,12 @@ public:
         const QRect& displayFrame, const QSize& targetSize);
     static QPixmap buildThumbnailPixmap(const ruwa::core::layers::LayerData* data,
         const QRect& displayFrame, const QSize& targetSize);
+    /** @brief Grayscale reveal preview of the layer mask (white = visible). */
+    static QImage buildMaskPreviewImage(const ruwa::core::layers::LayerData* data,
+        const QRect& displayFrame, const QSize& targetSize);
+    /** @brief Document-space rectangle the previews above are sampled from. */
+    static QRect previewSourceFrame(
+        const ruwa::core::layers::LayerData* data, const QRect& displayFrame);
 
     // --- State ---
     void setSelected(bool s);
@@ -217,6 +223,10 @@ signals:
     void applyEffectsRequested(const ruwa::core::layers::LayerId& id);
 
 protected:
+    /** Hover preview lives here: QEvent::ToolTip rides Qt's own tooltip clock
+     *  (wake-up delay + fall-asleep grace), so a brief slip off the thumbnail
+     *  does not restart the wait. */
+    bool event(QEvent* e) override;
     void paintEvent(QPaintEvent* e) override;
     void enterEvent(QEnterEvent* e) override;
     void leaveEvent(QEvent* e) override;
