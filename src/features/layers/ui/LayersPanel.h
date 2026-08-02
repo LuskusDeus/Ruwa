@@ -9,6 +9,10 @@
 #include "features/layers/model/LayerModel.h"
 #include "features/layers/ui/LayerListView.h"
 
+#include <QList>
+#include <QMap>
+#include <QPoint>
+#include <QPointer>
 #include <QRect>
 #include <QSize>
 #include <QTimer>
@@ -16,6 +20,10 @@
 #include <memory>
 
 class QPushButton;
+class QEvent;
+class QObject;
+class QJsonArray;
+class QVariantAnimation;
 
 namespace aether {
 class IUndoCommand;
@@ -26,6 +34,8 @@ class BaseStyledWidget;
 class BaseAnimatedButton;
 class OpacitySliderWidget;
 class AnimatedComboBox;
+class AnimatedFlowWidget;
+class DragGhostWidget;
 } // namespace ruwa::ui::widgets
 
 namespace ruwa::ui::workspace {
@@ -44,8 +54,29 @@ class LayersPanel : public ruwa::ui::docking::DockPanel {
     Q_OBJECT
 
 public:
+    /// Reorderable slots of the toolbar's left-hand (action) block. The alpha-lock
+    /// and layer-lock toggles are pinned to the right and never take part.
+    enum class ToolbarItem {
+        AddLayer,
+        AddAdjustment,
+        AddGroup,
+        AddMask,
+        Duplicate,
+        Merge,
+        Separator,
+        Delete,
+    };
+
     explicit LayersPanel(QWidget* parent = nullptr);
     ~LayersPanel() override;
+
+    /// Toolbar buttons the panel context menu can show/hide. The divider is not
+    /// listed: it is chrome, and the flow already drops it at row edges.
+    static QList<ToolbarItem> configurableToolbarItems();
+    static QString toolbarItemDisplayName(ToolbarItem item);
+    static ruwa::ui::core::IconProvider::StandardIcon toolbarItemIconType(ToolbarItem item);
+    bool isToolbarItemVisible(ToolbarItem item) const;
+    void setToolbarItemVisible(ToolbarItem item, bool visible);
 
     // === Model ===
     ruwa::core::layers::LayerModel* layerModel() { return &m_layerModel; }
@@ -135,6 +166,10 @@ signals:
     void deleteLayerRequested();
     void addGroupRequested();
 
+    /// Emitted when persistent panel state (currently the toolbar order) changes,
+    /// so the workspace can schedule a dock-layout save.
+    void panelStateChanged();
+
     void layerNameChanged(const ruwa::core::layers::LayerId& id, const QString& name);
     void layerOrderChanged(const ruwa::core::layers::LayerId& movedId,
         const ruwa::core::layers::LayerId& newParentId, int newIndex);
@@ -159,6 +194,9 @@ protected:
     QWidget* createContent() override;
     void retranslateUi() override;
     void onThemeChanged() override;
+    bool eventFilter(QObject* watched, QEvent* event) override;
+    QJsonObject savePanelState() const override;
+    void restorePanelState(const QJsonObject& state) override;
 
 private slots:
     void onLayerSelected(const ruwa::core::layers::LayerId& id, Qt::KeyboardModifiers modifiers);
@@ -215,6 +253,23 @@ private:
     void populateBlendModeCombo();
     void syncLayerControls();
 
+    // === Toolbar reordering (drag & drop) ===
+    static QList<ToolbarItem> defaultToolbarOrder();
+    static QString toolbarItemKey(ToolbarItem item);
+    static QList<ToolbarItem> normalizedToolbarOrder(const QJsonArray& values);
+    static QList<ToolbarItem> normalizedHiddenToolbarItems(const QJsonArray& values);
+    QWidget* toolbarItemWidget(ToolbarItem item) const;
+    void applyToolbarOrder(bool animate);
+    void animateToolbarItemVisibility(ToolbarItem item, bool visible);
+    void cancelToolbarItemVisibilityAnimation(ToolbarItem item);
+    void startToolbarDrag(ToolbarItem item, QWidget* itemWidget, const QPoint& globalPos);
+    void updateToolbarDrag(const QPoint& globalPos);
+    void finishToolbarDrag(bool accepted, const QPoint& globalPos);
+    QPoint toolbarGhostTargetPosition(const QPoint& globalPos) const;
+    int toolbarInsertIndexAt(const QPoint& contentPos) const;
+    void moveDraggedToolbarItemTo(int insertIndex);
+    void cancelToolbarDragCandidate();
+
 private:
     ruwa::core::layers::LayerModel m_layerModel;
     ruwa::ui::widgets::LayerListView* m_listView = nullptr;
@@ -233,6 +288,25 @@ private:
 
     ruwa::ui::widgets::AnimatedComboBox* m_blendModeCombo = nullptr;
     ruwa::ui::widgets::OpacitySliderWidget* m_opacitySlider = nullptr;
+
+    // Adaptive toolbar flow + its reorder-drag lifecycle.
+    ruwa::ui::widgets::AnimatedFlowWidget* m_toolbarFlow = nullptr;
+    QWidget* m_toolbarSeparator = nullptr;
+    QList<ToolbarItem> m_toolbarOrder;
+    QList<ToolbarItem> m_appliedToolbarOrder;
+    QList<ToolbarItem> m_hiddenToolbarItems;
+    QList<ToolbarItem> m_toolbarDragStartOrder;
+    QMap<ToolbarItem, QPointer<QVariantAnimation>> m_toolbarVisibilityAnimations;
+    QPointer<ruwa::ui::widgets::DragGhostWidget> m_toolbarDragGhost;
+    QWidget* m_toolbarDragCandidate = nullptr;
+    QWidget* m_toolbarDraggedWidget = nullptr;
+    QPoint m_toolbarDragPressPosition;
+    QPoint m_toolbarDragOffset;
+    ToolbarItem m_toolbarDraggedItem = ToolbarItem::AddLayer;
+    bool m_toolbarDragActive = false;
+    bool m_toolbarDragSettling = false;
+    bool m_toolbarDragInsideContent = false;
+    bool m_toolbarDragCursorOverride = false;
 
     QRect m_displayFrame;
     QTimer m_thumbnailRefreshTimer;

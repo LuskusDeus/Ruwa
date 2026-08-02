@@ -2,6 +2,7 @@
 
 #include "DockPanelContextMenu.h"
 
+#include "features/layers/ui/LayersPanel.h"
 #include "features/tools/ToolsPanel.h"
 #include "shell/docking/widgets/DockPanel.h"
 #include "shared/resources/IconProvider.h"
@@ -72,7 +73,7 @@ void DockPanelContextMenu::applyChrome()
     const auto& theme = ruwa::ui::core::ThemeManager::instance();
     const auto& colors = theme.colors();
 
-    for (QLabel* sectionLabel : { m_sectionLabel, m_toolsSectionLabel }) {
+    for (QLabel* sectionLabel : { m_sectionLabel, m_toolsSectionLabel, m_layerButtonsSectionLabel }) {
         if (sectionLabel) {
             QFont f = colors.fonts.getUIFont(theme.scaledFontSize(10));
             f.setWeight(QFont::DemiBold);
@@ -305,8 +306,54 @@ void DockPanelContextMenu::buildUi()
     toolsSectionLayout->addWidget(toolsGridHost);
     contentLayout()->addWidget(m_toolsSectionHost);
 
+    // --- Layers panel: same show/hide switches for its toolbar buttons ---
+    m_sepBeforeLayerButtons = new HorizontalSeparator(contentWidget());
+    m_sepBeforeLayerButtons->setMargins(theme.scaled(4), theme.scaled(4));
+    contentLayout()->addWidget(m_sepBeforeLayerButtons);
+
+    m_layerButtonsSectionHost = new QWidget(contentWidget());
+    m_layerButtonsSectionHost->setAttribute(Qt::WA_TranslucentBackground);
+    auto* layerButtonsSectionLayout = new QVBoxLayout(m_layerButtonsSectionHost);
+    layerButtonsSectionLayout->setContentsMargins(0, 0, 0, 0);
+    layerButtonsSectionLayout->setSpacing(theme.scaled(2));
+
+    auto* layerButtonsHeader = new QWidget(m_layerButtonsSectionHost);
+    layerButtonsHeader->setAttribute(Qt::WA_TranslucentBackground);
+    auto* layerButtonsHeaderLayout = new QVBoxLayout(layerButtonsHeader);
+    layerButtonsHeaderLayout->setContentsMargins(
+        theme.scaled(10), theme.scaled(8), theme.scaled(10), theme.scaled(4));
+    layerButtonsHeaderLayout->setSpacing(0);
+    m_layerButtonsSectionLabel = new QLabel(tr("Visible buttons"), layerButtonsHeader);
+    layerButtonsHeaderLayout->addWidget(m_layerButtonsSectionLabel);
+    layerButtonsSectionLayout->addWidget(layerButtonsHeader);
+
+    auto* layerButtonsColumn = new QWidget(m_layerButtonsSectionHost);
+    layerButtonsColumn->setAttribute(Qt::WA_TranslucentBackground);
+    auto* layerButtonsColumnLayout = new QVBoxLayout(layerButtonsColumn);
+    layerButtonsColumnLayout->setContentsMargins(0, 0, 0, 0);
+    layerButtonsColumnLayout->setSpacing(theme.scaled(2));
+
+    using LayersPanel = ruwa::ui::workspace::LayersPanel;
+    for (const LayersPanel::ToolbarItem item : LayersPanel::configurableToolbarItems()) {
+        ToggleSwitch* toggle = nullptr;
+        QWidget* row = createToggleRow(layerButtonsColumn, LayersPanel::toolbarItemIconType(item),
+            LayersPanel::toolbarItemDisplayName(item), toggle);
+        layerButtonsColumnLayout->addWidget(row);
+        m_layerButtonToggles.append({ item, toggle });
+
+        connect(toggle, &ToggleSwitch::toggled, this, [this, item](bool visible) {
+            if (m_layersPanel) {
+                m_layersPanel->setToolbarItemVisible(item, visible);
+            }
+        });
+    }
+    layerButtonsSectionLayout->addWidget(layerButtonsColumn);
+    contentLayout()->addWidget(m_layerButtonsSectionHost);
+
     m_sepBeforeTools->hide();
     m_toolsSectionHost->hide();
+    m_sepBeforeLayerButtons->hide();
+    m_layerButtonsSectionHost->hide();
 }
 
 void DockPanelContextMenu::rebuildStandardMenu()
@@ -316,6 +363,7 @@ void DockPanelContextMenu::rebuildStandardMenu()
         = static_cast<quintptr>(ctx.value(QStringLiteral("dockPanelPtr")).toULongLong());
     m_panel = reinterpret_cast<ruwa::ui::docking::DockPanel*>(panelPtr);
     m_toolsPanel = qobject_cast<ruwa::ui::workspace::ToolsPanel*>(m_panel.data());
+    m_layersPanel = qobject_cast<ruwa::ui::workspace::LayersPanel*>(m_panel.data());
 
     const bool hasPanel = !m_panel.isNull();
     const bool isFloating = hasPanel && m_panel->isFloating();
@@ -360,6 +408,16 @@ void DockPanelContextMenu::rebuildStandardMenu()
         const QSignalBlocker blocker(desc.toggle);
         desc.toggle->setEnabled(hasToolsPanel);
         desc.toggle->setChecked(hasToolsPanel && m_toolsPanel->isToolVisible(desc.tool),
+            ToggleSwitch::TransitionMode::Instant);
+    }
+
+    const bool hasLayersPanel = !m_layersPanel.isNull();
+    m_sepBeforeLayerButtons->setVisible(hasLayersPanel);
+    m_layerButtonsSectionHost->setVisible(hasLayersPanel);
+    for (const LayerButtonToggleDesc& desc : m_layerButtonToggles) {
+        const QSignalBlocker blocker(desc.toggle);
+        desc.toggle->setEnabled(hasLayersPanel);
+        desc.toggle->setChecked(hasLayersPanel && m_layersPanel->isToolbarItemVisible(desc.item),
             ToggleSwitch::TransitionMode::Instant);
     }
 

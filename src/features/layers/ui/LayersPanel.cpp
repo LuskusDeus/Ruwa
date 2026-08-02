@@ -21,15 +21,24 @@
 #include "shared/widgets/inputs/OpacitySliderWidget.h"
 #include "shared/widgets/layout/AnimatedFlowWidget.h"
 #include "shared/widgets/overlays/ToolTipController.h"
+#include "shared/widgets/reorderlist/ListDragDrop.h"
 #include "shell/top-bar/MessagePopupManager.h"
 #include "shared/tiles/TilePixelAccess.h"
 
 #include <QVBoxLayout>
 #include <QHBoxLayout>
+#include <QApplication>
+#include <QCursor>
+#include <QGraphicsOpacityEffect>
 #include <QGuiApplication>
+#include <QJsonArray>
+#include <QKeyEvent>
+#include <QMouseEvent>
 #include <QPainter>
 #include <QPainterPath>
+#include <QPixmap>
 #include <QSignalBlocker>
+#include <QVariantAnimation>
 #include <QEvent>
 #include <QImage>
 #include <QWidget>
@@ -42,6 +51,7 @@
 #include <array>
 #include <cmath>
 #include <cstring>
+#include <utility>
 #include <vector>
 
 namespace ruwa::ui::workspace {
@@ -1315,6 +1325,16 @@ public:
         setCheckable(false);
     }
 
+    /// Drops the press/hover state a reorder drag stole from the button, so it
+    /// doesn't stay visually stuck once the ghost takes over.
+    void cancelPointerInteraction()
+    {
+        setDown(false);
+        m_isPressed = false;
+        setHovered(rect().contains(mapFromGlobal(QCursor::pos())));
+        update();
+    }
+
 protected:
     void paintEvent(QPaintEvent* event) override
     {
@@ -1462,6 +1482,8 @@ LayersPanel::LayersPanel(QWidget* parent)
     setFloatable(true);
     setMovable(true);
 
+    m_toolbarOrder = defaultToolbarOrder();
+
     m_thumbnailRefreshTimer.setSingleShot(true);
     m_thumbnailRefreshTimer.setInterval(33);
     connect(&m_thumbnailRefreshTimer, &QTimer::timeout, this, [this]() {
@@ -1476,7 +1498,23 @@ LayersPanel::LayersPanel(QWidget* parent)
         &m_layerModel, &LayerModel::layerDataChanged, this, &LayersPanel::onModelLayerDataChanged);
 }
 
-LayersPanel::~LayersPanel() = default;
+LayersPanel::~LayersPanel()
+{
+    if (m_toolbarDragActive) {
+        qApp->removeEventFilter(this);
+    }
+    if (m_toolbarDragCursorOverride) {
+        QApplication::restoreOverrideCursor();
+        m_toolbarDragCursorOverride = false;
+    }
+    if (m_toolbarDragGhost) {
+        delete m_toolbarDragGhost.data();
+        m_toolbarDragGhost = nullptr;
+    }
+    if (m_toolbarFlow) {
+        m_toolbarFlow->shutdown();
+    }
+}
 
 // ============================================================================
 // Content
@@ -1670,26 +1708,693 @@ void LayersPanel::setupToolbar(QWidget* container)
     connect(m_btnDelete, &ruwa::ui::widgets::BaseAnimatedButton::clicked, this,
         &LayersPanel::onDeleteLayer);
 
-    // Divider that sets the destructive Delete apart from the operations.
-    auto* deleteSeparator = new LayerToolbarSeparator(container);
+    // Divider that sets the destructive Delete apart from the operations. It rides
+    // along in the reorderable list but cannot itself be picked up.
+    m_toolbarSeparator = new LayerToolbarSeparator(container);
 
     // Adaptive, animated flow: action buttons wrap with the panel width, while
     // the alpha-lock / layer-lock toggles stay pinned to the first row (right).
-    auto* flow = new ruwa::ui::widgets::AnimatedFlowWidget(
+    m_toolbarFlow = new ruwa::ui::widgets::AnimatedFlowWidget(
         ruwa::ui::widgets::AnimatedFlowWidget::LayoutStyle::PinnedToolbar, container);
-    flow->setFlowSpacing(2, 2);
-    flow->setSeparatorPropertyName(kFlowSeparatorProp);
-    flow->setItems(
-        // Flow order: creation group first, then operations on the selection,
-        // with a divider isolating Delete.
-        { m_btnAdd, m_btnAdjustment, m_btnGroup, m_btnMask, m_btnDuplicate, m_btnMergeDown,
-            deleteSeparator, m_btnDelete },
-        // Pinned to the first row (always on top).
-        { m_btnAlphaLock, m_btnLock });
+    m_toolbarFlow->setFlowSpacing(2, 2);
+    m_toolbarFlow->setSeparatorPropertyName(kFlowSeparatorProp);
 
-    controlsLayout->addWidget(flow);
+    // Only the left-hand action block reorders. Pinned toggles stay put and never
+    // install the drag filter.
+    for (ToolbarItem item : std::as_const(m_toolbarOrder)) {
+        QWidget* itemWidget = toolbarItemWidget(item);
+        if (itemWidget && item != ToolbarItem::Separator) {
+            itemWidget->installEventFilter(this);
+        }
+    }
+
+    applyToolbarOrder(false);
+    controlsLayout->addWidget(m_toolbarFlow);
 
     applyToolbarTheme();
+}
+
+// ============================================================================
+// Toolbar reordering (drag & drop)
+// ============================================================================
+
+QList<LayersPanel::ToolbarItem> LayersPanel::defaultToolbarOrder()
+{
+    // Creation group first, then operations on the selection, with a divider
+    // isolating the destructive Delete.
+    return { ToolbarItem::AddLayer, ToolbarItem::AddAdjustment, ToolbarItem::AddGroup,
+        ToolbarItem::AddMask, ToolbarItem::Duplicate, ToolbarItem::Merge, ToolbarItem::Separator,
+        ToolbarItem::Delete };
+}
+
+QString LayersPanel::toolbarItemKey(ToolbarItem item)
+{
+    switch (item) {
+    case ToolbarItem::AddLayer:
+        return QStringLiteral("add");
+    case ToolbarItem::AddAdjustment:
+        return QStringLiteral("adjustment");
+    case ToolbarItem::AddGroup:
+        return QStringLiteral("group");
+    case ToolbarItem::AddMask:
+        return QStringLiteral("mask");
+    case ToolbarItem::Duplicate:
+        return QStringLiteral("duplicate");
+    case ToolbarItem::Merge:
+        return QStringLiteral("merge");
+    case ToolbarItem::Separator:
+        return QStringLiteral("separator");
+    case ToolbarItem::Delete:
+        return QStringLiteral("delete");
+    }
+    return {};
+}
+
+/// Restores a stored order, dropping unknown/duplicate entries and appending any
+/// item the stored order never mentioned (so a newly added button still shows up).
+QList<LayersPanel::ToolbarItem> LayersPanel::normalizedToolbarOrder(const QJsonArray& values)
+{
+    const QList<ToolbarItem> defaults = defaultToolbarOrder();
+    QList<ToolbarItem> result;
+    for (const QJsonValue& value : values) {
+        const QString key = value.toString();
+        for (ToolbarItem item : defaults) {
+            if (toolbarItemKey(item) == key && !result.contains(item)) {
+                result.append(item);
+                break;
+            }
+        }
+    }
+    for (ToolbarItem item : defaults) {
+        if (!result.contains(item)) {
+            result.append(item);
+        }
+    }
+    return result;
+}
+
+QList<LayersPanel::ToolbarItem> LayersPanel::configurableToolbarItems()
+{
+    QList<ToolbarItem> items;
+    for (ToolbarItem item : defaultToolbarOrder()) {
+        if (item != ToolbarItem::Separator) {
+            items.append(item);
+        }
+    }
+    return items;
+}
+
+QString LayersPanel::toolbarItemDisplayName(ToolbarItem item)
+{
+    // Same strings the buttons carry as tooltips, so both share one translation.
+    switch (item) {
+    case ToolbarItem::AddLayer:
+        return tr("Add Layer");
+    case ToolbarItem::AddAdjustment:
+        return tr("Add Adjustment Layer");
+    case ToolbarItem::AddGroup:
+        return tr("Add Group");
+    case ToolbarItem::AddMask:
+        return tr("Add Mask");
+    case ToolbarItem::Duplicate:
+        return tr("Duplicate Layer");
+    case ToolbarItem::Merge:
+        return tr("Merge Layers");
+    case ToolbarItem::Separator:
+        return {};
+    case ToolbarItem::Delete:
+        return tr("Delete Layer");
+    }
+    return {};
+}
+
+ruwa::ui::core::IconProvider::StandardIcon LayersPanel::toolbarItemIconType(ToolbarItem item)
+{
+    using StandardIcon = ruwa::ui::core::IconProvider::StandardIcon;
+    switch (item) {
+    case ToolbarItem::AddLayer:
+        return StandardIcon::Edit;
+    case ToolbarItem::AddAdjustment:
+        return StandardIcon::AdjustmentLayer;
+    case ToolbarItem::AddGroup:
+        return StandardIcon::Folder;
+    case ToolbarItem::AddMask:
+        return StandardIcon::LayerMask;
+    case ToolbarItem::Duplicate:
+        return StandardIcon::Duplicate;
+    case ToolbarItem::Merge:
+        return StandardIcon::ArrowDown;
+    case ToolbarItem::Separator:
+        return StandardIcon::Dots;
+    case ToolbarItem::Delete:
+        return StandardIcon::Trash;
+    }
+    return StandardIcon::Edit;
+}
+
+bool LayersPanel::isToolbarItemVisible(ToolbarItem item) const
+{
+    return !m_hiddenToolbarItems.contains(item);
+}
+
+void LayersPanel::setToolbarItemVisible(ToolbarItem item, bool visible)
+{
+    // The divider is chrome, not a configurable button.
+    if (item == ToolbarItem::Separator || isToolbarItemVisible(item) == visible) {
+        return;
+    }
+
+    if (visible) {
+        m_hiddenToolbarItems.removeOne(item);
+    } else {
+        m_hiddenToolbarItems.append(item);
+    }
+
+    applyToolbarOrder(true);
+    emit panelStateChanged();
+}
+
+/// Restores the hidden set, dropping unknown keys and keeping the canonical order
+/// so the stored array stays stable across sessions.
+QList<LayersPanel::ToolbarItem> LayersPanel::normalizedHiddenToolbarItems(const QJsonArray& values)
+{
+    QList<ToolbarItem> requested;
+    for (const QJsonValue& value : values) {
+        const QString key = value.toString();
+        for (ToolbarItem item : configurableToolbarItems()) {
+            if (toolbarItemKey(item) == key && !requested.contains(item)) {
+                requested.append(item);
+                break;
+            }
+        }
+    }
+
+    QList<ToolbarItem> result;
+    for (ToolbarItem item : configurableToolbarItems()) {
+        if (requested.contains(item)) {
+            result.append(item);
+        }
+    }
+    return result;
+}
+
+QWidget* LayersPanel::toolbarItemWidget(ToolbarItem item) const
+{
+    switch (item) {
+    case ToolbarItem::AddLayer:
+        return m_btnAdd;
+    case ToolbarItem::AddAdjustment:
+        return m_btnAdjustment;
+    case ToolbarItem::AddGroup:
+        return m_btnGroup;
+    case ToolbarItem::AddMask:
+        return m_btnMask;
+    case ToolbarItem::Duplicate:
+        return m_btnDuplicate;
+    case ToolbarItem::Merge:
+        return m_btnMergeDown;
+    case ToolbarItem::Separator:
+        return m_toolbarSeparator;
+    case ToolbarItem::Delete:
+        return m_btnDelete;
+    }
+    return nullptr;
+}
+
+void LayersPanel::applyToolbarOrder(bool animate)
+{
+    if (!m_toolbarFlow) {
+        return;
+    }
+
+    // visibleOrder tracks buttons only: it drives the fade animations, and the
+    // divider's visibility belongs to the flow, not to a cross-fade.
+    QList<ToolbarItem> visibleOrder;
+    QList<QWidget*> flowItems;
+    visibleOrder.reserve(m_toolbarOrder.size());
+    flowItems.reserve(m_toolbarOrder.size());
+    for (int index = 0; index < m_toolbarOrder.size(); ++index) {
+        const ToolbarItem item = m_toolbarOrder[index];
+        QWidget* itemWidget = toolbarItemWidget(item);
+        if (!itemWidget || !isToolbarItemVisible(item)) {
+            continue;
+        }
+        if (item == ToolbarItem::Separator) {
+            // A divider with nothing left to separate would dangle at the end of
+            // the block (the flow only guards the row-edge case).
+            bool hasFollower = false;
+            for (int next = index + 1; next < m_toolbarOrder.size(); ++next) {
+                if (isToolbarItemVisible(m_toolbarOrder[next])
+                    && toolbarItemWidget(m_toolbarOrder[next])) {
+                    hasFollower = true;
+                    break;
+                }
+            }
+            if (!hasFollower || flowItems.isEmpty()) {
+                itemWidget->hide();
+                continue;
+            }
+            flowItems.append(itemWidget);
+            continue;
+        }
+        visibleOrder.append(item);
+        flowItems.append(itemWidget);
+    }
+
+    const bool shouldAnimate
+        = animate && ruwa::ui::core::WidgetStyleManager::instance().animationsEnabled();
+    // Pinned to the first row (always on top), never reorderable.
+    const QList<QWidget*> pinnedItems { m_btnAlphaLock, m_btnLock };
+
+    if (!shouldAnimate) {
+        for (auto it = m_toolbarVisibilityAnimations.begin();
+            it != m_toolbarVisibilityAnimations.end(); ++it) {
+            if (it.value()) {
+                it.value()->stop();
+                it.value()->deleteLater();
+            }
+        }
+        m_toolbarVisibilityAnimations.clear();
+        m_toolbarFlow->setItems(flowItems, pinnedItems, false);
+        for (ToolbarItem item : defaultToolbarOrder()) {
+            QWidget* itemWidget = toolbarItemWidget(item);
+            // The flow owns the divider's visibility (it drops it at row edges),
+            // so forcing it back on here would undo the relayout above.
+            if (!itemWidget || item == ToolbarItem::Separator) {
+                continue;
+            }
+            if (itemWidget != m_toolbarDraggedWidget) {
+                itemWidget->setGraphicsEffect(nullptr);
+            }
+            itemWidget->setVisible(visibleOrder.contains(item));
+        }
+        m_appliedToolbarOrder = visibleOrder;
+        return;
+    }
+
+    for (ToolbarItem item : std::as_const(m_appliedToolbarOrder)) {
+        if (!visibleOrder.contains(item)) {
+            animateToolbarItemVisibility(item, false);
+        }
+    }
+    for (ToolbarItem item : std::as_const(visibleOrder)) {
+        if (!m_appliedToolbarOrder.contains(item)) {
+            animateToolbarItemVisibility(item, true);
+        }
+    }
+
+    m_toolbarFlow->setItems(flowItems, pinnedItems, true);
+    m_appliedToolbarOrder = visibleOrder;
+}
+
+void LayersPanel::cancelToolbarItemVisibilityAnimation(ToolbarItem item)
+{
+    const auto it = m_toolbarVisibilityAnimations.find(item);
+    if (it == m_toolbarVisibilityAnimations.end()) {
+        return;
+    }
+    if (it.value()) {
+        it.value()->stop();
+        it.value()->deleteLater();
+    }
+    m_toolbarVisibilityAnimations.erase(it);
+}
+
+/// Cross-fades a toolbar button in or out; the flow slides the neighbours in the
+/// same frame, so hiding a button never snaps the row.
+void LayersPanel::animateToolbarItemVisibility(ToolbarItem item, bool visible)
+{
+    QWidget* itemWidget = toolbarItemWidget(item);
+    if (!itemWidget) {
+        return;
+    }
+
+    qreal startOpacity = visible ? 0.0 : 1.0;
+    if (auto* currentEffect = qobject_cast<QGraphicsOpacityEffect*>(itemWidget->graphicsEffect())) {
+        startOpacity = currentEffect->opacity();
+    }
+    cancelToolbarItemVisibilityAnimation(item);
+    if (itemWidget != m_toolbarDraggedWidget) {
+        itemWidget->setGraphicsEffect(nullptr);
+    }
+
+    auto* opacityEffect = new QGraphicsOpacityEffect(itemWidget);
+    opacityEffect->setOpacity(startOpacity);
+    itemWidget->setGraphicsEffect(opacityEffect);
+    itemWidget->show();
+
+    auto* animation = new QVariantAnimation(itemWidget);
+    animation->setDuration(160);
+    animation->setEasingCurve(visible ? QEasingCurve::OutCubic : QEasingCurve::InCubic);
+    animation->setStartValue(startOpacity);
+    animation->setEndValue(visible ? 1.0 : 0.0);
+    m_toolbarVisibilityAnimations.insert(item, animation);
+
+    const QPointer<QWidget> widgetGuard(itemWidget);
+    const QPointer<QGraphicsOpacityEffect> effectGuard(opacityEffect);
+    connect(animation, &QVariantAnimation::valueChanged, this,
+        [widgetGuard, effectGuard](const QVariant& value) {
+            if (widgetGuard && effectGuard && widgetGuard->graphicsEffect() == effectGuard) {
+                effectGuard->setOpacity(value.toReal());
+            }
+        });
+    connect(animation, &QVariantAnimation::finished, this,
+        [this, item, visible, widgetGuard, effectGuard, animation]() {
+            if (m_toolbarVisibilityAnimations.value(item).data() != animation) {
+                return;
+            }
+            m_toolbarVisibilityAnimations.remove(item);
+            if (widgetGuard && effectGuard && widgetGuard->graphicsEffect() == effectGuard) {
+                widgetGuard->setGraphicsEffect(nullptr);
+                widgetGuard->setVisible(visible);
+            }
+            animation->deleteLater();
+        });
+    animation->start();
+}
+
+QJsonObject LayersPanel::savePanelState() const
+{
+    QJsonArray order;
+    for (ToolbarItem item : m_toolbarOrder) {
+        order.append(toolbarItemKey(item));
+    }
+    QJsonArray hidden;
+    for (ToolbarItem item : m_hiddenToolbarItems) {
+        hidden.append(toolbarItemKey(item));
+    }
+
+    QJsonObject state;
+    state[QStringLiteral("toolbarOrder")] = order;
+    state[QStringLiteral("hiddenToolbarItems")] = hidden;
+    return state;
+}
+
+void LayersPanel::restorePanelState(const QJsonObject& state)
+{
+    const QList<ToolbarItem> restoredOrder = state.contains(QStringLiteral("toolbarOrder"))
+        ? normalizedToolbarOrder(state.value(QStringLiteral("toolbarOrder")).toArray())
+        : defaultToolbarOrder();
+    const QList<ToolbarItem> restoredHidden = state.contains(QStringLiteral("hiddenToolbarItems"))
+        ? normalizedHiddenToolbarItems(state.value(QStringLiteral("hiddenToolbarItems")).toArray())
+        : QList<ToolbarItem> {};
+    if (restoredOrder == m_toolbarOrder && restoredHidden == m_hiddenToolbarItems) {
+        return;
+    }
+
+    m_toolbarOrder = restoredOrder;
+    m_hiddenToolbarItems = restoredHidden;
+    applyToolbarOrder(false);
+}
+
+void LayersPanel::startToolbarDrag(ToolbarItem item, QWidget* itemWidget, const QPoint& globalPos)
+{
+    if (!itemWidget || !m_toolbarFlow || m_toolbarDragActive || m_toolbarDragSettling
+        || !m_toolbarOrder.contains(item)) {
+        return;
+    }
+
+    if (auto* button = dynamic_cast<LayerToolbarButton*>(itemWidget)) {
+        button->cancelPointerInteraction();
+    }
+
+    const QPixmap snapshot = itemWidget->grab();
+    m_toolbarDragActive = true;
+    m_toolbarDraggedItem = item;
+    m_toolbarDraggedWidget = itemWidget;
+    m_toolbarDragStartOrder = m_toolbarOrder;
+    m_toolbarDragOffset = itemWidget->mapToGlobal(QPoint(0, 0)) - globalPos;
+
+    auto* opacityEffect = new QGraphicsOpacityEffect(itemWidget);
+    opacityEffect->setOpacity(0.25);
+    itemWidget->setGraphicsEffect(opacityEffect);
+
+    QWidget* topLevel = m_toolbarFlow->window();
+    m_toolbarDragGhost = new ruwa::ui::widgets::DragGhostWidget(topLevel);
+    m_toolbarDragGhost->setSnapshot(snapshot);
+    const QPoint sourcePosition = topLevel->mapFromGlobal(itemWidget->mapToGlobal(QPoint(0, 0)))
+        - m_toolbarDragGhost->contentTopLeft();
+    m_toolbarDragGhost->startFollowing(sourcePosition);
+    m_toolbarDragGhost->captureBackdrop(topLevel);
+    m_toolbarDragGhost->show();
+    m_toolbarDragGhost->raise();
+    m_toolbarDragGhost->setFollowTarget(toolbarGhostTargetPosition(globalPos));
+
+    m_toolbarDragInsideContent
+        = m_toolbarFlow->rect().contains(m_toolbarFlow->mapFromGlobal(globalPos));
+    qApp->installEventFilter(this);
+    if (!m_toolbarDragCursorOverride) {
+        QApplication::setOverrideCursor(Qt::ClosedHandCursor);
+        m_toolbarDragCursorOverride = true;
+    }
+}
+
+void LayersPanel::updateToolbarDrag(const QPoint& globalPos)
+{
+    if (!m_toolbarDragActive || !m_toolbarDragGhost || !m_toolbarFlow) {
+        return;
+    }
+    m_toolbarDragGhost->setFollowTarget(toolbarGhostTargetPosition(globalPos));
+    const QPoint contentPos = m_toolbarFlow->mapFromGlobal(globalPos);
+    m_toolbarDragInsideContent = m_toolbarFlow->rect().contains(contentPos);
+    if (m_toolbarDragInsideContent) {
+        moveDraggedToolbarItemTo(toolbarInsertIndexAt(contentPos));
+    }
+}
+
+void LayersPanel::finishToolbarDrag(bool accepted, const QPoint& globalPos)
+{
+    if (!m_toolbarDragActive) {
+        return;
+    }
+    updateToolbarDrag(globalPos);
+    accepted = accepted && m_toolbarDragInsideContent;
+
+    qApp->removeEventFilter(this);
+    if (m_toolbarDragCursorOverride) {
+        QApplication::restoreOverrideCursor();
+        m_toolbarDragCursorOverride = false;
+    }
+    m_toolbarDragActive = false;
+    m_toolbarDragSettling = true;
+
+    const bool orderChanged = accepted && m_toolbarOrder != m_toolbarDragStartOrder;
+    if (!accepted) {
+        m_toolbarOrder = m_toolbarDragStartOrder;
+        applyToolbarOrder(true);
+    } else if (orderChanged) {
+        emit panelStateChanged();
+    }
+
+    QPoint targetPosition;
+    if (QWidget* draggedWidget = toolbarItemWidget(m_toolbarDraggedItem)) {
+        const QRect targetRect = m_toolbarFlow->itemTargetGeometry(draggedWidget);
+        QWidget* topLevel = m_toolbarFlow->window();
+        targetPosition = topLevel->mapFromGlobal(m_toolbarFlow->mapToGlobal(targetRect.topLeft()));
+        if (m_toolbarDragGhost) {
+            targetPosition -= m_toolbarDragGhost->contentTopLeft();
+        }
+    }
+
+    QPointer<LayersPanel> guard(this);
+    auto finish = [guard]() {
+        if (!guard) {
+            return;
+        }
+        if (guard->m_toolbarDraggedWidget) {
+            guard->m_toolbarDraggedWidget->setGraphicsEffect(nullptr);
+            if (auto* button = dynamic_cast<LayerToolbarButton*>(guard->m_toolbarDraggedWidget)) {
+                button->cancelPointerInteraction();
+            }
+        }
+        if (guard->m_toolbarDragGhost) {
+            guard->m_toolbarDragGhost->deleteLater();
+            guard->m_toolbarDragGhost = nullptr;
+        }
+        guard->m_toolbarDraggedWidget = nullptr;
+        guard->m_toolbarDragStartOrder.clear();
+        guard->m_toolbarDragSettling = false;
+        guard->m_toolbarDragInsideContent = false;
+        guard->cancelToolbarDragCandidate();
+    };
+
+    if (!m_toolbarDragGhost) {
+        finish();
+        return;
+    }
+    m_toolbarDragGhost->animateTo(targetPosition,
+        accepted ? ruwa::ui::widgets::DragGhostWidget::Transition::Settle
+                 : ruwa::ui::widgets::DragGhostWidget::Transition::Return,
+        std::move(finish));
+}
+
+QPoint LayersPanel::toolbarGhostTargetPosition(const QPoint& globalPos) const
+{
+    if (!m_toolbarDragGhost || !m_toolbarFlow) {
+        return {};
+    }
+    QWidget* topLevel = m_toolbarFlow->window();
+    return topLevel->mapFromGlobal(globalPos + m_toolbarDragOffset)
+        - m_toolbarDragGhost->contentTopLeft();
+}
+
+/*
+ * Like the tools panel, the insertion resolver reads the flow's final target
+ * rectangles rather than the transient on-screen ones, so a fast pointer stays
+ * stable while the neighbours are still gliding into their new slots.
+ */
+int LayersPanel::toolbarInsertIndexAt(const QPoint& contentPos) const
+{
+    struct Placement {
+        int stationaryIndex = 0;
+        QRect rect;
+    };
+
+    QList<Placement> placements;
+    int stationaryIndex = 0;
+    for (ToolbarItem item : m_toolbarOrder) {
+        if (item == m_toolbarDraggedItem) {
+            continue;
+        }
+        QWidget* itemWidget = toolbarItemWidget(item);
+        if (!itemWidget) {
+            continue;
+        }
+        // A separator the flow dropped at a row edge is hidden and has no slot.
+        const QRect rect = m_toolbarFlow->itemTargetGeometry(itemWidget);
+        if (itemWidget->isVisible() && rect.isValid()) {
+            placements.append({ stationaryIndex, rect });
+        }
+        ++stationaryIndex;
+    }
+
+    if (placements.isEmpty()) {
+        return 0;
+    }
+    if (contentPos.y() < placements.front().rect.top()) {
+        return 0;
+    }
+    if (contentPos.y() > placements.back().rect.bottom()) {
+        return static_cast<int>(placements.size());
+    }
+
+    int closestRowCenter = placements.front().rect.center().y();
+    int closestDistance = qAbs(contentPos.y() - closestRowCenter);
+    for (const Placement& placement : placements) {
+        const int center = placement.rect.center().y();
+        const int distance = qAbs(contentPos.y() - center);
+        if (distance < closestDistance) {
+            closestDistance = distance;
+            closestRowCenter = center;
+        }
+    }
+
+    int indexAfterRow = 0;
+    for (const Placement& placement : placements) {
+        if (placement.rect.center().y() != closestRowCenter) {
+            continue;
+        }
+        if (contentPos.x() < placement.rect.center().x()) {
+            return placement.stationaryIndex;
+        }
+        indexAfterRow = placement.stationaryIndex + 1;
+    }
+    return indexAfterRow;
+}
+
+void LayersPanel::moveDraggedToolbarItemTo(int insertIndex)
+{
+    QList<ToolbarItem> reordered = m_toolbarOrder;
+    if (!reordered.removeOne(m_toolbarDraggedItem)) {
+        return;
+    }
+    reordered.insert(
+        qBound(0, insertIndex, static_cast<int>(reordered.size())), m_toolbarDraggedItem);
+    if (reordered == m_toolbarOrder) {
+        return;
+    }
+    m_toolbarOrder = reordered;
+    applyToolbarOrder(true);
+}
+
+void LayersPanel::cancelToolbarDragCandidate()
+{
+    m_toolbarDragCandidate = nullptr;
+    m_toolbarDragPressPosition = {};
+}
+
+bool LayersPanel::eventFilter(QObject* watched, QEvent* event)
+{
+    if (m_toolbarDragActive && m_toolbarDragGhost) {
+        switch (event->type()) {
+        case QEvent::MouseMove: {
+            auto* mouseEvent = static_cast<QMouseEvent*>(event);
+            updateToolbarDrag(mouseEvent->globalPosition().toPoint());
+            return true;
+        }
+        case QEvent::MouseButtonRelease: {
+            auto* mouseEvent = static_cast<QMouseEvent*>(event);
+            if (mouseEvent->button() == Qt::LeftButton) {
+                finishToolbarDrag(true, mouseEvent->globalPosition().toPoint());
+                return true;
+            }
+            break;
+        }
+        case QEvent::KeyPress: {
+            auto* keyEvent = static_cast<QKeyEvent*>(event);
+            if (keyEvent->key() == Qt::Key_Escape) {
+                finishToolbarDrag(false, QCursor::pos());
+                return true;
+            }
+            break;
+        }
+        case QEvent::ApplicationDeactivate:
+            finishToolbarDrag(false, QCursor::pos());
+            break;
+        default:
+            break;
+        }
+    }
+
+    // Candidate tracking is only meaningful before a drag starts; while one runs the
+    // block above already consumes the pointer stream (and this filter sits on qApp,
+    // so the cast would otherwise run for every event in the application).
+    LayerToolbarButton* button
+        = m_toolbarDragActive ? nullptr : dynamic_cast<LayerToolbarButton*>(watched);
+    if (button) {
+        switch (event->type()) {
+        case QEvent::MouseButtonPress: {
+            auto* mouseEvent = static_cast<QMouseEvent*>(event);
+            if (mouseEvent->button() == Qt::LeftButton && !m_toolbarDragSettling) {
+                m_toolbarDragCandidate = button;
+                m_toolbarDragPressPosition = mouseEvent->position().toPoint();
+            }
+            break;
+        }
+        case QEvent::MouseMove: {
+            auto* mouseEvent = static_cast<QMouseEvent*>(event);
+            if (m_toolbarDragCandidate == button && (mouseEvent->buttons() & Qt::LeftButton)
+                && (mouseEvent->position().toPoint() - m_toolbarDragPressPosition).manhattanLength()
+                    >= QApplication::startDragDistance()) {
+                for (ToolbarItem item : std::as_const(m_toolbarOrder)) {
+                    if (toolbarItemWidget(item) == button) {
+                        startToolbarDrag(item, button, mouseEvent->globalPosition().toPoint());
+                        return true;
+                    }
+                }
+            }
+            break;
+        }
+        case QEvent::MouseButtonRelease:
+        case QEvent::Hide:
+            cancelToolbarDragCandidate();
+            break;
+        default:
+            break;
+        }
+    }
+
+    return DockPanel::eventFilter(watched, event);
 }
 
 void LayersPanel::populateBlendModeCombo()
@@ -1846,6 +2551,27 @@ void LayersPanel::preparePresentationSnapshot()
 {
     if (m_listView) {
         m_listView->preparePresentationSnapshot();
+    }
+
+    // A snapshot must not capture a half-faded toolbar button.
+    for (auto it = m_toolbarVisibilityAnimations.begin();
+        it != m_toolbarVisibilityAnimations.end(); ++it) {
+        if (it.value()) {
+            it.value()->stop();
+            it.value()->deleteLater();
+        }
+    }
+    m_toolbarVisibilityAnimations.clear();
+
+    for (ToolbarItem item : defaultToolbarOrder()) {
+        QWidget* itemWidget = toolbarItemWidget(item);
+        if (!itemWidget || item == ToolbarItem::Separator) {
+            continue;
+        }
+        if (itemWidget != m_toolbarDraggedWidget) {
+            itemWidget->setGraphicsEffect(nullptr);
+        }
+        itemWidget->setVisible(m_appliedToolbarOrder.contains(item));
     }
 }
 

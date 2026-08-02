@@ -4,6 +4,7 @@
 #define RUWA_UI_WIDGETS_CONTEXTMENU_DOCKPANELCONTEXTMENU_H
 
 #include "shell/context-menu/BaseContextMenu.h"
+#include "features/layers/ui/LayersPanel.h"
 #include "shared/resources/IconProvider.h"
 #include "shared/types/ToolId.h"
 
@@ -18,6 +19,7 @@ class DockPanel;
 
 namespace ruwa::ui::workspace {
 class ToolsPanel;
+class LayersPanel;
 }
 
 namespace ruwa::ui::widgets {
@@ -57,21 +59,32 @@ private:
         ToggleSwitch* toggle = nullptr;
     };
 
+    struct LayerButtonToggleDesc {
+        ruwa::ui::workspace::LayersPanel::ToolbarItem item
+            = ruwa::ui::workspace::LayersPanel::ToolbarItem::AddLayer;
+        ToggleSwitch* toggle = nullptr;
+    };
+
 private:
     QPointer<ruwa::ui::docking::DockPanel> m_panel;
     QPointer<ruwa::ui::workspace::ToolsPanel> m_toolsPanel;
+    QPointer<ruwa::ui::workspace::LayersPanel> m_layersPanel;
     ToggleSwitch* m_movableToggle = nullptr;
     ToggleSwitch* m_resizableToggle = nullptr;
     ToggleSwitch* m_dockableToggle = nullptr;
 
     QLabel* m_sectionLabel = nullptr;
     QLabel* m_toolsSectionLabel = nullptr;
+    QLabel* m_layerButtonsSectionLabel = nullptr;
     QVector<BehaviorToggleRowDesc> m_toggleRows;
     QVector<ToolToggleDesc> m_toolToggles;
+    QVector<LayerButtonToggleDesc> m_layerButtonToggles;
     QWidget* m_toolsSectionHost = nullptr;
+    QWidget* m_layerButtonsSectionHost = nullptr;
     HorizontalSeparator* m_sepBeforeFloat = nullptr;
     HorizontalSeparator* m_sepBeforeClose = nullptr;
     HorizontalSeparator* m_sepBeforeTools = nullptr;
+    HorizontalSeparator* m_sepBeforeLayerButtons = nullptr;
     BaseStyledWidget* m_floatAction = nullptr;
     BaseStyledWidget* m_closeAction = nullptr;
 };
