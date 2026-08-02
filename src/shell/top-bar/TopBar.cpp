@@ -30,6 +30,9 @@
 #include <QString>
 #include <QWindow>
 #include <QResizeEvent>
+
+#include <utility>
+
 namespace ruwa::ui::widgets {
 
 namespace {
@@ -47,6 +50,17 @@ constexpr int kTopBarControlHoverBgInsetHEdgeBase = 6;
 constexpr int kTopBarControlHoverBgInsetHMidBase = 5;
 constexpr int kTopBarLogoLeftPaddingBase = 4;
 constexpr qreal kMessagePopupGlowContourPhase = 0.68;
+
+MenuItem commandMenuItem(QString text, QString commandId)
+{
+    MenuItem item;
+    item.text = std::move(text);
+    item.commandId = std::move(commandId);
+    item.action = [commandId = item.commandId]() {
+        ruwa::core::CommandExecutor::instance().execute(commandId, {});
+    };
+    return item;
+}
 
 QWidget* deepestVisibleChildAt(QWidget* parent, const QPoint& posInParent)
 {
@@ -679,56 +693,41 @@ void TopBar::initOverlay(QWidget* centralWidget)
 void TopBar::setupFileMenu()
 {
     m_fileItems.clear();
-    m_fileItems.append({ tr("New..."), "Ctrl+N", QIcon(), true, false,
-        []() { ruwa::core::CommandExecutor::instance().execute("file.new", {}); } });
-    m_fileItems.append({ tr("Open..."), "Ctrl+O", QIcon(), true, false,
-        []() { ruwa::core::CommandExecutor::instance().execute("file.open", {}); } });
+    m_fileItems.append(commandMenuItem(tr("New..."), QStringLiteral("file.new")));
+    m_fileItems.append(commandMenuItem(tr("Open..."), QStringLiteral("file.open")));
     m_fileItems.append(MenuItem::Separator());
-    m_fileItems.append({ tr("Save"), "Ctrl+S", QIcon(), true, false,
-        []() { ruwa::core::CommandExecutor::instance().execute("file.save", {}); } });
-    m_fileItems.append({ tr("Save As..."), "Ctrl+Shift+S", QIcon(), true, false,
-        []() { ruwa::core::CommandExecutor::instance().execute("file.saveAs", {}); } });
-    m_fileItems.append({ tr("Export..."), "Ctrl+Alt+Shift+S", QIcon(), true, false,
-        []() { ruwa::core::CommandExecutor::instance().execute("file.export", {}); } });
-    m_fileItems.append({ tr("Fast Export as PNG"), "Ctrl+Alt+Shift+P", QIcon(), true, false,
-        []() { ruwa::core::CommandExecutor::instance().execute("file.fastExportPng", {}); } });
+    m_fileItems.append(commandMenuItem(tr("Save"), QStringLiteral("file.save")));
+    m_fileItems.append(commandMenuItem(tr("Save As..."), QStringLiteral("file.saveAs")));
+    m_fileItems.append(commandMenuItem(tr("Export..."), QStringLiteral("file.export")));
+    m_fileItems.append(commandMenuItem(
+        tr("Fast Export as PNG"), QStringLiteral("file.fastExportPng")));
     m_fileItems.append({ tr("Import..."), QString(), QIcon(), true, false,
         [this]() { emit fileImportImagesRequested(); } });
     m_fileItems.append(MenuItem::Separator());
-    m_fileItems.append({ tr("Close"), "Ctrl+W", QIcon(), true, false,
-        []() { ruwa::core::CommandExecutor::instance().execute("tab.close", {}); } });
-    m_fileItems.append({ tr("Exit"), "Ctrl+Q", QIcon(), true, false,
-        []() { ruwa::core::CommandExecutor::instance().execute("file.exit", {}); } });
+    m_fileItems.append(commandMenuItem(tr("Close"), QStringLiteral("tab.close")));
+    m_fileItems.append(commandMenuItem(tr("Exit"), QStringLiteral("file.exit")));
 }
 
 void TopBar::setupEditMenu()
 {
     m_editItems.clear();
-    m_editItems.append({ tr("Undo"), "Ctrl+Z", QIcon(), true, false,
-        []() { ruwa::core::CommandExecutor::instance().execute("edit.undo", {}); } });
-    m_editItems.append({ tr("Redo"), "Ctrl+Shift+Z", QIcon(), true, false,
-        []() { ruwa::core::CommandExecutor::instance().execute("edit.redo", {}); } });
+    m_editItems.append(commandMenuItem(tr("Undo"), QStringLiteral("edit.undo")));
+    m_editItems.append(commandMenuItem(tr("Redo"), QStringLiteral("edit.redo")));
     m_editItems.append(MenuItem::Separator());
-    m_editItems.append({ tr("Cut"), "Ctrl+X", QIcon(), true, false,
-        []() { ruwa::core::CommandExecutor::instance().execute("edit.cut", {}); } });
-    m_editItems.append({ tr("Copy"), "Ctrl+C", QIcon(), true, false,
-        []() { ruwa::core::CommandExecutor::instance().execute("edit.copy", {}); } });
-    m_editItems.append({ tr("Paste"), "Ctrl+V", QIcon(), true, false,
-        []() { ruwa::core::CommandExecutor::instance().execute("edit.paste", {}); } });
+    m_editItems.append(commandMenuItem(tr("Cut"), QStringLiteral("edit.cut")));
+    m_editItems.append(commandMenuItem(tr("Copy"), QStringLiteral("edit.copy")));
+    m_editItems.append(commandMenuItem(tr("Paste"), QStringLiteral("edit.paste")));
     m_editItems.append(MenuItem::Separator());
-    m_editItems.append({ tr("Preferences..."), "Ctrl+K", QIcon(), true, false,
-        []() { ruwa::core::CommandExecutor::instance().execute("nav.settings", {}); } });
+    m_editItems.append(commandMenuItem(tr("Preferences..."), QStringLiteral("nav.settings")));
 }
 
 void TopBar::setupViewMenu()
 {
     m_viewItems.clear();
-    m_viewItems.append({ tr("Zoom In"), "Ctrl++", QIcon(), true, false,
-        []() { ruwa::core::CommandExecutor::instance().execute("view.zoomIn", {}); } });
-    m_viewItems.append({ tr("Zoom Out"), "Ctrl+-", QIcon(), true, false,
-        []() { ruwa::core::CommandExecutor::instance().execute("view.zoomOut", {}); } });
-    m_viewItems.append({ tr("Fit to Window"), "Ctrl+0", QIcon(), true, false,
-        []() { ruwa::core::CommandExecutor::instance().execute("view.zoomToFit", {}); } });
+    m_viewItems.append(commandMenuItem(tr("Zoom In"), QStringLiteral("view.zoomIn")));
+    m_viewItems.append(commandMenuItem(tr("Zoom Out"), QStringLiteral("view.zoomOut")));
+    m_viewItems.append(
+        commandMenuItem(tr("Fit to Window"), QStringLiteral("view.zoomToFit")));
     m_viewItems.append(MenuItem::Separator());
     // Panels item is added in viewItemsWithEnabledState() to get fresh toggle state
 }
@@ -862,11 +861,14 @@ MenuItem TopBar::buildCanvasWidgetsMenuItem()
 void TopBar::setupHelpMenu()
 {
     m_helpItems.clear();
-    m_helpItems.append({ tr("Documentation"), "F1", QIcon(), true, false,
+    m_helpItems.append({ tr("Documentation"), QString(), QIcon(), true, false,
         [this]() { emit helpDocumentationRequested(); } });
     m_helpItems.append(MenuItem::Separator());
-    m_helpItems.append(
-        { tr("About Ruwa"), "", QIcon(), true, false, [this]() { emit helpAboutRequested(); } });
+    MenuItem aboutItem;
+    aboutItem.text = tr("About Ruwa");
+    aboutItem.commandId = QStringLiteral("nav.about");
+    aboutItem.action = [this]() { emit helpAboutRequested(); };
+    m_helpItems.append(aboutItem);
 }
 
 MenuButton* TopBar::menuButtonAt(const QPoint& globalPos) const

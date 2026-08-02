@@ -3,6 +3,7 @@
 // MenuPopup.cpp
 #include "MenuPopup.h"
 #include "OverlayContainer.h"
+#include "commands/ShortcutManager.h"
 #include "features/theme/manager/ThemeManager.h"
 #include "features/theme/manager/ThemeColors.h"
 #include "shared/resources/IconProvider.h"
@@ -64,19 +65,41 @@ MenuItemWidget::MenuItemWidget(const MenuItem& item, QWidget* parent)
     }
 
     setMouseTracking(true);
+
+    if (!item.commandId.isEmpty()) {
+        connect(&ruwa::core::ShortcutManager::instance(),
+            &ruwa::core::ShortcutManager::shortcutChanged, this,
+            [this](const QString& commandId, const QKeySequence&) {
+                if (commandId == m_item.commandId) {
+                    updateGeometry();
+                    update();
+                }
+            });
+    }
 }
 
 namespace {
+QString menuItemShortcutText(const MenuItem& item)
+{
+    if (!item.commandId.isEmpty()) {
+        return ruwa::core::ShortcutManager::instance()
+            .shortcutFor(item.commandId)
+            .toString(QKeySequence::NativeText);
+    }
+    return item.shortcut;
+}
+
 int menuItemReservedRightPx(const MenuItem& item, const QFont& baseFont)
 {
     int reservedRight = 16;
     if (item.hasSubmenu()) {
         reservedRight = qMax(reservedRight, 28);
     }
-    if (!item.shortcut.isEmpty()) {
+    const QString shortcutText = menuItemShortcutText(item);
+    if (!shortcutText.isEmpty()) {
         QFont shortcutFont = baseFont;
         shortcutFont.setPointSize(8);
-        const int sw = QFontMetrics(shortcutFont).horizontalAdvance(item.shortcut);
+        const int sw = QFontMetrics(shortcutFont).horizontalAdvance(shortcutText);
         reservedRight = qMax(reservedRight, sw + 24);
     }
     return reservedRight;
@@ -196,7 +219,8 @@ void MenuItemWidget::paintEvent(QPaintEvent* event)
         painter.drawPolygon(arrow);
     }
 
-    if (!m_item.shortcut.isEmpty()) {
+    const QString shortcutText = menuItemShortcutText(m_item);
+    if (!shortcutText.isEmpty()) {
         QColor shortcutColor = m_item.enabled ? colors.textMuted : colors.textDisabled();
         painter.setPen(shortcutColor);
 
@@ -206,7 +230,7 @@ void MenuItemWidget::paintEvent(QPaintEvent* event)
 
         const int shortcutBlockW = reservedRight - rightMargin;
         QRect shortcutRect(width() - reservedRight, 0, qMax(1, shortcutBlockW), height());
-        painter.drawText(shortcutRect, Qt::AlignRight | Qt::AlignVCenter, m_item.shortcut);
+        painter.drawText(shortcutRect, Qt::AlignRight | Qt::AlignVCenter, shortcutText);
     }
 }
 

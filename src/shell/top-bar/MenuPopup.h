@@ -33,6 +33,7 @@ struct MenuItem {
     bool isToggle = false;
     bool checked = false; // Initial/current state for toggles
     std::function<void(bool)> toggleAction; // Called with new state when toggled
+    QString commandId; // Resolves the current shortcut through ShortcutManager when set
 
     static MenuItem Separator()
     {

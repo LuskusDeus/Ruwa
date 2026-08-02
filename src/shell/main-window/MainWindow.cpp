@@ -35,6 +35,7 @@
 #include "features/settings/SettingsManager.h"
 #include "features/canvas/ui/CanvasPanelHelpers.h"
 #include <QCoreApplication>
+#include <QDesktopServices>
 #include <QApplication>
 #include <QEvent>
 #include <QFile>
@@ -638,6 +639,8 @@ void MainWindow::connectSignals()
     connect(m_topBar, &widgets::TopBar::fileImportImagesRequested, this,
         &MainWindow::handleImportImagesRequest);
     connect(m_topBar, &widgets::TopBar::helpAboutRequested, this, &MainWindow::onHelpAbout);
+    connect(m_topBar, &widgets::TopBar::helpDocumentationRequested, this,
+        []() { QDesktopServices::openUrl(QUrl(QStringLiteral("https://docs.accretion.pro/"))); });
 
     // Panels visibility (View → Panels) - forward to active WorkspaceTab
     connect(m_topBar, &widgets::TopBar::panelsToolsVisibilityChanged, this, [this](bool visible) {

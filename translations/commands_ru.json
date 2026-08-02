@@ -815,6 +815,17 @@
       "размазать"
     ]
   },
+  "tools.liquify": {
+    "title": "Пластика",
+    "category": "Инструменты",
+    "description": "Выбрать инструмент «Пластика»",
+    "aliases": [
+      "liquify",
+      "warp",
+      "пластика",
+      "деформация"
+    ]
+  },
   "tools.toggleBrushEraser": {
     "title": "Переключить кисть-ластик",
     "category": "Инструменты",

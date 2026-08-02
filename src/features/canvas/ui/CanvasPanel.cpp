@@ -145,6 +145,7 @@ constexpr std::array kToolCommandBindings {
     ToolCommandBinding { ToolId::Brush, "tools.brush" },
     ToolCommandBinding { ToolId::Blur, "tools.blur" },
     ToolCommandBinding { ToolId::Smudge, "tools.smudge" },
+    ToolCommandBinding { ToolId::Liquify, "tools.liquify" },
     ToolCommandBinding { ToolId::Eraser, "tools.eraser" },
     ToolCommandBinding { ToolId::Fill, "tools.fill" },
     ToolCommandBinding { ToolId::ClassicFill, "tools.classic-fill" },

@@ -50,6 +50,13 @@ public:
     void execute(const CommandContext& ctx, const QVariantMap& args = {}) override;
 };
 
+class ToolLiquifyCommand : public Command {
+public:
+    CommandInfo info() const override;
+    bool canExecute(const CommandContext& ctx) const override;
+    void execute(const CommandContext& ctx, const QVariantMap& args = {}) override;
+};
+
 class ToolTextCommand : public Command {
 public:
     CommandInfo info() const override;

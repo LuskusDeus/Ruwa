@@ -92,7 +92,7 @@ constexpr std::array kToolPresentations {
     ToolPresentation { ToolId::Smudge, IconProvider::StandardIcon::Smudge,
         QT_TRANSLATE_NOOP("ToolsPanel", "Smudge"), "tools.smudge" },
     ToolPresentation { ToolId::Liquify, IconProvider::StandardIcon::Liquify,
-        QT_TRANSLATE_NOOP("ToolsPanel", "Liquify"), "" },
+        QT_TRANSLATE_NOOP("ToolsPanel", "Liquify"), "tools.liquify" },
     ToolPresentation { ToolId::Text, IconProvider::StandardIcon::Text,
         QT_TRANSLATE_NOOP("ToolsPanel", "Text"), "tools.text" },
     ToolPresentation { ToolId::MagicWand, IconProvider::StandardIcon::MagicWand,

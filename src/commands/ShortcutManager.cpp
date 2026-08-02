@@ -68,16 +68,8 @@ void ShortcutManager::createShortcut(const QString& commandId, const QKeySequenc
     shortcut->setContext(Qt::ApplicationShortcut);
 
     connect(shortcut, &QShortcut::activated, this, [this, commandId]() {
-        const bool isUndoRedo
-            = (commandId == QLatin1String("edit.undo") || commandId == QLatin1String("edit.redo"));
-        QElapsedTimer dbgShortcutTimer;
-        if (isUndoRedo) {
-            dbgShortcutTimer.start();
-        }
         recordShortcutUsed(commandId);
-        if (isUndoRedo) { }
         CommandExecutor::instance().execute(commandId);
-        if (isUndoRedo) { }
     });
 
     m_shortcuts.insert(commandId, shortcut);
@@ -327,9 +319,23 @@ void ShortcutManager::loadFromSettings()
 
     const QStringList keys = settings.childKeys();
     for (const QString& key : keys) {
-        if (key == "LastUsed")
+        if (key == "LastUsed") {
             continue;
-        QKeySequence seq(settings.value(key).toString());
+        }
+
+        const QString storedShortcut = settings.value(key).toString();
+        // An existing key with an empty value is an explicit override: the user
+        // cleared the default shortcut and expects it to remain unassigned.
+        if (storedShortcut.isEmpty()) {
+            m_customShortcuts.insert(key, QKeySequence());
+            continue;
+        }
+
+        QKeySequence seq
+            = QKeySequence::fromString(storedShortcut, QKeySequence::PortableText);
+        if (seq.isEmpty()) {
+            seq = QKeySequence::fromString(storedShortcut, QKeySequence::NativeText);
+        }
         if (!seq.isEmpty()) {
             m_customShortcuts.insert(key, seq);
         }
@@ -363,7 +369,7 @@ void ShortcutManager::saveToSettings() const
     QHash<QString, QString> customSnapshot;
     customSnapshot.reserve(m_customShortcuts.size());
     for (auto it = m_customShortcuts.constBegin(); it != m_customShortcuts.constEnd(); ++it) {
-        customSnapshot.insert(it.key(), it.value().toString());
+        customSnapshot.insert(it.key(), it.value().toString(QKeySequence::PortableText));
     }
     const QStringList lastUsedSnapshot = m_lastUsedShortcuts;
 

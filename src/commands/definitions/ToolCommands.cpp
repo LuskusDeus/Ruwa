@@ -185,6 +185,32 @@ void ToolSmudgeCommand::execute(const CommandContext& ctx, const QVariantMap& ar
 }
 
 // ======================================================================================
+//   L I Q U I F Y
+// ======================================================================================
+
+CommandInfo ToolLiquifyCommand::info() const
+{
+    return CommandInfo { .id = "tools.liquify",
+        .title = "Liquify",
+        .category = "Tools",
+        .description = "Select the liquify tool",
+        .aliases = { "liquify", "warp" },
+        .defaultShortcut = QKeySequence(),
+        .icon = QIcon() };
+}
+
+bool ToolLiquifyCommand::canExecute(const CommandContext& ctx) const
+{
+    return canExecuteToolSwitchCommand(ctx);
+}
+
+void ToolLiquifyCommand::execute(const CommandContext& ctx, const QVariantMap& args)
+{
+    Q_UNUSED(args);
+    executeToolCommand(ctx, ruwa::ui::workspace::ToolId::Liquify);
+}
+
+// ======================================================================================
 //   T E X T
 // ======================================================================================
 
@@ -890,6 +916,7 @@ void registerToolCommands(CommandRegistry& registry)
     registry.registerCommand(std::make_unique<ToolBrushCommand>());
     registry.registerCommand(std::make_unique<ToolBlurCommand>());
     registry.registerCommand(std::make_unique<ToolSmudgeCommand>());
+    registry.registerCommand(std::make_unique<ToolLiquifyCommand>());
     registry.registerCommand(std::make_unique<ToolTextCommand>());
     registry.registerCommand(std::make_unique<ToolEraserCommand>());
     registry.registerCommand(std::make_unique<ToggleBrushEraserCommand>());
