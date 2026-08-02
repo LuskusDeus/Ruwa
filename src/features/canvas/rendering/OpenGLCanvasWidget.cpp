@@ -4547,6 +4547,14 @@ bool OpenGLCanvasWidget::doFillSelectionWithColor(const QColor& color)
     if (dirtyKeys.empty())
         return false;
 
+    // writeTilePixelF() dirties TileData, but existing tiles are not added to
+    // TileGrid::dirtyTiles() by that per-tile flag alone. Register every changed
+    // key with the grid so the renderer uploads pre-existing tiles too and
+    // whole-grid caches observe the new content version.
+    for (const TileKey& key : dirtyKeys) {
+        targetGrid->markDirty(key);
+    }
+
     targetGrid->pruneEmpty();
 
     for (const auto& key : dirtyKeys) {
