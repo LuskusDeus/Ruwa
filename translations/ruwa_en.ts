@@ -3993,7 +3993,7 @@ Ruwa uses the Qt framework (version %1), dynamically linked under the GNU Lesser
     <message>
         <location filename="../src/features/settings/SettingsContent.cpp" line="412"/>
         <location filename="../src/features/settings/SettingsContent.cpp" line="735"/>
-        <source>Keep raster and selection moves on whole-pixel coordinates</source>
+        <source>Keep free raster and selection moves on whole-pixel coordinates</source>
         <translation type="unfinished"></translation>
     </message>
     <message>

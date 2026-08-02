@@ -3962,8 +3962,8 @@ Ruwa использует фреймворк Qt (версия %1), динами�
     <message>
         <location filename="../src/features/settings/SettingsContent.cpp" line="412"/>
         <location filename="../src/features/settings/SettingsContent.cpp" line="735"/>
-        <source>Keep raster and selection moves on whole-pixel coordinates</source>
-        <translation>Удерживать перемещение растра и выделений на целых пикселях</translation>
+        <source>Keep free raster and selection moves on whole-pixel coordinates</source>
+        <translation>Сохранять свободное перемещение растра и выделений на целых пиксельных координатах</translation>
     </message>
     <message>
         <location filename="../src/features/settings/SettingsContent.cpp" line="422"/>

@@ -409,7 +409,7 @@ void SettingsContent::retranslateUi()
     if (m_pixelAlignRasterMovesToggle) {
         m_pixelAlignRasterMovesToggle->setLabel(tr("Pixel-align raster moves"));
         m_pixelAlignRasterMovesToggle->setDescription(
-            tr("Keep raster and selection moves on whole-pixel coordinates"));
+            tr("Keep free raster and selection moves on whole-pixel coordinates"));
     }
 
     // Performance
@@ -732,7 +732,7 @@ void SettingsContent::createEditorCategory()
         tr("Repeat nearby gaps and center content between neighboring objects"),
         &ruwa::core::SettingsManager::setAutoSnapEqualSpacingEnabled);
     addSnapToggle(m_pixelAlignRasterMovesToggle, tr("Pixel-align raster moves"),
-        tr("Keep raster and selection moves on whole-pixel coordinates"),
+        tr("Keep free raster and selection moves on whole-pixel coordinates"),
         &ruwa::core::SettingsManager::setPixelAlignRasterMovesEnabled);
 
     m_categories.append(category);

@@ -30,10 +30,9 @@ public:
 private:
     std::optional<SnapRelation> choose(SnapAxis axis, std::vector<SnapRelation> candidates,
         const Vector2& referencePoint, const Viewport* viewport, float screenZoom, bool axisAllowed,
-        bool enforceCoordinatePolicy, std::vector<SnapRelation>& merged);
+        std::vector<SnapRelation>& merged);
     float screenDistance(const SnapRelation& relation, const Vector2& referencePoint,
         const Viewport* viewport, float screenZoom) const;
-    bool coordinatePolicyAllows(SnapRelation& relation) const;
     void buildVisualState(const Rect& sourceBounds, SnapResult& result);
     static QString formatMetric(float value);
 

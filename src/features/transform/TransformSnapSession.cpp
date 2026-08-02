@@ -87,27 +87,9 @@ float TransformSnapSession::screenDistance(const SnapRelation& relation,
     return std::sqrt(dx * dx + dy * dy);
 }
 
-bool TransformSnapSession::coordinatePolicyAllows(SnapRelation& relation) const
-{
-    if (m_coordinatePolicy != SnapCoordinatePolicy::PixelAligned) {
-        return true;
-    }
-    const float rounded = std::round(relation.correction);
-    if (std::abs((relation.sourceCoordinate + rounded) - relation.targetCoordinate) > 0.001f
-        && relation.type == SnapRelationType::Alignment) {
-        return false;
-    }
-    if (std::abs(relation.correction - rounded) > 0.001f) {
-        return false;
-    }
-    relation.correction = rounded;
-    return true;
-}
-
 std::optional<SnapRelation> TransformSnapSession::choose(SnapAxis axis,
     std::vector<SnapRelation> candidates, const Vector2& referencePoint, const Viewport* viewport,
-    float screenZoom, bool axisAllowed, bool enforceCoordinatePolicy,
-    std::vector<SnapRelation>& merged)
+    float screenZoom, bool axisAllowed, std::vector<SnapRelation>& merged)
 {
     std::optional<SnapRelation>& latch = axis == SnapAxis::X ? m_xLatch : m_yLatch;
     merged.clear();
@@ -117,10 +99,7 @@ std::optional<SnapRelation> TransformSnapSession::choose(SnapAxis axis,
     }
 
     candidates.erase(std::remove_if(candidates.begin(), candidates.end(),
-                         [axis, this, enforceCoordinatePolicy](SnapRelation& relation) {
-                             return relation.axis != axis
-                                 || (enforceCoordinatePolicy && !coordinatePolicyAllows(relation));
-                         }),
+                         [axis](const SnapRelation& relation) { return relation.axis != axis; }),
         candidates.end());
 
     for (SnapRelation& candidate : candidates) {
@@ -197,9 +176,9 @@ SnapResult TransformSnapSession::solveMove(
     const Vector2 reference = sourceBounds.center();
     SnapResult result;
     result.xRelation = choose(
-        SnapAxis::X, candidates, reference, viewport, screenZoom, allowX, true, result.xRelations);
+        SnapAxis::X, candidates, reference, viewport, screenZoom, allowX, result.xRelations);
     result.yRelation = choose(
-        SnapAxis::Y, candidates, reference, viewport, screenZoom, allowY, true, result.yRelations);
+        SnapAxis::Y, candidates, reference, viewport, screenZoom, allowY, result.yRelations);
     if (result.xRelation) {
         result.correction.x = result.xRelation->correction;
     }
@@ -221,9 +200,9 @@ SnapResult TransformSnapSession::solvePoint(const Vector2& point, const Viewport
         m_scene, m_settings, point, m_sourceParentId, canvasOnly, searchRadius);
     SnapResult result;
     result.xRelation = choose(
-        SnapAxis::X, candidates, point, viewport, screenZoom, allowX, false, result.xRelations);
+        SnapAxis::X, candidates, point, viewport, screenZoom, allowX, result.xRelations);
     result.yRelation = choose(
-        SnapAxis::Y, candidates, point, viewport, screenZoom, allowY, false, result.yRelations);
+        SnapAxis::Y, candidates, point, viewport, screenZoom, allowY, result.yRelations);
     if (result.xRelation) {
         result.correction.x = result.xRelation->correction;
     }

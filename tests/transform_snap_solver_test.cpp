@@ -123,21 +123,24 @@ TEST_CASE("same-parent targets win deterministic transform snap ties")
     REQUIRE(result.xRelations.size() >= 2);
 }
 
-TEST_CASE("pixel-aligned sessions reject unreachable half-pixel relations")
+TEST_CASE("exact snap relations override pixel-aligned free movement")
 {
     SnapSettings settings;
     TransformSnapSession pixel(
         settings, finiteCanvasScene(), SnapCoordinatePolicy::PixelAligned);
-    TransformSnapSession continuous(
-        settings, finiteCanvasScene(), SnapCoordinatePolicy::Continuous);
 
-    const Rect halfPixelMove { 89.5f, 35.0f, 10.0f, 10.0f };
-    REQUIRE_FALSE(
-        pixel.solveMove(halfPixelMove, nullptr, 1.0f).xRelation.has_value());
-    REQUIRE(
-        continuous.solveMove(halfPixelMove, nullptr, 1.0f).xRelation.has_value());
+    // An odd-width aggregate bounds, typical for a multi-layer selection, has a half-pixel
+    // center. It must still align exactly to the even-width canvas center.
+    const Rect multiLayerBounds { 39.0f, 30.0f, 21.0f, 20.0f };
+    const SnapResult result = pixel.solveMove(multiLayerBounds, nullptr, 1.0f);
+    REQUIRE(result.xRelation.has_value());
+    REQUIRE(result.xRelation->sourceAnchor == SnapAnchor::Center);
+    REQUIRE(result.xRelation->targetAnchor == SnapAnchor::Center);
+    REQUIRE(result.correction.x == Catch::Approx(0.5f));
+    REQUIRE(multiLayerBounds.center().x + result.correction.x == Catch::Approx(50.0f));
 
-    // Pixel alignment is a move policy. Resize and deform handles remain continuous.
+    // Pixel alignment remains a free-movement policy. Point-based resize and deform handles are
+    // continuous as before.
     REQUIRE(pixel.solvePoint({ 99.5f, 40.0f }, nullptr, 1.0f, true).xRelation.has_value());
 }
 

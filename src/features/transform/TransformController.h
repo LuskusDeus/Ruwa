@@ -971,9 +971,9 @@ private:
 
         m_moveTargetOffset = { m_moveTargetOffset.x + result.correction.x,
             m_moveTargetOffset.y + result.correction.y };
-        if (m_snapSession->coordinatePolicy() == SnapCoordinatePolicy::PixelAligned) {
-            m_moveTargetOffset = pixelAlignedMoveOffset(m_moveTargetOffset);
-        }
+        // Free raster movement is already rounded by moveOffsetForPolicy(). Keep the exact snap
+        // correction here: center and spacing relations can legitimately require a half-pixel
+        // offset when the source and target bounds have different parity.
         // Keep the rendered geometry on the relation represented by the guide.
         m_moveSmoothOffset = m_moveTargetOffset;
         applyMoveSmoothOffsetToState();
