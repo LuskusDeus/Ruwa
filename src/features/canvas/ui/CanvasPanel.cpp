@@ -1138,6 +1138,17 @@ void CanvasPanel::applyCurrentBrushColorPreservingOpacity(const QColor& color)
         m_toolStateController->setCurrentColor(colorWithCurrentAlpha);
     }
 
+    // The instrument's own state is what restoreToolState() replays. Without
+    // this write the two stores drift apart and any later restore (a brush
+    // settings edit, a tool switch) resurrects the stale per-tool color.
+    if (ToolBrushState* state = toolBrushStateForInstrument(overlayInstrumentMode())) {
+        state->color.r = static_cast<uint8_t>(colorWithCurrentAlpha.red());
+        state->color.g = static_cast<uint8_t>(colorWithCurrentAlpha.green());
+        state->color.b = static_cast<uint8_t>(colorWithCurrentAlpha.blue());
+        state->color.a = static_cast<uint8_t>(colorWithCurrentAlpha.alpha());
+        state->valid = true;
+    }
+
     if (m_brushOverlay) {
         m_brushOverlay->setBrushColor(colorWithCurrentAlpha);
     }
@@ -1146,6 +1157,10 @@ void CanvasPanel::applyCurrentBrushColorPreservingOpacity(const QColor& color)
             static_cast<uint8_t>(colorWithCurrentAlpha.green()),
             static_cast<uint8_t>(colorWithCurrentAlpha.blue()),
             static_cast<uint8_t>(colorWithCurrentAlpha.alpha()));
+    }
+
+    if (!m_toolStateController || !m_toolStateController->suppressPersistDuringRestore()) {
+        persistGlobalToolState();
     }
 }
 
