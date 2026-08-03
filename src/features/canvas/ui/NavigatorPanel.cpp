@@ -8,6 +8,7 @@
 #include "NavigatorWidget.h"
 #include "CanvasPanel.h"
 #include "ZoomSliderMapping.h"
+#include "features/theme/manager/ThemeManager.h"
 #include "shared/resources/IconProvider.h"
 #include "shared/style/WidgetStyleManager.h"
 #include "shared/widgets/ToolButton.h"
@@ -15,6 +16,7 @@
 #include "shared/widgets/overlays/ToolTipController.h"
 
 #include <QHBoxLayout>
+#include <QPainter>
 #include <QSignalBlocker>
 #include <QVBoxLayout>
 
@@ -36,6 +38,29 @@ bool canControlZoom(const CanvasPanel* panel)
     return panel && panel->isGLContentReady() && panel->isInteractionEnabled()
         && !panel->isExportMode();
 }
+
+// Plain QWidget children don't erase their own background, so this strip only ever
+// looked right by luck of whatever happened to be painted behind it. Painting the
+// panel surface color explicitly guarantees it always matches, regardless of what
+// sits underneath in the dock panel's widget stack.
+class NavigatorControlsBar final : public QWidget {
+public:
+    explicit NavigatorControlsBar(QWidget* parent)
+        : QWidget(parent)
+    {
+        connect(&ruwa::ui::core::ThemeManager::instance(),
+            &ruwa::ui::core::ThemeManager::themeChanged, this,
+            [this]() { update(); });
+    }
+
+protected:
+    void paintEvent(QPaintEvent* event) override
+    {
+        Q_UNUSED(event);
+        QPainter p(this);
+        p.fillRect(rect(), ruwa::ui::core::WidgetStyleManager::instance().colors().surface);
+    }
+};
 
 } // namespace
 
@@ -108,7 +133,7 @@ QWidget* NavigatorPanel::createContent()
     m_navigatorWidget->setCanvasPanel(m_canvasPanel);
     contentLayout->addWidget(m_navigatorWidget, 1);
 
-    auto* controls = new QWidget(content);
+    auto* controls = new NavigatorControlsBar(content);
     auto* controlsLayout = new QHBoxLayout(controls);
     auto& style = ruwa::ui::core::WidgetStyleManager::instance();
     const int padding = style.scaled(kControlsPadding);
