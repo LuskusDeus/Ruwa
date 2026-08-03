@@ -32,8 +32,11 @@ public:
     using BrushSettingsData = ruwa::core::brushes::BrushSettingsData;
     using BrushSettingDef = ruwa::core::brushes::BrushSettingDef;
 
-    explicit BrushSettingsWidget(
-        const QVector<BrushSettingDef>& defs, QWidget* parent = nullptr, bool starMode = false);
+    /// `starMode` builds the brush editor rows (star + dynamics buttons).
+    /// `dynamicsButtons` adds only the curve editor buttons, for compact hosts
+    /// such as the brush settings panel.
+    explicit BrushSettingsWidget(const QVector<BrushSettingDef>& defs, QWidget* parent = nullptr,
+        bool starMode = false, bool dynamicsButtons = false);
     ~BrushSettingsWidget() override = default;
 
     void setSettings(const QVariantMap& data);
@@ -47,7 +50,7 @@ public:
 signals:
     void settingChanged();
     void starToggled(const QString& settingKey, bool starred);
-    void dynamicsRequested(const QString& settingKey, const QString& settingLabel);
+    void dynamicsRequested(const QString& settingKey, const QString& settingLabel, QWidget* anchor);
 
 private slots:
     void onSliderChanged();
@@ -149,6 +152,7 @@ private:
     QVector<QWidget*> m_separatorRows;
     QVariantMap m_currentSettings;
     bool m_starMode = false;
+    bool m_dynamicsButtons = false;
     bool m_updating = false;
 };
 

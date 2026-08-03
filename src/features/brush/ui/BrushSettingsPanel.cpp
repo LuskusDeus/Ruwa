@@ -5,7 +5,9 @@
 #include "BrushSettingsWidget.h"
 #include "features/brush/editor/BrushEditorLayoutParts.h"
 #include "features/brush/engine/BrushEngineRegistry.h"
+#include "features/brush/manager/BrushDynamicsSlotUtils.h"
 #include "features/brush/manager/BrushManager.h"
+#include "features/brush/ui/BrushDynamicsPopup.h"
 #include "features/canvas/ui/CanvasPanel.h"
 #include "features/theme/manager/ThemeManager.h"
 #include "shared/resources/IconProvider.h"
@@ -15,6 +17,7 @@
 #include "shared/widgets/ToolButton.h"
 
 #include <QCoreApplication>
+#include <QCursor>
 #include <QFont>
 #include <QHBoxLayout>
 #include <QLabel>
@@ -36,6 +39,8 @@ using ruwa::ui::core::IconProvider;
 using ruwa::ui::core::ThemeManager;
 using ruwa::ui::core::WidgetStyleManager;
 using ruwa::ui::widgets::BaseStyledPanel;
+using ruwa::ui::widgets::BrushDynamicsEditorWidget;
+using ruwa::ui::widgets::BrushDynamicsPopup;
 using ruwa::ui::widgets::BrushSettingsWidget;
 using ruwa::ui::widgets::SmoothScrollArea;
 using ruwa::ui::windows::layout_internal::DotPreviewCanvas;
@@ -117,7 +122,14 @@ BrushSettingsPanel::BrushSettingsPanel(QWidget* parent)
     });
 }
 
-BrushSettingsPanel::~BrushSettingsPanel() = default;
+BrushSettingsPanel::~BrushSettingsPanel()
+{
+    // The popup reparents itself to the host window while open, so it outlives
+    // the panel unless it is torn down explicitly.
+    if (m_dynamicsPopup) {
+        delete m_dynamicsPopup.data();
+    }
+}
 
 CanvasPanel* BrushSettingsPanel::canvasPanel() const
 {
@@ -316,6 +328,8 @@ void BrushSettingsPanel::rebuildSettings()
         return;
     }
 
+    closeDynamicsPopup();
+
     while (QLayoutItem* item = m_scrollLayout->takeAt(0)) {
         if (QWidget* widget = item->widget()) {
             widget->hide();
@@ -412,10 +426,15 @@ void BrushSettingsPanel::rebuildSettings()
         m_scrollLayout->addWidget(categoryHeader);
         m_scrollLayout->addSpacing(theme.scaled(4));
 
-        auto* section = new BrushSettingsWidget(tabDefs, m_scrollContent);
+        auto* section = new BrushSettingsWidget(
+            tabDefs, m_scrollContent, /*starMode=*/false, /*dynamicsButtons=*/true);
         section->setSettings(m_currentSettings);
         connect(section, &BrushSettingsWidget::settingChanged, this,
             [this, section]() { applySectionEdit(section); });
+        connect(section, &BrushSettingsWidget::dynamicsRequested, this,
+            [this](const QString& settingKey, const QString& settingLabel, QWidget* anchor) {
+                showDynamicsPopup(settingKey, settingLabel, anchor);
+            });
         m_scrollLayout->addWidget(section);
         m_scrollLayout->addSpacing(theme.scaled(6));
         m_sectionWidgets.append(section);
@@ -465,6 +484,82 @@ void BrushSettingsPanel::applySectionEdit(BrushSettingsWidget* editedSection)
     refreshSectionValues(m_currentSettings);
     if (m_canvasPanel && m_canvasPanel->selectedBrushIdForCurrentContext() == m_currentBrushId) {
         m_canvasPanel->reapplyCurrentToolState();
+    }
+}
+
+void BrushSettingsPanel::showDynamicsPopup(
+    const QString& settingKey, const QString& settingLabel, QWidget* anchor)
+{
+    if (m_currentBrushId.isEmpty()) {
+        return;
+    }
+
+    // A repeat click on the button that opened the popup toggles it closed
+    // instead of re-showing it for the same setting.
+    if (m_dynamicsPopup && m_dynamicsPopup->isPopupVisible()
+        && m_dynamicsPopup->settingKey() == settingKey
+        && m_dynamicsPopup->anchorWidget() == anchor) {
+        closeDynamicsPopup();
+        return;
+    }
+
+    auto& manager = BrushManager::instance();
+    const auto brush = manager.brushData(m_currentBrushId);
+    if (!brush) {
+        return;
+    }
+
+    if (!m_dynamicsPopup) {
+        m_dynamicsPopup = new BrushDynamicsPopup(this);
+        connect(m_dynamicsPopup.data(), &BrushDynamicsPopup::slotChanged, this,
+            [this](const QString& key, const ruwa::core::brushes::BrushDynamicsSlot& slot) {
+                applyDynamicsSlot(key, slot);
+            });
+    }
+
+    const QPoint anchorGlobalPos = anchor
+        ? anchor->mapToGlobal(QPoint(anchor->width(), anchor->height() / 2))
+        : QCursor::pos();
+    m_dynamicsPopup->showForSetting(settingKey, settingLabel,
+        ruwa::core::brushes::dynamicsSlotForSetting(m_currentSettings, settingKey),
+        ruwa::core::brushes::dynamicsTargetForSetting(brush->engineId, settingKey),
+        BrushDynamicsEditorWidget::curveAxesConfigForSetting(
+            brush->engineId, m_currentSettings, settingKey),
+        anchor, anchorGlobalPos);
+}
+
+void BrushSettingsPanel::applyDynamicsSlot(
+    const QString& settingKey, const ruwa::core::brushes::BrushDynamicsSlot& slot)
+{
+    if (m_currentBrushId.isEmpty()) {
+        return;
+    }
+
+    auto& manager = BrushManager::instance();
+    const auto managedSettings = manager.brushSettings(m_currentBrushId);
+    if (!managedSettings) {
+        return;
+    }
+
+    BrushSettingsData updated = *managedSettings;
+    if (!ruwa::core::brushes::applyDynamicsSlotForSetting(updated, settingKey, slot)) {
+        return;
+    }
+    if (!manager.updateBrushSettings(m_currentBrushId, updated)) {
+        return;
+    }
+
+    m_currentSettings = manager.brushSettings(m_currentBrushId).value_or(updated);
+    refreshSectionValues(m_currentSettings);
+    if (m_canvasPanel && m_canvasPanel->selectedBrushIdForCurrentContext() == m_currentBrushId) {
+        m_canvasPanel->reapplyCurrentToolState();
+    }
+}
+
+void BrushSettingsPanel::closeDynamicsPopup()
+{
+    if (m_dynamicsPopup) {
+        m_dynamicsPopup->hidePopup();
     }
 }
 

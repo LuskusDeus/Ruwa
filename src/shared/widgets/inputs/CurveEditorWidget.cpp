@@ -23,7 +23,8 @@ namespace ruwa::ui::widgets {
 
 namespace {
 
-using Point = CurveEditorWidget::Point;
+using Curve = CurveEditorWidget::Curve;
+using CurvePoint = CurveEditorWidget::CurvePoint;
 
 constexpr qreal kPointRadius = 5.0;
 constexpr qreal kHitPadding = 8.0;
@@ -42,15 +43,26 @@ QVector<qreal> axisTicks(const CurveEditorWidget::AxisDisplaySpec& spec)
     return { spec.minValue, spec.maxValue };
 }
 
-QVector<Point> defaultPoints(qreal minValue, qreal maxValue)
+CurvePoint makePoint(qreal x, qreal y, qreal smoothness)
+{
+    CurvePoint point;
+    point.x = static_cast<float>(x);
+    point.y = static_cast<float>(y);
+    point.smoothness = static_cast<float>(smoothness);
+    return point;
+}
+
+Curve defaultCurve(qreal minValue, qreal maxValue)
 {
     const qreal span = qMax<qreal>(0.0001, maxValue - minValue);
-    return {
-        { 0.0, minValue + span * 0.08, 0.35 },
-        { 0.24, minValue + span * 0.22, 0.72 },
-        { 0.68, minValue + span * 0.82, 0.72 },
-        { 1.0, minValue + span * 0.94, 0.35 },
+    Curve curve;
+    curve.points = {
+        makePoint(0.0, minValue + span * 0.08, 0.35),
+        makePoint(0.24, minValue + span * 0.22, 0.72),
+        makePoint(0.68, minValue + span * 0.82, 0.72),
+        makePoint(1.0, minValue + span * 0.94, 0.35),
     };
+    return curve;
 }
 
 qreal clampToRange(qreal value, qreal minValue, qreal maxValue)
@@ -58,36 +70,33 @@ qreal clampToRange(qreal value, qreal minValue, qreal maxValue)
     return qBound(minValue, value, maxValue);
 }
 
-QVector<Point> sanitizePoints(QVector<Point> points, qreal minValue, qreal maxValue)
+Curve sanitizeCurve(Curve curve, qreal minValue, qreal maxValue)
 {
-    if (points.size() < 2) {
-        points = defaultPoints(minValue, maxValue);
+    if (curve.points.size() < 2) {
+        curve = defaultCurve(minValue, maxValue);
     }
 
-    std::sort(
-        points.begin(), points.end(), [](const Point& a, const Point& b) { return a.x < b.x; });
+    curve.sortByX();
 
-    for (Point& point : points) {
-        point.x = clampToRange(point.x, 0.0, 1.0);
-        point.y = clampToRange(point.y, minValue, maxValue);
-        point.smoothness = clampToRange(point.smoothness, 0.0, 1.0);
+    for (CurvePoint& point : curve.points) {
+        point.x = static_cast<float>(clampToRange(point.x, 0.0, 1.0));
+        point.y = static_cast<float>(clampToRange(point.y, minValue, maxValue));
+        point.smoothness = static_cast<float>(clampToRange(point.smoothness, 0.0, 1.0));
     }
 
-    points.front().x = 0.0;
-    points.back().x = 1.0;
+    curve.points.front().x = 0.0f;
+    curve.points.back().x = 1.0f;
 
-    for (int i = 1; i < points.size() - 1; ++i) {
-        const qreal minX = points[i - 1].x + 0.001;
-        const qreal maxX = points[i + 1].x - 0.001;
-        points[i].x = qBound(minX, points[i].x, maxX);
+    for (std::size_t i = 1; i + 1 < curve.points.size(); ++i) {
+        const float minX = curve.points[i - 1].x + 0.001f;
+        const float maxX = curve.points[i + 1].x - 0.001f;
+        curve.points[i].x = qBound(minX, curve.points[i].x, maxX);
     }
 
-    return points;
+    return curve;
 }
 
 } // namespace
-
-using Point = CurveEditorWidget::Point;
 
 class CurveEditorPlot final : public QWidget {
 public:
@@ -95,7 +104,7 @@ public:
 
     explicit CurveEditorPlot(QWidget* parent = nullptr)
         : QWidget(parent)
-        , m_points(defaultPoints(0.0, 1.0))
+        , m_curve(defaultCurve(0.0, 1.0))
         , m_selectedIndex(1)
     {
         setFocusPolicy(Qt::StrongFocus);
@@ -104,13 +113,13 @@ public:
         setSizePolicy(QSizePolicy::Expanding, QSizePolicy::Expanding);
     }
 
-    QVector<Point> points() const { return m_points; }
+    Curve curve() const { return m_curve; }
 
-    void setPoints(const QVector<Point>& points)
+    void setCurve(const Curve& curve)
     {
-        m_points = sanitizePoints(points, m_valueMin, m_valueMax);
+        m_curve = sanitizeCurve(curve, m_valueMin, m_valueMax);
         if (m_selectedIndex >= 0) {
-            m_selectedIndex = qBound(0, m_selectedIndex, m_points.size() - 1);
+            m_selectedIndex = qBound(0, m_selectedIndex, pointCount() - 1);
         }
         update();
     }
@@ -124,7 +133,7 @@ public:
         }
         m_valueMin = boundedMin;
         m_valueMax = boundedMax;
-        m_points = sanitizePoints(m_points, m_valueMin, m_valueMax);
+        m_curve = sanitizeCurve(m_curve, m_valueMin, m_valueMax);
         update();
     }
 
@@ -149,7 +158,7 @@ public:
 
     void setSelectedPointIndex(int index)
     {
-        const int bounded = (index >= 0 && index < m_points.size()) ? index : -1;
+        const int bounded = (index >= 0 && index < pointCount()) ? index : -1;
         if (m_selectedIndex == bounded) {
             return;
         }
@@ -231,8 +240,8 @@ protected:
 
         painter.restore();
 
-        for (int i = 0; i < m_points.size(); ++i) {
-            const QPointF pointPos = pointToPixel(m_points[i], plot);
+        for (int i = 0; i < pointCount(); ++i) {
+            const QPointF pointPos = pointToPixel(pointAt(i), plot);
             const bool isSelected = (i == m_selectedIndex);
             const bool isHovered = (i == m_hoveredIndex);
             const qreal pointRadius = theme.scaled(kPointRadius + (isSelected ? 1.0 : 0.0));
@@ -359,7 +368,7 @@ protected:
     void keyPressEvent(QKeyEvent* event) override
     {
         if ((event->key() == Qt::Key_Delete || event->key() == Qt::Key_Backspace)
-            && m_selectedIndex > 0 && m_selectedIndex < m_points.size() - 1) {
+            && m_selectedIndex > 0 && m_selectedIndex < pointCount() - 1) {
             if (removePointAt(m_selectedIndex)) {
                 event->accept();
                 return;
@@ -370,6 +379,15 @@ protected:
     }
 
 private:
+    int pointCount() const { return static_cast<int>(m_curve.points.size()); }
+
+    const CurvePoint& pointAt(int index) const
+    {
+        return m_curve.points[static_cast<std::size_t>(index)];
+    }
+
+    CurvePoint& pointAt(int index) { return m_curve.points[static_cast<std::size_t>(index)]; }
+
     QRectF plotRect() const
     {
         auto& theme = core::ThemeManager::instance();
@@ -385,12 +403,17 @@ private:
         return QRectF(rect()).adjusted(leftInset, topInset, -rightInset, -bottomInset);
     }
 
-    QPointF pointToPixel(const Point& point, const QRectF& plot) const
+    QPointF valueToPixel(qreal x, qreal y, const QRectF& plot) const
     {
-        return QPointF(plot.left() + point.x * plot.width(),
+        return QPointF(plot.left() + x * plot.width(),
             plot.bottom()
-                - ((point.y - m_valueMin) / qMax<qreal>(0.0001, m_valueMax - m_valueMin))
+                - ((y - m_valueMin) / qMax<qreal>(0.0001, m_valueMax - m_valueMin))
                     * plot.height());
+    }
+
+    QPointF pointToPixel(const CurvePoint& point, const QRectF& plot) const
+    {
+        return valueToPixel(point.x, point.y, plot);
     }
 
     QPointF pixelToNormalized(const QPointF& position) const
@@ -474,8 +497,8 @@ private:
     {
         const QRectF plot = plotRect();
         const qreal radius = core::ThemeManager::instance().scaled(kPointRadius + kHitPadding);
-        for (int i = m_points.size() - 1; i >= 0; --i) {
-            if (QLineF(position, pointToPixel(m_points[i], plot)).length() <= radius) {
+        for (int i = pointCount() - 1; i >= 0; --i) {
+            if (QLineF(position, pointToPixel(pointAt(i), plot)).length() <= radius) {
                 return i;
             }
         }
@@ -484,15 +507,15 @@ private:
 
     bool removePointAt(int index)
     {
-        if (index <= 0 || index >= m_points.size() - 1) {
+        if (index <= 0 || index >= pointCount() - 1) {
             return false;
         }
 
-        m_points.removeAt(index);
+        m_curve.points.erase(m_curve.points.begin() + index);
         m_hoveredIndex = -1;
         m_dragging = false;
         m_draggingIndex = -1;
-        setSelectedPointIndex(qMin(index, m_points.size() - 1));
+        setSelectedPointIndex(qMin(index, pointCount() - 1));
         if (pointsChanged) {
             pointsChanged();
         }
@@ -505,25 +528,22 @@ private:
 
     void addPoint(const QPointF& position)
     {
-        Point point;
         const QPointF normalized = pixelToNormalized(position);
-        point.x = normalized.x();
-        point.y = normalized.y();
-        point.smoothness = 0.65;
+        CurvePoint point = makePoint(normalized.x(), normalized.y(), 0.65);
 
         int insertIndex = 1;
-        while (insertIndex < m_points.size() && m_points[insertIndex].x < point.x) {
+        while (insertIndex < pointCount() && pointAt(insertIndex).x < point.x) {
             ++insertIndex;
         }
 
-        const qreal minX = m_points[insertIndex - 1].x + kMinPointSpacing;
-        const qreal maxX = m_points[insertIndex].x - kMinPointSpacing;
+        const qreal minX = pointAt(insertIndex - 1).x + kMinPointSpacing;
+        const qreal maxX = pointAt(insertIndex).x - kMinPointSpacing;
         if (maxX <= minX) {
             return;
         }
 
-        point.x = qBound(minX, point.x, maxX);
-        m_points.insert(insertIndex, point);
+        point.x = static_cast<float>(qBound(minX, static_cast<qreal>(point.x), maxX));
+        m_curve.points.insert(m_curve.points.begin() + insertIndex, point);
         movePoint(insertIndex, position, false);
         setSelectedPointIndex(insertIndex);
         m_draggingIndex = insertIndex;
@@ -537,22 +557,23 @@ private:
 
     void movePoint(int index, const QPointF& position, bool notify = true)
     {
-        if (index < 0 || index >= m_points.size()) {
+        if (index < 0 || index >= pointCount()) {
             return;
         }
 
         const QPointF normalized = pixelToNormalized(position);
-        Point& point = m_points[index];
-        point.y = normalized.y();
+        CurvePoint& point = pointAt(index);
+        point.y = static_cast<float>(normalized.y());
 
         if (index == 0) {
-            point.x = 0.0;
-        } else if (index == m_points.size() - 1) {
-            point.x = 1.0;
+            point.x = 0.0f;
+        } else if (index == pointCount() - 1) {
+            point.x = 1.0f;
         } else {
-            const qreal minX = m_points[index - 1].x + kMinPointSpacing;
-            const qreal maxX = m_points[index + 1].x - kMinPointSpacing;
-            point.x = (maxX > minX) ? qBound(minX, normalized.x(), maxX) : (minX + maxX) * 0.5;
+            const qreal minX = pointAt(index - 1).x + kMinPointSpacing;
+            const qreal maxX = pointAt(index + 1).x - kMinPointSpacing;
+            point.x = static_cast<float>(
+                (maxX > minX) ? qBound(minX, normalized.x(), maxX) : (minX + maxX) * 0.5);
         }
 
         update();
@@ -564,117 +585,30 @@ private:
     QVector<QPointF> sampledPolyline(const QRectF& plot) const
     {
         QVector<QPointF> samples;
-        if (m_points.isEmpty()) {
+        if (m_curve.points.empty()) {
             return samples;
         }
 
         const int stepsPerSegment = qMax(18, width() / 28);
-        samples.reserve((m_points.size() - 1) * stepsPerSegment + 1);
-        for (int i = 0; i < m_points.size() - 1; ++i) {
+        samples.reserve((pointCount() - 1) * stepsPerSegment + 1);
+        for (int i = 0; i < pointCount() - 1; ++i) {
+            const CurvePoint& p0 = pointAt(i);
+            const CurvePoint& p1 = pointAt(i + 1);
             for (int step = 0; step < stepsPerSegment; ++step) {
                 const qreal t = static_cast<qreal>(step) / static_cast<qreal>(stepsPerSegment);
-                samples.append(
-                    pointToPixel({ m_points[i].x + (m_points[i + 1].x - m_points[i].x) * t,
-                                     evaluateSegment(i, t), 0.0 },
-                        plot));
+                const qreal x = p0.x + (p1.x - p0.x) * t;
+                const qreal y = clampToRange(
+                    m_curve.evaluateSegment(static_cast<std::size_t>(i), static_cast<float>(t)),
+                    m_valueMin, m_valueMax);
+                samples.append(valueToPixel(x, y, plot));
             }
         }
-        samples.append(pointToPixel(m_points.back(), plot));
+        samples.append(pointToPixel(pointAt(pointCount() - 1), plot));
         return samples;
     }
 
-    qreal evaluateSegment(int index, qreal t) const
-    {
-        const Point& p0 = m_points[index];
-        const Point& p1 = m_points[index + 1];
-        const qreal dx = qMax<qreal>(0.0001, p1.x - p0.x);
-        const qreal startTangent = pchipTangent(index);
-        const qreal endTangent = pchipTangent(index + 1);
-
-        const qreal t2 = t * t;
-        const qreal t3 = t2 * t;
-        const qreal h00 = (2.0 * t3) - (3.0 * t2) + 1.0;
-        const qreal h10 = t3 - (2.0 * t2) + t;
-        const qreal h01 = (-2.0 * t3) + (3.0 * t2);
-        const qreal h11 = t3 - t2;
-
-        return clampToRange(
-            h00 * p0.y + h10 * dx * startTangent + h01 * p1.y + h11 * dx * endTangent, m_valueMin,
-            m_valueMax);
-    }
-
-    qreal pchipTangent(int index) const
-    {
-        if (m_points.size() <= 2) {
-            return simpleSlope(0, 1);
-        }
-        if (index <= 0) {
-            return endpointTangent(0);
-        }
-        if (index >= m_points.size() - 1) {
-            return endpointTangent(m_points.size() - 1);
-        }
-
-        const qreal leftSlope = simpleSlope(index - 1, index);
-        const qreal rightSlope = simpleSlope(index, index + 1);
-        if (slopeSign(leftSlope) != slopeSign(rightSlope)) {
-            return 0.0;
-        }
-        if (slopeSign(leftSlope) == 0) {
-            return 0.0;
-        }
-
-        const qreal leftDx = segmentWidth(index - 1, index);
-        const qreal rightDx = segmentWidth(index, index + 1);
-        const qreal w1 = 2.0 * rightDx + leftDx;
-        const qreal w2 = rightDx + 2.0 * leftDx;
-        return (w1 + w2) / ((w1 / leftSlope) + (w2 / rightSlope));
-    }
-
-    qreal endpointTangent(int index) const
-    {
-        const bool leftEndpoint = index <= 0;
-        const int edgeIndex = leftEndpoint ? 0 : m_points.size() - 2;
-        const int nextIndex = leftEndpoint ? 1 : m_points.size() - 3;
-        const qreal edgeDx = segmentWidth(edgeIndex, edgeIndex + 1);
-        const qreal nextDx = segmentWidth(nextIndex, nextIndex + 1);
-        const qreal edgeSlope = simpleSlope(edgeIndex, edgeIndex + 1);
-        const qreal nextSlope = simpleSlope(nextIndex, nextIndex + 1);
-        qreal tangent = ((2.0 * edgeDx + nextDx) * edgeSlope - edgeDx * nextSlope)
-            / qMax<qreal>(0.0001, edgeDx + nextDx);
-
-        if (slopeSign(tangent) != slopeSign(edgeSlope)) {
-            return 0.0;
-        }
-        if (slopeSign(edgeSlope) != slopeSign(nextSlope)
-            && std::abs(tangent) > std::abs(3.0 * edgeSlope)) {
-            return 3.0 * edgeSlope;
-        }
-        return tangent;
-    }
-
-    qreal simpleSlope(int leftIndex, int rightIndex) const
-    {
-        const Point& left = m_points[leftIndex];
-        const Point& right = m_points[rightIndex];
-        return (right.y - left.y) / segmentWidth(leftIndex, rightIndex);
-    }
-
-    qreal segmentWidth(int leftIndex, int rightIndex) const
-    {
-        return qMax<qreal>(0.0001, m_points[rightIndex].x - m_points[leftIndex].x);
-    }
-
-    int slopeSign(qreal value) const
-    {
-        if (std::abs(value) <= 0.000001) {
-            return 0;
-        }
-        return value > 0.0 ? 1 : -1;
-    }
-
 private:
-    QVector<Point> m_points;
+    Curve m_curve;
     int m_selectedIndex = -1;
     int m_hoveredIndex = -1;
     int m_draggingIndex = -1;
@@ -709,26 +643,26 @@ CurveEditorWidget::CurveEditorWidget(QWidget* parent)
     applyStyles();
 }
 
-void CurveEditorWidget::setPoints(const QVector<Point>& points)
+void CurveEditorWidget::setCurve(const Curve& curve)
 {
-    m_plot->setPoints(points);
+    m_plot->setCurve(curve);
 }
 
-QVector<CurveEditorWidget::Point> CurveEditorWidget::points() const
+CurveEditorWidget::Curve CurveEditorWidget::curve() const
 {
-    return m_plot->points();
+    return m_plot->curve();
 }
 
 void CurveEditorWidget::setVerticalRange(qreal maxValue)
 {
     m_plot->setValueRange(0.0, maxValue);
-    m_plot->setPoints(m_plot->points());
+    m_plot->setCurve(m_plot->curve());
 }
 
 void CurveEditorWidget::setVerticalRange(qreal minValue, qreal maxValue)
 {
     m_plot->setValueRange(minValue, maxValue);
-    m_plot->setPoints(m_plot->points());
+    m_plot->setCurve(m_plot->curve());
 }
 
 qreal CurveEditorWidget::verticalRange() const

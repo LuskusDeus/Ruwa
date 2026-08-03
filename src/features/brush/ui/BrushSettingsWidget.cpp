@@ -129,8 +129,8 @@ template <typename Row> void connectStarButton(BrushSettingsWidget* owner, Row& 
 template <typename Row> void connectDynamicsButton(BrushSettingsWidget* owner, const Row& row)
 {
     QObject::connect(row.dynamicsButton, &QPushButton::clicked, owner,
-        [owner, key = row.key, label = row.nameLabel]() {
-            emit owner->dynamicsRequested(key, label ? label->text() : key);
+        [owner, key = row.key, label = row.nameLabel, btn = row.dynamicsButton]() {
+            emit owner->dynamicsRequested(key, label ? label->text() : key, btn);
         });
 }
 
@@ -244,10 +244,11 @@ void BrushSettingsWidget::ComboBoxRow::setInputEnabled(bool enabled)
     }
 }
 
-BrushSettingsWidget::BrushSettingsWidget(
-    const QVector<BrushSettingDef>& defs, QWidget* parent, bool starMode)
+BrushSettingsWidget::BrushSettingsWidget(const QVector<BrushSettingDef>& defs, QWidget* parent,
+    bool starMode, bool dynamicsButtons)
     : QWidget(parent)
     , m_starMode(starMode)
+    , m_dynamicsButtons(dynamicsButtons)
 {
     setAttribute(Qt::WA_TranslucentBackground);
     setProperty("_bsw_updating", false);
@@ -388,7 +389,7 @@ void BrushSettingsWidget::buildRows(const QVector<BrushSettingDef>& defs)
         }
 
         if (def.type == SettingType::DynamicInfo) {
-            if (!m_starMode) {
+            if (!m_starMode && !m_dynamicsButtons) {
                 continue;
             }
 
@@ -402,9 +403,15 @@ void BrushSettingsWidget::buildRows(const QVector<BrushSettingDef>& defs)
             hbox->setContentsMargins(0, 0, 0, 0);
             hbox->setSpacing(8);
 
-            row.starButton = createStarButton(container, theme);
-            hbox->addWidget(row.starButton);
-            connectStarButton(this, row);
+            if (m_starMode) {
+                row.starButton = createStarButton(container, theme);
+                hbox->addWidget(row.starButton);
+                connectStarButton(this, row);
+            }
+
+            row.nameLabel = new QLabel(
+                QCoreApplication::translate("ruwa::core::brushes", def.label), container);
+            row.nameLabel->setObjectName(QStringLiteral("bsw_label"));
 
             if (def.supportsDynamics()) {
                 row.dynamicsButton = createDynamicsButton(container, theme);
@@ -415,9 +422,6 @@ void BrushSettingsWidget::buildRows(const QVector<BrushSettingDef>& defs)
                 hbox->addWidget(row.dynamicsPlaceholder);
             }
 
-            row.nameLabel = new QLabel(
-                QCoreApplication::translate("ruwa::core::brushes", def.label), container);
-            row.nameLabel->setObjectName(QStringLiteral("bsw_label"));
             row.infoLabel = new QLabel(QCoreApplication::translate("ruwa::core::brushes",
                                            def.description ? def.description : ""),
                 container);
@@ -456,7 +460,13 @@ void BrushSettingsWidget::buildRows(const QVector<BrushSettingDef>& defs)
                 row.starButton = createStarButton(container, theme);
                 hbox->addWidget(row.starButton);
                 connectStarButton(this, row);
+            }
 
+            row.nameLabel = new QLabel(
+                QCoreApplication::translate("ruwa::core::brushes", def.label), container);
+            row.nameLabel->setObjectName(QStringLiteral("bsw_label"));
+
+            if (m_starMode || m_dynamicsButtons) {
                 if (def.supportsDynamics()) {
                     row.dynamicsButton = createDynamicsButton(container, theme);
                     hbox->addWidget(row.dynamicsButton);
@@ -466,10 +476,6 @@ void BrushSettingsWidget::buildRows(const QVector<BrushSettingDef>& defs)
                     hbox->addWidget(row.dynamicsPlaceholder);
                 }
             }
-
-            row.nameLabel = new QLabel(
-                QCoreApplication::translate("ruwa::core::brushes", def.label), container);
-            row.nameLabel->setObjectName(QStringLiteral("bsw_label"));
 
             const int steps = qRound((def.max - def.min) / def.step);
             row.slider = new ProgressHandleSlider(container);
@@ -506,7 +512,9 @@ void BrushSettingsWidget::buildRows(const QVector<BrushSettingDef>& defs)
                 row.starButton = createStarButton(container, theme);
                 hbox->addWidget(row.starButton);
                 connectStarButton(this, row);
+            }
 
+            if (m_starMode || m_dynamicsButtons) {
                 row.dynamicsPlaceholder = createDynamicsPlaceholder(container, theme);
                 hbox->addWidget(row.dynamicsPlaceholder);
             }
@@ -545,7 +553,9 @@ void BrushSettingsWidget::buildRows(const QVector<BrushSettingDef>& defs)
                 row.starButton = createStarButton(container, theme);
                 hbox->addWidget(row.starButton);
                 connectStarButton(this, row);
+            }
 
+            if (m_starMode || m_dynamicsButtons) {
                 row.dynamicsPlaceholder = createDynamicsPlaceholder(container, theme);
                 hbox->addWidget(row.dynamicsPlaceholder);
             }
@@ -625,7 +635,9 @@ void BrushSettingsWidget::buildRows(const QVector<BrushSettingDef>& defs)
             row.starButton = createStarButton(container, theme);
             hbox->addWidget(row.starButton);
             connectStarButton(this, row);
+        }
 
+        if (m_starMode || m_dynamicsButtons) {
             row.dynamicsPlaceholder = createDynamicsPlaceholder(container, theme);
             hbox->addWidget(row.dynamicsPlaceholder);
         }

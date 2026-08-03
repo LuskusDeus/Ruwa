@@ -4,11 +4,10 @@
 #define RUWA_UI_WINDOWS_BRUSHEDITOR_BRUSHEDITORPARAMETEROVERLAY_H
 
 #include "features/brush/manager/BrushSettingDefs.h"
-#include "shared/widgets/inputs/CurveEditorWidget.h"
+#include "features/brush/ui/BrushDynamicsEditorWidget.h"
 
 #include <QRect>
 #include <QString>
-#include <QVector>
 #include <QWidget>
 
 class QLabel;
@@ -25,34 +24,21 @@ class QShowEvent;
 class QVariantAnimation;
 
 namespace ruwa::ui::widgets {
-class ToggleSwitch;
-class AnimatedStackedWidget;
-class SegmentedOptionSelector;
-class AnimatedComboBox;
 class CapsuleButton;
-class CurveEditorWidget;
-class ProgressHandleSlider;
 } // namespace ruwa::ui::widgets
 
 namespace ruwa::ui::windows {
 
+/// Modal overlay chrome (dim, panel, title row) around the shared parameter
+/// dynamics editor.
 class BrushEditorParameterOverlay : public QWidget {
     Q_OBJECT
 
 public:
-    using BrushDynamicsBinding = ruwa::core::brushes::BrushDynamicsBinding;
     using BrushDynamicsSlot = ruwa::core::brushes::BrushDynamicsSlot;
     using BrushDynamicTargetDef = ruwa::core::brushes::BrushDynamicTargetDef;
     using BrushInputSourceKey = ruwa::core::brushes::BrushInputSourceKey;
-    using BrushDynamicsSettingKey = ruwa::core::brushes::BrushDynamicsSettingKey;
-    using BrushDynamicsBlendMode = ruwa::core::brushes::BrushDynamicsBlendMode;
-    using BrushTimeEndAction = ruwa::core::brushes::BrushTimeEndAction;
-    struct CurveAxesConfig {
-        ruwa::ui::widgets::CurveEditorWidget::AxisDisplaySpec horizontalAxis { 0.0, 1.0, 100.0, 0,
-            QStringLiteral("%"), {}, true };
-        ruwa::ui::widgets::CurveEditorWidget::AxisDisplaySpec verticalAxis { 0.0, 1.0, 100.0, 0,
-            QString(), {}, true };
-    };
+    using CurveAxesConfig = ruwa::ui::widgets::BrushDynamicsEditorWidget::CurveAxesConfig;
 
     explicit BrushEditorParameterOverlay(QWidget* parent = nullptr);
     ~BrushEditorParameterOverlay() override;
@@ -84,92 +70,27 @@ protected:
     bool eventFilter(QObject* watched, QEvent* event) override;
 
 private:
-    static BrushDynamicsBinding defaultTimeBinding(BrushDynamicsSettingKey setting);
-    static BrushDynamicsBinding defaultRandomBinding(BrushDynamicsSettingKey setting);
-    static BrushDynamicsBinding defaultStrokeDirectionBinding(BrushDynamicsSettingKey setting);
-    BrushDynamicsBinding displayBinding(BrushDynamicsBinding binding) const;
-    CurveAxesConfig curveAxesConfigForBinding(const BrushDynamicsBinding& binding) const;
-    int randomRangeSliderFactor() const;
-    int sliderValueFromRandomRangeValue(float value) const;
-    float randomRangeValueFromSliderValue(int sliderValue) const;
-    QString formatRandomRange(const ruwa::core::brushes::BrushDynamicsRandomRange& range) const;
-    widgets::ToggleSwitch* activeToggle() const;
-    widgets::SegmentedOptionSelector* activeModeSelector() const;
-    widgets::CurveEditorWidget* activeCurveEditor() const;
-    bool isSourceAvailable(BrushInputSourceKey source) const;
-    BrushInputSourceKey fallbackSource() const;
-    int sourcePageIndex(BrushInputSourceKey source) const;
-    BrushDynamicsBinding currentBinding() const;
-    BrushDynamicsBinding defaultBindingForSource(BrushInputSourceKey source) const;
-    void resetActiveSourceBinding();
-    void storeCurrentBinding(const BrushDynamicsBinding& binding, bool emitSlotChanged = true);
-    void syncEditorFromCurrentBinding();
-    void updateModeSelector();
     void updateTexts();
     void updatePanelGeometry();
     void updatePanelPresentation();
-    void updateSourceButtons();
     void updateStyles();
     void setShortcutBlocking(bool blocked);
 
     QWidget* m_panel = nullptr;
-    QWidget* m_body = nullptr;
-    QWidget* m_sourcesColumn = nullptr;
-    ruwa::ui::widgets::AnimatedStackedWidget* m_editorStack = nullptr;
-    QWidget* m_pressurePage = nullptr;
-    QWidget* m_timePage = nullptr;
-    QWidget* m_randomPage = nullptr;
-    QWidget* m_directionPage = nullptr;
+    ruwa::ui::widgets::BrushDynamicsEditorWidget* m_editor = nullptr;
     QGraphicsOpacityEffect* m_panelOpacityEffect = nullptr;
     QLabel* m_titleLabel = nullptr;
-    QLabel* m_sourcesLabel = nullptr;
-    QLabel* m_pressureLabel = nullptr;
-    QLabel* m_modeLabel = nullptr;
-    QLabel* m_timeEnabledLabel = nullptr;
-    QLabel* m_timeModeLabel = nullptr;
-    QLabel* m_timeDurationLabel = nullptr;
-    QLabel* m_timeEndActionLabel = nullptr;
-    QLabel* m_randomEnabledLabel = nullptr;
-    QLabel* m_randomModeLabel = nullptr;
-    QLabel* m_randomRangeLabel = nullptr;
-    QLabel* m_directionEnabledLabel = nullptr;
-    QLabel* m_directionModeLabel = nullptr;
     ruwa::ui::widgets::CapsuleButton* m_resetButton = nullptr;
     QPushButton* m_closeButton = nullptr;
-    QPushButton* m_tabletPressureButton = nullptr;
-    QPushButton* m_timeButton = nullptr;
-    QPushButton* m_randomButton = nullptr;
-    QPushButton* m_directionButton = nullptr;
-    ruwa::ui::widgets::ToggleSwitch* m_pressureToggle = nullptr;
-    ruwa::ui::widgets::SegmentedOptionSelector* m_modeSelector = nullptr;
-    ruwa::ui::widgets::CurveEditorWidget* m_curveEditor = nullptr;
-    ruwa::ui::widgets::ToggleSwitch* m_timeToggle = nullptr;
-    ruwa::ui::widgets::SegmentedOptionSelector* m_timeModeSelector = nullptr;
-    ruwa::ui::widgets::CurveEditorWidget* m_timeCurveEditor = nullptr;
-    ruwa::ui::widgets::ProgressHandleSlider* m_timeDurationSlider = nullptr;
-    ruwa::ui::widgets::AnimatedComboBox* m_timeEndActionCombo = nullptr;
-    ruwa::ui::widgets::ToggleSwitch* m_randomToggle = nullptr;
-    ruwa::ui::widgets::SegmentedOptionSelector* m_randomModeSelector = nullptr;
-    ruwa::ui::widgets::ProgressHandleSlider* m_randomRangeSlider = nullptr;
-    ruwa::ui::widgets::ToggleSwitch* m_directionToggle = nullptr;
-    ruwa::ui::widgets::SegmentedOptionSelector* m_directionModeSelector = nullptr;
-    ruwa::ui::widgets::CurveEditorWidget* m_directionCurveEditor = nullptr;
     QVariantAnimation* m_dimAnimation = nullptr;
     QVariantAnimation* m_panelAnimation = nullptr;
-    QString m_settingKey;
     QString m_settingLabel;
-    BrushDynamicsSlot m_slot;
-    BrushDynamicTargetDef m_targetDef;
-    CurveAxesConfig m_curveAxesConfig;
     QRect m_targetPanelRect;
     qreal m_dimProgress = 0.0;
     qreal m_panelProgress = 0.0;
-    BrushInputSourceKey m_activeSource = BrushInputSourceKey::TabletPressure;
-    QVector<BrushDynamicsBlendMode> m_modeOptions;
     bool m_isShowing = false;
     bool m_isHiding = false;
     bool m_shortcutsBlocked = false;
-    bool m_syncingModeSelector = false;
 };
 
 } // namespace ruwa::ui::windows

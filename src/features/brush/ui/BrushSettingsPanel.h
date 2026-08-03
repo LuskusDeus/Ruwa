@@ -19,6 +19,7 @@ class DotPreviewCanvas;
 
 namespace ruwa::ui::widgets {
 class BaseStyledPanel;
+class BrushDynamicsPopup;
 class BrushSettingsWidget;
 class SmoothScrollArea;
 } // namespace ruwa::ui::widgets
@@ -60,6 +61,10 @@ private:
     void rebuildSettings();
     void refreshSectionValues(const BrushSettingsData& settings);
     void applySectionEdit(ruwa::ui::widgets::BrushSettingsWidget* editedSection);
+    void showDynamicsPopup(const QString& settingKey, const QString& settingLabel, QWidget* anchor);
+    void applyDynamicsSlot(
+        const QString& settingKey, const ruwa::core::brushes::BrushDynamicsSlot& slot);
+    void closeDynamicsPopup();
     void updateHeader();
     void updateDabPreview(const BrushSettingsData* settings);
     void updateEmptyState(const QString& text);
@@ -80,6 +85,7 @@ private:
     QVBoxLayout* m_scrollLayout = nullptr;
     QLabel* m_emptyLabel = nullptr;
     QVector<ruwa::ui::widgets::BrushSettingsWidget*> m_sectionWidgets;
+    QPointer<ruwa::ui::widgets::BrushDynamicsPopup> m_dynamicsPopup;
 };
 
 } // namespace ruwa::ui::workspace

@@ -3,6 +3,8 @@
 #ifndef RUWA_UI_WIDGETS_COMMON_CURVEEDITORWIDGET_H
 #define RUWA_UI_WIDGETS_COMMON_CURVEEDITORWIDGET_H
 
+#include "features/brush/manager/BrushMappingCurve.h"
+
 #include <QString>
 #include <QVector>
 #include <QWidget>
@@ -15,11 +17,11 @@ class CurveEditorWidget : public QWidget {
     Q_OBJECT
 
 public:
-    struct Point {
-        qreal x = 0.0;
-        qreal y = 0.0;
-        qreal smoothness = 1.0;
-    };
+    /// The editor edits the shared parameter-curve model directly; there is no
+    /// widget-local point type to convert to and from.
+    using Curve = ruwa::core::brushes::BrushMappingCurve;
+    using CurvePoint = ruwa::core::brushes::BrushMappingPoint;
+
     struct AxisDisplaySpec {
         qreal minValue = 0.0;
         qreal maxValue = 1.0;
@@ -32,8 +34,8 @@ public:
 
     explicit CurveEditorWidget(QWidget* parent = nullptr);
 
-    void setPoints(const QVector<Point>& points);
-    QVector<Point> points() const;
+    void setCurve(const Curve& curve);
+    Curve curve() const;
     void setVerticalRange(qreal maxValue);
     void setVerticalRange(qreal minValue, qreal maxValue);
     qreal verticalRange() const;

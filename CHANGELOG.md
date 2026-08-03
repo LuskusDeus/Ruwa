@@ -15,6 +15,11 @@ a release.
 
 ## [Unreleased]
 
+### Added
+- The Brush Settings panel now shows a curve button next to every setting that
+  supports parameter dynamics. Clicking it opens a popup with the same dynamics
+  editor as the brush editor — input sources, blend mode, and the curve itself.
+
 ## [0.2.8-alpha] — 2026-07-31 — "Smarter snapping, smoother zoom, and a faster paint loop"
 
 This update rebuilds auto snapping around other layers and equal spacing, adds

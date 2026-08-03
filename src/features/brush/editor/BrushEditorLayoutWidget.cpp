@@ -7,6 +7,8 @@
 #include "features/brush/editor/ProceduralTextureEditorWidget.h"
 
 #include "features/brush/engine/BrushEngineRegistry.h"
+#include "features/brush/manager/BrushDynamicsSlotUtils.h"
+#include "features/brush/ui/BrushDynamicsEditorWidget.h"
 #include "features/brush/ui/BrushSettingsWidget.h"
 #include "features/theme/manager/ThemeManager.h"
 #include "shared/i18n/TranslationManager.h"
@@ -203,283 +205,6 @@ void applyAspectFitDabScale(
     }
 }
 
-QVector<qreal> evenlySpacedTicks(qreal minValue, qreal maxValue, int segments)
-{
-    QVector<qreal> ticks;
-    if (qFuzzyCompare(minValue + 1.0, maxValue + 1.0)) {
-        ticks.append(minValue);
-        return ticks;
-    }
-    if (segments <= 0) {
-        ticks.append(minValue);
-        ticks.append(maxValue);
-        return ticks;
-    }
-
-    ticks.reserve(segments + 1);
-    for (int i = 0; i <= segments; ++i) {
-        const qreal t = static_cast<qreal>(i) / static_cast<qreal>(segments);
-        ticks.append(minValue + (maxValue - minValue) * t);
-    }
-    return ticks;
-}
-
-ruwa::core::brushes::BrushDynamicsSlot defaultDynamicsSlotForSetting(const QString& settingKey)
-{
-    ruwa::core::brushes::BrushDynamicsSlot slot;
-    slot.setting
-        = ruwa::core::brushes::brushDynamicsSettingKeyFromSettingKey(settingKey.toStdString());
-    if (!ruwa::core::brushes::supportsBrushDynamicsSetting(slot.setting)) {
-        return slot;
-    }
-
-    auto& binding = slot.binding(ruwa::core::brushes::BrushInputSourceKey::TabletPressure);
-    binding.setting = slot.setting;
-    binding.source = ruwa::core::brushes::BrushInputSourceKey::TabletPressure;
-    binding.mode = ruwa::core::brushes::defaultBrushDynamicsBlendMode(slot.setting, binding.source);
-    if (slot.setting == ruwa::core::brushes::BrushDynamicsSettingKey::ShapeAngle
-        || slot.setting == ruwa::core::brushes::BrushDynamicsSettingKey::ColorHue) {
-        binding.curve.points = {
-            { 0.0f, 0.0f, 0.65f },
-            { 1.0f, 0.0f, 0.65f },
-        };
-    } else {
-        binding.curve.points = {
-            { 0.0f, 0.0f, 0.65f },
-            { 1.0f, 1.0f, 0.65f },
-        };
-    }
-    binding.curve.normalize(binding.setting, binding.mode);
-
-    return slot;
-}
-
-float bindingEndpointValue(
-    const ruwa::core::brushes::BrushDynamicsBinding& binding, float inputValue)
-{
-    if (binding.curve.empty()) {
-        return (binding.mode == ruwa::core::brushes::BrushDynamicsBlendMode::Add) ? 0.0f : 1.0f;
-    }
-    return binding.curve.evaluate(inputValue,
-        (binding.mode == ruwa::core::brushes::BrushDynamicsBlendMode::Add) ? 0.0f : 1.0f,
-        binding.setting, binding.mode);
-}
-
-ruwa::core::brushes::BrushDynamicsBinding legacyPressureBindingForSetting(
-    const ruwa::core::brushes::BrushSettingsData& settings,
-    ruwa::core::brushes::BrushDynamicsSettingKey setting)
-{
-    ruwa::core::brushes::BrushDynamicsBinding binding;
-    binding.setting = setting;
-    binding.source = ruwa::core::brushes::BrushInputSourceKey::TabletPressure;
-    binding.mode = ruwa::core::brushes::BrushDynamicsBlendMode::Multiply;
-
-    float minValue = 1.0f;
-    float maxValue = 1.0f;
-    bool enabled = false;
-    bool hasLegacyState = false;
-
-    switch (setting) {
-    case ruwa::core::brushes::BrushDynamicsSettingKey::RadiusMultiplier:
-        minValue = settings.sizePressureMin;
-        maxValue = settings.sizePressureMax;
-        enabled = settings.sizePressureEnabled;
-        hasLegacyState = enabled || minValue != 1.0f || maxValue != 1.0f;
-        break;
-    case ruwa::core::brushes::BrushDynamicsSettingKey::OpacityMultiplier:
-        minValue = settings.opacityPressureMin;
-        maxValue = settings.opacityPressureMax;
-        enabled = settings.opacityPressureEnabled;
-        hasLegacyState = enabled || minValue != 1.0f || maxValue != 1.0f;
-        break;
-    case ruwa::core::brushes::BrushDynamicsSettingKey::ShapeFlow:
-        minValue = settings.flowPressureMin;
-        maxValue = settings.flowPressureMax;
-        enabled = minValue < 0.999f || maxValue < 0.999f;
-        hasLegacyState = enabled;
-        break;
-    default:
-        break;
-    }
-
-    if (!hasLegacyState) {
-        return binding;
-    }
-
-    binding.enabled = enabled;
-    binding.curve.points = {
-        { 0.0f, minValue, 0.65f },
-        { 1.0f, maxValue, 0.65f },
-    };
-    binding.curve.normalize(setting, binding.mode);
-    return binding;
-}
-
-bool hasEffectiveDynamics(const ruwa::core::brushes::BrushSettingsData& settings,
-    ruwa::core::brushes::BrushDynamicsSettingKey setting)
-{
-    if (!ruwa::core::brushes::supportsBrushDynamicsSetting(setting)) {
-        return false;
-    }
-
-    if (settings.dynamics.slotForSetting(setting).hasActiveBindings()) {
-        return true;
-    }
-
-    switch (setting) {
-    case ruwa::core::brushes::BrushDynamicsSettingKey::RadiusMultiplier:
-        return settings.sizePressureEnabled;
-    case ruwa::core::brushes::BrushDynamicsSettingKey::OpacityMultiplier:
-        return settings.opacityPressureEnabled;
-    case ruwa::core::brushes::BrushDynamicsSettingKey::ShapeFlow:
-        return settings.flowPressureMin < 0.999f || settings.flowPressureMax < 0.999f;
-    default:
-        return false;
-    }
-}
-
-qreal baseValueForDynamicsSetting(const ruwa::core::brushes::BrushSettingsData& settings,
-    ruwa::core::brushes::BrushDynamicsSettingKey setting)
-{
-    switch (setting) {
-    case ruwa::core::brushes::BrushDynamicsSettingKey::RadiusMultiplier:
-        return 1.0;
-    case ruwa::core::brushes::BrushDynamicsSettingKey::OpacityMultiplier:
-        return 1.0;
-    case ruwa::core::brushes::BrushDynamicsSettingKey::ShapeFlow:
-        return settings.flow;
-    case ruwa::core::brushes::BrushDynamicsSettingKey::ShapeHardness:
-        return settings.hardness;
-    case ruwa::core::brushes::BrushDynamicsSettingKey::ShapeSpacing:
-        return settings.spacing;
-    case ruwa::core::brushes::BrushDynamicsSettingKey::ShapeRoundness:
-        return settings.roundness;
-    case ruwa::core::brushes::BrushDynamicsSettingKey::ShapeAngle:
-        return settings.angle;
-    case ruwa::core::brushes::BrushDynamicsSettingKey::TextureAmount:
-        return settings.textureAmount;
-    case ruwa::core::brushes::BrushDynamicsSettingKey::TextureScale:
-        return settings.textureScale;
-    case ruwa::core::brushes::BrushDynamicsSettingKey::TextureContrast:
-        return settings.textureContrast;
-    case ruwa::core::brushes::BrushDynamicsSettingKey::TextureDepth:
-        return settings.textureDepth;
-    case ruwa::core::brushes::BrushDynamicsSettingKey::TextureBlend:
-        return settings.textureBlend;
-    case ruwa::core::brushes::BrushDynamicsSettingKey::TextureEdgeBoost:
-        return settings.textureEdgeBoost;
-    case ruwa::core::brushes::BrushDynamicsSettingKey::ColorHue:
-        return settings.colorHue;
-    case ruwa::core::brushes::BrushDynamicsSettingKey::ColorLightness:
-        return settings.colorLightness;
-    case ruwa::core::brushes::BrushDynamicsSettingKey::ColorSaturation:
-        return settings.colorSaturation;
-    case ruwa::core::brushes::BrushDynamicsSettingKey::ScatterPosition:
-        return settings.scatterPosition;
-    case ruwa::core::brushes::BrushDynamicsSettingKey::StrokePostCorrection:
-        return settings.postCorrection;
-    case ruwa::core::brushes::BrushDynamicsSettingKey::StrokeStabilization:
-        return settings.stabilization;
-    case ruwa::core::brushes::BrushDynamicsSettingKey::StrokeStartTaper:
-        return settings.startTaper;
-    case ruwa::core::brushes::BrushDynamicsSettingKey::StrokeEndTaper:
-        return settings.endTaper;
-    case ruwa::core::brushes::BrushDynamicsSettingKey::StrokeStartCorrectionLength:
-        return settings.startCorrectionLength;
-    case ruwa::core::brushes::BrushDynamicsSettingKey::StrokeEndCorrectionLength:
-        return settings.endCorrectionLength;
-    case ruwa::core::brushes::BrushDynamicsSettingKey::None:
-    case ruwa::core::brushes::BrushDynamicsSettingKey::Count:
-        break;
-    }
-    return 1.0;
-}
-
-std::optional<ruwa::core::brushes::BrushSettingDef> findSettingDef(
-    const ruwa::core::brushes::BrushEngineDescriptor& descriptor, const QString& settingKey)
-{
-    for (const auto& tab : descriptor.settingsTabs) {
-        for (const auto& def : tab.settings) {
-            if (def.key != nullptr && settingKey == QLatin1String(def.key)) {
-                return def;
-            }
-        }
-    }
-    return std::nullopt;
-}
-
-BrushEditorParameterOverlay::CurveAxesConfig curveAxesConfigForSetting(
-    const ruwa::core::brushes::BrushData& brush,
-    const ruwa::core::brushes::BrushSettingsData& settings, const QString& settingKey)
-{
-    BrushEditorParameterOverlay::CurveAxesConfig config;
-    config.horizontalAxis
-        = { 0.0, 1.0, 100.0, 0, QStringLiteral("%"), evenlySpacedTicks(0.0, 1.0, 4), true };
-
-    const auto dynamicsKey
-        = ruwa::core::brushes::brushDynamicsSettingKeyFromSettingKey(settingKey.toStdString());
-    const qreal baseValue = qMax<qreal>(0.0, baseValueForDynamicsSetting(settings, dynamicsKey));
-
-    const auto* module = ruwa::core::brushes::BrushEngineRegistry::instance().moduleOrPixelFallback(
-        brush.engineId);
-    if (!module) {
-        config.verticalAxis.maxValue = baseValue;
-        config.verticalAxis.tickValues = evenlySpacedTicks(0.0, baseValue, 4);
-        return config;
-    }
-
-    const auto def = findSettingDef(module->descriptor(), settingKey);
-    if (!def.has_value()) {
-        config.verticalAxis.maxValue = baseValue;
-        config.verticalAxis.tickValues = evenlySpacedTicks(0.0, baseValue, 4);
-        return config;
-    }
-
-    QString suffix;
-    const QString defSuffix = def->suffix ? QLatin1String(def->suffix) : QString();
-    if (!defSuffix.isEmpty() && defSuffix != QStringLiteral("%")) {
-        suffix = defSuffix;
-    }
-
-    config.verticalAxis.minValue = 0.0;
-    config.verticalAxis.maxValue = baseValue;
-    config.verticalAxis.displayScale = def->displayScale;
-    config.verticalAxis.displayDecimals = def->displayDecimals;
-    config.verticalAxis.suffix = suffix;
-    config.verticalAxis.tickValues = evenlySpacedTicks(0.0, baseValue, 4);
-    config.verticalAxis.visible = true;
-    return config;
-}
-
-void syncLegacyPressureState(ruwa::core::brushes::BrushSettingsData& settings,
-    const ruwa::core::brushes::BrushDynamicsSlot& slot)
-{
-    const auto& binding = slot.binding(ruwa::core::brushes::BrushInputSourceKey::TabletPressure);
-    const bool mirrorable = binding.isActive()
-        && binding.mode == ruwa::core::brushes::BrushDynamicsBlendMode::Multiply;
-    const float minValue = mirrorable ? bindingEndpointValue(binding, 0.0f) : 1.0f;
-    const float maxValue = mirrorable ? bindingEndpointValue(binding, 1.0f) : 1.0f;
-
-    switch (slot.setting) {
-    case ruwa::core::brushes::BrushDynamicsSettingKey::RadiusMultiplier:
-        settings.sizePressureEnabled = mirrorable;
-        settings.sizePressureMin = minValue;
-        settings.sizePressureMax = maxValue;
-        break;
-    case ruwa::core::brushes::BrushDynamicsSettingKey::OpacityMultiplier:
-        settings.opacityPressureEnabled = mirrorable;
-        settings.opacityPressureMin = minValue;
-        settings.opacityPressureMax = maxValue;
-        break;
-    case ruwa::core::brushes::BrushDynamicsSettingKey::ShapeFlow:
-        settings.flowPressureMin = minValue;
-        settings.flowPressureMax = maxValue;
-        break;
-    default:
-        break;
-    }
-}
-
 } // namespace
 
 // =========================================================================
@@ -620,7 +345,7 @@ void BrushEditorLayoutWidget::setupSignals()
                 BrushManager::instance().setSettingStarred(m_selectedBrushId, key, starred);
             });
         connect(page, &widgets::BrushSettingsWidget::dynamicsRequested, this,
-            [this](const QString& key, const QString& label) {
+            [this](const QString& key, const QString& label, QWidget*) {
                 if (m_selectedBrushId.isEmpty()) {
                     return;
                 }
@@ -851,11 +576,13 @@ void BrushEditorLayoutWidget::setupSignals()
             }
             const auto dynamicsKey = ruwa::core::brushes::brushDynamicsSettingKeyFromSettingKey(
                 settingKey.toStdString());
-            const bool hadActiveBinding = hasEffectiveDynamics(m_currentSettings, dynamicsKey);
+            const bool hadActiveBinding
+                = ruwa::core::brushes::hasEffectiveDynamics(m_currentSettings, dynamicsKey);
             if (!applyDynamicsSlotForSetting(settingKey, slot)) {
                 return;
             }
-            const bool hasActiveBinding = hasEffectiveDynamics(m_currentSettings, dynamicsKey);
+            const bool hasActiveBinding
+                = ruwa::core::brushes::hasEffectiveDynamics(m_currentSettings, dynamicsKey);
             if (hadActiveBinding != hasActiveBinding) {
                 distributeSettings();
             }
@@ -1080,7 +807,8 @@ void BrushEditorLayoutWidget::showParameterDynamicsOverlay(
     flushPendingParameterDynamicsCommit();
     m_parameterOverlay->showOverlay(settingKey, settingLabel, dynamicsSlotForSetting(settingKey),
         dynamicsTargetForSetting(settingKey),
-        curveAxesConfigForSetting(selectedBrushData(), m_currentSettings, settingKey));
+        widgets::BrushDynamicsEditorWidget::curveAxesConfigForSetting(
+            selectedBrushData().engineId, m_currentSettings, settingKey));
 }
 
 void BrushEditorLayoutWidget::updateOpenParameterDynamicsOverlayAxes()
@@ -1095,105 +823,27 @@ void BrushEditorLayoutWidget::updateOpenParameterDynamicsOverlayAxes()
     }
 
     m_parameterOverlay->setCurveAxesConfig(
-        curveAxesConfigForSetting(selectedBrushData(), m_currentSettings, settingKey));
+        widgets::BrushDynamicsEditorWidget::curveAxesConfigForSetting(
+            selectedBrushData().engineId, m_currentSettings, settingKey));
 }
 
 BrushEditorLayoutWidget::BrushDynamicsSlot BrushEditorLayoutWidget::dynamicsSlotForSetting(
     const QString& settingKey) const
 {
-    const auto dynamicsKey
-        = ruwa::core::brushes::brushDynamicsSettingKeyFromSettingKey(settingKey.toStdString());
-    if (!ruwa::core::brushes::supportsBrushDynamicsSetting(dynamicsKey)) {
-        return {};
-    }
-
-    auto slot = m_currentSettings.dynamics.slotForSetting(dynamicsKey);
-    if (slot.hasStoredBindings()) {
-        return slot;
-    }
-
-    const auto legacyBinding = legacyPressureBindingForSetting(m_currentSettings, dynamicsKey);
-    if (legacyBinding.hasStoredCurve()) {
-        slot.binding(ruwa::core::brushes::BrushInputSourceKey::TabletPressure) = legacyBinding;
-        return slot;
-    }
-
-    auto fallbackSlot = defaultDynamicsSlotForSetting(settingKey);
-    fallbackSlot.binding(ruwa::core::brushes::BrushInputSourceKey::TabletPressure).enabled
-        = slot.binding(ruwa::core::brushes::BrushInputSourceKey::TabletPressure).enabled;
-    return fallbackSlot;
+    return ruwa::core::brushes::dynamicsSlotForSetting(m_currentSettings, settingKey);
 }
 
 BrushEditorLayoutWidget::BrushDynamicTargetDef BrushEditorLayoutWidget::dynamicsTargetForSetting(
     const QString& settingKey) const
 {
-    const auto dynamicsKey
-        = ruwa::core::brushes::brushDynamicsSettingKeyFromSettingKey(settingKey.toStdString());
-    const auto* module = ruwa::core::brushes::BrushEngineRegistry::instance().moduleOrPixelFallback(
-        selectedBrushData().engineId);
-    const auto fallbackTarget = [&]() -> BrushDynamicTargetDef {
-        if (!ruwa::core::brushes::supportsBrushDynamicsSetting(dynamicsKey)) {
-            return {};
-        }
-        return ruwa::core::brushes::pressureTimeRandomDynamicsTarget(dynamicsKey);
-    };
-    if (!module) {
-        return fallbackTarget();
-    }
-
-    const auto def = findSettingDef(module->descriptor(), settingKey);
-    if (def.has_value()) {
-        return def->dynamicTarget;
-    }
-    return fallbackTarget();
+    return ruwa::core::brushes::dynamicsTargetForSetting(
+        selectedBrushData().engineId, settingKey);
 }
 
 bool BrushEditorLayoutWidget::applyDynamicsSlotForSetting(
     const QString& settingKey, const BrushDynamicsSlot& slot)
 {
-    const auto dynamicsKey
-        = ruwa::core::brushes::brushDynamicsSettingKeyFromSettingKey(settingKey.toStdString());
-    if (!ruwa::core::brushes::supportsBrushDynamicsSetting(dynamicsKey)) {
-        return false;
-    }
-
-    auto normalizedSlot = slot;
-    normalizedSlot.setting = dynamicsKey;
-    for (std::size_t sourceIndex = 0; sourceIndex < normalizedSlot.bindings.size(); ++sourceIndex) {
-        auto& binding = normalizedSlot.bindings[sourceIndex];
-        binding.setting = dynamicsKey;
-        binding.source = ruwa::core::brushes::brushInputSourceFromIndex(sourceIndex);
-        binding.mode = ruwa::core::brushes::normalizeBrushDynamicsBlendMode(
-            dynamicsKey, binding.source, binding.mode);
-        if (binding.source == ruwa::core::brushes::BrushInputSourceKey::RandomValue) {
-            if (binding.enabled || binding.hasStoredCurve()) {
-                const auto range = ruwa::core::brushes::brushDynamicsRandomRange(binding);
-                ruwa::core::brushes::setBrushDynamicsRandomRange(
-                    binding, range.minimum, range.maximum);
-            }
-        }
-        binding.durationSec
-            = ruwa::core::brushes::clampBrushTimeDurationSeconds(binding.durationSec);
-        if (binding.endAction == ruwa::core::brushes::BrushTimeEndAction::Count) {
-            binding.endAction = ruwa::core::brushes::BrushTimeEndAction::Stop;
-        }
-        binding.curve.normalize(binding.setting, binding.mode);
-    }
-    bool overrideClaimed = false;
-    for (auto& binding : normalizedSlot.bindings) {
-        if (binding.isActive()
-            && binding.mode == ruwa::core::brushes::BrushDynamicsBlendMode::Override) {
-            if (overrideClaimed) {
-                binding.enabled = false;
-            } else {
-                overrideClaimed = true;
-            }
-        }
-    }
-
-    m_currentSettings.dynamics.slotForSetting(dynamicsKey) = normalizedSlot;
-    syncLegacyPressureState(m_currentSettings, normalizedSlot);
-    return true;
+    return ruwa::core::brushes::applyDynamicsSlotForSetting(m_currentSettings, settingKey, slot);
 }
 
 // =========================================================================
