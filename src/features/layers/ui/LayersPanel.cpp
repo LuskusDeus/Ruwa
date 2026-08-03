@@ -2140,8 +2140,6 @@ void LayersPanel::startToolbarDrag(ToolbarItem item, QWidget* itemWidget, const 
     m_toolbarDragGhost->raise();
     m_toolbarDragGhost->setFollowTarget(toolbarGhostTargetPosition(globalPos));
 
-    m_toolbarDragInsideContent
-        = m_toolbarFlow->rect().contains(m_toolbarFlow->mapFromGlobal(globalPos));
     qApp->installEventFilter(this);
     if (!m_toolbarDragCursorOverride) {
         QApplication::setOverrideCursor(Qt::ClosedHandCursor);
@@ -2156,10 +2154,11 @@ void LayersPanel::updateToolbarDrag(const QPoint& globalPos)
     }
     m_toolbarDragGhost->setFollowTarget(toolbarGhostTargetPosition(globalPos));
     const QPoint contentPos = m_toolbarFlow->mapFromGlobal(globalPos);
-    m_toolbarDragInsideContent = m_toolbarFlow->rect().contains(contentPos);
-    if (m_toolbarDragInsideContent) {
-        moveDraggedToolbarItemTo(toolbarInsertIndexAt(contentPos));
-    }
+    // Clamp to the toolbar bounds so the insert position keeps resolving to the
+    // nearest slot even once the cursor leaves the toolbar, instead of freezing.
+    const QPoint clampedPos(qBound(0, contentPos.x(), qMax(0, m_toolbarFlow->width() - 1)),
+        qBound(0, contentPos.y(), qMax(0, m_toolbarFlow->height() - 1)));
+    moveDraggedToolbarItemTo(toolbarInsertIndexAt(clampedPos));
 }
 
 void LayersPanel::finishToolbarDrag(bool accepted, const QPoint& globalPos)
@@ -2168,7 +2167,6 @@ void LayersPanel::finishToolbarDrag(bool accepted, const QPoint& globalPos)
         return;
     }
     updateToolbarDrag(globalPos);
-    accepted = accepted && m_toolbarDragInsideContent;
 
     qApp->removeEventFilter(this);
     if (m_toolbarDragCursorOverride) {
@@ -2214,7 +2212,6 @@ void LayersPanel::finishToolbarDrag(bool accepted, const QPoint& globalPos)
         guard->m_toolbarDraggedWidget = nullptr;
         guard->m_toolbarDragStartOrder.clear();
         guard->m_toolbarDragSettling = false;
-        guard->m_toolbarDragInsideContent = false;
         guard->cancelToolbarDragCandidate();
     };
 

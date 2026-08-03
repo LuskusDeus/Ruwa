@@ -305,7 +305,6 @@ private:
     ToolbarItem m_toolbarDraggedItem = ToolbarItem::AddLayer;
     bool m_toolbarDragActive = false;
     bool m_toolbarDragSettling = false;
-    bool m_toolbarDragInsideContent = false;
     bool m_toolbarDragCursorOverride = false;
 
     QRect m_displayFrame;

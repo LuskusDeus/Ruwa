@@ -119,7 +119,6 @@ private:
     ToolId m_draggedTool = ToolId::Hand;
     bool m_dragActive = false;
     bool m_dragSettling = false;
-    bool m_dragInsideContent = false;
     bool m_dragCursorOverride = false;
     bool m_contentCreated = false;
 };

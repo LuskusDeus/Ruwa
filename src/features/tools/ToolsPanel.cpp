@@ -814,8 +814,6 @@ void ToolsPanel::startToolDrag(ToolId tool, ToolButton* button, const QPoint& gl
     m_dragGhost->raise();
     m_dragGhost->setFollowTarget(ghostTargetPosition(globalPos));
 
-    m_dragInsideContent
-        = m_contentWidget->rect().contains(m_contentWidget->mapFromGlobal(globalPos));
     qApp->installEventFilter(this);
     if (!m_dragCursorOverride) {
         QApplication::setOverrideCursor(Qt::ClosedHandCursor);
@@ -830,10 +828,11 @@ void ToolsPanel::updateToolDrag(const QPoint& globalPos)
     }
     m_dragGhost->setFollowTarget(ghostTargetPosition(globalPos));
     const QPoint contentPos = m_contentWidget->mapFromGlobal(globalPos);
-    m_dragInsideContent = m_contentWidget->rect().contains(contentPos);
-    if (m_dragInsideContent) {
-        moveDraggedToolTo(toolInsertIndexAt(contentPos));
-    }
+    // Clamp to the panel bounds so the insert position keeps resolving to the
+    // nearest slot even once the cursor leaves the panel, instead of freezing.
+    const QPoint clampedPos(qBound(0, contentPos.x(), qMax(0, m_contentWidget->width() - 1)),
+        qBound(0, contentPos.y(), qMax(0, m_contentWidget->height() - 1)));
+    moveDraggedToolTo(toolInsertIndexAt(clampedPos));
 }
 
 void ToolsPanel::finishToolDrag(bool accepted, const QPoint& globalPos)
@@ -842,7 +841,6 @@ void ToolsPanel::finishToolDrag(bool accepted, const QPoint& globalPos)
         return;
     }
     updateToolDrag(globalPos);
-    accepted = accepted && m_dragInsideContent;
 
     qApp->removeEventFilter(this);
     if (m_dragCursorOverride) {
@@ -885,7 +883,6 @@ void ToolsPanel::finishToolDrag(bool accepted, const QPoint& globalPos)
         guard->m_draggedButton = nullptr;
         guard->m_dragStartOrder.clear();
         guard->m_dragSettling = false;
-        guard->m_dragInsideContent = false;
         guard->cancelToolDragCandidate();
     };
 
