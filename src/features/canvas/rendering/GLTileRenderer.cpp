@@ -303,41 +303,54 @@ void GLTileRenderer::render(const TileGrid& grid, const Viewport& viewport, uint
             GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA, GL_ONE, GL_ONE_MINUS_SRC_ALPHA);
     }
 
-    m_tileProgram->use();
-    m_gl->glBindVertexArray(m_emptyVAO);
-    m_gl->glBindSampler(0, 0);
-    GLuint boundSampler = 0;
-    auto bindDisplaySampler = [this, &boundSampler](GLuint sampler) {
-        if (boundSampler == sampler)
-            return;
-        m_gl->glBindSampler(0, sampler);
-        boundSampler = sampler;
+    auto clippedOut = [clipToCanvas, canvasMaxTileX, canvasMaxTileY](const TileKey& key) {
+        return clipToCanvas
+            && (key.x < 0 || key.y < 0 || key.x > canvasMaxTileX || key.y > canvasMaxTileY);
     };
 
-    for (const auto& key : visibleKeys) {
-        if (clipToCanvas) {
-            if (key.x < 0 || key.y < 0 || key.x > canvasMaxTileX || key.y > canvasMaxTileY) {
+    // Minification filtering is decided once for the whole frame, never per
+    // tile. Picking the mip sampler for clean tiles and level zero for stale
+    // ones makes the dirty tiles of a live stroke read as a visible grid over
+    // high-frequency content, because the eye catches the boundary between a
+    // smoothed and an aliased region instantly. Uniform level-zero sampling
+    // over the whole view is plain draft quality, which reads as intentional
+    // and snaps back to mipmapped once the deferred regeneration catches up.
+    bool visibleMipsReady = minifying;
+    if (minifying) {
+        for (const auto& key : visibleKeys) {
+            if (clippedOut(key))
                 continue;
+            const TileData* tile = grid.getTile(key);
+            if (!tile || !tile->hasTexture() || !tile->displayMipmapsDirty())
+                continue;
+            const bool budgetAvailable
+                = m_displayMipRegenerationsThisFrame < m_displayMipRegenerationBudget;
+            if (!m_deferDisplayMipRegeneration && budgetAvailable) {
+                m_gl->glGenerateTextureMipmap(tile->textureId());
+                tile->clearDisplayMipmapsDirty();
+                ++m_displayMipRegenerationsThisFrame;
+            } else {
+                // Keep scanning: tiles regenerated after the frame already fell
+                // back to level zero still shorten the catch-up.
+                m_visibleDisplayMipmapsPending = true;
+                visibleMipsReady = false;
             }
         }
+    }
+
+    GLuint frameSampler = useDisplayFiltering ? m_levelZeroLinearSampler : 0;
+    if (visibleMipsReady)
+        frameSampler = m_displaySampler;
+
+    m_tileProgram->use();
+    m_gl->glBindVertexArray(m_emptyVAO);
+    m_gl->glBindSampler(0, frameSampler);
+
+    for (const auto& key : visibleKeys) {
+        if (clippedOut(key))
+            continue;
         const TileData* tile = grid.getTile(key);
         if (tile && tile->hasTexture()) {
-            GLuint tileSampler = useDisplayFiltering ? m_levelZeroLinearSampler : 0;
-            if (minifying && tile->displayMipmapsDirty()) {
-                const bool budgetAvailable
-                    = m_displayMipRegenerationsThisFrame < m_displayMipRegenerationBudget;
-                if (!m_deferDisplayMipRegeneration && budgetAvailable) {
-                    m_gl->glGenerateTextureMipmap(tile->textureId());
-                    tile->clearDisplayMipmapsDirty();
-                    ++m_displayMipRegenerationsThisFrame;
-                } else {
-                    m_visibleDisplayMipmapsPending = true;
-                }
-            }
-            if (minifying && !tile->displayMipmapsDirty()) {
-                tileSampler = m_displaySampler;
-            }
-            bindDisplaySampler(tileSampler);
             if (drawTileQuad(key, *tile, vpMatrix, canvasWidth, canvasHeight, clipToCanvas,
                     cornerRadiusCanvasPx, compositeRoundedEdgesOverViewportBackground,
                     viewportBackgroundColor)) {

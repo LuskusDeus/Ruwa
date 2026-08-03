@@ -35,8 +35,8 @@ public:
     void shutdown();
 
     /// Start one top-level viewport/export frame. During an interactive content
-    /// mutation stale mip chains are not rebuilt; their tiles are sampled from
-    /// fresh level zero instead.
+    /// mutation stale mip chains are not rebuilt; the frame falls back to
+    /// fresh level zero for the entire visible set instead.
     void beginDisplayMipFrame(bool deferRegeneration);
     void beginUnrestrictedDisplayMipFrame();
     bool hasPendingVisibleDisplayMipmaps() const { return m_visibleDisplayMipmapsPending; }
@@ -91,9 +91,11 @@ private:
     std::unique_ptr<GLShaderProgram> m_tileProgram;
 
     // Overrides the texture object's sampling state only for display draws.
-    // Clean minified tiles use the mip sampler. Dirty tiles that cannot be
-    // regenerated in this frame use the level-zero sampler, which avoids both
-    // stale mip content and synchronous regeneration during interactive edits.
+    // One of the two is picked per frame for every visible tile at once: the
+    // mip sampler when the whole visible set has valid mip chains, the
+    // level-zero sampler otherwise. Mixing them per tile is what makes the
+    // dirty tiles of a live stroke visible as a grid, so the choice is never
+    // made per tile — see render().
     GLuint m_displaySampler = 0;
     GLuint m_levelZeroLinearSampler = 0;
 
