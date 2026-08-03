@@ -343,7 +343,9 @@ public:
     void beginTransformUndoStep();
     /// Freeze canvas/layer snap targets and current editor settings for this drag.
     void beginTransformSnapSession();
-    void syncTransformSnapMetricLabel();
+    /// Refresh every transform capsule: the snap spacing labels and the live
+    /// move/rotate/scale readout for the handle currently being dragged.
+    void syncTransformMetricOverlays();
     void commitTransformUndoStep();
     void discardTransformUndoStep();
     TransformController& transformController() { return m_transformController; }
@@ -696,6 +698,15 @@ private:
     TransformController m_transformController;
     TransformTargetSet m_transformTargetSet;
     std::vector<ruwa::ui::widgets::CanvasMetricLabelOverlay*> m_transformSnapMetricLabels;
+    /// Live readout of the drag in progress (offset / angle / scale percentage).
+    ruwa::ui::widgets::CanvasMetricLabelOverlay* m_transformDragMetricLabel = nullptr;
+    /// Transformed corners latched when the drag started; the readout above is
+    /// measured against them, so it works for quad/mesh modes too.
+    std::optional<std::array<Vector2, 4>> m_transformDragStartCorners;
+    void syncTransformSnapMetricLabels();
+    void syncTransformDragMetricLabel();
+    /// Keep the drag readout glued to the cursor while the drag is in progress.
+    void refreshTransformDragMetricAnchor();
     std::unique_ptr<UndoManager> m_transformUndoManager;
     std::optional<TransformState> m_transformUndoStepBefore;
     std::optional<TransformInteractionMode> m_transformUndoStepBeforeMode;

@@ -8417,8 +8417,12 @@ void OpenGLCanvasWidget::beginTransformSnapSession()
 {
     if (!m_transformController.isActive() || !m_transformController.isDragging()) {
         m_transformController.endSnapSession();
+        m_transformDragStartCorners.reset();
         return;
     }
+    // Called right after every successful transform mousePress, so this is the
+    // reference frame the live drag readout measures against.
+    m_transformDragStartCorners = m_transformController.state().transformedCorners();
 
     const auto& editor = ruwa::core::SettingsManager::instance().settings().editor;
     SnapSettings settings;
@@ -8529,7 +8533,13 @@ void OpenGLCanvasWidget::beginTransformSnapSession()
         std::move(settings), std::move(scene), policy, sourceParentId);
 }
 
-void OpenGLCanvasWidget::syncTransformSnapMetricLabel()
+void OpenGLCanvasWidget::syncTransformMetricOverlays()
+{
+    syncTransformSnapMetricLabels();
+    syncTransformDragMetricLabel();
+}
+
+void OpenGLCanvasWidget::syncTransformSnapMetricLabels()
 {
     const auto& labels = m_transformController.snapVisualState().labels;
     while (m_transformSnapMetricLabels.size() < labels.size()) {
@@ -8545,6 +8555,115 @@ void OpenGLCanvasWidget::syncTransformSnapMetricLabel()
     for (size_t i = labels.size(); i < m_transformSnapMetricLabels.size(); ++i) {
         m_transformSnapMetricLabels[i]->dismiss();
     }
+}
+
+void OpenGLCanvasWidget::syncTransformDragMetricLabel()
+{
+    // Measure against the corners latched at drag start rather than the raw
+    // translation/rotation/scale fields: those are bypassed in free-quad and
+    // mesh modes, while the corners are meaningful in every mode.
+    using ruwa::ui::widgets::MetricSegment;
+    QList<MetricSegment> segments;
+    if (m_transformController.isActive() && m_transformController.isDragging()
+        && m_transformDragStartCorners.has_value()) {
+        const auto& start = *m_transformDragStartCorners;
+        const std::array<Vector2, 4> now = m_transformController.state().transformedCorners();
+        const auto edge = [](const std::array<Vector2, 4>& q, int from, int to) {
+            return Vector2 { q[to].x - q[from].x, q[to].y - q[from].y };
+        };
+        const auto length = [](const Vector2& v) {
+            return std::sqrt(static_cast<double>(v.x) * v.x + static_cast<double>(v.y) * v.y);
+        };
+
+        switch (m_transformController.activeDragKind()) {
+        case TransformDragKind::Move: {
+            const auto centroid = [](const std::array<Vector2, 4>& q) {
+                return Vector2 { (q[0].x + q[1].x + q[2].x + q[3].x) * 0.25f,
+                    (q[0].y + q[1].y + q[2].y + q[3].y) * 0.25f };
+            };
+            const Vector2 from = centroid(start);
+            const Vector2 to = centroid(now);
+            const int dx = qRound(to.x - from.x);
+            const int dy = qRound(to.y - from.y);
+            // The arrows carry the direction, so the values stay unsigned. Both
+            // icons point their default way (left / down); each flips once the
+            // content travels against it.
+            const QString offsetTemplate = QStringLiteral("8888");
+            segments.append(MetricSegment { QStringLiteral(":/icons/TransformLeft"), dx > 0, false,
+                QString::number(qAbs(dx)), offsetTemplate });
+            segments.append(MetricSegment { QStringLiteral(":/icons/TransformDown"), false, dy < 0,
+                QString::number(qAbs(dy)), offsetTemplate });
+            break;
+        }
+        case TransformDragKind::Rotate: {
+            const Vector2 before = edge(start, 0, 1);
+            const Vector2 after = edge(now, 0, 1);
+            if (length(before) > 1.0e-4 && length(after) > 1.0e-4) {
+                constexpr double kRadiansToDegrees = 57.29577951308232;
+                double degrees = (std::atan2(after.y, after.x) - std::atan2(before.y, before.x))
+                    * kRadiansToDegrees;
+                // Report the shortest signed rotation, matching what the drag reads as.
+                degrees = std::fmod(degrees + 540.0, 360.0) - 180.0;
+                // The rotation glyph is never mirrored, so the sign is the only
+                // thing left to tell the two directions apart — keep it.
+                segments.append(MetricSegment { QStringLiteral(":/icons/TransformRotation"), false,
+                    false, QString::number(degrees, 'f', 1) + QStringLiteral("°"),
+                    QStringLiteral("-888.8°") });
+            }
+            break;
+        }
+        case TransformDragKind::Scale: {
+            const double startWidth = length(edge(start, 0, 1));
+            const double startHeight = length(edge(start, 0, 3));
+            if (startWidth > 1.0e-4 && startHeight > 1.0e-4) {
+                const double widthPercent = length(edge(now, 0, 1)) / startWidth * 100.0;
+                const double heightPercent = length(edge(now, 0, 3)) / startHeight * 100.0;
+                const bool uniform = std::abs(widthPercent - heightPercent) < 0.05;
+                const QString value = uniform
+                    ? QStringLiteral("%1%").arg(QString::number(widthPercent, 'f', 1))
+                    : QStringLiteral("%1% × %2%")
+                          .arg(QString::number(widthPercent, 'f', 1),
+                              QString::number(heightPercent, 'f', 1));
+                // Non-uniform scales can grow one axis and shrink the other;
+                // the icon follows the area, which is what the eye reads.
+                const bool grew = widthPercent * heightPercent >= 100.0 * 100.0;
+                segments.append(MetricSegment { grew
+                        ? QStringLiteral(":/icons/TransformBigger")
+                        : QStringLiteral(":/icons/TransformSmaller"),
+                    false, false, value,
+                    uniform ? QStringLiteral("888.8%") : QStringLiteral("888.8% × 888.8%") });
+            }
+            break;
+        }
+        default:
+            break;
+        }
+    }
+
+    if (segments.isEmpty()) {
+        if (m_transformDragMetricLabel) {
+            m_transformDragMetricLabel->dismiss();
+        }
+        return;
+    }
+
+    if (!m_transformDragMetricLabel) {
+        m_transformDragMetricLabel = new ruwa::ui::widgets::CanvasMetricLabelOverlay(this);
+    }
+
+    m_transformDragMetricLabel->presentAtCursor(segments, QPointF(mapFromGlobal(QCursor::pos())));
+}
+
+void OpenGLCanvasWidget::refreshTransformDragMetricAnchor()
+{
+    // Sampled per frame off the OS cursor rather than off move events, the same
+    // way pan sampling is: the readout then tracks the pointer at the display
+    // refresh rate even when Qt coalesces or delays the moves behind it.
+    if (!m_transformDragMetricLabel || !m_transformController.isActive()
+        || !m_transformController.isDragging()) {
+        return;
+    }
+    m_transformDragMetricLabel->refreshAtCursor(QPointF(mapFromGlobal(QCursor::pos())));
 }
 
 void OpenGLCanvasWidget::commitTransformUndoStep()
@@ -8867,7 +8986,7 @@ void OpenGLCanvasWidget::confirmTransform()
     if (!m_transformController.hasChanges()) {
         // No changes
         m_transformController.cancelAndExit();
-        syncTransformSnapMetricLabel();
+        syncTransformMetricOverlays();
         destroyTransformUndoStack();
         m_transformTargetSet.clear();
         m_selectionCopyMoveTransform = false;
@@ -9093,7 +9212,7 @@ void OpenGLCanvasWidget::confirmTransform()
         }
 
         m_transformController.cancelAndExit();
-        syncTransformSnapMetricLabel();
+        syncTransformMetricOverlays();
         destroyTransformUndoStack();
         const Rect cacheBounds
             = unionTransformBounds(m_transformTargetSet.contentBounds, stateCopy.transformedAABB());
@@ -9188,7 +9307,7 @@ void OpenGLCanvasWidget::confirmTransform()
         layer->runtimeRetainedPayloadKey.clear();
 
         m_transformController.cancelAndExit();
-        syncTransformSnapMetricLabel();
+        syncTransformMetricOverlays();
         destroyTransformUndoStack();
         m_transformTargetSet.clear();
         m_selectionCopyMoveTransform = false;
@@ -9261,7 +9380,7 @@ void OpenGLCanvasWidget::confirmTransform()
         layer->smartTransform = stateCopy;
 
         m_transformController.cancelAndExit();
-        syncTransformSnapMetricLabel();
+        syncTransformMetricOverlays();
         destroyTransformUndoStack();
         m_transformTargetSet.clear();
         m_selectionCopyMoveTransform = false;
@@ -9363,7 +9482,7 @@ void OpenGLCanvasWidget::confirmTransform()
 
         // 6. Exit transform mode (without CPU apply â€” already done on GPU)
         m_transformController.cancelAndExit();
-        syncTransformSnapMetricLabel();
+        syncTransformMetricOverlays();
         destroyTransformUndoStack();
         m_transformTargetSet.clear();
         m_selectionCopyMoveTransform = false;
@@ -9459,7 +9578,7 @@ void OpenGLCanvasWidget::cancelTransform(std::optional<bool> moveOnlyStateForOve
     Rect transformedAABB = m_transformController.state().transformedAABB();
 
     m_transformController.cancelAndExit();
-    syncTransformSnapMetricLabel();
+    syncTransformMetricOverlays();
     destroyTransformUndoStack();
     m_transformTargetSet.clear();
     m_selectionCopyMoveTransform = false;
@@ -9624,6 +9743,7 @@ void OpenGLCanvasWidget::paintGL_updateCameraAndEmitSignals()
         = m_viewport.camera().isAnimating() || m_transformController.hasPendingAnimation();
 
     updateFillProgressPopupPosition();
+    refreshTransformDragMetricAnchor();
     const float zoom = m_viewport.camera().zoom();
     if (zoom != m_lastEmittedZoom) {
         m_lastEmittedZoom = zoom;

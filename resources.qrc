@@ -50,6 +50,11 @@
         <file alias="Italic">resources/icons/Italic.png</file>
         <file alias="Underline">resources/icons/Underline.png</file>
         <file alias="Zoom">resources/icons/Zoom.png</file>
+        <file alias="TransformLeft">resources/icons/TransformLeft.png</file>
+        <file alias="TransformDown">resources/icons/TransformDown.png</file>
+        <file alias="TransformRotation">resources/icons/TransformRotation.png</file>
+        <file alias="TransformSmaller">resources/icons/TransformSmaller.png</file>
+        <file alias="TransformBigger">resources/icons/TransformBigger.png</file>
         <file alias="OpaqueLogoIcon">resources/icons/OpaqueLogo.png</file>
         <file alias="TransparentLogoIcon">resources/icons/TransparentLogo.png</file>
         <file alias="BasicFile">resources/icons/BasicFile.png</file>

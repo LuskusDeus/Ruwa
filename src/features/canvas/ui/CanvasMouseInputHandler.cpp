@@ -926,7 +926,7 @@ bool CanvasMouseInputHandler::handleMouseMove(QMouseEvent* event)
                     const aether::Vector2 worldPos = m_panel->mapToWorld(globalPos);
                     glWidget->latchSelectionCopyMoveTransformIfNeeded(worldPos);
                     if (ctrl.mouseMove(worldPos, zoom, event->modifiers(), &viewport)) {
-                        glWidget->syncTransformSnapMetricLabel();
+                        glWidget->syncTransformMetricOverlays();
                         m_panel->requestRender();
                     }
                     event->accept();
@@ -1224,7 +1224,7 @@ bool CanvasMouseInputHandler::handleMouseMove(QMouseEvent* event)
         m_panel->m_glWidget->latchSelectionCopyMoveTransformIfNeeded(worldPos);
         if (m_panel->m_glWidget->transformController().mouseMove(
                 worldPos, zoom, event->modifiers(), &viewport)) {
-            m_panel->m_glWidget->syncTransformSnapMetricLabel();
+            m_panel->m_glWidget->syncTransformMetricOverlays();
             m_panel->requestRender();
         }
         event->accept();
@@ -1309,7 +1309,7 @@ bool CanvasMouseInputHandler::handleMouseRelease(QMouseEvent* event)
             = m_panel->m_glWidget->transformController().moveAxisGuideActive()
             || m_panel->m_glWidget->transformController().snapVisualState().active();
         m_panel->m_glWidget->transformController().mouseRelease();
-        m_panel->m_glWidget->syncTransformSnapMetricLabel();
+        m_panel->m_glWidget->syncTransformMetricOverlays();
         m_panel->m_glWidget->commitTransformUndoStep();
         m_panel->m_transformDragCursorValid = false;
         if (hadTransformGuides) {

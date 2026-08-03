@@ -36,6 +36,12 @@ class Canvas;
 
 enum class TransformInteractionMode { Classic, Deform };
 
+/// What the drag in progress is actually doing. The active handle alone does not
+/// answer this: a classic corner drives either scale or rotation depending on
+/// which affordance was grabbed, and the free-quad/deform paths reinterpret it
+/// again. See activeDragKind().
+enum class TransformDragKind { None, Move, Rotate, Scale };
+
 class TransformController {
 public:
     TransformController() = default;
@@ -652,6 +658,49 @@ public:
         captureTransformModeEntryReference();
     }
     TransformHandle activeHandle() const { return m_activeHandle; }
+
+    /// Classify the drag in progress the same way mouseMove dispatches it, so UI
+    /// can report what the user is doing. Mesh deform reports None: it is neither
+    /// a move, a rotation nor a scale. Keep in sync with mouseMove.
+    TransformDragKind activeDragKind() const
+    {
+        if (!m_active || !m_dragging) {
+            return TransformDragKind::None;
+        }
+        if (m_interactionMode == TransformInteractionMode::Deform && m_state.hasDeformMesh()
+            && (m_activeDeformPoint >= 0 || m_deformRegionActive)) {
+            return TransformDragKind::None;
+        }
+        const bool isCorner = isCornerHandle(m_activeHandle);
+        const bool isSide = isSideHandle(m_activeHandle);
+        if (m_ctrlFreeDragActive && m_state.hasFreeQuad() && (isCorner || isSide)) {
+            // Ctrl free-form distort: report the edge-length change as a scale.
+            return TransformDragKind::Scale;
+        }
+        if (m_state.hasFreeQuad()) {
+            if (m_activeHandle == TransformHandle::Move) {
+                return TransformDragKind::Move;
+            }
+            if (m_activeHandle == TransformHandle::Rotate) {
+                return TransformDragKind::Rotate;
+            }
+            if (isCorner || isSide) {
+                return TransformDragKind::Scale;
+            }
+        }
+        if (cornersActAsRotationHandles() && !m_ctrlFreeDragActive && isCorner
+            && m_classicCornerRotateFromIcon) {
+            return TransformDragKind::Rotate;
+        }
+        if (m_activeHandle == TransformHandle::Move) {
+            return TransformDragKind::Move;
+        }
+        if (m_activeHandle == TransformHandle::Rotate) {
+            return TransformDragKind::Rotate;
+        }
+        return isCorner || isSide ? TransformDragKind::Scale : TransformDragKind::None;
+    }
+
     int activeDeformPoint() const { return m_activeDeformPoint; }
     TransformInteractionMode interactionMode() const { return m_interactionMode; }
     void setInteractionMode(TransformInteractionMode mode)
