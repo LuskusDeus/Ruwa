@@ -170,8 +170,19 @@ private:
     // stabilizer. Real pen samples drive a windowed period estimate; catch-up
     // (idle) ticks pass through real time and reset-on-pause keeps it honest.
     double stepStabilizerClock(double realMs, bool isRealPenSample);
+    // Stroke time carried by DABS (the `Time` dynamics input). Integrates the
+    // forward motion of the synthetic clock above onto the stroke's own origin.
+    // synthNowMs is a stepStabilizerClock result; realMs is the raw input clock,
+    // used only to seed the origin. See the member block for why dabs must not
+    // read the raw clock directly.
+    float stepDabDynamicsClock(double synthNowMs, double realMs);
+    // Same clock, entry point for ticks that carry no pen sample (the liquify
+    // dwell): advances in real time without touching the period estimate.
+    float advanceDabDynamicsClockIdle(double realMs);
+    // dabElapsedSeconds is the DAB clock (stepDabDynamicsClock), not the raw
+    // input clock — everything this writes ends up on a dab.
     void continueStrokeWithResolvedPoint(float worldX, float worldY, float pressure,
-        float strokeElapsedSeconds, const Vector2& stabilizedPoint, bool requestRenderAfterStep,
+        float dabElapsedSeconds, const Vector2& stabilizedPoint, bool requestRenderAfterStep,
         bool updateCatchupTimer);
     void rasterizeStrokeSegment(TileGrid* grid, TileGrid* selectionMask,
         BrushExecutionBackend* brushExecutionBackend, float fromX, float fromY, float toX,
@@ -224,6 +235,10 @@ private:
     float m_lastStrokeX = 0.0f;
     float m_lastStrokeY = 0.0f;
     float m_lastStrokePressure = 1.0f;
+    // Anchors of the rasterized path. Their *ElapsedSeconds are in the DAB clock
+    // domain (m_dabClock*), because that is what they are handed to the brush
+    // as; only m_lastStrokeTargetElapsedSeconds tracks the raw input clock, which
+    // is what the incoming sample stream is ordered against.
     float m_lastStrokeElapsedSeconds = 0.0f;
     float m_lastStrokeTargetX = 0.0f;
     float m_lastStrokeTargetY = 0.0f;
@@ -294,6 +309,21 @@ private:
     double m_stabLastRealPenMs = 0.0;
     std::array<double, kStabClockWindow> m_stabRealWin {};
     int m_stabRealWinCount = 0;
+    // Stroke time handed to the DABS, i.e. what the `Time` dynamics input reads
+    // (BrushSettings.h normalizedBrushStrokeTime). It must NOT be the raw input
+    // clock: with a stylus the OS stamps a whole burst of samples with one
+    // coarse (~15.6 ms) time, so the raw stream advances by the 0.5 ms ordering
+    // nudge for three or four samples and then jumps a full tick. Per-dab that
+    // is a step function — a run of dabs gets a near-constant time, then one
+    // short segment absorbs the whole tick — which a hue-over-time brush paints
+    // as flat colour bands with hard edges. A mouse never shows it because its
+    // clock is read from QElapsedTimer at processing time and always advances.
+    // So dabs integrate the FORWARD motion of the de-jittered synthetic clock
+    // instead: even increments, real-time rate, monotonic across the snap-backs
+    // stepStabilizerClock performs on a pause or a drift correction.
+    bool m_dabClockValid = false;
+    double m_dabClockPrevSynthMs = 0.0;
+    double m_dabClockElapsedMs = 0.0;
     // Stroke-elapsed ms of the latest REAL pen input; gates stabilizer catch-up
     // so it only fires when input is idle (see processStabilizerCatchup).
     double m_lastRealInputMs = 0.0;

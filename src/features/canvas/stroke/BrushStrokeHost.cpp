@@ -341,6 +341,9 @@ void BrushStrokeHost::beginStroke(
     m_stabPressureLastMs = 0.0;
     m_stabClockValid = false;
     m_stabRealWinCount = 0;
+    m_dabClockValid = false;
+    m_dabClockPrevSynthMs = 0.0;
+    m_dabClockElapsedMs = 0.0;
     m_lastRealInputMs = 0.0;
     m_lastLiquifyMoveWallMs = 0.0;
     m_lastLiquifyMoveX = worldX;
@@ -791,6 +794,51 @@ double BrushStrokeHost::stepStabilizerClock(double realMs, bool isRealPenSample)
     return m_stabSynthMs;
 }
 
+float BrushStrokeHost::stepDabDynamicsClock(double synthNowMs, double realMs)
+{
+    if (!m_dabClockValid) {
+        m_dabClockValid = true;
+        m_dabClockPrevSynthMs = synthNowMs;
+        // Seed from the raw clock so the ORIGIN is unchanged (0 == stroke
+        // start, first sample lands where it always did); only the increments
+        // from here on are de-jittered.
+        m_dabClockElapsedMs = std::max(0.0, realMs);
+        return static_cast<float>(m_dabClockElapsedMs / 1000.0);
+    }
+
+    // Forward motion only. The synthetic clock snaps back to real time when a
+    // pause resets the period estimate or the drift clamp fires; a dynamics
+    // clock that stepped backwards would rewind hue (or size, or any other
+    // time-bound setting) in the middle of a stroke. A snap costs at most one
+    // sample of advance, whereas a genuine pause moves real time forward and is
+    // carried through in full — a time-driven brush keeps running while the pen
+    // rests, exactly as it does on the mouse path.
+    const double advanceMs = synthNowMs - m_dabClockPrevSynthMs;
+    m_dabClockPrevSynthMs = synthNowMs;
+    if (advanceMs > 0.0) {
+        m_dabClockElapsedMs += advanceMs;
+    }
+    return static_cast<float>(m_dabClockElapsedMs / 1000.0);
+}
+
+float BrushStrokeHost::advanceDabDynamicsClockIdle(double realMs)
+{
+    if (!m_dabClockValid) {
+        // Nothing has been drawn from a pen sample yet, so there is no clock to
+        // carry: report raw stroke time and leave the seeding to the first real
+        // sample.
+        return static_cast<float>(std::max(0.0, realMs) / 1000.0);
+    }
+    // No new sample means no synthetic step to integrate — advance in real time
+    // instead, which is the same rule stepStabilizerClock applies to its own
+    // idle ticks, but without feeding the sample-period estimate.
+    if (realMs > m_dabClockPrevSynthMs) {
+        m_dabClockElapsedMs += realMs - m_dabClockPrevSynthMs;
+        m_dabClockPrevSynthMs = realMs;
+    }
+    return static_cast<float>(m_dabClockElapsedMs / 1000.0);
+}
+
 void BrushStrokeHost::continueStrokeImmediate(float worldX, float worldY, float pressure,
     float strokeElapsedSeconds, bool requestRenderAfterStep, bool isRealPenSample)
 {
@@ -819,8 +867,32 @@ void BrushStrokeHost::continueStrokeImmediate(float worldX, float worldY, float 
         m_callbacks.notifyCanvasInteraction(true);
     }
 
+    // Two clocks with two consumers.
+    //
+    //   strokeElapsedSeconds — the RAW input clock (pen event timestamps, or
+    //     the wall clock on the mouse/catch-up paths). The input stream is
+    //     ordered and de-duplicated against it, so the m_lastStrokeTarget*
+    //     bookkeeping and the queue keep using it verbatim.
+    //   nowMs — the de-jittered synthetic sample clock the stabilizer's
+    //     time-domain EWMA runs on. The OS delivers moves in bursts at coarse
+    //     (~15.6 ms) timer resolution, so the observable per-sample dt is
+    //     bimodal (nudge floor / one big jump) and the EWMA turns that into a
+    //     sawtooth (facets). See stepStabilizerClock.
+    //   dabElapsedSeconds — what the DABS carry, and therefore what the `Time`
+    //     dynamics input reads. Same bimodality, different symptom: per dab it
+    //     is a step function, so a hue-over-time brush bands. It integrates
+    //     nowMs rather than sampling it, which also keeps it monotonic across
+    //     the snap-backs stepStabilizerClock performs. See stepDabDynamicsClock.
+    //
+    // Stepped here, above the quick-shape branch, so every dab of the stroke
+    // reads one clock. Quick-shape samples are ordinary real pen samples, so
+    // feeding them to the period estimate keeps it honest.
+    const double realMs = static_cast<double>(strokeElapsedSeconds) * 1000.0;
+    const double nowMs = stepStabilizerClock(realMs, isRealPenSample);
+    const float dabElapsedSeconds = stepDabDynamicsClock(nowMs, realMs);
+
     currentBrush->setPressure(pressure);
-    currentBrush->setStrokeElapsedSeconds(strokeElapsedSeconds, true);
+    currentBrush->setStrokeElapsedSeconds(dabElapsedSeconds, true);
 
     m_lastStrokeTargetX = worldX;
     m_lastStrokeTargetY = worldY;
@@ -837,15 +909,6 @@ void BrushStrokeHost::continueStrokeImmediate(float worldX, float worldY, float 
 
     const float stabSlider = currentBrush->stabilization();
     const float stabLagMs = ruwa::core::brushes::stabilizationTauMs(stabSlider);
-
-    // De-jittered sample clock (see m_stabClock*/stepStabilizerClock). The OS
-    // delivers bursts stamped at coarse (~15.6 ms) resolution, so the raw
-    // per-sample dt is bimodal and the time-domain EWMA turns it into the facet
-    // sawtooth. We feed the
-    // EWMA an even time base estimated from the real pen rate. The EWMA and τ
-    // are untouched (same visual logic); lag stays τ in real time.
-    const double realMs = static_cast<double>(strokeElapsedSeconds) * 1000.0;
-    const double nowMs = stepStabilizerClock(realMs, isRealPenSample);
 
     // Take ONE stabilized point per call and let the downstream Catmull-Rom
     // interpolate the curve between such points. Feeding the stabilizer's dense
@@ -884,7 +947,7 @@ void BrushStrokeHost::continueStrokeImmediate(float worldX, float worldY, float 
         emitPressure = m_stabPressure2;
     }
     continueStrokeWithResolvedPoint(
-        worldX, worldY, emitPressure, strokeElapsedSeconds, resolved, false, false);
+        worldX, worldY, emitPressure, dabElapsedSeconds, resolved, false, false);
     updateStabilizerCatchupTimer();
     if (requestRenderAfterStep && m_callbacks.requestRender) {
         m_callbacks.requestRender();
@@ -892,7 +955,7 @@ void BrushStrokeHost::continueStrokeImmediate(float worldX, float worldY, float 
 }
 
 void BrushStrokeHost::continueStrokeWithResolvedPoint(float worldX, float worldY, float pressure,
-    float strokeElapsedSeconds, const Vector2& resolvedPoint, bool requestRenderAfterStep,
+    float dabElapsedSeconds, const Vector2& resolvedPoint, bool requestRenderAfterStep,
     bool updateCatchupTimer)
 {
     if (!m_isDrawing) {
@@ -906,7 +969,7 @@ void BrushStrokeHost::continueStrokeWithResolvedPoint(float worldX, float worldY
     }
 
     currentBrush->setPressure(pressure);
-    currentBrush->setStrokeElapsedSeconds(strokeElapsedSeconds, true);
+    currentBrush->setStrokeElapsedSeconds(dabElapsedSeconds, true);
 
     const Vector2 stabilizedPoint = resolvedPoint;
 
@@ -964,10 +1027,10 @@ void BrushStrokeHost::continueStrokeWithResolvedPoint(float worldX, float worldY
             // the end-of-stroke drain) still interpolates the latest pressure.
             if (m_liveStrokePoints.size() > 1) {
                 m_liveStrokePoints.back().pressure = pressure;
-                m_liveStrokePoints.back().strokeElapsedSeconds = strokeElapsedSeconds;
+                m_liveStrokePoints.back().strokeElapsedSeconds = dabElapsedSeconds;
             }
             m_lastStrokeInputPressure = pressure;
-            m_lastStrokeInputElapsedSeconds = strokeElapsedSeconds;
+            m_lastStrokeInputElapsedSeconds = dabElapsedSeconds;
             if (updateCatchupTimer && stabilizerCatchupPending) {
                 updateStabilizerCatchupTimer();
             }
@@ -979,7 +1042,7 @@ void BrushStrokeHost::continueStrokeWithResolvedPoint(float worldX, float worldY
             previewUpdated = false;
         } else if (realtimeRebuild) {
             ++m_realtimePreviewEventCount;
-            currentBrush->setStrokeElapsedSeconds(strokeElapsedSeconds, true);
+            currentBrush->setStrokeElapsedSeconds(dabElapsedSeconds, true);
             currentBrush->recordDabPoint(stabilizedPoint.x, stabilizedPoint.y);
             previewUpdated = rebuildStrokePreviewFromDabs(
                 grid, paintMask, executionBackend, true, &rebuiltTiles);
@@ -990,40 +1053,40 @@ void BrushStrokeHost::continueStrokeWithResolvedPoint(float worldX, float worldY
                 m_callbacks.makeCurrent();
             }
             m_useGPUBrush = executionBackend->stamp(*currentBrush, *grid, stabilizedPoint.x,
-                stabilizedPoint.y, paintMask, true, strokeElapsedSeconds, true);
+                stabilizedPoint.y, paintMask, true, dabElapsedSeconds, true);
             if (!hasCurrentContext && m_callbacks.doneCurrent) {
                 m_callbacks.doneCurrent();
             }
         } else if (executionBackend) {
             m_useGPUBrush = executionBackend->stamp(*currentBrush, *grid, stabilizedPoint.x,
-                stabilizedPoint.y, paintMask, false, strokeElapsedSeconds, true);
+                stabilizedPoint.y, paintMask, false, dabElapsedSeconds, true);
         } else {
             if (brushRequiresGpuEffect(currentBrush)) {
                 m_useGPUBrush = false;
                 return;
             }
-            currentBrush->setStrokeElapsedSeconds(strokeElapsedSeconds, true);
+            currentBrush->setStrokeElapsedSeconds(dabElapsedSeconds, true);
             currentBrush->stamp(*grid, stabilizedPoint.x, stabilizedPoint.y, paintMask);
             m_useGPUBrush = false;
         }
 
         if (!m_liveStrokePoints.empty()) {
             m_liveStrokePoints.back().pressure = pressure;
-            m_liveStrokePoints.back().strokeElapsedSeconds = strokeElapsedSeconds;
+            m_liveStrokePoints.back().strokeElapsedSeconds = dabElapsedSeconds;
         }
         if (realtimeRebuild || m_liveStrokePoints.size() <= 1) {
             m_lastStrokeX = stabilizedPoint.x;
             m_lastStrokeY = stabilizedPoint.y;
             m_lastStrokePressure = pressure;
-            m_lastStrokeElapsedSeconds = strokeElapsedSeconds;
+            m_lastStrokeElapsedSeconds = dabElapsedSeconds;
         }
     } else if (realtimeRebuild) {
         ++m_realtimePreviewEventCount;
-        currentBrush->setStrokeElapsedSeconds(strokeElapsedSeconds, true);
+        currentBrush->setStrokeElapsedSeconds(dabElapsedSeconds, true);
         std::vector<TileBrush::DabPoint> segmentDabs;
         currentBrush->appendInterpolatedStrokeDabs(prevX, prevY, stabilizedPoint.x,
             stabilizedPoint.y, prevPressure, pressure, segmentDabs, m_lastStrokeElapsedSeconds,
-            strokeElapsedSeconds, true);
+            dabElapsedSeconds, true);
         previewUpdated
             = rebuildStrokePreviewFromDabs(grid, paintMask, executionBackend, true, &rebuiltTiles);
     } else {
@@ -1050,7 +1113,7 @@ void BrushStrokeHost::continueStrokeWithResolvedPoint(float worldX, float worldY
         // to several world pixels of zig-zag, so we apply much stronger
         // filtering there. At zoom >= 1 the filter degenerates to near
         // pass-through (single iteration, lag of 2 samples).
-        m_liveStrokePoints.push_back({ stabilizedPoint, pressure, strokeElapsedSeconds });
+        m_liveStrokePoints.push_back({ stabilizedPoint, pressure, dabElapsedSeconds });
 
         const float zoom = std::max(viewportZoom(), 0.05f);
         const float zoomInv = 1.0f / zoom;
@@ -1102,12 +1165,12 @@ void BrushStrokeHost::continueStrokeWithResolvedPoint(float worldX, float worldY
         m_lastStrokeX = stabilizedPoint.x;
         m_lastStrokeY = stabilizedPoint.y;
         m_lastStrokePressure = pressure;
-        m_lastStrokeElapsedSeconds = strokeElapsedSeconds;
+        m_lastStrokeElapsedSeconds = dabElapsedSeconds;
     }
     m_lastStrokeInputX = stabilizedPoint.x;
     m_lastStrokeInputY = stabilizedPoint.y;
     m_lastStrokeInputPressure = pressure;
-    m_lastStrokeInputElapsedSeconds = strokeElapsedSeconds;
+    m_lastStrokeInputElapsedSeconds = dabElapsedSeconds;
 
     if ((!realtimeRebuild && !skippedDabForDirection) || previewUpdated) {
         snapshotNewTiles(currentBrush->strokeBuffer(), grid);
@@ -1675,6 +1738,9 @@ void BrushStrokeHost::clearStrokeRuntimeState()
     m_lastStrokeElapsedSeconds = 0.0f;
     m_lastStrokeTargetElapsedSeconds = 0.0f;
     m_lastStrokeInputElapsedSeconds = 0.0f;
+    m_dabClockValid = false;
+    m_dabClockPrevSynthMs = 0.0;
+    m_dabClockElapsedMs = 0.0;
     m_strokeElapsedTimer.invalidate();
     m_stabilizerCatchupTimer.stop();
     m_liquifyDwellTimer.stop();
@@ -2294,7 +2360,14 @@ void BrushStrokeHost::emitLiquifyDwell()
     // One zero-movement segment at the current position → exactly one dwell dab
     // (see TileBrush::appendInterpolatedStrokeDabs). rasterizeStrokeSegment makes
     // the GL context current itself.
-    const float elapsed = strokeElapsedSecondsNow();
+    //
+    // The dwell dab reads the same DAB clock as every other dab instead of the
+    // wall clock, so a time-bound dynamic doesn't jump when the pen stops and
+    // the dwell takes over. No pen sample arrived, so this is the idle entry
+    // point: it advances in real time and leaves the stabilizer's period
+    // estimate alone.
+    const float elapsed = advanceDabDynamicsClockIdle(
+        static_cast<double>(strokeElapsedSecondsNow()) * 1000.0);
     rasterizeStrokeSegment(grid, paintMask, executionBackend, m_lastStrokeInputX,
         m_lastStrokeInputY, m_lastStrokeInputX, m_lastStrokeInputY, m_lastStrokeInputPressure,
         m_lastStrokeInputPressure, elapsed, elapsed);
