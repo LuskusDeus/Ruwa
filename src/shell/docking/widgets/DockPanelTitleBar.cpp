@@ -3,6 +3,7 @@
 // DockPanelTitleBar.cpp
 #include "DockPanelTitleBar.h"
 #include "DockPanel.h"
+#include "DockPanelCloseButton.h"
 #include "features/theme/manager/ThemeManager.h"
 #include "shared/resources/FontManager.h"
 #include "shared/resources/IconProvider.h"
@@ -25,6 +26,11 @@ namespace {
 constexpr int kTitleSidePadding = 6;
 constexpr int kInteractiveGap = 6;
 constexpr int kInteractiveVerticalPadding = 1;
+
+// Divider between a panel-supplied trailing widget and the close button.
+constexpr int kBaseSeparatorWidth = 1;
+constexpr int kBaseSeparatorGap = 5;
+constexpr qreal kSeparatorHeightRatio = 0.55;
 
 // Match BrushPackPanel / floating overlays: pill-shaped drag strip
 constexpr int kBaseHandleLineWidth = 96;
@@ -95,6 +101,7 @@ DockPanelTitleBar::DockPanelTitleBar(DockPanel* panel)
     , m_panel(panel)
 {
     setupUI();
+    setupCloseButton();
     setupFloatingLayoutAnimation();
 
     // Repaint when application focus changes so active/inactive title colors stay in sync.
@@ -111,6 +118,9 @@ void DockPanelTitleBar::setBarHeight(int height)
 {
     m_height = height;
     setFixedHeight(m_height);
+    if (m_closeButton) {
+        m_closeButton->applyTheme(qMax(1, m_height - (kInteractiveVerticalPadding * 2)));
+    }
     updateInteractiveWidgetGeometries();
     notifyPanelLayoutGeometry();
 }
@@ -165,7 +175,17 @@ void DockPanelTitleBar::updateIcon()
 
 void DockPanelTitleBar::updateButtons()
 {
+    // Closable may have just been toggled: re-run the right-edge layout.
+    updateInteractiveWidgetGeometries();
     update();
+}
+
+void DockPanelTitleBar::retranslateUi()
+{
+    if (m_closeButton) {
+        m_closeButton->setToolTip(tr("Close panel"));
+        m_closeButton->setAccessibleName(tr("Close panel"));
+    }
 }
 
 void DockPanelTitleBar::applyTheme(const ruwa::ui::core::ThemeColors& c)
@@ -178,6 +198,9 @@ void DockPanelTitleBar::applyTheme(const ruwa::ui::core::ThemeColors& c)
         ruwa::ui::core::FontManager::FontType::UI);
 
     m_scaledSlideExtra = ruwa::ui::core::ThemeManager::instance().scaled(10);
+    if (m_closeButton) {
+        m_closeButton->applyTheme(qMax(1, m_height - (kInteractiveVerticalPadding * 2)));
+    }
     setFixedHeight(m_height);
     updateInteractiveWidgetGeometries();
     notifyPanelLayoutGeometry();
@@ -364,6 +387,16 @@ void DockPanelTitleBar::paintEvent(QPaintEvent* /*event*/)
         painter.drawLine(0, height() - 1, width(), height() - 1);
     }
 
+    // Divider between the panel's trailing widget and the close button.
+    if (!m_trailingSeparatorRect.isEmpty()) {
+        painter.save();
+        painter.setRenderHint(QPainter::Antialiasing, false);
+        painter.setPen(Qt::NoPen);
+        painter.setBrush(m_borderColor);
+        painter.drawRect(m_trailingSeparatorRect);
+        painter.restore();
+    }
+
     // Active panel keeps normal colors; inactive panels are muted.
     const QWidget* focusWidget = QApplication::focusWidget();
     const bool panelFocused
@@ -448,8 +481,18 @@ void DockPanelTitleBar::paintEvent(QPaintEvent* /*event*/)
         auto& theme = ruwa::ui::core::ThemeManager::instance();
         auto& mgr = ruwa::ui::core::WidgetStyleManager::instance();
         const int lineH = theme.scaled(kBaseHandleLineHeight);
-        const QRect handleBounds
-            = m_interactiveWidgetsVisibleWhenFloating ? titleContentRect() : rect();
+        // Keep the pill centred on the bar: when the close button is present it
+        // is inset symmetrically instead of shifted off-centre.
+        QRect handleBounds = rect();
+        if (m_interactiveWidgetsVisibleWhenFloating) {
+            handleBounds = titleContentRect();
+        } else if (m_closeButton && m_closeButton->isVisible()) {
+            const int inset = m_closeButton->width() + kInteractiveGap;
+            const QRect insetRect = handleBounds.adjusted(inset, 0, -inset, 0);
+            if (insetRect.width() > 0) {
+                handleBounds = insetRect;
+            }
+        }
         const int lineW
             = handleLineWidthForBar(handleBounds.width(), kBaseHandleLineWidth, lineH, theme);
         const qreal handleCy = handleCenterY(m_height, slideOffset, m_scaledSlideExtra);
@@ -498,6 +541,28 @@ void DockPanelTitleBar::setupUI()
     m_trailingHost->hide();
 }
 
+void DockPanelTitleBar::setupCloseButton()
+{
+    m_closeButton = new DockPanelCloseButton(this);
+    m_closeButton->applyTheme(qMax(1, m_height - (kInteractiveVerticalPadding * 2)));
+    m_closeButton->hide();
+    retranslateUi();
+
+    connect(m_closeButton, &QPushButton::clicked, this, [this]() {
+        if (m_panel) {
+            m_panel->closePanel();
+        }
+    });
+}
+
+int DockPanelTitleBar::chromeSlideOffset() const
+{
+    if (m_interactiveWidgetsVisibleWhenFloating) {
+        return 0;
+    }
+    return titleSlideOffsetPx(m_panel, m_height, m_scaledSlideExtra, m_floatingLayoutProgress);
+}
+
 void DockPanelTitleBar::updateInteractiveWidgetGeometries()
 {
     const bool hideChrome = !m_interactiveWidgetsVisibleWhenFloating && m_panel
@@ -531,10 +596,7 @@ void DockPanelTitleBar::updateInteractiveWidgetGeometries()
         content->resize(size);
         host->resize(size);
 
-        const int slide = m_interactiveWidgetsVisibleWhenFloating
-            ? 0
-            : titleSlideOffsetPx(m_panel, m_height, m_scaledSlideExtra, m_floatingLayoutProgress);
-        const int y = slide + qMax(0, (m_height - size.height()) / 2);
+        const int y = chromeSlideOffset() + qMax(0, (m_height - size.height()) / 2);
         if (alignment == Qt::AlignLeft) {
             host->move(x, y);
         } else {
@@ -549,7 +611,37 @@ void DockPanelTitleBar::updateInteractiveWidgetGeometries()
     const int leftWidth
         = updateHost(m_leadingHost, m_leadingWidget, kTitleSidePadding, Qt::AlignLeft);
     Q_UNUSED(leftWidth);
-    updateHost(m_trailingHost, m_trailingWidget, width() - kTitleSidePadding, Qt::AlignRight);
+
+    // Right edge is consumed outside-in: close button, divider, trailing widget.
+    const int slide = chromeSlideOffset();
+    int rightEdge = width() - kTitleSidePadding;
+
+    // The close control stays visible and stationary even while the floating
+    // chrome collapses into the drag handle — a floating panel is exactly where
+    // a close affordance is needed.
+    const bool showClose = m_closeButton && m_panel && m_panel->isClosable();
+    if (m_closeButton) {
+        m_closeButton->setVisible(showClose);
+        if (showClose) {
+            const QSize size = m_closeButton->size();
+            m_closeButton->move(rightEdge - size.width(), qMax(0, (m_height - size.height()) / 2));
+            rightEdge -= size.width();
+        }
+    }
+
+    m_trailingSeparatorRect = QRect();
+    if (showClose && m_trailingWidget && !hideChrome) {
+        auto& theme = ruwa::ui::core::ThemeManager::instance();
+        const int sepWidth = qMax(1, theme.scaled(kBaseSeparatorWidth));
+        const int sepGap = theme.scaled(kBaseSeparatorGap);
+        const int sepHeight = qMax(2, qRound(m_height * kSeparatorHeightRatio));
+        const int sepX = rightEdge - sepGap - sepWidth;
+        m_trailingSeparatorRect
+            = QRect(sepX, slide + (m_height - sepHeight) / 2, sepWidth, sepHeight);
+        rightEdge = sepX - sepGap;
+    }
+
+    updateHost(m_trailingHost, m_trailingWidget, rightEdge, Qt::AlignRight);
 }
 
 QWidget* DockPanelTitleBar::replaceInteractiveWidget(
@@ -580,6 +672,12 @@ QRect DockPanelTitleBar::titleContentRect() const
 
     if (m_leadingHost && m_leadingWidget && m_leadingHost->isVisible()) {
         left = m_leadingHost->geometry().right() + 1 + kInteractiveGap;
+    }
+
+    // Outside-in: the close button bounds the content, the trailing widget
+    // (when present) bounds it further.
+    if (m_closeButton && m_closeButton->isVisible()) {
+        right = m_closeButton->geometry().left() - kInteractiveGap;
     }
 
     if (m_trailingHost && m_trailingWidget && m_trailingHost->isVisible()) {

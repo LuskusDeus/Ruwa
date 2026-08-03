@@ -1904,6 +1904,15 @@ Rasterize the layer to transform the selection?</source>
     </message>
 </context>
 <context>
+    <name>ruwa::ui::docking::DockPanelTitleBar</name>
+    <message>
+        <location filename="../src/shell/docking/widgets/DockPanelTitleBar.cpp" line="186"/>
+        <location filename="../src/shell/docking/widgets/DockPanelTitleBar.cpp" line="187"/>
+        <source>Close panel</source>
+        <translation type="unfinished"></translation>
+    </message>
+</context>
+<context>
     <name>ruwa::ui::first_run_integration::FirstRunIntegrationWidget</name>
     <message>
         <location filename="../src/features/first-run-integration/FirstRunIntegrationWidget.cpp" line="634"/>

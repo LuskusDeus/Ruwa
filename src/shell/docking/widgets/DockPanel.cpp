@@ -650,6 +650,9 @@ void DockPanel::setTranslatableTitle(const char* sourceText)
 
 void DockPanel::retranslateUi()
 {
+    if (m_titleBar) {
+        m_titleBar->retranslateUi();
+    }
     if (m_titleSource) {
         setTitle(QCoreApplication::translate(metaObject()->className(), m_titleSource));
     }

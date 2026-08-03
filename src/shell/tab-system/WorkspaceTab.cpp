@@ -1861,6 +1861,20 @@ void WorkspaceTab::setupDockSystem()
     // Connect signals
     connect(m_dockManager, &docking::DockManager::layoutChanged, this,
         [this]() { scheduleDockLayoutSave(); });
+
+    // A panel closed or reopened from its own chrome (title bar cross, title
+    // context menu) changes exactly what View → Panels reports, so the menu
+    // has to be refreshed from the same place the menu's own toggles do it.
+    // Layout restores are excluded: they emit once at the end themselves.
+    const auto notifyPanelVisibility = [this](docking::DockPanel*) {
+        if (m_restoringDockLayout) {
+            return;
+        }
+        emit panelsVisibilityChanged();
+    };
+    connect(m_dockManager, &docking::DockManager::panelClosed, this, notifyPanelVisibility);
+    connect(m_dockManager, &docking::DockManager::panelShown, this, notifyPanelVisibility);
+
     connectPanelSignals();
 }
 

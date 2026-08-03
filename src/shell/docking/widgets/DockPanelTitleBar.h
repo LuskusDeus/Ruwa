@@ -10,6 +10,7 @@
 
 #include <QWidget>
 #include <QPoint>
+#include <QRect>
 #include <QFont>
 
 class QShowEvent;
@@ -18,6 +19,7 @@ class QVariantAnimation;
 namespace ruwa::ui::docking {
 
 class DockPanel;
+class DockPanelCloseButton;
 
 /**
  * @brief Minimal title bar widget for DockPanel
@@ -25,8 +27,13 @@ class DockPanel;
  * Features:
  * - Panel title with icon placeholder
  * - Drag support for moving/floating panels
+ * - Close button pinned to the right edge (when the panel is closable)
  * - Theme-aware styling
  * - Compact height (19px)
+ *
+ * Right-edge layout, from the outside in:
+ * `[close] | [trailing widget]`, i.e. a panel-supplied trailing widget always
+ * sits left of the separator, and the close button is the outermost control.
  */
 class DockPanelTitleBar : public QWidget, public ruwa::ui::widgets::IContextMenuProvider {
     Q_OBJECT
@@ -73,6 +80,9 @@ public:
     void updateButtons(); // Repaints + syncs floating chrome
     void applyTheme(const ruwa::ui::core::ThemeColors& colors);
 
+    /// Re-apply tr() strings (called by DockPanel on QEvent::LanguageChange)
+    void retranslateUi();
+
     /// Animate between docked title row and floating layout (drag strip + title row).
     void syncFloatingLayout(bool floating);
 
@@ -101,7 +111,10 @@ protected:
 private:
     void setupUI();
     void setupFloatingLayoutAnimation();
+    void setupCloseButton();
     void updateInteractiveWidgetGeometries();
+    /// Vertical offset applied to the title-bar chrome while floating.
+    int chromeSlideOffset() const;
     QWidget* replaceInteractiveWidget(QWidget* currentWidget, QWidget* newWidget, QWidget* host);
     QRect titleContentRect() const;
     void notifyPanelLayoutGeometry();
@@ -132,6 +145,11 @@ private:
     QWidget* m_leadingWidget = nullptr;
     QWidget* m_trailingWidget = nullptr;
     bool m_interactiveWidgetsVisibleWhenFloating = false;
+
+    // Close control: outermost item on the right, separated from the trailing
+    // widget by a hairline divider (empty rect = divider not drawn).
+    DockPanelCloseButton* m_closeButton = nullptr;
+    QRect m_trailingSeparatorRect;
 
     // Floating: max slide distance (theme-scaled); title shifts inside fixed bar height
     QVariantAnimation* m_floatingLayoutAnim = nullptr;
