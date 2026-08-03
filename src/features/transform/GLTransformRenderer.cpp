@@ -480,8 +480,8 @@ Result<void> GLTransformRenderer::initialize()
 
     // Create the single-tile preview target in the default document format. It
     // is recreated below when a source grid uses a different pixel format.
-    m_tempTex = createTexture2D(m_gl, TILE_SIZE, TILE_SIZE,
-        tileTextureParams(kDefaultTileFormat, GL_NEAREST, GL_NEAREST));
+    m_tempTex = createTexture2D(
+        m_gl, TILE_SIZE, TILE_SIZE, tileTextureParams(kDefaultTileFormat, GL_NEAREST, GL_NEAREST));
 
     m_initialized = true;
     return Result<void>::ok();
@@ -591,8 +591,8 @@ void GLTransformRenderer::buildSourceAtlas(
 
     // 2. Create atlas texture
     const GLint filter = useNearestFilter ? GL_NEAREST : GL_LINEAR;
-    m_atlasTexture = createTexture2D(m_gl, m_atlasWidth, m_atlasHeight,
-        tileTextureParams(srcGrid.format(), filter, filter));
+    m_atlasTexture = createTexture2D(
+        m_gl, m_atlasWidth, m_atlasHeight, tileTextureParams(srcGrid.format(), filter, filter));
 
     // Clear to transparent
     GLint prevFBO = 0;

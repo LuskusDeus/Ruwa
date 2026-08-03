@@ -699,8 +699,8 @@ void TopBar::setupFileMenu()
     m_fileItems.append(commandMenuItem(tr("Save"), QStringLiteral("file.save")));
     m_fileItems.append(commandMenuItem(tr("Save As..."), QStringLiteral("file.saveAs")));
     m_fileItems.append(commandMenuItem(tr("Export..."), QStringLiteral("file.export")));
-    m_fileItems.append(commandMenuItem(
-        tr("Fast Export as PNG"), QStringLiteral("file.fastExportPng")));
+    m_fileItems.append(
+        commandMenuItem(tr("Fast Export as PNG"), QStringLiteral("file.fastExportPng")));
     m_fileItems.append({ tr("Import..."), QString(), QIcon(), true, false,
         [this]() { emit fileImportImagesRequested(); } });
     m_fileItems.append(MenuItem::Separator());
@@ -726,8 +726,7 @@ void TopBar::setupViewMenu()
     m_viewItems.clear();
     m_viewItems.append(commandMenuItem(tr("Zoom In"), QStringLiteral("view.zoomIn")));
     m_viewItems.append(commandMenuItem(tr("Zoom Out"), QStringLiteral("view.zoomOut")));
-    m_viewItems.append(
-        commandMenuItem(tr("Fit to Window"), QStringLiteral("view.zoomToFit")));
+    m_viewItems.append(commandMenuItem(tr("Fit to Window"), QStringLiteral("view.zoomToFit")));
     m_viewItems.append(MenuItem::Separator());
     // Panels item is added in viewItemsWithEnabledState() to get fresh toggle state
 }

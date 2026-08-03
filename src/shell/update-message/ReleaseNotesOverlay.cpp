@@ -57,6 +57,59 @@ struct ReleaseNoteEntry {
 QVector<ReleaseNoteEntry> releaseNoteEntries()
 {
     return {
+        { QCoreApplication::translate("ReleaseNotesOverlay",
+              "Rearrangeable panels, richer tooltips, and cleaner gradients"),
+            QStringLiteral("0.2.9-alpha"), QStringLiteral("03.08.2026"),
+            QCoreApplication::translate("ReleaseNotesOverlay",
+                "<p><b>This update makes the workspace yours to arrange, gives Ruwa its own "
+                "tooltips with shortcuts in them, reports what a transform drag is doing right at "
+                "the cursor, and removes gradient banding from 8-bit documents.</b></p>"
+                "<p><b>New</b></p>"
+                "<ul>"
+                "<li>Tools reorder by drag and drop, and single tools can be switched off from the "
+                "panel's title menu under Visible tools.</li>"
+                "<li>The Layers panel action buttons reorder and hide the same way. The alpha-lock "
+                "and layer-lock toggles stay pinned.</li>"
+                "<li>Ruwa draws its own glass tooltips instead of the system ones, with the "
+                "shortcut assigned to the action shown next to its name.</li>"
+                "<li>A close cross on every panel title bar, floating panels included.</li>"
+                "<li>Resting on a layer or mask thumbnail opens a large preview with the layer's "
+                "properties beside it.</li>"
+                "<li>Zoom controls in the Navigator: a zoom slider with a percentage readout and a "
+                "fit-to-view button.</li>"
+                "<li>A live readout beside the cursor while transforming — pixels while moving, "
+                "degrees while rotating, percent while scaling.</li>"
+                "<li>A curve button next to every Brush Settings entry that supports dynamics, "
+                "opening the same editor the Brush Editor uses.</li>"
+                "</ul>"
+                "<p><b>Improved</b></p>"
+                "<ul>"
+                "<li>A liquid-glass pass on the on-canvas overlays: a tinted sweep along the "
+                "outline and soft inner shadows.</li>"
+                "<li>The Layer Effects panel moves Add effect into its subtitle bar and drops the "
+                "separate search field — the effect picker has its own.</li>"
+                "<li>Releasing a Rotate View drag close to a quarter turn animates the view onto "
+                "that exact angle.</li>"
+                "<li>Fewer redundant GL state changes per drawn tile.</li>"
+                "</ul>"
+                "<p><b>Fixes</b></p>"
+                "<ul>"
+                "<li>Gradients and soft strokes no longer band or drift in hue on 8-bit documents: "
+                "writes are dithered, stroke buffers stay at 16-bit float, and values already on "
+                "the 8-bit grid are rounded instead of dithered.</li>"
+                "<li>A zoomed-out stroke no longer draws a live map of which tiles are dirty: "
+                "filtering is chosen once per frame instead of per tile.</li>"
+                "<li>A fast undo burst no longer crashes.</li>"
+                "<li>Picking a colour is no longer undone by a later tool switch or brush-settings "
+                "edit.</li>"
+                "<li>A stylus tap moves keyboard focus to UI panels the same way a mouse click "
+                "does.</li>"
+                "<li>Filling inside a selection shows up immediately.</li>"
+                "<li>Auto snapping prefers exact relations over approximate ones.</li>"
+                "<li>The update installer runs from outside the installation directory, so it can "
+                "replace every file it needs to.</li>"
+                "<li>A toolbar drag keeps tracking once the cursor leaves the panel bounds.</li>"
+                "</ul>") },
         { QCoreApplication::translate(
               "ReleaseNotesOverlay", "Smarter snapping, smoother zoom, and a faster paint loop"),
             QStringLiteral("0.2.8-alpha"), QStringLiteral("31.07.2026"),

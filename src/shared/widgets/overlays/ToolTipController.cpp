@@ -446,8 +446,8 @@ private:
         for (const ShortcutPart& part : std::as_const(m_shortcutParts)) {
             const QRectF partRect(x, 0.0, part.width, m_shortcutHeight);
             if (part.keyCap) {
-                ruwa::ui::painting::drawKeycapFrame(painter, partRect,
-                    theme.scaled(kKeyCapRadius), keyDepth, keyFill, keyBorderTop, keyBorderBottom);
+                ruwa::ui::painting::drawKeycapFrame(painter, partRect, theme.scaled(kKeyCapRadius),
+                    keyDepth, keyFill, keyBorderTop, keyBorderBottom);
 
                 painter.setPen(colors.text);
                 painter.drawText(

@@ -3985,8 +3985,8 @@ void GLBrushRenderer::finishReadback(GLsync fence, TileGrid& grid, const std::ve
     }
 }
 
-size_t GLBrushRenderer::finishReadbackBatch(
-    GLsync& fence, TileGrid& grid, const std::vector<TileKey>& keys, size_t firstKey, size_t maxKeys)
+size_t GLBrushRenderer::finishReadbackBatch(GLsync& fence, TileGrid& grid,
+    const std::vector<TileKey>& keys, size_t firstKey, size_t maxKeys)
 {
     if (fence) {
         // The deferred path polls first, so this normally cannot block. A
@@ -4280,8 +4280,8 @@ void GLBrushRenderer::renderDabBatchForTile(const TileBrush& brush,
             // the offset of its leading dab so consecutive chunks round
             // independently instead of stacking the same error.
             const TileBrush::DabPoint& seedDab = dabs[indices[runCursor]];
-            m_gl->glUniform1f(uniforms.ditherSeed,
-                dabDitherSeed(blendAsMax, seedDab.worldX, seedDab.worldY));
+            m_gl->glUniform1f(
+                uniforms.ditherSeed, dabDitherSeed(blendAsMax, seedDab.worldX, seedDab.worldY));
 
             for (size_t i = 0; i < chunkCount; ++i) {
                 const TileBrush::DabPoint& dab = dabs[indices[runCursor + i]];

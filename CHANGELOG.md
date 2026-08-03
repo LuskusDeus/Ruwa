@@ -15,10 +15,84 @@ a release.
 
 ## [Unreleased]
 
+## [0.2.9-alpha] — 2026-08-03 — "Rearrangeable panels, richer tooltips, and cleaner gradients"
+
+This update makes the workspace yours to arrange: tools and layer actions
+reorder by drag and drop and can be hidden individually, every panel gets a
+close button, and thumbnails open a large hover preview. Ruwa now draws its own
+tooltips with the assigned shortcut in them, reports what a transform drag is
+doing right at the cursor, and moves zoom controls into the Navigator. On the
+rendering side, 8-bit writes are dithered and stroke buffers widened, which
+removes gradient banding and the hue drift that soft low-flow strokes used to
+accumulate.
+
 ### Added
+- Tools reorder by drag and drop in the Tools panel, and individual tools can be
+  switched off from the panel's title context menu under `Visible tools`.
+- The action buttons of the Layers panel toolbar (add layer, adjustment, group,
+  mask, duplicate, merge, delete) reorder and hide the same way. The alpha-lock
+  and layer-lock toggles stay pinned and are deliberately left out of both.
+- Ruwa draws its own themed glass tooltips instead of the system ones, and they
+  show the keyboard shortcut assigned to the action next to its name.
+- Every dockable panel that can be closed now carries a close cross at the right
+  end of its title bar, including while it floats.
+- Resting on a layer or mask thumbnail opens a large preview popup with the
+  layer rendered at a readable size next to its properties.
+- The Navigator panel gained zoom controls: a zoom slider with a percentage
+  readout and a fit-to-view button.
+- A live readout beside the cursor while transforming — offset in pixels while
+  moving, degrees while rotating, and percentage of the starting size while
+  scaling.
 - The Brush Settings panel now shows a curve button next to every setting that
   supports parameter dynamics. Clicking it opens a popup with the same dynamics
   editor as the brush editor — input sources, blend mode, and the curve itself.
+- Releasing a Rotate View drag within 2.5° of a quarter turn animates the view
+  onto that exact angle instead of leaving it slightly off.
+
+### Improved
+- The four on-canvas overlays gained a liquid-glass pass over their existing
+  backdrop blur: a tinted specular sweep along the outline and a pair of inner
+  shadows.
+- The Layer Effects panel was reorganized: the `Add effect` button moved into
+  the panel's subtitle bar and its separate search field was dropped, since the
+  effect picker has its own search.
+- Compositor state setup was streamlined, cutting redundant GL state changes per
+  drawn tile.
+- The Rotate View tool has a clearer icon.
+- Liquify is now a proper command, so it can be given a shortcut and found in
+  the command palette, and top-bar menu entries update their shortcut text the
+  moment a shortcut is rebound.
+
+### Fixed
+- Gradients and soft strokes no longer band or drift in hue on 8-bit documents:
+  8-bit writes are dithered, in-progress src-over stroke buffers are kept at
+  16-bit float, and values already sitting on the 8-bit grid are rounded instead
+  of dithered, which removes the isolated off-by-one pixels that dithering
+  scattered across flat areas.
+- Zoomed-out strokes no longer draw a live map of which tiles are dirty: the
+  choice between mipmapped and unfiltered sampling is now made once per frame
+  instead of per tile.
+- A fast undo burst no longer crashes: a pending stroke is finalized before undo
+  runs, and commands are never destroyed or reused while a background prefetch
+  is still reading them.
+- Picking a colour is no longer undone later: the per-tool colour state is kept
+  in step with it, so a tool switch or a brush-settings edit no longer resurrects
+  the previous colour.
+- Windows reopen on the monitor they were last used on in the cases the previous
+  attempt missed, splash screen included.
+- A stylus tap now moves keyboard focus to UI panels the same way a mouse click
+  does.
+- The main window no longer flickers under DWM composition when it is opaque.
+- Filling inside a selection invalidates the affected tiles, so the result shows
+  up immediately.
+- Auto snapping prefers exact relations over approximate ones, so a drag settles
+  on the alignment it is closest to.
+- The update installer runs from outside the installation directory, so it can
+  replace every file it needs to.
+- Toolbar drag-reorder in the Tools and Layers panels keeps tracking once the
+  cursor leaves the panel bounds instead of snapping the button back.
+- The Navigator's zoom strip paints its own surface background instead of
+  relying on whatever is behind it.
 
 ## [0.2.8-alpha] — 2026-07-31 — "Smarter snapping, smoother zoom, and a faster paint loop"
 

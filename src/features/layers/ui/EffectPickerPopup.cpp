@@ -450,8 +450,7 @@ QPoint EffectPickerPopup::calculateTargetPos()
     // Place the popup symmetrically around the anchor's horizontal centre.
     const QPoint belowCenterGlobal
         = m_anchor->mapToGlobal(QPoint(m_anchor->width() / 2, m_anchor->height() + 4));
-    QPoint pos
-        = m_overlay->mapFromGlobal(belowCenterGlobal) - QPoint(width() / 2, kShadowMargin);
+    QPoint pos = m_overlay->mapFromGlobal(belowCenterGlobal) - QPoint(width() / 2, kShadowMargin);
 
     const QRect avail = m_overlay->rect();
     pos.setX(qBound(avail.left(), pos.x(), qMax(avail.left(), avail.right() - width() + 1)));

@@ -2316,8 +2316,7 @@ void WorkspaceTab::updateInitialPresentationReadiness()
             return;
         }
         if (m_navigatorPanel && m_navigatorPanel->isVisible()) {
-            if (auto* navigator = navigatorWidget();
-                navigator && !navigator->presentationReady()) {
+            if (auto* navigator = navigatorWidget(); navigator && !navigator->presentationReady()) {
                 updateInitialPresentationReadiness();
                 return;
             }

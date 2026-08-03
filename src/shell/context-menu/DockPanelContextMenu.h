@@ -20,7 +20,7 @@ class DockPanel;
 namespace ruwa::ui::workspace {
 class ToolsPanel;
 class LayersPanel;
-}
+} // namespace ruwa::ui::workspace
 
 namespace ruwa::ui::widgets {
 
@@ -41,9 +41,8 @@ private:
     void buildUi();
     void applyChrome();
     void updateToggleRowsChrome();
-    QWidget* createToggleRow(QWidget* parent,
-        ruwa::ui::core::IconProvider::StandardIcon iconKind, const QString& text,
-        ToggleSwitch*& outToggle);
+    QWidget* createToggleRow(QWidget* parent, ruwa::ui::core::IconProvider::StandardIcon iconKind,
+        const QString& text, ToggleSwitch*& outToggle);
 
     struct BehaviorToggleRowDesc {
         QWidget* rowWidget = nullptr;

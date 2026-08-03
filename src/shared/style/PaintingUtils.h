@@ -145,9 +145,8 @@ inline QLineF liquidGlassSweepAxis(const QRectF& bounds)
 /// Diagonal highlight along @p outline: transparent at the ends of the 45° sweep
 /// across @p bounds, full @p primary at the midpoint.
 /// @p outline must already be the stroke geometry (pixel-center inset).
-inline void drawLiquidGlassRim(QPainter& painter, const QPainterPath& outline,
-    const QRectF& bounds, const QColor& primary, qreal penWidth = 1.0,
-    qreal opacity = kLiquidGlassRimOpacity)
+inline void drawLiquidGlassRim(QPainter& painter, const QPainterPath& outline, const QRectF& bounds,
+    const QColor& primary, qreal penWidth = 1.0, qreal opacity = kLiquidGlassRimOpacity)
 {
     if (outline.isEmpty() || !bounds.isValid() || opacity <= 0.0 || penWidth <= 0.0) {
         return;

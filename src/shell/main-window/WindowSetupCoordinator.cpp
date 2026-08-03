@@ -127,8 +127,8 @@ WindowSetupCoordinator::~WindowSetupCoordinator()
 QScreen* WindowSetupCoordinator::savedScreen()
 {
     QSettings settings;
-    return resolveScreen(settings.value(kScreenNameKey).toString(),
-        settings.value(kScreenGeometryKey).toRect());
+    return resolveScreen(
+        settings.value(kScreenNameKey).toString(), settings.value(kScreenGeometryKey).toRect());
 }
 
 void WindowSetupCoordinator::setupWindowAgent(

@@ -21,8 +21,8 @@ inline qreal valueToZoom(int value, qreal minZoom, qreal maxZoom)
         return minZoom;
     }
 
-    const qreal ratio = static_cast<qreal>(value - kMinimum)
-        / static_cast<qreal>(kMaximum - kMinimum);
+    const qreal ratio
+        = static_cast<qreal>(value - kMinimum) / static_cast<qreal>(kMaximum - kMinimum);
     return std::exp(std::log(minZoom) + ratio * (std::log(maxZoom) - std::log(minZoom)));
 }
 

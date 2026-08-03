@@ -244,8 +244,8 @@ void BrushSettingsWidget::ComboBoxRow::setInputEnabled(bool enabled)
     }
 }
 
-BrushSettingsWidget::BrushSettingsWidget(const QVector<BrushSettingDef>& defs, QWidget* parent,
-    bool starMode, bool dynamicsButtons)
+BrushSettingsWidget::BrushSettingsWidget(
+    const QVector<BrushSettingDef>& defs, QWidget* parent, bool starMode, bool dynamicsButtons)
     : QWidget(parent)
     , m_starMode(starMode)
     , m_dynamicsButtons(dynamicsButtons)

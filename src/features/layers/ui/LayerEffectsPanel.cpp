@@ -110,8 +110,7 @@ QWidget* LayerEffectsPanel::createContent()
     // Same hover-only action style as BrushSettingsPanel's editor button.
     m_addEffectButton = new ToolButton(ToolButton::Mode::Action, controlsWidget);
     m_addEffectButton->setText(tr("Add effect"));
-    m_addEffectButton->setIcon(
-        ruwa::ui::core::IconProvider::instance().createPlusIcon(14));
+    m_addEffectButton->setIcon(ruwa::ui::core::IconProvider::instance().createPlusIcon(14));
     m_addEffectButton->setBaseSize(168, 26, 14);
     // The previous compact button was approximately 84 base pixels wide.
     m_addEffectButton->setChromeStyle(ToolButton::ChromeStyle::PrimaryHover);

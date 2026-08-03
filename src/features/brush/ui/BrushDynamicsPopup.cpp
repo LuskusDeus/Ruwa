@@ -52,9 +52,9 @@ BrushDynamicsPopup::BrushDynamicsPopup(QWidget* parent)
     m_titleLabel = new QLabel(this);
     m_titleLabel->setObjectName(QStringLiteral("brush_dynamics_popup_title"));
 
-    m_resetButton = new CapsuleButton(
-        QCoreApplication::translate("BrushEditorParameterOverlay", "Reset"),
-        CapsuleButton::Variant::Secondary, this);
+    m_resetButton
+        = new CapsuleButton(QCoreApplication::translate("BrushEditorParameterOverlay", "Reset"),
+            CapsuleButton::Variant::Secondary, this);
     m_resetButton->setBaseMinimumWidth(0);
     m_resetButton->setBannerBaseHeight(32);
     m_resetButton->setIcon(theme.icons().getIcon(IconProvider::StandardIcon::UndoArrow));
@@ -104,12 +104,12 @@ BrushDynamicsPopup::BrushDynamicsPopup(QWidget* parent)
         }
     });
 
-    connect(m_editor, &BrushDynamicsEditorWidget::slotChanged, this,
-        &BrushDynamicsPopup::slotChanged);
+    connect(
+        m_editor, &BrushDynamicsEditorWidget::slotChanged, this, &BrushDynamicsPopup::slotChanged);
     connect(m_editor, &BrushDynamicsEditorWidget::editingFinished, this,
         &BrushDynamicsPopup::editingFinished);
-    connect(&ThemeManager::instance(), &ThemeManager::themeChanged, this,
-        [this]() { updateStyles(); });
+    connect(
+        &ThemeManager::instance(), &ThemeManager::themeChanged, this, [this]() { updateStyles(); });
 
     updateStyles();
 }

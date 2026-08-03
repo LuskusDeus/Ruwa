@@ -199,7 +199,7 @@ QPixmap CanvasMetricLabelOverlay::themedIconPixmap(const MetricSegment& segment)
     // backing format, which need not carry alpha — and a SourceIn tint against
     // an opaque destination floods the whole icon box with the tint colour.
     QImage result(source.scaled(side, side, Qt::KeepAspectRatio, Qt::SmoothTransformation)
-                      .convertToFormat(QImage::Format_ARGB32_Premultiplied));
+            .convertToFormat(QImage::Format_ARGB32_Premultiplied));
     QPainter painter(&result);
     painter.setCompositionMode(QPainter::CompositionMode_SourceIn);
     painter.fillRect(result.rect(), theme.colors().text);

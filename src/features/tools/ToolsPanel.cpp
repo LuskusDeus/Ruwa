@@ -330,8 +330,8 @@ private:
 const QList<ToolId>& defaultToolOrder()
 {
     static const QList<ToolId> order { ToolId::Hand, ToolId::RotateView, ToolId::Zoom,
-        ToolId::Brush, ToolId::Eraser, ToolId::Fill, ToolId::Eyedropper, ToolId::Blur,
-        ToolId::Move, ToolId::SquareSelection, ToolId::Lasso, ToolId::MagicWand, ToolId::Text,
+        ToolId::Brush, ToolId::Eraser, ToolId::Fill, ToolId::Eyedropper, ToolId::Blur, ToolId::Move,
+        ToolId::SquareSelection, ToolId::Lasso, ToolId::MagicWand, ToolId::Text,
         ToolId::CanvasResize };
     return order;
 }
@@ -858,8 +858,7 @@ void ToolsPanel::finishToolDrag(bool accepted, const QPoint& globalPos)
         emit panelStateChanged();
     }
 
-    const QRect targetRect
-        = m_contentWidget->itemTargetGeometry(m_toolsData[m_draggedTool].button);
+    const QRect targetRect = m_contentWidget->itemTargetGeometry(m_toolsData[m_draggedTool].button);
     const QPoint targetGlobal = m_contentWidget->mapToGlobal(targetRect.topLeft());
     QWidget* topLevel = m_contentWidget->window();
     QPoint targetPosition = topLevel->mapFromGlobal(targetGlobal);
@@ -976,8 +975,7 @@ void ToolsPanel::moveDraggedToolTo(int insertIndex)
     if (!reordered.removeOne(m_draggedTool)) {
         return;
     }
-    reordered.insert(
-        qBound(0, insertIndex, static_cast<int>(reordered.size())), m_draggedTool);
+    reordered.insert(qBound(0, insertIndex, static_cast<int>(reordered.size())), m_draggedTool);
     if (reordered == m_toolOrder) {
         return;
     }
@@ -1117,8 +1115,8 @@ void ToolsPanel::onThemeChanged()
     }
     if (m_contentCreated) {
         auto& style = WidgetStyleManager::instance();
-        m_contentWidget->setContentsMargins(style.scaled(BASE_MARGIN_H), style.scaled(BASE_MARGIN_V),
-            style.scaled(BASE_MARGIN_H), style.scaled(BASE_MARGIN_V));
+        m_contentWidget->setContentsMargins(style.scaled(BASE_MARGIN_H),
+            style.scaled(BASE_MARGIN_V), style.scaled(BASE_MARGIN_H), style.scaled(BASE_MARGIN_V));
         m_contentWidget->setFlowSpacing(style.scaled(BASE_SPACING), style.scaled(BASE_SPACING));
         applyToolOrder(false);
     }

@@ -232,8 +232,7 @@ private:
 
 } // namespace
 
-BrushDynamicsEditorWidget::CurveAxesConfig
-BrushDynamicsEditorWidget::curveAxesConfigForSetting(
+BrushDynamicsEditorWidget::CurveAxesConfig BrushDynamicsEditorWidget::curveAxesConfigForSetting(
     const QString& engineId, const BrushSettingsData& settings, const QString& settingKey)
 {
     CurveAxesConfig config;
@@ -242,8 +241,8 @@ BrushDynamicsEditorWidget::curveAxesConfigForSetting(
 
     const auto dynamicsKey
         = ruwa::core::brushes::brushDynamicsSettingKeyFromSettingKey(settingKey.toStdString());
-    const qreal baseValue = qMax<qreal>(
-        0.0, ruwa::core::brushes::baseValueForDynamicsSetting(settings, dynamicsKey));
+    const qreal baseValue
+        = qMax<qreal>(0.0, ruwa::core::brushes::baseValueForDynamicsSetting(settings, dynamicsKey));
 
     const auto* module
         = ruwa::core::brushes::BrushEngineRegistry::instance().moduleOrPixelFallback(engineId);
@@ -745,8 +744,8 @@ BrushDynamicsEditorWidget::BrushDynamicsEditorWidget(QWidget* parent)
     bodyLayout->addWidget(m_sourcesColumn, 0);
     bodyLayout->addWidget(m_editorStack, 1);
 
-    connect(&ThemeManager::instance(), &ThemeManager::themeChanged, this,
-        [this]() { updateStyles(); });
+    connect(
+        &ThemeManager::instance(), &ThemeManager::themeChanged, this, [this]() { updateStyles(); });
     connect(m_tabletPressureButton, &QPushButton::clicked, this,
         [this]() { setActiveSource(BrushInputSourceKey::TabletPressure); });
     connect(m_timeButton, &QPushButton::clicked, this,
@@ -807,8 +806,8 @@ BrushDynamicsEditorWidget::BrushDynamicsEditorWidget(QWidget* parent)
     connectCurveEditor(m_timeCurveEditor);
     connectCurveEditor(m_directionCurveEditor);
 
-    connect(m_timeDurationSlider, &ProgressHandleSlider::valueChanged, this,
-        [this](int sliderValue) {
+    connect(
+        m_timeDurationSlider, &ProgressHandleSlider::valueChanged, this, [this](int sliderValue) {
             auto binding = currentBinding();
             binding.durationSec = timeDurationFromSliderValue(sliderValue);
             storeCurrentBinding(binding);
@@ -961,8 +960,8 @@ BrushDynamicsEditorWidget::BrushDynamicsBinding BrushDynamicsEditorWidget::curre
     return displayBinding(binding);
 }
 
-BrushDynamicsEditorWidget::BrushDynamicsBinding
-BrushDynamicsEditorWidget::defaultBindingForSource(BrushInputSourceKey source) const
+BrushDynamicsEditorWidget::BrushDynamicsBinding BrushDynamicsEditorWidget::defaultBindingForSource(
+    BrushInputSourceKey source) const
 {
     if (source == BrushInputSourceKey::Time) {
         return defaultTimeBinding(m_slot.setting);
@@ -1056,30 +1055,30 @@ void BrushDynamicsEditorWidget::syncEditorFromCurrentBinding()
         binding.source = source;
         return displayBinding(binding);
     };
-    const auto syncCurveEditor
-        = [this](CurveEditorWidget* editor, const BrushDynamicsBinding& binding) {
-              if (!editor) {
-                  return;
-              }
+    const auto syncCurveEditor = [this](CurveEditorWidget* editor,
+                                     const BrushDynamicsBinding& binding) {
+        if (!editor) {
+            return;
+        }
 
-              const auto axesConfig = curveAxesConfigForBinding(binding);
-              auto verticalAxis = axesConfig.verticalAxis;
-              const qreal minValue = ruwa::core::brushes::brushDynamicsBindingValueMin(
-                  binding.setting, binding.mode);
-              const qreal maxValue = ruwa::core::brushes::brushDynamicsBindingValueMax(
-                  binding.setting, binding.mode);
-              if (binding.mode == BrushDynamicsBlendMode::Add
-                  || binding.mode == BrushDynamicsBlendMode::Override) {
-                  verticalAxis.minValue = minValue;
-                  verticalAxis.maxValue = maxValue;
-                  verticalAxis.tickValues = { minValue, (minValue + maxValue) * 0.5, maxValue };
-              }
+        const auto axesConfig = curveAxesConfigForBinding(binding);
+        auto verticalAxis = axesConfig.verticalAxis;
+        const qreal minValue
+            = ruwa::core::brushes::brushDynamicsBindingValueMin(binding.setting, binding.mode);
+        const qreal maxValue
+            = ruwa::core::brushes::brushDynamicsBindingValueMax(binding.setting, binding.mode);
+        if (binding.mode == BrushDynamicsBlendMode::Add
+            || binding.mode == BrushDynamicsBlendMode::Override) {
+            verticalAxis.minValue = minValue;
+            verticalAxis.maxValue = maxValue;
+            verticalAxis.tickValues = { minValue, (minValue + maxValue) * 0.5, maxValue };
+        }
 
-              editor->setVerticalRange(minValue, maxValue);
-              editor->setHorizontalAxisDisplay(axesConfig.horizontalAxis);
-              editor->setVerticalAxisDisplay(verticalAxis);
-              editor->setCurve(binding.curve);
-          };
+        editor->setVerticalRange(minValue, maxValue);
+        editor->setHorizontalAxisDisplay(axesConfig.horizontalAxis);
+        editor->setVerticalAxisDisplay(verticalAxis);
+        editor->setCurve(binding.curve);
+    };
 
     const auto pressureBinding = bindingForSource(BrushInputSourceKey::TabletPressure);
     const auto timeBinding = bindingForSource(BrushInputSourceKey::Time);
@@ -1300,8 +1299,7 @@ void BrushDynamicsEditorWidget::updateSourceButtons()
         if (!button) {
             return;
         }
-        const bool enabled
-            = m_targetDef.sourceDef(source).has_value() && isSourceAvailable(source);
+        const bool enabled = m_targetDef.sourceDef(source).has_value() && isSourceAvailable(source);
         button->setVisible(true);
         button->setEnabled(true);
         button->setSourceAvailable(enabled);

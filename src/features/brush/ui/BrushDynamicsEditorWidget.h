@@ -42,10 +42,9 @@ public:
     using BrushSettingsData = ruwa::core::brushes::BrushSettingsData;
 
     struct CurveAxesConfig {
-        CurveEditorWidget::AxisDisplaySpec horizontalAxis { 0.0, 1.0, 100.0, 0,
-            QStringLiteral("%"), {}, true };
-        CurveEditorWidget::AxisDisplaySpec verticalAxis { 0.0, 1.0, 100.0, 0, QString(), {},
-            true };
+        CurveEditorWidget::AxisDisplaySpec horizontalAxis { 0.0, 1.0, 100.0, 0, QStringLiteral("%"),
+            {}, true };
+        CurveEditorWidget::AxisDisplaySpec verticalAxis { 0.0, 1.0, 100.0, 0, QString(), {}, true };
     };
 
     explicit BrushDynamicsEditorWidget(QWidget* parent = nullptr);

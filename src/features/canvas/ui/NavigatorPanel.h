@@ -21,7 +21,7 @@ namespace ruwa::ui::workspace {
 class CanvasPanel;
 class NavigatorWidget;
 class ToolButton;
-}
+} // namespace ruwa::ui::workspace
 
 namespace ruwa::ui::workspace {
 

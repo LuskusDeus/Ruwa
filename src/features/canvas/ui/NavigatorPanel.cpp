@@ -49,8 +49,7 @@ public:
         : QWidget(parent)
     {
         connect(&ruwa::ui::core::ThemeManager::instance(),
-            &ruwa::ui::core::ThemeManager::themeChanged, this,
-            [this]() { update(); });
+            &ruwa::ui::core::ThemeManager::themeChanged, this, [this]() { update(); });
     }
 
 protected:
@@ -94,8 +93,8 @@ void NavigatorPanel::setCanvasPanel(CanvasPanel* panel)
     }
 
     if (m_canvasPanel) {
-        connect(m_canvasPanel, &CanvasPanel::zoomChanged, this,
-            &NavigatorPanel::syncZoomSlider, Qt::UniqueConnection);
+        connect(m_canvasPanel, &CanvasPanel::zoomChanged, this, &NavigatorPanel::syncZoomSlider,
+            Qt::UniqueConnection);
         connect(m_canvasPanel, &CanvasPanel::zoomLimitsChanged, this,
             &NavigatorPanel::setZoomLimits, Qt::UniqueConnection);
         connect(m_canvasPanel, &CanvasPanel::glContentReady, this,
@@ -211,8 +210,7 @@ void NavigatorPanel::syncZoomSlider(qreal zoom)
         return;
     }
     const QSignalBlocker blocker(m_zoomSlider);
-    m_zoomSlider->setValue(
-        ruwa::ui::widgets::zoom_slider::zoomToValue(zoom, m_minZoom, m_maxZoom));
+    m_zoomSlider->setValue(ruwa::ui::widgets::zoom_slider::zoomToValue(zoom, m_minZoom, m_maxZoom));
 }
 
 void NavigatorPanel::setZoomLimits(qreal minZoom, qreal maxZoom)
@@ -230,8 +228,7 @@ void NavigatorPanel::onZoomSliderValueChanged(int value)
         syncZoomControls();
         return;
     }
-    const qreal zoom = ruwa::ui::widgets::zoom_slider::valueToZoom(
-        value, m_minZoom, m_maxZoom);
+    const qreal zoom = ruwa::ui::widgets::zoom_slider::valueToZoom(value, m_minZoom, m_maxZoom);
     m_canvasPanel->setZoomSmooth(static_cast<float>(zoom));
 }
 

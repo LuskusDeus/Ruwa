@@ -67,7 +67,6 @@ inline float brushInputSourceValue(const BrushInputContext& inputContext,
     BrushInputSourceKey source, const BrushDynamicsBinding* binding = nullptr,
     bool* available = nullptr);
 
-
 struct BrushDynamicsBinding {
     BrushDynamicsSettingKey setting = BrushDynamicsSettingKey::None;
     BrushInputSourceKey source = BrushInputSourceKey::None;

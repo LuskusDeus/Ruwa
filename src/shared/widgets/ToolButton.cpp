@@ -334,8 +334,7 @@ void ToolButton::paintEvent(QPaintEvent* event)
         normalContentColor = lerpColor(normalContentColor, colors.primary, hoverProgress());
     }
     const QColor activeColor = colors.textOnPrimary();
-    const QColor enabledContentColor
-        = lerpColor(normalContentColor, activeColor, activeProgress());
+    const QColor enabledContentColor = lerpColor(normalContentColor, activeColor, activeProgress());
     const QColor contentColor
         = lerpColor(colors.textDisabled(), enabledContentColor, m_enabledProgress);
 
@@ -343,8 +342,7 @@ void ToolButton::paintEvent(QPaintEvent* event)
     const bool hasIcon = !m_sourceIcon.isNull();
     const bool hasLabel = !label.isEmpty();
     const int labelWidth = hasLabel ? QFontMetrics(font()).horizontalAdvance(label) : 0;
-    const int iconLabelSpacing
-        = hasIcon && hasLabel ? mgr.scaled(BASE_ICON_LABEL_SPACING) : 0;
+    const int iconLabelSpacing = hasIcon && hasLabel ? mgr.scaled(BASE_ICON_LABEL_SPACING) : 0;
     const int contentWidth = (hasIcon ? m_iconSize : 0) + iconLabelSpacing + labelWidth;
     int contentX = (width() - contentWidth) / 2;
 
@@ -361,8 +359,8 @@ void ToolButton::paintEvent(QPaintEvent* event)
     if (hasLabel) {
         painter.setFont(font());
         painter.setPen(contentColor);
-        painter.drawText(QRect(contentX, 0, labelWidth, height()), Qt::AlignVCenter | Qt::AlignLeft,
-            label);
+        painter.drawText(
+            QRect(contentX, 0, labelWidth, height()), Qt::AlignVCenter | Qt::AlignLeft, label);
     }
 
     if (m_hasGroupIndicator) {

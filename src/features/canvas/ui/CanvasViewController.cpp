@@ -212,12 +212,10 @@ void CanvasViewController::applyZoomLimits()
     const bool ignoreMinZoom = m_panel->m_exportModeOverlayProgress > 1e-5;
 
     if (!m_panel->m_glWidget) {
-        const auto [minZoom, maxZoom]
-            = ruwa::core::canvas::computeZoomLimits(800, 800, maxBrush);
+        const auto [minZoom, maxZoom] = ruwa::core::canvas::computeZoomLimits(800, 800, maxBrush);
         const qreal effectiveMinZoom = ignoreMinZoom ? 0.001 : static_cast<qreal>(minZoom);
         if (m_panel->m_stylusJoystick) {
-            m_panel->m_stylusJoystick->setZoomLimits(
-                effectiveMinZoom, maxZoom);
+            m_panel->m_stylusJoystick->setZoomLimits(effectiveMinZoom, maxZoom);
         }
         emit m_panel->zoomLimitsChanged(effectiveMinZoom, maxZoom);
         return;

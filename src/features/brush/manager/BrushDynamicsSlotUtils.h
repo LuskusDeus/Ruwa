@@ -33,8 +33,7 @@ BrushDynamicsSlot dynamicsSlotForSetting(
 std::optional<BrushSettingDef> findSettingDef(
     const BrushEngineDescriptor& descriptor, const QString& settingKey);
 
-BrushDynamicTargetDef dynamicsTargetForSetting(
-    const QString& engineId, const QString& settingKey);
+BrushDynamicTargetDef dynamicsTargetForSetting(const QString& engineId, const QString& settingKey);
 
 /// Mirrors an edited slot back into the legacy min/max pressure fields.
 void syncLegacyPressureState(BrushSettingsData& settings, const BrushDynamicsSlot& slot);

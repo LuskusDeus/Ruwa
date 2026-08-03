@@ -331,8 +331,7 @@ void ShortcutManager::loadFromSettings()
             continue;
         }
 
-        QKeySequence seq
-            = QKeySequence::fromString(storedShortcut, QKeySequence::PortableText);
+        QKeySequence seq = QKeySequence::fromString(storedShortcut, QKeySequence::PortableText);
         if (seq.isEmpty()) {
             seq = QKeySequence::fromString(storedShortcut, QKeySequence::NativeText);
         }

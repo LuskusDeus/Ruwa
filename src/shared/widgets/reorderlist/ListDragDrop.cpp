@@ -257,8 +257,7 @@ void DragGhostWidget::animateTo(
 
     auto* opacityAnimation = new QPropertyAnimation(this, "ghostOpacity", group);
     opacityAnimation->setDuration(returning ? 300 : 80);
-    opacityAnimation->setEasingCurve(
-        returning ? QEasingCurve::InOutCubic : QEasingCurve::OutCubic);
+    opacityAnimation->setEasingCurve(returning ? QEasingCurve::InOutCubic : QEasingCurve::OutCubic);
     opacityAnimation->setStartValue(ghostOpacity());
     opacityAnimation->setEndValue(returning ? 0.0 : 1.0);
     group->addAnimation(opacityAnimation);

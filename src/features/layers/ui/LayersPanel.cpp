@@ -2551,8 +2551,8 @@ void LayersPanel::preparePresentationSnapshot()
     }
 
     // A snapshot must not capture a half-faded toolbar button.
-    for (auto it = m_toolbarVisibilityAnimations.begin();
-        it != m_toolbarVisibilityAnimations.end(); ++it) {
+    for (auto it = m_toolbarVisibilityAnimations.begin(); it != m_toolbarVisibilityAnimations.end();
+        ++it) {
         if (it.value()) {
             it.value()->stop();
             it.value()->deleteLater();

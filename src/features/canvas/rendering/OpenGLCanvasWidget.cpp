@@ -8627,9 +8627,8 @@ void OpenGLCanvasWidget::syncTransformDragMetricLabel()
                 // Non-uniform scales can grow one axis and shrink the other;
                 // the icon follows the area, which is what the eye reads.
                 const bool grew = widthPercent * heightPercent >= 100.0 * 100.0;
-                segments.append(MetricSegment { grew
-                        ? QStringLiteral(":/icons/TransformBigger")
-                        : QStringLiteral(":/icons/TransformSmaller"),
+                segments.append(MetricSegment { grew ? QStringLiteral(":/icons/TransformBigger")
+                                                     : QStringLiteral(":/icons/TransformSmaller"),
                     false, false, value,
                     uniform ? QStringLiteral("888.8%") : QStringLiteral("888.8% × 888.8%") });
             }

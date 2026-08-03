@@ -33,8 +33,7 @@ bool UndoActionCommand::canExecute(const CommandContext& ctx) const
         return false;
     }
     auto* mgr = m_resolve ? m_resolve() : nullptr;
-    return mgr && (mgr->canUndo()
-                      || (canvasPanel && canvasPanel->hasPendingStrokeFinalization()));
+    return mgr && (mgr->canUndo() || (canvasPanel && canvasPanel->hasPendingStrokeFinalization()));
 }
 
 void UndoActionCommand::execute(const CommandContext& ctx, const QVariantMap& args)

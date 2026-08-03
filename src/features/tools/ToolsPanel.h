@@ -32,7 +32,7 @@ class ToolGroupPopup;
 namespace ruwa::ui::widgets {
 class AnimatedFlowWidget;
 class DragGhostWidget;
-}
+} // namespace ruwa::ui::widgets
 
 namespace ruwa::ui::workspace {
 

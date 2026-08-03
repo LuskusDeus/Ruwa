@@ -73,7 +73,8 @@ void DockPanelContextMenu::applyChrome()
     const auto& theme = ruwa::ui::core::ThemeManager::instance();
     const auto& colors = theme.colors();
 
-    for (QLabel* sectionLabel : { m_sectionLabel, m_toolsSectionLabel, m_layerButtonsSectionLabel }) {
+    for (QLabel* sectionLabel :
+        { m_sectionLabel, m_toolsSectionLabel, m_layerButtonsSectionLabel }) {
         if (sectionLabel) {
             QFont f = colors.fonts.getUIFont(theme.scaledFontSize(10));
             f.setWeight(QFont::DemiBold);
@@ -205,11 +206,9 @@ void DockPanelContextMenu::buildUi()
     behaviorLayout->addWidget(createToggleRow(behaviorColumn,
         ruwa::ui::core::IconProvider::StandardIcon::Move, tr("Movable"), m_movableToggle));
     behaviorLayout->addWidget(createToggleRow(behaviorColumn,
-        ruwa::ui::core::IconProvider::StandardIcon::DockLayout, tr("Dockable"),
-        m_dockableToggle));
+        ruwa::ui::core::IconProvider::StandardIcon::DockLayout, tr("Dockable"), m_dockableToggle));
     behaviorLayout->addWidget(createToggleRow(behaviorColumn,
-        ruwa::ui::core::IconProvider::StandardIcon::Resize, tr("Resizable"),
-        m_resizableToggle));
+        ruwa::ui::core::IconProvider::StandardIcon::Resize, tr("Resizable"), m_resizableToggle));
 
     connect(m_movableToggle, &ToggleSwitch::toggled, this, [this](bool enabled) {
         if (m_panel) {
@@ -289,9 +288,9 @@ void DockPanelContextMenu::buildUi()
     for (int index = 0; index < tools.size(); ++index) {
         const ruwa::ui::workspace::ToolId tool = tools[index];
         ToggleSwitch* toggle = nullptr;
-        QWidget* row = createToggleRow(toolsGridHost,
-            ruwa::ui::workspace::ToolsPanel::toolIconType(tool),
-            ruwa::ui::workspace::ToolsPanel::toolDisplayName(tool), toggle);
+        QWidget* row
+            = createToggleRow(toolsGridHost, ruwa::ui::workspace::ToolsPanel::toolIconType(tool),
+                ruwa::ui::workspace::ToolsPanel::toolDisplayName(tool), toggle);
         const int column = index / rowsPerColumn;
         const int rowIndex = index % rowsPerColumn;
         toolsGrid->addWidget(row, rowIndex, column);

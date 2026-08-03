@@ -699,8 +699,8 @@ void UpdateMessageOverlay::setupUI()
     heroTextLayout->addWidget(statusLabel);
 
     auto* heroTitleLabel = new QLabel(QCoreApplication::translate("UpdateMessageOverlay",
-                                          "Smarter snapping, smoother zoom, and a faster paint "
-                                          "loop."),
+                                          "Rearrangeable panels, richer tooltips, and cleaner "
+                                          "gradients."),
         heroText);
     QFont heroTitleFont = colors.fonts.getUIFont(theme.scaledFontSize(HeroTitleFontSize));
     heroTitleFont.setWeight(QFont::DemiBold);
@@ -716,9 +716,9 @@ void UpdateMessageOverlay::setupUI()
 
     auto* descriptionLabel
         = new QLabel(QCoreApplication::translate("UpdateMessageOverlay",
-                         "This update rebuilds auto snapping around other layers and equal "
-                         "spacing, adds unified range controls for brush dynamics, and makes "
-                         "canvas rendering smooth at every zoom level."),
+                         "This update makes the workspace yours to arrange, gives Ruwa its own "
+                         "tooltips with shortcuts in them, and removes gradient banding from "
+                         "8-bit documents."),
             leftWidget);
     descriptionLabel->setWordWrap(true);
     descriptionLabel->setFont(colors.fonts.getUIFont(theme.scaledFontSize(BodyFontSize)));
@@ -734,23 +734,22 @@ void UpdateMessageOverlay::setupUI()
 
     addReleaseHighlightRow(highlightsWidget, highlightsLayout, colors, theme, ChangelogBadge::New,
         QCoreApplication::translate("UpdateMessageOverlay",
-            "Auto snapping now covers other layers and equal spacing, with live guides and "
-            "measurements."));
+            "Tools and layer actions reorder by drag and drop, and single buttons can be hidden."));
     addReleaseHighlightRow(highlightsWidget, highlightsLayout, colors, theme,
         ChangelogBadge::Updated,
         QCoreApplication::translate("UpdateMessageOverlay",
-            "Brush dynamics now use a single two-handle range control instead of separate "
-            "amounts."));
+            "Themed tooltips carry the action's shortcut, and every panel title bar gets a close "
+            "cross."));
     addReleaseHighlightRow(highlightsWidget, highlightsLayout, colors, theme,
         ChangelogBadge::Improved,
         QCoreApplication::translate("UpdateMessageOverlay",
-            "Mipmapped canvas rendering, an animated navigator, and faster painting, selections, "
-            "and Liquify."));
+            "Large thumbnail previews, Navigator zoom controls, and a live readout while "
+            "transforming."));
     addReleaseHighlightRow(highlightsWidget, highlightsLayout, colors, theme,
         ChangelogBadge::BugFix,
         QCoreApplication::translate("UpdateMessageOverlay",
-            "The pen keeps contact across the window edge, the hue ring is oriented correctly, "
-            "and updates survive a failed cleanup."));
+            "No more gradient banding on 8-bit documents, no dirty-tile flicker while zoomed out, "
+            "and no crash on a fast undo burst."));
 
     leftLayout->addWidget(highlightsWidget);
     leftLayout->addStretch();

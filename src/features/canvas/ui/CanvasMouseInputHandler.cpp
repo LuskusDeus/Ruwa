@@ -1374,8 +1374,7 @@ bool CanvasMouseInputHandler::handleMouseRelease(QMouseEvent* event)
     if (m_panel->m_isRotatingView && event->button() == Qt::LeftButton) {
         m_panel->m_isRotatingView = false;
         auto& cam = m_panel->m_glWidget->viewport().camera();
-        if (cam.snapRotationSmooth(
-                kRotateViewSnapIncrement, kRotateViewSnapCaptureDistance)) {
+        if (cam.snapRotationSmooth(kRotateViewSnapIncrement, kRotateViewSnapCaptureDistance)) {
             m_panel->requestRender();
         }
         event->accept();

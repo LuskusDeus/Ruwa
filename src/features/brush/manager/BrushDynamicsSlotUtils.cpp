@@ -122,8 +122,7 @@ std::optional<BrushSettingDef> findSettingDef(
     return std::nullopt;
 }
 
-BrushDynamicTargetDef dynamicsTargetForSetting(
-    const QString& engineId, const QString& settingKey)
+BrushDynamicTargetDef dynamicsTargetForSetting(const QString& engineId, const QString& settingKey)
 {
     const auto dynamicsKey = brushDynamicsSettingKeyFromSettingKey(settingKey.toStdString());
     const auto* module = BrushEngineRegistry::instance().moduleOrPixelFallback(engineId);
@@ -147,8 +146,7 @@ BrushDynamicTargetDef dynamicsTargetForSetting(
 void syncLegacyPressureState(BrushSettingsData& settings, const BrushDynamicsSlot& slot)
 {
     const auto& binding = slot.binding(BrushInputSourceKey::TabletPressure);
-    const bool mirrorable
-        = binding.isActive() && binding.mode == BrushDynamicsBlendMode::Multiply;
+    const bool mirrorable = binding.isActive() && binding.mode == BrushDynamicsBlendMode::Multiply;
     const auto endpointValue = [&binding](float inputValue) {
         if (binding.curve.empty()) {
             return (binding.mode == BrushDynamicsBlendMode::Add) ? 0.0f : 1.0f;

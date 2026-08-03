@@ -836,8 +836,7 @@ BrushEditorLayoutWidget::BrushDynamicsSlot BrushEditorLayoutWidget::dynamicsSlot
 BrushEditorLayoutWidget::BrushDynamicTargetDef BrushEditorLayoutWidget::dynamicsTargetForSetting(
     const QString& settingKey) const
 {
-    return ruwa::core::brushes::dynamicsTargetForSetting(
-        selectedBrushData().engineId, settingKey);
+    return ruwa::core::brushes::dynamicsTargetForSetting(selectedBrushData().engineId, settingKey);
 }
 
 bool BrushEditorLayoutWidget::applyDynamicsSlotForSetting(

@@ -199,10 +199,10 @@ SnapResult TransformSnapSession::solvePoint(const Vector2& point, const Viewport
     std::vector<SnapRelation> candidates = TransformSnapSolver::pointCandidates(
         m_scene, m_settings, point, m_sourceParentId, canvasOnly, searchRadius);
     SnapResult result;
-    result.xRelation = choose(
-        SnapAxis::X, candidates, point, viewport, screenZoom, allowX, result.xRelations);
-    result.yRelation = choose(
-        SnapAxis::Y, candidates, point, viewport, screenZoom, allowY, result.yRelations);
+    result.xRelation
+        = choose(SnapAxis::X, candidates, point, viewport, screenZoom, allowX, result.xRelations);
+    result.yRelation
+        = choose(SnapAxis::Y, candidates, point, viewport, screenZoom, allowY, result.yRelations);
     if (result.xRelation) {
         result.correction.x = result.xRelation->correction;
     }
