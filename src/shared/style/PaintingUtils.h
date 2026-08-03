@@ -8,7 +8,10 @@
 #include <QGraphicsBlurEffect>
 #include <QGraphicsPixmapItem>
 #include <QGraphicsScene>
+#include <QHash>
 #include <QImage>
+#include <QList>
+#include <QLineF>
 #include <QLinearGradient>
 #include <QPainter>
 #include <QPainterPath>
@@ -93,6 +96,308 @@ inline void drawGradientBorder(QPainter& painter, const QRectF& outerRect, qreal
     painter.setPen(pen);
     painter.setBrush(Qt::NoBrush);
     painter.drawPath(path);
+}
+
+// ----------------------------------------------------------------------------
+// Liquid glass — the specular pass for on-canvas overlays. Sits on top of the
+// backdrop blur: a diagonal primary-tinted sweep riding the outline, plus a pair
+// of inner shadows (dark rising from the bottom edge, primary light falling from
+// the top edge). The rim shares its geometry with drawGradientBorder(), so the
+// two land on the same pixel line instead of reading as a double stroke.
+// ----------------------------------------------------------------------------
+
+/// Opacity of the diagonal specular rim.
+inline constexpr qreal kLiquidGlassRimOpacity = 0.15;
+/// Opacity of the inner-shadow pair.
+inline constexpr qreal kLiquidGlassShadowOpacity = 0.05;
+/// Default inner-shadow penetration in logical px (scale at the call site).
+inline constexpr qreal kLiquidGlassShadowDepth = 8.0;
+
+/// Axis of the specular sweep, running bottom-left → top-right across @p bounds.
+///
+/// A linear gradient's bands are perpendicular to its axis, so the axis is NOT the
+/// diagonal — it is the normal of the top-left→bottom-right diagonal. That puts the
+/// bright midpoint band exactly on that diagonal (through both corners) and the
+/// transparent ends on the projections of the other two, at any aspect ratio.
+///
+/// Driving the axis off the corners directly instead ties its angle to the aspect
+/// ratio: on a long capsule it flattens to near-horizontal, the bands turn vertical
+/// and read as stripes parallel to the short sides. Pinning it to 45° is no better —
+/// the bright band then leaves through the long edges near the centre rather than
+/// through the corners.
+inline QLineF liquidGlassSweepAxis(const QRectF& bounds)
+{
+    const qreal w = bounds.width();
+    const qreal h = bounds.height();
+    const QPointF center = bounds.center();
+
+    const qreal diagonal = std::sqrt(w * w + h * h);
+    if (diagonal <= 0.0) {
+        return QLineF(center, center);
+    }
+
+    const QPointF direction(h / diagonal, -w / diagonal); // right and up
+    // Perpendicular distance from the diagonal out to either remaining corner.
+    const qreal half = w * h / diagonal;
+    return QLineF(center - direction * half, center + direction * half);
+}
+
+/// Diagonal highlight along @p outline: transparent at the ends of the 45° sweep
+/// across @p bounds, full @p primary at the midpoint.
+/// @p outline must already be the stroke geometry (pixel-center inset).
+inline void drawLiquidGlassRim(QPainter& painter, const QPainterPath& outline,
+    const QRectF& bounds, const QColor& primary, qreal penWidth = 1.0,
+    qreal opacity = kLiquidGlassRimOpacity)
+{
+    if (outline.isEmpty() || !bounds.isValid() || opacity <= 0.0 || penWidth <= 0.0) {
+        return;
+    }
+
+    QColor mid = primary;
+    mid.setAlphaF(qBound<qreal>(0.0, primary.alphaF() * opacity, 1.0));
+    QColor ends = mid;
+    ends.setAlpha(0);
+
+    const QLineF axis = liquidGlassSweepAxis(bounds);
+    QLinearGradient sweep(axis.p1(), axis.p2());
+    sweep.setColorAt(0.0, ends);
+    sweep.setColorAt(0.5, mid);
+    sweep.setColorAt(1.0, ends);
+
+    QPen pen;
+    pen.setBrush(sweep);
+    pen.setWidthF(penWidth);
+    pen.setCosmetic(true);
+
+    painter.save();
+    painter.setPen(pen);
+    painter.setBrush(Qt::NoBrush);
+    painter.drawPath(outline);
+    painter.restore();
+}
+
+namespace detail {
+
+/// LRU of rendered inner-shadow layers, keyed on everything the raster depends on.
+///
+/// The on-canvas overlays repaint on every backdrop-blur tick — i.e. every frame
+/// while the user draws — and the shadow is by far the most expensive thing they
+/// paint: 48 stroked paths into a 16-bit buffer plus a per-pixel dither pass, all
+/// on the GUI thread. Since none of its inputs change between those repaints, it
+/// is rasterised once and blitted afterwards.
+///
+/// GUI thread only, like the rest of this header. Capacity covers the four canvas
+/// overlays with room for in-flight size variants; a width animation still misses
+/// every frame (the geometry genuinely changed) but cannot grow the cache.
+inline constexpr int kLiquidGlassCacheCapacity = 12;
+
+struct LiquidGlassCache {
+    QHash<quint64, QImage> entries;
+    QList<quint64> order; ///< least-recently-used first
+
+    const QImage* find(quint64 key)
+    {
+        const auto it = entries.constFind(key);
+        if (it == entries.constEnd()) {
+            return nullptr;
+        }
+        const qsizetype at = order.indexOf(key);
+        if (at >= 0 && at != order.size() - 1) {
+            order.move(at, order.size() - 1);
+        }
+        return &it.value();
+    }
+
+    void insert(quint64 key, const QImage& image)
+    {
+        if (!entries.contains(key)) {
+            order.append(key);
+        }
+        entries.insert(key, image);
+        while (order.size() > kLiquidGlassCacheCapacity) {
+            entries.remove(order.takeFirst());
+        }
+    }
+};
+
+inline LiquidGlassCache& liquidGlassCache()
+{
+    static LiquidGlassCache cache;
+    return cache;
+}
+
+inline quint64 hashCombine(quint64 seed, quint64 value)
+{
+    return seed ^ (value + 0x9e3779b97f4a7c15ULL + (seed << 6) + (seed >> 2));
+}
+
+/// Identity of a path for cache purposes. Coordinates are quantised to 1/16 px so
+/// float noise in the layout does not churn the key.
+inline quint64 hashPath(quint64 seed, const QPainterPath& path)
+{
+    const int count = path.elementCount();
+    seed = hashCombine(seed, quint64(count));
+    for (int i = 0; i < count; ++i) {
+        const QPainterPath::Element element = path.elementAt(i);
+        seed = hashCombine(seed, quint64(element.type));
+        seed = hashCombine(seed, quint64(qint64(qRound(element.x * 16.0))));
+        seed = hashCombine(seed, quint64(qint64(qRound(element.y * 16.0))));
+    }
+    return seed;
+}
+
+} // namespace detail
+
+/// Inner shadows hugging the inside of @p shape: @p primary light dropping from
+/// the top edge, black rising from the bottom. Softness comes from stacking
+/// offset strokes of the outline; the stack is accumulated at 16 bits per channel
+/// and Bayer-dithered on the way back to 8, because at these opacities a single
+/// layer lands well below one 8-bit step and the ramp would band hard.
+///
+/// The raster is cached (see detail::LiquidGlassCache) — repeat calls with the same
+/// shape, colour, depth and DPR only cost a blit.
+inline void drawLiquidGlassInnerShadow(QPainter& painter, const QPainterPath& shape,
+    const QColor& primary, qreal depth = kLiquidGlassShadowDepth,
+    qreal opacity = kLiquidGlassShadowOpacity)
+{
+    if (shape.isEmpty() || depth <= 0.5 || opacity <= 0.0) {
+        return;
+    }
+
+    const QRectF bounds = shape.boundingRect();
+    if (bounds.isEmpty()) {
+        return;
+    }
+
+    const qreal dpr = painter.device() ? painter.device()->devicePixelRatioF() : qreal(1);
+    const QRect target = bounds.toAlignedRect();
+    const QSize devSize(
+        qMax(1, qCeil(target.width() * dpr)), qMax(1, qCeil(target.height() * dpr)));
+
+    quint64 cacheKey = detail::hashPath(0x11A11DC1A55ULL, shape);
+    cacheKey = detail::hashCombine(cacheKey, quint64(primary.rgba()));
+    cacheKey = detail::hashCombine(cacheKey, quint64(qint64(qRound(depth * 64.0))));
+    cacheKey = detail::hashCombine(cacheKey, quint64(qint64(qRound(opacity * 4096.0))));
+    cacheKey = detail::hashCombine(cacheKey, quint64(qint64(qRound(dpr * 1024.0))));
+
+    if (const QImage* cached = detail::liquidGlassCache().find(cacheKey)) {
+        painter.drawImage(target.topLeft(), *cached);
+        return;
+    }
+
+    QImage hiPrec(devSize, QImage::Format_RGBA64_Premultiplied);
+    if (hiPrec.isNull()) {
+        return;
+    }
+    hiPrec.setDevicePixelRatio(dpr);
+    hiPrec.fill(Qt::transparent);
+
+    // More layers than the eye can resolve as steps; the dither hides the rest.
+    constexpr int kLayers = 24;
+    const qreal layerAlpha = 1.0 - std::pow(1.0 - qBound<qreal>(0.0, opacity, 1.0), 1.0 / kLayers);
+
+    {
+        QPainter p(&hiPrec);
+        p.setRenderHint(QPainter::Antialiasing, true);
+        p.translate(-target.topLeft());
+        p.setBrush(Qt::NoBrush);
+
+        QColor light = primary;
+        light.setAlphaF(layerAlpha * primary.alphaF());
+        QColor lightEnd = light;
+        lightEnd.setAlpha(0);
+
+        QColor dark(0, 0, 0);
+        dark.setAlphaF(layerAlpha);
+        QColor darkEnd = dark;
+        darkEnd.setAlpha(0);
+
+        // Each stack is faded out along Y past the midline, so on the left/right
+        // edges — where both bands reach equally far in — the light hands over to
+        // the dark as one continuous ramp instead of stacking into a hard seam.
+        QLinearGradient lightFade(bounds.topLeft(), bounds.bottomLeft());
+        lightFade.setColorAt(0.0, light);
+        lightFade.setColorAt(0.35, light);
+        lightFade.setColorAt(0.68, lightEnd);
+
+        QLinearGradient darkFade(bounds.topLeft(), bounds.bottomLeft());
+        darkFade.setColorAt(0.32, darkEnd);
+        darkFade.setColorAt(0.65, dark);
+        darkFade.setColorAt(1.0, dark);
+
+        for (int i = kLayers; i >= 1; --i) {
+            // Offsetting the outline by the band's half-width keeps the stroke on
+            // the inside of the leading edge only; the opposite edge lands outside
+            // the shape and is masked off below.
+            const qreal reach = depth * qreal(i) / qreal(kLayers);
+
+            QPen pen;
+            pen.setWidthF(reach * 2.0);
+            pen.setJoinStyle(Qt::RoundJoin);
+
+            pen.setBrush(lightFade);
+            p.setPen(pen);
+            p.drawPath(shape.translated(0.0, reach));
+
+            pen.setBrush(darkFade);
+            p.setPen(pen);
+            p.drawPath(shape.translated(0.0, -reach));
+        }
+
+        // Antialiased mask instead of setClipPath(), whose edge is hard-aliased and
+        // would stair-step the rounded corners.
+        p.setCompositionMode(QPainter::CompositionMode_DestinationIn);
+        p.setPen(Qt::NoPen);
+        p.setBrush(Qt::black);
+        p.drawPath(shape);
+    }
+
+    QImage dithered(devSize, QImage::Format_ARGB32_Premultiplied);
+    if (dithered.isNull()) {
+        return;
+    }
+    dithered.setDevicePixelRatio(dpr);
+    const int W = devSize.width();
+    const int H = devSize.height();
+    for (int y = 0; y < H; ++y) {
+        const QRgba64* src = reinterpret_cast<const QRgba64*>(hiPrec.constScanLine(y));
+        QRgb* dst = reinterpret_cast<QRgb*>(dithered.scanLine(y));
+        const int* bayerRow = detail::kBayer4[y & 3];
+        for (int x = 0; x < W; ++x) {
+            const int off = bayerRow[x & 3] * 16;
+            const QRgba64 s = src[x];
+            const int a = qMin(255, (int(s.alpha()) + off) / 257);
+            const int r = qMin(a, (int(s.red()) + off) / 257);
+            const int g = qMin(a, (int(s.green()) + off) / 257);
+            const int b = qMin(a, (int(s.blue()) + off) / 257);
+            dst[x] = qRgba(r, g, b, a);
+        }
+    }
+
+    detail::liquidGlassCache().insert(cacheKey, dithered);
+    painter.drawImage(target.topLeft(), dithered);
+}
+
+/// Liquid-glass pass for a rounded-rect overlay. Call it right after the
+/// backdrop tint and the regular border: the rim reuses drawGradientBorder()'s
+/// inset/radius so both strokes coincide.
+inline void drawLiquidGlass(QPainter& painter, const QRectF& rect, qreal radius,
+    const QColor& primary, qreal shadowDepth = kLiquidGlassShadowDepth, qreal rimWidth = 1.0)
+{
+    if (!rect.isValid()) {
+        return;
+    }
+
+    QPainterPath shape;
+    shape.addRoundedRect(rect, radius, radius);
+
+    const QRectF rimRect = rect.adjusted(0.5, 0.5, -0.5, -0.5);
+    const qreal rimRadius = qMax<qreal>(0.0, radius - 0.5);
+    QPainterPath rim;
+    rim.addRoundedRect(rimRect, rimRadius, rimRadius);
+
+    drawLiquidGlassInnerShadow(painter, shape, primary, shadowDepth);
+    drawLiquidGlassRim(painter, rim, rimRect, primary, rimWidth);
 }
 
 /**

@@ -524,6 +524,9 @@ void BrushControlOverlay::drawBackground(QPainter& painter)
     }
 
     ruwa::ui::painting::drawGradientBorder(painter, rect(), radius, borderColor, borderColor);
+
+    ruwa::ui::painting::drawLiquidGlass(painter, QRectF(rect()), radius, mgr.colors().primary,
+        theme.scaled(ruwa::ui::painting::kLiquidGlassShadowDepth));
 }
 
 void BrushControlOverlay::drawHandle(QPainter& painter, const QRectF& rect)

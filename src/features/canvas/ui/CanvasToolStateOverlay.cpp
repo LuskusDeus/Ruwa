@@ -1321,6 +1321,10 @@ void CanvasToolStateOverlay::drawBackground(QPainter& painter)
     }
 
     ruwa::ui::painting::drawGradientBorder(painter, rect(), radius, borderColor, borderColor);
+
+    // Capsule is short — keep the inner shadow from meeting in the middle.
+    ruwa::ui::painting::drawLiquidGlass(painter, QRectF(rect()), radius, mgr.colors().primary,
+        qMin<qreal>(mgr.scaled(ruwa::ui::painting::kLiquidGlassShadowDepth), height() * 0.25));
 }
 
 void CanvasToolStateOverlay::setBackdropSource(

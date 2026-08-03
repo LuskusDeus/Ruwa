@@ -327,6 +327,18 @@ void CanvasStylusJoystickWidget::paintEvent(QPaintEvent* event)
     painter.setBrush(Qt::NoBrush);
     painter.drawEllipse(bodyRect);
 
+    // Liquid glass on the circular body: rim rides the same ellipse as the border.
+    {
+        QPainterPath rimPath;
+        rimPath.addEllipse(bodyRect);
+        ruwa::ui::painting::drawLiquidGlassInnerShadow(painter, basePath, colors.primary,
+            ruwa::ui::core::WidgetStyleManager::instance().scaled(
+                ruwa::ui::painting::kLiquidGlassShadowDepth));
+        ruwa::ui::painting::drawLiquidGlassRim(painter, rimPath, bodyRect, colors.primary);
+        painter.setPen(Qt::NoPen);
+        painter.setBrush(Qt::NoBrush);
+    }
+
     // Upper rotating arc with rounded caps.
     const qreal sweep = ringSweepRadians();
     const qreal arcCenter = -kPi / 2.0 + m_ringRotation;

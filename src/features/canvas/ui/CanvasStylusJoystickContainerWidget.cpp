@@ -137,6 +137,10 @@ protected:
         borderColor.setAlphaF(borderColor.alphaF() * 0.5);
         ruwa::ui::painting::drawGradientBorder(p, QRectF(rect()), radius, borderColor, borderColor);
 
+        ruwa::ui::painting::drawLiquidGlass(p, QRectF(rect()), radius, colors.primary,
+            ruwa::ui::core::WidgetStyleManager::instance().scaled(
+                ruwa::ui::painting::kLiquidGlassShadowDepth));
+
         // Draw handle (rounded line) at top, like BrushControlOverlay
         const int handleH = ruwa::ui::core::WidgetStyleManager::instance().scaled(kHandleHeight);
         const int lineW = ruwa::ui::core::WidgetStyleManager::instance().scaled(kHandleLineWidth);
