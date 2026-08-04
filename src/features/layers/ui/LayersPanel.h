@@ -98,6 +98,18 @@ public:
     /// mask (inside = visible, outside = hidden). Returns true if it filled.
     using FillMaskFromSelectionFn = std::function<bool(const ruwa::core::layers::LayerId&)>;
     void setFillMaskFromSelectionFn(FillMaskFromSelectionFn fn);
+
+    /// Canvas-side operations the panel needs to prepare layers for an edit it
+    /// owns (merge rasterizes smart layers and bakes masks). Each of them pushes
+    /// its own undo command, which is why the transaction hooks come along: the
+    /// whole preparation plus the edit must collapse into one undo step.
+    struct CanvasLayerOps {
+        std::function<bool(const ruwa::core::layers::LayerId&)> rasterizeLayer;
+        std::function<bool(const ruwa::core::layers::LayerId&)> applyLayerMask;
+        std::function<void(const QString&)> beginUndoTransaction;
+        std::function<void()> endUndoTransaction;
+    };
+    void setCanvasLayerOps(CanvasLayerOps ops);
     void scheduleThumbnailRefresh();
     void invalidateLayerThumbnails(const QList<ruwa::core::layers::LayerId>& ids);
     void setThumbnailLoadingMode(bool active);
@@ -131,7 +143,7 @@ public:
     bool mergeSelectedLayers();
     /// Contextual merge (Ctrl+E / toolbar): merges the selection or merges down,
     /// showing a custom warning when the merge is blocked by a Background or
-    /// Smart/Board layer. Returns true only if a merge actually happened.
+    /// Board layer. Returns true only if a merge actually happened.
     bool performMerge();
     /// Whether a merge action should be offered (it will either merge or warn).
     bool hasMergeIntent() const;
@@ -246,6 +258,12 @@ private slots:
 private:
     bool mergeLayerSet(
         const QList<ruwa::core::layers::LayerData*>& orderedTopToBottom, const QString& undoLabel);
+    /// Turn every layer in the set into plain, mask-free pixels so the flat
+    /// compositing that merge performs sees what the screen shows: smart layers
+    /// are rasterized (which bakes their transform) and masks are baked in.
+    /// Runs inside the caller's undo transaction. False = merge must be aborted.
+    bool prepareLayersForMerge(const QList<ruwa::core::layers::LayerId>& ids);
+    static QString hiddenMaskMergeWarning();
     void showMergeWarning(const QString& message);
 
     void setupToolbar(QWidget* container);
@@ -313,6 +331,7 @@ private:
     RequestRenderFn m_requestRenderFn;
     OnContentChangedFn m_onContentChangedFn;
     FillMaskFromSelectionFn m_fillMaskFromSelectionFn;
+    CanvasLayerOps m_canvasLayerOps;
     bool m_syncingLayerControls = false;
     bool m_lastMaskEditTarget = false;
     ruwa::core::layers::BlendMode m_blendModeBeforePreview = ruwa::core::layers::BlendMode::Normal;

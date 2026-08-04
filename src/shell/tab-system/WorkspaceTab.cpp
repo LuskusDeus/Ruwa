@@ -1932,6 +1932,26 @@ void WorkspaceTab::setupPanels()
     m_layersPanel->setFillMaskFromSelectionFn([this](const ruwa::core::layers::LayerId& id) {
         return m_canvasPanel && m_canvasPanel->fillLayerMaskFromActiveSelection(id);
     });
+
+    workspace::LayersPanel::CanvasLayerOps layerOps;
+    layerOps.rasterizeLayer = [this](const ruwa::core::layers::LayerId& id) {
+        return m_canvasPanel && m_canvasPanel->rasterizeSmartLayer(id);
+    };
+    layerOps.applyLayerMask = [this](const ruwa::core::layers::LayerId& id) {
+        return m_canvasPanel && m_canvasPanel->applyLayerMask(id);
+    };
+    layerOps.beginUndoTransaction = [this](const QString& text) {
+        if (m_canvasPanel) {
+            m_canvasPanel->createGLContent();
+            m_canvasPanel->canvas().undoManager().beginTransaction(text);
+        }
+    };
+    layerOps.endUndoTransaction = [this]() {
+        if (m_canvasPanel) {
+            m_canvasPanel->canvas().undoManager().endTransaction();
+        }
+    };
+    m_layersPanel->setCanvasLayerOps(std::move(layerOps));
     m_layerEffectsPanel->setPushUndoFn([this](std::unique_ptr<aether::IUndoCommand> cmd) {
         if (m_canvasPanel) {
             m_canvasPanel->createGLContent();

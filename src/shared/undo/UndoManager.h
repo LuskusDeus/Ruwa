@@ -21,6 +21,8 @@
 
 namespace aether {
 
+class CompositeUndoCommand;
+
 // ==========================================================================
 //   I U N D O   C O M M A N D
 // ==========================================================================
@@ -77,7 +79,25 @@ public:
 
     /// Push a new command. Does NOT call redo() — the caller has already
     /// applied the changes. Clears the redo stack.
+    /// Inside a transaction the command is captured instead of stacked.
     void push(std::unique_ptr<IUndoCommand> cmd);
+
+    // ---- Transactions ----
+    //
+    // Everything pushed between begin and end becomes ONE undo step, replayed
+    // in push order on redo. Use it when an operation is only correct as a
+    // whole — e.g. merge first rasterizes a smart layer and bakes its mask,
+    // and a redo that skipped that preparation would composite other pixels.
+    // Capturing at this level (rather than at each call site) also catches
+    // commands pushed by code that knows nothing about the transaction.
+    //
+    // Nesting is allowed: only the outermost pair stacks anything. A
+    // transaction that captured a single command pushes it unwrapped, so its
+    // own undo label survives; an empty one pushes nothing.
+
+    void beginTransaction(const QString& text);
+    void endTransaction();
+    bool inTransaction() const { return m_transaction != nullptr; }
 
     void undo();
     void redo();
@@ -145,6 +165,10 @@ private:
     std::deque<std::unique_ptr<IUndoCommand>> m_commands;
     int m_index = 0; // Number of applied commands (undo pops from here)
     int m_cleanIndex = 0;
+
+    // Open transaction (see beginTransaction). Non-null means push() captures.
+    std::unique_ptr<CompositeUndoCommand> m_transaction;
+    int m_transactionDepth = 0;
 
     qint64 m_memoryLimit = 3LL * 1024 * 1024 * 1024; // 3 GB
     qint64 m_currentMemory = 0;

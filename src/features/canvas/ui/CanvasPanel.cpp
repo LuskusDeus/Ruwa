@@ -2229,7 +2229,7 @@ bool CanvasPanel::applyLayerMask(const ruwa::core::layers::LayerId& id)
 bool CanvasPanel::invertLayerMask(const ruwa::core::layers::LayerId& id)
 {
     auto* layer = m_layerModel ? m_layerModel->layerById(id) : nullptr;
-    if (!m_glWidget || !layer || !layer->isRaster() || !layer->hasMask()) {
+    if (!m_glWidget || !layer || !layer->canHostMask() || !layer->hasMask()) {
         return false;
     }
     commitTransformBeforeDocumentMutation();

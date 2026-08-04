@@ -5,6 +5,7 @@
 // ==========================================================================
 
 #include "shared/undo/UndoManager.h"
+#include "shared/undo/CompositeUndoCommand.h"
 #include <QThreadPool>
 #include <QtConcurrent>
 #include <atomic>
@@ -57,6 +58,13 @@ void UndoManager::push(std::unique_ptr<IUndoCommand> cmd)
     if (m_undoRedoInProgress)
         return; // Don't push during undo/redo (e.g. selection change from layer removal)
 
+    if (m_transaction) {
+        // Inside a transaction: collect, stack later as one step. The command has
+        // already been applied by its caller, exactly as an immediate push expects.
+        m_transaction->append(std::move(cmd));
+        return;
+    }
+
     // Reported size at push time (can be raw/uncompressed for async commands).
     const qint64 reportedCmdSize = cmd->memorySize();
     recomputeCurrentMemory();
@@ -107,8 +115,44 @@ void UndoManager::push(std::unique_ptr<IUndoCommand> cmd)
     }
 }
 
+// ==========================================================================
+//   T R A N S A C T I O N S
+// ==========================================================================
+
+void UndoManager::beginTransaction(const QString& text)
+{
+    if (m_transactionDepth++ == 0) {
+        m_transaction = std::make_unique<CompositeUndoCommand>(text);
+    }
+}
+
+void UndoManager::endTransaction()
+{
+    if (m_transactionDepth == 0) {
+        return;
+    }
+    if (--m_transactionDepth > 0) {
+        return; // Inner pair: keep collecting.
+    }
+
+    // Detach before pushing, otherwise push() would capture the transaction
+    // into itself.
+    auto transaction = std::move(m_transaction);
+    if (!transaction || transaction->isEmpty()) {
+        return;
+    }
+    if (transaction->size() == 1) {
+        push(transaction->takeOnly());
+        return;
+    }
+    push(std::move(transaction));
+}
+
 void UndoManager::undo()
 {
+    if (m_transaction) {
+        return; // An operation is still being assembled; nothing to undo yet.
+    }
     if (!canUndo())
         return;
 
@@ -133,6 +177,9 @@ void UndoManager::undo()
 
 void UndoManager::redo()
 {
+    if (m_transaction) {
+        return; // See undo().
+    }
     if (!canRedo())
         return;
 
@@ -258,6 +305,10 @@ void UndoManager::performRedo()
 void UndoManager::clear()
 {
     waitForPendingPreparation();
+    // Drop a transaction left open by an aborted operation (e.g. the document
+    // was closed mid-merge) instead of letting it capture into the new history.
+    m_transaction.reset();
+    m_transactionDepth = 0;
     m_commands.clear();
     m_currentMemory = 0;
     m_index = 0;

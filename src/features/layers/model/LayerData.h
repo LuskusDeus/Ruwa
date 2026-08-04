@@ -559,6 +559,25 @@ struct LayerData : public std::enable_shared_from_this<LayerData> {
     /** @brief Whether the mask currently affects compositing */
     bool maskAffectsCompositing() const { return hasMask() && maskEnabled; }
 
+    /**
+     * @brief Can this layer own a layer mask ("Add mask" target).
+     *
+     * Masks are painted in DOCUMENT space and the compositor gates the layer's
+     * finished document-space grid with them, so a smart layer qualifies just
+     * like a raster one: its projected grid is what the mask meets. Board layers
+     * are composed by a separate surface and groups have no mask pipeline yet,
+     * so both stay out.
+     */
+    bool canHostMask() const { return !isBackground() && (isRaster() || isSmart()); }
+
+    /**
+     * @brief Brush/fill edits currently land in this layer's mask, not its pixels.
+     *
+     * The mask is a plain RGBA8 grid regardless of the layer type, so edits that
+     * target it never need the layer itself to be rasterizable.
+     */
+    bool maskIsEditTarget() const { return maskEditActive && maskGrid != nullptr; }
+
     /** @brief Create an empty (reveal-all) mask grid if none exists. Returns the grid. */
     aether::TileGrid* ensureMask()
     {

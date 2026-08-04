@@ -380,12 +380,14 @@ std::vector<CompositeLayerInfo> LayerCompositingBuilder::buildLayerStackRecursiv
         const bool hiddenByClipBase = ruwa::core::layers::isHiddenByClipBaseInSiblings(layers, i);
         const bool layerVisible = layerData->visible && !hiddenByClipBase;
 
-        bool isActiveWithStroke
-            = hasStroke && layerData->id == activeLayerPtr->id && layerData->isRaster();
+        // A stroke reaches this layer either because it paints the layer's pixels
+        // (raster only) or because it paints the layer's MASK — the latter works on
+        // a smart layer too, where the gated content is the projected grid.
+        bool isActiveWithStroke = hasStroke && layerData->id == activeLayerPtr->id
+            && (layerData->isRaster() || layerData->maskIsEditTarget());
 
         if (isActiveWithStroke) {
-            const bool isMaskEditStroke
-                = layerData->maskEditActive && layerData->maskGrid != nullptr;
+            const bool isMaskEditStroke = layerData->maskIsEditTarget();
 
             if (isMaskEditStroke) {
                 // Live mask-edit preview, fully GPU and exact in a single pass.

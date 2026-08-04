@@ -702,6 +702,15 @@ bool hasClippedLayerDirectlyAbove(const LayerModel& model, const LayerId& source
     return false;
 }
 
+// Layer kinds a merge can consume. A smart layer qualifies because merge
+// rasterizes it first (Photoshop does the same silently). A Board layer does
+// not: it lives outside document bounds and is composed by its own surface, so
+// folding it into document pixels is a conversion the user must ask for.
+bool isMergeableLayerType(const LayerData* layer)
+{
+    return layer && (layer->isRaster() || layer->isSmart());
+}
+
 MergeDownCandidate mergeDownCandidateForSelection(const LayerModel& model)
 {
     MergeDownCandidate candidate;
@@ -715,9 +724,9 @@ MergeDownCandidate mergeDownCandidateForSelection(const LayerModel& model)
         return candidate;
     }
 
-    if (!source->isRaster() || !target->isRaster() || source->hasChildren() || target->hasChildren()
-        || source->locked || target->locked || source->clippedToBelow || target->clippedToBelow
-        || hasClippedLayerDirectlyAbove(model, source->id)) {
+    if (!isMergeableLayerType(source) || !isMergeableLayerType(target) || source->hasChildren()
+        || target->hasChildren() || source->locked || target->locked || source->clippedToBelow
+        || target->clippedToBelow || hasClippedLayerDirectlyAbove(model, source->id)) {
         return candidate;
     }
 
@@ -770,11 +779,11 @@ bool applyMergeDown(LayerModel& model, const LayerId& sourceId, const LayerId& t
 }
 
 // A layer that can participate in a flat raster merge (Merge Visible / Merge Selected).
-// Mirrors the constraints applied to Merge Down: plain raster, no children, not locked,
-// not part of a clipping stack.
+// Mirrors the constraints applied to Merge Down: a mergeable kind, no children,
+// not locked, not part of a clipping stack.
 bool isSimpleMergeableLayer(const LayerModel& model, const LayerData* layer)
 {
-    return layer && layer->isRaster() && !layer->hasChildren() && !layer->locked
+    return isMergeableLayerType(layer) && !layer->hasChildren() && !layer->locked
         && !layer->clippedToBelow && !hasClippedLayerDirectlyAbove(model, layer->id);
 }
 
@@ -880,8 +889,49 @@ LayerId applyMergeLayers(LayerModel& model, const QList<LayerId>& orderedTopToBo
     return targetId;
 }
 
+// Baking a mask goes through the canvas, which refuses to edit a hidden or
+// locked layer. Checked up front so a merge either prepares everything or
+// touches nothing — a half-prepared abort would leave a rasterized layer behind.
+bool mergeBlockedByUnbakeableMask(const LayerModel& model, const QList<LayerId>& ids)
+{
+    for (const LayerId& id : ids) {
+        const auto* layer = model.layerById(id);
+        if (layer && layer->hasMask() && (!layer->visible || layer->locked)) {
+            return true;
+        }
+    }
+    return false;
+}
+
+// Opens an undo transaction for a whole operation and closes it on every exit
+// path, including the early returns that abort a merge.
+class UndoTransactionScope {
+public:
+    UndoTransactionScope(const LayersPanel::CanvasLayerOps& ops, const QString& text)
+    {
+        if (ops.beginUndoTransaction && ops.endUndoTransaction) {
+            ops.beginUndoTransaction(text);
+            m_end = ops.endUndoTransaction;
+        }
+    }
+
+    ~UndoTransactionScope()
+    {
+        if (m_end) {
+            m_end();
+        }
+    }
+
+    UndoTransactionScope(const UndoTransactionScope&) = delete;
+    UndoTransactionScope& operator=(const UndoTransactionScope&) = delete;
+
+private:
+    std::function<void()> m_end;
+};
+
 // Selected mergeable layers, ordered top -> bottom. Valid only when every selected
-// layer is a simple raster sibling under one common parent; returns <2 entries otherwise.
+// layer is a simple mergeable sibling under one common parent; returns <2 entries
+// otherwise.
 QList<LayerData*> collectMergeSelectedLayers(const LayerModel& model)
 {
     const QSet<LayerId>& selectedIds = model.selectedLayerIds();
@@ -2511,6 +2561,11 @@ void LayersPanel::setFillMaskFromSelectionFn(FillMaskFromSelectionFn fn)
     m_fillMaskFromSelectionFn = std::move(fn);
 }
 
+void LayersPanel::setCanvasLayerOps(CanvasLayerOps ops)
+{
+    m_canvasLayerOps = std::move(ops);
+}
+
 void LayersPanel::scheduleThumbnailRefresh()
 {
     if (!m_thumbnailRefreshTimer.isActive()) {
@@ -2895,7 +2950,25 @@ bool LayersPanel::mergeSelectedLayerDown()
         return false;
     }
 
+    const QList<LayerId> participants { candidate.sourceId, candidate.targetId };
+    if (mergeBlockedByUnbakeableMask(m_layerModel, participants)) {
+        showMergeWarning(hiddenMaskMergeWarning());
+        return false;
+    }
+
     emit aboutToPerformTransformIncompatibleEdit();
+
+    // Preparation and merge form one undo step, and redo replays them in this
+    // order — a redo that skipped the preparation would composite the smart
+    // layer's untransformed, unmasked pixels instead.
+    UndoTransactionScope transaction(m_canvasLayerOps, tr("Merge Down"));
+    if (!prepareLayersForMerge(participants)) {
+        return false;
+    }
+
+    // Snapshot AFTER preparation: this command's undo restores the prepared
+    // (rasterized, mask-free) layers, and the preparation commands sitting
+    // before it in the transaction then walk them back to smart and masked.
     auto* source = m_layerModel.layerById(candidate.sourceId);
     auto* target = m_layerModel.layerById(candidate.targetId);
     auto sourceSnapshot = LayerModel::cloneLayerTree(source, true);
@@ -2998,6 +3071,44 @@ bool LayersPanel::canMergeSelectedLayerDown() const
     return mergeDownCandidateForSelection(m_layerModel).isValid();
 }
 
+QString LayersPanel::hiddenMaskMergeWarning()
+{
+    return tr("A hidden or locked layer with a mask can't be merged. Show the layer, "
+              "or delete its mask, first.");
+}
+
+bool LayersPanel::prepareLayersForMerge(const QList<LayerId>& ids)
+{
+    for (const LayerId& id : ids) {
+        auto* layer = m_layerModel.layerById(id);
+        if (!layer) {
+            return false;
+        }
+
+        if (layer->isSmart()) {
+            // Merge composites raw grids, so the smart transform has to be baked
+            // into pixels first — otherwise the object would fold in at its
+            // content origin, unscaled.
+            if (!m_canvasLayerOps.rasterizeLayer || !m_canvasLayerOps.rasterizeLayer(id)) {
+                return false;
+            }
+            layer = m_layerModel.layerById(id);
+            if (!layer || !layer->isRaster()) {
+                return false;
+            }
+        }
+
+        if (layer->hasMask()) {
+            // Same reason: the merge never reads the mask, so leaving it on the
+            // layer would resurrect everything the mask hides.
+            if (!m_canvasLayerOps.applyLayerMask || !m_canvasLayerOps.applyLayerMask(id)) {
+                return false;
+            }
+        }
+    }
+    return true;
+}
+
 bool LayersPanel::mergeLayerSet(
     const QList<LayerData*>& orderedTopToBottom, const QString& undoLabel)
 {
@@ -3014,15 +3125,34 @@ bool LayersPanel::mergeLayerSet(
         if (!layer) {
             return false;
         }
+        orderedIds.append(layer->id);
     }
+
+    if (mergeBlockedByUnbakeableMask(m_layerModel, orderedIds)) {
+        showMergeWarning(hiddenMaskMergeWarning());
+        return false;
+    }
+
     emit aboutToPerformTransformIncompatibleEdit();
 
-    for (LayerData* layer : orderedTopToBottom) {
+    // See mergeSelectedLayerDown for why preparation, snapshots and the merge
+    // are ordered this way inside one transaction.
+    UndoTransactionScope transaction(m_canvasLayerOps, undoLabel);
+    if (!prepareLayersForMerge(orderedIds)) {
+        return false;
+    }
+
+    for (const LayerId& id : orderedIds) {
+        // Re-resolve: preparation replaced layer state (never identity), but the
+        // snapshot must be taken from the prepared layer.
+        LayerData* layer = m_layerModel.layerById(id);
+        if (!layer) {
+            return false;
+        }
         auto snapshot = LayerModel::cloneLayerTree(layer, true);
         if (!snapshot) {
             return false;
         }
-        orderedIds.append(layer->id);
         const LayerId parentId = layer->parent ? layer->parent->id : LayerId();
         const int index
             = layer->parent ? layer->indexInParent() : rootLayerIndex(m_layerModel, layer);
@@ -3075,12 +3205,12 @@ bool LayersPanel::hasMergeIntent() const
 
     if (selCount >= 2) {
         // A merge is offered when the selection is mergeable, or when it contains a
-        // layer we should explicitly warn about (Background / Smart / Board).
+        // layer we should explicitly warn about (Background / Board).
         if (canMergeSelectedLayers()) {
             return true;
         }
         for (LayerData* layer : m_layerModel.selectedLayers()) {
-            if (layer && (layer->isBackground() || layer->isSmart() || layer->isBoard())) {
+            if (layer && (layer->isBackground() || layer->isBoard())) {
                 return true;
             }
         }
@@ -3096,8 +3226,7 @@ bool LayersPanel::hasMergeIntent() const
         if (canMergeSelectedLayerDown()) {
             return true;
         }
-        return target->isBackground() || target->isSmart() || target->isBoard()
-            || (source && (source->isSmart() || source->isBoard()));
+        return target->isBackground() || target->isBoard() || (source && source->isBoard());
     }
 
     return false;
@@ -3106,8 +3235,9 @@ bool LayersPanel::hasMergeIntent() const
 bool LayersPanel::performMerge()
 {
     const QString backgroundWarning = tr("The Background layer can't be merged.");
-    const QString smartWarning
-        = tr("Smart and Board layers can't be merged. Rasterize the layer first.");
+    // Smart layers merge fine now (they are rasterized first). A Board lives
+    // outside document bounds, so folding it in stays an explicit conversion.
+    const QString boardWarning = tr("Board layers can't be merged. Rasterize the layer first.");
 
     const int selCount = m_layerModel.selectionCount();
 
@@ -3117,21 +3247,21 @@ bool LayersPanel::performMerge()
         }
         // Mergeable selection is impossible — explain why when a special layer is involved.
         bool hasBackground = false;
-        bool hasSmartOrBoard = false;
+        bool hasBoard = false;
         for (LayerData* layer : m_layerModel.selectedLayers()) {
             if (!layer) {
                 continue;
             }
             if (layer->isBackground()) {
                 hasBackground = true;
-            } else if (layer->isSmart() || layer->isBoard()) {
-                hasSmartOrBoard = true;
+            } else if (layer->isBoard()) {
+                hasBoard = true;
             }
         }
         if (hasBackground) {
             showMergeWarning(backgroundWarning);
-        } else if (hasSmartOrBoard) {
-            showMergeWarning(smartWarning);
+        } else if (hasBoard) {
+            showMergeWarning(boardWarning);
         }
         return false;
     }
@@ -3147,9 +3277,8 @@ bool LayersPanel::performMerge()
         }
         if (target->isBackground()) {
             showMergeWarning(backgroundWarning);
-        } else if ((source && (source->isSmart() || source->isBoard())) || target->isSmart()
-            || target->isBoard()) {
-            showMergeWarning(smartWarning);
+        } else if ((source && source->isBoard()) || target->isBoard()) {
+            showMergeWarning(boardWarning);
         }
         return false;
     }
@@ -4080,7 +4209,7 @@ void LayersPanel::onAddGroup()
 void LayersPanel::onAddMask()
 {
     auto* layer = m_layerModel.selectedLayer();
-    if (!layer || layer->isBackground() || !layer->isRaster()) {
+    if (!layer || !layer->canHostMask()) {
         return;
     }
 
@@ -4196,9 +4325,9 @@ bool LayersPanel::canPasteMaskToSelectedLayer() const
     if (!ruwa::shared::clipboard::EditClipboard::instance().mask()) {
         return false;
     }
-    // Same targets "Add mask" accepts: masks live on ordinary raster layers.
+    // Same targets "Add mask" accepts.
     auto* layer = m_layerModel.selectedLayer();
-    return layer && layer->isRaster() && !layer->isBackground();
+    return layer && layer->canHostMask();
 }
 
 bool LayersPanel::pasteMaskToSelectedLayer()
@@ -4596,8 +4725,8 @@ void LayersPanel::syncLayerControls()
     }
 
     if (m_btnMask) {
-        // Mask editing is supported on raster layers in this version.
-        const bool canMask = canModifyLayerEntry && layer && layer->isRaster();
+        // Raster and smart layers can own a mask; see LayerData::canHostMask.
+        const bool canMask = canModifyLayerEntry && layer && layer->canHostMask();
         m_btnMask->setEnabled(canMask);
     }
 

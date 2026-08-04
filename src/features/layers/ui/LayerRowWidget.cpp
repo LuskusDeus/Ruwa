@@ -3035,6 +3035,8 @@ QVariantMap LayerRowWidget::contextMenuContext() const
         applyMask.insert(QStringLiteral("danger"), false);
         applyMask.insert(QStringLiteral("standardIcon"),
             static_cast<int>(IconProvider::StandardIcon::LayerMask));
+        // Baking a mask into the pixels means rasterizing a smart layer, so the
+        // action stays raster-only (Photoshop disables it on smart objects too).
         applyMask.insert(QStringLiteral("enabled"), m_data->isRaster());
         actions.append(applyMask);
 
@@ -3046,7 +3048,7 @@ QVariantMap LayerRowWidget::contextMenuContext() const
         invertMask.insert(QStringLiteral("danger"), false);
         invertMask.insert(QStringLiteral("standardIcon"),
             static_cast<int>(IconProvider::StandardIcon::LayerMask));
-        invertMask.insert(QStringLiteral("enabled"), m_data->isRaster());
+        invertMask.insert(QStringLiteral("enabled"), m_data->canHostMask());
         actions.append(invertMask);
     }
 
@@ -3179,7 +3181,7 @@ void LayerRowWidget::onSimpleContextAction(int actionId)
         emit applyMaskRequested(m_data->id);
         break;
     case CtxInvertMask:
-        if (!m_data->hasMask() || !m_data->isRaster()) {
+        if (!m_data->hasMask() || !m_data->canHostMask()) {
             break;
         }
         emit invertMaskRequested(m_data->id);

@@ -1801,6 +1801,20 @@ bool layerRequiresRasterizationForPixelEdits(const ruwa::core::layers::LayerData
     return layer && (layer->isIsolatedPixelLayer() || layer->isText());
 }
 
+/**
+ * Whether an edit about to be performed has to rasterize the layer first.
+ *
+ * Same question as layerRequiresRasterizationForPixelEdits, asked at the point
+ * of an actual edit: when the layer's MASK is the active target the edit lands
+ * in a plain RGBA8 mask grid and the isolated content is never touched, so a
+ * smart layer needs no conversion. The raw query above stays untouched — the
+ * explicit "Rasterize" command must keep working while a mask is focused.
+ */
+bool pixelEditsRequireRasterization(const ruwa::core::layers::LayerData* layer)
+{
+    return layerRequiresRasterizationForPixelEdits(layer) && !layer->maskIsEditTarget();
+}
+
 std::unique_ptr<TileGrid> rasterizeTextLayerToGrid(ruwa::core::layers::LayerData* layer)
 {
     auto rasterGrid = std::make_unique<TileGrid>();
@@ -2991,7 +3005,15 @@ void OpenGLCanvasWidget::onLayerDataChanged(const QUuid& id)
             // remove transition as well, not only while the effect is active.
             const bool boundsInvalidate = updateBoundsEffectInvalidationState(id, layer);
             if (layer->isIsolatedPixelLayer()) {
-                rebuildSmartProjectionCacheForLayer(id);
+                // The projection is a function of the content grid and the smart
+                // transform. A mask-target transform commit changes neither, yet it
+                // notifies this layer while its own readback is still pending — so
+                // rebuilding here would be pure work at the worst possible moment.
+                const bool maskOnlyChange = m_pendingTransform.active
+                    && m_pendingTransform.maskTarget && m_pendingTransform.layerId == id;
+                if (!maskOnlyChange) {
+                    rebuildSmartProjectionCacheForLayer(id);
+                }
                 m_canvas.dirtyManager().onStructureChanged();
                 // Remove stale composited tiles that no longer exist in any layer.
                 // Fast text edits can otherwise leave one-frame "ghost" cache tiles.
@@ -3262,8 +3284,18 @@ std::shared_ptr<TileGrid> OpenGLCanvasWidget::buildSmartProjectedGrid(
     }
 
     // Prefer GPU transform for smart-layer projection rebuild when available.
+    //
+    // NOT while a transform readback is still in flight: GLTransformRenderer owns a
+    // single source atlas and a single readback PBO, so building a projection here
+    // would overwrite both before tryFinalizeTransform() gets to read them, and the
+    // pending transform would collect THIS layer's content instead of its own tiles.
+    // That is reachable from a mask transform on a smart layer, whose commit
+    // notifies the layer (-> projection rebuild) while its own readback is pending.
+    // Flushing the pending transform instead is not an option here: it would push
+    // the TransformCommand ahead of the copy-move add command that the commit path
+    // pushes right after the notification, inverting the undo stack.
     const bool canUseGpu = m_initialized && m_renderer && m_renderer->transformRenderer()
-        && m_renderer->tileRenderer() && !sourceGrid->empty();
+        && m_renderer->tileRenderer() && !sourceGrid->empty() && !m_pendingTransform.active;
     if (canUseGpu) {
         makeCurrent();
 
@@ -3378,7 +3410,7 @@ bool OpenGLCanvasWidget::ensurePaintableActiveLayer()
     }
 
     auto* layer = m_layerModel->selectedLayer();
-    if (!layer || !layerRequiresRasterizationForPixelEdits(layer)) {
+    if (!layer || !pixelEditsRequireRasterization(layer)) {
         return true;
     }
 
@@ -3462,7 +3494,7 @@ void OpenGLCanvasWidget::rasterizeSmartLayer(ruwa::core::layers::LayerData* laye
 bool OpenGLCanvasWidget::confirmRasterizeForSelectionTransform(
     ruwa::core::layers::LayerData* layer, bool hasSelection)
 {
-    if (!layer || !layerRequiresRasterizationForPixelEdits(layer) || !hasSelection) {
+    if (!layer || !pixelEditsRequireRasterization(layer) || !hasSelection) {
         return true;
     }
 
@@ -3493,7 +3525,7 @@ bool OpenGLCanvasWidget::offerRasterizeForSelectionTransform(
     if (!confirmRasterizeForSelectionTransform(layer, hasSelection)) {
         return false;
     }
-    if (!layer || !layerRequiresRasterizationForPixelEdits(layer) || !hasSelection) {
+    if (!layer || !pixelEditsRequireRasterization(layer) || !hasSelection) {
         return true;
     }
 
@@ -3511,7 +3543,7 @@ bool OpenGLCanvasWidget::offerRasterizeForSelectionTransformTargets(bool hasSele
     rasterizeLayerIds.reserve(m_transformTargetSet.visualTargets.size());
     for (const TransformTargetInfo& target : m_transformTargetSet.visualTargets) {
         auto* layer = m_layerModel->layerById(target.layerId);
-        if (layerRequiresRasterizationForPixelEdits(layer)) {
+        if (pixelEditsRequireRasterization(layer)) {
             rasterizeLayerIds.push_back(target.layerId);
         }
     }
@@ -3529,7 +3561,7 @@ bool OpenGLCanvasWidget::offerRasterizeForSelectionTransformTargets(bool hasSele
     bool rasterizedAny = false;
     for (const QUuid& layerId : rasterizeLayerIds) {
         auto* layer = m_layerModel->layerById(layerId);
-        if (layerRequiresRasterizationForPixelEdits(layer)) {
+        if (pixelEditsRequireRasterization(layer)) {
             rasterizeSmartLayer(layer);
             rasterizedAny = true;
         }
@@ -4437,9 +4469,11 @@ bool OpenGLCanvasWidget::doFillSelectionWithColor(const QColor& color)
     if (!m_selectionController)
         return false;
     auto* layer = activeLayer();
-    if (!isLayerCanvasEditable(layer) || !layer->isRaster())
+    // Filling the MASK works on any mask-capable layer (the mask is a plain grid);
+    // filling the pixels still requires a raster layer.
+    if (!isLayerCanvasEditable(layer) || (!layer->isRaster() && !layer->maskIsEditTarget()))
         return false;
-    const bool maskTarget = layer->maskEditActive && layer->maskGrid != nullptr;
+    const bool maskTarget = layer->maskIsEditTarget();
     TileGrid* targetGrid = maskTarget ? layer->maskGrid.get() : layer->tileGrid.get();
     if (!targetGrid)
         return false;
@@ -5179,7 +5213,9 @@ bool OpenGLCanvasWidget::invertLayerMask(const QUuid& layerId)
         return false;
     }
     auto* layer = m_layerModel->layerById(layerId);
-    if (!layer || !layer->hasMask() || !layer->isRaster()) {
+    // Type-agnostic: inverting only rewrites the mask grid, which every
+    // mask-capable layer (raster or smart) carries in the same form.
+    if (!layer || !layer->hasMask() || !layer->canHostMask()) {
         return false;
     }
     TileGrid* mask = layer->maskTileGrid();
@@ -5600,7 +5636,7 @@ void OpenGLCanvasWidget::executeDeferredFillKickoff(uint64_t sequence)
     PendingFillKickoff kickoff = std::move(m_pendingFillKickoff);
     m_pendingFillKickoff = {};
     auto* layer = m_layerModel ? m_layerModel->layerById(kickoff.layerId) : nullptr;
-    if (!isLayerCanvasEditable(layer) || !layer->isRaster()) {
+    if (!isLayerCanvasEditable(layer) || (!layer->isRaster() && !kickoff.maskTarget)) {
         syncFillProcessingLayerSignal();
         return;
     }
@@ -5777,7 +5813,7 @@ void OpenGLCanvasWidget::handleFillWorkerResult(uint64_t requestSequence, const 
     m_fillWorkerCancelState.reset();
 
     auto* layer = m_layerModel ? m_layerModel->layerById(layerId) : nullptr;
-    if (!isLayerCanvasEditable(layer) || !layer->isRaster()) {
+    if (!isLayerCanvasEditable(layer) || (!layer->isRaster() && !m_fillPreview.maskTarget)) {
         return;
     }
     TileGrid* targetGrid = m_fillPreview.maskTarget ? layer->maskTileGrid() : layer->tileGrid.get();
@@ -6733,7 +6769,7 @@ bool OpenGLCanvasWidget::applyFloodFillResult(const QUuid& layerId, FloodFillRes
         return false;
     }
     auto* layer = m_layerModel ? m_layerModel->layerById(layerId) : nullptr;
-    if (!isLayerCanvasEditable(layer) || !layer->isRaster()) {
+    if (!isLayerCanvasEditable(layer) || (!layer->isRaster() && !maskTarget)) {
         return false;
     }
     TileGrid* targetGrid = maskTarget ? layer->maskTileGrid() : layer->tileGrid.get();
@@ -7043,10 +7079,10 @@ bool OpenGLCanvasWidget::performFill(int worldX, int worldY)
         return false;
 
     auto* layer = activeLayer();
-    if (!isLayerCanvasEditable(layer) || !layer->isRaster()) {
+    if (!isLayerCanvasEditable(layer) || (!layer->isRaster() && !layer->maskIsEditTarget())) {
         return false;
     }
-    const bool maskTarget = layer->maskEditActive && layer->maskGrid != nullptr;
+    const bool maskTarget = layer->maskIsEditTarget();
     TileGrid* targetGrid = maskTarget ? layer->maskGrid.get() : layer->tileGrid.get();
     if (!targetGrid) {
         return false;
@@ -7115,10 +7151,10 @@ bool OpenGLCanvasWidget::performClassicFill(int worldX, int worldY)
         return false;
 
     auto* layer = activeLayer();
-    if (!isLayerCanvasEditable(layer) || !layer->isRaster()) {
+    if (!isLayerCanvasEditable(layer) || (!layer->isRaster() && !layer->maskIsEditTarget())) {
         return false;
     }
-    const bool maskTarget = layer->maskEditActive && layer->maskGrid != nullptr;
+    const bool maskTarget = layer->maskIsEditTarget();
     TileGrid* targetGrid = maskTarget ? layer->maskGrid.get() : layer->tileGrid.get();
     if (!targetGrid) {
         return false;
@@ -10819,7 +10855,13 @@ void OpenGLCanvasWidget::paintGL_renderTransformViewportPreview(
         CompositeLayerInfo fixedContentInfo;
         fixedContentInfo.id = session.targetLayerId;
         fixedContentInfo.effectChainRevision = targetLayer->effectChainRevision;
-        fixedContentInfo.tileGrid = targetLayer->pixelGrid();
+        // The content stays put, so it must be the grid the document compositor
+        // would draw: for a smart layer that is the PROJECTED grid. Its raw
+        // pixelGrid() lives at the content origin and would snap the object into
+        // the top-left corner for the duration of the mask transform.
+        fixedContentInfo.tileGrid = m_layerCompositingBuilder
+            ? m_layerCompositingBuilder->compositingGridForLayer(targetLayer)
+            : targetLayer->pixelGrid();
         fixedContentInfo.opacity = 1.0f;
         fixedContentInfo.blendMode = 0;
         fixedContentInfo.visible = true;
@@ -11057,7 +11099,7 @@ void OpenGLCanvasWidget::paintGL_renderFillPreviewOverlay(
 
     auto* targetLayer
         = m_layerModel ? m_layerModel->layerById(m_fillPreview.targetLayerId) : nullptr;
-    if (!targetLayer || !targetLayer->isRaster()
+    if (!targetLayer || (!targetLayer->isRaster() && !m_fillPreview.maskTarget)
         || (m_fillPreview.maskTarget && !targetLayer->maskTileGrid())) {
         stopFillPreview();
         return;
