@@ -87,11 +87,23 @@ std::shared_ptr<LayerData> cloneLayerTreeImpl(const LayerData* source, bool pres
     clone->thumbnailDirty = true;
     clone->expanded = source->expanded;
     clone->smartTransform = source->smartTransform;
+    // Smart content is SHARED, not copied: a duplicated smart object is an
+    // instance of the same content, and an undo snapshot describes the same
+    // content it was taken from. Nothing here can diverge silently — the few
+    // paths that edit content in place detach first (LayerData::detachSmartContent),
+    // and "New Smart Object via Copy" detaches on purpose. Sharing also means
+    // duplicating a 100 MP smart object costs nothing and both instances reuse
+    // one set of GPU tile textures.
+    if (source->smartContent) {
+        clone->smartContent = source->smartContent;
+    }
     if (source->textData) {
         clone->textData = std::make_unique<TextLayerData>(*source->textData);
     }
 
-    if (const auto* srcGrid = source->pixelGrid()) {
+    // Raster pixels are still deep-copied; only smart content is shared, and
+    // pixelGrid() reports the shared grid for smart layers, so skip it here.
+    if (const auto* srcGrid = source->isIsolatedPixelLayer() ? nullptr : source->pixelGrid()) {
         if (auto* dstGrid = clone->pixelGrid()) {
             // A clone keeps the source's self-describing format. Stamp it BEFORE
             // creating tiles so dst buffers size correctly, and copy the exact
@@ -195,6 +207,40 @@ LayerModel::LayerModel(QObject* parent)
     // Подключаем через слот для надёжного пробрасывания
     connect(&m_selection, &LayerSelectionManager::selectionChanged, this,
         &LayerModel::onSelectionManagerChanged);
+    // Made here, in the constructor, so it runs BEFORE any UI slot connected
+    // later: whoever reacts to layersChanged already sees fresh instance counts.
+    connect(this, &LayerModel::layersChanged, this, &LayerModel::refreshSmartInstanceCounts);
+}
+
+void LayerModel::refreshSmartInstanceCounts()
+{
+    QHash<QUuid, int> countByContent;
+    forEach([&countByContent](LayerData* layer) {
+        if (layer && layer->smartContent) {
+            ++countByContent[layer->smartContent->contentId];
+        }
+    });
+    QList<LayerId> changed;
+    forEach([&countByContent, &changed](LayerData* layer) {
+        if (!layer) {
+            return;
+        }
+        const int count
+            = layer->smartContent ? countByContent.value(layer->smartContent->contentId) : 0;
+        if (layer->runtimeSmartInstanceCount == count) {
+            return;
+        }
+        layer->runtimeSmartInstanceCount = count;
+        changed.append(layer->id);
+    });
+
+    // Losing (or gaining) a sibling instance changes the OTHER layers' badges
+    // too, and nothing else would tell their rows to repaint. layerDataChanged
+    // is emitted directly rather than through notifyLayerDataChanged: only the
+    // badge moved, the thumbnail is still valid.
+    for (const LayerId& id : changed) {
+        emit layerDataChanged(id);
+    }
 }
 
 std::shared_ptr<LayerData> LayerModel::cloneLayerTree(const LayerData* source, bool preserveIds)
@@ -346,8 +392,11 @@ void LayerModel::stampDocumentFormatOnGrids(LayerData* layer) const
     if (layer->tileGrid && layer->tileGrid->empty()) {
         layer->tileGrid->setFormat(m_documentTileFormat);
     }
-    if (layer->smartContentGrid && layer->smartContentGrid->empty()) {
-        layer->smartContentGrid->setFormat(m_documentTileFormat);
+    // Stamping the format on a still-empty grid is deliberately NOT copy-on-write:
+    // instances live in one document and therefore want the same document format,
+    // and detaching here would silently break the link at load/add time.
+    if (auto* smartGrid = layer->smartGrid(); smartGrid && smartGrid->empty()) {
+        smartGrid->setFormat(m_documentTileFormat);
     }
 }
 
@@ -2295,11 +2344,27 @@ LayerEntry LayerModel::layerDataToEntry(const LayerData* data)
         }
     }
 
+    writeSmartContentEntryFields(entry, data);
+
     for (const auto& child : data->children) {
         entry.children.append(layerDataToEntry(child.get()));
     }
 
     return entry;
+}
+
+void LayerModel::writeSmartContentEntryFields(LayerEntry& entry, const LayerData* layer)
+{
+    if (!layer || !layer->smartContent) {
+        return;
+    }
+    const SmartContent& content = *layer->smartContent;
+    entry.smartContentId = content.contentId;
+    entry.smartSourcePath = content.sourcePath;
+    entry.smartSourceKind = static_cast<int>(content.sourceKind);
+    entry.smartSourceHash = content.sourceHash;
+    // smartSourceRelativePath is derived by the serializer, which is the only
+    // place that knows where the project file will sit.
 }
 
 std::shared_ptr<LayerData> LayerModel::entryToLayerData(const LayerEntry& entry, LayerData* parent)
@@ -2379,8 +2444,32 @@ std::shared_ptr<LayerData> LayerModel::entryToLayerData(const LayerEntry& entry,
         data->tileGrid = std::make_unique<aether::TileGrid>();
         data->tileGrid->setFormat(documentTileFormat());
     } else if (data->isIsolatedPixelLayer()) {
-        data->smartContentGrid = std::make_unique<aether::TileGrid>();
-        data->smartContentGrid->setFormat(documentTileFormat());
+        // v29: entries sharing a contentId are instances of one smart object, so
+        // the second and later ones adopt the content the first one built —
+        // including its pixels, which only the first entry carries. Files older
+        // than v29 have a null id and land in the else branch, giving every
+        // layer its own content, which is exactly how they were written.
+        std::shared_ptr<SmartContent> sharedContent;
+        if (!entry.smartContentId.isNull()) {
+            sharedContent = m_loadingSmartContents.value(entry.smartContentId);
+        }
+        if (sharedContent) {
+            data->smartContent = std::move(sharedContent);
+        } else {
+            data->setSmartGrid(std::make_unique<aether::TileGrid>());
+            data->smartGrid()->setFormat(documentTileFormat());
+            SmartContent* content = data->ensureSmartContent();
+            if (!entry.smartContentId.isNull()) {
+                content->contentId = entry.smartContentId;
+                m_loadingSmartContents.insert(entry.smartContentId, data->smartContent);
+            }
+            // Source description travels with the content, not the layer: where
+            // these pixels can be refreshed from is a property of the object.
+            content->sourcePath = entry.smartSourcePath;
+            content->sourceKind = entry.smartSourceKind == 1 ? SmartSourceKind::LinkedFile
+                                                             : SmartSourceKind::Embedded;
+            content->sourceHash = entry.smartSourceHash;
+        }
     }
 
     // Restore the layer mask (painted grayscale). Masks are typically small, so
@@ -2484,12 +2573,17 @@ void LayerModel::loadFromEntries(const QList<LayerEntry>& entries)
     clearSelection();
     m_rootLayers.clear();
     m_clipParentByLayer.clear();
+    m_loadingSmartContents.clear();
 
     // Build layer tree from entries
     m_rootLayers.reserve(entries.size());
     for (const auto& entry : entries) {
         m_rootLayers.append(entryToLayerData(entry, nullptr));
     }
+
+    // The instance links now live in the layers themselves; holding the
+    // contents here too would keep a replaced document alive.
+    m_loadingSmartContents.clear();
 
     normalizeLoadedLayers(m_rootLayers);
     rebuildDefaultLayerCounter();

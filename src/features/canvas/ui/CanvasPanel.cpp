@@ -32,7 +32,9 @@
 #include "shared/undo/LayerAddCommand.h"
 #include "features/layers/model/LayerModel.h"
 #include "features/layers/model/LayerData.h"
+#include "features/layers/model/SmartContentSource.h"
 #include "features/transform/TransformState.h"
+#include "shared/utils/FileDialogMemory.h"
 #include "platform/Platform.h"
 #include "shared/clipboard/EditClipboard.h"
 #include "shared/tiles/TileTypes.h"
@@ -78,8 +80,10 @@
 #include <QUrl>
 #include <QFileInfo>
 #include <QFileDialog>
+#include <QFutureWatcher>
 #include <QImage>
 #include <QImageReader>
+#include <QtConcurrent>
 #include <QLabel>
 #include <QTimer>
 #include <QGuiApplication>
@@ -2214,6 +2218,110 @@ bool CanvasPanel::rasterizeSmartLayer(const ruwa::core::layers::LayerId& id)
     }
     commitTransformBeforeDocumentMutation();
     return m_glWidget->rasterizeSmartLayerById(id);
+}
+
+bool CanvasPanel::convertLayerToSmartObject(const ruwa::core::layers::LayerId& id)
+{
+    auto* layer = m_layerModel ? m_layerModel->layerById(id) : nullptr;
+    if (!m_glWidget || !layer || !layer->canConvertToSmartObject()) {
+        return false;
+    }
+    commitTransformBeforeDocumentMutation();
+    return m_glWidget->convertLayerToSmartObjectById(id);
+}
+
+namespace {
+
+/// A decoded replacement content plus the description of where it came from.
+/// Built off the GUI thread; `grid` is null when the file could not be decoded.
+struct DecodedSmartSource {
+    std::shared_ptr<aether::TileGrid> grid;
+    QString sourcePath;
+    QByteArray sourceHash;
+};
+
+/// File filter listing every image format this Qt build can read.
+QString importableImageFilter()
+{
+    QStringList patterns;
+    for (const QByteArray& format : QImageReader::supportedImageFormats()) {
+        const QString pattern = QStringLiteral("*.") + QString::fromLatin1(format);
+        if (!patterns.contains(pattern, Qt::CaseInsensitive)) {
+            patterns.append(pattern);
+        }
+    }
+    const QString imageGlob = patterns.isEmpty()
+        ? QStringLiteral("*.png *.jpg *.jpeg *.bmp *.gif *.webp *.tiff *.tga")
+        : patterns.join(QChar(' '));
+    return CanvasPanel::tr("Images (%1)").arg(imageGlob) + QStringLiteral(";;")
+        + CanvasPanel::tr("All Files (*)");
+}
+
+} // namespace
+
+bool CanvasPanel::replaceSmartLayerContents(const ruwa::core::layers::LayerId& id)
+{
+    auto* layer = m_layerModel ? m_layerModel->layerById(id) : nullptr;
+    if (!m_glWidget || !layer || !layer->isSmart()) {
+        return false;
+    }
+
+    const QString filePath = ruwa::shared::filedialog::getOpenFileName(this,
+        ruwa::shared::filedialog::category::kImageImport, tr("Replace contents"),
+        importableImageFilter());
+    if (filePath.isEmpty()) {
+        return false;
+    }
+
+    commitTransformBeforeDocumentMutation();
+
+    // Decoding and hashing a large source is slow enough to be felt, and both
+    // are pure functions of the file, so they run off the GUI thread the same
+    // way image import does. Everything that touches the document happens back
+    // here, after the layer has been looked up again.
+    auto* watcher = new QFutureWatcher<DecodedSmartSource>(this);
+
+    connect(watcher, &QFutureWatcher<DecodedSmartSource>::finished, this, [this, watcher, id]() {
+        watcher->deleteLater();
+        if (!m_glWidget || !m_layerModel) {
+            return;
+        }
+
+        DecodedSmartSource decoded = watcher->result();
+        if (!decoded.grid) {
+            ruwa::ui::widgets::MessagePopupManager::show(this,
+                tr("This file could not be read as an image."), { { tr("OK"), true, []() {} } },
+                360);
+            return;
+        }
+
+        // The layer may have been deleted or rasterized while the file was
+        // being decoded, so it is looked up again rather than captured.
+        auto* targetLayer = m_layerModel->layerById(id);
+        if (!targetLayer || !targetLayer->isSmart()) {
+            return;
+        }
+
+        m_glWidget->replaceSmartLayerContents(id,
+            std::make_unique<aether::TileGrid>(std::move(*decoded.grid)), decoded.sourcePath,
+            decoded.sourceHash);
+    });
+
+    watcher->setFuture(QtConcurrent::run([filePath]() {
+        DecodedSmartSource decoded;
+        QImageReader reader(filePath);
+        reader.setAutoTransform(true);
+        const QImage image = reader.read();
+        if (image.isNull()) {
+            return decoded;
+        }
+        decoded.grid = detail::buildTileGridFromImage(image);
+        decoded.sourcePath = ruwa::core::layers::normalizedSmartSourcePath(filePath);
+        decoded.sourceHash = ruwa::core::layers::smartSourceFileHash(filePath);
+        return decoded;
+    }));
+
+    return true;
 }
 
 bool CanvasPanel::applyLayerMask(const ruwa::core::layers::LayerId& id)

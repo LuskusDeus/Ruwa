@@ -86,6 +86,28 @@ struct LayerEntry {
     bool clippedToBelow = false;
     bool nameIsCustom = false;
     QList<TileEntry> tiles; // Pixel layer tile payload (Raster/Smart, premultiplied RGBA8)
+
+    // ---- Smart-object content identity and source (file version >= 29) ----
+    //
+    // `smartContentId` is the identity of the PIXELS, not of the layer: several
+    // entries carrying the same id are instances of one smart object and share
+    // one content on load. Only the first entry with a given id carries the tile
+    // payload — the serializer drops it from the rest, and the reader hands them
+    // the same content, so the file stores shared content once.
+    //
+    // The source fields describe where the content can be REFRESHED from; the
+    // pixels always travel with the file, for every sourceKind, so a project
+    // stays openable by someone who does not have the source. Both path forms
+    // are written: `smartSourceRelativePath` (set when the source sits under the
+    // project directory) keeps links alive when a whole folder is moved or
+    // shared, `smartSourcePath` is the absolute fallback. The serializer derives
+    // the relative form on save and resolves it back on load — everything above
+    // the serializer only ever deals with the absolute path.
+    QUuid smartContentId;
+    QString smartSourcePath;
+    QString smartSourceRelativePath;
+    int smartSourceKind = 0; // SmartSourceKind: Embedded=0, LinkedFile=1
+    QByteArray smartSourceHash;
     bool hasMask = false;
     bool maskEnabled = true;
     bool maskLinked = true;
@@ -140,7 +162,7 @@ struct ProjectData {
         bool valid = false;
     };
 
-    static constexpr quint32 CURRENT_VERSION = 28; // Isolated/pass-through group compositing
+    static constexpr quint32 CURRENT_VERSION = 29; // Smart-object content id + source, shared once
 
     quint32 version = CURRENT_VERSION;
 

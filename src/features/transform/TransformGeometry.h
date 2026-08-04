@@ -54,11 +54,11 @@ inline std::optional<Rect> transformBoundsForLayer(const ruwa::core::layers::Lay
         return TransformState::computeContentBounds(*grid);
     }
     if (layer->isIsolatedPixelLayer()) {
-        const auto* grid = layer->smartContentGrid.get();
+        const auto* grid = layer->smartGrid();
         if (!grid || grid->empty()) {
             return std::nullopt;
         }
-        const Rect sourceBounds = TransformState::computeContentBounds(*grid);
+        const Rect sourceBounds = layer->smartContentBounds();
         if (sourceBounds.width <= 0.0f || sourceBounds.height <= 0.0f) {
             return std::nullopt;
         }

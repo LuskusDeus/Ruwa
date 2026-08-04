@@ -15,6 +15,7 @@
 #include "features/selection/LassoSelectionManager.h"
 #include "shared/tiles/TileBrush.h"
 #include "features/canvas/undo/DrawCommand.h"
+#include "features/canvas/undo/LayerContentSwapCommand.h"
 #include "features/transform/TransformController.h"
 #include "features/transform/TransformTargetSet.h"
 #include "features/canvas/quick-shape/QuickShapeMorph.h"
@@ -272,6 +273,18 @@ public:
     /// Bake generated pixel layer to raster (transform applied). Returns false if layer is missing
     /// or not rasterizable.
     bool rasterizeSmartLayerById(const QUuid& layerId);
+    /// Wrap a layer's pixels into a smart object (undoable, the inverse of
+    /// rasterizing). Returns false if the layer is missing or not convertible.
+    bool convertLayerToSmartObjectById(const QUuid& layerId);
+    /// Give a smart object new pixels, keeping its placement (undoable).
+    ///
+    /// This writes THROUGH the shared content, so every instance of the object
+    /// shows the new pixels — replacing an object's contents is a statement
+    /// about the object, not about one layer that shows it. @p sourcePath and
+    /// @p sourceHash record where the content can later be REFRESHED from; the
+    /// pixels themselves always stay in the document.
+    bool replaceSmartLayerContents(const QUuid& layerId, std::unique_ptr<TileGrid> contentGrid,
+        const QString& sourcePath, const QByteArray& sourceHash);
     /// Bake a layer's mask into its pixels and remove the mask (undoable).
     /// Layer must be an editable raster layer carrying a mask.
     bool applyLayerMask(const QUuid& layerId);
@@ -445,6 +458,20 @@ private:
 
     /// Rasterize generated pixel layer in-place. Caller must ensure layer is rasterizable.
     void rasterizeSmartLayer(ruwa::core::layers::LayerData* layer);
+
+    /// Wrap a layer's pixels into a smart object in-place. False when the layer
+    /// is not convertible (see LayerData::canConvertToSmartObject).
+    bool convertLayerToSmartObject(ruwa::core::layers::LayerData* layer);
+
+    /// Shared tail of both conversions: refresh the projection caches, notify
+    /// the model and push the undo command that swaps the displaced state back.
+    void finishLayerContentSwap(
+        ruwa::core::layers::LayerData* layer, LayerContentState replacedState, const QString& text);
+
+    /// Re-place and re-project every layer showing @p contentId after its pixels
+    /// were replaced. Each layer keeps its own placement, so this is per-layer
+    /// work driven by a content-level change.
+    void refreshLayersForSmartContent(const QUuid& contentId);
 
     /// If generated pixel layer has selection: show rasterize dialog. Returns false if user
     /// cancels.

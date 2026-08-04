@@ -230,6 +230,14 @@ public:
     /// Clear raster layer pixels (GL). No-op if GL not ready or layer not editable.
     bool clearLayerPixelContent(const ruwa::core::layers::LayerId& id);
     bool rasterizeSmartLayer(const ruwa::core::layers::LayerId& id);
+    /// Wrap a layer's pixels into a smart object (GL, undoable) — the inverse of
+    /// rasterizing.
+    bool convertLayerToSmartObject(const ruwa::core::layers::LayerId& id);
+    /// Ask for a file and give the smart object new contents, keeping its
+    /// placement (GL, undoable). Every instance of the object follows. Returns
+    /// false when the layer is not a smart object or no file was chosen; the
+    /// replacement itself completes asynchronously once the file is decoded.
+    bool replaceSmartLayerContents(const ruwa::core::layers::LayerId& id);
     /// Bake a layer's mask into its pixels and remove the mask (GL, undoable).
     bool applyLayerMask(const ruwa::core::layers::LayerId& id);
     /// Invert a layer mask (reveal -> 1 - reveal) across all tiles + background (GL, undoable).

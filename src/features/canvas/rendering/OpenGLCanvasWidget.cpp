@@ -63,7 +63,8 @@
 #include "features/canvas/undo/DrawCommand.h"
 #include "features/canvas/undo/ApplyMaskCommand.h"
 #include "features/canvas/undo/ApplyLayerEffectsCommand.h"
-#include "features/canvas/undo/RasterizeLayerCommand.h"
+#include "features/canvas/undo/LayerContentSwapCommand.h"
+#include "features/canvas/undo/SmartContentSwapCommand.h"
 #include "shared/undo/InvertMaskCommand.h"
 #include "features/fill/FloodFill.h"
 #include "features/fill/FillRawTileOps.h"
@@ -343,9 +344,8 @@ bool layerHasPixelAt(ruwa::core::layers::LayerData* layer, const aether::Vector2
         return gridPixelAlphaAt(layer->pixelGrid(), worldPos) > 0.0f;
     }
 
-    if (layer->isIsolatedPixelLayer() && layer->smartContentGrid) {
-        const aether::Rect sourceBounds
-            = aether::TransformState::computeContentBounds(*layer->smartContentGrid);
+    if (layer->isIsolatedPixelLayer() && layer->hasSmartContent()) {
+        const aether::Rect sourceBounds = layer->smartContentBounds();
         if (sourceBounds.width <= 0.0f || sourceBounds.height <= 0.0f) {
             return false;
         }
@@ -354,7 +354,7 @@ bool layerHasPixelAt(ruwa::core::layers::LayerData* layer, const aether::Vector2
         const aether::TransformState state
             = aether::transformStateWithSourceBounds(layer->smartTransform, sourceBounds);
         return state.tryInverseTransformPoint(worldPos, sourcePos)
-            && gridPixelAlphaAt(layer->smartContentGrid.get(), sourcePos) > 0.0f;
+            && gridPixelAlphaAt(layer->smartGrid(), sourcePos) > 0.0f;
     }
 
     if (layer->isText() && aether::ensureTextRetainedPayload(layer)
@@ -415,10 +415,9 @@ aether::TransformState currentNonRasterTransformState(const ruwa::core::layers::
         const aether::Rect sourceBounds = aether::computeTextLayoutSourceBounds(*layer->textData);
         return aether::transformStateWithSourceBounds(layer->textData->transform, sourceBounds);
     }
-    if (layer->isIsolatedPixelLayer() && layer->smartContentGrid) {
-        const aether::Rect sourceBounds
-            = aether::TransformState::computeContentBounds(*layer->smartContentGrid);
-        return aether::transformStateWithSourceBounds(layer->smartTransform, sourceBounds);
+    if (layer->isIsolatedPixelLayer() && layer->hasSmartContent()) {
+        return aether::transformStateWithSourceBounds(
+            layer->smartTransform, layer->smartContentBounds());
     }
     return {};
 }
@@ -3242,7 +3241,7 @@ void OpenGLCanvasWidget::rebuildSmartProjectionCacheForLayer(const QUuid& layerI
         return;
     }
 
-    const auto* sourceGrid = layer->smartContentGrid.get();
+    const auto* sourceGrid = layer->smartGrid();
     if (!sourceGrid) {
         m_smartProjectedGrids.remove(layerId);
         m_canvas.tilePositionIndex().removeLayer(layerId);
@@ -3265,7 +3264,7 @@ std::shared_ptr<TileGrid> OpenGLCanvasWidget::buildSmartProjectedGrid(
     if (!layer || !layer->isIsolatedPixelLayer()) {
         return nullptr;
     }
-    const TileGrid* sourceGrid = layer->smartContentGrid.get();
+    const TileGrid* sourceGrid = layer->smartGrid();
     if (!sourceGrid) {
         return nullptr;
     }
@@ -3274,7 +3273,7 @@ std::shared_ptr<TileGrid> OpenGLCanvasWidget::buildSmartProjectedGrid(
     TransformState projectionState = layer->smartTransform;
     if (projectionState.contentBounds.width <= 0.0f
         || projectionState.contentBounds.height <= 0.0f) {
-        projectionState.contentBounds = TransformState::computeContentBounds(*sourceGrid);
+        projectionState.contentBounds = layer->smartContentBounds();
         projectionState.pivot = projectionState.contentBounds.center();
     }
 
@@ -3440,6 +3439,70 @@ bool OpenGLCanvasWidget::ensurePaintableActiveLayer()
     return false;
 }
 
+namespace {
+
+/**
+ * Move every field describing HOW a layer stores its content out of the layer,
+ * leaving it ready to receive a different representation. What comes back is
+ * exactly what LayerContentSwapCommand swaps back on undo, so a conversion only
+ * has to install the new representation — the old one is already parked.
+ */
+LayerContentState takeLayerContentState(ruwa::core::layers::LayerData* layer)
+{
+    LayerContentState state;
+    state.type = layer->type;
+    state.tileGrid = std::move(layer->tileGrid);
+    state.smartContent = std::move(layer->smartContent);
+    state.smartTransform = layer->smartTransform;
+    state.textData = std::move(layer->textData);
+    state.runtimeVisualBackend = layer->runtimeVisualBackend;
+    state.runtimeRetainedPayload = std::move(layer->runtimeRetainedPayload);
+    state.runtimeRetainedPayloadKey = std::move(layer->runtimeRetainedPayloadKey);
+    return state;
+}
+
+/**
+ * Re-fit a placement onto content of a different size.
+ *
+ * The layer's placement box is what the user arranged, so the new content is
+ * fitted into it rather than the other way round (this is what Photoshop's
+ * Replace Contents does). For a free quad or a deform mesh the box is already
+ * expressed in document space and the content is addressed through normalized
+ * coordinates, so writing the new bounds is the whole job. For the affine case
+ * the scale absorbs the size ratio and the translation is rebuilt so the
+ * content's centre stays where it was.
+ */
+void refitTransformToContentBounds(TransformState& transform, const Rect& newBounds)
+{
+    const Rect oldBounds = transform.contentBounds;
+    if (newBounds.width <= 0.0f || newBounds.height <= 0.0f) {
+        transform.contentBounds = newBounds;
+        return;
+    }
+
+    if (transform.hasFreeQuad() || transform.hasDeformMesh()) {
+        transform.contentBounds = newBounds;
+        return;
+    }
+
+    if (oldBounds.width <= 0.0f || oldBounds.height <= 0.0f) {
+        transform.contentBounds = newBounds;
+        transform.pivot = newBounds.center();
+        return;
+    }
+
+    const Vector2 oldCentreInDoc = transform.transformPoint(oldBounds.center());
+    transform.scale.x *= oldBounds.width / newBounds.width;
+    transform.scale.y *= oldBounds.height / newBounds.height;
+    transform.contentBounds = newBounds;
+    transform.pivot = newBounds.center();
+    // With the pivot at the content centre, the centre maps to pivot + translation.
+    transform.translation
+        = { oldCentreInDoc.x - transform.pivot.x, oldCentreInDoc.y - transform.pivot.y };
+}
+
+} // namespace
+
 void OpenGLCanvasWidget::rasterizeSmartLayer(ruwa::core::layers::LayerData* layer)
 {
     if (!layer || !layerRequiresRasterizationForPixelEdits(layer))
@@ -3451,21 +3514,13 @@ void OpenGLCanvasWidget::rasterizeSmartLayer(ruwa::core::layers::LayerData* laye
         rasterGrid = rasterizeTextLayerToGrid(layer);
     } else if (auto projected = buildSmartProjectedGrid(layer); projected) {
         rasterGrid = std::make_unique<TileGrid>(std::move(*projected));
-    } else if (auto clonedSource = cloneTileGrid(layer->smartContentGrid.get()); clonedSource) {
+    } else if (auto clonedSource = cloneTileGrid(layer->smartGrid()); clonedSource) {
         rasterGrid = std::make_unique<TileGrid>(std::move(*clonedSource));
     } else {
         rasterGrid = std::make_unique<TileGrid>();
     }
 
-    RasterizedLayerState replacedState;
-    replacedState.type = layer->type;
-    replacedState.tileGrid = std::move(layer->tileGrid);
-    replacedState.smartContentGrid = std::move(layer->smartContentGrid);
-    replacedState.smartTransform = layer->smartTransform;
-    replacedState.textData = std::move(layer->textData);
-    replacedState.runtimeVisualBackend = layer->runtimeVisualBackend;
-    replacedState.runtimeRetainedPayload = std::move(layer->runtimeRetainedPayload);
-    replacedState.runtimeRetainedPayloadKey = std::move(layer->runtimeRetainedPayloadKey);
+    LayerContentState replacedState = takeLayerContentState(layer);
 
     layer->type = ruwa::core::layers::LayerType::Raster;
     layer->tileGrid = std::move(rasterGrid);
@@ -3473,22 +3528,110 @@ void OpenGLCanvasWidget::rasterizeSmartLayer(ruwa::core::layers::LayerData* laye
     layer->runtimeRetainedPayloadKey.clear();
     layer->runtimeVisualBackend = LayerVisualBackend::RasterTiles;
 
+    finishLayerContentSwap(layer, std::move(replacedState), QStringLiteral("Rasterize Layer"));
+}
+
+bool OpenGLCanvasWidget::convertLayerToSmartObject(ruwa::core::layers::LayerData* layer)
+{
+    if (!layer || !layer->canConvertToSmartObject()) {
+        return false;
+    }
+
+    // Content space starts out identical to document space: the smart object
+    // shows exactly the pixels the layer showed, placed by an identity
+    // transform. A text layer bakes its glyphs the way rasterization does — its
+    // text model is parked in the undo state, so undo brings it back editable.
+    std::unique_ptr<TileGrid> contentGrid;
+    if (layer->isText()) {
+        contentGrid = rasterizeTextLayerToGrid(layer);
+    } else if (auto cloned = cloneTileGrid(layer->tileGrid.get()); cloned) {
+        // The original grid belongs to the undo state, so the content takes a
+        // copy. Rasterization pays the same price in the other direction.
+        contentGrid = std::make_unique<TileGrid>(std::move(*cloned));
+    }
+    if (!contentGrid) {
+        contentGrid = std::make_unique<TileGrid>();
+    }
+
+    LayerContentState replacedState = takeLayerContentState(layer);
+
+    layer->type = ruwa::core::layers::LayerType::Smart;
+    layer->smartContent
+        = std::make_shared<ruwa::core::layers::SmartContent>(std::move(contentGrid));
+    layer->smartTransform = TransformState();
+    layer->smartTransform.contentBounds = layer->smartContentBounds();
+    layer->smartTransform.pivot = layer->smartTransform.contentBounds.center();
+    layer->runtimeRetainedPayloadKey.clear();
+    layer->runtimeVisualBackend = LayerVisualBackend::RasterTiles;
+
+    // The layer's effect chain and mask deliberately stay put: both are applied
+    // to the layer's finished document-space grid, which is now the projected
+    // content, so they keep meaning exactly what they meant before (Photoshop
+    // likewise keeps effects as smart filters over the new object).
+
+    finishLayerContentSwap(
+        layer, std::move(replacedState), QStringLiteral("Convert to Smart Object"));
+    return true;
+}
+
+void OpenGLCanvasWidget::finishLayerContentSwap(
+    ruwa::core::layers::LayerData* layer, LayerContentState replacedState, const QString& text)
+{
     m_smartProjectedGrids.remove(layer->id);
     rebuildLayerProjectionCaches();
     m_canvas.dirtyManager().onStructureChanged();
     if (m_layerModel) {
+        // A conversion hands the layer a different content (or none), which
+        // changes how many layers share the old one — the remaining instances'
+        // badges have to follow. This is a layer-data change, not a structural
+        // one, so the model's own layersChanged refresh does not cover it.
+        m_layerModel->refreshSmartInstanceCounts();
         m_layerModel->notifyLayerDataChanged(layer->id);
     }
 
-    auto command = std::make_unique<RasterizeLayerCommand>(m_layerModel, layer->id,
-        std::move(replacedState), [this](const ruwa::core::layers::LayerId& changedLayerId) {
+    auto command = std::make_unique<LayerContentSwapCommand>(m_layerModel, layer->id,
+        std::move(replacedState), text, [this](const ruwa::core::layers::LayerId& changedLayerId) {
             rebuildLayerProjectionCaches();
             m_canvas.dirtyManager().onStructureChanged();
             if (m_layerModel) {
+                m_layerModel->refreshSmartInstanceCounts();
                 m_layerModel->notifyLayerDataChanged(changedLayerId);
             }
         });
     m_canvas.undoManager().push(std::move(command));
+    requestRender();
+}
+
+void OpenGLCanvasWidget::refreshLayersForSmartContent(const QUuid& contentId)
+{
+    if (!m_layerModel || contentId.isNull()) {
+        return;
+    }
+
+    QList<ruwa::core::layers::LayerId> affectedLayers;
+    m_layerModel->forEach([&](ruwa::core::layers::LayerData* layer) {
+        if (!layer || !layer->smartContent || layer->smartContent->contentId != contentId) {
+            return;
+        }
+        // The placement is per-layer, so each instance re-fits the new content
+        // into its own box; without this the layer keeps projecting through the
+        // previous content's bounds.
+        refitTransformToContentBounds(layer->smartTransform, layer->smartContentBounds());
+        layer->thumbnailDirty = true;
+        m_smartProjectedGrids.remove(layer->id);
+        affectedLayers.append(layer->id);
+    });
+
+    if (affectedLayers.isEmpty()) {
+        return;
+    }
+
+    rebuildLayerProjectionCaches();
+    m_canvas.dirtyManager().onStructureChanged();
+    for (const ruwa::core::layers::LayerId& layerId : affectedLayers) {
+        m_layerModel->notifyLayerDataChanged(layerId);
+    }
+    requestRender();
 }
 
 bool OpenGLCanvasWidget::confirmRasterizeForSelectionTransform(
@@ -4895,6 +5038,68 @@ bool OpenGLCanvasWidget::rasterizeSmartLayerById(const QUuid& layerId)
 
     notifyCanvasInteraction(true);
     rasterizeSmartLayer(layer);
+    return true;
+}
+
+bool OpenGLCanvasWidget::convertLayerToSmartObjectById(const QUuid& layerId)
+{
+    if (!m_layerModel || layerId.isNull()) {
+        return false;
+    }
+    auto* layer = m_layerModel->layerById(layerId);
+    if (!layer || !layer->canConvertToSmartObject()) {
+        return false;
+    }
+
+    notifyCanvasInteraction(true);
+    return convertLayerToSmartObject(layer);
+}
+
+bool OpenGLCanvasWidget::replaceSmartLayerContents(const QUuid& layerId,
+    std::unique_ptr<TileGrid> contentGrid, const QString& sourcePath, const QByteArray& sourceHash)
+{
+    if (!m_layerModel || layerId.isNull() || !contentGrid) {
+        return false;
+    }
+    auto* layer = m_layerModel->layerById(layerId);
+    if (!layer || !layer->isSmart()) {
+        return false;
+    }
+
+    // Deliberately NOT LayerData::setSmartGrid(): that detaches a shared content
+    // first, because installing pixels into one layer must not reach through to
+    // its instances. Replacing an object's CONTENTS is the opposite statement —
+    // the object itself is now something else — so this writes through the
+    // shared content and every instance follows.
+    auto content = layer->smartContent;
+    if (!content) {
+        layer->ensureSmartContent();
+        content = layer->smartContent;
+    }
+
+    notifyCanvasInteraction(true);
+
+    SmartContentState replacedState;
+    replacedState.grid = std::move(content->grid);
+    replacedState.sourcePath = content->sourcePath;
+    replacedState.sourceKind = content->sourceKind;
+    replacedState.sourceHash = content->sourceHash;
+
+    content->setGrid(std::move(contentGrid));
+    content->sourcePath = sourcePath;
+    // Still Embedded: the pixels live in the document and a .rwf stays openable
+    // without the source file. The path only says where they can be refreshed
+    // from, which is exactly what a later Place Linked will reuse.
+    content->sourceKind = ruwa::core::layers::SmartSourceKind::Embedded;
+    content->sourceHash = sourceHash;
+
+    refreshLayersForSmartContent(content->contentId);
+
+    auto command = std::make_unique<SmartContentSwapCommand>(std::move(content),
+        std::move(replacedState), QStringLiteral("Replace Contents"),
+        [this](const QUuid& changedContentId) { refreshLayersForSmartContent(changedContentId); });
+    m_canvas.undoManager().push(std::move(command));
+    requestRender();
     return true;
 }
 

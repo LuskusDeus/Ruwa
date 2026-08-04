@@ -1412,6 +1412,12 @@ QString LayerRowWidget::typeBadgeText() const
     const char* ctx = "ruwa::ui::widgets::LayerRowWidget";
     switch (m_data->type) {
     case LayerType::Smart:
+        // Instances share one content, so the badge counts them: editing the
+        // content of one is going to change every layer wearing this number.
+        if (m_data->isSmartContentShared()) {
+            return QCoreApplication::translate(ctx, "smart ×%1")
+                .arg(m_data->runtimeSmartInstanceCount);
+        }
         return QCoreApplication::translate(ctx, "smart");
     case LayerType::Board:
         return QCoreApplication::translate(ctx, "board");
@@ -2919,6 +2925,9 @@ enum LayerRowContextAction : int {
     CtxApplyMask = 10,
     CtxInvertMask = 11,
     CtxApplyEffects = 12,
+    CtxConvertToSmartObject = 13,
+    CtxNewSmartObjectViaCopy = 14,
+    CtxReplaceSmartContents = 15,
     CtxLayerColorBase = 100,
 };
 
@@ -3011,6 +3020,38 @@ QVariantMap LayerRowWidget::contextMenuContext() const
         QStringLiteral("standardIcon"), static_cast<int>(IconProvider::StandardIcon::Camera));
     rasterize.insert(QStringLiteral("enabled"), m_data->isIsolatedPixelLayer() || m_data->isText());
     actions.append(rasterize);
+
+    // The inverse of Rasterize: wrap the layer's pixels into a smart object.
+    QVariantMap convertToSmart;
+    convertToSmart.insert(QStringLiteral("id"), CtxConvertToSmartObject);
+    convertToSmart.insert(QStringLiteral("text"), tr("Convert to Smart Object"));
+    convertToSmart.insert(QStringLiteral("danger"), false);
+    convertToSmart.insert(
+        QStringLiteral("standardIcon"), static_cast<int>(IconProvider::StandardIcon::BasicFile));
+    convertToSmart.insert(QStringLiteral("enabled"), m_data->canConvertToSmartObject());
+    actions.append(convertToSmart);
+
+    // Duplicating a smart object gives an INSTANCE (shared content); this is the
+    // way to get an independent copy instead.
+    if (m_data->isSmart()) {
+        QVariantMap smartViaCopy;
+        smartViaCopy.insert(QStringLiteral("id"), CtxNewSmartObjectViaCopy);
+        smartViaCopy.insert(QStringLiteral("text"), tr("New Smart Object via Copy"));
+        smartViaCopy.insert(QStringLiteral("danger"), false);
+        smartViaCopy.insert(QStringLiteral("standardIcon"),
+            static_cast<int>(IconProvider::StandardIcon::Duplicate));
+        actions.append(smartViaCopy);
+
+        // Give the object different pixels while it keeps its placement, mask
+        // and effects. Every instance shows the new contents.
+        QVariantMap replaceContents;
+        replaceContents.insert(QStringLiteral("id"), CtxReplaceSmartContents);
+        replaceContents.insert(QStringLiteral("text"), tr("Replace Contents..."));
+        replaceContents.insert(QStringLiteral("danger"), false);
+        replaceContents.insert(
+            QStringLiteral("standardIcon"), static_cast<int>(IconProvider::StandardIcon::Import));
+        actions.append(replaceContents);
+    }
 
     // Bake the layer's effect chain into its pixels and clear the chain.
     if (m_data->isRaster() && !m_data->effects.isEmpty()) {
@@ -3173,6 +3214,24 @@ void LayerRowWidget::onSimpleContextAction(int actionId)
             break;
         }
         emit rasterizeSmartLayerRequested(m_data->id);
+        break;
+    case CtxConvertToSmartObject:
+        if (!m_data->canConvertToSmartObject()) {
+            break;
+        }
+        emit convertToSmartObjectRequested(m_data->id);
+        break;
+    case CtxNewSmartObjectViaCopy:
+        if (!m_data->isSmart()) {
+            break;
+        }
+        emit newSmartObjectViaCopyRequested(m_data->id);
+        break;
+    case CtxReplaceSmartContents:
+        if (!m_data->isSmart()) {
+            break;
+        }
+        emit replaceSmartContentsRequested(m_data->id);
         break;
     case CtxApplyMask:
         if (!m_data->hasMask() || !m_data->isRaster()) {

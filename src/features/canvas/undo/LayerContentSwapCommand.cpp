@@ -1,10 +1,10 @@
 // SPDX-License-Identifier: MPL-2.0
 
 // ============================================================================
-//   R U W A   |   C O R E   |   R A S T E R I Z E   L A Y E R   C O M M A N D
+//   R U W A   |   C O R E   |   L A Y E R   C O N T E N T   S W A P
 // ============================================================================
 
-#include "features/canvas/undo/RasterizeLayerCommand.h"
+#include "features/canvas/undo/LayerContentSwapCommand.h"
 
 #include "features/canvas/grid/GridRemap.h"
 #include "features/layers/model/LayerModel.h"
@@ -16,7 +16,7 @@
 namespace aether {
 namespace {
 
-qint64 gridMemorySize(const std::unique_ptr<TileGrid>& grid)
+qint64 gridMemorySize(const TileGrid* grid)
 {
     if (!grid) {
         return 0;
@@ -46,9 +46,14 @@ qint64 retainedPayloadMemorySize(const std::shared_ptr<RetainedRenderPayload>& p
     return size;
 }
 
-qint64 inactiveStateMemorySize(const RasterizedLayerState& state)
+qint64 smartContentMemorySize(const std::shared_ptr<ruwa::core::layers::SmartContent>& content)
 {
-    qint64 size = gridMemorySize(state.tileGrid) + gridMemorySize(state.smartContentGrid)
+    return content ? gridMemorySize(content->grid.get()) : qint64 { 0 };
+}
+
+qint64 inactiveStateMemorySize(const LayerContentState& state)
+{
+    qint64 size = gridMemorySize(state.tileGrid.get()) + smartContentMemorySize(state.smartContent)
         + retainedPayloadMemorySize(state.runtimeRetainedPayload);
     size += static_cast<qint64>(state.runtimeRetainedPayloadKey.capacity()) * sizeof(QChar);
     if (state.textData) {
@@ -67,31 +72,36 @@ qint64 inactiveStateMemorySize(const RasterizedLayerState& state)
 
 } // namespace
 
-RasterizeLayerCommand::RasterizeLayerCommand(ruwa::core::layers::LayerModel* layerModel,
-    const ruwa::core::layers::LayerId& layerId, RasterizedLayerState replacedState,
-    OnLayerStateChangedFn onLayerStateChanged)
+LayerContentSwapCommand::LayerContentSwapCommand(ruwa::core::layers::LayerModel* layerModel,
+    const ruwa::core::layers::LayerId& layerId, LayerContentState replacedState,
+    QString commandText, OnLayerStateChangedFn onLayerStateChanged)
     : m_layerModel(layerModel)
     , m_layerId(layerId)
     , m_inactiveState(std::move(replacedState))
+    , m_text(std::move(commandText))
     , m_onLayerStateChanged(std::move(onLayerStateChanged))
 {
+    // Either side of the swap can be the heavy one (rasterizing parks the smart
+    // content, converting parks the raster grid), and the two trade places on
+    // every undo/redo — so the bound is the larger of them. pixelGrid() covers
+    // the applied side whichever representation it currently uses.
     const auto* appliedLayer = m_layerModel ? m_layerModel->layerById(m_layerId) : nullptr;
-    const qint64 appliedRasterMemory = appliedLayer ? gridMemorySize(appliedLayer->tileGrid) : 0;
-    m_stateMemoryUpperBound
-        = std::max(inactiveStateMemorySize(m_inactiveState), appliedRasterMemory);
+    const qint64 appliedMemory
+        = appliedLayer ? gridMemorySize(appliedLayer->pixelGrid()) : qint64 { 0 };
+    m_stateMemoryUpperBound = std::max(inactiveStateMemorySize(m_inactiveState), appliedMemory);
 }
 
-void RasterizeLayerCommand::undo()
+void LayerContentSwapCommand::undo()
 {
     swapWithLayer();
 }
 
-void RasterizeLayerCommand::redo()
+void LayerContentSwapCommand::redo()
 {
     swapWithLayer();
 }
 
-void RasterizeLayerCommand::swapWithLayer()
+void LayerContentSwapCommand::swapWithLayer()
 {
     if (!m_layerModel) {
         return;
@@ -106,7 +116,7 @@ void RasterizeLayerCommand::swapWithLayer()
     using std::swap;
     swap(layer->type, m_inactiveState.type);
     swap(layer->tileGrid, m_inactiveState.tileGrid);
-    swap(layer->smartContentGrid, m_inactiveState.smartContentGrid);
+    swap(layer->smartContent, m_inactiveState.smartContent);
     swap(layer->smartTransform, m_inactiveState.smartTransform);
     swap(layer->textData, m_inactiveState.textData);
     swap(layer->runtimeVisualBackend, m_inactiveState.runtimeVisualBackend);
@@ -121,18 +131,18 @@ void RasterizeLayerCommand::swapWithLayer()
     }
 }
 
-QString RasterizeLayerCommand::text() const
+QString LayerContentSwapCommand::text() const
 {
-    return QStringLiteral("Rasterize Layer");
+    return m_text;
 }
 
-qint64 RasterizeLayerCommand::memorySize() const
+qint64 LayerContentSwapCommand::memorySize() const
 {
-    return sizeof(RasterizeLayerCommand) + m_stateMemoryUpperBound
+    return sizeof(LayerContentSwapCommand) + m_stateMemoryUpperBound
         + static_cast<qint64>(m_pendingGridRemaps.capacity()) * sizeof(PendingGridRemap);
 }
 
-bool RasterizeLayerCommand::remapForCanvasResize(
+bool LayerContentSwapCommand::remapForCanvasResize(
     int offsetX, int offsetY, int newWidth, int newHeight)
 {
     if (m_inactiveState.type == ruwa::core::layers::LayerType::Raster) {
@@ -157,7 +167,7 @@ bool RasterizeLayerCommand::remapForCanvasResize(
     return true;
 }
 
-void RasterizeLayerCommand::applyPendingGridRemaps()
+void LayerContentSwapCommand::applyPendingGridRemaps()
 {
     if (!m_inactiveState.tileGrid) {
         m_pendingGridRemaps.clear();

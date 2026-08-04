@@ -1672,6 +1672,8 @@ QWidget* LayersPanel::createContent()
         &LayersPanel::onLayerLockClicked);
     connect(m_listView, &ruwa::ui::widgets::LayerListView::layerDuplicateRequested, this,
         &LayersPanel::onLayerDuplicateRequested);
+    connect(m_listView, &ruwa::ui::widgets::LayerListView::layerNewSmartObjectViaCopyRequested,
+        this, &LayersPanel::onLayerNewSmartObjectViaCopyRequested);
     connect(m_listView, &ruwa::ui::widgets::LayerListView::layerDeleteRequested, this,
         &LayersPanel::onLayerDeleteRequested);
     connect(m_listView, &ruwa::ui::widgets::LayerListView::layerQuickClippingMaskRequested, this,
@@ -1680,6 +1682,10 @@ QWidget* LayersPanel::createContent()
         &LayersPanel::onLayerClearPixelsRequested);
     connect(m_listView, &ruwa::ui::widgets::LayerListView::layerRasterizeSmartRequested, this,
         &LayersPanel::onLayerRasterizeSmartRequested);
+    connect(m_listView, &ruwa::ui::widgets::LayerListView::layerConvertToSmartObjectRequested, this,
+        &LayersPanel::onLayerConvertToSmartObjectRequested);
+    connect(m_listView, &ruwa::ui::widgets::LayerListView::layerReplaceSmartContentsRequested, this,
+        &LayersPanel::onLayerReplaceSmartContentsRequested);
     connect(m_listView, &ruwa::ui::widgets::LayerListView::layerApplyMaskRequested, this,
         &LayersPanel::onLayerApplyMaskRequested);
     connect(m_listView, &ruwa::ui::widgets::LayerListView::layerInvertMaskRequested, this,
@@ -2870,7 +2876,7 @@ bool LayersPanel::deleteSelectedLayers()
     return true;
 }
 
-bool LayersPanel::duplicateSelectedLayers()
+bool LayersPanel::duplicateSelectedLayers(bool detachSmartContent)
 {
     bool hasDuplicableLayer = false;
     for (const LayerId& id : m_layerModel.selectedLayerIds()) {
@@ -2888,6 +2894,22 @@ bool LayersPanel::duplicateSelectedLayers()
     const QList<LayerId> addedIds = m_layerModel.duplicateSelectedLayers();
     if (addedIds.isEmpty()) {
         return false;
+    }
+
+    if (detachSmartContent) {
+        // "New Smart Object via Copy": the duplicate came out sharing its
+        // source's content (that is what makes a plain duplicate an instance),
+        // so give it a private copy. Done BEFORE the undo snapshot below, which
+        // must describe the already-detached layer.
+        for (const LayerId& id : addedIds) {
+            if (auto* added = m_layerModel.layerById(id); added && added->smartContent) {
+                added->detachSmartContent();
+            }
+        }
+        // duplicateSelectedLayers() emitted layersChanged before the detach, so
+        // the counts it refreshed still describe the shared state. The refresh
+        // repaints both the copy's row and the source's.
+        m_layerModel.refreshSmartInstanceCounts();
     }
 
     if (m_pushUndoFn) {
@@ -3393,6 +3415,16 @@ void LayersPanel::onLayerDuplicateRequested(const LayerId& id)
     duplicateSelectedLayers();
 }
 
+void LayersPanel::onLayerNewSmartObjectViaCopyRequested(const LayerId& id)
+{
+    if (m_layerModel.selectedLayerId() != id || m_layerModel.selectionCount() != 1) {
+        emit aboutToPerformTransformIncompatibleEdit();
+    }
+    m_layerModel.setSelectedLayer(id);
+    syncLayerControls();
+    duplicateSelectedLayers(/*detachSmartContent=*/true);
+}
+
 void LayersPanel::onLayerDeleteRequested(const LayerId& id)
 {
     if (m_layerModel.selectedLayerId() != id || m_layerModel.selectionCount() != 1) {
@@ -3427,6 +3459,22 @@ void LayersPanel::onLayerRasterizeSmartRequested(const LayerId& id)
     m_layerModel.setSelectedLayer(id);
     syncLayerControls();
     emit layerRasterizeSmartRequested(id);
+}
+
+void LayersPanel::onLayerConvertToSmartObjectRequested(const LayerId& id)
+{
+    emit aboutToPerformTransformIncompatibleEdit();
+    m_layerModel.setSelectedLayer(id);
+    syncLayerControls();
+    emit layerConvertToSmartObjectRequested(id);
+}
+
+void LayersPanel::onLayerReplaceSmartContentsRequested(const LayerId& id)
+{
+    emit aboutToPerformTransformIncompatibleEdit();
+    m_layerModel.setSelectedLayer(id);
+    syncLayerControls();
+    emit layerReplaceSmartContentsRequested(id);
 }
 
 void LayersPanel::onLayerApplyMaskRequested(const LayerId& id)

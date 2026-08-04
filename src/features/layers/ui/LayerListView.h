@@ -88,10 +88,13 @@ signals:
     void layerAlphaLockClicked(const ruwa::core::layers::LayerId& id);
     void layerLockClicked(const ruwa::core::layers::LayerId& id);
     void layerDuplicateRequested(const ruwa::core::layers::LayerId& id);
+    void layerNewSmartObjectViaCopyRequested(const ruwa::core::layers::LayerId& id);
+    void layerReplaceSmartContentsRequested(const ruwa::core::layers::LayerId& id);
     void layerDeleteRequested(const ruwa::core::layers::LayerId& id);
     void layerQuickClippingMaskRequested(const ruwa::core::layers::LayerId& id);
     void layerClearPixelsRequested(const ruwa::core::layers::LayerId& id);
     void layerRasterizeSmartRequested(const ruwa::core::layers::LayerId& id);
+    void layerConvertToSmartObjectRequested(const ruwa::core::layers::LayerId& id);
     void layerApplyMaskRequested(const ruwa::core::layers::LayerId& id);
     void layerInvertMaskRequested(const ruwa::core::layers::LayerId& id);
     void layerApplyEffectsRequested(const ruwa::core::layers::LayerId& id);
@@ -131,6 +134,9 @@ private slots:
     void onRowQuickClippingMaskRequested(const ruwa::core::layers::LayerId& id);
     void onRowClearPixelsRequested(const ruwa::core::layers::LayerId& id);
     void onRowRasterizeSmartRequested(const ruwa::core::layers::LayerId& id);
+    void onRowConvertToSmartObjectRequested(const ruwa::core::layers::LayerId& id);
+    void onRowNewSmartObjectViaCopyRequested(const ruwa::core::layers::LayerId& id);
+    void onRowReplaceSmartContentsRequested(const ruwa::core::layers::LayerId& id);
     void onRowApplyMaskRequested(const ruwa::core::layers::LayerId& id);
     void onRowInvertMaskRequested(const ruwa::core::layers::LayerId& id);
     void onRowApplyEffectsRequested(const ruwa::core::layers::LayerId& id);

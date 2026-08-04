@@ -19,6 +19,7 @@
 #include "shared/tiles/TileTypes.h"
 #include "features/layers/model/LayerData.h"
 #include "features/layers/model/LayerModel.h"
+#include "features/layers/model/SmartContentSource.h"
 
 #include <QFileInfo>
 #include <QImageReader>
@@ -602,7 +603,15 @@ std::shared_ptr<ruwa::core::layers::LayerData> materializeImportedLayer(
     if (layer->isRaster()) {
         layer->tileGrid = std::make_unique<aether::TileGrid>(std::move(*payload.pixelGrid));
     } else {
-        layer->smartContentGrid = std::make_unique<aether::TileGrid>(std::move(*payload.pixelGrid));
+        layer->setSmartGrid(std::make_unique<aether::TileGrid>(std::move(*payload.pixelGrid)));
+    }
+    // A smart object imported from a file records where it came from, so a later
+    // "this file changed on disk — reload it?" can be offered for objects placed
+    // today. The pixels still live in the document: the path never becomes the
+    // place the content lives.
+    if (auto* content = layer->smartContent.get(); content && !payload.sourcePath.isEmpty()) {
+        content->sourcePath = payload.sourcePath;
+        content->sourceHash = payload.sourceHash;
     }
     layer->smartTransform.contentBounds = payload.contentBounds;
     layer->smartTransform.pivot = payload.contentBounds.center();
@@ -695,6 +704,11 @@ static ImportedLayerBatch buildImportedLayerBatch(
         if (!payload.isValid() || !payload.pixelGrid) {
             continue;
         }
+
+        // Costs one extra pass over the file, which is why it happens here, on
+        // the import worker thread, and only for imports that come FROM a file.
+        payload.sourcePath = ruwa::core::layers::normalizedSmartSourcePath(filePath);
+        payload.sourceHash = ruwa::core::layers::smartSourceFileHash(filePath);
 
         auto undoGrid = cloneTileGrid(*payload.pixelGrid);
         if (!undoGrid) {

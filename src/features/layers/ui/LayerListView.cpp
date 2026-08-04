@@ -977,6 +977,27 @@ void LayerListView::onRowRasterizeSmartRequested(const LayerId& id)
     emit layerRasterizeSmartRequested(id);
 }
 
+void LayerListView::onRowConvertToSmartObjectRequested(const LayerId& id)
+{
+    if (m_settlingDrag || m_dragActive)
+        return;
+    emit layerConvertToSmartObjectRequested(id);
+}
+
+void LayerListView::onRowNewSmartObjectViaCopyRequested(const LayerId& id)
+{
+    if (m_settlingDrag || m_dragActive)
+        return;
+    emit layerNewSmartObjectViaCopyRequested(id);
+}
+
+void LayerListView::onRowReplaceSmartContentsRequested(const LayerId& id)
+{
+    if (m_settlingDrag || m_dragActive)
+        return;
+    emit layerReplaceSmartContentsRequested(id);
+}
+
 void LayerListView::onRowApplyMaskRequested(const LayerId& id)
 {
     if (m_settlingDrag || m_dragActive)
@@ -2239,6 +2260,12 @@ void LayerListView::connectRowSignals(LayerRowWidget* row)
         &LayerListView::onRowClearPixelsRequested);
     connect(row, &LayerRowWidget::rasterizeSmartLayerRequested, this,
         &LayerListView::onRowRasterizeSmartRequested);
+    connect(row, &LayerRowWidget::convertToSmartObjectRequested, this,
+        &LayerListView::onRowConvertToSmartObjectRequested);
+    connect(row, &LayerRowWidget::newSmartObjectViaCopyRequested, this,
+        &LayerListView::onRowNewSmartObjectViaCopyRequested);
+    connect(row, &LayerRowWidget::replaceSmartContentsRequested, this,
+        &LayerListView::onRowReplaceSmartContentsRequested);
     connect(
         row, &LayerRowWidget::applyMaskRequested, this, &LayerListView::onRowApplyMaskRequested);
     connect(

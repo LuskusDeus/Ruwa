@@ -46,6 +46,11 @@ struct ImportedLayerPayload {
     ruwa::core::layers::LayerType layerType;
     aether::Rect contentBounds;
     std::shared_ptr<aether::TileGrid> pixelGrid;
+    // Where a smart object built from this payload can be REFRESHED from. Empty
+    // for images that never had a file (clipboard, drag-and-drop of raw image
+    // data), and ignored for raster layers, which have no content identity.
+    QString sourcePath;
+    QByteArray sourceHash;
 
     bool isValid() const { return !id.isNull() && pixelGrid != nullptr; }
 };
@@ -79,6 +84,11 @@ Qt::CursorShape cursorForTransformHandle(
 
 float normalizeAngleDelta(float delta);
 bool isAngleEffectivelyZero(float radians);
+
+/// Decode an image into a fresh (RGBA8, premultiplied) tile grid. The layer
+/// builders below use it; "Replace Contents" uses it to rebuild a smart
+/// object's content grid without going through a layer at all.
+std::shared_ptr<aether::TileGrid> buildTileGridFromImage(QImage image);
 
 std::shared_ptr<ruwa::core::layers::LayerData> buildSmartLayerFromImage(
     QImage image, const QString& layerName);

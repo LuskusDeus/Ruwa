@@ -17,6 +17,7 @@
 #include "shared/tiles/TileGrid.h"
 #include "features/canvas/rendering/RetainedRenderPayload.h"
 #include "features/effects/LayerEffectTypes.h"
+#include "features/layers/model/SmartContent.h"
 #include "features/transform/TransformState.h"
 
 namespace ruwa::core::layers {
@@ -391,10 +392,21 @@ struct LayerData : public std::enable_shared_from_this<LayerData> {
     // === Pixel content ===
     // Holds premultiplied RGBA8 pixel data in a sparse tile grid.
     // Raster layers draw directly into tileGrid.
-    // Smart/Text layers keep isolated pixels in smartContentGrid.
+    // Smart/Board layers keep isolated pixels in smartContent->grid.
     // Non-pixel layers keep both pointers null.
     std::unique_ptr<aether::TileGrid> tileGrid;
-    std::unique_ptr<aether::TileGrid> smartContentGrid;
+    // The smart object's payload — its pixels plus their identity and source.
+    // Held by shared_ptr because several layers can show ONE content (instances);
+    // smartTransform deliberately stays per-layer so instances can be placed
+    // differently. Access the pixels through pixelGrid() / smartGrid().
+    std::shared_ptr<SmartContent> smartContent;
+    // How many layers OF THIS MODEL currently show `smartContent`: 0 without
+    // content, 1 for a lone smart object, >1 for instances. Runtime bookkeeping
+    // maintained by LayerModel::refreshSmartInstanceCounts(), read by the layer
+    // row's badge. Deliberately not smartContent.use_count(): undo snapshots
+    // hold the same shared content, so the raw count would call a lone layer
+    // "shared" merely because it appears somewhere in the undo stack.
+    int runtimeSmartInstanceCount = 0;
     aether::TransformState smartTransform;
     std::unique_ptr<TextLayerData> textData;
     aether::LayerVisualBackend runtimeVisualBackend = aether::LayerVisualBackend::RasterTiles;
@@ -431,7 +443,7 @@ struct LayerData : public std::enable_shared_from_this<LayerData> {
         auto layer = std::make_shared<LayerData>();
         layer->name = clampedName(name);
         layer->type = LayerType::Smart;
-        layer->smartContentGrid = std::make_unique<aether::TileGrid>();
+        layer->smartContent = std::make_shared<SmartContent>();
         return layer;
     }
 
@@ -440,7 +452,7 @@ struct LayerData : public std::enable_shared_from_this<LayerData> {
         auto layer = std::make_shared<LayerData>();
         layer->name = clampedName(name);
         layer->type = LayerType::Board;
-        layer->smartContentGrid = std::make_unique<aether::TileGrid>();
+        layer->smartContent = std::make_shared<SmartContent>();
         return layer;
     }
 
@@ -486,7 +498,7 @@ struct LayerData : public std::enable_shared_from_this<LayerData> {
         if (type == LayerType::Raster) {
             layer->tileGrid = std::make_unique<aether::TileGrid>();
         } else if (type == LayerType::Smart || type == LayerType::Board) {
-            layer->smartContentGrid = std::make_unique<aether::TileGrid>();
+            layer->smartContent = std::make_shared<SmartContent>();
         } else if (type == LayerType::Text) {
             layer->textData = std::make_unique<TextLayerData>();
             layer->nameIsCustom = !name.isEmpty() && layer->name != QStringLiteral("Text");
@@ -571,6 +583,19 @@ struct LayerData : public std::enable_shared_from_this<LayerData> {
     bool canHostMask() const { return !isBackground() && (isRaster() || isSmart()); }
 
     /**
+     * @brief Can this layer be wrapped into a smart object ("Convert to Smart
+     *        Object" target).
+     *
+     * A conversion has to be able to name the pixels the object will contain.
+     * A raster layer IS those pixels and a text layer bakes its glyphs into
+     * them. Everything else is out: the Background is not a free-floating layer,
+     * a group's content is its children (converting it needs the offscreen
+     * subtree composite that does not exist yet), and smart/board layers are
+     * already isolated content.
+     */
+    bool canConvertToSmartObject() const { return !isBackground() && (isRaster() || isText()); }
+
+    /**
      * @brief Brush/fill edits currently land in this layer's mask, not its pixels.
      *
      * The mask is a plain RGBA8 grid regardless of the layer type, so edits that
@@ -603,12 +628,104 @@ struct LayerData : public std::enable_shared_from_this<LayerData> {
         maskThumbnailDirty = true;
     }
 
+    // ------------------------------------------------------------------------
+    // Smart content access
+    // ------------------------------------------------------------------------
+
+    /** @brief Does this layer carry a smart content payload with pixels */
+    bool hasSmartContent() const { return smartContent && smartContent->grid; }
+
+    /** @brief The smart content's pixel grid (content space), or nullptr */
+    aether::TileGrid* smartGrid() { return smartContent ? smartContent->grid.get() : nullptr; }
+    const aether::TileGrid* smartGrid() const
+    {
+        return smartContent ? smartContent->grid.get() : nullptr;
+    }
+
+    /** @brief Create an empty smart content payload if none exists. Never null. */
+    SmartContent* ensureSmartContent()
+    {
+        if (!smartContent) {
+            smartContent = std::make_shared<SmartContent>();
+        }
+        return smartContent.get();
+    }
+
+    /** @brief Is this layer's content also shown by another layer (an instance) */
+    bool isSmartContentShared() const { return runtimeSmartInstanceCount > 1; }
+
+    /**
+     * @brief Give this layer a private copy of its content (copy-on-write).
+     *
+     * Call before an edit that must NOT reach through to the other instances.
+     * The copy keeps the source description but gets a fresh contentId, which is
+     * what breaks the link. No-op when the content is not shared.
+     *
+     * Sharing is counted with use_count() here rather than with
+     * runtimeSmartInstanceCount, because correctness must not depend on the UI
+     * bookkeeping being up to date: detaching one time too many costs a copy,
+     * detaching one time too few corrupts another layer.
+     */
+    SmartContent* detachSmartContent()
+    {
+        if (!smartContent) {
+            return ensureSmartContent();
+        }
+        if (smartContent.use_count() > 1) {
+            smartContent = smartContent->cloneDetached();
+            runtimeSmartInstanceCount = 1;
+        }
+        return smartContent.get();
+    }
+
+    /**
+     * @brief Replace THIS layer's pixels, leaving any instances untouched.
+     *
+     * Installing pixels is a per-layer act, so a shared content is detached
+     * first. (A future "Replace Contents" that deliberately updates every
+     * instance must write through `smartContent->setGrid()` instead.)
+     */
+    void setSmartGrid(std::unique_ptr<aether::TileGrid> grid)
+    {
+        if (smartContent && smartContent.use_count() > 1) {
+            smartContent = std::make_shared<SmartContent>();
+            runtimeSmartInstanceCount = 1;
+        }
+        ensureSmartContent()->setGrid(std::move(grid));
+    }
+
+    /**
+     * @brief Pixel-tight bounds of the smart content in CONTENT space.
+     *
+     * Empty rect when the layer has no content. Cached inside SmartContent, so
+     * this is cheap enough to call per hit-test.
+     */
+    aether::Rect smartContentBounds() const
+    {
+        return smartContent ? smartContent->nativeBounds() : aether::Rect {};
+    }
+
+    /**
+     * @brief Invalidation key for anything derived from this layer's content.
+     *        0 when the layer has no smart content.
+     */
+    quint64 smartContentStamp() const { return smartContent ? smartContent->contentStamp() : 0ull; }
+
+    /**
+     * @brief The layer's editable pixels.
+     *
+     * Raster layers own their grid directly; smart/board layers expose their
+     * content grid here so saving, thumbnails, transform bounds and undo memory
+     * accounting keep working uniformly. Painting is NOT gated by this — the
+     * brush paths check isRaster() — so returning a grid does not make a smart
+     * layer paintable.
+     */
     aether::TileGrid* pixelGrid()
     {
         if (isRaster())
             return tileGrid.get();
         if (isIsolatedPixelLayer())
-            return smartContentGrid.get();
+            return smartGrid();
         return nullptr;
     }
 
@@ -617,7 +734,7 @@ struct LayerData : public std::enable_shared_from_this<LayerData> {
         if (isRaster())
             return tileGrid.get();
         if (isIsolatedPixelLayer())
-            return smartContentGrid.get();
+            return smartGrid();
         return nullptr;
     }
 

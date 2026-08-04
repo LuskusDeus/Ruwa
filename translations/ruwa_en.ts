@@ -3410,6 +3410,21 @@ Ruwa uses the Qt framework (version %1), dynamically linked under the GNU Lesser
         <translation type="unfinished"></translation>
     </message>
     <message>
+        <location filename="../src/features/layers/ui/LayerRowWidget.cpp" line="3018"/>
+        <source>Convert to Smart Object</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location filename="../src/features/layers/ui/LayerRowWidget.cpp" line="3029"/>
+        <source>New Smart Object via Copy</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location filename="../src/features/layers/ui/LayerRowWidget.cpp" line="3039"/>
+        <source>Replace Contents...</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
         <location filename="../src/features/layers/ui/LayerRowWidget.cpp" line="3021"/>
         <source>Apply all effects</source>
         <translation type="unfinished"></translation>
@@ -5362,6 +5377,26 @@ Ruwa uses the Qt framework (version %1), dynamically linked under the GNU Lesser
     <message>
         <location filename="../src/features/canvas/ui/CanvasPanel.cpp" line="2493"/>
         <source>Layer</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location filename="../src/features/canvas/ui/CanvasPanel.cpp" line="2251"/>
+        <source>Images (%1)</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location filename="../src/features/canvas/ui/CanvasPanel.cpp" line="2252"/>
+        <source>All Files (*)</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location filename="../src/features/canvas/ui/CanvasPanel.cpp" line="2264"/>
+        <source>Replace contents</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location filename="../src/features/canvas/ui/CanvasPanel.cpp" line="2288"/>
+        <source>This file could not be read as an image.</source>
         <translation type="unfinished"></translation>
     </message>
     <message>

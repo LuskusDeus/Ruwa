@@ -3420,6 +3420,21 @@ Ruwa использует фреймворк Qt (версия %1), динами�
         <translation>Растрировать</translation>
     </message>
     <message>
+        <location filename="../src/features/layers/ui/LayerRowWidget.cpp" line="3018"/>
+        <source>Convert to Smart Object</source>
+        <translation>Преобразовать в смарт-объект</translation>
+    </message>
+    <message>
+        <location filename="../src/features/layers/ui/LayerRowWidget.cpp" line="3029"/>
+        <source>New Smart Object via Copy</source>
+        <translation>Новый смарт-объект через копирование</translation>
+    </message>
+    <message>
+        <location filename="../src/features/layers/ui/LayerRowWidget.cpp" line="3039"/>
+        <source>Replace Contents...</source>
+        <translation>Заменить содержимое...</translation>
+    </message>
+    <message>
         <location filename="../src/features/layers/ui/LayerRowWidget.cpp" line="3021"/>
         <source>Apply all effects</source>
         <translation>Применить все эффекты</translation>
@@ -5376,6 +5391,26 @@ Ruwa использует фреймворк Qt (версия %1), динами�
         <location filename="../src/features/canvas/ui/CanvasPanel.cpp" line="2493"/>
         <source>Layer</source>
         <translation>Слой</translation>
+    </message>
+    <message>
+        <location filename="../src/features/canvas/ui/CanvasPanel.cpp" line="2251"/>
+        <source>Images (%1)</source>
+        <translation>Изображения (%1)</translation>
+    </message>
+    <message>
+        <location filename="../src/features/canvas/ui/CanvasPanel.cpp" line="2252"/>
+        <source>All Files (*)</source>
+        <translation>Все файлы (*)</translation>
+    </message>
+    <message>
+        <location filename="../src/features/canvas/ui/CanvasPanel.cpp" line="2264"/>
+        <source>Replace contents</source>
+        <translation>Заменить содержимое</translation>
+    </message>
+    <message>
+        <location filename="../src/features/canvas/ui/CanvasPanel.cpp" line="2288"/>
+        <source>This file could not be read as an image.</source>
+        <translation>Не удалось прочитать этот файл как изображение.</translation>
     </message>
     <message>
         <location filename="../src/features/canvas/ui/CanvasPanelContentCreation.cpp" line="73"/>

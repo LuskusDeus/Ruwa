@@ -371,6 +371,18 @@ public:
     void applyLayerEffectsEntries(
         const QList<ruwa::core::serialization::LayerEffectsEntry>& entries);
 
+    /**
+     * @brief Copy a layer's smart-content identity and source into an entry (v29).
+     *
+     * Shared by every producer of layer entries: the contentId is what makes
+     * instances survive a save/load round-trip, so it must be written the same
+     * way wherever entries are built. A layer without smart content leaves the
+     * fields at their defaults (a null id), which reads back as "not an
+     * instance of anything".
+     */
+    static void writeSmartContentEntryFields(
+        ruwa::core::serialization::LayerEntry& entry, const LayerData* layer);
+
     // ========================================================================
     // Iteration Helpers
     // ========================================================================
@@ -388,12 +400,25 @@ public:
     QList<LayerData*> findAll(const std::function<bool(const LayerData*)>& predicate) const;
 
     /**
-     * @brief Clone a layer tree (including children, tiles, smartTransform).
+     * @brief Clone a layer tree (including children, raster tiles, smartTransform).
      * @param source Layer to clone
      * @param preserveIds If true, clone keeps same IDs as source (for undo snapshots)
+     *
+     * Smart content is SHARED with the source, not copied — the clone is an
+     * instance. Call LayerData::detachSmartContent() on the result to break the
+     * link ("New Smart Object via Copy").
      */
     static std::shared_ptr<LayerData> cloneLayerTree(
         const LayerData* source, bool preserveIds = false);
+
+    /**
+     * @brief Recount, for every layer, how many layers show its smart content.
+     *
+     * Refreshes LayerData::runtimeSmartInstanceCount, which the layer row uses
+     * to badge instances. Runs itself on every layersChanged, so callers
+     * normally never need it.
+     */
+    void refreshSmartInstanceCounts();
 
 signals:
     // === Structure Changes ===
@@ -487,6 +512,12 @@ private:
     bool m_clippingRefreshPending = false;
     int m_nextDefaultLayerNumber = 1;
     aether::TilePixelFormat m_documentTileFormat = aether::kDefaultTileFormat;
+
+    // Smart contents already materialized during the load in progress, keyed by
+    // the file's contentId: entries sharing an id are instances and must end up
+    // pointing at ONE content. Only meaningful inside loadFromEntries, which
+    // clears it on both ends so nothing keeps a loaded document alive.
+    QHash<QUuid, std::shared_ptr<SmartContent>> m_loadingSmartContents;
 
     // Selection manager - единый источник истины для выделения
     LayerSelectionManager m_selection;

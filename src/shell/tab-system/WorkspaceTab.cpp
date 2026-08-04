@@ -214,11 +214,11 @@ void collectLayerTilePositions(const LayerData* layer, QSet<QPoint>& out, bool r
     }
 
     if (layer->isIsolatedPixelLayer()) {
-        const auto* pixelGrid = layer->smartContentGrid.get();
+        const auto* pixelGrid = layer->smartGrid();
         if (pixelGrid && !pixelGrid->empty()) {
             aether::TransformState state = layer->smartTransform;
             if (state.contentBounds.width <= 0.0f || state.contentBounds.height <= 0.0f) {
-                state.contentBounds = aether::TransformState::computeContentBounds(*pixelGrid);
+                state.contentBounds = layer->smartContentBounds();
                 state.pivot = state.contentBounds.center();
             }
 
@@ -409,8 +409,29 @@ SaveProjectResult saveProjectInBackground(SaveProjectPayload payload)
     return result;
 }
 
+/// True when this layer's pixels have already been collected for another
+/// instance of the same smart content, and inserts the id otherwise.
+///
+/// The serializer does this dedup too, and that is where the guarantee lives;
+/// doing it here as well is what keeps a save of an instance-heavy document
+/// from transiently holding one copy of the pixels per instance. Identical
+/// content ids mean identical pixels, by construction.
+bool smartContentAlreadyCollected(
+    const ruwa::core::layers::LayerData* layer, QSet<QUuid>& collectedContentIds)
+{
+    if (!layer || !layer->smartContent) {
+        return false;
+    }
+    const QUuid contentId = layer->smartContent->contentId;
+    if (collectedContentIds.contains(contentId)) {
+        return true;
+    }
+    collectedContentIds.insert(contentId);
+    return false;
+}
+
 ruwa::core::serialization::LayerEntry buildLayerEntryFromSnapshot(
-    const std::shared_ptr<ruwa::core::layers::LayerData>& layer)
+    const std::shared_ptr<ruwa::core::layers::LayerData>& layer, QSet<QUuid>& collectedContentIds)
 {
     using namespace ruwa::core::serialization;
 
@@ -434,8 +455,10 @@ ruwa::core::serialization::LayerEntry buildLayerEntryFromSnapshot(
     entry.clippedToBelow = layer->clippedToBelow;
     writeLayerTransformFields(entry, serializedTransformForLayer(layer.get()));
     writeTextLayerFields(entry, layer.get());
+    ruwa::core::layers::LayerModel::writeSmartContentEntryFields(entry, layer.get());
 
-    if (const auto* pixelGrid = layer->pixelGrid(); pixelGrid) {
+    const bool skipPixels = smartContentAlreadyCollected(layer.get(), collectedContentIds);
+    if (const auto* pixelGrid = skipPixels ? nullptr : layer->pixelGrid(); pixelGrid) {
         const int contentTileBytes = static_cast<int>(aether::tileByteSize(pixelGrid->format()));
         entry.tiles.reserve(static_cast<int>(pixelGrid->tiles().size()));
         for (const auto& [key, tile] : pixelGrid->tiles()) {
@@ -473,7 +496,7 @@ ruwa::core::serialization::LayerEntry buildLayerEntryFromSnapshot(
 
     entry.children.reserve(layer->children.size());
     for (const auto& child : layer->children) {
-        entry.children.append(buildLayerEntryFromSnapshot(child));
+        entry.children.append(buildLayerEntryFromSnapshot(child, collectedContentIds));
     }
 
     return entry;
@@ -512,8 +535,9 @@ ruwa::core::serialization::ProjectData buildProjectDataFromSnapshot(
     data.selectedLayerId = snapshot.selectedLayerId;
 
     data.rootLayers.reserve(snapshot.rootLayers.size());
+    QSet<QUuid> collectedContentIds;
     for (const auto& root : snapshot.rootLayers) {
-        data.rootLayers.append(buildLayerEntryFromSnapshot(root));
+        data.rootLayers.append(buildLayerEntryFromSnapshot(root, collectedContentIds));
     }
     for (const auto& root : snapshot.rootLayers) {
         std::function<void(const std::shared_ptr<ruwa::core::layers::LayerData>&)> collectEffects;
@@ -2830,6 +2854,18 @@ void WorkspaceTab::connectPanelSignals()
                 m_canvasPanel->rasterizeSmartLayer(id);
             }
         });
+    connect(m_layersPanel, &workspace::LayersPanel::layerConvertToSmartObjectRequested, this,
+        [this](const ruwa::core::layers::LayerId& id) {
+            if (m_canvasPanel) {
+                m_canvasPanel->convertLayerToSmartObject(id);
+            }
+        });
+    connect(m_layersPanel, &workspace::LayersPanel::layerReplaceSmartContentsRequested, this,
+        [this](const ruwa::core::layers::LayerId& id) {
+            if (m_canvasPanel) {
+                m_canvasPanel->replaceSmartLayerContents(id);
+            }
+        });
     connect(m_layersPanel, &workspace::LayersPanel::layerApplyMaskRequested, this,
         [this](const ruwa::core::layers::LayerId& id) {
             if (m_canvasPanel) {
@@ -2962,9 +2998,10 @@ ruwa::core::serialization::ProjectData WorkspaceTab::toProjectData() const
         data.selectedLayerId = model->selectedLayerId();
         const auto& roots = model->rootLayers();
 
+        QSet<QUuid> collectedContentIds;
         std::function<LayerEntry(const std::shared_ptr<ruwa::core::layers::LayerData>&)> convert;
-        convert
-            = [&convert](const std::shared_ptr<ruwa::core::layers::LayerData>& ld) -> LayerEntry {
+        convert = [&convert, &collectedContentIds](
+                      const std::shared_ptr<ruwa::core::layers::LayerData>& ld) -> LayerEntry {
             LayerEntry entry;
             entry.id = ld->id;
             entry.name = ld->name;
@@ -2981,8 +3018,10 @@ ruwa::core::serialization::ProjectData WorkspaceTab::toProjectData() const
             entry.clippedToBelow = ld->clippedToBelow;
             writeLayerTransformFields(entry, serializedTransformForLayer(ld.get()));
             writeTextLayerFields(entry, ld.get());
+            ruwa::core::layers::LayerModel::writeSmartContentEntryFields(entry, ld.get());
 
-            if (const auto* pixelGrid = ld->pixelGrid(); pixelGrid) {
+            const bool skipPixels = smartContentAlreadyCollected(ld.get(), collectedContentIds);
+            if (const auto* pixelGrid = skipPixels ? nullptr : ld->pixelGrid(); pixelGrid) {
                 const int contentTileBytes
                     = static_cast<int>(aether::tileByteSize(pixelGrid->format()));
                 entry.tiles.reserve(static_cast<int>(pixelGrid->tiles().size()));

@@ -222,7 +222,7 @@ TileGrid* LayerCompositingBuilder::compositingGridForLayer(
         if (it != m_smartProjectedGrids.constEnd() && it.value()) {
             return it.value().get();
         }
-        return const_cast<TileGrid*>(layer->smartContentGrid.get());
+        return const_cast<TileGrid*>(layer->smartGrid());
     }
     return const_cast<TileGrid*>(layer->pixelGrid());
 }

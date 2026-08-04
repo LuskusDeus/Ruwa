@@ -137,7 +137,10 @@ public:
     /// Give the selected layer the mask sitting on the clipboard, replacing any
     /// mask it already has (undoable).
     bool pasteMaskToSelectedLayer();
-    bool duplicateSelectedLayers();
+    /// Duplicate the selection. A duplicated smart object shares its source's
+    /// content (it becomes an instance) unless @p detachSmartContent is set,
+    /// which is the "New Smart Object via Copy" semantic.
+    bool duplicateSelectedLayers(bool detachSmartContent = false);
     bool mergeSelectedLayerDown();
     bool mergeVisibleLayers();
     bool mergeSelectedLayers();
@@ -190,6 +193,10 @@ signals:
     void layerClearPixelContentRequested(const ruwa::core::layers::LayerId& id);
     /// Smart → raster bake (handled by workspace → canvas GL).
     void layerRasterizeSmartRequested(const ruwa::core::layers::LayerId& id);
+    /// Raster/text → smart object wrap (handled by workspace → canvas GL).
+    void layerConvertToSmartObjectRequested(const ruwa::core::layers::LayerId& id);
+    /// Give a smart object new contents from a file (handled by workspace → canvas GL).
+    void layerReplaceSmartContentsRequested(const ruwa::core::layers::LayerId& id);
     /// Bake a layer's mask into its pixels and remove it (handled by workspace → canvas GL).
     void layerApplyMaskRequested(const ruwa::core::layers::LayerId& id);
     /// Invert a layer mask (all tiles + background) (workspace → canvas GL).
@@ -229,12 +236,15 @@ private slots:
     void onLayerAlphaLockClicked(const ruwa::core::layers::LayerId& id);
     void onLayerLockClicked(const ruwa::core::layers::LayerId& id);
     void onLayerDuplicateRequested(const ruwa::core::layers::LayerId& id);
+    void onLayerNewSmartObjectViaCopyRequested(const ruwa::core::layers::LayerId& id);
     void onLayerDeleteRequested(const ruwa::core::layers::LayerId& id);
     void onLayerQuickClippingMaskRequested(const ruwa::core::layers::LayerId& id);
     void onLayerToggleAlphaLockRequested(const ruwa::core::layers::LayerId& id);
     void onLayerToggleLockRequested(const ruwa::core::layers::LayerId& id);
     void onLayerClearPixelsRequested(const ruwa::core::layers::LayerId& id);
     void onLayerRasterizeSmartRequested(const ruwa::core::layers::LayerId& id);
+    void onLayerConvertToSmartObjectRequested(const ruwa::core::layers::LayerId& id);
+    void onLayerReplaceSmartContentsRequested(const ruwa::core::layers::LayerId& id);
     void onLayerApplyMaskRequested(const ruwa::core::layers::LayerId& id);
     void onLayerInvertMaskRequested(const ruwa::core::layers::LayerId& id);
     void onLayerApplyEffectsRequested(const ruwa::core::layers::LayerId& id);

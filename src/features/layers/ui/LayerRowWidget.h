@@ -218,6 +218,9 @@ signals:
     void toggleAlphaLockRequested(const ruwa::core::layers::LayerId& id);
     void toggleLayerLockRequested(const ruwa::core::layers::LayerId& id);
     void rasterizeSmartLayerRequested(const ruwa::core::layers::LayerId& id);
+    void convertToSmartObjectRequested(const ruwa::core::layers::LayerId& id);
+    void newSmartObjectViaCopyRequested(const ruwa::core::layers::LayerId& id);
+    void replaceSmartContentsRequested(const ruwa::core::layers::LayerId& id);
     void applyMaskRequested(const ruwa::core::layers::LayerId& id);
     void invertMaskRequested(const ruwa::core::layers::LayerId& id);
     void applyEffectsRequested(const ruwa::core::layers::LayerId& id);

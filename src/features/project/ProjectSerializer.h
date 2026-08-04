@@ -9,6 +9,8 @@
 #include <QString>
 #include <QByteArray>
 #include <QDataStream>
+#include <QSet>
+#include <QUuid>
 
 namespace ruwa::core::serialization {
 
@@ -68,7 +70,10 @@ private:
     QByteArray writeProjectInfo(const ProjectData& data) const;
     QByteArray writeLayerTree(const ProjectData& data) const;
     QByteArray writeLayerEffects(const ProjectData& data) const;
-    void writeLayerEntry(QDataStream& out, const LayerEntry& layer) const;
+    /// @p writtenSmartContentIds accumulates the smart contents already written
+    /// during this tree walk, so shared content is stored once (see LayerEntry).
+    void writeLayerEntry(
+        QDataStream& out, const LayerEntry& layer, QSet<QUuid>& writtenSmartContentIds) const;
     void writeLayerEffectState(
         QDataStream& out, const ruwa::core::effects::LayerEffectState& state) const;
 
@@ -82,6 +87,12 @@ private:
 
     // Low-level helpers
     bool readHeader(QDataStream& in, quint32& version) const;
+
+    /// Directory of the file currently being saved/loaded. Set by save()/load()
+    /// and read by the layer writers/readers, which are const: it is the only
+    /// thing that makes a project-relative smart-source path derivable, and it
+    /// is per-call state exactly like m_lastError.
+    QString m_projectDirectory;
 
     mutable QString m_lastError;
 

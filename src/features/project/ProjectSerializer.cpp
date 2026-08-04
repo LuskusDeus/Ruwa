@@ -3,6 +3,7 @@
 // ProjectSerializer.cpp
 #include "ProjectSerializer.h"
 
+#include <QDir>
 #include <QFile>
 #include <QSaveFile>
 #include <QFileInfo>
@@ -99,6 +100,49 @@ bool countFitsInStream(QDataStream& in, quint32 count, int minElementBytes)
     return dst;
 }
 
+// ============================================================================
+// Smart-object source paths (file version >= 29)
+//
+// A smart content records where it can be REFRESHED from. Storing that as a
+// path relative to the project file (when the source sits under the project
+// directory) is what keeps links alive when a whole folder is moved, copied to
+// another machine or shared; the absolute path stays as the fallback for
+// sources that live elsewhere. Only the serializer deals in the relative form —
+// it is derived on save and resolved back on load.
+// ============================================================================
+
+QString smartSourceRelativePathFor(const QString& absolutePath, const QString& projectDirectory)
+{
+    if (absolutePath.isEmpty() || projectDirectory.isEmpty()) {
+        return {};
+    }
+    const QString relative = QDir(projectDirectory).relativeFilePath(absolutePath);
+    // Only paths that stay INSIDE the project directory are useful as relative
+    // ones: "../../elsewhere/img.png" would break the moment the project moves,
+    // which is exactly the case the absolute fallback already covers.
+    if (relative.isEmpty() || relative.startsWith(QStringLiteral(".."))
+        || QDir::isAbsolutePath(relative)) {
+        return {};
+    }
+    return relative;
+}
+
+QString resolveSmartSourcePath(
+    const QString& relativePath, const QString& absolutePath, const QString& projectDirectory)
+{
+    if (!relativePath.isEmpty() && !projectDirectory.isEmpty()) {
+        const QString candidate = QDir(projectDirectory).absoluteFilePath(relativePath);
+        // The relative form wins only when it actually resolves: a project that
+        // travelled with its assets finds them next to itself, one that did not
+        // falls back to wherever the source used to live. A path that resolves
+        // to nothing at all is not an error — the layer keeps its saved pixels.
+        if (QFileInfo::exists(candidate)) {
+            return QDir::cleanPath(candidate);
+        }
+    }
+    return absolutePath;
+}
+
 } // namespace
 
 // ============================================================================
@@ -117,6 +161,8 @@ bool ProjectSerializer::save(const QString& filePath, const ProjectData& data)
         m_lastError = QStringLiteral("Cannot open file for writing: %1").arg(file.errorString());
         return false;
     }
+
+    m_projectDirectory = QFileInfo(filePath).absolutePath();
 
     QDataStream out(&file);
     out.setByteOrder(QDataStream::LittleEndian);
@@ -169,6 +215,8 @@ bool ProjectSerializer::load(const QString& filePath, ProjectData& data)
         m_lastError = QStringLiteral("Cannot open file: %1").arg(file.errorString());
         return false;
     }
+
+    m_projectDirectory = QFileInfo(filePath).absolutePath();
 
     QDataStream in(&file);
     in.setByteOrder(QDataStream::LittleEndian);
@@ -368,14 +416,18 @@ QByteArray ProjectSerializer::writeLayerTree(const ProjectData& data) const
 
     out << static_cast<quint32>(data.rootLayers.size());
 
+    // Shared smart content is written by whichever entry the tree walk reaches
+    // first; the set carries that knowledge across the whole (recursive) walk.
+    QSet<QUuid> writtenSmartContentIds;
     for (const auto& layer : data.rootLayers) {
-        writeLayerEntry(out, layer);
+        writeLayerEntry(out, layer, writtenSmartContentIds);
     }
 
     return blob;
 }
 
-void ProjectSerializer::writeLayerEntry(QDataStream& out, const LayerEntry& layer) const
+void ProjectSerializer::writeLayerEntry(
+    QDataStream& out, const LayerEntry& layer, QSet<QUuid>& writtenSmartContentIds) const
 {
     out << layer.id;
     out << layer.name;
@@ -442,7 +494,27 @@ void ProjectSerializer::writeLayerEntry(QDataStream& out, const LayerEntry& laye
         }
     }
 
-    const bool writeTilePayload = (layer.type != kSerializedTextLayerType);
+    // v29: smart-object content identity + source. Written for every layer type
+    // (a null id simply means "this layer has no smart content"), so the reader
+    // never has to know which types can carry one.
+    const bool contentAlreadyWritten
+        = !layer.smartContentId.isNull() && writtenSmartContentIds.contains(layer.smartContentId);
+    out << layer.smartContentId;
+    out << smartSourceRelativePathFor(layer.smartSourcePath, m_projectDirectory);
+    out << layer.smartSourcePath;
+    out << static_cast<quint8>(layer.smartSourceKind);
+    out << layer.smartSourceHash;
+
+    // A text layer stores its glyphs, not pixels; an instance stores nothing,
+    // because the entry that first carried this content already wrote the
+    // pixels. A content only counts as written once pixels actually went out,
+    // so an entry whose tiles were already stripped upstream cannot claim the
+    // id and leave the copy that still has them dropped too.
+    const bool writeTilePayload
+        = (layer.type != kSerializedTextLayerType) && !contentAlreadyWritten;
+    if (!layer.smartContentId.isNull() && writeTilePayload && !layer.tiles.isEmpty()) {
+        writtenSmartContentIds.insert(layer.smartContentId);
+    }
     out << static_cast<quint32>(writeTilePayload ? layer.tiles.size() : 0);
     if (writeTilePayload) {
         for (const auto& tile : layer.tiles) {
@@ -473,7 +545,7 @@ void ProjectSerializer::writeLayerEntry(QDataStream& out, const LayerEntry& laye
 
     out << static_cast<quint32>(layer.children.size());
     for (const auto& child : layer.children) {
-        writeLayerEntry(out, child);
+        writeLayerEntry(out, child, writtenSmartContentIds);
     }
 }
 
@@ -963,6 +1035,23 @@ LayerEntry ProjectSerializer::readLayerEntry(QDataStream& in, quint32 version, q
                 layer.textStyleRuns.append(run);
             }
         }
+    }
+    if (version >= 29) {
+        quint8 sourceKind = 0;
+        QString storedRelativePath;
+        QString storedAbsolutePath;
+        in >> layer.smartContentId;
+        in >> storedRelativePath;
+        in >> storedAbsolutePath;
+        in >> sourceKind;
+        in >> layer.smartSourceHash;
+        if (in.status() != QDataStream::Ok) {
+            return layer;
+        }
+        layer.smartSourceKind = static_cast<int>(sourceKind);
+        layer.smartSourceRelativePath = storedRelativePath;
+        layer.smartSourcePath
+            = resolveSmartSourcePath(storedRelativePath, storedAbsolutePath, m_projectDirectory);
     }
     if (version >= 2) {
         in >> tileCount;

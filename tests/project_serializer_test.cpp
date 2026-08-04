@@ -19,6 +19,7 @@
 #include <QByteArray>
 #include <QDataStream>
 #include <QFile>
+#include <QFileInfo>
 #include <QIODevice>
 #include <QTemporaryDir>
 #include <QUuid>
@@ -71,6 +72,41 @@ void writeHeader(QDataStream& s, quint32 version = ProjectData::CURRENT_VERSION)
 {
     s.writeRawData("UWA\0", 4); // magic: 'U','W','A','\0'
     s << version;
+}
+
+// Returns the payload of the first section of `type` in a whole .rwf file, or an
+// empty array when there is none. Lets a test reuse a section the real writer
+// produced while replacing another one with hand-crafted bytes.
+QByteArray extractSection(const QByteArray& fileBytes, quint32 type)
+{
+    QDataStream s(fileBytes);
+    s.setByteOrder(QDataStream::LittleEndian);
+    s.setVersion(QDataStream::Qt_6_0);
+
+    char magic[4] = {};
+    quint32 version = 0;
+    s.readRawData(magic, 4); // header is not what this helper is after
+    s >> version;
+    Q_UNUSED(magic);
+    Q_UNUSED(version);
+
+    while (s.status() == QDataStream::Ok && !s.atEnd()) {
+        quint32 sectionType = 0;
+        quint64 sectionSize = 0;
+        s >> sectionType;
+        s >> sectionSize;
+        if (s.status() != QDataStream::Ok || sectionType == kSectionEnd) {
+            break;
+        }
+        QByteArray blob(static_cast<int>(sectionSize), Qt::Uninitialized);
+        if (s.readRawData(blob.data(), blob.size()) != blob.size()) {
+            break;
+        }
+        if (sectionType == type) {
+            return blob;
+        }
+    }
+    return {};
 }
 
 } // namespace
@@ -257,4 +293,186 @@ TEST_CASE("Deeply nested layer tree is rejected without stack overflow", "[seria
     ProjectData loaded;
     REQUIRE_FALSE(reader.load(path, loaded)); // must not stack-overflow
     CHECK_FALSE(reader.lastError().isEmpty());
+}
+
+// ============================================================================
+// Smart-object content (file version >= 29)
+// ============================================================================
+
+TEST_CASE("Shared smart content is written once and reloads as instances", "[serializer]")
+{
+    QTemporaryDir dir;
+    REQUIRE(dir.isValid());
+
+    ProjectData data;
+    data.projectName = QStringLiteral("instances");
+    data.canvasSize = QSize(128, 128);
+
+    const QUuid contentId = QUuid::createUuid();
+    TileEntry tile;
+    tile.x = 0;
+    tile.y = 0;
+    tile.pixels
+        = QByteArray(static_cast<int>(aether::tileByteSize(aether::TilePixelFormat::RGBA8)), '\0');
+
+    // Two layers showing one smart object: same contentId, same pixels.
+    LayerEntry first;
+    first.id = QUuid::createUuid();
+    first.name = QStringLiteral("Object");
+    first.type = 6; // smart
+    first.smartContentId = contentId;
+    first.smartSourceHash = QByteArray("hash-bytes");
+    first.tiles.append(tile);
+
+    LayerEntry second = first;
+    second.id = QUuid::createUuid();
+    second.name = QStringLiteral("Object instance");
+
+    data.rootLayers.append(first);
+    data.rootLayers.append(second);
+
+    const QString path = dir.filePath("instances.rwf");
+    ProjectSerializer writer;
+    REQUIRE(writer.save(path, data));
+
+    ProjectSerializer reader;
+    ProjectData loaded;
+    REQUIRE(reader.load(path, loaded));
+    REQUIRE(loaded.rootLayers.size() == 2);
+
+    // Identity survives on both, so the loader can re-link them as instances.
+    CHECK(loaded.rootLayers[0].smartContentId == contentId);
+    CHECK(loaded.rootLayers[1].smartContentId == contentId);
+    CHECK(loaded.rootLayers[0].smartSourceHash == QByteArray("hash-bytes"));
+
+    // ...but the pixels are stored exactly once.
+    CHECK(loaded.rootLayers[0].tiles.size() == 1);
+    CHECK(loaded.rootLayers[1].tiles.isEmpty());
+}
+
+TEST_CASE("Smart source path follows a project moved with its assets", "[serializer]")
+{
+    QTemporaryDir originalDir;
+    QTemporaryDir movedDir;
+    REQUIRE(originalDir.isValid());
+    REQUIRE(movedDir.isValid());
+
+    // An asset sitting next to the project file.
+    const QString assetName = QStringLiteral("source.png");
+    for (const QTemporaryDir* d : { &originalDir, &movedDir }) {
+        QFile asset(d->filePath(assetName));
+        REQUIRE(asset.open(QIODevice::WriteOnly));
+        asset.write("not-really-an-image");
+        asset.close();
+    }
+
+    ProjectData data;
+    data.projectName = QStringLiteral("linked");
+    data.canvasSize = QSize(64, 64);
+
+    LayerEntry layer;
+    layer.id = QUuid::createUuid();
+    layer.type = 6; // smart
+    layer.smartContentId = QUuid::createUuid();
+    layer.smartSourcePath = originalDir.filePath(assetName);
+    data.rootLayers.append(layer);
+
+    const QString originalPath = originalDir.filePath("linked.rwf");
+    ProjectSerializer writer;
+    REQUIRE(writer.save(originalPath, data));
+
+    // Loading in place resolves to the original asset.
+    {
+        ProjectSerializer reader;
+        ProjectData loaded;
+        REQUIRE(reader.load(originalPath, loaded));
+        REQUIRE(loaded.rootLayers.size() == 1);
+        CHECK(QFileInfo(loaded.rootLayers[0].smartSourcePath)
+            == QFileInfo(originalDir.filePath(assetName)));
+    }
+
+    // Copying the whole folder elsewhere must re-point the source at the copy:
+    // that is what the project-relative path is for.
+    const QString movedPath = movedDir.filePath("linked.rwf");
+    REQUIRE(QFile::copy(originalPath, movedPath));
+
+    ProjectSerializer reader;
+    ProjectData loaded;
+    REQUIRE(reader.load(movedPath, loaded));
+    REQUIRE(loaded.rootLayers.size() == 1);
+    CHECK(QFileInfo(loaded.rootLayers[0].smartSourcePath)
+        == QFileInfo(movedDir.filePath(assetName)));
+}
+
+TEST_CASE("Files written before v29 load with no smart content identity", "[serializer]")
+{
+    QTemporaryDir dir;
+    REQUIRE(dir.isValid());
+
+    // A v28 layer entry: everything up to the smart block, then straight to the
+    // tile count. The reader must not consume the smart fields for such a file.
+    const QByteArray layerBlob = buildBytes([](QDataStream& s) {
+        s << quint32(1); // root layer count
+        s << QUuid::createUuid();
+        s << QStringLiteral("Legacy smart");
+        s << quint8(0); // nameIsCustom (v21+)
+        s << quint8(6); // type: smart
+        s << quint8(1); // visible
+        s << quint8(0); // locked
+        s << quint8(1); // expanded
+        s << qreal(1.0); // opacity
+        s << quint8(0); // blendMode
+        s << quint8(0); // groupCompositingMode (v28+)
+        s << quint8(0); // displayColorIndex (v16+)
+        s << quint32(0xFFFFFFFFu); // backgroundColorRgba (v3+)
+        s << quint8(0); // backgroundTransparent
+        s << quint8(0); // clippedToBelow (v4+)
+        for (int i = 0; i < 11; ++i) {
+            s << float(0.0f); // contentBounds + translation + rotation + scale + pivot (v15+)
+        }
+        s << quint8(0); // hasFreeCorners
+        s << quint8(0); // hasDeformMesh
+        s << quint8(0); // hasTextPayload (v20+)
+        s << quint32(0); // tile count (v2+)
+        s << quint8(0); // hasMask (v25+)
+        s << quint32(0); // child count
+    });
+
+    // ProjectInfo has not changed shape since v27, so the real writer's section
+    // is exactly what a v28 file carries — reuse it instead of hand-rolling the
+    // thirty-odd fields the reader expects.
+    ProjectData source;
+    source.projectName = QStringLiteral("legacy");
+    source.canvasSize = QSize(64, 64);
+    const QString sourcePath = dir.filePath("source-for-info.rwf");
+    ProjectSerializer writer;
+    REQUIRE(writer.save(sourcePath, source));
+
+    QFile sourceFile(sourcePath);
+    REQUIRE(sourceFile.open(QIODevice::ReadOnly));
+    const QByteArray infoBlob = extractSection(sourceFile.readAll(), kSectionProjectInfo);
+    REQUIRE_FALSE(infoBlob.isEmpty());
+
+    const QByteArray file = buildBytes([&](QDataStream& s) {
+        writeHeader(s, 28);
+        s << quint32(kSectionProjectInfo);
+        s << quint64(infoBlob.size());
+        s.writeRawData(infoBlob.constData(), infoBlob.size());
+        s << quint32(kSectionLayerTree);
+        s << quint64(layerBlob.size());
+        s.writeRawData(layerBlob.constData(), layerBlob.size());
+        s << quint32(kSectionEnd);
+        s << quint64(0);
+    });
+
+    const QString path = writeTempFile(dir, QStringLiteral("v28.rwf"), file);
+
+    ProjectSerializer reader;
+    ProjectData loaded;
+    REQUIRE(reader.load(path, loaded));
+    REQUIRE(loaded.rootLayers.size() == 1);
+    CHECK(loaded.rootLayers[0].name == QStringLiteral("Legacy smart"));
+    // No identity in the file: the loader gives such a layer its own content.
+    CHECK(loaded.rootLayers[0].smartContentId.isNull());
+    CHECK(loaded.rootLayers[0].smartSourcePath.isEmpty());
 }
