@@ -166,7 +166,8 @@ qreal CustomTabBar::computeStripContentWidth() const
 
     for (int i = 0; i < m_items.size(); ++i) {
         const TabItem& item = m_items[i];
-        qreal w = ICON_MARGIN + ICON_SIZE + ICON_MARGIN;
+        // Must mirror updateLayout(): smart object items carry no icon.
+        qreal w = item.isSmartObject ? ICON_MARGIN : (ICON_MARGIN + ICON_SIZE + ICON_MARGIN);
         w += fm.horizontalAdvance(item.title) + TEXT_PADDING;
         w += CLOSE_MARGIN + CLOSE_SIZE;
         x += w;
@@ -261,6 +262,200 @@ void CustomTabBar::setTabManager(ruwa::core::TabManager* manager)
     }
 }
 
+bool CustomTabBar::isSmartObjectTab(ruwa::core::BaseTab* tab)
+{
+    auto* wsTab = qobject_cast<ruwa::ui::tabs::WorkspaceTab*>(tab);
+    return wsTab && wsTab->isSmartContentEditor();
+}
+
+CustomTabBar::TabItem CustomTabBar::makeItem(ruwa::core::BaseTab* tab)
+{
+    TabItem item;
+    item.id = tab->id();
+    item.title = tab->title();
+
+    if (auto* wsTab = qobject_cast<ruwa::ui::tabs::WorkspaceTab*>(tab);
+        wsTab && wsTab->isSmartContentEditor()) {
+        // Contents of a smart object: a breadcrumb child of its document, with no
+        // identity of its own to show (no icon, no user-set name).
+        item.isSmartObject = true;
+        item.parentTabId = wsTab->smartEditDocumentTabId();
+    } else {
+        item.icon = tab->icon();
+        item.iconAlias = defaultIconForTabType(tab->type());
+        if (auto* wsTab = qobject_cast<ruwa::ui::tabs::WorkspaceTab*>(tab)) {
+            if (!wsTab->tabIconAlias().isEmpty()) {
+                item.iconAlias = wsTab->tabIconAlias();
+            }
+        }
+        if (item.icon.isNull()) {
+            item.icon = ruwa::ui::core::IconProvider::instance().getIcon(item.iconAlias);
+        }
+    }
+
+    item.hoverAnim = new QVariantAnimation(this);
+    item.hoverAnim->setDuration(200);
+    item.hoverAnim->setEasingCurve(QEasingCurve::OutCubic);
+    item.hoverAnim->setStartValue(0.0);
+    item.hoverAnim->setEndValue(1.0);
+
+    const QUuid itemId = item.id;
+    connect(
+        item.hoverAnim, &QVariantAnimation::valueChanged, this, [this, itemId](const QVariant& v) {
+            int i = m_indexById.value(itemId, -1);
+            if (i >= 0) {
+                m_items[i].hoverProgress = v.toReal();
+                update();
+            }
+        });
+
+    item.fadeAnim = new QVariantAnimation(this);
+    item.fadeAnim->setDuration(250); // Fade-in duration
+    item.fadeAnim->setEasingCurve(QEasingCurve::OutCubic);
+    item.fadeAnim->setStartValue(0.0);
+    item.fadeAnim->setEndValue(1.0);
+
+    connect(item.fadeAnim, &QVariantAnimation::valueChanged, this,
+        [this, itemId](const QVariant& v) { applyTabVisibilityAnimFrame(itemId, v.toReal()); });
+
+    item.closeRevealAnim = new QVariantAnimation(this);
+    connect(item.closeRevealAnim, &QVariantAnimation::valueChanged, this,
+        [this, itemId](const QVariant& v) {
+            int i = m_indexById.value(itemId, -1);
+            if (i >= 0) {
+                m_items[i].closeRevealProgress = v.toReal();
+                // Same as hoverAnim: repaint()+update() mix caused double paints / flicker
+                update();
+            }
+        });
+
+    bindTabDisplayTitleSignals(tab);
+    return item;
+}
+
+void CustomTabBar::destroyItemAnimations(TabItem& item)
+{
+    if (item.hoverAnim) {
+        item.hoverAnim->stop();
+        item.hoverAnim->deleteLater();
+        item.hoverAnim = nullptr;
+    }
+    if (item.fadeAnim) {
+        item.fadeAnim->stop();
+        item.fadeAnim->deleteLater();
+        item.fadeAnim = nullptr;
+    }
+    if (item.closeRevealAnim) {
+        item.closeRevealAnim->stop();
+        item.closeRevealAnim->deleteLater();
+        item.closeRevealAnim = nullptr;
+    }
+}
+
+void CustomTabBar::reindexItems()
+{
+    m_indexById.clear();
+    for (int i = 0; i < m_items.size(); ++i) {
+        m_indexById.insert(m_items[i].id, i);
+    }
+}
+
+QList<QUuid> CustomTabBar::smartObjectTabsForParent(const QUuid& parentTabId) const
+{
+    QList<QUuid> result;
+    if (!m_tabManager || parentTabId.isNull()) {
+        return result;
+    }
+    for (ruwa::core::BaseTab* tab : m_tabManager->tabs()) {
+        auto* wsTab = qobject_cast<ruwa::ui::tabs::WorkspaceTab*>(tab);
+        // Keyed on the DOCUMENT at the top of the chain, not on the immediate
+        // parent: a smart object nested inside another one has no strip item to
+        // hang off, so every level shares the document's one breadcrumb slot.
+        if (wsTab && wsTab->isSmartContentEditor()
+            && wsTab->smartEditDocumentTabId() == parentTabId) {
+            result.append(wsTab->id());
+        }
+    }
+    return result;
+}
+
+QUuid CustomTabBar::shownSmartObjectTabForParent(const QUuid& parentTabId)
+{
+    const QList<QUuid> open = smartObjectTabsForParent(parentTabId);
+    if (open.isEmpty()) {
+        m_shownSmartByParent.remove(parentTabId);
+        return QUuid();
+    }
+
+    const QUuid stored = m_shownSmartByParent.value(parentTabId);
+    // The stored pick can point at a contents tab that was closed meanwhile.
+    const QUuid resolved = open.contains(stored) ? stored : open.constFirst();
+    m_shownSmartByParent.insert(parentTabId, resolved);
+    return resolved;
+}
+
+int CustomTabBar::itemIndexOfSmartChild(const QUuid& parentTabId) const
+{
+    for (int i = 0; i < m_items.size(); ++i) {
+        if (m_items[i].isSmartObject && m_items[i].parentTabId == parentTabId) {
+            return i;
+        }
+    }
+    return -1;
+}
+
+void CustomTabBar::syncSmartSlotForParent(const QUuid& parentTabId, bool animated)
+{
+    if (!m_tabManager || parentTabId.isNull()) {
+        return;
+    }
+    if (m_indexById.value(parentTabId, -1) < 0) {
+        return; // The document itself is gone or closing — nothing to hang off.
+    }
+
+    const int existingIndex = itemIndexOfSmartChild(parentTabId);
+    if (existingIndex >= 0 && m_items[existingIndex].isClosing) {
+        // Let the fade-out own the slot; it re-syncs when it finishes.
+        return;
+    }
+
+    const QUuid desiredId = shownSmartObjectTabForParent(parentTabId);
+    const QUuid existingId = existingIndex >= 0 ? m_items[existingIndex].id : QUuid();
+    if (existingId == desiredId) {
+        return;
+    }
+
+    if (existingIndex >= 0) {
+        // Swapped out, not closed: the tab stays open behind the slot, so it must
+        // disappear at once rather than play a close animation.
+        destroyItemAnimations(m_items[existingIndex]);
+        m_items.removeAt(existingIndex);
+        if (m_hoveredIndex == existingIndex) {
+            m_hoveredIndex = -1;
+        } else if (m_hoveredIndex > existingIndex) {
+            --m_hoveredIndex;
+        }
+        reindexItems();
+    }
+
+    int insertedIndex = -1;
+    if (auto* desiredTab = m_tabManager->tab(desiredId)) {
+        const int parentIndex = m_indexById.value(parentTabId, -1);
+        if (parentIndex >= 0) {
+            insertedIndex = parentIndex + 1;
+            m_items.insert(insertedIndex, makeItem(desiredTab));
+            reindexItems();
+        }
+    }
+
+    updateLayout();
+    refreshStripAlignment(m_initialAlignDone);
+    if (insertedIndex >= 0 && animated) {
+        startFadeInAnimation(insertedIndex);
+    }
+    update();
+}
+
 void CustomTabBar::rebuildFromManager()
 {
     if (m_layoutSlideAnim) {
@@ -276,73 +471,31 @@ void CustomTabBar::rebuildFromManager()
     }
     m_items.clear();
     m_indexById.clear();
+    m_smartParentByTab.clear();
     m_hoveredIndex = -1;
 
     if (!m_tabManager)
         return;
 
-    // Build from manager's tab list
+    // Smart object tabs never get a strip slot of their own: they are drawn as a
+    // breadcrumb child of their document, and all of one document's contents
+    // share that single slot.
     for (ruwa::core::BaseTab* tab : m_tabManager->tabs()) {
-        TabItem item;
-        item.id = tab->id();
-        item.title = tab->title();
-        item.icon = tab->icon();
-        item.iconAlias = defaultIconForTabType(tab->type());
-
-        // Get persisted alias from WorkspaceTab if available
-        if (auto* wsTab = qobject_cast<ruwa::ui::tabs::WorkspaceTab*>(tab)) {
-            if (!wsTab->tabIconAlias().isEmpty()) {
-                item.iconAlias = wsTab->tabIconAlias();
-            }
+        if (isSmartObjectTab(tab)) {
+            auto* wsTab = qobject_cast<ruwa::ui::tabs::WorkspaceTab*>(tab);
+            m_smartParentByTab.insert(tab->id(), wsTab->smartEditDocumentTabId());
+            bindTabDisplayTitleSignals(tab);
+            continue;
         }
 
-        // Fallback to default icon if tab has none
-        if (item.icon.isNull()) {
-            item.icon = ruwa::ui::core::IconProvider::instance().getIcon(item.iconAlias);
+        m_items.append(makeItem(tab));
+        m_indexById.insert(tab->id(), m_items.size() - 1);
+
+        const QUuid childId = shownSmartObjectTabForParent(tab->id());
+        if (auto* childTab = m_tabManager->tab(childId)) {
+            m_items.append(makeItem(childTab));
+            m_indexById.insert(childId, m_items.size() - 1);
         }
-
-        // Create hover animation
-        item.hoverAnim = new QVariantAnimation(this);
-        item.hoverAnim->setDuration(200);
-        item.hoverAnim->setEasingCurve(QEasingCurve::OutCubic);
-        item.hoverAnim->setStartValue(0.0);
-        item.hoverAnim->setEndValue(1.0);
-
-        QUuid itemId = item.id;
-        connect(item.hoverAnim, &QVariantAnimation::valueChanged, this,
-            [this, itemId](const QVariant& v) {
-                int i = m_indexById.value(itemId, -1);
-                if (i >= 0) {
-                    m_items[i].hoverProgress = v.toReal();
-                    update();
-                }
-            });
-
-        // Create fade animation
-        item.fadeAnim = new QVariantAnimation(this);
-        item.fadeAnim->setDuration(250); // Fade-in duration
-        item.fadeAnim->setEasingCurve(QEasingCurve::OutCubic);
-        item.fadeAnim->setStartValue(0.0);
-        item.fadeAnim->setEndValue(1.0);
-
-        connect(item.fadeAnim, &QVariantAnimation::valueChanged, this,
-            [this, itemId](const QVariant& v) { applyTabVisibilityAnimFrame(itemId, v.toReal()); });
-
-        item.closeRevealAnim = new QVariantAnimation(this);
-        connect(item.closeRevealAnim, &QVariantAnimation::valueChanged, this,
-            [this, itemId](const QVariant& v) {
-                int i = m_indexById.value(itemId, -1);
-                if (i >= 0) {
-                    m_items[i].closeRevealProgress = v.toReal();
-                    // Same as hoverAnim: repaint()+update() mix caused double paints / flicker
-                    update();
-                }
-            });
-
-        m_indexById.insert(item.id, m_items.size());
-        m_items.append(item);
-
-        bindTabDisplayTitleSignals(tab);
     }
 
     // Track active
@@ -361,70 +514,26 @@ void CustomTabBar::onTabAdded(ruwa::core::BaseTab* tab)
     if (!tab)
         return;
 
-    // Create new tab item
-    TabItem item;
-    item.id = tab->id();
-    item.title = tab->title();
-    item.icon = tab->icon();
-    item.iconAlias = defaultIconForTabType(tab->type());
+    if (isSmartObjectTab(tab)) {
+        auto* wsTab = qobject_cast<ruwa::ui::tabs::WorkspaceTab*>(tab);
+        const QUuid parentTabId = wsTab->smartEditDocumentTabId();
+        m_smartParentByTab.insert(tab->id(), parentTabId);
+        bindTabDisplayTitleSignals(tab);
+        // A newly opened smart object takes over its document's slot; whatever was
+        // there stays open, just not drawn.
+        m_shownSmartByParent.insert(parentTabId, tab->id());
+        syncSmartSlotForParent(parentTabId, true);
+        return;
+    }
+
+    TabItem item = makeItem(tab);
     item.opacity = 0.0; // Start invisible for appear animation
     item.verticalOffset = tabPopDistancePx();
-
-    // Get persisted alias from WorkspaceTab if available
-    if (auto* wsTab = qobject_cast<ruwa::ui::tabs::WorkspaceTab*>(tab)) {
-        if (!wsTab->tabIconAlias().isEmpty()) {
-            item.iconAlias = wsTab->tabIconAlias();
-        }
-    }
-
-    // Fallback to default icon if tab has none
-    if (item.icon.isNull()) {
-        item.icon = ruwa::ui::core::IconProvider::instance().getIcon(item.iconAlias);
-    }
-
-    // Create hover animation
-    item.hoverAnim = new QVariantAnimation(this);
-    item.hoverAnim->setDuration(200);
-    item.hoverAnim->setEasingCurve(QEasingCurve::OutCubic);
-    item.hoverAnim->setStartValue(0.0);
-    item.hoverAnim->setEndValue(1.0);
-
-    QUuid itemId = item.id;
-    connect(
-        item.hoverAnim, &QVariantAnimation::valueChanged, this, [this, itemId](const QVariant& v) {
-            int i = m_indexById.value(itemId, -1);
-            if (i >= 0) {
-                m_items[i].hoverProgress = v.toReal();
-                update();
-            }
-        });
-
-    // Create fade animation
-    item.fadeAnim = new QVariantAnimation(this);
-    item.fadeAnim->setDuration(250);
-    item.fadeAnim->setEasingCurve(QEasingCurve::OutCubic);
-    item.fadeAnim->setStartValue(0.0);
-    item.fadeAnim->setEndValue(1.0);
-
-    connect(item.fadeAnim, &QVariantAnimation::valueChanged, this,
-        [this, itemId](const QVariant& v) { applyTabVisibilityAnimFrame(itemId, v.toReal()); });
-
-    item.closeRevealAnim = new QVariantAnimation(this);
-    connect(item.closeRevealAnim, &QVariantAnimation::valueChanged, this,
-        [this, itemId](const QVariant& v) {
-            int i = m_indexById.value(itemId, -1);
-            if (i >= 0) {
-                m_items[i].closeRevealProgress = v.toReal();
-                update();
-            }
-        });
 
     // Add to list
     int idx = m_items.size();
     m_indexById.insert(item.id, idx);
     m_items.append(item);
-
-    bindTabDisplayTitleSignals(tab);
 
     updateLayout();
     refreshStripAlignment(m_initialAlignDone);
@@ -475,6 +584,16 @@ void CustomTabBar::onTabClosing(ruwa::core::BaseTab* tab, int direction)
     QUuid tabId = tab->id();
 
     if (!m_indexById.contains(tabId)) {
+        // A smart object sharing a slot with another one has no item to fade, so
+        // nobody would ever confirm its close and the tab would hang in the
+        // manager's closing state. Confirm it once this signal has unwound.
+        if (isSmartObjectTab(tab)) {
+            QTimer::singleShot(0, this, [this, tabId]() {
+                if (m_tabManager) {
+                    m_tabManager->confirmTabClosed(tabId);
+                }
+            });
+        }
         return;
     }
 
@@ -495,15 +614,38 @@ void CustomTabBar::onTabClosing(ruwa::core::BaseTab* tab, int direction)
 
 void CustomTabBar::onTabRemoved(const QUuid& tabId)
 {
-    // Tab was already removed from display in onTabClosing
-    // This is just for cleanup - nothing to do here
-    Q_UNUSED(tabId);
+    // Regular tabs were already taken out of the strip in onTabClosing. A smart
+    // object is the exception: the slot it occupied may have to fall back to
+    // another one still open for the same document. Its tab object is gone by
+    // now, hence the cached parent.
+    const QUuid parentTabId = m_smartParentByTab.take(tabId);
+    if (parentTabId.isNull()) {
+        // Not a smart object — but it may have been a document that had one.
+        m_shownSmartByParent.remove(tabId);
+        return;
+    }
+    if (m_shownSmartByParent.value(parentTabId) == tabId) {
+        m_shownSmartByParent.remove(parentTabId);
+    }
+    syncSmartSlotForParent(parentTabId, true);
 }
 
 void CustomTabBar::onActiveTabChanged(ruwa::core::BaseTab* newTab, ruwa::core::BaseTab* oldTab)
 {
     Q_UNUSED(oldTab);
     m_activeId = newTab ? newTab->id() : QUuid();
+
+    // Keyboard navigation (and the auto-activation after a close) can land on a
+    // smart object that is not the one drawn — the strip follows the focus.
+    if (auto* wsTab = qobject_cast<ruwa::ui::tabs::WorkspaceTab*>(newTab);
+        wsTab && wsTab->isSmartContentEditor()) {
+        const QUuid parentTabId = wsTab->smartEditDocumentTabId();
+        if (!parentTabId.isNull() && m_shownSmartByParent.value(parentTabId) != newTab->id()) {
+            m_shownSmartByParent.insert(parentTabId, newTab->id());
+            syncSmartSlotForParent(parentTabId, true);
+        }
+    }
+
     update();
 }
 
@@ -527,7 +669,7 @@ void CustomTabBar::updateLayout()
     for (int i = 0; i < m_items.size(); ++i) {
         TabItem& item = m_items[i];
 
-        qreal w = ICON_MARGIN + ICON_SIZE + ICON_MARGIN;
+        qreal w = item.isSmartObject ? ICON_MARGIN : (ICON_MARGIN + ICON_SIZE + ICON_MARGIN);
         w += fm.horizontalAdvance(item.title) + TEXT_PADDING;
         w += CLOSE_MARGIN + CLOSE_SIZE;
 
@@ -573,7 +715,11 @@ void CustomTabBar::paintEvent(QPaintEvent* event)
             // Slash exits with the left tab when it closes, enters with the right tab when it
             // appears
             const TabItem& sepAnim = item.isClosing ? item : rightTab;
-            drawSeparator(p, sepX, height() / 2.0, sepAnim);
+            // A smart object hangs off its document, so that step reads as a
+            // breadcrumb arrow rather than a sibling slash.
+            const QString glyph
+                = rightTab.isSmartObject ? QStringLiteral(">") : QStringLiteral("/");
+            drawSeparator(p, sepX, height() / 2.0, sepAnim, glyph);
         }
     }
 }
@@ -616,32 +762,35 @@ void CustomTabBar::drawTab(QPainter& painter, const TabItem& item, bool isActive
             colors.textMuted, colors.text, progress * 0.5);
     }
 
-    // Icon
-    qreal iconX = x + ICON_MARGIN;
-    qreal iconY = (height() - ICON_SIZE) / 2.0;
-    QRectF iconRect(iconX, iconY, ICON_SIZE, ICON_SIZE);
+    // Icon — a smart object's contents deliberately have none: they are a view of
+    // the document next to them, not a document of their own.
+    const qreal iconX = x + ICON_MARGIN;
+    if (!item.isSmartObject) {
+        const qreal iconY = (height() - ICON_SIZE) / 2.0;
+        QRectF iconRect(iconX, iconY, ICON_SIZE, ICON_SIZE);
 
-    // Determine icon tint color based on state
-    QColor iconTint = isActive ? colors.primary : colors.textMuted;
-    if (!isActive && progress > 0.0) {
-        iconTint
-            = ruwa::ui::core::ThemeColors::interpolate(colors.textMuted, colors.text, progress);
-    }
+        // Determine icon tint color based on state
+        QColor iconTint = isActive ? colors.primary : colors.textMuted;
+        if (!isActive && progress > 0.0) {
+            iconTint
+                = ruwa::ui::core::ThemeColors::interpolate(colors.textMuted, colors.text, progress);
+        }
 
-    // Draw the actual icon, tinted to match the theme
-    if (!item.icon.isNull()) {
-        QPixmap pix = item.icon.pixmap(ICON_SIZE, ICON_SIZE);
-        QPixmap tinted = ruwa::ui::painting::tintedPixmap(pix, iconTint);
-        painter.drawPixmap(iconRect.toRect(), tinted);
-    } else {
-        // Fallback: colored rectangle if icon is missing
-        painter.setPen(Qt::NoPen);
-        painter.setBrush(iconTint);
-        painter.drawRoundedRect(iconRect, 2, 2);
+        // Draw the actual icon, tinted to match the theme
+        if (!item.icon.isNull()) {
+            QPixmap pix = item.icon.pixmap(ICON_SIZE, ICON_SIZE);
+            QPixmap tinted = ruwa::ui::painting::tintedPixmap(pix, iconTint);
+            painter.drawPixmap(iconRect.toRect(), tinted);
+        } else {
+            // Fallback: colored rectangle if icon is missing
+            painter.setPen(Qt::NoPen);
+            painter.setBrush(iconTint);
+            painter.drawRoundedRect(iconRect, 2, 2);
+        }
     }
 
     // Title
-    qreal textX = iconX + ICON_SIZE + ICON_MARGIN;
+    qreal textX = item.isSmartObject ? iconX : (iconX + ICON_SIZE + ICON_MARGIN);
     QFont textFont = font();
     textFont.setPointSize(9);
     // No bold on active - avoids text size jump and clipping with different fonts
@@ -672,7 +821,8 @@ void CustomTabBar::drawTab(QPainter& painter, const TabItem& item, bool isActive
     painter.restore();
 }
 
-void CustomTabBar::drawSeparator(QPainter& painter, qreal x, qreal y, const TabItem& anim)
+void CustomTabBar::drawSeparator(
+    QPainter& painter, qreal x, qreal y, const TabItem& anim, const QString& glyph)
 {
     painter.save();
     painter.setOpacity(anim.opacity);
@@ -683,7 +833,7 @@ void CustomTabBar::drawSeparator(QPainter& painter, qreal x, qreal y, const TabI
     sepFont.setPointSize(9);
     painter.setFont(sepFont);
     painter.setPen(colors.textMuted);
-    painter.drawText(QPointF(x - 6, y + 4), "/");
+    painter.drawText(QPointF(x - 6, y + 4), glyph);
     painter.restore();
 }
 
@@ -1020,6 +1170,7 @@ void CustomTabBar::startFadeOutAnimation(int index)
             // Clean up animations
             TabItem& it = m_items[idx];
             const bool contentOwnsCloseConfirmation = it.contentOwnsCloseConfirmation;
+            const QUuid smartParentTabId = it.isSmartObject ? it.parentTabId : QUuid();
             if (it.hoverAnim) {
                 it.hoverAnim->deleteLater();
                 it.hoverAnim = nullptr;
@@ -1052,6 +1203,17 @@ void CustomTabBar::startFadeOutAnimation(int index)
 
             if (m_tabManager && !contentOwnsCloseConfirmation) {
                 m_tabManager->confirmTabClosed(tabId);
+            }
+
+            // The slot is free now: another smart object of the same document may
+            // be waiting behind it. (onTabRemoved covers the paths where the tab
+            // is confirmed elsewhere; whichever runs first, the other is a no-op.)
+            if (!smartParentTabId.isNull()) {
+                m_smartParentByTab.remove(tabId);
+                if (m_shownSmartByParent.value(smartParentTabId) == tabId) {
+                    m_shownSmartByParent.remove(smartParentTabId);
+                }
+                syncSmartSlotForParent(smartParentTabId, true);
             }
         },
         Qt::SingleShotConnection);
@@ -1118,7 +1280,10 @@ ruwa::ui::widgets::ContextMenuType CustomTabBar::contextMenuType() const
 
     // Only show context menu if we have a valid tab under cursor
     if (tabIndex >= 0 && tabIndex < m_items.size()) {
-        return ruwa::ui::widgets::ContextMenuType::TabBar;
+        // A smart object cannot be renamed or re-iconed; its menu switches
+        // between the contents open for the same document instead.
+        return m_items[tabIndex].isSmartObject ? ruwa::ui::widgets::ContextMenuType::SmartObjectTab
+                                               : ruwa::ui::widgets::ContextMenuType::TabBar;
     }
 
     return ruwa::ui::widgets::ContextMenuType::None;
@@ -1150,6 +1315,25 @@ QVariantMap CustomTabBar::contextMenuContext() const
                     context["tabTitle"] = wsTab->baseTitle();
                 }
             }
+        }
+
+        if (item.isSmartObject && m_tabManager) {
+            // Every contents tab of this document, drawn or not — the menu is the
+            // only way to reach the ones sharing this slot.
+            context["parentTabId"] = item.parentTabId;
+            QVariantList ids;
+            QStringList titles;
+            for (const QUuid& smartTabId : smartObjectTabsForParent(item.parentTabId)) {
+                auto* smartTab = m_tabManager->tab(smartTabId);
+                if (!smartTab) {
+                    continue;
+                }
+                ids.append(smartTabId);
+                auto* wsTab = qobject_cast<ruwa::ui::tabs::WorkspaceTab*>(smartTab);
+                titles.append(wsTab ? wsTab->baseTitle() : smartTab->title());
+            }
+            context["smartTabIds"] = ids;
+            context["smartTabTitles"] = titles;
         }
     }
 
@@ -1195,15 +1379,20 @@ void CustomTabBar::onCloseOtherTabsRequested(const QUuid& tabId)
     if (!context)
         return;
 
+    // From the manager, not from m_items: smart objects sharing a slot are open
+    // tabs too, and "close the others" has to mean all of them.
     QList<QUuid> tabsToClose;
-    for (const TabItem& item : m_items) {
-        if (item.id != tabId) {
-            tabsToClose.append(item.id);
+    for (ruwa::core::BaseTab* tab : m_tabManager->tabs()) {
+        if (tab->id() != tabId) {
+            tabsToClose.append(tab->id());
         }
     }
 
     for (const QUuid& id : tabsToClose) {
         ruwa::core::BaseTab* tab = m_tabManager->tab(id);
+        if (!tab) {
+            continue; // Already closed as a side effect (contents follow their document).
+        }
         auto* wsTab = qobject_cast<ruwa::ui::tabs::WorkspaceTab*>(tab);
         if (wsTab && !ruwa::ui::widgets::prepareWorkspaceTabForClose(wsTab, context)) {
             return; // User cancelled
@@ -1221,8 +1410,8 @@ void CustomTabBar::onCloseAllTabsRequested()
     if (!context)
         return;
 
-    for (const TabItem& item : m_items) {
-        ruwa::core::BaseTab* tab = m_tabManager->tab(item.id);
+    const QList<ruwa::core::BaseTab*> tabs = m_tabManager->tabs();
+    for (ruwa::core::BaseTab* tab : tabs) {
         auto* wsTab = qobject_cast<ruwa::ui::tabs::WorkspaceTab*>(tab);
         if (wsTab && !ruwa::ui::widgets::prepareWorkspaceTabForClose(wsTab, context)) {
             return; // User cancelled
@@ -1230,16 +1419,57 @@ void CustomTabBar::onCloseAllTabsRequested()
     }
 
     QList<QUuid> tabsToClose;
-    for (const TabItem& item : m_items) {
-        tabsToClose.append(item.id);
+    for (ruwa::core::BaseTab* tab : tabs) {
+        tabsToClose.append(tab->id());
     }
     for (const QUuid& id : tabsToClose) {
-        m_tabManager->requestCloseTab(id);
+        if (m_tabManager->hasTab(id)) {
+            m_tabManager->requestCloseTab(id);
+        }
+    }
+}
+
+void CustomTabBar::onSmartObjectTabActivated(const QUuid& tabId)
+{
+    if (!m_tabManager) {
+        return;
+    }
+    auto* wsTab = qobject_cast<ruwa::ui::tabs::WorkspaceTab*>(m_tabManager->tab(tabId));
+    if (!wsTab || !wsTab->isSmartContentEditor()) {
+        return;
+    }
+
+    // activateTab() alone would move the strip through onActiveTabChanged, but do
+    // it explicitly so the slot is right even if the tab was already active.
+    const QUuid parentTabId = wsTab->smartEditDocumentTabId();
+    m_shownSmartByParent.insert(parentTabId, tabId);
+    syncSmartSlotForParent(parentTabId, true);
+    m_tabManager->activateTab(tabId);
+}
+
+void CustomTabBar::onCloseAllSmartObjectTabsRequested(const QUuid& parentTabId)
+{
+    if (!m_tabManager) {
+        return;
+    }
+    QWidget* context = window();
+    for (const QUuid& tabId : smartObjectTabsForParent(parentTabId)) {
+        // Contents carry edits that only exist in their tab until committed, so
+        // closing them in bulk asks the same question closing one does.
+        auto* wsTab = qobject_cast<ruwa::ui::tabs::WorkspaceTab*>(m_tabManager->tab(tabId));
+        if (wsTab && context && !ruwa::ui::widgets::prepareWorkspaceTabForClose(wsTab, context)) {
+            return; // User cancelled
+        }
+        m_tabManager->requestCloseTab(tabId);
     }
 }
 
 void CustomTabBar::onTabRenamed(const QUuid& tabId, const QString& newName)
 {
+    // A smart object is named by its layer; its tab is not the user's to rename.
+    if (m_tabManager && isSmartObjectTab(m_tabManager->tab(tabId))) {
+        return;
+    }
     if (m_tabManager) {
         if (auto* tab = m_tabManager->tab(tabId)) {
             if (auto* wsTab = qobject_cast<ruwa::ui::tabs::WorkspaceTab*>(tab)) {
@@ -1272,6 +1502,11 @@ void CustomTabBar::onTabRenamed(const QUuid& tabId, const QString& newName)
 
 void CustomTabBar::onTabIconChanged(const QUuid& tabId, const QString& iconAlias)
 {
+    // Smart objects are drawn without an icon on purpose — never give them one.
+    if (m_tabManager && isSmartObjectTab(m_tabManager->tab(tabId))) {
+        return;
+    }
+
     QIcon newIcon = ruwa::ui::core::IconProvider::instance().getIcon(iconAlias);
 
     if (m_tabManager) {

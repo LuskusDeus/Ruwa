@@ -222,42 +222,7 @@ void TabContextMenu::showEvent(QShowEvent* event)
 QPoint TabContextMenu::calculateMenuPosition(
     const QPoint& globalPos, const QSize& menuSize, QWidget* sourceWidget) const
 {
-    if (!sourceWidget) {
-        return StandardContextMenu::calculateMenuPosition(globalPos, menuSize, sourceWidget);
-    }
-
-    const auto& theme = ruwa::ui::core::ThemeManager::instance();
-    const int shadowSide = theme.scaled(ruwa::ui::painting::kAttachedShadowSideExtentBase);
-    const int outerCornerRadius = theme.scaled(ruwa::ui::painting::kAttachedOuterCornerRadiusBase);
-
-    const QRect tabGlobalRect = context().value(QStringLiteral("tabGlobalRect")).toRect();
-    const int visibleBodyLeft = tabGlobalRect.isValid()
-        ? tabGlobalRect.left()
-        : sourceWidget->mapToGlobal(QPoint(0, 0)).x();
-    int seamY = sourceWidget->mapToGlobal(QPoint(0, sourceWidget->height())).y() - 1;
-    for (QWidget* w = sourceWidget; w; w = w->parentWidget()) {
-        if (auto* topBar = qobject_cast<ruwa::ui::widgets::TopBar*>(w)) {
-            seamY = topBar->mapToGlobal(QPoint(0, topBar->height())).y() - 1;
-            break;
-        }
-    }
-
-    QPoint pos(visibleBodyLeft - shadowSide - outerCornerRadius, seamY);
-
-    QScreen* screen = QApplication::screenAt(pos);
-    if (!screen) {
-        screen = QApplication::primaryScreen();
-    }
-    if (screen) {
-        const QRect screenRect = screen->availableGeometry();
-        if (pos.x() + menuSize.width() > screenRect.right()) {
-            pos.setX(screenRect.right() - menuSize.width());
-        }
-        pos.setX(qMax(pos.x(), screenRect.left()));
-        pos.setY(qMax(pos.y(), screenRect.top()));
-    }
-
-    return pos;
+    return attachedTopBarMenuPosition(globalPos, menuSize, sourceWidget);
 }
 
 void TabContextMenu::selectIcon(const QString& iconAlias, bool emitChange, bool animateSelection)

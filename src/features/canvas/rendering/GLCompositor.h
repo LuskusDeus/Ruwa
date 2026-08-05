@@ -148,6 +148,31 @@ public:
         const Color& backdropColor = Color::transparent());
     void resetFrameStats();
 
+    /**
+     * @brief Composite an arbitrary layer stack into CPU pixels — the offscreen
+     *        sibling of compositeDirtyKeys.
+     *
+     * Used to flatten a smart object's nested document into the composited cache
+     * its instances are drawn from. The stack is composited exactly like the
+     * document's own (same shaders, same clip/mask/effect rules), tile by tile,
+     * and each result tile is read back into @p outGrid.
+     *
+     * @p outGrid is cleared and pinned to RGBA8: the ping-pong pair the whole
+     * composite path runs through is 8-bit and its textures are SWAPPED into the
+     * cache tiles, so a higher-precision output grid would end up owning an
+     * 8-bit texture. A 16F/32F document therefore keeps its precision in its
+     * LAYERS and flattens to 8 bits — the same result the canvas itself shows.
+     *
+     * Runs as its own composite batch (it resets the per-batch effect caches),
+     * so it must NOT be called from inside a live composite batch or a paintGL
+     * frame's compositing pass.
+     *
+     * @return true when at least one tile was read back.
+     */
+    bool compositeStackIntoGrid(const std::vector<CompositeLayerInfo>& layers,
+        const std::unordered_set<TileKey, TileKeyHash>& keys, TileGrid& outGrid,
+        GLTileRenderer* tileRenderer, const Color& backdropColor = Color::transparent());
+
     /// Permanently bakes `effects` into `grid`'s pixels (one-shot, not part of
     /// the live composite path). Runs the whole chain per affected tile —
     /// existing tiles plus, for bounds-expanding effects (blur/shadow), the
@@ -162,10 +187,11 @@ public:
         const std::function<void(const TileKey&)>& beforeTileWrite,
         std::vector<TileKey>& outTouchedKeys);
 
-    /// Drops (and frees) the whole-layer distortion cache entry keyed by
-    /// `contentIdentity` (a TileGrid address), if any. Call after baking into a
-    /// throwaway grid so the cross-batch cache never keeps an entry keyed on a
-    /// pointer that is about to be freed. No-op when no such entry exists.
+    /// Drops (and frees) every cross-batch cache entry keyed by
+    /// `contentIdentity` (a TileGrid address) — the whole-layer distortion
+    /// region and the per-tile effect results alike. Call before a throwaway
+    /// grid is freed so no cache can be revalidated against whatever lands on
+    /// its address next. No-op when nothing is cached for it.
     void dropWholeLayerCacheEntry(const void* contentIdentity);
 
     bool isInitialized() const { return m_initialized; }

@@ -76,6 +76,8 @@ class FillWorker;
 namespace ruwa::core::layers {
 class LayerModel;
 struct LayerData;
+struct SmartContent;
+struct SmartDocument;
 } // namespace ruwa::core::layers
 namespace ruwa::core::brushes {
 class IBrushEngineSession;
@@ -285,6 +287,31 @@ public:
     /// pixels themselves always stay in the document.
     bool replaceSmartLayerContents(const QUuid& layerId, std::unique_ptr<TileGrid> contentGrid,
         const QString& sourcePath, const QByteArray& sourceHash);
+    /// Re-flatten every smart object whose nested document changed, then
+    /// re-project the layers that show it.
+    ///
+    /// Cheap and idempotent: a content whose composite already matches its
+    /// document costs one integer comparison, and a document-less (flat) content
+    /// costs nothing at all. Call it after committing edits to a smart object's
+    /// contents, or whenever a nested document may have changed. Needs a GL
+    /// context, which it makes current itself — so never call it from paintGL;
+    /// it defers instead when the renderer is not up yet.
+    void refreshSmartContentComposites();
+    /// Flatten ONE smart content now (and re-project the layers showing it).
+    /// False when nothing had to be done, or when the composite could not run —
+    /// see refreshSmartContentComposites for the context rules.
+    bool recompositeSmartContent(
+        const std::shared_ptr<ruwa::core::layers::SmartContent>& content);
+    /// Install edited contents for the smart object identified by @p contentId
+    /// and flatten them (undoable, content-level: every instance follows).
+    ///
+    /// This is what a smart object's contents tab commits through. The placement
+    /// of each instance is deliberately preserved — editing an object's contents
+    /// does not move the object. Returns false when no layer here shows those
+    /// contents, or when the flattening could not run: nothing is changed then,
+    /// so the caller can keep its edits and retry.
+    bool applySmartContentDocument(
+        const QUuid& contentId, std::shared_ptr<ruwa::core::layers::SmartDocument> document);
     /// Bake a layer's mask into its pixels and remove the mask (undoable).
     /// Layer must be an editable raster layer carrying a mask.
     bool applyLayerMask(const QUuid& layerId);
@@ -444,6 +471,13 @@ private:
     void purgeStaleCompositionCacheTiles();
     std::shared_ptr<TileGrid> buildSmartProjectedGrid(const ruwa::core::layers::LayerData* layer);
 
+    /// Bakes a smart layer's CONTENT-SPACE filters into a throwaway clone of its
+    /// content, which then becomes the source of the projection. Null when there
+    /// is nothing to bake (no such filters, empty content, no renderer) — the
+    /// projection then reads the content grid itself, as it always did.
+    std::shared_ptr<TileGrid> buildContentSpaceEffectedGrid(
+        const ruwa::core::layers::LayerData* layer);
+
     // Bakes the layer's effect chain into a throwaway clone of its raw content
     // and returns it, so a content selection can trace the effect-processed
     // silhouette. Returns nullptr for non-raster layers or layers with no
@@ -463,6 +497,15 @@ private:
     /// is not convertible (see LayerData::canConvertToSmartObject).
     bool convertLayerToSmartObject(ruwa::core::layers::LayerData* layer);
 
+    /// Move a group's children into a smart object's nested document, in place.
+    ///
+    /// The group layer itself becomes the smart layer: its children leave the
+    /// model and become the contents, so the object can be re-opened and edited
+    /// with its stack intact. Structural removal and the content swap are one
+    /// undo transaction — a redo that replayed only half of it would leave the
+    /// children duplicated. Called by convertLayerToSmartObject for groups.
+    bool convertGroupToSmartObject(ruwa::core::layers::LayerData* layer);
+
     /// Shared tail of both conversions: refresh the projection caches, notify
     /// the model and push the undo command that swaps the displaced state back.
     void finishLayerContentSwap(
@@ -471,7 +514,13 @@ private:
     /// Re-place and re-project every layer showing @p contentId after its pixels
     /// were replaced. Each layer keeps its own placement, so this is per-layer
     /// work driven by a content-level change.
-    void refreshLayersForSmartContent(const QUuid& contentId);
+    ///
+    /// @p refitPlacement fits each instance's placement box to the new content
+    /// bounds — right when the object became a DIFFERENT image (Replace
+    /// Contents), wrong when its own contents were merely edited: refitting
+    /// there would shift and rescale every instance on each brush stroke inside
+    /// the object.
+    void refreshLayersForSmartContent(const QUuid& contentId, bool refitPlacement = true);
 
     /// If generated pixel layer has selection: show rasterize dialog. Returns false if user
     /// cancels.
@@ -640,6 +689,15 @@ private:
 
     std::function<bool(const QString&, const QString&)> m_rasterizationConfirmCallback;
     QHash<QUuid, std::shared_ptr<TileGrid>> m_smartProjectedGrids;
+    /// Layers whose cached projection has content-space filters baked into it.
+    /// Without this the removal of the last such filter would leave the baked
+    /// projection in place: the compositor's chain changed, but the pixels it
+    /// runs on did not.
+    QSet<QUuid> m_smartContentEffectProjections;
+    /// A composite refresh was asked for before the GL context existed. The
+    /// content still holds its last valid pixels, so nothing is broken in the
+    /// meantime — the sweep is simply re-run once there is a renderer.
+    bool m_smartCompositeRefreshPending = false;
     CompositionCache m_boardCompositionCache;
     bool m_boardCompositionCacheDirty = true;
     std::unordered_set<TileKey, TileKeyHash> m_boardCompositionKeys;

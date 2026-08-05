@@ -97,6 +97,7 @@ private:
     void applyMoveEffect(const QUuid& effectId, int newIndex);
     void applyEnabled(const QUuid& effectId, bool enabled);
     void applyRealtimePreview(const QUuid& effectId, bool enabled);
+    void applyContentSpace(const QUuid& effectId, bool contentSpace);
     void applyParam(const QUuid& effectId, const QString& key, const QVariant& value);
     void applyDuplicateEffect(const QUuid& effectId);
     void applyResetEffect(const QUuid& effectId);

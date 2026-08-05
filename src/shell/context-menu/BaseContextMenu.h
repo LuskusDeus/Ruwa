@@ -204,6 +204,16 @@ protected:
     QRectF attachedBodyRect() const;
 
     /**
+     * @brief Placement for a menu that hangs off the top bar seam, aligned with
+     *        the anchor rect in context()["tabGlobalRect"].
+     *
+     * Shared by every menu opened from the tab strip so they all attach to the
+     * same seam and left edge; clamped to the screen the menu lands on.
+     */
+    QPoint attachedTopBarMenuPosition(
+        const QPoint& globalPos, const QSize& menuSize, QWidget* sourceWidget) const;
+
+    /**
      * @brief Full-width action row: optional icon (left), label; theme-aligned hover / danger tint.
      * @param addToLayout If non-null, the row is appended there; otherwise to the menu's main
      * column.

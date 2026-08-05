@@ -108,6 +108,33 @@ struct LayerEntry {
     QString smartSourceRelativePath;
     int smartSourceKind = 0; // SmartSourceKind: Embedded=0, LinkedFile=1
     QByteArray smartSourceHash;
+
+    // ---- Smart-object nested document (file version >= 30) ----
+    //
+    // The layer stack living INSIDE a smart object. Separate from `children`,
+    // which is the UI hierarchy of THIS document: a smart object's contents are
+    // another document entirely, with their own size and storage format.
+    //
+    // `tiles` above still carries the object's COMPOSITED pixels, always. A file
+    // must open, draw and export without re-compositing anything — the nested
+    // layers are what the "edit contents" tab needs, not what the canvas draws.
+    //
+    // Written once per smartContentId, exactly like the tile payload (instances
+    // adopt the first entry's content on load), but tracked separately: an empty
+    // content writes no tiles and would otherwise let its document claim the id
+    // and strip pixels from the instance that does have them.
+    bool hasSmartDocument = false;
+    QSize smartDocumentSize;
+    int smartDocumentFormat = 0; // aether::TilePixelFormat: RGBA8=0, RGBA16F=1, RGBA32F=2
+    QList<LayerEntry> smartDocumentLayers; // nested roots, top-first
+
+    // Effect chain of a layer that lives INSIDE a nested document (v30). Empty
+    // for every layer of the document itself: those are stored in the separate
+    // LayerEffects section, keyed by layer id. A nested layer cannot use that
+    // section — it is not in the model the ids are resolved against, and ids are
+    // only unique within one document anyway (a detached copy of a smart object
+    // keeps its nested ids), so its chain travels with its own entry.
+    QList<ruwa::core::effects::LayerEffectState> effects;
     bool hasMask = false;
     bool maskEnabled = true;
     bool maskLinked = true;
@@ -162,7 +189,7 @@ struct ProjectData {
         bool valid = false;
     };
 
-    static constexpr quint32 CURRENT_VERSION = 29; // Smart-object content id + source, shared once
+    static constexpr quint32 CURRENT_VERSION = 31; // Per-effect content-space flag (smart filters)
 
     quint32 version = CURRENT_VERSION;
 

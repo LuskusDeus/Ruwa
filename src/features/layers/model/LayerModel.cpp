@@ -5,7 +5,9 @@
 #include "features/effects/LayerEffectRegistry.h"
 #include "features/effects/plugin/EffectPluginManager.h"
 #include "features/layers/model/BlendModeUtils.h"
+#include "features/layers/smart/SmartDocument.h"
 #include "features/project/ProjectData.h"
+#include <algorithm>
 #include <cstring>
 
 namespace ruwa::core::layers {
@@ -395,7 +397,11 @@ void LayerModel::stampDocumentFormatOnGrids(LayerData* layer) const
     // Stamping the format on a still-empty grid is deliberately NOT copy-on-write:
     // instances live in one document and therefore want the same document format,
     // and detaching here would silently break the link at load/add time.
-    if (auto* smartGrid = layer->smartGrid(); smartGrid && smartGrid->empty()) {
+    // A document-backed content is exempt: its grid is a CACHE of a nested
+    // document that carries its own format, so the composite's precision is the
+    // nested document's business, not this one's.
+    if (auto* smartGrid = layer->smartGrid();
+        smartGrid && smartGrid->empty() && !layer->hasSmartDocument()) {
         smartGrid->setFormat(m_documentTileFormat);
     }
 }
@@ -1175,6 +1181,26 @@ bool LayerModel::setLayerEffectRealtimePreviewEnabled(
 
     layer->effects[index].realtimePreviewEnabled = enabled;
     markLayerEffectsChanged(layer, false);
+    return true;
+}
+
+bool LayerModel::setLayerEffectContentSpace(
+    const LayerId& layerId, const QUuid& effectInstanceId, bool contentSpace)
+{
+    auto* layer = layerById(layerId);
+    if (!layer || (contentSpace && !layer->supportsContentSpaceEffects())) {
+        return false;
+    }
+
+    const int index = effectIndexByInstanceId(layer->effects, effectInstanceId);
+    if (index < 0 || layer->effects[index].contentSpace == contentSpace) {
+        return false;
+    }
+
+    layer->effects[index].contentSpace = contentSpace;
+    // Moves the filter to the other side of the object's placement, so the
+    // document result changes even though nothing else about the effect did.
+    markLayerEffectsChanged(layer, true);
     return true;
 }
 
@@ -2353,7 +2379,8 @@ LayerEntry LayerModel::layerDataToEntry(const LayerData* data)
     return entry;
 }
 
-void LayerModel::writeSmartContentEntryFields(LayerEntry& entry, const LayerData* layer)
+void LayerModel::writeSmartContentEntryFields(LayerEntry& entry, const LayerData* layer,
+    const SmartDocumentLayerConverter& convertNestedLayer)
 {
     if (!layer || !layer->smartContent) {
         return;
@@ -2365,6 +2392,51 @@ void LayerModel::writeSmartContentEntryFields(LayerEntry& entry, const LayerData
     entry.smartSourceHash = content.sourceHash;
     // smartSourceRelativePath is derived by the serializer, which is the only
     // place that knows where the project file will sit.
+
+    // v30: the nested document (the object's contents as layers). The COMPOSITED
+    // pixels are written separately, by the caller, and unconditionally — a file
+    // must open and draw without re-compositing anything.
+    //
+    // The nested layers are converted by the CALLER's converter, because a
+    // nested layer needs the same full treatment as a top-level one — pixels and
+    // mask included — and that lives in the producers. No converter therefore
+    // means no document rather than a metadata-only one: half a nested stack is
+    // worse than none. Producers also pass no converter for the second and later
+    // instances of one content: the file stores it once anyway (the serializer
+    // dedups), and this keeps a save of an instance-heavy document from
+    // transiently building one copy of the whole stack per instance.
+    if (!convertNestedLayer || !content.document) {
+        return;
+    }
+    const SmartDocument& document = *content.document;
+    entry.hasSmartDocument = true;
+    entry.smartDocumentSize = document.size;
+    entry.smartDocumentFormat = static_cast<int>(document.format);
+    entry.smartDocumentLayers.reserve(document.roots.size());
+    for (const auto& root : document.roots) {
+        if (!root) {
+            continue;
+        }
+        LayerEntry nestedEntry = convertNestedLayer(root);
+        // Effect chains of nested layers travel INSIDE their entry: the
+        // id-keyed LayerEffects section resolves against this model, which these
+        // layers are not part of. The producers cannot do it — they build the
+        // entry without knowing it is nested — so it is copied here, over the
+        // tree the converter just returned.
+        copyEffectsIntoNestedEntry(nestedEntry, *root);
+        entry.smartDocumentLayers.append(std::move(nestedEntry));
+    }
+}
+
+void LayerModel::copyEffectsIntoNestedEntry(LayerEntry& entry, const LayerData& layer)
+{
+    entry.effects = layer.effects;
+    const qsizetype count = std::min(entry.children.size(), layer.children.size());
+    for (qsizetype i = 0; i < count; ++i) {
+        if (layer.children[i]) {
+            copyEffectsIntoNestedEntry(entry.children[i], *layer.children[i]);
+        }
+    }
 }
 
 std::shared_ptr<LayerData> LayerModel::entryToLayerData(const LayerEntry& entry, LayerData* parent)
@@ -2449,8 +2521,16 @@ std::shared_ptr<LayerData> LayerModel::entryToLayerData(const LayerEntry& entry,
         // including its pixels, which only the first entry carries. Files older
         // than v29 have a null id and land in the else branch, giving every
         // layer its own content, which is exactly how they were written.
+        // A file that claims an object appears INSIDE its own contents would
+        // otherwise build a reference cycle (content → document → layer →
+        // content) that can never be freed. Such an entry gets its own identity
+        // instead of a link back to the ancestor being restored; nothing the app
+        // can author looks like this, only a crafted file.
+        const bool selfReferencing = !entry.smartContentId.isNull()
+            && m_restoringSmartContentIds.contains(entry.smartContentId);
+
         std::shared_ptr<SmartContent> sharedContent;
-        if (!entry.smartContentId.isNull()) {
+        if (!entry.smartContentId.isNull() && !selfReferencing) {
             sharedContent = m_loadingSmartContents.value(entry.smartContentId);
         }
         if (sharedContent) {
@@ -2459,7 +2539,7 @@ std::shared_ptr<LayerData> LayerModel::entryToLayerData(const LayerEntry& entry,
             data->setSmartGrid(std::make_unique<aether::TileGrid>());
             data->smartGrid()->setFormat(documentTileFormat());
             SmartContent* content = data->ensureSmartContent();
-            if (!entry.smartContentId.isNull()) {
+            if (!entry.smartContentId.isNull() && !selfReferencing) {
                 content->contentId = entry.smartContentId;
                 m_loadingSmartContents.insert(entry.smartContentId, data->smartContent);
             }
@@ -2469,6 +2549,13 @@ std::shared_ptr<LayerData> LayerModel::entryToLayerData(const LayerEntry& entry,
             content->sourceKind = entry.smartSourceKind == 1 ? SmartSourceKind::LinkedFile
                                                              : SmartSourceKind::Embedded;
             content->sourceHash = entry.smartSourceHash;
+        }
+        // v30: the object's contents as a layer stack. Asked for on every entry,
+        // not just the one that built the content: the guard inside keeps the
+        // first document and ignores repeats, so a file whose instances happen to
+        // carry it in a different order still ends up with exactly one.
+        if (auto* content = data->smartContent.get()) {
+            restoreSmartDocumentFromEntry(*content, entry);
         }
     }
 
@@ -2496,12 +2583,77 @@ std::shared_ptr<LayerData> LayerModel::entryToLayerData(const LayerEntry& entry,
         }
     }
 
+    // A nested layer's effect chain travels inside its own entry, because the
+    // id-keyed LayerEffects section is resolved against this model and these
+    // layers are not in it. Empty for every layer of the document itself.
+    if (!entry.effects.isEmpty()) {
+        data->effects = normalizeLoadedEffects(entry.effects);
+    }
+
+    // A layer of a NESTED document restores its pixels here and now. The async
+    // batch restore resolves its targets through the model, and these layers are
+    // not in it — they live inside a SmartContent. They are also the contents of
+    // an object, not the canvas: what the canvas draws is the composite, which
+    // travels separately and does take the deferred path.
+    if (m_restoringSmartDocumentDepth > 0) {
+        if (auto* pixelGrid = data->pixelGrid()) {
+            const int contentTileBytes
+                = static_cast<int>(aether::tileByteSize(pixelGrid->format()));
+            for (const auto& tile : entry.tiles) {
+                if (tile.pixels.size() != contentTileBytes) {
+                    continue;
+                }
+                aether::TileData& dst
+                    = pixelGrid->getOrCreateTile(aether::TileKey { tile.x, tile.y });
+                std::memcpy(dst.pixels(), tile.pixels.constData(),
+                    static_cast<size_t>(contentTileBytes));
+                dst.markDirty();
+            }
+        }
+    }
+
     for (const auto& childEntry : entry.children) {
         auto child = entryToLayerData(childEntry, data.get());
         data->children.append(child);
     }
 
     return data;
+}
+
+void LayerModel::restoreSmartDocumentFromEntry(SmartContent& content, const LayerEntry& entry)
+{
+    if (!entry.hasSmartDocument || content.document) {
+        // Instances share one content, and the file stores the document with
+        // whichever entry carried it first — so a second entry finds it already
+        // there and must not build a second copy.
+        return;
+    }
+
+    auto document = std::make_shared<SmartDocument>();
+    document->size = entry.smartDocumentSize;
+    document->format = entry.smartDocumentFormat == 2 ? aether::TilePixelFormat::RGBA32F
+        : entry.smartDocumentFormat == 1               ? aether::TilePixelFormat::RGBA16F
+                                                       : aether::TilePixelFormat::RGBA8;
+
+    // Claim the slot BEFORE building the layers, not after: a nested layer that
+    // is an instance of this very content would otherwise find no document here
+    // and start restoring it a second time, forever. The file carries the
+    // composited pixels for exactly this document, so the cache is valid the
+    // moment it is installed — opening a project must not re-composite every
+    // smart object in it.
+    content.adoptDocument(document, document->revision);
+
+    ++m_restoringSmartDocumentDepth;
+    m_restoringSmartContentIds.insert(content.contentId);
+    for (const auto& nestedEntry : entry.smartDocumentLayers) {
+        // parent = nullptr: these are the ROOTS of another document, not
+        // children of the layer that hosts them.
+        if (auto nested = entryToLayerData(nestedEntry, nullptr)) {
+            document->roots.append(std::move(nested));
+        }
+    }
+    m_restoringSmartContentIds.remove(content.contentId);
+    --m_restoringSmartDocumentDepth;
 }
 
 int LayerModel::rootIndexOf(const LayerData* layer) const
@@ -2574,6 +2726,8 @@ void LayerModel::loadFromEntries(const QList<LayerEntry>& entries)
     m_rootLayers.clear();
     m_clipParentByLayer.clear();
     m_loadingSmartContents.clear();
+    m_restoringSmartContentIds.clear();
+    m_restoringSmartDocumentDepth = 0;
 
     // Build layer tree from entries
     m_rootLayers.reserve(entries.size());
@@ -2605,6 +2759,22 @@ void LayerModel::loadFromEntries(const QList<LayerEntry>& entries)
     emit layersChanged();
 }
 
+QList<effects::LayerEffectState> LayerModel::normalizeLoadedEffects(
+    const QList<effects::LayerEffectState>& stored)
+{
+    QList<effects::LayerEffectState> normalized;
+    normalized.reserve(stored.size());
+    for (const auto& effect : stored) {
+        // Apply any plugin schema migrations on the stored version BEFORE
+        // normalizeState() adopts the current version and fills defaults.
+        // No-op for built-in effects and effects already at their version.
+        effects::LayerEffectState migrated = effect;
+        effects::plugin::EffectPluginManager::instance().migrateState(migrated);
+        normalized.append(effects::LayerEffectRegistry::instance().normalizeState(migrated));
+    }
+    return normalized;
+}
+
 void LayerModel::applyLayerEffectsEntries(
     const QList<ruwa::core::serialization::LayerEffectsEntry>& entries)
 {
@@ -2615,16 +2785,7 @@ void LayerModel::applyLayerEffectsEntries(
             continue;
         }
 
-        QList<effects::LayerEffectState> normalized;
-        normalized.reserve(entry.effects.size());
-        for (const auto& effect : entry.effects) {
-            // Apply any plugin schema migrations on the stored version BEFORE
-            // normalizeState() adopts the current version and fills defaults.
-            // No-op for built-in effects and effects already at their version.
-            effects::LayerEffectState migrated = effect;
-            effects::plugin::EffectPluginManager::instance().migrateState(migrated);
-            normalized.append(effects::LayerEffectRegistry::instance().normalizeState(migrated));
-        }
+        QList<effects::LayerEffectState> normalized = normalizeLoadedEffects(entry.effects);
 
         if (layer->effects == normalized) {
             continue;

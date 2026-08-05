@@ -1955,6 +1955,8 @@ void LayerRowWidget::mouseDoubleClickEvent(QMouseEvent* e)
         startRename();
     } else if (zone == HitZone::Thumbnail && m_data->isText()) {
         emit textEditRequested(m_data->id);
+    } else if (zone == HitZone::Thumbnail && m_data->isSmart() && m_data->hasSmartContent()) {
+        emit smartContentEditRequested(m_data->id);
     }
     e->accept();
 }
@@ -2928,6 +2930,7 @@ enum LayerRowContextAction : int {
     CtxConvertToSmartObject = 13,
     CtxNewSmartObjectViaCopy = 14,
     CtxReplaceSmartContents = 15,
+    CtxEditSmartContents = 16,
     CtxLayerColorBase = 100,
 };
 
@@ -3034,6 +3037,17 @@ QVariantMap LayerRowWidget::contextMenuContext() const
     // Duplicating a smart object gives an INSTANCE (shared content); this is the
     // way to get an independent copy instead.
     if (m_data->isSmart()) {
+        // Same entry point as double-clicking the thumbnail, which is otherwise
+        // the only way in and not discoverable.
+        QVariantMap editContents;
+        editContents.insert(QStringLiteral("id"), CtxEditSmartContents);
+        editContents.insert(QStringLiteral("text"), tr("Edit Contents"));
+        editContents.insert(QStringLiteral("danger"), false);
+        editContents.insert(
+            QStringLiteral("standardIcon"), static_cast<int>(IconProvider::StandardIcon::Edit));
+        editContents.insert(QStringLiteral("enabled"), m_data->hasSmartContent());
+        actions.append(editContents);
+
         QVariantMap smartViaCopy;
         smartViaCopy.insert(QStringLiteral("id"), CtxNewSmartObjectViaCopy);
         smartViaCopy.insert(QStringLiteral("text"), tr("New Smart Object via Copy"));
@@ -3232,6 +3246,12 @@ void LayerRowWidget::onSimpleContextAction(int actionId)
             break;
         }
         emit replaceSmartContentsRequested(m_data->id);
+        break;
+    case CtxEditSmartContents:
+        if (!m_data->isSmart() || !m_data->hasSmartContent()) {
+            break;
+        }
+        emit smartContentEditRequested(m_data->id);
         break;
     case CtxApplyMask:
         if (!m_data->hasMask() || !m_data->isRaster()) {

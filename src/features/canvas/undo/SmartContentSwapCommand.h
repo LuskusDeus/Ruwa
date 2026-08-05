@@ -28,6 +28,13 @@ namespace aether {
  */
 struct SmartContentState {
     std::unique_ptr<TileGrid> grid;
+    /// The nested document those pixels were composited from, if any. Parked
+    /// together with the grid because `SmartContent::setGrid()` drops the
+    /// document on purpose — without this, undoing a "Replace Contents" would
+    /// hand back the old pixels but not the layers that made them.
+    std::shared_ptr<ruwa::core::layers::SmartDocument> document;
+    /// `document->revision` that @ref grid corresponds to.
+    quint64 compositeRevision = 0;
     QString sourcePath;
     ruwa::core::layers::SmartSourceKind sourceKind = ruwa::core::layers::SmartSourceKind::Embedded;
     QByteArray sourceHash;

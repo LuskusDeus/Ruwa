@@ -285,6 +285,17 @@ void GLRenderer::compositeDirtyKeys(const std::vector<CompositeLayerInfo>& layer
     }
 }
 
+bool GLRenderer::compositeStackIntoGrid(const std::vector<CompositeLayerInfo>& layers,
+    const std::unordered_set<TileKey, TileKeyHash>& keys, TileGrid& outGrid,
+    const Color& backdropColor)
+{
+    if (!m_compositor || !m_tileRenderer) {
+        return false;
+    }
+    return m_compositor->compositeStackIntoGrid(
+        layers, keys, outGrid, m_tileRenderer.get(), backdropColor);
+}
+
 // ---- Legacy single-quad canvas (kept for compatibility) ----
 
 void GLRenderer::drawCanvas(const Canvas& canvas, const Viewport& viewport,

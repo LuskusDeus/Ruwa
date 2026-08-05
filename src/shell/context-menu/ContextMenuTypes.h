@@ -15,6 +15,9 @@ namespace ruwa::ui::widgets {
 enum class ContextMenuType {
     None = 0,
     TabBar,
+    /// Tab strip, but for a smart object's contents tab: switch between the open
+    /// contents of one document instead of renaming/re-iconing a project tab.
+    SmartObjectTab,
     DockPanelTitle,
     LayerItem,
     Canvas,

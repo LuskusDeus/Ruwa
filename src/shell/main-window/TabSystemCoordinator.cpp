@@ -11,6 +11,7 @@
 #include "features/home/HomePageTab.h"
 #include "shell/tab-system/EmptyStateTab.h"
 #include "shell/tab-system/WorkspaceTab.h"
+#include "features/layers/smart/SmartEditSession.h"
 #include "features/theme/editor/ThemeEditorTab.h"
 #include "features/theme/manager/ThemeManager.h"
 #include "features/settings/shortcuts/ShortcutManagerTab.h"
@@ -121,6 +122,23 @@ void TabSystemCoordinator::setupConnections()
         [this](ruwa::core::BaseTab* newTab, ruwa::core::BaseTab* oldTab) {
             Q_UNUSED(oldTab);
             emit activeTabChanged(newTab);
+        });
+
+    // Smart-object editing sessions: the registry indexes them, tab lifetime
+    // stays here. Every removal is fed in — a closing editing tab ends its own
+    // session, a closing document tab ends (and disposes of) the ones it hosts.
+    auto& smartEditSessions = ruwa::core::layers::SmartEditSessionRegistry::instance();
+    connect(m_tabManager, &ruwa::core::TabManager::tabRemoved, this,
+        [&smartEditSessions](const QUuid& tabId) { smartEditSessions.notifyTabRemoved(tabId); });
+    // Safety net, not the designed path: a document tab is meant to close its
+    // editing tabs (commit or discard) from its own canClose(). This only makes
+    // sure no editing tab is left behind if it did not.
+    connect(&smartEditSessions,
+        &ruwa::core::layers::SmartEditSessionRegistry::childTabCloseRequested, this,
+        [this](const QUuid& childTabId) {
+            if (m_tabManager && m_tabManager->hasTab(childTabId)) {
+                m_tabManager->requestCloseTab(childTabId);
+            }
         });
 
     // Connect color picker requests from ThemeEditorTab

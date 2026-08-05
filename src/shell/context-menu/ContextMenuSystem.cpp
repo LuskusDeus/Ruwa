@@ -9,6 +9,7 @@
 #include "shell/context-menu/BaseContextMenu.h"
 #include "shell/context-menu/NoActionsContextMenu.h"
 #include "shell/context-menu/TabContextMenu.h"
+#include "shell/context-menu/SmartObjectTabContextMenu.h"
 #include "shell/context-menu/DockPanelContextMenu.h"
 #include "shell/context-menu/SimpleActionsContextMenu.h"
 #include "shell/tab-system/CustomTabBar.h"
@@ -149,6 +150,19 @@ void ContextMenuSystem::showContextMenu(ContextMenuType type, const QPoint& glob
         }
     }
 
+    if (type == ContextMenuType::SmartObjectTab) {
+        if (auto* smartMenu = qobject_cast<SmartObjectTabContextMenu*>(menu)) {
+            if (auto* tabBar = qobject_cast<ruwa::ui::tabs::CustomTabBar*>(sourceWidget)) {
+                connect(smartMenu, &SmartObjectTabContextMenu::smartObjectActivated, tabBar,
+                    &ruwa::ui::tabs::CustomTabBar::onSmartObjectTabActivated);
+                connect(smartMenu, &SmartObjectTabContextMenu::closeSmartObjectRequested, tabBar,
+                    &ruwa::ui::tabs::CustomTabBar::onCloseTabRequested);
+                connect(smartMenu, &SmartObjectTabContextMenu::closeAllSmartObjectsRequested,
+                    tabBar, &ruwa::ui::tabs::CustomTabBar::onCloseAllSmartObjectTabsRequested);
+            }
+        }
+    }
+
     if (type == ContextMenuType::SimpleActions) {
         if (auto* simple = qobject_cast<SimpleActionsContextMenu*>(menu)) {
             if (auto* themePreview = qobject_cast<ThemePreviewWidget*>(sourceWidget)) {
@@ -235,6 +249,8 @@ BaseContextMenu* ContextMenuSystem::createMenu(ContextMenuType type, QWidget* ro
     switch (type) {
     case ContextMenuType::TabBar:
         return new TabContextMenu(rootWidget);
+    case ContextMenuType::SmartObjectTab:
+        return new SmartObjectTabContextMenu(rootWidget);
     case ContextMenuType::DockPanelTitle:
         return new DockPanelContextMenu(rootWidget);
 

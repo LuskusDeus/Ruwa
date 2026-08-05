@@ -18,6 +18,7 @@
 #include "features/canvas/rendering/GLViewportCompositor.h"
 #include "features/canvas/rendering/CanvasBackdropRenderer.h"
 #include "features/canvas/rendering/LayerScreenSourceCache.h"
+#include "features/canvas/rendering/SmartContentCompositor.h"
 #include "features/canvas/rendering/TextRetainedPayloadBuilder.h"
 #include "features/brush/rendering/DabShapeCache.h"
 #include "features/canvas/rendering/BrushCursorContourBuilder.h"
@@ -55,8 +56,11 @@
 #include "shared/undo/SelectionState.h"
 #include "shared/undo/SelectionCommand.h"
 #include "shared/undo/LayerAddCommand.h"
+#include "shared/undo/LayerRemoveCommand.h"
+#include "features/layers/smart/SmartDocument.h"
 #include "shared/clipboard/EditClipboard.h"
 #include "shared/tiles/TileGrid.h"
+#include "shared/tiles/TileGridClone.h"
 #include "shared/tiles/TilePixelAccess.h"
 #include "shared/types/GeometryHelpers.h"
 #include "shared/widgets/DotGridLoadingIndicator.h"
@@ -2852,6 +2856,22 @@ void OpenGLCanvasWidget::setLayerModel(ruwa::core::layers::LayerModel* model)
                 if (m_layerScreenSourceCache) {
                     m_layerScreenSourceCache->invalidateByLayer(id);
                 }
+                // A content-space filter is baked into the projected content, not
+                // run by the compositor, so a chain change has to rebuild that
+                // projection — and so does the removal of the last one, which is
+                // what the tracking set answers. This is the one case where
+                // LayerModel::markLayerEffectsChanged's "never rebuild a
+                // projection for a slider value" rule cannot hold: here the
+                // projection IS the effect result. It stays gated on the layer
+                // actually having such a filter, so every other chain edit is as
+                // cheap as it was.
+                auto* layer = m_layerModel ? m_layerModel->layerById(id) : nullptr;
+                if (layer
+                    && (layer->hasContentSpaceEffects()
+                        || m_smartContentEffectProjections.contains(id))) {
+                    rebuildSmartProjectionCacheForLayer(id);
+                    m_canvas.dirtyManager().onStructureChanged();
+                }
                 invalidateCachedLayerStacks();
                 requestRender();
             });
@@ -2873,6 +2893,7 @@ void OpenGLCanvasWidget::setLayerModel(ruwa::core::layers::LayerModel* model)
     }
 
     m_smartProjectedGrids.clear();
+    m_smartContentEffectProjections.clear();
     m_layerHadBoundsEffect.clear();
     requestRender();
 }
@@ -3228,6 +3249,9 @@ void OpenGLCanvasWidget::updateBoardCompositionTransientDirty()
 void OpenGLCanvasWidget::rebuildSmartProjectionCacheForLayer(const QUuid& layerId)
 {
     invalidateCachedLayerStacks();
+    // Whatever this rebuild produces re-arms it (see buildContentSpaceEffectedGrid);
+    // every path that ends without a projection must leave it cleared.
+    m_smartContentEffectProjections.remove(layerId);
     if (!m_layerModel) {
         m_smartProjectedGrids.remove(layerId);
         m_canvas.tilePositionIndex().removeLayer(layerId);
@@ -3258,6 +3282,58 @@ void OpenGLCanvasWidget::rebuildSmartProjectionCacheForLayer(const QUuid& layerI
     }
 }
 
+std::shared_ptr<TileGrid> OpenGLCanvasWidget::buildContentSpaceEffectedGrid(
+    const ruwa::core::layers::LayerData* layer)
+{
+    if (!layer) {
+        return nullptr;
+    }
+    // The set tracks which cached projections have filters baked into them, so
+    // that REMOVING the last content-space filter still rebuilds the projection
+    // that had it. Cleared first, re-armed only if a bake actually lands.
+    m_smartContentEffectProjections.remove(layer->id);
+
+    const auto contentEffects = layer->contentSpaceEffects();
+    const TileGrid* sourceGrid = layer->smartGrid();
+    if (contentEffects.isEmpty() || !sourceGrid || sourceGrid->empty() || !m_renderer) {
+        return nullptr;
+    }
+
+    GLCompositor* compositor = m_renderer->compositor();
+    GLTileRenderer* tileRenderer = m_renderer->tileRenderer();
+    if (!compositor || !tileRenderer) {
+        return nullptr;
+    }
+
+    // A throwaway clone: the object's own content must never be modified by a
+    // filter — that is the difference between a smart filter and Apply Effects.
+    auto effected = cloneTileGrid(sourceGrid);
+    if (!effected || effected->empty()) {
+        return nullptr;
+    }
+
+    std::vector<TileKey> touched;
+    makeCurrent();
+    const bool baked = compositor->bakeEffectsIntoGrid(
+        *effected, contentEffects, tileRenderer, /*beforeTileWrite=*/nullptr, touched);
+    // Cross-batch effect caches are keyed by grid address, and this grid is a
+    // fresh allocation that may land on a freed one's address.
+    compositor->dropWholeLayerCacheEntry(effected.get());
+    // Projection sources stay CPU-backed, like the projected grids themselves.
+    for (auto& [key, tile] : effected->tiles()) {
+        if (tile.hasTexture()) {
+            tileRenderer->destroyTileTexture(tile);
+        }
+    }
+    doneCurrent();
+
+    if (!baked) {
+        return nullptr;
+    }
+    m_smartContentEffectProjections.insert(layer->id);
+    return effected;
+}
+
 std::shared_ptr<TileGrid> OpenGLCanvasWidget::buildSmartProjectedGrid(
     const ruwa::core::layers::LayerData* layer)
 {
@@ -3268,18 +3344,39 @@ std::shared_ptr<TileGrid> OpenGLCanvasWidget::buildSmartProjectedGrid(
     if (!sourceGrid) {
         return nullptr;
     }
+
+    // Content-space smart filters run HERE, on the content, before the placement
+    // — that is what makes them rotate, scale and deform with the object instead
+    // of sitting in document space on top of it. The result becomes the source of
+    // the projection; everything downstream (compositor, masks, thumbnails) sees
+    // it as the object's pixels, and LayerData::documentSpaceEffects keeps the
+    // compositor from running the same filters a second time.
+    //
+    // The placement box stays anchored to the RAW content bounds, the way every
+    // other measurement of the layer is: a bounds-expanding filter (blur, shadow)
+    // adds pixels around the content and they travel with it, rather than
+    // re-fitting the object every time such a filter's radius changes.
+    std::shared_ptr<TileGrid> contentEffected = buildContentSpaceEffectedGrid(layer);
+    if (contentEffected) {
+        sourceGrid = contentEffected.get();
+    }
     TileGrid* sourceGridMutable = const_cast<TileGrid*>(sourceGrid);
 
-    TransformState projectionState = layer->smartTransform;
-    if (projectionState.contentBounds.width <= 0.0f
-        || projectionState.contentBounds.height <= 0.0f) {
-        projectionState.contentBounds = layer->smartContentBounds();
-        projectionState.pivot = projectionState.contentBounds.center();
-    }
+    // Re-anchored to the CURRENT content bounds, exactly like hit-testing, the
+    // transform overlay and the row preview already do
+    // (transformStateWithSourceBounds keeps the placement identical while moving
+    // the pivot). It matters now that contents can be edited: their bounds change
+    // without the placement being refitted, and a projection built against the
+    // stored bounds would then disagree with everything that measures the layer —
+    // visibly so for a quad/deform placement, whose uv mapping IS the bounds.
+    const TransformState projectionState = aether::transformStateWithSourceBounds(
+        layer->smartTransform, layer->smartContentBounds());
 
-    // Identity transform can be rendered from source grid directly.
+    // Identity transform can be rendered from source grid directly — unless the
+    // content-space chain already produced different pixels, which are then the
+    // whole point of having a projection at all.
     if (projectionState.isIdentity()) {
-        return nullptr;
+        return contentEffected;
     }
 
     // Prefer GPU transform for smart-layer projection rebuild when available.
@@ -3321,6 +3418,15 @@ std::shared_ptr<TileGrid> OpenGLCanvasWidget::buildSmartProjectedGrid(
                 tileRenderer->destroyTileTexture(tile);
             }
         }
+        if (contentEffected) {
+            // Same rule for the throwaway effected source: uploadDirtyTiles just
+            // gave its tiles textures, and nothing else will ever free them.
+            for (auto& [key, tile] : contentEffected->tiles()) {
+                if (tile.hasTexture()) {
+                    tileRenderer->destroyTileTexture(tile);
+                }
+            }
+        }
         transformRenderer->destroySourceAtlas();
         doneCurrent();
 
@@ -3347,6 +3453,7 @@ void OpenGLCanvasWidget::rebuildLayerProjectionCaches()
     m_layerHadBoundsEffect.clear();
     if (!m_layerModel) {
         m_smartProjectedGrids.clear();
+        m_smartContentEffectProjections.clear();
         return;
     }
 
@@ -3537,6 +3644,12 @@ bool OpenGLCanvasWidget::convertLayerToSmartObject(ruwa::core::layers::LayerData
         return false;
     }
 
+    // A group carries a whole layer stack, so it becomes a smart object with a
+    // nested DOCUMENT rather than a flattened grid — the contents stay editable.
+    if (layer->isGroup()) {
+        return convertGroupToSmartObject(layer);
+    }
+
     // Content space starts out identical to document space: the smart object
     // shows exactly the pixels the layer showed, placed by an identity
     // transform. A text layer bakes its glyphs the way rasterization does — its
@@ -3574,6 +3687,119 @@ bool OpenGLCanvasWidget::convertLayerToSmartObject(ruwa::core::layers::LayerData
     return true;
 }
 
+bool OpenGLCanvasWidget::convertGroupToSmartObject(ruwa::core::layers::LayerData* layer)
+{
+    using ruwa::core::layers::LayerData;
+    using ruwa::core::layers::LayerId;
+
+    if (!layer || !layer->isGroup() || !m_layerModel) {
+        return false;
+    }
+
+    // A Background cannot leave the model (removeLayers refuses it), and half a
+    // group moved into an object is worse than no conversion at all.
+    const std::function<bool(const LayerData*)> holdsBackground = [&](const LayerData* node) {
+        if (!node) {
+            return false;
+        }
+        if (node->isBackground()) {
+            return true;
+        }
+        for (const auto& child : node->children) {
+            if (holdsBackground(child.get())) {
+                return true;
+            }
+        }
+        return false;
+    };
+    for (const auto& child : layer->children) {
+        if (holdsBackground(child.get())) {
+            return false;
+        }
+    }
+
+    // The children themselves BECOME the contents; the undo state gets clones,
+    // exactly the way deleting layers does. So the two halves of the conversion
+    // never share a layer object, and an undo cannot reach into the document.
+    QList<std::shared_ptr<LayerData>> contentRoots;
+    QList<std::shared_ptr<LayerData>> undoClones;
+    QList<std::pair<LayerId, int>> restorePositions;
+    QList<LayerId> childIds;
+    for (int i = 0; i < layer->children.size(); ++i) {
+        const auto& child = layer->children[i];
+        if (!child) {
+            continue;
+        }
+        auto clone = ruwa::core::layers::LayerModel::cloneLayerTree(child.get(),
+            /*preserveIds=*/true);
+        if (!clone) {
+            continue;
+        }
+        contentRoots.append(child);
+        undoClones.append(std::move(clone));
+        restorePositions.append({ layer->id, i });
+        childIds.append(child->id);
+    }
+
+    // Content space starts out identical to document space (identity placement),
+    // so the nested canvas is this canvas and the contents keep the document's
+    // authoring precision.
+    auto document = std::make_shared<ruwa::core::layers::SmartDocument>();
+    document->size = QSize(static_cast<int>(m_canvas.width()), static_cast<int>(m_canvas.height()));
+    document->format = m_layerModel->documentTileFormat();
+
+    // One undo step: a redo that replayed the content swap without the removal
+    // would leave the children in the model AND inside the object.
+    auto& undoManager = m_canvas.undoManager();
+    undoManager.beginTransaction(QStringLiteral("Convert to Smart Object"));
+
+    if (!childIds.isEmpty()) {
+        m_layerModel->removeLayers(childIds);
+        // Detached from the tree by hand: the layers live on in `contentRoots`,
+        // and a document root with a parent still pointing at the (now smart)
+        // layer would be walked as if it were nested.
+        for (const auto& root : contentRoots) {
+            root->parent = nullptr;
+            root->depth = 0;
+            root->updateChildrenDepth();
+        }
+        undoManager.push(std::make_unique<aether::LayerRemoveCommand>(m_layerModel,
+            std::move(undoClones), std::move(restorePositions), [this]() { requestRender(); },
+            [this]() { notifyCanvasInteraction(true); }));
+    }
+    document->roots = std::move(contentRoots);
+
+    LayerContentState replacedState = takeLayerContentState(layer);
+
+    layer->type = ruwa::core::layers::LayerType::Smart;
+    layer->smartContent = std::make_shared<ruwa::core::layers::SmartContent>();
+    // No composite yet, so the cache is declared stale on purpose: the flatten
+    // below (or the deferred sweep, if GL is not up) is what produces the pixels.
+    layer->smartContent->setDocument(document);
+    layer->smartTransform = TransformState();
+    layer->runtimeRetainedPayloadKey.clear();
+    layer->runtimeVisualBackend = LayerVisualBackend::RasterTiles;
+
+    // The group's own mask and effect chain stay on the layer, as they do for a
+    // raster conversion: they were applied to the group's finished result, which
+    // is exactly what the smart object now shows. What the conversion does change
+    // is pass-through blending — a flattened object is isolated by nature, the
+    // same trade Photoshop makes.
+
+    // Flatten now so the object has pixels before anything asks for them. A
+    // refusal (no GL context yet) is not a failure: the content is stale and the
+    // deferred sweep composites it on the first frame that has a renderer.
+    recompositeSmartContent(layer->smartContent);
+    layer->smartTransform.contentBounds = layer->smartContentBounds();
+    layer->smartTransform.pivot = layer->smartTransform.contentBounds.center();
+
+    finishLayerContentSwap(
+        layer, std::move(replacedState), QStringLiteral("Convert to Smart Object"));
+
+    undoManager.endTransaction();
+    return true;
+}
+
 void OpenGLCanvasWidget::finishLayerContentSwap(
     ruwa::core::layers::LayerData* layer, LayerContentState replacedState, const QString& text)
 {
@@ -3602,7 +3828,7 @@ void OpenGLCanvasWidget::finishLayerContentSwap(
     requestRender();
 }
 
-void OpenGLCanvasWidget::refreshLayersForSmartContent(const QUuid& contentId)
+void OpenGLCanvasWidget::refreshLayersForSmartContent(const QUuid& contentId, bool refitPlacement)
 {
     if (!m_layerModel || contentId.isNull()) {
         return;
@@ -3615,8 +3841,11 @@ void OpenGLCanvasWidget::refreshLayersForSmartContent(const QUuid& contentId)
         }
         // The placement is per-layer, so each instance re-fits the new content
         // into its own box; without this the layer keeps projecting through the
-        // previous content's bounds.
-        refitTransformToContentBounds(layer->smartTransform, layer->smartContentBounds());
+        // previous content's bounds. Editing the object's own contents is the
+        // one case that must NOT refit — see the header.
+        if (refitPlacement) {
+            refitTransformToContentBounds(layer->smartTransform, layer->smartContentBounds());
+        }
         layer->thumbnailDirty = true;
         m_smartProjectedGrids.remove(layer->id);
         affectedLayers.append(layer->id);
@@ -3632,6 +3861,136 @@ void OpenGLCanvasWidget::refreshLayersForSmartContent(const QUuid& contentId)
         m_layerModel->notifyLayerDataChanged(layerId);
     }
     requestRender();
+}
+
+void OpenGLCanvasWidget::refreshSmartContentComposites()
+{
+    if (!m_layerModel) {
+        return;
+    }
+
+    // Collect first: the sweep must not walk the model while the refresh below
+    // rebuilds projections and emits model signals.
+    QList<std::shared_ptr<ruwa::core::layers::SmartContent>> staleContents;
+    QSet<QUuid> seenContents;
+    m_layerModel->forEach([&](ruwa::core::layers::LayerData* layer) {
+        if (!layer || !layer->smartContent || !layer->smartContent->document) {
+            return;
+        }
+        const QUuid contentId = layer->smartContent->contentId;
+        // Instances share one content; compositing it once is the whole point.
+        if (layer->smartContent->compositeUpToDate() || seenContents.contains(contentId)) {
+            return;
+        }
+        seenContents.insert(contentId);
+        staleContents.append(layer->smartContent);
+    });
+
+    if (staleContents.isEmpty()) {
+        m_smartCompositeRefreshPending = false;
+        return;
+    }
+
+    bool anyStillStale = false;
+    for (const auto& content : staleContents) {
+        recompositeSmartContent(content);
+        // Asked per content rather than inferred from the return value: a
+        // composite that was refused for good (a nesting cycle, a driver that
+        // produced nothing) settles the cache itself, and only what is genuinely
+        // left stale should bring the sweep back.
+        anyStillStale = anyStillStale || !content->compositeUpToDate();
+    }
+
+    m_smartCompositeRefreshPending = anyStillStale;
+}
+
+bool OpenGLCanvasWidget::recompositeSmartContent(
+    const std::shared_ptr<ruwa::core::layers::SmartContent>& content)
+{
+    if (!content || !content->document || content->compositeUpToDate()) {
+        return false;
+    }
+    if (!m_initialized || !m_renderer || !m_layerCompositingBuilder) {
+        // No GL yet: the content keeps its last valid pixels and the sweep is
+        // re-armed for the first frame that has a renderer.
+        m_smartCompositeRefreshPending = true;
+        return false;
+    }
+
+    makeCurrent();
+    SmartContentCompositor compositor(m_renderer.get(), m_layerCompositingBuilder.get());
+    const bool recomposited = compositor.ensureComposite(*content);
+    doneCurrent();
+
+    if (recomposited) {
+        // Editing an object's contents must not move the object: the placement
+        // stays exactly as the user left it, only the pixels behind it change.
+        refreshLayersForSmartContent(content->contentId, /*refitPlacement=*/false);
+    }
+    return recomposited;
+}
+
+bool OpenGLCanvasWidget::applySmartContentDocument(
+    const QUuid& contentId, std::shared_ptr<ruwa::core::layers::SmartDocument> document)
+{
+    if (!m_layerModel || contentId.isNull() || !document) {
+        return false;
+    }
+
+    std::shared_ptr<ruwa::core::layers::SmartContent> content;
+    m_layerModel->forEach([&](ruwa::core::layers::LayerData* layer) {
+        if (content || !layer || !layer->smartContent
+            || layer->smartContent->contentId != contentId) {
+            return;
+        }
+        content = layer->smartContent;
+    });
+    if (!content) {
+        // Nothing in this document shows those contents any more (the layer was
+        // deleted while its contents tab was open). There is nothing to commit
+        // into; the session reconcile is already closing that tab.
+        return false;
+    }
+
+    notifyCanvasInteraction(true);
+
+    // The old composite is COPIED for the undo state rather than moved out: the
+    // content must keep valid pixels the whole way through, because the
+    // recomposite below can decline (no GPU) and the commit then has to unwind
+    // to exactly what was there before.
+    SmartContentState replacedState;
+    replacedState.grid = content->grid ? aether::cloneGridWithSolids(*content->grid)
+                                       : std::make_unique<TileGrid>();
+    replacedState.document = content->document;
+    replacedState.compositeRevision = content->compositeRevision;
+    replacedState.sourcePath = content->sourcePath;
+    replacedState.sourceKind = content->sourceKind;
+    replacedState.sourceHash = content->sourceHash;
+
+    auto previousDocument = content->document;
+    const quint64 previousCompositeRevision = content->compositeRevision;
+
+    content->setDocument(std::move(document));
+    if (!recompositeSmartContent(content)) {
+        // The pixels could not be produced, so there is nothing to show for this
+        // commit — put the previous contents back instead of leaving the object
+        // pointing at layers its pixels do not match. The caller reports the
+        // failure and the editing tab stays open with its edits intact.
+        content->adoptDocument(std::move(previousDocument), previousCompositeRevision);
+        return false;
+    }
+
+    // Untranslated like every other undo label here (see "Rasterize Layer" /
+    // "Replace Contents"): the undo stack is not localized in this codebase.
+    auto command = std::make_unique<SmartContentSwapCommand>(content, std::move(replacedState),
+        QStringLiteral("Edit Contents"), [this](const QUuid& changedContentId) {
+            // Undo/redo swaps back a composite that already matches its document,
+            // so only the placement-preserving re-projection is needed.
+            refreshLayersForSmartContent(changedContentId, /*refitPlacement=*/false);
+        });
+    m_canvas.undoManager().push(std::move(command));
+    requestRender();
+    return true;
 }
 
 bool OpenGLCanvasWidget::confirmRasterizeForSelectionTransform(
@@ -5081,6 +5440,11 @@ bool OpenGLCanvasWidget::replaceSmartLayerContents(const QUuid& layerId,
 
     SmartContentState replacedState;
     replacedState.grid = std::move(content->grid);
+    // The nested document (if this object had one) is parked with the pixels it
+    // produced: the new contents replace the layers too, and setGrid() below is
+    // what drops them. Undo hands both halves back together.
+    replacedState.document = content->document;
+    replacedState.compositeRevision = content->compositeRevision;
     replacedState.sourcePath = content->sourcePath;
     replacedState.sourceKind = content->sourceKind;
     replacedState.sourceHash = content->sourceHash;
@@ -7933,6 +8297,12 @@ void OpenGLCanvasWidget::synchronizeCompositionForReadback()
     if (!m_initialized || !m_renderer || !m_layerCompositingBuilder) {
         return;
     }
+
+    // Export, thumbnails and the navigator read the composition, so a smart
+    // object whose contents changed must be flattened FIRST. It runs before the
+    // makeCurrent below on purpose: the sweep releases the context when it is
+    // done, and everything after this line needs it current.
+    refreshSmartContentComposites();
 
     makeCurrent();
     const auto& layerStack = m_layerCompositingBuilder->buildLayerStack();
@@ -12020,6 +12390,15 @@ void OpenGLCanvasWidget::paintGL()
 {
     if (!m_initialized || !m_renderer)
         return;
+
+    if (m_smartCompositeRefreshPending) {
+        // A smart object's contents changed while there was no renderer to
+        // flatten them. There is one now — but a composite is its own batch and
+        // this one makes/releases the context, so it runs from the event loop
+        // rather than inside this frame. One frame of last-good pixels.
+        m_smartCompositeRefreshPending = false;
+        QTimer::singleShot(0, this, [this]() { refreshSmartContentComposites(); });
+    }
 
     flushPendingFillPreviewTextureDeletes();
     paintGL_updateCameraAndEmitSignals();

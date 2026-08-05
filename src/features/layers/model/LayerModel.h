@@ -231,6 +231,10 @@ public:
     bool setLayerEffectEnabled(const LayerId& layerId, const QUuid& effectInstanceId, bool enabled);
     bool setLayerEffectRealtimePreviewEnabled(
         const LayerId& layerId, const QUuid& effectInstanceId, bool enabled);
+    /// Move one effect between the smart object's content space and document
+    /// space. Refused on a layer that has no content space of its own.
+    bool setLayerEffectContentSpace(
+        const LayerId& layerId, const QUuid& effectInstanceId, bool contentSpace);
     bool setLayerEffectParam(const LayerId& layerId, const QUuid& effectInstanceId,
         const QString& key, const QVariant& value);
     void beginLayerEffectParamEdit(
@@ -380,8 +384,23 @@ public:
      * fields at their defaults (a null id), which reads back as "not an
      * instance of anything".
      */
-    static void writeSmartContentEntryFields(
-        ruwa::core::serialization::LayerEntry& entry, const LayerData* layer);
+    /// Builds the entry for one layer of a nested document. Supplied by the
+    /// producer, because a nested layer needs exactly the treatment a top-level
+    /// one gets — pixels and mask included.
+    using SmartDocumentLayerConverter
+        = std::function<ruwa::core::serialization::LayerEntry(const std::shared_ptr<LayerData>&)>;
+
+    /**
+     * @copybrief writeSmartContentEntryFields
+     *
+     * With @p convertNestedLayer set, the smart object's nested DOCUMENT (v30 —
+     * its contents as a layer stack) is written too. Without it, only the
+     * identity/source fields are: a document converted without pixels would be
+     * worse than no document at all. Producers also leave it empty for the
+     * second and later instances of one content, which the file stores once.
+     */
+    static void writeSmartContentEntryFields(ruwa::core::serialization::LayerEntry& entry,
+        const LayerData* layer, const SmartDocumentLayerConverter& convertNestedLayer = {});
 
     // ========================================================================
     // Iteration Helpers
@@ -505,6 +524,19 @@ private:
     std::shared_ptr<LayerData> entryToLayerData(
         const ruwa::core::serialization::LayerEntry& entry, LayerData* parent = nullptr);
 
+    /// Rebuild a smart object's nested document (v30) from its entry, once per
+    /// content. No-op when the entry carries none or the content already has one.
+    void restoreSmartDocumentFromEntry(
+        SmartContent& content, const ruwa::core::serialization::LayerEntry& entry);
+    /// Copy the effect chains of a nested layer subtree into the entries the
+    /// producer built for it (see LayerEntry::effects).
+    static void copyEffectsIntoNestedEntry(
+        ruwa::core::serialization::LayerEntry& entry, const LayerData& layer);
+    /// Migrate + normalize effect states read from a file, so a stored chain
+    /// reaches a layer the same way whichever section it travelled in.
+    static QList<ruwa::core::effects::LayerEffectState> normalizeLoadedEffects(
+        const QList<ruwa::core::effects::LayerEffectState>& stored);
+
 private:
     QList<std::shared_ptr<LayerData>> m_rootLayers;
     QHash<LayerId, LayerId> m_clipParentByLayer;
@@ -518,6 +550,14 @@ private:
     // pointing at ONE content. Only meaningful inside loadFromEntries, which
     // clears it on both ends so nothing keeps a loaded document alive.
     QHash<QUuid, std::shared_ptr<SmartContent>> m_loadingSmartContents;
+    /// >0 while entryToLayerData is building the layers of a NESTED document.
+    /// Those layers restore their pixels immediately: the deferred batch restore
+    /// resolves its targets through this model, and they are not in it.
+    int m_restoringSmartDocumentDepth = 0;
+    /// Contents whose nested document is being restored right now. A file that
+    /// claims one of them appears inside its own contents must not be linked
+    /// back to it — that would be an unfreeable reference cycle.
+    QSet<QUuid> m_restoringSmartContentIds;
 
     // Selection manager - единый источник истины для выделения
     LayerSelectionManager m_selection;

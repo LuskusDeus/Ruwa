@@ -78,6 +78,15 @@ struct LayerEffectState {
     bool enabled = true;
     bool realtimePreviewEnabled = true;
     bool uiExpanded = true;
+    /// Smart layers only: run this filter on the object's CONTENT, before its
+    /// placement, instead of on the finished document-space result. A content-
+    /// space filter therefore rotates, scales and deforms with the object (a
+    /// Photoshop smart filter), while a document-space one is applied to the
+    /// already-placed pixels and keeps its own orientation and scale.
+    ///
+    /// Default false: every effect authored before the flag existed, and every
+    /// effect on a layer that is not a smart object, is document space.
+    bool contentSpace = false;
     QVariantMap params;
 };
 
@@ -211,7 +220,8 @@ inline bool operator==(const LayerEffectState& lhs, const LayerEffectState& rhs)
     return lhs.instanceId == rhs.instanceId && lhs.typeId == rhs.typeId
         && lhs.version == rhs.version && lhs.enabled == rhs.enabled
         && lhs.realtimePreviewEnabled == rhs.realtimePreviewEnabled
-        && lhs.uiExpanded == rhs.uiExpanded && lhs.params == rhs.params;
+        && lhs.uiExpanded == rhs.uiExpanded && lhs.contentSpace == rhs.contentSpace
+        && lhs.params == rhs.params;
 }
 
 inline bool operator!=(const LayerEffectState& lhs, const LayerEffectState& rhs)

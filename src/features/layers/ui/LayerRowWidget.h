@@ -200,6 +200,8 @@ signals:
     void thumbnailCtrlClicked(const ruwa::core::layers::LayerId& id);
     void maskThumbnailCtrlClicked(const ruwa::core::layers::LayerId& id);
     void textEditRequested(const ruwa::core::layers::LayerId& id);
+    /// Double click on a smart object's thumbnail: open its contents for editing.
+    void smartContentEditRequested(const ruwa::core::layers::LayerId& id);
     void doubleClicked(const ruwa::core::layers::LayerId& id);
     void expandToggled(const ruwa::core::layers::LayerId& id);
     void visibilityToggled(const ruwa::core::layers::LayerId& id);

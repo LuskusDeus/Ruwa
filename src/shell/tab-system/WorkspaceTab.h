@@ -67,7 +67,9 @@ class NavigatorWidget;
 
 namespace ruwa::core::layers {
 struct LayerData;
-}
+struct SmartContent;
+struct SmartDocument;
+} // namespace ruwa::core::layers
 
 namespace ruwa::ui::tabs {
 
@@ -230,6 +232,61 @@ public:
 
     /// Create a duplicate of the given WorkspaceTab (returns nullptr if source is null)
     static WorkspaceTab* duplicate(WorkspaceTab* source, QWidget* parent = nullptr);
+
+    // === Smart object contents ===
+
+    /**
+     * @brief Open (or re-focus) the tab that edits the contents of smart layer @p layerId.
+     *
+     * Sessions are keyed by CONTENT: double-clicking any instance lands in the
+     * same tab. Nothing happens for non-smart layers. A contents tab may open
+     * another one (a smart object inside a smart object) up to the nesting depth
+     * the compositor is willing to descend.
+     */
+    void openSmartContentEditor(const QUuid& layerId);
+
+    /// True for a tab that edits a smart object's contents rather than a project file.
+    bool isSmartContentEditor() const { return m_smartEditContent != nullptr; }
+    QUuid smartEditContentId() const { return m_smartEditContentId; }
+    /// The tab this contents tab was opened from — itself a contents tab when the
+    /// object is nested. May already be closed.
+    QUuid smartEditParentTabId() const { return m_smartEditParentTabId; }
+    /// The real project tab at the top of the chain: the one whose file every
+    /// commit eventually lands in, and whose tab-strip slot the contents share.
+    /// Own id for a tab that is not a contents editor.
+    QUuid smartEditDocumentTabId() const;
+    /// How many contents tabs deep this one sits (0 for a project tab).
+    int smartContentNestingDepth() const;
+
+    /**
+     * @brief Build a contents-editing tab for @p content.
+     *
+     * The tab is seeded with a COPY of the content's nested document — its whole
+     * layer stack, not a flattened image. Edits stay inside the tab until they
+     * are committed back, which is what makes the commit a single undoable step
+     * in the parent document.
+     */
+    static WorkspaceTab* createSmartContentEditor(const QUuid& contentId,
+        std::shared_ptr<ruwa::core::layers::SmartContent> content, const QUuid& parentTabId,
+        const QString& contentName, QWidget* parent = nullptr);
+
+    /**
+     * @brief Write this contents tab's layer stack back into the smart object it
+     *        belongs to (one undo step over there, every instance follows).
+     *
+     * No-op returning true for a tab with nothing to commit. False when the
+     * commit could not be made — the parent tab is gone, no layer there shows
+     * these contents any more, or the flattening could not run; the tab then
+     * keeps its edits, still marked modified.
+     */
+    bool commitSmartContentEdits();
+
+    /// True for a contents tab carrying edits that have not been committed back.
+    bool hasUncommittedSmartContentEdits() const
+    {
+        return isSmartContentEditor() && isModified();
+    }
+
     void seedStartupImageImportPaths(const QStringList& filePaths);
     void seedStartupImageImport(const QImage& image, const QString& layerName);
     bool importImageFilesBelowSelectedKeepingSelection(const QStringList& filePaths);
@@ -387,6 +444,12 @@ private:
     void requestInitialLoadingShellHide();
     void buildWorkspaceUi();
     void initializeEmptyProject();
+    void initializeSmartContentDocument();
+    /// Snapshot this tab's layer stack as a nested document (deep copy, ids
+    /// preserved), sized and formatted like this tab's canvas.
+    std::shared_ptr<ruwa::core::layers::SmartDocument> buildSmartDocumentFromModel() const;
+    void scheduleSmartContentSessionReconcile();
+    void reconcileSmartContentSessions();
     void queuePostTransitionInitialization();
     void startInitialWorkspaceWarmup();
     void updateInitialPresentationReadiness();
@@ -454,6 +517,12 @@ private:
     QString m_tabTitle;
     QString m_filePath;
     QString m_tabIconAlias;
+    /// Non-null only in a contents-editing tab; also its "am I one" flag. Held by
+    /// shared_ptr so the content outlives deletion/undo of the layer it came from.
+    std::shared_ptr<ruwa::core::layers::SmartContent> m_smartEditContent;
+    QUuid m_smartEditContentId;
+    QUuid m_smartEditParentTabId;
+    bool m_smartSessionReconcileQueued = false;
     bool m_transitionFinished = false;
     bool m_workspaceUiBuilt = false;
     bool m_postTransitionInitializationStarted = false;

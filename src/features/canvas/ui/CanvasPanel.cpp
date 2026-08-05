@@ -2354,6 +2354,18 @@ bool CanvasPanel::applyLayerEffects(const ruwa::core::layers::LayerId& id)
     return m_glWidget->applyLayerEffects(id);
 }
 
+bool CanvasPanel::applySmartContentDocument(
+    const QUuid& contentId, std::shared_ptr<ruwa::core::layers::SmartDocument> document)
+{
+    if (!m_glWidget || contentId.isNull() || !document) {
+        return false;
+    }
+    // A live transform is a pending change to THIS document's pixels; the commit
+    // below pushes an undo step, so the transform has to be resolved first.
+    commitTransformBeforeDocumentMutation();
+    return m_glWidget->applySmartContentDocument(contentId, std::move(document));
+}
+
 bool CanvasPanel::fillLayerMaskFromActiveSelection(const ruwa::core::layers::LayerId& id)
 {
     if (!m_glWidget || id.isNull()) {

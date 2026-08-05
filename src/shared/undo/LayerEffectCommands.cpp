@@ -22,6 +22,8 @@ QString commandText(LayerEffectCommand::Kind kind)
         return QStringLiteral("Toggle Layer Effect");
     case LayerEffectCommand::Kind::RealtimePreview:
         return QStringLiteral("Toggle Effect Preview");
+    case LayerEffectCommand::Kind::ContentSpace:
+        return QStringLiteral("Change Effect Space");
     case LayerEffectCommand::Kind::Param:
         return QStringLiteral("Edit Layer Effect");
     }
@@ -156,6 +158,15 @@ LayerEffectRealtimePreviewCommand::LayerEffectRealtimePreviewCommand(
     OnContentChangedFn onContentChanged)
     : LayerEffectCommand(layerModel, std::move(layerId), std::move(before), std::move(after),
           Kind::RealtimePreview, std::move(requestRender), std::move(onContentChanged), false)
+{
+}
+
+LayerEffectContentSpaceCommand::LayerEffectContentSpaceCommand(
+    ruwa::core::layers::LayerModel* layerModel, ruwa::core::layers::LayerId layerId,
+    EffectList before, EffectList after, RequestRenderFn requestRender,
+    OnContentChangedFn onContentChanged)
+    : LayerEffectCommand(layerModel, std::move(layerId), std::move(before), std::move(after),
+          Kind::ContentSpace, std::move(requestRender), std::move(onContentChanged), true)
 {
 }
 

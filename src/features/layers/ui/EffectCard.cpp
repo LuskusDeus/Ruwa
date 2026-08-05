@@ -62,6 +62,7 @@ enum CardAction {
     ActionMoveUp = 1,
     ActionMoveDown,
     ActionTogglePreview,
+    ActionToggleContentSpace,
     ActionDuplicate,
     ActionReset,
     ActionDelete
@@ -628,6 +629,11 @@ void EffectCard::setMoveEnabled(bool canMoveUp, bool canMoveDown)
     m_canMoveDown = canMoveDown;
 }
 
+void EffectCard::setContentSpaceSupported(bool supported)
+{
+    m_contentSpaceSupported = supported;
+}
+
 void EffectCard::showOverflowMenu()
 {
     if (!m_menuButton) {
@@ -691,6 +697,13 @@ QVariantMap EffectCard::contextMenuContext() const
     actions.append(simpleSeparator());
     actions.append(simpleAction(ActionTogglePreview, tr("Show in brush preview"),
         IconProvider::StandardIcon::Eye, true, false, m_state.realtimePreviewEnabled));
+    if (m_contentSpaceSupported) {
+        // Checked = the filter runs on the object's contents and is carried by
+        // its placement; unchecked = it runs on the placed result, as every
+        // effect did before smart objects had a content space.
+        actions.append(simpleAction(ActionToggleContentSpace, tr("Apply inside contents"),
+            IconProvider::StandardIcon::BasicFile, true, false, m_state.contentSpace));
+    }
     actions.append(simpleSeparator());
     actions.append(
         simpleAction(ActionDuplicate, tr("Duplicate"), IconProvider::StandardIcon::Duplicate));
@@ -716,6 +729,13 @@ void EffectCard::handleContextMenuAction(int actionId)
     case ActionTogglePreview:
         m_state.realtimePreviewEnabled = !m_state.realtimePreviewEnabled;
         emit previewToggled(m_state.realtimePreviewEnabled);
+        break;
+    case ActionToggleContentSpace:
+        if (!m_contentSpaceSupported) {
+            break;
+        }
+        m_state.contentSpace = !m_state.contentSpace;
+        emit contentSpaceToggled(m_state.contentSpace);
         break;
     case ActionDuplicate:
         emit duplicateRequested();

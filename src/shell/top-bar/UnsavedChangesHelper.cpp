@@ -4,6 +4,8 @@
 #include "UnsavedChangesHelper.h"
 #include "MessagePopupManager.h"
 #include "shell/tab-system/WorkspaceTab.h"
+#include "shell/tab-system/TabManager.h"
+#include "features/layers/smart/SmartEditSession.h"
 #include "features/project/ProjectSerializer.h"
 #include "shared/utils/FileDialogMemory.h"
 
@@ -83,14 +85,78 @@ QString ensureProjectSaveExtension(QString filePath)
     return filePath;
 }
 
+/**
+ * Decide the fate of every open contents tab of @p hostTab before the tab that
+ * hosts them closes.
+ *
+ * A contents tab commits INTO its host, so once that host is gone there is
+ * nothing left to commit into — the question has to be asked first, and a cancel
+ * anywhere aborts the whole close.
+ *
+ * The host may itself be a contents tab (a smart object inside a smart object),
+ * which is why an unmodified child is still walked into: the modified one may be
+ * its child.
+ */
+bool prepareSmartContentEditorsForParentClose(
+    ruwa::ui::tabs::WorkspaceTab* hostTab, QWidget* context)
+{
+    auto* manager = hostTab->tabManager();
+    if (!manager) {
+        return true;
+    }
+
+    const auto sessions
+        = ruwa::core::layers::SmartEditSessionRegistry::instance().sessionsForParentTab(
+            hostTab->id());
+    for (const auto& session : sessions) {
+        auto* childTab
+            = qobject_cast<ruwa::ui::tabs::WorkspaceTab*>(manager->tab(session.childTabId));
+        if (!childTab) {
+            continue;
+        }
+        if (!prepareWorkspaceTabForClose(childTab, context)) {
+            return false;
+        }
+    }
+    return true;
+}
+
 } // namespace
 
 bool prepareWorkspaceTabForClose(ruwa::ui::tabs::WorkspaceTab* wsTab, QWidget* context)
 {
     if (!wsTab || !context)
         return true;
+
+    // Closing a document takes its contents tabs with it (TabSystemCoordinator
+    // ends their sessions), so their uncommitted edits are decided before the
+    // document's own save prompt — a commit there marks THIS tab modified, and
+    // that has to be part of what the user is then asked about.
+    // Contents tabs are asked first here too: a nested smart object commits into
+    // THIS tab, so its edits have to be settled before this tab is asked about
+    // its own — the innermost level answers first, all the way down.
+    if (!prepareSmartContentEditorsForParentClose(wsTab, context))
+        return false;
+
     if (!wsTab->isModified())
         return true;
+
+    if (wsTab->isSmartContentEditor()) {
+        // Contents have no file of their own: "saving" them means committing
+        // them back into the object that hosts them.
+        const auto result
+            = MessagePopupManager::showSaveChangesBlocking(context, wsTab->baseTitle());
+        if (result == MessagePopupManager::SaveChangesResult::Cancel)
+            return false;
+        if (result == MessagePopupManager::SaveChangesResult::Save
+            && !wsTab->commitSmartContentEdits()) {
+            // The commit could not be made (the object is gone, or the pixels
+            // could not be flattened). Keep the tab open with its edits rather
+            // than dropping them behind a dialog the user answered "Save" to.
+            return false;
+        }
+        return true;
+    }
 
     const QString displayName
         = wsTab->hasFilePath() ? QFileInfo(wsTab->filePath()).fileName() : wsTab->baseTitle();

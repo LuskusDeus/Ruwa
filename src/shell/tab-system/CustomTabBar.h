@@ -55,6 +55,9 @@ public slots:
     void onCloseTabRequested(const QUuid& tabId);
     void onCloseOtherTabsRequested(const QUuid& tabId);
     void onCloseAllTabsRequested();
+    /// Show that smart object in its document's breadcrumb slot and focus it.
+    void onSmartObjectTabActivated(const QUuid& tabId);
+    void onCloseAllSmartObjectTabsRequested(const QUuid& parentTabId);
     void onTabRenamed(const QUuid& tabId, const QString& newName);
     void onTabIconChanged(const QUuid& tabId, const QString& iconAlias);
 
@@ -85,6 +88,10 @@ private:
         QString title;
         QIcon icon;
         QString iconAlias; ///< Resource alias (e.g. "BasicFile") for context menu sync
+        /// A smart object's contents, shown as a breadcrumb child of its document
+        /// tab: no icon, no rename, preceded by ">" instead of "/".
+        bool isSmartObject = false;
+        QUuid parentTabId; ///< Set for smart object items only.
         QRectF rect;
         QRectF closeRect;
         bool closeHovered = false;
@@ -109,6 +116,18 @@ private:
     };
 
     void rebuildFromManager();
+    TabItem makeItem(ruwa::core::BaseTab* tab);
+    void destroyItemAnimations(TabItem& item);
+    void reindexItems();
+    static bool isSmartObjectTab(ruwa::core::BaseTab* tab);
+    /// Every open smart object of @p parentTabId, in tab order — including the
+    /// ones sharing the breadcrumb slot and therefore not drawn.
+    QList<QUuid> smartObjectTabsForParent(const QUuid& parentTabId) const;
+    /// Which one currently owns the slot; validates (and repairs) the stored pick.
+    QUuid shownSmartObjectTabForParent(const QUuid& parentTabId);
+    int itemIndexOfSmartChild(const QUuid& parentTabId) const;
+    /// Make the strip agree with shownSmartObjectTabForParent() for that document.
+    void syncSmartSlotForParent(const QUuid& parentTabId, bool animated);
     void bindTabDisplayTitleSignals(ruwa::core::BaseTab* tab);
     void updateLayout();
     [[nodiscard]] qreal computeStripContentWidth() const;
@@ -117,7 +136,8 @@ private:
     int tabIndexAt(const QPointF& pos) const;
     bool isCloseButtonAt(int index, const QPointF& pos) const;
     void drawTab(QPainter& painter, const TabItem& item, bool isActive, bool isHovered);
-    void drawSeparator(QPainter& painter, qreal x, qreal y, const TabItem& anim);
+    void drawSeparator(
+        QPainter& painter, qreal x, qreal y, const TabItem& anim, const QString& glyph);
     void startHoverAnimation(int index, bool hovering);
     void startCloseRevealAnimation(int index, bool reveal);
     void startFadeInAnimation(int index);
@@ -136,6 +156,12 @@ private:
     QHash<QUuid, int> m_indexById;
     QUuid m_activeId;
     int m_hoveredIndex = -1;
+
+    /// documentTabId -> the smart object currently drawn in its breadcrumb slot.
+    QHash<QUuid, QUuid> m_shownSmartByParent;
+    /// smartTabId -> its document tab, kept for every open smart object (drawn or
+    /// not) because the tab object is already gone by the time it is removed.
+    QHash<QUuid, QUuid> m_smartParentByTab;
 
     QHash<QUuid, qreal> m_layoutSlideStartById;
     QVariantAnimation* m_layoutSlideAnim = nullptr;

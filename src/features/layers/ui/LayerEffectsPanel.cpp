@@ -274,6 +274,7 @@ EffectCard* LayerEffectsPanel::buildCard(
 
     auto* card = new EffectCard(descCopy, effect);
     card->setMoveEnabled(index > 0, layer && index < layer->effects.size() - 1);
+    card->setContentSpaceSupported(layer && layer->supportsContentSpaceEffects());
 
     const QUuid id = effect.instanceId;
     connect(card, &EffectCard::dragInitiated, m_listView, &EffectsListView::beginDrag);
@@ -281,6 +282,8 @@ EffectCard* LayerEffectsPanel::buildCard(
         [this, id](bool enabled) { applyEnabled(id, enabled); });
     connect(card, &EffectCard::previewToggled, this,
         [this, id](bool enabled) { applyRealtimePreview(id, enabled); });
+    connect(card, &EffectCard::contentSpaceToggled, this,
+        [this, id](bool contentSpace) { applyContentSpace(id, contentSpace); });
     // Move actions resolve the current index at click time (order changes).
     connect(card, &EffectCard::moveUpRequested, this,
         [this, id]() { applyMoveEffect(id, m_cardOrder.indexOf(id) - 1); });
@@ -328,6 +331,7 @@ void LayerEffectsPanel::syncCardsToLayer(bool animate)
         } else {
             card->setEffectState(e);
             card->setMoveEnabled(i > 0, i < n - 1);
+            card->setContentSpaceSupported(layer->supportsContentSpaceEffects());
         }
         order.append(id);
         desired.insert(id);
@@ -450,6 +454,18 @@ void LayerEffectsPanel::applyRealtimePreview(const QUuid& effectId, bool enabled
         });
 }
 
+void LayerEffectsPanel::applyContentSpace(const QUuid& effectId, bool contentSpace)
+{
+    LayerData* layer = selectedLayer();
+    if (!layer)
+        return;
+    const LayerId layerId = layer->id;
+    applyEffectMutation<aether::LayerEffectContentSpaceCommand>(
+        layerId, [this, layerId, effectId, contentSpace]() {
+            return m_layerModel->setLayerEffectContentSpace(layerId, effectId, contentSpace);
+        });
+}
+
 void LayerEffectsPanel::applyParam(const QUuid& effectId, const QString& key, const QVariant& value)
 {
     LayerData* layer = selectedLayer();
@@ -559,6 +575,7 @@ void LayerEffectsPanel::applyDuplicateEffect(const QUuid& effectId)
         m_layerModel->setLayerEffectEnabled(layerId, newId, source.enabled);
         m_layerModel->setLayerEffectRealtimePreviewEnabled(
             layerId, newId, source.realtimePreviewEnabled);
+        m_layerModel->setLayerEffectContentSpace(layerId, newId, source.contentSpace);
         return true;
     });
 }

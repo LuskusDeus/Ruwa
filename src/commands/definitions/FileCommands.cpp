@@ -315,6 +315,13 @@ void SaveProjectCommand::execute(const CommandContext& ctx, const QVariantMap& a
         return;
     }
 
+    if (wsTab->isSmartContentEditor()) {
+        // Contents have no file of their own: saving them means writing them
+        // back into the object that hosts them, as one undo step over there.
+        wsTab->commitSmartContentEdits();
+        return;
+    }
+
     if (wsTab->hasFilePath()) {
         if (!wsTab->saveProjectAsync()) { }
     } else {
@@ -355,7 +362,7 @@ void SaveProjectAsCommand::execute(const CommandContext& ctx, const QVariantMap&
     }
 
     auto* wsTab = qobject_cast<ruwa::ui::tabs::WorkspaceTab*>(ctx.activeTab());
-    if (!wsTab) {
+    if (!wsTab || wsTab->isSmartContentEditor()) {
         return;
     }
 

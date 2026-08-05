@@ -1068,6 +1068,70 @@ void GLCompositor::compositeDirtyKeys(const std::vector<CompositeLayerInfo>& lay
     if (dbgBatchUs > 2000 && m_dbgTileCount > 0) { }
 }
 
+bool GLCompositor::compositeStackIntoGrid(const std::vector<CompositeLayerInfo>& layers,
+    const std::unordered_set<TileKey, TileKeyHash>& keys, TileGrid& outGrid,
+    GLTileRenderer* tileRenderer, const Color& backdropColor)
+{
+    if (!m_initialized || !tileRenderer || layers.empty() || keys.empty()) {
+        return false;
+    }
+
+    outGrid.clear();
+    // See the header: the composite path hands its ping-pong texture to the
+    // cache tile, and that texture is RGBA8.
+    outGrid.setFormat(TilePixelFormat::RGBA8);
+
+    // A throwaway cache, so the composite writes nowhere near the document's.
+    // Its grid is RGBA8 by default, which is what the tile textures must be for
+    // the swap in compositeTile() to stay type-correct.
+    CompositionCache cache;
+    cache.markDirty(keys);
+    const std::vector<TileKey> keyList(keys.begin(), keys.end());
+    compositeDirtyKeys(layers, cache, tileRenderer, keyList, backdropColor);
+
+    if (!m_fbo) {
+        m_gl->glGenFramebuffers(1, &m_fbo);
+    }
+
+    GLFboViewportGuard guard(m_gl);
+    std::vector<uint8_t> buffer(TILE_BYTE_SIZE);
+    size_t readTiles = 0;
+    for (auto& [key, tile] : cache.grid().tiles()) {
+        if (!tile.hasTexture()) {
+            continue;
+        }
+        m_gl->glBindFramebuffer(GL_FRAMEBUFFER, m_fbo);
+        m_gl->glFramebufferTexture2D(
+            GL_FRAMEBUFFER, GL_COLOR_ATTACHMENT0, GL_TEXTURE_2D, tile.textureId(), 0);
+        if (m_gl->glCheckFramebufferStatus(GL_FRAMEBUFFER) != GL_FRAMEBUFFER_COMPLETE) {
+            continue;
+        }
+        m_gl->glViewport(0, 0, static_cast<GLsizei>(TILE_SIZE), static_cast<GLsizei>(TILE_SIZE));
+        m_gl->glReadPixels(0, 0, static_cast<GLsizei>(TILE_SIZE), static_cast<GLsizei>(TILE_SIZE),
+            GL_RGBA, GL_UNSIGNED_BYTE, buffer.data());
+
+        TileData& dstTile = outGrid.getOrCreateTile(key);
+        std::memcpy(dstTile.pixels(), buffer.data(), TILE_BYTE_SIZE);
+        // Through the GRID, not the tile: that is the documented "these pixels
+        // changed" signal, and it is what moves contentVersion() — which every
+        // cache derived from this grid (projections, effects) validates against.
+        outGrid.markDirty(key);
+        ++readTiles;
+    }
+
+    // Hand the composited textures back to the pool rather than leaving them to
+    // the orphan collector: this cache is temporary and its tiles would
+    // otherwise each cost a fresh allocation on the next composite.
+    for (auto& entry : cache.grid().tiles()) {
+        tileRenderer->destroyTileTexture(entry.second);
+    }
+
+    // Fully transparent tiles carry no information and would make the content
+    // look non-empty to every bounds/coverage consumer.
+    outGrid.pruneEmpty();
+    return readTiles > 0;
+}
+
 void GLCompositor::resetFrameStats()
 {
     m_lastCompositedTiles = 0;
@@ -1981,12 +2045,24 @@ bool GLCompositor::chainNeedsWholeLayer(
 
 void GLCompositor::dropWholeLayerCacheEntry(const void* contentIdentity)
 {
-    auto it = m_wholeLayerCache.find(contentIdentity);
-    if (it == m_wholeLayerCache.end()) {
-        return;
+    if (auto it = m_wholeLayerCache.find(contentIdentity); it != m_wholeLayerCache.end()) {
+        deleteTexture(m_gl, it->second.texture);
+        m_wholeLayerCache.erase(it);
     }
-    deleteTexture(m_gl, it->second.texture);
-    m_wholeLayerCache.erase(it);
+
+    // The per-tile effect cache is keyed on the same identity and validates
+    // against contentVersion + tileCount — values a DIFFERENT grid allocated at
+    // the freed address can reproduce exactly (a fresh grid with the same tiles
+    // is not far-fetched). Dropping both together is what makes "this address is
+    // about to stop existing" a complete statement.
+    for (auto it = m_layerEffectTileCache.begin(); it != m_layerEffectTileCache.end();) {
+        if (it->first.identity == contentIdentity) {
+            deleteTexture(m_gl, it->second.texture);
+            it = m_layerEffectTileCache.erase(it);
+        } else {
+            ++it;
+        }
+    }
 }
 
 void GLCompositor::evictWholeLayerCacheIfNeeded(const void* keepIdentity)

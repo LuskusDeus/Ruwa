@@ -168,6 +168,8 @@ signals:
     void layerContentSelectionRequested(const ruwa::core::layers::LayerId& id);
     void layerMaskSelectionRequested(const ruwa::core::layers::LayerId& id);
     void layerTextEditRequested(const ruwa::core::layers::LayerId& id);
+    /// Double click on a smart object's thumbnail: open its contents in their own tab.
+    void layerSmartContentEditRequested(const ruwa::core::layers::LayerId& id);
     void layerVisibilityChanged(const ruwa::core::layers::LayerId& id, bool visible);
     void layerLockChanged(const ruwa::core::layers::LayerId& id, bool locked);
     void layerAlphaLockChanged(const ruwa::core::layers::LayerId& id, bool alphaLock);
@@ -224,6 +226,7 @@ private slots:
     void onLayerContentSelectionRequested(const ruwa::core::layers::LayerId& id);
     void onLayerMaskSelectionRequested(const ruwa::core::layers::LayerId& id);
     void onLayerTextEditRequested(const ruwa::core::layers::LayerId& id);
+    void onLayerSmartContentEditRequested(const ruwa::core::layers::LayerId& id);
     void onLayerExpandToggled(const ruwa::core::layers::LayerId& id);
     void onLayerVisibilityToggled(const ruwa::core::layers::LayerId& id);
     void onLayerDragDropped(

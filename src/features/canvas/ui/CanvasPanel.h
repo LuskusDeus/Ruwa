@@ -58,6 +58,7 @@ class OpenGLCanvasWidget;
 
 namespace ruwa::core::layers {
 class LayerModel;
+struct SmartDocument;
 }
 
 namespace ruwa::ui::widgets {
@@ -238,6 +239,12 @@ public:
     /// false when the layer is not a smart object or no file was chosen; the
     /// replacement itself completes asynchronously once the file is decoded.
     bool replaceSmartLayerContents(const ruwa::core::layers::LayerId& id);
+    /// Commit edited contents into the smart object @p contentId of THIS
+    /// document and re-flatten them (undoable; every instance follows, none of
+    /// them moves). False when no layer here shows those contents or the
+    /// flattening could not run — nothing is changed in that case.
+    bool applySmartContentDocument(
+        const QUuid& contentId, std::shared_ptr<ruwa::core::layers::SmartDocument> document);
     /// Bake a layer's mask into its pixels and remove the mask (GL, undoable).
     bool applyLayerMask(const ruwa::core::layers::LayerId& id);
     /// Invert a layer mask (reveal -> 1 - reveal) across all tiles + background (GL, undoable).

@@ -19,7 +19,7 @@ namespace aether {
 
 class LayerEffectCommand : public IUndoCommand {
 public:
-    enum class Kind { Add, Remove, Move, Enabled, RealtimePreview, Param };
+    enum class Kind { Add, Remove, Move, Enabled, RealtimePreview, ContentSpace, Param };
 
     using RequestRenderFn = std::function<void()>;
     using OnContentChangedFn = std::function<void()>;
@@ -86,6 +86,16 @@ public:
 class LayerEffectRealtimePreviewCommand : public LayerEffectCommand {
 public:
     LayerEffectRealtimePreviewCommand(ruwa::core::layers::LayerModel* layerModel,
+        ruwa::core::layers::LayerId layerId, EffectList before, EffectList after,
+        RequestRenderFn requestRender = {}, OnContentChangedFn onContentChanged = {});
+};
+
+/// Moves one effect between content space and document space on a smart object.
+/// Affects the document result (the pixels change space), unlike the preview
+/// toggle it sits next to in the card menu.
+class LayerEffectContentSpaceCommand : public LayerEffectCommand {
+public:
+    LayerEffectContentSpaceCommand(ruwa::core::layers::LayerModel* layerModel,
         ruwa::core::layers::LayerId layerId, EffectList before, EffectList after,
         RequestRenderFn requestRender = {}, OnContentChangedFn onContentChanged = {});
 };

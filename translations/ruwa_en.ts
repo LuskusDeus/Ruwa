@@ -2577,6 +2577,16 @@ Please choose a different shortcut.</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
+        <location filename="../src/shell/tab-system/WorkspaceTab.cpp" line="3856"/>
+        <source>Smart Object</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location filename="../src/shell/tab-system/WorkspaceTab.cpp" line="3959"/>
+        <source>Contents</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
         <location filename="../src/shell/tab-system/WorkspaceTab.cpp" line="1013"/>
         <source>Preparing workspace shell...</source>
         <translation type="unfinished"></translation>
@@ -3425,6 +3435,11 @@ Ruwa uses the Qt framework (version %1), dynamically linked under the GNU Lesser
         <translation type="unfinished"></translation>
     </message>
     <message>
+        <location filename="../src/features/layers/ui/LayerRowWidget.cpp" line="3033"/>
+        <source>Edit Contents</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
         <location filename="../src/features/layers/ui/LayerRowWidget.cpp" line="3021"/>
         <source>Apply all effects</source>
         <translation type="unfinished"></translation>
@@ -4267,6 +4282,24 @@ Ruwa uses the Qt framework (version %1), dynamically linked under the GNU Lesser
         <location filename="../src/features/settings/ShortcutsNavigatorWidget.cpp" line="298"/>
         <location filename="../src/features/settings/ShortcutsNavigatorWidget.cpp" line="315"/>
         <source>Customize</source>
+        <translation type="unfinished"></translation>
+    </message>
+</context>
+<context>
+    <name>ruwa::ui::widgets::SmartObjectTabContextMenu</name>
+    <message>
+        <location filename="../src/shell/context-menu/SmartObjectTabContextMenu.cpp" line="49"/>
+        <source>Smart Objects</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location filename="../src/shell/context-menu/SmartObjectTabContextMenu.cpp" line="80"/>
+        <source>Close this smart object</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location filename="../src/shell/context-menu/SmartObjectTabContextMenu.cpp" line="91"/>
+        <source>Close all smart objects</source>
         <translation type="unfinished"></translation>
     </message>
 </context>
@@ -5505,6 +5538,11 @@ Ruwa uses the Qt framework (version %1), dynamically linked under the GNU Lesser
     <message>
         <location filename="../src/features/layers/ui/EffectCard.cpp" line="692"/>
         <source>Show in brush preview</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location filename="../src/features/layers/ui/EffectCard.cpp" line="704"/>
+        <source>Apply inside contents</source>
         <translation type="unfinished"></translation>
     </message>
     <message>

@@ -5,6 +5,9 @@
 
 #include "app/Application.h"
 #include "features/layers/model/LayerModel.h"
+#include "features/canvas/rendering/SmartContentCompositor.h"
+#include "features/layers/smart/SmartDocument.h"
+#include "features/layers/smart/SmartEditSession.h"
 #include "features/effects/EffectCoverageResolver.h"
 #include "features/transform/TransformState.h"
 #include "features/project/ProjectSerializer.h"
@@ -455,9 +458,22 @@ ruwa::core::serialization::LayerEntry buildLayerEntryFromSnapshot(
     entry.clippedToBelow = layer->clippedToBelow;
     writeLayerTransformFields(entry, serializedTransformForLayer(layer.get()));
     writeTextLayerFields(entry, layer.get());
-    ruwa::core::layers::LayerModel::writeSmartContentEntryFields(entry, layer.get());
 
     const bool skipPixels = smartContentAlreadyCollected(layer.get(), collectedContentIds);
+    // The nested document travels with the pixels: whichever instance carries
+    // the content carries its contents too, and the others carry neither. The
+    // nested layers go through THIS builder, so they are converted exactly like
+    // top-level ones (their own pixels, masks, groups and nested documents).
+    ruwa::core::layers::LayerModel::SmartDocumentLayerConverter nestedConverter;
+    if (!skipPixels) {
+        nestedConverter
+            = [&collectedContentIds](const std::shared_ptr<ruwa::core::layers::LayerData>& nested) {
+                  return buildLayerEntryFromSnapshot(nested, collectedContentIds);
+              };
+    }
+    ruwa::core::layers::LayerModel::writeSmartContentEntryFields(
+        entry, layer.get(), nestedConverter);
+
     if (const auto* pixelGrid = skipPixels ? nullptr : layer->pixelGrid(); pixelGrid) {
         const int contentTileBytes = static_cast<int>(aether::tileByteSize(pixelGrid->format()));
         entry.tiles.reserve(static_cast<int>(pixelGrid->tiles().size()));
@@ -1023,6 +1039,14 @@ void WorkspaceTab::syncCanvasColorFromWorkspaceState()
 
 bool WorkspaceTab::canClose()
 {
+    if (isSmartContentEditor()) {
+        // Never blocks. Uncommitted contents are asked about in
+        // prepareWorkspaceTabForClose (commit / discard / cancel), and the closes
+        // this tab does NOT get a say in — its object was deleted, its document
+        // is closing — must always go through, or the tab would outlive what it
+        // was editing.
+        return true;
+    }
     // Block close when modified; callers should use prepareWorkspaceTabForClose first
     return !isModified();
 }
@@ -1443,6 +1467,11 @@ void WorkspaceTab::initializeEmptyProject()
 
     auto* model = m_layersPanel->layerModel();
     if (!model || !model->rootLayers().isEmpty()) {
+        return;
+    }
+
+    if (isSmartContentEditor()) {
+        initializeSmartContentDocument();
         return;
     }
 
@@ -2837,6 +2866,17 @@ void WorkspaceTab::connectPanelSignals()
         &workspace::CanvasPanel::selectLayerMaskContent);
     connect(m_layersPanel, &workspace::LayersPanel::layerTextEditRequested, m_canvasPanel,
         &workspace::CanvasPanel::startTextLayerEditing);
+    connect(m_layersPanel, &workspace::LayersPanel::layerSmartContentEditRequested, this,
+        &WorkspaceTab::openSmartContentEditor);
+    if (auto* layerModel = m_layersPanel->layerModel()) {
+        // An open contents tab must not outlive the layers that show its content:
+        // structure changes cover delete/reorder, per-layer changes cover a
+        // content swap (rasterize / convert).
+        connect(layerModel, &ruwa::core::layers::LayerModel::layersChanged, this,
+            &WorkspaceTab::scheduleSmartContentSessionReconcile);
+        connect(layerModel, &ruwa::core::layers::LayerModel::layerDataChanged, this,
+            [this](const LayerId&) { scheduleSmartContentSessionReconcile(); });
+    }
     connect(m_layersPanel, &workspace::LayersPanel::deleteLayerRequested, this, [this]() {
         if (m_canvasPanel) {
             m_canvasPanel->notifyContentChanged();
@@ -3018,9 +3058,17 @@ ruwa::core::serialization::ProjectData WorkspaceTab::toProjectData() const
             entry.clippedToBelow = ld->clippedToBelow;
             writeLayerTransformFields(entry, serializedTransformForLayer(ld.get()));
             writeTextLayerFields(entry, ld.get());
-            ruwa::core::layers::LayerModel::writeSmartContentEntryFields(entry, ld.get());
 
             const bool skipPixels = smartContentAlreadyCollected(ld.get(), collectedContentIds);
+            // The nested document (v30) travels with the pixels and is converted
+            // by this same lambda, so nested layers get the full treatment.
+            ruwa::core::layers::LayerModel::SmartDocumentLayerConverter nestedConverter;
+            if (!skipPixels) {
+                nestedConverter = convert;
+            }
+            ruwa::core::layers::LayerModel::writeSmartContentEntryFields(
+                entry, ld.get(), nestedConverter);
+
             if (const auto* pixelGrid = skipPixels ? nullptr : ld->pixelGrid(); pixelGrid) {
                 const int contentTileBytes
                     = static_cast<int>(aether::tileByteSize(pixelGrid->format()));
@@ -3359,7 +3407,9 @@ bool WorkspaceTab::saveProject()
 
 bool WorkspaceTab::saveProjectAs(const QString& filePath)
 {
-    if (filePath.isEmpty()) {
+    if (filePath.isEmpty() || isSmartContentEditor()) {
+        // Contents are part of the document that hosts them; they are committed
+        // back into it, never written to a project file of their own.
         return false;
     }
 
@@ -3384,7 +3434,7 @@ bool WorkspaceTab::saveProjectAsync()
 
 bool WorkspaceTab::saveProjectAsAsync(const QString& filePath)
 {
-    if (filePath.isEmpty()) {
+    if (filePath.isEmpty() || isSmartContentEditor()) {
         return false;
     }
 
@@ -3813,6 +3863,312 @@ WorkspaceTab* WorkspaceTab::duplicate(WorkspaceTab* source, QWidget* parent)
         = std::make_unique<ruwa::core::serialization::ProjectData>(std::move(data));
 
     return tab;
+}
+
+// ============================================================================
+// Smart Object Contents
+// ============================================================================
+
+WorkspaceTab* WorkspaceTab::createSmartContentEditor(const QUuid& contentId,
+    std::shared_ptr<ruwa::core::layers::SmartContent> content, const QUuid& parentTabId,
+    const QString& contentName, QWidget* parent)
+{
+    if (contentId.isNull() || !content || !content->grid) {
+        return nullptr;
+    }
+
+    // A flat content (everything authored before nested documents, and every
+    // imported image) grows its document here, on first edit: the very pixels
+    // it already had become a one-layer stack, and they stay valid as that
+    // stack's composite, so not one cache is invalidated by the wrapping. It is
+    // not an undoable act — nothing about the object changed, only how it is
+    // stored — and it must happen before the size below is asked for, so both
+    // come from the same place.
+    content->wrapGridInDocument();
+
+    // Content space is the space the pixels were authored in, and the projection
+    // back into the document depends on it — so the contents document keeps that
+    // origin. Its canvas spans from (0,0) to the far corner of the content, never
+    // a re-centred crop. The rule lives in SmartContent so a nested document and
+    // this tab can never disagree about how big content space is.
+    const QSize canvasSize = content->contentSpaceSize();
+
+    const QString name
+        = contentName.trimmed().isEmpty() ? tr("Smart Object") : contentName.trimmed();
+
+    ProjectSettings settings;
+    settings.name = name;
+    settings.canvasSize = canvasSize;
+    settings.canvasBoundsMode = ruwa::core::canvas::CanvasBoundsMode::Bounded;
+    settings.exportFrame = ruwa::core::serialization::ProjectData::ExportFrame { true,
+        QRect(0, 0, canvasSize.width(), canvasSize.height()) };
+    settings.templateType = QStringLiteral("RGB Color");
+    settings.backgroundColor = Qt::transparent;
+    // The contents keep the storage format they were AUTHORED in; a conversion
+    // here would silently change precision on every round trip. Deliberately not
+    // the composite's format — that one is always 8-bit.
+    settings.tileFormat = content->storageFormat();
+
+    auto* tab = new WorkspaceTab(settings, parent);
+    tab->m_smartEditContent = std::move(content);
+    tab->m_smartEditContentId = contentId;
+    tab->m_smartEditParentTabId = parentTabId;
+    tab->m_tabTitle = name;
+    tab->m_tabIconAlias = QStringLiteral("BasicFile");
+    return tab;
+}
+
+QUuid WorkspaceTab::smartEditDocumentTabId() const
+{
+    const WorkspaceTab* tab = this;
+    auto* manager = tabManager();
+    // Bounded by the same depth the composite refuses to descend past, so a
+    // corrupted chain can never spin here.
+    for (int step = 0; manager && tab->isSmartContentEditor()
+         && step <= aether::SmartContentCompositor::kMaxNestingDepth;
+         ++step) {
+        auto* parent = qobject_cast<WorkspaceTab*>(manager->tab(tab->m_smartEditParentTabId));
+        if (!parent) {
+            break;
+        }
+        tab = parent;
+    }
+    return tab->id();
+}
+
+int WorkspaceTab::smartContentNestingDepth() const
+{
+    const WorkspaceTab* tab = this;
+    auto* manager = tabManager();
+    int depth = 0;
+    while (manager && tab && tab->isSmartContentEditor()
+        && depth <= aether::SmartContentCompositor::kMaxNestingDepth) {
+        ++depth;
+        tab = qobject_cast<WorkspaceTab*>(manager->tab(tab->m_smartEditParentTabId));
+    }
+    return depth;
+}
+
+void WorkspaceTab::openSmartContentEditor(const QUuid& layerId)
+{
+    if (!m_layersPanel) {
+        return;
+    }
+
+    // A smart object inside a smart object opens one level deeper. The bound is
+    // the compositor's: past it the nested stack would never be flattened, so
+    // there would be nothing to see for the edit.
+    if (smartContentNestingDepth() >= aether::SmartContentCompositor::kMaxNestingDepth) {
+        return;
+    }
+
+    auto* model = m_layersPanel->layerModel();
+    auto* layer = model ? model->layerById(layerId) : nullptr;
+    if (!layer || !layer->isSmart() || !layer->hasSmartContent()) {
+        return;
+    }
+
+    auto* manager = tabManager();
+    if (!manager) {
+        return;
+    }
+
+    auto& sessions = ruwa::core::layers::SmartEditSessionRegistry::instance();
+    const QUuid contentId = layer->smartContent->contentId;
+
+    if (const auto* existing = sessions.sessionForContent(contentId)) {
+        const QUuid existingTabId = existing->childTabId;
+        if (auto* existingTab = manager->tab(existingTabId)) {
+            // Another instance may have opened it; the row just double-clicked is
+            // the better "where did this come from" answer from now on.
+            sessions.setOriginLayer(contentId, layerId);
+            manager->activateTab(existingTab);
+            return;
+        }
+        // The tab died without the registry hearing about it — recover rather
+        // than refusing to open the contents ever again.
+        sessions.closeSession(
+            contentId, ruwa::core::layers::SmartEditSessionRegistry::CloseReason::ChildTabClosed);
+    }
+
+    auto* editor
+        = createSmartContentEditor(contentId, layer->smartContent, id(), layer->name, nullptr);
+    if (!editor) {
+        return;
+    }
+
+    ruwa::core::layers::SmartEditSession session;
+    session.contentId = contentId;
+    session.childTabId = editor->id();
+    session.parentTabId = id();
+    session.originLayerId = layerId;
+    session.content = layer->smartContent;
+
+    if (!sessions.openSession(session)) {
+        delete editor;
+        return;
+    }
+    if (!manager->addTab(editor)) {
+        // Only now is the session ours to drop — a failed openSession would have
+        // meant someone else's.
+        sessions.closeSession(
+            contentId, ruwa::core::layers::SmartEditSessionRegistry::CloseReason::ChildTabClosed);
+        delete editor;
+    }
+}
+
+void WorkspaceTab::scheduleSmartContentSessionReconcile()
+{
+    // Coalesced to the next turn on purpose: a reorder or a group move removes
+    // the layer and re-inserts it within one operation, and the model signals
+    // that intermediate state. Reconciling on the spot would read the gap as
+    // "the content is gone" and close the tab.
+    //
+    // Runs on contents tabs too: a nested smart object is edited in a tab this
+    // one hosts, and deleting the nested layer here must close it just the same.
+    if (m_smartSessionReconcileQueued) {
+        return;
+    }
+    m_smartSessionReconcileQueued = true;
+    QTimer::singleShot(0, this, [this]() { reconcileSmartContentSessions(); });
+}
+
+void WorkspaceTab::reconcileSmartContentSessions()
+{
+    m_smartSessionReconcileQueued = false;
+
+    auto& sessions = ruwa::core::layers::SmartEditSessionRegistry::instance();
+    const QList<ruwa::core::layers::SmartEditSession> owned = sessions.sessionsForParentTab(id());
+    if (owned.isEmpty()) {
+        return;
+    }
+
+    // A content stays editable as long as ANY layer still shows it: deleting one
+    // instance must not close a tab the others still stand behind.
+    QHash<QUuid, QUuid> liveContentToLayer;
+    auto* model = m_layersPanel ? m_layersPanel->layerModel() : nullptr;
+    if (model) {
+        model->forEach([&liveContentToLayer](LayerData* layer) {
+            if (!layer || !layer->isSmart() || !layer->hasSmartContent()) {
+                return;
+            }
+            const QUuid contentId = layer->smartContent->contentId;
+            if (!liveContentToLayer.contains(contentId)) {
+                liveContentToLayer.insert(contentId, layer->id);
+            }
+        });
+    }
+
+    auto* manager = tabManager();
+    for (const auto& session : owned) {
+        const auto it = liveContentToLayer.constFind(session.contentId);
+        if (it != liveContentToLayer.constEnd()) {
+            if (model && !model->contains(session.originLayerId)) {
+                // The layer it was opened from is gone, but a sibling instance
+                // carries the content — follow that one instead.
+                sessions.setOriginLayer(session.contentId, it.value());
+            }
+            continue;
+        }
+
+        // Nothing in the document shows these pixels any more (deleted,
+        // rasterized, converted away): the tab has nothing left to edit.
+        sessions.closeSession(session.contentId,
+            ruwa::core::layers::SmartEditSessionRegistry::CloseReason::ContentReplaced);
+        if (manager && manager->hasTab(session.childTabId)) {
+            manager->requestCloseTab(session.childTabId);
+        }
+    }
+}
+
+void WorkspaceTab::initializeSmartContentDocument()
+{
+    auto* model = m_layersPanel ? m_layersPanel->layerModel() : nullptr;
+    if (!model || !m_smartEditContent) {
+        return;
+    }
+
+    // The whole nested layer stack, not a flattened image: this tab edits the
+    // object's real contents, so groups, masks, effects and instances survive a
+    // round trip. It is a deep COPY (ids preserved so the same layers are
+    // recognisable across a commit) — edits belong to this tab until committed,
+    // and the parent document must not change under the user meanwhile.
+    QList<std::shared_ptr<LayerData>> layers;
+    if (const auto* document = m_smartEditContent->document.get()) {
+        layers = ruwa::core::layers::SmartDocument::cloneRootsForSeparateOwner(document->roots);
+    }
+
+    if (layers.isEmpty()) {
+        // Contents with nothing in them (every layer deleted in a previous
+        // session): give the user something to draw on rather than an empty
+        // panel with no valid edit target.
+        layers.append(LayerData::create(LayerType::Raster, tr("Contents")));
+    }
+
+    // rootLayers order is top-first and addLayers appends, so adding them in
+    // order reproduces the stack exactly.
+    model->addLayers(layers);
+    model->setSelectedLayer(layers.first()->id);
+    model->notifyBulkLayerContentChanged();
+
+    m_layersPanel->refreshLayers();
+}
+
+std::shared_ptr<ruwa::core::layers::SmartDocument> WorkspaceTab::buildSmartDocumentFromModel() const
+{
+    auto* model = m_layersPanel ? m_layersPanel->layerModel() : nullptr;
+    if (!model) {
+        return nullptr;
+    }
+
+    auto document = std::make_shared<ruwa::core::layers::SmartDocument>();
+    // The canvas may have been resized while editing, so the live size wins over
+    // the one the tab was created with. It is content space, anchored at (0,0) —
+    // the size the contents are authored against, not a crop of them.
+    document->size = m_canvasPanel ? m_canvasPanel->canvasSize() : m_settings.canvasSize;
+    document->format = model->documentTileFormat();
+    // A copy that belongs to the parent document from now on: nested smart
+    // objects must stop sharing their content with the layers still open in this
+    // tab, or an edit made here after the commit would leak across.
+    document->roots = ruwa::core::layers::SmartDocument::cloneRootsForSeparateOwner(
+        model->rootLayers());
+    return document;
+}
+
+bool WorkspaceTab::commitSmartContentEdits()
+{
+    if (!isSmartContentEditor()) {
+        return false;
+    }
+    if (!isModified()) {
+        // Nothing was touched since the last commit: the object already shows
+        // exactly these contents.
+        return true;
+    }
+
+    auto* manager = tabManager();
+    auto* parentTab
+        = manager ? qobject_cast<WorkspaceTab*>(manager->tab(m_smartEditParentTabId)) : nullptr;
+    auto* parentCanvas = parentTab ? parentTab->canvasPanel() : nullptr;
+    if (!parentCanvas) {
+        // The document that hosts the object is gone (or not built yet). Nothing
+        // to commit into; the caller keeps the edits.
+        return false;
+    }
+
+    auto document = buildSmartDocumentFromModel();
+    if (!document) {
+        return false;
+    }
+
+    if (!parentCanvas->applySmartContentDocument(m_smartEditContentId, std::move(document))) {
+        return false;
+    }
+
+    // The tab's own stack stays intact (undo inside the contents keeps working);
+    // only the "has changes the object does not have" flag is cleared.
+    setModified(false);
+    return true;
 }
 
 void WorkspaceTab::flushPendingStartupImageImport()

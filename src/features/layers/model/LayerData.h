@@ -586,14 +586,76 @@ struct LayerData : public std::enable_shared_from_this<LayerData> {
      * @brief Can this layer be wrapped into a smart object ("Convert to Smart
      *        Object" target).
      *
-     * A conversion has to be able to name the pixels the object will contain.
-     * A raster layer IS those pixels and a text layer bakes its glyphs into
-     * them. Everything else is out: the Background is not a free-floating layer,
-     * a group's content is its children (converting it needs the offscreen
-     * subtree composite that does not exist yet), and smart/board layers are
-     * already isolated content.
+     * A conversion has to be able to name the contents the object will hold.
+     * A raster layer IS those pixels, a text layer bakes its glyphs into them,
+     * and a group's children become the object's nested document. Everything
+     * else is out: the Background is not a free-floating layer, and smart/board
+     * layers are already isolated content.
      */
-    bool canConvertToSmartObject() const { return !isBackground() && (isRaster() || isText()); }
+    bool canConvertToSmartObject() const
+    {
+        return !isBackground() && (isRaster() || isText() || isGroup());
+    }
+
+    /**
+     * @brief Can this layer's effects be moved into content space?
+     *
+     * Only a smart object has a content space to move them into: everything else
+     * is authored directly in document space, so the flag has no meaning there
+     * and is ignored rather than honoured (see LayerEffectState::contentSpace).
+     */
+    bool supportsContentSpaceEffects() const { return isSmart(); }
+
+    /**
+     * @brief The effects that run on the object's CONTENT, before its placement.
+     *
+     * Baked into the projected content by the canvas, which is why the compositor
+     * must not see them: it would run them a second time, on the placed result.
+     * Always empty for a layer that has no content space of its own.
+     */
+    QList<ruwa::core::effects::LayerEffectState> contentSpaceEffects() const
+    {
+        QList<ruwa::core::effects::LayerEffectState> result;
+        if (!supportsContentSpaceEffects()) {
+            return result;
+        }
+        for (const auto& effect : effects) {
+            if (effect.contentSpace) {
+                result.append(effect);
+            }
+        }
+        return result;
+    }
+
+    /// The rest of the chain: everything applied to the finished document-space
+    /// pixels. The whole chain for any layer without a content space.
+    QList<ruwa::core::effects::LayerEffectState> documentSpaceEffects() const
+    {
+        if (!supportsContentSpaceEffects()) {
+            return effects;
+        }
+        QList<ruwa::core::effects::LayerEffectState> result;
+        for (const auto& effect : effects) {
+            if (!effect.contentSpace) {
+                result.append(effect);
+            }
+        }
+        return result;
+    }
+
+    /// Cheap "is there anything to bake into the content" test.
+    bool hasContentSpaceEffects() const
+    {
+        if (!supportsContentSpaceEffects()) {
+            return false;
+        }
+        for (const auto& effect : effects) {
+            if (effect.contentSpace && effect.enabled) {
+                return true;
+            }
+        }
+        return false;
+    }
 
     /**
      * @brief Brush/fill edits currently land in this layer's mask, not its pixels.
@@ -642,6 +704,21 @@ struct LayerData : public std::enable_shared_from_this<LayerData> {
         return smartContent ? smartContent->grid.get() : nullptr;
     }
 
+    /**
+     * @brief The nested layer stack inside this smart object, or nullptr.
+     *
+     * Null both when there is no content at all and when the content is flat —
+     * a flat content's pixels are the content itself (see SmartContent).
+     */
+    SmartDocument* smartDocument() { return smartContent ? smartContent->document.get() : nullptr; }
+    const SmartDocument* smartDocument() const
+    {
+        return smartContent ? smartContent->document.get() : nullptr;
+    }
+
+    /** @brief Is this layer's content backed by a nested document */
+    bool hasSmartDocument() const { return smartContent && smartContent->document != nullptr; }
+
     /** @brief Create an empty smart content payload if none exists. Never null. */
     SmartContent* ensureSmartContent()
     {
@@ -684,6 +761,9 @@ struct LayerData : public std::enable_shared_from_this<LayerData> {
      * Installing pixels is a per-layer act, so a shared content is detached
      * first. (A future "Replace Contents" that deliberately updates every
      * instance must write through `smartContent->setGrid()` instead.)
+     *
+     * A nested document does not follow the detached layer: these pixels are the
+     * content now, which is the same rule `SmartContent::setGrid()` follows.
      */
     void setSmartGrid(std::unique_ptr<aether::TileGrid> grid)
     {

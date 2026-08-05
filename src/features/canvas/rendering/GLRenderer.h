@@ -75,6 +75,11 @@ public:
         const Color& backdropColor = Color::transparent());
     void compositeDirtyKeys(const std::vector<CompositeLayerInfo>& layers, CompositionCache& cache,
         const std::vector<TileKey>& keys, const Color& backdropColor = Color::transparent());
+    /// Flatten an arbitrary stack into CPU pixels (see
+    /// GLCompositor::compositeStackIntoGrid). Not a frame operation.
+    bool compositeStackIntoGrid(const std::vector<CompositeLayerInfo>& layers,
+        const std::unordered_set<TileKey, TileKeyHash>& keys, TileGrid& outGrid,
+        const Color& backdropColor = Color::transparent());
 
     // Legacy: single-quad canvas (kept for fallback — checkerboard)
     void drawCanvas(const Canvas& canvas, const Viewport& viewport, const Color& checkerColor1,

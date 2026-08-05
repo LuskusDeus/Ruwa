@@ -16,6 +16,7 @@
 #include "shared/tiles/TileFormat.h"
 #include "shared/tiles/TilePixelAccess.h"
 
+#include <algorithm>
 #include <limits>
 
 namespace ruwa::core::serialization {
@@ -45,6 +46,12 @@ constexpr qint64 kMaxSectionSize = static_cast<qint64>(std::numeric_limits<int>:
 // file as corrupt. Real documents nest a handful of groups deep; this only
 // exists to stop a maliciously deep tree from overflowing the call stack.
 constexpr int kMaxLayerDepth = 512;
+
+// A nested smart-object document's canvas size comes straight from the file and
+// becomes a real canvas dimension the moment those contents are opened for
+// editing, so a negative or absurd value is clamped away here rather than
+// reaching a widget.
+constexpr int kMaxSmartDocumentDimension = 1000000;
 
 // Conservative lower bounds (in bytes) on the on-disk size of one element of
 // each repeated structure. Used by countFitsInStream() to reject impossible
@@ -417,17 +424,18 @@ QByteArray ProjectSerializer::writeLayerTree(const ProjectData& data) const
     out << static_cast<quint32>(data.rootLayers.size());
 
     // Shared smart content is written by whichever entry the tree walk reaches
-    // first; the set carries that knowledge across the whole (recursive) walk.
-    QSet<QUuid> writtenSmartContentIds;
+    // first; the state carries that knowledge across the whole (recursive) walk,
+    // nested documents included.
+    SmartContentWriteState smartState;
     for (const auto& layer : data.rootLayers) {
-        writeLayerEntry(out, layer, writtenSmartContentIds);
+        writeLayerEntry(out, layer, smartState);
     }
 
     return blob;
 }
 
 void ProjectSerializer::writeLayerEntry(
-    QDataStream& out, const LayerEntry& layer, QSet<QUuid>& writtenSmartContentIds) const
+    QDataStream& out, const LayerEntry& layer, SmartContentWriteState& smartState) const
 {
     out << layer.id;
     out << layer.name;
@@ -497,8 +505,8 @@ void ProjectSerializer::writeLayerEntry(
     // v29: smart-object content identity + source. Written for every layer type
     // (a null id simply means "this layer has no smart content"), so the reader
     // never has to know which types can carry one.
-    const bool contentAlreadyWritten
-        = !layer.smartContentId.isNull() && writtenSmartContentIds.contains(layer.smartContentId);
+    const bool contentAlreadyWritten = !layer.smartContentId.isNull()
+        && smartState.writtenTileIds.contains(layer.smartContentId);
     out << layer.smartContentId;
     out << smartSourceRelativePathFor(layer.smartSourcePath, m_projectDirectory);
     out << layer.smartSourcePath;
@@ -513,7 +521,7 @@ void ProjectSerializer::writeLayerEntry(
     const bool writeTilePayload
         = (layer.type != kSerializedTextLayerType) && !contentAlreadyWritten;
     if (!layer.smartContentId.isNull() && writeTilePayload && !layer.tiles.isEmpty()) {
-        writtenSmartContentIds.insert(layer.smartContentId);
+        smartState.writtenTileIds.insert(layer.smartContentId);
     }
     out << static_cast<quint32>(writeTilePayload ? layer.tiles.size() : 0);
     if (writeTilePayload) {
@@ -522,6 +530,37 @@ void ProjectSerializer::writeLayerEntry(
             out << static_cast<qint32>(tile.y);
             out << tile.pixels;
         }
+    }
+
+    // v30: the smart object's nested document — its contents as a layer stack.
+    // Written after the composited pixels above, which stay unconditional: a
+    // reader that stops at v29 has everything it needs to DRAW the object, and
+    // only loses the ability to edit its contents as layers.
+    //
+    // Once per content, like the pixels, but tracked separately (see
+    // SmartContentWriteState). The nested roots go through the same
+    // writeLayerEntry and share the same state, so a content used both in this
+    // document and inside another object's contents is still stored once.
+    const bool writeSmartDocument = layer.hasSmartDocument && !layer.smartContentId.isNull()
+        && !smartState.writtenDocumentIds.contains(layer.smartContentId);
+    out << static_cast<quint8>(writeSmartDocument ? 1 : 0);
+    if (writeSmartDocument) {
+        smartState.writtenDocumentIds.insert(layer.smartContentId);
+        out << static_cast<qint32>(layer.smartDocumentSize.width());
+        out << static_cast<qint32>(layer.smartDocumentSize.height());
+        out << static_cast<quint8>(layer.smartDocumentFormat);
+        out << static_cast<quint32>(layer.smartDocumentLayers.size());
+        for (const auto& nested : layer.smartDocumentLayers) {
+            writeLayerEntry(out, nested, smartState);
+        }
+    }
+
+    // v30: the effect chain of a NESTED layer, which cannot use the id-keyed
+    // LayerEffects section (see LayerEntry::effects). Always written — four
+    // bytes for the layers of this document, which leave it empty.
+    out << static_cast<quint32>(layer.effects.size());
+    for (const auto& effect : layer.effects) {
+        writeLayerEffectState(out, effect);
     }
 
     // Layer mask payload (version >= 25; defaultFill + per-tile solid added in 26).
@@ -545,7 +584,7 @@ void ProjectSerializer::writeLayerEntry(
 
     out << static_cast<quint32>(layer.children.size());
     for (const auto& child : layer.children) {
-        writeLayerEntry(out, child, writtenSmartContentIds);
+        writeLayerEntry(out, child, smartState);
     }
 }
 
@@ -577,6 +616,9 @@ void ProjectSerializer::writeLayerEffectState(
     out << static_cast<quint8>(state.enabled ? 1 : 0);
     out << static_cast<quint8>(state.realtimePreviewEnabled ? 1 : 0);
     out << static_cast<quint8>(state.uiExpanded ? 1 : 0);
+    // v31: which space this filter runs in. Written before params so the reader
+    // can tell the two layouts apart by version alone.
+    out << static_cast<quint8>(state.contentSpace ? 1 : 0);
     out << state.params;
 }
 
@@ -858,7 +900,7 @@ bool ProjectSerializer::readLayerEffects(const QByteArray& blob, ProjectData& da
         }
         entry.effects.reserve(static_cast<int>(effectCount));
         for (quint32 j = 0; j < effectCount; ++j) {
-            entry.effects.append(readLayerEffectState(in));
+            entry.effects.append(readLayerEffectState(in, data.version));
             if (in.status() != QDataStream::Ok) {
                 m_lastError = QStringLiteral("Corrupted LayerEffects entry at index %1").arg(i);
                 return false;
@@ -870,13 +912,15 @@ bool ProjectSerializer::readLayerEffects(const QByteArray& blob, ProjectData& da
     return true;
 }
 
-ruwa::core::effects::LayerEffectState ProjectSerializer::readLayerEffectState(QDataStream& in) const
+ruwa::core::effects::LayerEffectState ProjectSerializer::readLayerEffectState(
+    QDataStream& in, quint32 fileVersion) const
 {
     ruwa::core::effects::LayerEffectState state;
     quint32 version = 1;
     quint8 enabled = 1;
     quint8 realtimePreviewEnabled = 1;
     quint8 uiExpanded = 1;
+    quint8 contentSpace = 0;
 
     in >> state.instanceId;
     in >> state.typeId;
@@ -884,12 +928,18 @@ ruwa::core::effects::LayerEffectState ProjectSerializer::readLayerEffectState(QD
     in >> enabled;
     in >> realtimePreviewEnabled;
     in >> uiExpanded;
+    if (fileVersion >= 31) {
+        in >> contentSpace;
+    }
     in >> state.params;
 
     state.version = version;
     state.enabled = (enabled != 0);
     state.realtimePreviewEnabled = (realtimePreviewEnabled != 0);
     state.uiExpanded = (uiExpanded != 0);
+    // Older files predate content space entirely: every effect they carry was
+    // authored in document space, which is exactly what false means.
+    state.contentSpace = (contentSpace != 0);
     return state;
 }
 
@@ -1110,6 +1160,70 @@ LayerEntry ProjectSerializer::readLayerEntry(QDataStream& in, quint32 version, q
             // depth differs from the knob.
 
             layer.tiles.append(std::move(tile));
+        }
+    }
+    if (version >= 30) {
+        quint8 hasSmartDocument = 0;
+        in >> hasSmartDocument;
+        if (in.status() != QDataStream::Ok) {
+            return layer;
+        }
+        if (hasSmartDocument != 0) {
+            qint32 docWidth = 0;
+            qint32 docHeight = 0;
+            quint8 docFormat = 0;
+            quint32 nestedCount = 0;
+            in >> docWidth;
+            in >> docHeight;
+            in >> docFormat;
+            in >> nestedCount;
+            if (in.status() != QDataStream::Ok) {
+                return layer;
+            }
+            if (!countFitsInStream(in, nestedCount, kMinLayerEntryBytes)) {
+                m_lastError = QStringLiteral("Corrupted smart-object document layer count");
+                in.setStatus(QDataStream::ReadCorruptData);
+                return layer;
+            }
+            layer.hasSmartDocument = true;
+            // Clamped, not trusted: the size is used as a canvas dimension when
+            // the contents are opened for editing.
+            layer.smartDocumentSize
+                = QSize(std::clamp<int>(docWidth, 0, kMaxSmartDocumentDimension),
+                    std::clamp<int>(docHeight, 0, kMaxSmartDocumentDimension));
+            // Unknown formats read as RGBA8 rather than indexing a switch with
+            // whatever the file said.
+            layer.smartDocumentFormat
+                = (docFormat <= 2) ? static_cast<int>(docFormat) : 0;
+            layer.smartDocumentLayers.reserve(static_cast<int>(nestedCount));
+            for (quint32 i = 0; i < nestedCount; ++i) {
+                // depth + 1: a nested document is a whole tree of its own, and
+                // the one depth budget has to bound every level of nesting
+                // together — smart objects inside smart objects included.
+                layer.smartDocumentLayers.append(readLayerEntry(
+                    in, version, tileSize, contentFormat, legacyUntaggedTiles, depth + 1));
+                if (in.status() != QDataStream::Ok) {
+                    return layer;
+                }
+            }
+        }
+
+        quint32 effectCount = 0;
+        in >> effectCount;
+        if (in.status() != QDataStream::Ok) {
+            return layer;
+        }
+        if (!countFitsInStream(in, effectCount, kMinEffectStateBytes)) {
+            m_lastError = QStringLiteral("Corrupted nested layer effect count");
+            in.setStatus(QDataStream::ReadCorruptData);
+            return layer;
+        }
+        layer.effects.reserve(static_cast<int>(effectCount));
+        for (quint32 i = 0; i < effectCount; ++i) {
+            layer.effects.append(readLayerEffectState(in, version));
+            if (in.status() != QDataStream::Ok) {
+                return layer;
+            }
         }
     }
     if (version >= 25) {

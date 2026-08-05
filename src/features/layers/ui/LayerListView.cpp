@@ -896,6 +896,17 @@ void LayerListView::onRowTextEditRequested(const LayerId& id)
     emit layerTextEditRequested(id);
 }
 
+void LayerListView::onRowSmartContentEditRequested(const LayerId& id)
+{
+    if (m_settlingDrag || m_dragActive || !m_model)
+        return;
+
+    for (auto* row : m_activeRows) {
+        row->closeRightExpandMenu();
+    }
+    emit layerSmartContentEditRequested(id);
+}
+
 void LayerListView::onRowDoubleClicked(const LayerId& id)
 {
     Q_UNUSED(id);
@@ -2240,6 +2251,8 @@ void LayerListView::connectRowSignals(LayerRowWidget* row)
     connect(row, &LayerRowWidget::maskThumbnailCtrlClicked, this,
         &LayerListView::onRowMaskThumbnailCtrlClicked);
     connect(row, &LayerRowWidget::textEditRequested, this, &LayerListView::onRowTextEditRequested);
+    connect(row, &LayerRowWidget::smartContentEditRequested, this,
+        &LayerListView::onRowSmartContentEditRequested);
     connect(row, &LayerRowWidget::doubleClicked, this, &LayerListView::onRowDoubleClicked);
     connect(row, &LayerRowWidget::expandToggled, this, &LayerListView::onRowExpandToggled);
     connect(row, &LayerRowWidget::visibilityToggled, this, &LayerListView::onRowVisibilityToggled);

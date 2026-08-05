@@ -14,6 +14,7 @@
 
 #include "features/project/ProjectData.h"
 #include "features/project/ProjectSerializer.h"
+#include "features/effects/LayerEffectTypes.h"
 #include "shared/tiles/TileFormat.h"
 
 #include <QByteArray>
@@ -475,4 +476,238 @@ TEST_CASE("Files written before v29 load with no smart content identity", "[seri
     // No identity in the file: the loader gives such a layer its own content.
     CHECK(loaded.rootLayers[0].smartContentId.isNull());
     CHECK(loaded.rootLayers[0].smartSourcePath.isEmpty());
+}
+
+TEST_CASE("A smart object's nested document round-trips and is stored once", "[serializer]")
+{
+    QTemporaryDir dir;
+    REQUIRE(dir.isValid());
+
+    ProjectData data;
+    data.projectName = QStringLiteral("nested");
+    data.canvasSize = QSize(128, 128);
+
+    const int tileBytes = static_cast<int>(aether::tileByteSize(aether::TilePixelFormat::RGBA8));
+    TileEntry tile;
+    tile.x = 0;
+    tile.y = 0;
+    tile.pixels = QByteArray(tileBytes, '\0');
+
+    // The object's contents: two roots, the lower one carrying pixels and a mask.
+    LayerEntry nestedTop;
+    nestedTop.id = QUuid::createUuid();
+    nestedTop.name = QStringLiteral("Contents top");
+    nestedTop.type = 0; // raster
+
+    LayerEntry nestedBottom;
+    nestedBottom.id = QUuid::createUuid();
+    nestedBottom.name = QStringLiteral("Contents bottom");
+    nestedBottom.type = 0;
+    nestedBottom.tiles.append(tile);
+    // A nested layer's effect chain travels inside its own entry: the id-keyed
+    // effects section is resolved against the model, which it is not part of.
+    ruwa::core::effects::LayerEffectState nestedEffect;
+    nestedEffect.typeId = QStringLiteral("blur.gaussian");
+    nestedEffect.params.insert(QStringLiteral("radius"), 4.5);
+    // v31: which space the filter runs in travels with it.
+    nestedEffect.contentSpace = true;
+    nestedBottom.effects.append(nestedEffect);
+    nestedBottom.hasMask = true;
+    TileEntry maskTile;
+    maskTile.x = 0;
+    maskTile.y = 0;
+    maskTile.solid = true;
+    maskTile.solidColor = 0xFFFFFFFFu;
+    nestedBottom.maskTiles.append(maskTile);
+
+    const QUuid contentId = QUuid::createUuid();
+    LayerEntry object;
+    object.id = QUuid::createUuid();
+    object.name = QStringLiteral("Object");
+    object.type = 6; // smart
+    object.smartContentId = contentId;
+    object.tiles.append(tile); // the COMPOSITE, always written
+    object.hasSmartDocument = true;
+    object.smartDocumentSize = QSize(64, 48);
+    object.smartDocumentFormat = 1; // RGBA16F
+    object.smartDocumentLayers.append(nestedTop);
+    object.smartDocumentLayers.append(nestedBottom);
+
+    // A second instance of the same object carries neither pixels nor contents.
+    LayerEntry instance = object;
+    instance.id = QUuid::createUuid();
+    instance.name = QStringLiteral("Object instance");
+
+    data.rootLayers.append(object);
+    data.rootLayers.append(instance);
+
+    const QString path = dir.filePath("nested.rwf");
+    ProjectSerializer writer;
+    REQUIRE(writer.save(path, data));
+
+    ProjectSerializer reader;
+    ProjectData loaded;
+    REQUIRE(reader.load(path, loaded));
+    REQUIRE(loaded.rootLayers.size() == 2);
+
+    const LayerEntry& loadedObject = loaded.rootLayers[0];
+    REQUIRE(loadedObject.hasSmartDocument);
+    CHECK(loadedObject.smartDocumentSize == QSize(64, 48));
+    CHECK(loadedObject.smartDocumentFormat == 1);
+    REQUIRE(loadedObject.smartDocumentLayers.size() == 2);
+    CHECK(loadedObject.smartDocumentLayers[0].name == QStringLiteral("Contents top"));
+    CHECK(loadedObject.smartDocumentLayers[0].id == nestedTop.id);
+
+    const LayerEntry& loadedNestedBottom = loadedObject.smartDocumentLayers[1];
+    REQUIRE(loadedNestedBottom.tiles.size() == 1);
+    CHECK(loadedNestedBottom.tiles[0].pixels.size() == tileBytes);
+    REQUIRE(loadedNestedBottom.hasMask);
+    REQUIRE(loadedNestedBottom.maskTiles.size() == 1);
+    CHECK(loadedNestedBottom.maskTiles[0].solid);
+    REQUIRE(loadedNestedBottom.effects.size() == 1);
+    CHECK(loadedNestedBottom.effects[0].typeId == QStringLiteral("blur.gaussian"));
+    CHECK(qFuzzyCompare(
+        loadedNestedBottom.effects[0].params.value(QStringLiteral("radius")).toDouble(), 4.5));
+    CHECK(loadedNestedBottom.effects[0].instanceId == nestedEffect.instanceId);
+    CHECK(loadedNestedBottom.effects[0].contentSpace);
+
+    // The composite travels with the file so it opens without re-compositing...
+    CHECK(loadedObject.tiles.size() == 1);
+    // ...and the contents are stored exactly once, like the pixels.
+    CHECK_FALSE(loaded.rootLayers[1].hasSmartDocument);
+    CHECK(loaded.rootLayers[1].smartDocumentLayers.isEmpty());
+    CHECK(loaded.rootLayers[1].tiles.isEmpty());
+    CHECK(loaded.rootLayers[1].smartContentId == contentId);
+}
+
+TEST_CASE("An empty smart content still stores its nested document", "[serializer]")
+{
+    QTemporaryDir dir;
+    REQUIRE(dir.isValid());
+
+    ProjectData data;
+    data.projectName = QStringLiteral("empty-content");
+    data.canvasSize = QSize(64, 64);
+
+    // A smart object whose composite is empty (nothing painted in it yet). Its
+    // document must not be able to claim the "already written" slot the pixels
+    // use, or the instance below would lose the tiles it does carry.
+    const QUuid contentId = QUuid::createUuid();
+    LayerEntry emptyObject;
+    emptyObject.id = QUuid::createUuid();
+    emptyObject.name = QStringLiteral("Empty object");
+    emptyObject.type = 6;
+    emptyObject.smartContentId = contentId;
+    emptyObject.hasSmartDocument = true;
+    emptyObject.smartDocumentSize = QSize(32, 32);
+    LayerEntry nested;
+    nested.id = QUuid::createUuid();
+    nested.name = QStringLiteral("Contents");
+    nested.type = 0;
+    emptyObject.smartDocumentLayers.append(nested);
+
+    LayerEntry withPixels = emptyObject;
+    withPixels.id = QUuid::createUuid();
+    withPixels.hasSmartDocument = false;
+    withPixels.smartDocumentLayers.clear();
+    TileEntry tile;
+    tile.x = 1;
+    tile.y = 1;
+    tile.pixels
+        = QByteArray(static_cast<int>(aether::tileByteSize(aether::TilePixelFormat::RGBA8)), '\0');
+    withPixels.tiles.append(tile);
+
+    data.rootLayers.append(emptyObject);
+    data.rootLayers.append(withPixels);
+
+    const QString path = dir.filePath("empty-content.rwf");
+    ProjectSerializer writer;
+    REQUIRE(writer.save(path, data));
+
+    ProjectSerializer reader;
+    ProjectData loaded;
+    REQUIRE(reader.load(path, loaded));
+    REQUIRE(loaded.rootLayers.size() == 2);
+
+    CHECK(loaded.rootLayers[0].hasSmartDocument);
+    REQUIRE(loaded.rootLayers[0].smartDocumentLayers.size() == 1);
+    // The pixels are still there: an empty document did not consume their slot.
+    REQUIRE(loaded.rootLayers[1].tiles.size() == 1);
+}
+
+TEST_CASE("A v29 file loads with no nested document", "[serializer]")
+{
+    QTemporaryDir dir;
+    REQUIRE(dir.isValid());
+
+    // A v29 smart layer: the smart identity block is present, the nested
+    // document block that follows the tiles in v30 is not.
+    const QUuid contentId = QUuid::createUuid();
+    const QByteArray layerBlob = buildBytes([&](QDataStream& s) {
+        s << quint32(1); // root layer count
+        s << QUuid::createUuid();
+        s << QStringLiteral("v29 smart");
+        s << quint8(0); // nameIsCustom
+        s << quint8(6); // type: smart
+        s << quint8(1); // visible
+        s << quint8(0); // locked
+        s << quint8(1); // expanded
+        s << qreal(1.0); // opacity
+        s << quint8(0); // blendMode
+        s << quint8(0); // groupCompositingMode
+        s << quint8(0); // displayColorIndex
+        s << quint32(0xFFFFFFFFu); // backgroundColorRgba
+        s << quint8(0); // backgroundTransparent
+        s << quint8(0); // clippedToBelow
+        for (int i = 0; i < 11; ++i) {
+            s << float(0.0f); // transform block
+        }
+        s << quint8(0); // hasFreeCorners
+        s << quint8(0); // hasDeformMesh
+        s << quint8(0); // hasTextPayload
+        s << contentId; // v29 smart content identity
+        s << QString(); // relative source path
+        s << QString(); // absolute source path
+        s << quint8(0); // sourceKind
+        s << QByteArray(); // sourceHash
+        s << quint32(0); // tile count
+        s << quint8(0); // hasMask
+        s << quint32(0); // child count
+    });
+
+    ProjectData source;
+    source.projectName = QStringLiteral("v29");
+    source.canvasSize = QSize(64, 64);
+    const QString sourcePath = dir.filePath("source-for-info.rwf");
+    ProjectSerializer writer;
+    REQUIRE(writer.save(sourcePath, source));
+
+    QFile sourceFile(sourcePath);
+    REQUIRE(sourceFile.open(QIODevice::ReadOnly));
+    const QByteArray infoBlob = extractSection(sourceFile.readAll(), kSectionProjectInfo);
+    REQUIRE_FALSE(infoBlob.isEmpty());
+
+    const QByteArray file = buildBytes([&](QDataStream& s) {
+        writeHeader(s, 29);
+        s << quint32(kSectionProjectInfo);
+        s << quint64(infoBlob.size());
+        s.writeRawData(infoBlob.constData(), infoBlob.size());
+        s << quint32(kSectionLayerTree);
+        s << quint64(layerBlob.size());
+        s.writeRawData(layerBlob.constData(), layerBlob.size());
+        s << quint32(kSectionEnd);
+        s << quint64(0);
+    });
+
+    const QString path = writeTempFile(dir, QStringLiteral("v29.rwf"), file);
+
+    ProjectSerializer reader;
+    ProjectData loaded;
+    REQUIRE(reader.load(path, loaded));
+    REQUIRE(loaded.rootLayers.size() == 1);
+    CHECK(loaded.rootLayers[0].smartContentId == contentId);
+    // Nothing invented for a file that predates nested documents: the object is
+    // flat, and opening its contents wraps the pixels into a document on demand.
+    CHECK_FALSE(loaded.rootLayers[0].hasSmartDocument);
+    CHECK(loaded.rootLayers[0].smartDocumentLayers.isEmpty());
 }

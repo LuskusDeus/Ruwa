@@ -2610,6 +2610,16 @@ Please choose a different shortcut.</source>
         <translation>Рисуй здесь</translation>
     </message>
     <message>
+        <location filename="../src/shell/tab-system/WorkspaceTab.cpp" line="3856"/>
+        <source>Smart Object</source>
+        <translation>Смарт-объект</translation>
+    </message>
+    <message>
+        <location filename="../src/shell/tab-system/WorkspaceTab.cpp" line="3959"/>
+        <source>Contents</source>
+        <translation>Содержимое</translation>
+    </message>
+    <message>
         <location filename="../src/shell/tab-system/WorkspaceTab.cpp" line="1509"/>
         <source>Building workspace panels...</source>
         <translation>Построение панелей рабочей области...</translation>
@@ -3433,6 +3443,11 @@ Ruwa использует фреймворк Qt (версия %1), динами�
         <location filename="../src/features/layers/ui/LayerRowWidget.cpp" line="3039"/>
         <source>Replace Contents...</source>
         <translation>Заменить содержимое...</translation>
+    </message>
+    <message>
+        <location filename="../src/features/layers/ui/LayerRowWidget.cpp" line="3033"/>
+        <source>Edit Contents</source>
+        <translation>Редактировать содержимое</translation>
     </message>
     <message>
         <location filename="../src/features/layers/ui/LayerRowWidget.cpp" line="3021"/>
@@ -4279,6 +4294,24 @@ Ruwa использует фреймворк Qt (версия %1), динами�
         <location filename="../src/features/settings/ShortcutsNavigatorWidget.cpp" line="315"/>
         <source>Customize</source>
         <translation>Настроить</translation>
+    </message>
+</context>
+<context>
+    <name>ruwa::ui::widgets::SmartObjectTabContextMenu</name>
+    <message>
+        <location filename="../src/shell/context-menu/SmartObjectTabContextMenu.cpp" line="49"/>
+        <source>Smart Objects</source>
+        <translation>Смарт-объекты</translation>
+    </message>
+    <message>
+        <location filename="../src/shell/context-menu/SmartObjectTabContextMenu.cpp" line="80"/>
+        <source>Close this smart object</source>
+        <translation>Закрыть этот смарт-объект</translation>
+    </message>
+    <message>
+        <location filename="../src/shell/context-menu/SmartObjectTabContextMenu.cpp" line="91"/>
+        <source>Close all smart objects</source>
+        <translation>Закрыть все смарт-объекты</translation>
     </message>
 </context>
 <context>
@@ -5519,6 +5552,11 @@ Ruwa использует фреймворк Qt (версия %1), динами�
         <location filename="../src/features/layers/ui/EffectCard.cpp" line="692"/>
         <source>Show in brush preview</source>
         <translation>Показывать в превью кисти</translation>
+    </message>
+    <message>
+        <location filename="../src/features/layers/ui/EffectCard.cpp" line="704"/>
+        <source>Apply inside contents</source>
+        <translation>Применять внутри содержимого</translation>
     </message>
     <message>
         <location filename="../src/features/layers/ui/EffectCard.cpp" line="696"/>

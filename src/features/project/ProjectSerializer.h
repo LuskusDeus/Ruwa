@@ -70,10 +70,17 @@ private:
     QByteArray writeProjectInfo(const ProjectData& data) const;
     QByteArray writeLayerTree(const ProjectData& data) const;
     QByteArray writeLayerEffects(const ProjectData& data) const;
-    /// @p writtenSmartContentIds accumulates the smart contents already written
-    /// during this tree walk, so shared content is stored once (see LayerEntry).
+    /// What a smart content has already contributed to the file during this tree
+    /// walk, so shared content is stored once (see LayerEntry). Pixels and the
+    /// nested document are tracked separately on purpose: an empty content
+    /// writes no pixels, and letting its document claim the id would strip the
+    /// tiles from the instance that does carry them.
+    struct SmartContentWriteState {
+        QSet<QUuid> writtenTileIds;
+        QSet<QUuid> writtenDocumentIds;
+    };
     void writeLayerEntry(
-        QDataStream& out, const LayerEntry& layer, QSet<QUuid>& writtenSmartContentIds) const;
+        QDataStream& out, const LayerEntry& layer, SmartContentWriteState& smartState) const;
     void writeLayerEffectState(
         QDataStream& out, const ruwa::core::effects::LayerEffectState& state) const;
 
@@ -83,7 +90,8 @@ private:
     bool readLayerEffects(const QByteArray& blob, ProjectData& data) const;
     LayerEntry readLayerEntry(QDataStream& in, quint32 version, quint32 tileSize,
         aether::TilePixelFormat contentFormat, bool legacyUntaggedTiles, int depth) const;
-    ruwa::core::effects::LayerEffectState readLayerEffectState(QDataStream& in) const;
+    ruwa::core::effects::LayerEffectState readLayerEffectState(
+        QDataStream& in, quint32 fileVersion) const;
 
     // Low-level helpers
     bool readHeader(QDataStream& in, quint32& version) const;

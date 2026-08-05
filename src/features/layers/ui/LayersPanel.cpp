@@ -1652,6 +1652,8 @@ QWidget* LayersPanel::createContent()
         &LayersPanel::onLayerMaskSelectionRequested);
     connect(m_listView, &ruwa::ui::widgets::LayerListView::layerTextEditRequested, this,
         &LayersPanel::onLayerTextEditRequested);
+    connect(m_listView, &ruwa::ui::widgets::LayerListView::layerSmartContentEditRequested, this,
+        &LayersPanel::onLayerSmartContentEditRequested);
     connect(m_listView, &ruwa::ui::widgets::LayerListView::layerExpandToggled, this,
         &LayersPanel::onLayerExpandToggled);
     connect(m_listView, &ruwa::ui::widgets::LayerListView::layerVisibilityToggled, this,
@@ -3403,6 +3405,18 @@ void LayersPanel::onLayerTextEditRequested(const LayerId& id)
     }
     syncLayerControls();
     emit layerTextEditRequested(id);
+}
+
+void LayersPanel::onLayerSmartContentEditRequested(const LayerId& id)
+{
+    // Opening the contents does not touch the document, but it moves the user to
+    // another tab — commit anything pending on this one first.
+    emit aboutToPerformTransformIncompatibleEdit();
+    if (m_layerModel.selectedLayerId() != id) {
+        m_layerModel.setSelectedLayer(id);
+        syncLayerControls();
+    }
+    emit layerSmartContentEditRequested(id);
 }
 
 void LayersPanel::onLayerDuplicateRequested(const LayerId& id)

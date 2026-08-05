@@ -76,6 +76,7 @@ signals:
     void layerContentSelectionRequested(const ruwa::core::layers::LayerId& id);
     void layerMaskSelectionRequested(const ruwa::core::layers::LayerId& id);
     void layerTextEditRequested(const ruwa::core::layers::LayerId& id);
+    void layerSmartContentEditRequested(const ruwa::core::layers::LayerId& id);
     void layerExpandToggled(const ruwa::core::layers::LayerId& id);
     void layerVisibilityToggled(const ruwa::core::layers::LayerId& id);
     void layerDragDropped(
@@ -120,6 +121,7 @@ private slots:
     void onRowThumbnailCtrlClicked(const ruwa::core::layers::LayerId& id);
     void onRowMaskThumbnailCtrlClicked(const ruwa::core::layers::LayerId& id);
     void onRowTextEditRequested(const ruwa::core::layers::LayerId& id);
+    void onRowSmartContentEditRequested(const ruwa::core::layers::LayerId& id);
     void onRowDoubleClicked(const ruwa::core::layers::LayerId& id);
     void onRowExpandToggled(const ruwa::core::layers::LayerId& id);
     void onRowVisibilityToggled(const ruwa::core::layers::LayerId& id);

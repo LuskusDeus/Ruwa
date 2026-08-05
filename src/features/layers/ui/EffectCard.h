@@ -54,6 +54,11 @@ public:
     /// Enable/disable the move actions in the overflow menu (list boundaries).
     void setMoveEnabled(bool canMoveUp, bool canMoveDown);
 
+    /// Whether the host layer HAS a content space to move this filter into (a
+    /// smart object). The overflow menu hides the choice entirely otherwise —
+    /// on a raster layer there is nothing for it to mean.
+    void setContentSpaceSupported(bool supported);
+
     // IContextMenuProvider — the "⋯" overflow menu is the project's themed
     // SimpleActions context menu, not a raw QMenu.
     ruwa::ui::widgets::ContextMenuType contextMenuType() const override;
@@ -63,6 +68,7 @@ public:
 signals:
     void enabledToggled(bool enabled);
     void previewToggled(bool enabled);
+    void contentSpaceToggled(bool contentSpace);
     void moveUpRequested();
     void moveDownRequested();
     void duplicateRequested();
@@ -120,6 +126,7 @@ private:
     QWidget* m_grip = nullptr;
     bool m_canMoveUp = false;
     bool m_canMoveDown = false;
+    bool m_contentSpaceSupported = false;
     bool m_syncing = false;
 
     // Whole-card drag dim (see setDragging). Owned by setGraphicsEffect.

@@ -75,6 +75,31 @@ bool appendStackThroughLayer(const std::vector<CompositeLayerInfo>& source,
     return false;
 }
 
+/// The backdrop colour a Background layer stands for. Shared by the live
+/// document and by an offscreen nested-document composite, so the two can never
+/// disagree about what "background" means.
+bool backgroundColorFromLayer(const ruwa::core::layers::LayerData* backgroundLayer, Color& outColor)
+{
+    if (!backgroundLayer || !backgroundLayer->visible || backgroundLayer->backgroundTransparent) {
+        return false;
+    }
+
+    const float layerOpacity = std::clamp(static_cast<float>(backgroundLayer->opacity), 0.0f, 1.0f);
+    if (layerOpacity <= 0.0f) {
+        return false;
+    }
+
+    const QColor bg = backgroundLayer->backgroundColor;
+    const float alpha = std::clamp(static_cast<float>(bg.alphaF()) * layerOpacity, 0.0f, 1.0f);
+    if (alpha <= 0.0f) {
+        return false;
+    }
+
+    outColor = Color { static_cast<float>(bg.redF()), static_cast<float>(bg.greenF()),
+        static_cast<float>(bg.blueF()), alpha };
+    return true;
+}
+
 } // namespace
 
 // ==========================================================================
@@ -184,30 +209,33 @@ bool LayerCompositingBuilder::resolveCanvasBackgroundColor(Color& outColor) cons
     if (!layerModel) {
         return false;
     }
+    return backgroundColorFromLayer(layerModel->backgroundLayer(), outColor);
+}
 
-    const auto* backgroundLayer = layerModel->backgroundLayer();
-    if (!backgroundLayer || !backgroundLayer->visible || backgroundLayer->backgroundTransparent) {
-        return false;
+bool LayerCompositingBuilder::resolveBackgroundColorForLayers(
+    const QList<std::shared_ptr<ruwa::core::layers::LayerData>>& roots, Color& outColor)
+{
+    // Roots only: a Background layer is a root-level singleton by construction
+    // (LayerModel::backgroundLayer looks no deeper either).
+    for (const auto& layer : roots) {
+        if (layer && layer->isBackground()) {
+            return backgroundColorFromLayer(layer.get(), outColor);
+        }
     }
+    return false;
+}
 
-    const float layerOpacity = std::clamp(static_cast<float>(backgroundLayer->opacity), 0.0f, 1.0f);
-    if (layerOpacity <= 0.0f) {
-        return false;
+std::vector<CompositeLayerInfo> LayerCompositingBuilder::buildOffscreenLayerStack(
+    const QList<std::shared_ptr<ruwa::core::layers::LayerData>>& roots) const
+{
+    if (roots.isEmpty()) {
+        return {};
     }
-
-    const QColor bg = backgroundLayer->backgroundColor;
-    const float alpha = std::clamp(static_cast<float>(bg.alphaF()) * layerOpacity, 0.0f, 1.0f);
-    if (alpha <= 0.0f) {
-        return false;
-    }
-
-    outColor = Color { static_cast<float>(bg.redF()), static_cast<float>(bg.greenF()),
-        static_cast<float>(bg.blueF()), alpha };
-    return true;
+    return buildLayerStackRecursive(roots, /*boardOnly=*/false, /*offscreen=*/true);
 }
 
 TileGrid* LayerCompositingBuilder::compositingGridForLayer(
-    const ruwa::core::layers::LayerData* layer) const
+    const ruwa::core::layers::LayerData* layer, bool useProjectionCache) const
 {
     if (!layer) {
         return nullptr;
@@ -218,9 +246,11 @@ TileGrid* LayerCompositingBuilder::compositingGridForLayer(
         return nullptr;
     }
     if (layer->isIsolatedPixelLayer()) {
-        auto it = m_smartProjectedGrids.constFind(layer->id);
-        if (it != m_smartProjectedGrids.constEnd() && it.value()) {
-            return it.value().get();
+        if (useProjectionCache) {
+            auto it = m_smartProjectedGrids.constFind(layer->id);
+            if (it != m_smartProjectedGrids.constEnd() && it.value()) {
+                return it.value().get();
+            }
         }
         return const_cast<TileGrid*>(layer->smartGrid());
     }
@@ -328,16 +358,25 @@ bool LayerCompositingBuilder::hasSoftMaskAlpha(const TileGrid* mask)
 }
 
 std::vector<CompositeLayerInfo> LayerCompositingBuilder::buildLayerStackRecursive(
-    const QList<std::shared_ptr<ruwa::core::layers::LayerData>>& layers, bool boardOnly) const
+    const QList<std::shared_ptr<ruwa::core::layers::LayerData>>& layers, bool boardOnly,
+    bool offscreen) const
 {
     std::vector<CompositeLayerInfo> result;
     result.reserve(layers.size());
 
-    auto* activeLayerPtr = m_context.getActiveLayer ? m_context.getActiveLayer() : nullptr;
-    const bool hasStroke = m_context.getBrushHasActiveStroke && m_context.getBrushHasActiveStroke()
-        && activeLayerPtr != nullptr;
+    // An offscreen stack describes layers that belong to ANOTHER document (a
+    // smart object's contents), so none of the live-edit state below can apply
+    // to them — and the result is baked, not previewed, so it must never carry
+    // a stroke preview or a reduced effect chain. Zeroing the inputs here is
+    // what turns the whole function static, instead of sprinkling `!offscreen`
+    // through the branches that consume them.
+    auto* activeLayerPtr
+        = (!offscreen && m_context.getActiveLayer) ? m_context.getActiveLayer() : nullptr;
+    const bool hasStroke = !offscreen && m_context.getBrushHasActiveStroke
+        && m_context.getBrushHasActiveStroke() && activeLayerPtr != nullptr;
     const TileGrid* selectionMaskGrid
-        = m_context.getSelectionMaskGrid ? m_context.getSelectionMaskGrid() : nullptr;
+        = (!offscreen && m_context.getSelectionMaskGrid) ? m_context.getSelectionMaskGrid()
+                                                         : nullptr;
     const bool selectionMaskHasSoftAlpha = selectionMaskGrid
         && (m_context.getSelectionMaskHasSoftAlpha ? m_context.getSelectionMaskHasSoftAlpha()
                                                    : hasSoftMaskAlpha(selectionMaskGrid));
@@ -352,8 +391,9 @@ std::vector<CompositeLayerInfo> LayerCompositingBuilder::buildLayerStackRecursiv
                 ? m_context.shouldPreserveAlphaForPaintMask(activeLayerPtr, selectionMaskGrid)
                 : (activeLayerPtr->alphaLock || selectionMaskHasSoftAlpha));
 
-    auto* transformController
-        = m_context.getTransformController ? m_context.getTransformController() : nullptr;
+    auto* transformController = (!offscreen && m_context.getTransformController)
+        ? m_context.getTransformController()
+        : nullptr;
     auto* renderer = m_context.getRenderer ? m_context.getRenderer() : nullptr;
     const bool useViewportTransformPreview
         = m_context.useViewportTransformPreview && m_context.useViewportTransformPreview();
@@ -400,7 +440,9 @@ std::vector<CompositeLayerInfo> LayerCompositingBuilder::buildLayerStackRecursiv
                 CompositeLayerInfo info;
                 info.id = layerData->id;
                 info.effectChainRevision = layerData->effectChainRevision;
-                info.effects = layerData->effects;
+                // See the static branch below: content-space filters are already
+                // in the projected content this grid comes from.
+                info.effects = layerData->documentSpaceEffects();
                 info.liveEditedEffectId = layerData->liveEditedEffectId;
                 info.liveEditedEffectParamKey = layerData->liveEditedEffectParamKey;
                 info.liveEffectEditGeneration = layerData->liveEffectEditGeneration;
@@ -453,7 +495,10 @@ std::vector<CompositeLayerInfo> LayerCompositingBuilder::buildLayerStackRecursiv
             // seam); the full chain is restored on commit/cancel via the same
             // transition. Handles any mix of preview on/off effects, and a fully
             // preview-off chain reduces to an empty chain (whole layer raw, cheap).
-            auto previewEffects = layerData->effects;
+            // documentSpaceEffects(): a smart object's content-space filters are
+            // already baked into its projected content, so the chain here is only
+            // what still has to run on the placed result.
+            auto previewEffects = layerData->documentSpaceEffects();
             previewEffects.removeIf(
                 [](const auto& fx) { return fx.enabled && !fx.realtimePreviewEnabled; });
 
@@ -537,7 +582,10 @@ std::vector<CompositeLayerInfo> LayerCompositingBuilder::buildLayerStackRecursiv
             CompositeLayerInfo info;
             info.id = layerData->id;
             info.effectChainRevision = layerData->effectChainRevision;
-            info.effects = layerData->effects;
+            // Content-space filters are baked into the smart object's projected
+            // content (see LayerData::documentSpaceEffects); running them here
+            // again would apply them twice, in the wrong space.
+            info.effects = layerData->documentSpaceEffects();
             info.liveEditedEffectId = layerData->liveEditedEffectId;
             info.liveEditedEffectParamKey = layerData->liveEditedEffectParamKey;
             info.liveEffectEditGeneration = layerData->liveEffectEditGeneration;
@@ -566,6 +614,22 @@ std::vector<CompositeLayerInfo> LayerCompositingBuilder::buildLayerStackRecursiv
                 // The special background layer is rendered in dedicated backdrop passes.
                 // Keeping it in the compositing stack makes affected cache tiles apply
                 // the same background alpha twice on top of the checker/backdrop.
+                //
+                // An offscreen stack has no such pass — its result IS the pixels,
+                // and a smart object flattened without its background would lose
+                // it — so there the background becomes a real solid-colour layer
+                // at the bottom of the stack. Its opacity is already folded into
+                // the resolved alpha, hence opacity 1 / Normal here.
+                Color backgroundColor = Color::transparent();
+                if (!offscreen || !backgroundColorFromLayer(layerData.get(), backgroundColor)) {
+                    continue;
+                }
+                info.hasSolidColor = true;
+                info.solidColor = backgroundColor;
+                info.opacity = 1.0f;
+                info.blendMode = 0;
+                info.clippedToBelow = false;
+                result.push_back(std::move(info));
                 continue;
             } else if (layerData->isText()) {
                 auto* mutableLayer = layerData.get();
@@ -580,7 +644,8 @@ std::vector<CompositeLayerInfo> LayerCompositingBuilder::buildLayerStackRecursiv
                 info.tileGrid = nullptr;
                 info.retainedPayload = layerData->runtimeRetainedPayload.get();
             } else {
-                info.tileGrid = compositingGridForLayer(layerData.get());
+                info.tileGrid = compositingGridForLayer(layerData.get(), /*useProjectionCache=*/
+                    !offscreen);
             }
 
             const bool isTransformTarget = transformController && transformController->isActive()
@@ -614,7 +679,7 @@ std::vector<CompositeLayerInfo> LayerCompositingBuilder::buildLayerStackRecursiv
             }
 
             if (layerData->isGroup() && layerData->hasChildren()) {
-                info.children = buildLayerStackRecursive(layerData->children, boardOnly);
+                info.children = buildLayerStackRecursive(layerData->children, boardOnly, offscreen);
                 if (boardOnly && info.children.empty()) {
                     continue;
                 }
