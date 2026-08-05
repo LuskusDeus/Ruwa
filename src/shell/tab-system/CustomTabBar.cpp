@@ -410,7 +410,26 @@ void CustomTabBar::syncSmartSlotForParent(const QUuid& parentTabId, bool animate
         return;
     }
     if (m_indexById.value(parentTabId, -1) < 0) {
-        return; // The document itself is gone or closing — nothing to hang off.
+        // The document itself is gone — its breadcrumb has nothing left to hang
+        // off, so it goes too rather than being left dangling in the strip. (A
+        // document takes its contents tabs with it, so their own items are
+        // normally already fading; this is the case where one is not.)
+        const int orphanIndex = itemIndexOfSmartChild(parentTabId);
+        if (orphanIndex >= 0 && !m_items[orphanIndex].isClosing) {
+            destroyItemAnimations(m_items[orphanIndex]);
+            m_items.removeAt(orphanIndex);
+            if (m_hoveredIndex == orphanIndex) {
+                m_hoveredIndex = -1;
+            } else if (m_hoveredIndex > orphanIndex) {
+                --m_hoveredIndex;
+            }
+            reindexItems();
+            updateLayout();
+            refreshStripAlignment(m_initialAlignDone);
+            update();
+        }
+        m_shownSmartByParent.remove(parentTabId);
+        return;
     }
 
     const int existingIndex = itemIndexOfSmartChild(parentTabId);
@@ -620,8 +639,12 @@ void CustomTabBar::onTabRemoved(const QUuid& tabId)
     // now, hence the cached parent.
     const QUuid parentTabId = m_smartParentByTab.take(tabId);
     if (parentTabId.isNull()) {
-        // Not a smart object — but it may have been a document that had one.
+        // Not a smart object — but it may have been a document that had one, and
+        // that breadcrumb must not outlive it. A sync rather than a bare erase:
+        // it is the one place that knows whether the slot is mid-fade (leave it)
+        // or still drawn for a document that is now gone (take it down).
         m_shownSmartByParent.remove(tabId);
+        syncSmartSlotForParent(tabId, true);
         return;
     }
     if (m_shownSmartByParent.value(parentTabId) == tabId) {
@@ -1214,6 +1237,10 @@ void CustomTabBar::startFadeOutAnimation(int index)
                     m_shownSmartByParent.remove(smartParentTabId);
                 }
                 syncSmartSlotForParent(smartParentTabId, true);
+            } else {
+                // A document just left the strip: its breadcrumb has lost the item
+                // it hangs off and is swept here.
+                syncSmartSlotForParent(tabId, false);
             }
         },
         Qt::SingleShotConnection);

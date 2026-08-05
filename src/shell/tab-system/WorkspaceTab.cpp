@@ -1051,6 +1051,34 @@ bool WorkspaceTab::canClose()
     return !isModified();
 }
 
+QList<QUuid> WorkspaceTab::dependentTabIds() const
+{
+    QList<QUuid> result;
+    auto* manager = tabManager();
+    if (!manager) {
+        return result;
+    }
+
+    // Asked of the open tabs rather than of the session registry: the question is
+    // "which tabs cannot outlive me", and a contents tab whose session was lost
+    // still cannot. A contents tab commits INTO this one, so once this tab is
+    // gone there is nothing left for it to commit into.
+    for (ruwa::core::BaseTab* candidate : manager->tabs()) {
+        auto* wsTab = qobject_cast<WorkspaceTab*>(candidate);
+        if (!wsTab || wsTab == this || !wsTab->isSmartContentEditor()) {
+            continue;
+        }
+        if (wsTab->smartEditParentTabId() != id()) {
+            continue;
+        }
+        // Deepest first: a nested object commits into the tab that hosts it, not
+        // into this one, so it has to be settled before its host goes.
+        result.append(wsTab->dependentTabIds());
+        result.append(wsTab->id());
+    }
+    return result;
+}
+
 void WorkspaceTab::onInitialize()
 {
     m_suppressModifiedChanges = true;

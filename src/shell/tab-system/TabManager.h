@@ -52,6 +52,11 @@ public:
     /// This removes the tab from manager state and queues deferred destruction.
     void confirmTabClosed(const QUuid& tabId);
 
+    /// Confirm every tab currently in the closing state, without waiting for its
+    /// animation. For "close everything now" paths (shutdown, close-all), where a
+    /// tab closed as a dependent of another has no animation to confirm it.
+    void confirmClosingTabs();
+
     /// Close all tabs (validates canClose for each)
     bool closeAllTabs();
 

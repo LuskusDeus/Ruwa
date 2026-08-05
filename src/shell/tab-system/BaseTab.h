@@ -6,6 +6,7 @@
 #include <QWidget>
 #include <QString>
 #include <QIcon>
+#include <QList>
 #include <QUuid>
 #include <functional>
 
@@ -63,6 +64,13 @@ public:
     void activate();
     void deactivate();
     virtual bool canClose();
+
+    /// Tabs that cannot outlive this one and must close together with it,
+    /// innermost first. TabManager closes them BEFORE this tab, so they are out
+    /// of the tab order by the time a replacement to activate is picked — and the
+    /// whole close flow is not re-entered from inside this tab's own animation.
+    virtual QList<QUuid> dependentTabIds() const { return {}; }
+
     void setNeedsThemeRefresh(bool needsRefresh);
     void applyThemeRefresh(std::function<void()> finished = {}, bool showLoading = true);
 

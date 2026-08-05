@@ -157,6 +157,8 @@ public:
 
     bool canClose() override;
 
+    QList<QUuid> dependentTabIds() const override;
+
     QVariantMap serialize() const override;
 
     // === Project File ===

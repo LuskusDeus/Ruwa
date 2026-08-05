@@ -5,6 +5,7 @@
 
 #include <QWidget>
 #include <QHash>
+#include <QList>
 #include <QUuid>
 #include <QPropertyAnimation>
 #include <QParallelAnimationGroup>
@@ -80,7 +81,12 @@ private:
 
     void slideToTab(ruwa::core::BaseTab* newTab, ruwa::core::BaseTab* oldTab);
     void slideOutClosingTab(ruwa::core::BaseTab* closingTab, ruwa::core::BaseTab* newActiveTab);
-    void finishAnimation();
+    /// Reset the animation state. @p animation is the group whose finished handler
+    /// is calling: if it is no longer the current one, a re-entrant close already
+    /// started the next slide and owns the state, so nothing is reset.
+    void finishAnimation(QParallelAnimationGroup* animation = nullptr);
+    /// Confirm every close this widget still owes TabManager.
+    void confirmPendingCloses();
     void positionTab(ruwa::core::BaseTab* tab, int xOffset);
     int determineDirection(ruwa::core::BaseTab* from, ruwa::core::BaseTab* to) const;
     void runDeferredInitAndSlide(ruwa::core::BaseTab* newTab, ruwa::core::BaseTab* oldTab);
@@ -97,6 +103,12 @@ private:
     QParallelAnimationGroup* m_animation = nullptr;
     AnimationType m_animationType = AnimationType::None;
     QUuid m_closingTabId; // Tab being closed (if CloseOut animation)
+    // Closes this widget still owes TabManager. A list, not the single
+    // m_closingTabId: closes come in bursts (a document takes its smart-object
+    // contents tabs with it) and one interrupting another must not drop the
+    // first one's confirmation — an unconfirmed tab never dies and its smart
+    // edit session never ends.
+    QList<QUuid> m_pendingCloseIds;
     int m_closingDirection = 1; // Direction for close animation: 1 = left, -1 = right
 
     int m_duration = 350;

@@ -739,7 +739,9 @@ void MainWindow::closeEvent(QCloseEvent* event)
             return;
         }
         tm->requestCloseTab(activeTab);
-        tm->confirmTabClosed(activeTab->id());
+        // Drained, not confirmed by id: a document takes its smart-object
+        // contents tabs with it and those have no close animation of their own.
+        tm->confirmClosingTabs();
         modifiedTabs.removeOne(activeWsTab);
     }
 
@@ -752,7 +754,7 @@ void MainWindow::closeEvent(QCloseEvent* event)
             return;
         }
         tm->requestCloseTab(wsTab);
-        tm->confirmTabClosed(wsTab->id());
+        tm->confirmClosingTabs();
     }
 
     // Second pass: close all remaining (non-modified) tabs
@@ -762,7 +764,7 @@ void MainWindow::closeEvent(QCloseEvent* event)
             break;
         if (!tm->requestCloseTab(tab))
             break;
-        tm->confirmTabClosed(tab->id());
+        tm->confirmClosingTabs();
     }
 
     persistWindowState();

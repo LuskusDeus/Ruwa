@@ -329,6 +329,9 @@ void AnimatedTabWidget::onTabClosing(ruwa::core::BaseTab* tab, int direction)
     m_closingTabId = tab->id();
     m_closingDirection = direction;
     m_animationType = AnimationType::CloseOut;
+    if (!m_pendingCloseIds.contains(m_closingTabId)) {
+        m_pendingCloseIds.append(m_closingTabId);
+    }
 }
 
 void AnimatedTabWidget::onTabRemoved(const QUuid& tabId)
@@ -336,9 +339,26 @@ void AnimatedTabWidget::onTabRemoved(const QUuid& tabId)
     // Tab has been fully removed from TabManager
     // Just clean up our tracking (tab will be deleted by TabManager)
     m_displayedTabs.remove(tabId);
+    m_pendingCloseIds.removeAll(tabId); // Confirmed here or by the tab strip.
     if (m_closingTabId == tabId) {
         m_closingTabId = QUuid();
         m_animationType = AnimationType::None;
+    }
+}
+
+void AnimatedTabWidget::confirmPendingCloses()
+{
+    if (!m_tabManager || m_pendingCloseIds.isEmpty()) {
+        return;
+    }
+
+    // Taken by value and cleared first: confirming re-enters (removing a document
+    // tab closes the smart-object contents tabs it hosts), and the re-entrant
+    // close has to be able to register its own pending confirmation.
+    const QList<QUuid> ids = m_pendingCloseIds;
+    m_pendingCloseIds.clear();
+    for (const QUuid& id : ids) {
+        m_tabManager->confirmTabClosed(id);
     }
 }
 
@@ -352,11 +372,9 @@ void AnimatedTabWidget::onActiveTabChanged(ruwa::core::BaseTab* newTab, ruwa::co
             tab->hide();
         }
         // If we were closing a tab, confirm it now
-        if (!m_closingTabId.isNull() && m_tabManager) {
-            m_tabManager->confirmTabClosed(m_closingTabId);
-            m_closingTabId = QUuid();
-            m_animationType = AnimationType::None;
-        }
+        m_closingTabId = QUuid();
+        m_animationType = AnimationType::None;
+        confirmPendingCloses();
         return;
     }
 
@@ -390,15 +408,14 @@ void AnimatedTabWidget::onActiveTabChanged(ruwa::core::BaseTab* newTab, ruwa::co
     } else {
         positionTab(newTab, 0);
         newTab->show();
-
-        // If we were closing but no animation, confirm immediately
-        if (!m_closingTabId.isNull() && m_tabManager) {
-            m_tabManager->confirmTabClosed(m_closingTabId);
-            m_closingTabId = QUuid();
-            m_animationType = AnimationType::None;
-        }
-
         newTab->onTransitionFinished();
+
+        // If we were closing but no animation, confirm immediately. State is reset
+        // first: the confirmation can come straight back in as another close.
+        m_closingTabId = QUuid();
+        m_animationType = AnimationType::None;
+        confirmPendingCloses();
+
         emit transitionFinished();
     }
 }
@@ -422,14 +439,12 @@ void AnimatedTabWidget::runDeferredInitAndSlide(
         // No animation source - just show
         positionTab(newTab, 0);
         newTab->show();
-
-        if (!m_closingTabId.isNull() && m_tabManager) {
-            m_tabManager->confirmTabClosed(m_closingTabId);
-            m_closingTabId = QUuid();
-            m_animationType = AnimationType::None;
-        }
-
         newTab->onTransitionFinished();
+
+        m_closingTabId = QUuid();
+        m_animationType = AnimationType::None;
+        confirmPendingCloses();
+
         emit transitionFinished();
     }
 }
@@ -540,10 +555,10 @@ void AnimatedTabWidget::slideToTab(ruwa::core::BaseTab* newTab, ruwa::core::Base
     // Store UUIDs for safe lookup after animation (tabs might be deleted during animation)
     QUuid oldTabId = oldTab->id();
     QUuid newTabId = newTab->id();
-    QUuid closingId = m_closingTabId; // Capture current closing tab ID
+    QParallelAnimationGroup* group = m_animation;
 
     connect(m_animation, &QParallelAnimationGroup::finished, this,
-        [this, oldTabId, newTabId, closingId]() {
+        [this, oldTabId, newTabId, group]() {
             // Look up tabs by UUID - they might have been deleted
             ruwa::core::BaseTab* oldT = m_displayedTabs.value(oldTabId, nullptr);
             ruwa::core::BaseTab* newT = m_displayedTabs.value(newTabId, nullptr);
@@ -559,24 +574,33 @@ void AnimatedTabWidget::slideToTab(ruwa::core::BaseTab* newTab, ruwa::core::Base
                 positionTab(newT, 0);
             }
 
-            // If we were closing a tab, confirm the close now
-            // This will trigger tabRemoved which cleans up m_displayedTabs
-            if (!closingId.isNull() && m_tabManager) {
-                m_tabManager->confirmTabClosed(closingId);
-            }
-
             if (newT) {
                 newT->onTransitionFinished();
             }
 
-            finishAnimation();
+            // The animation state is settled BEFORE the confirmations, not after:
+            // confirming a close triggers tabRemoved, and that can start the next
+            // close right here (a document removes the smart-object contents tabs
+            // it hosts) — which would run slideToTab from inside this handler. It
+            // has to find a clean slate, and the animation it starts must not be
+            // torn down by this one's cleanup.
+            finishAnimation(group);
+            confirmPendingCloses();
         });
 
     m_animation->start();
 }
 
-void AnimatedTabWidget::finishAnimation()
+void AnimatedTabWidget::finishAnimation(QParallelAnimationGroup* animation)
 {
+    if (animation && m_animation != animation) {
+        // A close that re-entered from inside this animation's finished handler
+        // already started the next slide; that one owns the state now, so only
+        // this group is disposed of.
+        animation->deleteLater();
+        return;
+    }
+
     m_animationType = AnimationType::None;
     m_closingTabId = QUuid();
     m_closingDirection = 1; // Reset to default

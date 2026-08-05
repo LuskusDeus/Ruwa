@@ -124,6 +124,21 @@ bool TabManager::requestCloseTab(BaseTab* tab)
         return false;
     }
 
+    // Tabs that cannot outlive this one (a smart object's contents tab commits
+    // INTO the tab that hosts it) close FIRST, and up front. Leaving them to be
+    // closed from this tab's tabRemoved re-enters the whole close flow from
+    // inside a running close animation, and findNextTabAfterClose below would
+    // otherwise pick one of them as the tab to activate — a contents tab of the
+    // very document that is going away.
+    for (const QUuid& dependentId : tab->dependentTabIds()) {
+        if (BaseTab* dependent = this->tab(dependentId)) {
+            requestCloseTab(dependent);
+        }
+    }
+    if (!hasTab(tab)) {
+        return false; // A dependent's close took this tab with it.
+    }
+
     const QUuid tabId = tab->id();
     const int closingIndex = m_tabOrder.indexOf(tab);
     const bool wasActive = (m_activeTab == tab);
@@ -230,10 +245,21 @@ bool TabManager::closeAllTabs()
             return false;
         }
         // For closeAllTabs, we confirm immediately (no animation needed)
-        confirmTabClosed(tab->id());
+        confirmClosingTabs();
     }
 
     return true;
+}
+
+void TabManager::confirmClosingTabs()
+{
+    // Drains rather than confirming one id: a close takes its dependent tabs with
+    // it, and those have no animation of their own to confirm them here. Each
+    // confirmation removes its entry, and a re-entrant close that adds another is
+    // picked up by the next turn of the loop.
+    while (!m_closingTabs.isEmpty()) {
+        confirmTabClosed(m_closingTabs.constBegin().key());
+    }
 }
 
 bool TabManager::activateTab(const QUuid& tabId)
