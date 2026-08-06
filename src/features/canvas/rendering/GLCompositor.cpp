@@ -278,6 +278,10 @@ void GLCompositor::compositeTile(const TileKey& key, const std::vector<Composite
 
     cacheTile.clearDirty();
     cache.grid().removeDirty(key);
+    // The one place where a cache tile's pixels are known to have changed.
+    // The display pyramid keys off this, never off texture identity — the swap
+    // above hands the tile a different texture object on every composite.
+    cache.noteTileContentChanged(key);
     const qint64 dbgSwapUs = dbgSwapTimer.nsecsElapsed() / 1000;
 
     // Accumulate per-tile stats for batch reporting

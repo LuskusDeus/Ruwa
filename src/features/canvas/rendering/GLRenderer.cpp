@@ -8,7 +8,9 @@
 #include "features/canvas/scene/CanvasDisplayTransforms.h"
 #include "shared/rendering/GLShaderProgram.h"
 #include "features/canvas/rendering/GLTileRenderer.h"
+#include "features/canvas/rendering/DisplayPyramid.h"
 #include "features/canvas/rendering/GLCompositor.h"
+#include "features/canvas/rendering/CompositeLayerKeys.h"
 #include "features/brush/rendering/GLBrushRenderer.h"
 #include "features/fill/GLFillRenderer.h"
 #include "features/transform/GLTransformRenderer.h"
@@ -18,6 +20,10 @@
 #include "features/canvas/rendering/GLTransformViewportPreviewPass.h"
 #include "features/brush/engine/BrushEngine.h"
 #include "shared/tiles/TileData.h"
+
+#include <algorithm>
+#include <cmath>
+
 namespace aether {
 
 // ==========================================================================
@@ -59,6 +65,14 @@ Result<void> GLRenderer::initialize(const QString& shaderDir)
     auto tileResult = m_tileRenderer->initialize(shaderDir);
     if (!tileResult) {
         return tileResult;
+    }
+
+    // Initialize the display pyramid. A failure here is not fatal: the tile
+    // renderer falls back to the level-zero path when the pyramid is absent.
+    m_displayPyramid = std::make_unique<DisplayPyramid>(m_gl);
+    auto pyramidResult = m_displayPyramid->initialize(shaderDir);
+    if (!pyramidResult) {
+        m_displayPyramid.reset();
     }
 
     // Initialize compositor
@@ -138,6 +152,7 @@ void GLRenderer::shutdown()
     m_targetLayerPreviewPass.reset();
     m_lassoMaskRenderer.reset();
     m_viewportCompositor.reset();
+    m_displayPyramid.reset();
     m_tileRenderer.reset();
     m_backgroundProgram.reset();
     m_canvasProgram.reset();
@@ -258,13 +273,77 @@ void GLRenderer::uploadDirtyTiles(TileGrid& grid)
 void GLRenderer::drawTiles(const TileGrid& grid, const Viewport& viewport, uint32_t canvasWidth,
     uint32_t canvasHeight, float cornerRadiusCanvasPx, bool canvasContentFlipH,
     bool canvasContentFlipV, bool compositeRoundedEdgesOverViewportBackground,
-    const Color& viewportBackgroundColor, bool clipToCanvas, bool useDisplayMipmaps)
+    const Color& viewportBackgroundColor, bool clipToCanvas, bool useDisplayMipmaps,
+    bool useDisplayPyramid)
 {
     if (m_tileRenderer) {
         m_tileRenderer->render(grid, viewport, canvasWidth, canvasHeight, cornerRadiusCanvasPx,
             canvasContentFlipH, canvasContentFlipV, compositeRoundedEdgesOverViewportBackground,
-            viewportBackgroundColor, clipToCanvas, useDisplayMipmaps);
+            viewportBackgroundColor, clipToCanvas, useDisplayMipmaps,
+            useDisplayPyramid ? m_displayPyramid.get() : nullptr);
     }
+}
+
+// ---- Display pyramid ----
+
+void GLRenderer::syncDisplayPyramid(CompositionCache& cache, const Viewport& viewport,
+    float canvasWidth, float canvasHeight, bool contentFlipH, bool contentFlipV,
+    uint32_t buildBudget)
+{
+    if (!m_displayPyramid) {
+        return;
+    }
+
+    // Defensive: one renderer is expected to serve one document for its whole
+    // life, but a swapped-in cache would otherwise keep the previous
+    // document's levels and draw them.
+    const TileGrid* sourceGrid = &cache.grid();
+    if (sourceGrid != m_displayPyramidSource) {
+        m_displayPyramidSource = sourceGrid;
+        m_displayPyramid->invalidateAll();
+    }
+
+    // Drain the feed every frame, even while zoomed in past 1:1 where nothing
+    // will be built. Skipping it would silently lose invalidations and leave
+    // the pyramid showing content that no longer exists on the next zoom-out.
+    if (cache.displayPyramidCleared()) {
+        m_displayPyramid->invalidateAll();
+    } else {
+        for (const TileKey& key : cache.displayPyramidInvalidations()) {
+            m_displayPyramid->invalidate(key);
+        }
+    }
+    cache.clearDisplayPyramidInvalidations();
+
+    const float zoom = viewport.camera().zoom();
+    if (zoom >= 1.0f) {
+        // Magnifying: no level above zero is sampled, so leave the dirt for the
+        // lazy rebuild that the next zoom-out triggers. Nothing is pending as
+        // far as THIS frame is concerned — claiming otherwise would spin the
+        // catch-up repaint forever while zoomed in.
+        m_displayPyramidPending = false;
+        return;
+    }
+
+    const VisibleWorldBounds bounds
+        = visibleWorldBounds(viewport, canvasWidth, canvasHeight, contentFlipH, contentFlipV);
+
+    DisplayPyramid::UpdateRequest request;
+    request.topLevel = std::clamp(
+        static_cast<int>(std::floor(DisplayPyramid::continuousLevelForZoom(zoom))), 0,
+        DisplayPyramid::kMaxLevel - 1);
+    request.worldMinX = bounds.minX;
+    request.worldMinY = bounds.minY;
+    request.worldMaxX = bounds.maxX;
+    request.worldMaxY = bounds.maxY;
+    request.budget = buildBudget;
+
+    m_displayPyramidPending = !m_displayPyramid->update(cache.grid(), request);
+}
+
+bool GLRenderer::hasPendingDisplayPyramidWork() const
+{
+    return m_displayPyramidPending;
 }
 
 // ---- Compositor ----

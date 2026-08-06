@@ -112,7 +112,7 @@ void collectVisibleCompositeLayerKeys(const std::vector<aether::CompositeLayerIn
     collectLevelKeys(layers, outKeys);
 }
 
-VisibleTileKeyBounds visibleTileKeyBounds(
+VisibleWorldBounds visibleWorldBounds(
     const aether::Viewport& viewport, float canvasWidth, float canvasHeight, bool flipH, bool flipV)
 {
     const auto& camera = viewport.camera();
@@ -135,7 +135,16 @@ VisibleTileKeyBounds visibleTileKeyBounds(
     const float maxX = std::max(std::max(p0.x, p1.x), std::max(p2.x, p3.x));
     const float maxY = std::max(std::max(p0.y, p1.y), std::max(p2.y, p3.y));
 
-    return { aether::worldToTile(minX, minY), aether::worldToTile(maxX, maxY) };
+    return { minX, minY, maxX, maxY };
+}
+
+VisibleTileKeyBounds visibleTileKeyBounds(
+    const aether::Viewport& viewport, float canvasWidth, float canvasHeight, bool flipH, bool flipV)
+{
+    const VisibleWorldBounds bounds
+        = visibleWorldBounds(viewport, canvasWidth, canvasHeight, flipH, flipV);
+    return { aether::worldToTile(bounds.minX, bounds.minY),
+        aether::worldToTile(bounds.maxX, bounds.maxY) };
 }
 
 bool isTileKeyVisible(const aether::TileKey& key, const VisibleTileKeyBounds& bounds)

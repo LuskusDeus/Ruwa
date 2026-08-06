@@ -1469,31 +1469,6 @@ aether::Rect incrementalLassoFillDirtyBounds(const std::vector<aether::Vector2>&
     return aether::retainedPolygonBounds({ currentAnchor, previousTip, currentTip });
 }
 
-aether::Rect visibleWorldBounds(
-    const aether::Viewport& viewport, float canvasWidth, float canvasHeight, bool flipH, bool flipV)
-{
-    const auto& camera = viewport.camera();
-    const aether::Vector2 viewportSize = viewport.size();
-    const aether::Vector2 p0
-        = aether::mirrorWorldInCanvas(camera.screenToWorld({ 0.0f, 0.0f }, viewportSize),
-            canvasWidth, canvasHeight, flipH, flipV);
-    const aether::Vector2 p1
-        = aether::mirrorWorldInCanvas(camera.screenToWorld({ viewportSize.x, 0.0f }, viewportSize),
-            canvasWidth, canvasHeight, flipH, flipV);
-    const aether::Vector2 p2
-        = aether::mirrorWorldInCanvas(camera.screenToWorld({ 0.0f, viewportSize.y }, viewportSize),
-            canvasWidth, canvasHeight, flipH, flipV);
-    const aether::Vector2 p3 = aether::mirrorWorldInCanvas(
-        camera.screenToWorld({ viewportSize.x, viewportSize.y }, viewportSize), canvasWidth,
-        canvasHeight, flipH, flipV);
-
-    const float minX = std::min(std::min(p0.x, p1.x), std::min(p2.x, p3.x));
-    const float minY = std::min(std::min(p0.y, p1.y), std::min(p2.y, p3.y));
-    const float maxX = std::max(std::max(p0.x, p1.x), std::max(p2.x, p3.x));
-    const float maxY = std::max(std::max(p0.y, p1.y), std::max(p2.y, p3.y));
-    return aether::Rect { minX, minY, maxX - minX, maxY - minY };
-}
-
 std::vector<aether::TileKey> tileKeysForRect(const aether::Rect& rect)
 {
     std::vector<aether::TileKey> keys;
@@ -1519,8 +1494,10 @@ std::vector<aether::TileKey> tileKeysForRect(const aether::Rect& rect)
 std::vector<aether::TileKey> collectVisibleKeysForBounds(const aether::Rect& bounds,
     const aether::Viewport& viewport, float canvasWidth, float canvasHeight, bool flipH, bool flipV)
 {
-    const aether::Rect visibleBounds
-        = visibleWorldBounds(viewport, canvasWidth, canvasHeight, flipH, flipV);
+    const aether::VisibleWorldBounds visible
+        = aether::visibleWorldBounds(viewport, canvasWidth, canvasHeight, flipH, flipV);
+    const aether::Rect visibleBounds { visible.minX, visible.minY, visible.maxX - visible.minX,
+        visible.maxY - visible.minY };
     return tileKeysForRect(intersectRects(bounds, visibleBounds));
 }
 
@@ -10769,9 +10746,18 @@ void OpenGLCanvasWidget::paintGL_renderSceneAndBlit(GLuint& outSceneTarget, GLin
     // anti-aliased edge blends layer content over the white background first.
     const bool compositeRoundedEdgesOverViewportBackground = hasCanvasBackground
         && canvasBackground.a >= 0.999f && finiteDocumentBounds && cornerRadiusCanvasPx > 0.0f;
+    // Bring the display pyramid up to date with whatever the composite above
+    // just changed, then draw the frame from it. Unlike the per-tile mip
+    // chains this replaces, the update is NOT deferred during a stroke: it
+    // costs about a third of the compositing that already happened this frame,
+    // and deferring it is precisely what used to flip the whole canvas to
+    // aliased for the length of a stroke.
+    m_renderer->syncDisplayPyramid(m_canvas.compositionCache(), m_viewport,
+        static_cast<float>(m_canvas.width()), static_cast<float>(m_canvas.height()),
+        effectiveContentFlipH(), effectiveContentFlipV());
     m_renderer->drawTiles(m_canvas.compositionGrid(), m_viewport, tileClipWidth, tileClipHeight,
         tileCornerRadiusCanvasPx, effectiveContentFlipH(), effectiveContentFlipV(),
-        compositeRoundedEdgesOverViewportBackground, m_backgroundColor);
+        compositeRoundedEdgesOverViewportBackground, m_backgroundColor, true, true, true);
     renderBoardLayers(boardLayerStack);
     if (renderToSceneFbo) {
         m_sceneFboManager.blitToDefaultFbo(this, defaultFbo, surfaceWidth, surfaceHeight);
@@ -12641,6 +12627,10 @@ void OpenGLCanvasWidget::paintGL()
     if (canvasCornerAnimating)
         update();
     if (!contentMutationActive && m_renderer->hasPendingVisibleDisplayMipmaps())
+        update();
+    // A pyramid tile that missed its rebuild draws stale rather than aliased,
+    // so this is a catch-up frame, not a quality fallback being undone.
+    if (m_renderer->hasPendingDisplayPyramidWork())
         update();
     if (m_viewport.camera().isAnimating() && !m_cameraAnimationFrameTimer.isActive()) {
         constexpr qint64 kCameraFrameIntervalNs = 1000000000LL / 120;

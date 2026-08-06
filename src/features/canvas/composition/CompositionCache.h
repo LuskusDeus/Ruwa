@@ -69,17 +69,56 @@ public:
     {
         m_grid.removeTile(key);
         m_dirtyPositions.erase(key);
+        noteTileContentChanged(key);
     }
 
     void clear()
     {
         m_grid.clear();
         m_dirtyPositions.clear();
+        m_displayPyramidCleared = true;
+        m_displayPyramidInvalidations.clear();
+    }
+
+    // ---- Display pyramid invalidation feed ----
+    //
+    //   Positions whose PIXELS changed since the renderer last drained this,
+    //   as opposed to m_dirtyPositions which is the "needs recompositing" work
+    //   queue. The two are not the same set: a position composited because it
+    //   was simply missing from the cache never appears in m_dirtyPositions,
+    //   and a position stops being dirty the moment it is recomposited — which
+    //   is exactly the moment the pyramid needs to hear about it.
+    //
+    //   Keyed by POSITION on purpose. A composition-cache tile does not own a
+    //   stable texture: GLCompositor::compositeTile swaps one of its ping-pong
+    //   textures into the TileData, so texture identity says nothing about
+    //   whether the content changed.
+
+    void noteTileContentChanged(const TileKey& key)
+    {
+        if (!m_displayPyramidCleared) {
+            m_displayPyramidInvalidations.insert(key);
+        }
+    }
+
+    const std::unordered_set<TileKey, TileKeyHash>& displayPyramidInvalidations() const
+    {
+        return m_displayPyramidInvalidations;
+    }
+
+    bool displayPyramidCleared() const { return m_displayPyramidCleared; }
+
+    void clearDisplayPyramidInvalidations()
+    {
+        m_displayPyramidInvalidations.clear();
+        m_displayPyramidCleared = false;
     }
 
 private:
     TileGrid m_grid;
     std::unordered_set<TileKey, TileKeyHash> m_dirtyPositions;
+    std::unordered_set<TileKey, TileKeyHash> m_displayPyramidInvalidations;
+    bool m_displayPyramidCleared = true;
 };
 
 } // namespace aether

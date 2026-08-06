@@ -23,6 +23,7 @@ namespace aether {
 
 class GLShaderProgram;
 class GLTileRenderer;
+class DisplayPyramid;
 class GLBrushRenderer;
 class GLFillRenderer;
 class GLTransformRenderer;
@@ -62,12 +63,27 @@ public:
     /// Render tile textures (alpha blended over whatever is underneath).
     /// Canvas dimensions define the mirror frame; clipToCanvas independently
     /// controls whether tiles outside that frame are discarded.
+    /// `useDisplayPyramid` opts this draw into the display pyramid. Only the
+    /// grid the pyramid actually tracks (the document's composition cache) may
+    /// set it; every other grid — the board cache, the layer screen-source
+    /// cache — keeps the level-zero path.
     void drawTiles(const TileGrid& grid, const Viewport& viewport, uint32_t canvasWidth = 0,
         uint32_t canvasHeight = 0, float cornerRadiusCanvasPx = 0.0f,
         bool canvasContentFlipH = false, bool canvasContentFlipV = false,
         bool compositeRoundedEdgesOverViewportBackground = false,
         const Color& viewportBackgroundColor = Color::transparent(), bool clipToCanvas = true,
-        bool useDisplayMipmaps = true);
+        bool useDisplayMipmaps = true, bool useDisplayPyramid = false);
+
+    // ---- Display pyramid ----
+    //
+    //   Drains the cache's invalidation feed and, when the camera is minifying,
+    //   rebuilds the levels the next draw will sample. Call once per frame,
+    //   AFTER compositing and BEFORE drawTiles.
+
+    void syncDisplayPyramid(CompositionCache& cache, const Viewport& viewport, float canvasWidth,
+        float canvasHeight, bool contentFlipH, bool contentFlipV, uint32_t buildBudget = 0);
+    bool hasPendingDisplayPyramidWork() const;
+    DisplayPyramid* displayPyramid() { return m_displayPyramid.get(); }
 
     // Compositor: composite dirty tiles from layer stack into cache
     /// Composite all dirty tiles into the cache.
@@ -117,6 +133,9 @@ private:
     // Tile renderer (handles GPU texture upload + tile quad drawing)
     std::unique_ptr<GLTileRenderer> m_tileRenderer;
 
+    // Persistent minification pyramid over the document's composition cache.
+    std::unique_ptr<DisplayPyramid> m_displayPyramid;
+
     // Compositor (FBO-based layer blending)
     std::unique_ptr<GLCompositor> m_compositor;
 
@@ -142,6 +161,11 @@ private:
     // Frame state
     uint32_t m_viewportWidth = 0;
     uint32_t m_viewportHeight = 0;
+    // Set when the last sync ran out of build budget before the visible region
+    // was clean. Only meaningful for a minifying frame — see syncDisplayPyramid.
+    bool m_displayPyramidPending = false;
+    // Identity check only — never dereferenced.
+    const TileGrid* m_displayPyramidSource = nullptr;
 
     bool m_initialized = false;
 };
