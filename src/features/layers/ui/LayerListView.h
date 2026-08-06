@@ -6,6 +6,8 @@
 
 #include "features/layers/model/LayerData.h"
 #include "features/layers/model/LayerModel.h"
+// For MultiLayerAction, which travels from a row's context menu up to the panel.
+#include "features/layers/ui/LayerRowWidget.h"
 
 #include <QWidget>
 #include <QHash>
@@ -101,6 +103,8 @@ signals:
     void layerApplyEffectsRequested(const ruwa::core::layers::LayerId& id);
     void layerToggleAlphaLockRequested(const ruwa::core::layers::LayerId& id);
     void layerToggleLockRequested(const ruwa::core::layers::LayerId& id);
+    /// Context-menu action a row raised for the whole layer selection.
+    void layerMultiActionRequested(ruwa::ui::widgets::MultiLayerAction action);
     void visibleThumbnailStateChanged();
 
 protected:
@@ -144,6 +148,7 @@ private slots:
     void onRowApplyEffectsRequested(const ruwa::core::layers::LayerId& id);
     void onRowToggleAlphaLockRequested(const ruwa::core::layers::LayerId& id);
     void onRowToggleLockRequested(const ruwa::core::layers::LayerId& id);
+    void onRowMultiActionRequested(ruwa::ui::widgets::MultiLayerAction action);
 
     // Drag signals
     void onDragCompleted(const ruwa::core::layers::LayerId& movedId, int dropInsertIndex);

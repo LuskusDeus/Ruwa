@@ -1698,6 +1698,8 @@ QWidget* LayersPanel::createContent()
         &LayersPanel::onLayerToggleAlphaLockRequested);
     connect(m_listView, &ruwa::ui::widgets::LayerListView::layerToggleLockRequested, this,
         &LayersPanel::onLayerToggleLockRequested);
+    connect(m_listView, &ruwa::ui::widgets::LayerListView::layerMultiActionRequested, this,
+        &LayersPanel::onLayerMultiActionRequested);
 
     setupToolbar(controlsWidget);
     syncLayerControls();
@@ -3567,6 +3569,312 @@ void LayersPanel::onLayerToggleLockRequested(const LayerId& id)
         m_pushUndoFn(std::move(cmd));
     }
     syncLayerControls();
+}
+
+bool LayersPanel::setSelectionLocked(bool locked)
+{
+    QList<aether::LayerPropertyCommand::Entry> entries;
+    for (const LayerId& id : m_layerModel.selectedLayerIds()) {
+        auto* layer = m_layerModel.layerById(id);
+        if (layer && !layer->isBackground() && layer->locked != locked) {
+            entries.append({ id, layer->locked, locked });
+        }
+    }
+    if (entries.isEmpty()) {
+        return false;
+    }
+
+    emit aboutToPerformTransformIncompatibleEdit();
+    for (const auto& entry : entries) {
+        m_layerModel.setLayerLocked(entry.layerId, locked);
+        emit layerLockChanged(entry.layerId, locked);
+    }
+    if (m_pushUndoFn) {
+        auto cmd = std::make_unique<aether::LayerPropertyCommand>(&m_layerModel,
+            aether::LayerPropertyCommand::Property::Locked, std::move(entries), m_requestRenderFn,
+            m_onContentChangedFn);
+        m_pushUndoFn(std::move(cmd));
+    }
+    syncLayerControls();
+    return true;
+}
+
+bool LayersPanel::setSelectionAlphaLocked(bool alphaLock)
+{
+    QList<aether::LayerPropertyCommand::Entry> entries;
+    for (const LayerId& id : m_layerModel.selectedLayerIds()) {
+        auto* layer = m_layerModel.layerById(id);
+        if (layer && layer->isRaster() && layer->alphaLock != alphaLock) {
+            entries.append({ id, layer->alphaLock, alphaLock });
+            m_layerModel.setLayerAlphaLock(id, alphaLock);
+            emit layerAlphaLockChanged(id, alphaLock);
+        }
+    }
+    if (entries.isEmpty()) {
+        return false;
+    }
+    if (m_pushUndoFn) {
+        auto cmd = std::make_unique<aether::LayerPropertyCommand>(&m_layerModel,
+            aether::LayerPropertyCommand::Property::AlphaLock, std::move(entries),
+            m_requestRenderFn, m_onContentChangedFn);
+        m_pushUndoFn(std::move(cmd));
+    }
+    syncLayerControls();
+    return true;
+}
+
+bool LayersPanel::convertSelectionToSmartObject()
+{
+    // Photoshop's semantic: the selection becomes ONE object that holds those
+    // layers. They are gathered under a fresh group and the group is what gets
+    // converted — its children become the object's nested document roots and the
+    // group layer itself turns into the smart layer, so nothing is left behind.
+    const QSet<LayerId> selected = m_layerModel.selectedLayerIds();
+    QList<LayerData*> roots;
+    for (LayerData* layer : m_layerModel.allLayersFlattened()) {
+        if (!layer || layer->isBackground() || !selected.contains(layer->id)) {
+            continue;
+        }
+        bool hasSelectedAncestor = false;
+        for (LayerData* ancestor = layer->parent; ancestor; ancestor = ancestor->parent) {
+            if (selected.contains(ancestor->id)) {
+                hasSelectedAncestor = true;
+                break;
+            }
+        }
+        if (!hasSelectedAncestor) {
+            roots.append(layer);
+        }
+    }
+    if (roots.isEmpty()) {
+        return false;
+    }
+
+    if (roots.size() == 1) {
+        // Nothing to gather. The plain conversion keeps the layer's own identity,
+        // and a group converted directly does not end up nested inside another.
+        if (!roots.first()->canConvertToSmartObject()) {
+            return false;
+        }
+        onLayerConvertToSmartObjectRequested(roots.first()->id);
+        return true;
+    }
+
+    emit aboutToPerformTransformIncompatibleEdit();
+
+    // The object lands where the topmost selected layer was, and takes its name —
+    // again what Photoshop does.
+    LayerData* anchor = roots.first();
+    const QString objectName = anchor->name;
+    LayerId parentId;
+    int insertIndex = 0;
+    LayerData* group = nullptr;
+    if (anchor->parent) {
+        parentId = anchor->parent->id;
+        insertIndex = anchor->indexInParent();
+        group = m_layerModel.createGroupIn(anchor->parent, objectName, insertIndex);
+    } else {
+        insertIndex = qMax(0, rootLayerIndex(m_layerModel, anchor));
+        group = m_layerModel.createGroup(objectName, insertIndex);
+    }
+    if (!group) {
+        return false;
+    }
+    const LayerId groupId = group->id;
+
+    // Recorded after the group exists, so the indices describe the stack the undo
+    // will actually put the layers back into (the group is removed last).
+    QList<GroupedLayerMoveRecord> moveRecords;
+    QList<LayerId> moveIds;
+    for (int i = 0; i < roots.size(); ++i) {
+        LayerData* layer = roots[i];
+        moveRecords.append({ layer->id, layer->parent ? layer->parent->id : LayerId(),
+            layer->parent ? layer->indexInParent() : rootLayerIndex(m_layerModel, layer), i });
+        moveIds.append(layer->id);
+    }
+    auto groupClone = LayerModel::cloneLayerTree(group, true);
+
+    // Gathering and converting are one step: an undo that stopped halfway would
+    // leave the user with a group they never asked for.
+    const bool transactional
+        = m_canvasLayerOps.beginUndoTransaction && m_canvasLayerOps.endUndoTransaction;
+    if (transactional) {
+        m_canvasLayerOps.beginUndoTransaction(tr("Convert to Smart Object"));
+    }
+
+    // Straight in, no insert animation: the group only lives for as long as the
+    // conversion takes to consume it.
+    m_layerModel.moveLayers(moveIds, group, 0);
+    if (m_pushUndoFn && groupClone) {
+        auto cmd = std::make_unique<CreateGroupedSelectionCommand>(&m_layerModel,
+            std::move(groupClone), std::pair<LayerId, int> { parentId, insertIndex },
+            std::move(moveRecords), m_requestRenderFn, m_onContentChangedFn);
+        m_pushUndoFn(std::move(cmd));
+    }
+
+    m_layerModel.setSelectedLayer(groupId);
+    emit layerConvertToSmartObjectRequested(groupId);
+
+    if (transactional) {
+        m_canvasLayerOps.endUndoTransaction();
+    }
+    syncLayerControls();
+    return true;
+}
+
+void LayersPanel::performSelectionCanvasOp(ruwa::ui::widgets::MultiLayerAction action)
+{
+    using ruwa::ui::widgets::MultiLayerAction;
+
+    // Which layers the operation means something for. Mirrors the enabled rules
+    // the context menu used when it built the entry.
+    const auto eligible = [action](const LayerData* layer) {
+        if (!layer || layer->isBackground()) {
+            return false;
+        }
+        switch (action) {
+        case MultiLayerAction::Rasterize:
+            return layer->isIsolatedPixelLayer() || layer->isText();
+        case MultiLayerAction::ClearPixels:
+            return layer->isPixelLayer() && layer->isRaster();
+        case MultiLayerAction::ApplyMask:
+            return layer->hasMask() && !layer->isGroup() && layer->isRaster();
+        case MultiLayerAction::InvertMask:
+            return layer->hasMask() && !layer->isGroup() && layer->canHostMask();
+        case MultiLayerAction::ApplyEffects:
+            return layer->isRaster() && !layer->effects.isEmpty();
+        default:
+            return false;
+        }
+    };
+
+    const QSet<LayerId> selected = m_layerModel.selectedLayerIds();
+    QList<LayerId> targets;
+    for (LayerData* layer : m_layerModel.allLayersFlattened()) {
+        if (layer && selected.contains(layer->id) && eligible(layer)) {
+            targets.append(layer->id);
+        }
+    }
+    if (targets.isEmpty()) {
+        return;
+    }
+
+    QString undoLabel;
+    switch (action) {
+    case MultiLayerAction::Rasterize:
+        undoLabel = tr("Rasterize Layers");
+        break;
+    case MultiLayerAction::ClearPixels:
+        undoLabel = tr("Clear Layers");
+        break;
+    case MultiLayerAction::ApplyMask:
+        undoLabel = tr("Apply Masks");
+        break;
+    case MultiLayerAction::InvertMask:
+        undoLabel = tr("Invert Masks");
+        break;
+    case MultiLayerAction::ApplyEffects:
+        undoLabel = tr("Apply Effects");
+        break;
+    default:
+        return;
+    }
+
+    emit aboutToPerformTransformIncompatibleEdit();
+
+    // Each per-layer op pushes its own undo command; one transaction collapses
+    // them into the single step the user asked for.
+    const bool transactional = targets.size() > 1 && m_canvasLayerOps.beginUndoTransaction
+        && m_canvasLayerOps.endUndoTransaction;
+    if (transactional) {
+        m_canvasLayerOps.beginUndoTransaction(undoLabel);
+    }
+
+    for (const LayerId& id : targets) {
+        // An earlier step can consume a later target — converting a group takes
+        // its children out of the model — so every layer is re-checked.
+        LayerData* layer = m_layerModel.layerById(id);
+        if (!eligible(layer)) {
+            continue;
+        }
+        switch (action) {
+        case MultiLayerAction::Rasterize:
+            emit layerRasterizeSmartRequested(id);
+            break;
+        case MultiLayerAction::ClearPixels:
+            emit layerClearPixelContentRequested(id);
+            break;
+        case MultiLayerAction::ApplyMask:
+            emit layerApplyMaskRequested(id);
+            break;
+        case MultiLayerAction::InvertMask:
+            emit layerInvertMaskRequested(id);
+            break;
+        case MultiLayerAction::ApplyEffects:
+            emit layerApplyEffectsRequested(id);
+            break;
+        default:
+            break;
+        }
+    }
+
+    if (transactional) {
+        m_canvasLayerOps.endUndoTransaction();
+    }
+    syncLayerControls();
+}
+
+void LayersPanel::onLayerMultiActionRequested(ruwa::ui::widgets::MultiLayerAction action)
+{
+    using ruwa::ui::widgets::MultiLayerAction;
+
+    switch (action) {
+    case MultiLayerAction::Duplicate:
+        duplicateSelectedLayers();
+        break;
+    case MultiLayerAction::Delete:
+        deleteSelectedLayers();
+        break;
+    case MultiLayerAction::Group:
+        onAddGroup();
+        break;
+    case MultiLayerAction::Merge:
+        performMerge();
+        break;
+    case MultiLayerAction::ConvertToSmartObject:
+        convertSelectionToSmartObject();
+        break;
+    case MultiLayerAction::ToggleVisibility:
+        toggleSelectedLayerVisibility();
+        break;
+    case MultiLayerAction::ToggleLock: {
+        // Same rule the menu labelled itself with: all locked → unlock, else lock.
+        bool allLocked = true;
+        for (const LayerData* layer : m_layerModel.selectedLayers()) {
+            if (layer && !layer->isBackground() && !layer->locked) {
+                allLocked = false;
+                break;
+            }
+        }
+        setSelectionLocked(!allLocked);
+        break;
+    }
+    case MultiLayerAction::ToggleAlphaLock: {
+        bool allAlphaLocked = true;
+        for (const LayerData* layer : m_layerModel.selectedLayers()) {
+            if (layer && layer->isRaster() && (layer->isPixelLayer() || layer->isGroup())
+                && !layer->alphaLock) {
+                allAlphaLocked = false;
+                break;
+            }
+        }
+        setSelectionAlphaLocked(!allAlphaLocked);
+        break;
+    }
+    default:
+        performSelectionCanvasOp(action);
+        break;
+    }
 }
 
 void LayersPanel::onLayerExpandToggled(const LayerId& id)

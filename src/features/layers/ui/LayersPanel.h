@@ -251,6 +251,9 @@ private slots:
     void onLayerApplyMaskRequested(const ruwa::core::layers::LayerId& id);
     void onLayerInvertMaskRequested(const ruwa::core::layers::LayerId& id);
     void onLayerApplyEffectsRequested(const ruwa::core::layers::LayerId& id);
+    /// Context menu raised on a multi-selection: the action applies to every
+    /// selected layer, not to the row that was clicked.
+    void onLayerMultiActionRequested(ruwa::ui::widgets::MultiLayerAction action);
 
     void onAddLayer();
     void onAddGroup();
@@ -278,6 +281,19 @@ private:
     bool prepareLayersForMerge(const QList<ruwa::core::layers::LayerId>& ids);
     static QString hiddenMaskMergeWarning();
     void showMergeWarning(const QString& message);
+
+    /// Lock / alpha-lock every eligible selected layer as one undo step. The
+    /// caller decides the target state; the context menu derives it the same way
+    /// the labels do (all locked → unlock, otherwise lock).
+    bool setSelectionLocked(bool locked);
+    bool setSelectionAlphaLocked(bool alphaLock);
+    /// Wrap the whole selection into a single smart object, Photoshop-style: the
+    /// selected layers become that object's contents and leave the stack. A
+    /// selection of one falls back to the plain single-layer conversion.
+    bool convertSelectionToSmartObject();
+    /// Run a per-layer canvas operation (rasterize, convert, clear, mask, effects)
+    /// over the whole selection, collapsed into a single undo step.
+    void performSelectionCanvasOp(ruwa::ui::widgets::MultiLayerAction action);
 
     void setupToolbar(QWidget* container);
     void applyToolbarTheme();

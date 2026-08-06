@@ -26,6 +26,29 @@ class BaseAnimatedButton;
 class DotGridLoadingIndicator;
 
 /**
+ * @brief Context-menu action aimed at the whole layer selection.
+ *
+ * Right-clicking a row that is part of a multi-selection keeps that selection
+ * and offers only what the whole set can do; every entry applies to each
+ * selected layer, not just the row under the cursor.
+ */
+enum class MultiLayerAction {
+    Duplicate,
+    Delete,
+    Group,
+    Merge,
+    ToggleVisibility,
+    ToggleLock,
+    ToggleAlphaLock,
+    Rasterize,
+    ConvertToSmartObject,
+    ClearPixels,
+    ApplyMask,
+    InvertMask,
+    ApplyEffects,
+};
+
+/**
  * @brief Single layer row widget with fully custom painting.
  *
  * Layout (left to right):
@@ -183,8 +206,13 @@ public:
     };
     HitZone hitTest(const QPoint& pos) const;
 
-    /// Select this row as if left-clicked (no modifiers) before showing context menu.
+    /// Select this row as if left-clicked (no modifiers) before showing the context
+    /// menu — unless the row already belongs to a multi-selection, which is kept.
     void prepareContextMenuInteraction();
+
+    /// True while this row is part of a multi-selection, i.e. its context menu
+    /// acts on every selected layer instead of this one.
+    bool contextMenuTargetsSelection() const;
 
     // IContextMenuProvider
     ContextMenuType contextMenuType() const override;
@@ -226,6 +254,8 @@ signals:
     void applyMaskRequested(const ruwa::core::layers::LayerId& id);
     void invertMaskRequested(const ruwa::core::layers::LayerId& id);
     void applyEffectsRequested(const ruwa::core::layers::LayerId& id);
+    /// Context-menu action for the whole selection (several layers are selected).
+    void multiLayerActionRequested(ruwa::ui::widgets::MultiLayerAction action);
 
 protected:
     /** Hover preview lives here: QEvent::ToolTip rides Qt's own tooltip clock
@@ -308,6 +338,10 @@ private:
     void animateMaskReveal(bool hasMask);
     void updateRightExpandButtonsGeometry();
     void updateThumbnailLoadingIndicator();
+    /// Menu contents / action routing for the multi-selection case.
+    QVariantMap selectionContextMenuContext() const;
+    void triggerSelectionContextAction(int actionId);
+
     void animateThumbnailCtrlGlow(bool in);
     void triggerThumbnailClickFlash(bool onMaskThumbnail);
     void updateThumbnailCtrlGlowState();

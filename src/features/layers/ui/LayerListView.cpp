@@ -1044,6 +1044,13 @@ void LayerListView::onRowToggleLockRequested(const LayerId& id)
     emit layerToggleLockRequested(id);
 }
 
+void LayerListView::onRowMultiActionRequested(MultiLayerAction action)
+{
+    if (m_settlingDrag || m_dragActive)
+        return;
+    emit layerMultiActionRequested(action);
+}
+
 void LayerListView::onRowEyePressed(const LayerId& id, bool wasVisible)
 {
     if (m_settlingDrag || m_dragActive)
@@ -2289,6 +2296,8 @@ void LayerListView::connectRowSignals(LayerRowWidget* row)
         &LayerListView::onRowToggleAlphaLockRequested);
     connect(row, &LayerRowWidget::toggleLayerLockRequested, this,
         &LayerListView::onRowToggleLockRequested);
+    connect(row, &LayerRowWidget::multiLayerActionRequested, this,
+        &LayerListView::onRowMultiActionRequested);
 }
 
 // ============================================================================

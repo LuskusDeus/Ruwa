@@ -2931,8 +2931,84 @@ enum LayerRowContextAction : int {
     CtxNewSmartObjectViaCopy = 14,
     CtxReplaceSmartContents = 15,
     CtxEditSmartContents = 16,
+    CtxGroupLayers = 17,
+    CtxMergeLayers = 18,
     CtxLayerColorBase = 100,
 };
+
+/// What the current layer selection as a whole can be asked to do. Every flag is
+/// "at least one selected layer qualifies", so an action stays offered as long as
+/// it means something for the set; the ones that toggle a flag also report whether
+/// the whole selection already carries it, which decides the wording.
+struct SelectionMenuState {
+    int count = 0;
+    int editableCount = 0; // non-Background: duplicate / delete / group / merge
+    bool anyEditable = false;
+    bool allVisible = true;
+    bool anyAlphaLockable = false;
+    bool allAlphaLocked = true;
+    bool allLocked = true;
+    bool anyRasterizable = false;
+    bool anyConvertible = false;
+    bool anyClearable = false;
+    bool anyMaskApplicable = false;
+    bool anyMaskInvertible = false;
+    bool anyEffectsApplicable = false;
+};
+
+SelectionMenuState summarizeSelection(ruwa::core::layers::LayerModel* model)
+{
+    SelectionMenuState s;
+    if (!model) {
+        return s;
+    }
+    for (LayerData* layer : model->selectedLayers()) {
+        if (!layer) {
+            continue;
+        }
+        ++s.count;
+        // The Background layer sits out of every structural and lock action, the
+        // same way it does in the single-layer menu.
+        if (layer->isBackground()) {
+            continue;
+        }
+        ++s.editableCount;
+        s.anyEditable = true;
+        if (!layer->visible) {
+            s.allVisible = false;
+        }
+        if (!layer->locked) {
+            s.allLocked = false;
+        }
+        if (layer->isRaster() && (layer->isPixelLayer() || layer->isGroup())) {
+            s.anyAlphaLockable = true;
+            if (!layer->alphaLock) {
+                s.allAlphaLocked = false;
+            }
+        }
+        if (layer->isIsolatedPixelLayer() || layer->isText()) {
+            s.anyRasterizable = true;
+        }
+        if (layer->canConvertToSmartObject()) {
+            s.anyConvertible = true;
+        }
+        if (layer->isPixelLayer() && layer->isRaster()) {
+            s.anyClearable = true;
+        }
+        if (layer->hasMask() && !layer->isGroup()) {
+            if (layer->isRaster()) {
+                s.anyMaskApplicable = true;
+            }
+            if (layer->canHostMask()) {
+                s.anyMaskInvertible = true;
+            }
+        }
+        if (layer->isRaster() && !layer->effects.isEmpty()) {
+            s.anyEffectsApplicable = true;
+        }
+    }
+    return s;
+}
 
 bool isLayerColorAction(int actionId)
 {
@@ -2948,9 +3024,24 @@ quint8 layerColorIndexForAction(int actionId)
 
 } // namespace
 
+bool LayerRowWidget::contextMenuTargetsSelection() const
+{
+    if (!m_data) {
+        return false;
+    }
+    auto* model = layerModelForLayerRow(this);
+    return model && model->selectionCount() > 1 && model->isSelected(m_data->id);
+}
+
 void LayerRowWidget::prepareContextMenuInteraction()
 {
     if (!m_data) {
+        return;
+    }
+    // Right-clicking inside an existing multi-selection keeps it: the menu that
+    // follows acts on every selected layer. Everywhere else the click selects
+    // the row first, the way a left click would.
+    if (contextMenuTargetsSelection()) {
         return;
     }
     emit clicked(m_data->id, Qt::NoModifier);
@@ -2966,6 +3057,9 @@ QVariantMap LayerRowWidget::contextMenuContext() const
     QVariantMap ctx;
     if (!m_data) {
         return ctx;
+    }
+    if (contextMenuTargetsSelection()) {
+        return selectionContextMenuContext();
     }
 
     QVariantList actions;
@@ -3178,9 +3272,201 @@ QVariantMap LayerRowWidget::contextMenuContext() const
     return ctx;
 }
 
+QVariantMap LayerRowWidget::selectionContextMenuContext() const
+{
+    QVariantMap ctx;
+    auto* model = layerModelForLayerRow(this);
+    const SelectionMenuState sel = summarizeSelection(model);
+    if (sel.count < 2) {
+        return ctx;
+    }
+    const int n = sel.count;
+
+    QVariantList actions;
+
+    auto appendSep = [&actions]() {
+        QVariantMap s;
+        s.insert(QStringLiteral("separator"), true);
+        actions.append(s);
+    };
+
+    auto appendAction = [&actions](int id, const QString& text, IconProvider::StandardIcon icon,
+                            bool enabled, bool danger = false) {
+        QVariantMap a;
+        a.insert(QStringLiteral("id"), id);
+        a.insert(QStringLiteral("text"), text);
+        a.insert(QStringLiteral("danger"), danger);
+        a.insert(QStringLiteral("standardIcon"), static_cast<int>(icon));
+        a.insert(QStringLiteral("enabled"), enabled);
+        actions.append(a);
+    };
+
+    appendAction(CtxDuplicate, tr("Duplicate %n layers", nullptr, n),
+        IconProvider::StandardIcon::Duplicate, sel.anyEditable);
+    appendAction(CtxDelete, tr("Delete %n layers", nullptr, n), IconProvider::StandardIcon::Trash,
+        sel.anyEditable, /*danger=*/true);
+
+    appendSep();
+
+    appendAction(CtxGroupLayers, tr("Group %n layers", nullptr, n),
+        IconProvider::StandardIcon::Folder, sel.anyEditable);
+    appendAction(CtxMergeLayers, tr("Merge %n layers", nullptr, n),
+        IconProvider::StandardIcon::ArrowDown, sel.anyEditable);
+
+    appendSep();
+
+    // One switch for the whole set: everything visible collapses to Hide, any
+    // hidden layer among them makes the action Show.
+    appendAction(CtxToggleVisibility,
+        sel.allVisible ? tr("Hide %n layers", nullptr, n) : tr("Show %n layers", nullptr, n),
+        sel.allVisible ? IconProvider::StandardIcon::EyeDeactivated
+                       : IconProvider::StandardIcon::Eye,
+        sel.anyEditable);
+
+    appendSep();
+
+    appendAction(CtxRasterizeLayer, tr("Rasterize %n layers", nullptr, n),
+        IconProvider::StandardIcon::Camera, sel.anyRasterizable);
+    // The whole selection becomes ONE object holding those layers, the way
+    // Photoshop does it — so any layer type can go in, not just the ones a
+    // single-layer conversion accepts.
+    appendAction(CtxConvertToSmartObject, tr("Convert to Smart Object"),
+        IconProvider::StandardIcon::BasicFile, sel.editableCount >= 2 || sel.anyConvertible);
+
+    if (sel.anyEffectsApplicable) {
+        appendSep();
+        appendAction(CtxApplyEffects, tr("Apply all effects"),
+            IconProvider::StandardIcon::AdjustmentLayer, true);
+    }
+
+    if (sel.anyMaskApplicable || sel.anyMaskInvertible) {
+        appendSep();
+        appendAction(CtxApplyMask, tr("Apply masks"), IconProvider::StandardIcon::LayerMask,
+            sel.anyMaskApplicable);
+        appendAction(CtxInvertMask, tr("Invert masks"), IconProvider::StandardIcon::LayerMask,
+            sel.anyMaskInvertible);
+    }
+
+    if (sel.anyClearable) {
+        appendSep();
+        appendAction(CtxClearLayer, tr("Clear %n layers", nullptr, n),
+            IconProvider::StandardIcon::Eraser, true);
+    }
+
+    appendSep();
+
+    if (sel.anyAlphaLockable) {
+        appendAction(CtxToggleAlphaLock, sel.allAlphaLocked ? tr("Unlock alpha") : tr("Lock alpha"),
+            IconProvider::StandardIcon::Alpha, true);
+    }
+    appendAction(CtxToggleLayerLock,
+        sel.allLocked ? tr("Unlock %n layers", nullptr, n) : tr("Lock %n layers", nullptr, n),
+        IconProvider::StandardIcon::Lock, sel.anyEditable);
+
+    ctx.insert(QStringLiteral("simpleActions"), QVariant::fromValue(actions));
+
+    // The strip only shows a checkmark when the whole selection already carries
+    // the same color; a mixed selection starts unmarked.
+    int sharedColorIndex = -1;
+    bool mixedColors = false;
+    for (const LayerData* layer : model->selectedLayers()) {
+        if (!layer) {
+            continue;
+        }
+        const int index = static_cast<int>(layer->displayColorIndex);
+        if (sharedColorIndex < 0) {
+            sharedColorIndex = index;
+        } else if (sharedColorIndex != index) {
+            mixedColors = true;
+            break;
+        }
+    }
+
+    QVariantList colorActions;
+    const auto& palette = displayColorPalette();
+    for (int i = 0; i < static_cast<int>(palette.size()); ++i) {
+        QVariantMap colorAction;
+        colorAction.insert(QStringLiteral("id"), CtxLayerColorBase + i);
+        colorAction.insert(QLatin1String(kKeyChecked), !mixedColors && sharedColorIndex == i);
+        colorAction.insert(QLatin1String(kKeyColorRgba), palette[static_cast<size_t>(i)].rgba());
+        if (i == 1) {
+            colorAction.insert(QLatin1String(kKeySeparatorBefore), true);
+        }
+        colorActions.append(colorAction);
+    }
+    ctx.insert(QLatin1String(kKeySimpleColorActions), colorActions);
+
+    return ctx;
+}
+
+void LayerRowWidget::triggerSelectionContextAction(int actionId)
+{
+    auto* model = layerModelForLayerRow(this);
+    if (!model) {
+        return;
+    }
+
+    if (isLayerColorAction(actionId)) {
+        const quint8 index = layerColorIndexForAction(actionId);
+        const QList<LayerId> ids = model->selectedLayerIds().values();
+        for (const LayerId& id : ids) {
+            model->setLayerDisplayColorIndex(id, index);
+        }
+        return;
+    }
+
+    switch (actionId) {
+    case CtxDuplicate:
+        emit multiLayerActionRequested(MultiLayerAction::Duplicate);
+        break;
+    case CtxDelete:
+        emit multiLayerActionRequested(MultiLayerAction::Delete);
+        break;
+    case CtxGroupLayers:
+        emit multiLayerActionRequested(MultiLayerAction::Group);
+        break;
+    case CtxMergeLayers:
+        emit multiLayerActionRequested(MultiLayerAction::Merge);
+        break;
+    case CtxToggleVisibility:
+        emit multiLayerActionRequested(MultiLayerAction::ToggleVisibility);
+        break;
+    case CtxToggleLayerLock:
+        emit multiLayerActionRequested(MultiLayerAction::ToggleLock);
+        break;
+    case CtxToggleAlphaLock:
+        emit multiLayerActionRequested(MultiLayerAction::ToggleAlphaLock);
+        break;
+    case CtxRasterizeLayer:
+        emit multiLayerActionRequested(MultiLayerAction::Rasterize);
+        break;
+    case CtxConvertToSmartObject:
+        emit multiLayerActionRequested(MultiLayerAction::ConvertToSmartObject);
+        break;
+    case CtxClearLayer:
+        emit multiLayerActionRequested(MultiLayerAction::ClearPixels);
+        break;
+    case CtxApplyMask:
+        emit multiLayerActionRequested(MultiLayerAction::ApplyMask);
+        break;
+    case CtxInvertMask:
+        emit multiLayerActionRequested(MultiLayerAction::InvertMask);
+        break;
+    case CtxApplyEffects:
+        emit multiLayerActionRequested(MultiLayerAction::ApplyEffects);
+        break;
+    default:
+        break;
+    }
+}
+
 void LayerRowWidget::onSimpleContextAction(int actionId)
 {
     if (!m_data) {
+        return;
+    }
+    if (contextMenuTargetsSelection()) {
+        triggerSelectionContextAction(actionId);
         return;
     }
     if (isLayerColorAction(actionId)) {
