@@ -50,6 +50,8 @@ Result<void> GLRenderer::initialize(const QString& shaderDir)
         return Result<void>::ok();
     }
 
+    m_shaderDir = shaderDir;
+
     auto shaderResult = createShaders(shaderDir);
     if (!shaderResult) {
         return shaderResult;
@@ -67,13 +69,8 @@ Result<void> GLRenderer::initialize(const QString& shaderDir)
         return tileResult;
     }
 
-    // Initialize the display pyramid. A failure here is not fatal: the tile
-    // renderer falls back to the level-zero path when the pyramid is absent.
-    m_displayPyramid = std::make_unique<DisplayPyramid>(m_gl);
-    auto pyramidResult = m_displayPyramid->initialize(shaderDir);
-    if (!pyramidResult) {
-        m_displayPyramid.reset();
-    }
+    // Display pyramids are created by the first syncDisplayPyramid for their
+    // slot — see the DisplayPyramidSlot doc comment.
 
     // Initialize compositor
     m_compositor = std::make_unique<GLCompositor>(m_gl);
@@ -152,7 +149,12 @@ void GLRenderer::shutdown()
     m_targetLayerPreviewPass.reset();
     m_lassoMaskRenderer.reset();
     m_viewportCompositor.reset();
-    m_displayPyramid.reset();
+    for (DisplayPyramidEntry& entry : m_displayPyramids) {
+        entry.pyramid.reset();
+        entry.source = nullptr;
+        entry.pending = false;
+        entry.initializeFailed = false;
+    }
     m_tileRenderer.reset();
     m_backgroundProgram.reset();
     m_canvasProgram.reset();
@@ -195,25 +197,6 @@ void GLRenderer::beginFrame(uint32_t width, uint32_t height)
 void GLRenderer::endFrame()
 {
     // Qt handles buffer swap
-}
-
-void GLRenderer::beginDisplayMipFrame(bool deferRegeneration)
-{
-    if (m_tileRenderer) {
-        m_tileRenderer->beginDisplayMipFrame(deferRegeneration);
-    }
-}
-
-void GLRenderer::beginUnrestrictedDisplayMipFrame()
-{
-    if (m_tileRenderer) {
-        m_tileRenderer->beginUnrestrictedDisplayMipFrame();
-    }
-}
-
-bool GLRenderer::hasPendingVisibleDisplayMipmaps() const
-{
-    return m_tileRenderer && m_tileRenderer->hasPendingVisibleDisplayMipmaps();
 }
 
 // ==========================================================================
@@ -273,44 +256,95 @@ void GLRenderer::uploadDirtyTiles(TileGrid& grid)
 void GLRenderer::drawTiles(const TileGrid& grid, const Viewport& viewport, uint32_t canvasWidth,
     uint32_t canvasHeight, float cornerRadiusCanvasPx, bool canvasContentFlipH,
     bool canvasContentFlipV, bool compositeRoundedEdgesOverViewportBackground,
-    const Color& viewportBackgroundColor, bool clipToCanvas, bool useDisplayMipmaps,
-    bool useDisplayPyramid)
+    const Color& viewportBackgroundColor, bool clipToCanvas, DisplayPyramidSlot pyramidSlot)
 {
-    if (m_tileRenderer) {
-        m_tileRenderer->render(grid, viewport, canvasWidth, canvasHeight, cornerRadiusCanvasPx,
-            canvasContentFlipH, canvasContentFlipV, compositeRoundedEdgesOverViewportBackground,
-            viewportBackgroundColor, clipToCanvas, useDisplayMipmaps,
-            useDisplayPyramid ? m_displayPyramid.get() : nullptr);
+    if (!m_tileRenderer) {
+        return;
     }
+
+    const DisplayPyramidEntry* entry = displayPyramidEntry(pyramidSlot);
+    const DisplayPyramid* pyramid = entry != nullptr ? entry->pyramid.get() : nullptr;
+    m_tileRenderer->render(grid, viewport, canvasWidth, canvasHeight, cornerRadiusCanvasPx,
+        canvasContentFlipH, canvasContentFlipV, compositeRoundedEdgesOverViewportBackground,
+        viewportBackgroundColor, clipToCanvas, pyramid);
 }
 
 // ---- Display pyramid ----
 
-void GLRenderer::syncDisplayPyramid(CompositionCache& cache, const Viewport& viewport,
-    float canvasWidth, float canvasHeight, bool contentFlipH, bool contentFlipV,
-    uint32_t buildBudget)
+size_t GLRenderer::displayPyramidSlotIndex(DisplayPyramidSlot slot)
 {
-    if (!m_displayPyramid) {
+    switch (slot) {
+    case DisplayPyramidSlot::Document:
+        return 0;
+    case DisplayPyramidSlot::Board:
+        return 1;
+    case DisplayPyramidSlot::None:
+        break;
+    }
+    return kDisplayPyramidSlotCount;
+}
+
+GLRenderer::DisplayPyramidEntry* GLRenderer::displayPyramidEntry(DisplayPyramidSlot slot)
+{
+    const size_t index = displayPyramidSlotIndex(slot);
+    return index < kDisplayPyramidSlotCount ? &m_displayPyramids[index] : nullptr;
+}
+
+const GLRenderer::DisplayPyramidEntry* GLRenderer::displayPyramidEntry(
+    DisplayPyramidSlot slot) const
+{
+    const size_t index = displayPyramidSlotIndex(slot);
+    return index < kDisplayPyramidSlotCount ? &m_displayPyramids[index] : nullptr;
+}
+
+void GLRenderer::resetDisplayPyramid(DisplayPyramidSlot slot)
+{
+    DisplayPyramidEntry* entry = displayPyramidEntry(slot);
+    if (entry == nullptr || !entry->pyramid) {
         return;
     }
+    entry->pyramid->clear();
+    entry->source = nullptr;
+    entry->pending = false;
+}
 
-    // Defensive: one renderer is expected to serve one document for its whole
-    // life, but a swapped-in cache would otherwise keep the previous
-    // document's levels and draw them.
+void GLRenderer::syncDisplayPyramid(DisplayPyramidSlot slot, CompositionCache& cache,
+    const Viewport& viewport, float canvasWidth, float canvasHeight, bool contentFlipH,
+    bool contentFlipV, const DisplayPyramidPacing& pacing)
+{
+    DisplayPyramidEntry* entry = displayPyramidEntry(slot);
+    if (entry == nullptr || entry->initializeFailed) {
+        return;
+    }
+    if (!entry->pyramid) {
+        // A failure here is not fatal: drawTiles falls back to the level-zero
+        // path when the slot has no pyramid. It is also not worth retrying every
+        // frame, hence the sticky flag.
+        auto pyramid = std::make_unique<DisplayPyramid>(m_gl);
+        if (!pyramid->initialize(m_shaderDir)) {
+            entry->initializeFailed = true;
+            return;
+        }
+        entry->pyramid = std::move(pyramid);
+    }
+
+    // Defensive: a slot is expected to serve one cache for its whole life, but a
+    // swapped-in cache would otherwise keep the previous one's levels and draw
+    // them.
     const TileGrid* sourceGrid = &cache.grid();
-    if (sourceGrid != m_displayPyramidSource) {
-        m_displayPyramidSource = sourceGrid;
-        m_displayPyramid->invalidateAll();
+    if (sourceGrid != entry->source) {
+        entry->source = sourceGrid;
+        entry->pyramid->invalidateAll();
     }
 
     // Drain the feed every frame, even while zoomed in past 1:1 where nothing
     // will be built. Skipping it would silently lose invalidations and leave
     // the pyramid showing content that no longer exists on the next zoom-out.
     if (cache.displayPyramidCleared()) {
-        m_displayPyramid->invalidateAll();
+        entry->pyramid->invalidateAll();
     } else {
         for (const TileKey& key : cache.displayPyramidInvalidations()) {
-            m_displayPyramid->invalidate(key);
+            entry->pyramid->invalidate(key);
         }
     }
     cache.clearDisplayPyramidInvalidations();
@@ -321,7 +355,7 @@ void GLRenderer::syncDisplayPyramid(CompositionCache& cache, const Viewport& vie
         // lazy rebuild that the next zoom-out triggers. Nothing is pending as
         // far as THIS frame is concerned — claiming otherwise would spin the
         // catch-up repaint forever while zoomed in.
-        m_displayPyramidPending = false;
+        entry->pending = false;
         return;
     }
 
@@ -329,21 +363,31 @@ void GLRenderer::syncDisplayPyramid(CompositionCache& cache, const Viewport& vie
         = visibleWorldBounds(viewport, canvasWidth, canvasHeight, contentFlipH, contentFlipV);
 
     DisplayPyramid::UpdateRequest request;
-    request.topLevel = std::clamp(
-        static_cast<int>(std::floor(DisplayPyramid::continuousLevelForZoom(zoom))), 0,
-        DisplayPyramid::kMaxLevel - 1);
+    request.topLevel
+        = std::clamp(static_cast<int>(std::floor(DisplayPyramid::continuousLevelForZoom(zoom))), 0,
+            DisplayPyramid::kMaxLevel - 1);
     request.worldMinX = bounds.minX;
     request.worldMinY = bounds.minY;
     request.worldMaxX = bounds.maxX;
     request.worldMaxY = bounds.maxY;
-    request.budget = buildBudget;
+    request.deferrableBudget = pacing.deferrableTileBudget;
+    if (pacing.focusPoint) {
+        request.hasFocusPoint = true;
+        request.focusX = pacing.focusPoint->x;
+        request.focusY = pacing.focusPoint->y;
+    }
 
-    m_displayPyramidPending = !m_displayPyramid->update(cache.grid(), request);
+    entry->pending = !entry->pyramid->update(cache.grid(), request);
 }
 
 bool GLRenderer::hasPendingDisplayPyramidWork() const
 {
-    return m_displayPyramidPending;
+    for (const DisplayPyramidEntry& entry : m_displayPyramids) {
+        if (entry.pending) {
+            return true;
+        }
+    }
+    return false;
 }
 
 // ---- Compositor ----

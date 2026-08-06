@@ -15,9 +15,11 @@
 #include "features/canvas/rendering/GLCompositor.h"
 
 #include <QOpenGLFunctions_4_5_Core>
+#include <QString>
 
 #include <memory>
 #include <array>
+#include <optional>
 
 namespace aether {
 
@@ -32,6 +34,31 @@ class GLLassoMaskRenderer;
 class GLTargetLayerPreviewPass;
 class GLTransformViewportPreviewPass;
 class BrushExecutionBackend;
+
+/// Which persistent display pyramid a draw samples from.
+///
+/// A pyramid's level 0 IS one particular grid, so one instance cannot serve
+/// two: every grid that wants smooth minification needs its own. `None` is the
+/// level-0 path, which is all a transient or screen-resolution grid needs.
+enum class DisplayPyramidSlot {
+    None,
+    /// The document's composition cache.
+    Document,
+    /// The board composition cache (layers outside the document frame).
+    Board,
+};
+
+/// How hard one sync is allowed to work, and where the frame's attention is.
+struct DisplayPyramidPacing {
+    /// Ceiling on rebuilds of tiles that ALREADY hold content; 0 = unlimited.
+    /// Tiles with no texture yet ignore it — deferring one of those would punch
+    /// a hole in the frame rather than leave a smooth, slightly stale patch.
+    uint32_t deferrableTileBudget = 0;
+    /// Document-space point to rebuild outward from, so whatever does end up a
+    /// frame behind is far from where the user is working. Unset = the centre of
+    /// the visible region.
+    std::optional<Vector2> focusPoint;
+};
 
 class GLRenderer {
 public:
@@ -48,9 +75,6 @@ public:
     // Frame operations
     void beginFrame(uint32_t width, uint32_t height);
     void endFrame();
-    void beginDisplayMipFrame(bool deferRegeneration);
-    void beginUnrestrictedDisplayMipFrame();
-    bool hasPendingVisibleDisplayMipmaps() const;
 
     // Draw calls
     void drawBackground(const Color& color);
@@ -63,27 +87,33 @@ public:
     /// Render tile textures (alpha blended over whatever is underneath).
     /// Canvas dimensions define the mirror frame; clipToCanvas independently
     /// controls whether tiles outside that frame are discarded.
-    /// `useDisplayPyramid` opts this draw into the display pyramid. Only the
-    /// grid the pyramid actually tracks (the document's composition cache) may
-    /// set it; every other grid — the board cache, the layer screen-source
-    /// cache — keeps the level-zero path.
+    /// `pyramidSlot` names the pyramid this draw samples when minifying. It must
+    /// be the slot whose cache owns `grid` and it must have been synced this
+    /// frame; anything else — a transient grid, the layer screen-source cache —
+    /// passes None and keeps the level-zero path.
     void drawTiles(const TileGrid& grid, const Viewport& viewport, uint32_t canvasWidth = 0,
         uint32_t canvasHeight = 0, float cornerRadiusCanvasPx = 0.0f,
         bool canvasContentFlipH = false, bool canvasContentFlipV = false,
         bool compositeRoundedEdgesOverViewportBackground = false,
         const Color& viewportBackgroundColor = Color::transparent(), bool clipToCanvas = true,
-        bool useDisplayMipmaps = true, bool useDisplayPyramid = false);
+        DisplayPyramidSlot pyramidSlot = DisplayPyramidSlot::None);
 
     // ---- Display pyramid ----
     //
     //   Drains the cache's invalidation feed and, when the camera is minifying,
-    //   rebuilds the levels the next draw will sample. Call once per frame,
-    //   AFTER compositing and BEFORE drawTiles.
+    //   rebuilds the levels the next draw will sample. Call once per frame per
+    //   slot in use, AFTER compositing and BEFORE drawTiles. The slot's storage
+    //   is created on the first sync, so a document with no board layers never
+    //   pays for a board pyramid.
 
-    void syncDisplayPyramid(CompositionCache& cache, const Viewport& viewport, float canvasWidth,
-        float canvasHeight, bool contentFlipH, bool contentFlipV, uint32_t buildBudget = 0);
+    void syncDisplayPyramid(DisplayPyramidSlot slot, CompositionCache& cache,
+        const Viewport& viewport, float canvasWidth, float canvasHeight, bool contentFlipH,
+        bool contentFlipV, const DisplayPyramidPacing& pacing = {});
+    /// Drop everything a slot holds. For a slot fed by a short-lived cache: the
+    /// stale-source check is pointer identity, and a fresh cache can land on the
+    /// address of the one before it.
+    void resetDisplayPyramid(DisplayPyramidSlot slot);
     bool hasPendingDisplayPyramidWork() const;
-    DisplayPyramid* displayPyramid() { return m_displayPyramid.get(); }
 
     // Compositor: composite dirty tiles from layer stack into cache
     /// Composite all dirty tiles into the cache.
@@ -123,6 +153,23 @@ private:
     Result<void> createEmptyVAO();
     std::array<float, 16> createCanvasModelMatrix(const Canvas& canvas) const;
 
+    static constexpr size_t kDisplayPyramidSlotCount = 2;
+    static size_t displayPyramidSlotIndex(DisplayPyramidSlot slot);
+
+    struct DisplayPyramidEntry {
+        std::unique_ptr<DisplayPyramid> pyramid;
+        // Identity check only — never dereferenced.
+        const TileGrid* source = nullptr;
+        // Set when the last sync ran out of build budget before the visible
+        // region was clean. Only meaningful for a minifying frame.
+        bool pending = false;
+        // A failed initialize() is not fatal: the draw falls back to level zero.
+        bool initializeFailed = false;
+    };
+
+    DisplayPyramidEntry* displayPyramidEntry(DisplayPyramidSlot slot);
+    const DisplayPyramidEntry* displayPyramidEntry(DisplayPyramidSlot slot) const;
+
 private:
     QOpenGLFunctions_4_5_Core* m_gl = nullptr;
 
@@ -133,8 +180,10 @@ private:
     // Tile renderer (handles GPU texture upload + tile quad drawing)
     std::unique_ptr<GLTileRenderer> m_tileRenderer;
 
-    // Persistent minification pyramid over the document's composition cache.
-    std::unique_ptr<DisplayPyramid> m_displayPyramid;
+    // Persistent minification pyramids, one per DisplayPyramidSlot.
+    std::array<DisplayPyramidEntry, kDisplayPyramidSlotCount> m_displayPyramids;
+    // Kept for the lazily created pyramids.
+    QString m_shaderDir;
 
     // Compositor (FBO-based layer blending)
     std::unique_ptr<GLCompositor> m_compositor;
@@ -161,11 +210,6 @@ private:
     // Frame state
     uint32_t m_viewportWidth = 0;
     uint32_t m_viewportHeight = 0;
-    // Set when the last sync ran out of build budget before the visible region
-    // was clean. Only meaningful for a minifying frame — see syncDisplayPyramid.
-    bool m_displayPyramidPending = false;
-    // Identity check only — never dereferenced.
-    const TileGrid* m_displayPyramidSource = nullptr;
 
     bool m_initialized = false;
 };

@@ -206,8 +206,7 @@ private:
 
     // Ceiling on retained VRAM: enough to absorb a screenful of tiles churning
     // between frames without letting an idle document sit on a large
-    // reservation. With full mip chains, 64 MB is about 192 RGBA8 display
-    // tiles, or 48 at RGBA32F.
+    // reservation. 64 MB is 256 RGBA8 tiles, or 64 at RGBA32F.
     static constexpr size_t kMaxPooledBytes = 64u * 1024u * 1024u;
 
     std::unordered_map<PoolKey, std::vector<GLuint>, PoolKeyHash> m_buckets;

@@ -81,17 +81,6 @@ inline TextureParams tileTextureParams(
     return p;
 }
 
-/// Build TextureParams for a tile that can be drawn directly into a zoomable
-/// viewport. Internal render passes still sample level zero through the texture
-/// object's regular GL_LINEAR minification state; GLTileRenderer binds a
-/// dedicated mipmapped sampler only for the final display pass.
-inline TextureParams displayTileTextureParams(TilePixelFormat f)
-{
-    TextureParams p = tileTextureParams(f);
-    p.levels = mipLevelsFor(TILE_SIZE, TILE_SIZE);
-    return p;
-}
-
 /// Create a 2D texture with immutable storage.
 ///
 /// glTextureStorage2D fixes the size and format for the texture's lifetime,

@@ -121,6 +121,18 @@
 
 namespace {
 
+/// Display-pyramid rebuilds an interactive frame may spend on tiles that already
+/// hold content. Absent tiles are never counted — see DisplayPyramidPacing.
+///
+/// A rebuild is one 258x258 draw with four taps, so the GPU side is noise; the
+/// cost that matters is ~20 GL calls each, and this caps that at the same order
+/// as one frame's compositing. A normal stroke dirties 2-6 level-zero tiles and
+/// so asks for well under ten rebuilds — the budget only ever bites on a
+/// full-canvas event (a fill preview, a transform over a big layer), which is
+/// exactly where a couple of frames of content lag in the corners of the screen
+/// is preferable to spending the frame.
+constexpr uint32_t kDisplayPyramidDeferrableBudget = 64;
+
 bool selectionStateMatches(const aether::SelectionState& lhs, const aether::SelectionState& rhs)
 {
     return lhs.layer.primaryId == rhs.layer.primaryId
@@ -2093,6 +2105,20 @@ Vector2 OpenGLCanvasWidget::documentWorldFromScreen(const Vector2& screenPx) con
         return w;
     }
     return mirrorWorldInCanvas(w, cw, ch, effectiveContentFlipH(), effectiveContentFlipV());
+}
+
+std::optional<Vector2> OpenGLCanvasWidget::displayPyramidFocusPoint() const
+{
+    // The brush cursor is the one pointer position the widget already keeps in
+    // viewport pixels every frame, and it is where the user is looking whenever
+    // content is being changed. Anything else (a transform drag, a fill preview)
+    // gets the region centre, which is no worse than the arbitrary hash order
+    // the rebuild used before.
+    if (!m_cursorOverlayState.brushVisible) {
+        return std::nullopt;
+    }
+    return documentWorldFromScreen(
+        { m_cursorOverlayState.brushCenterX, m_cursorOverlayState.brushCenterY });
 }
 
 Vector2 OpenGLCanvasWidget::screenFromDocumentWorld(const Vector2& documentWorld) const
@@ -8512,7 +8538,6 @@ QImage OpenGLCanvasWidget::renderCompositedRegion(const QRect& worldRect, const 
     overviewViewport.camera().setZoom(std::min(zoomX, zoomY));
     overviewViewport.camera().setRotation(0.0f);
 
-    m_renderer->beginUnrestrictedDisplayMipFrame();
     m_renderer->beginFrame(targetW, targetH);
     glClearColor(0.0f, 0.0f, 0.0f, 0.0f);
     glClear(GL_COLOR_BUFFER_BIT);
@@ -8530,8 +8555,16 @@ QImage OpenGLCanvasWidget::renderCompositedRegion(const QRect& worldRect, const 
     const bool clipTilesToDocumentBounds = hasFiniteDocumentBounds();
     const uint32_t tileClipWidth = clipTilesToDocumentBounds ? m_canvas.width() : 0u;
     const uint32_t tileClipHeight = clipTilesToDocumentBounds ? m_canvas.height() : 0u;
-    m_renderer->drawTiles(
-        m_canvas.compositionGrid(), overviewViewport, tileClipWidth, tileClipHeight);
+    // An overview is minified by definition, so it needs the pyramid as much as
+    // the interactive frame does — and more of it: the request is built from
+    // THIS viewport, which sees the whole document at once. Unlimited budget,
+    // because a half-built export is not a frame that gets a second chance.
+    m_renderer->syncDisplayPyramid(DisplayPyramidSlot::Document, m_canvas.compositionCache(),
+        overviewViewport, static_cast<float>(m_canvas.width()),
+        static_cast<float>(m_canvas.height()), false, false);
+    m_renderer->drawTiles(m_canvas.compositionGrid(), overviewViewport, tileClipWidth,
+        tileClipHeight, 0.0f, false, false, false, Color::transparent(), true,
+        DisplayPyramidSlot::Document);
 
     if (m_layerCompositingBuilder && !m_exportPreviewHideBoardLayers) {
         const auto& boardLayerStack = m_layerCompositingBuilder->buildBoardLayerStack();
@@ -8542,7 +8575,17 @@ QImage OpenGLCanvasWidget::renderCompositedRegion(const QRect& worldRect, const 
                 CompositionCache boardCache;
                 boardCache.markDirty(boardKeys);
                 m_renderer->compositeAllDirty(boardLayerStack, boardCache);
-                m_renderer->drawTiles(boardCache.grid(), overviewViewport, 0u, 0u);
+                // This cache lives and dies inside this call, so the board slot
+                // starts from nothing both here and on the next interactive
+                // frame: the slot's staleness check is pointer identity and a
+                // local object can reuse an address.
+                m_renderer->resetDisplayPyramid(DisplayPyramidSlot::Board);
+                m_renderer->syncDisplayPyramid(DisplayPyramidSlot::Board, boardCache,
+                    overviewViewport, static_cast<float>(m_canvas.width()),
+                    static_cast<float>(m_canvas.height()), false, false);
+                m_renderer->drawTiles(boardCache.grid(), overviewViewport, 0u, 0u, 0.0f, false,
+                    false, false, Color::transparent(), true, DisplayPyramidSlot::Board);
+                m_renderer->resetDisplayPyramid(DisplayPyramidSlot::Board);
             }
         }
     }
@@ -8645,8 +8688,7 @@ QImage OpenGLCanvasWidget::grabCanvasImage(const QRect& worldRect)
 
     glViewport(0, 0, static_cast<GLsizei>(cw), static_cast<GLsizei>(ch));
 
-    // Render canvas to FBO
-    m_renderer->beginUnrestrictedDisplayMipFrame();
+    // Render canvas to FBO. Strictly 1:1, so no minification and no pyramid.
     m_renderer->beginFrame(cw, ch);
 
     // Clear to transparent so hidden/transparent background exports correctly
@@ -10683,9 +10725,23 @@ void OpenGLCanvasWidget::renderBoardLayers(const std::vector<CompositeLayerInfo>
         return;
     }
 
+    // The board gets its own pyramid: level 0 of a pyramid IS one grid, and this
+    // is a different grid from the document's cache. Without it the board would
+    // be the one aliased thing in a smooth zoomed-out frame.
+    //
+    // Board tiles are composited only where visible (see above), so a level tile
+    // straddling the window edge box-filters transparency in from the neighbour
+    // that was culled. That is confined to the outermost texel of the frame and
+    // heals as soon as panning composites the tile.
+    DisplayPyramidPacing boardPacing;
+    boardPacing.deferrableTileBudget = kDisplayPyramidDeferrableBudget;
+    boardPacing.focusPoint = displayPyramidFocusPoint();
+    m_renderer->syncDisplayPyramid(DisplayPyramidSlot::Board, m_boardCompositionCache, m_viewport,
+        static_cast<float>(m_canvas.width()), static_cast<float>(m_canvas.height()),
+        effectiveContentFlipH(), effectiveContentFlipV(), boardPacing);
     m_renderer->drawTiles(m_boardCompositionCache.grid(), m_viewport, m_canvas.width(),
         m_canvas.height(), 0.0f, effectiveContentFlipH(), effectiveContentFlipV(), false,
-        Color::transparent(), false);
+        Color::transparent(), false, DisplayPyramidSlot::Board);
 }
 
 void OpenGLCanvasWidget::paintGL_renderSceneAndBlit(GLuint& outSceneTarget, GLint defaultFbo,
@@ -10747,17 +10803,22 @@ void OpenGLCanvasWidget::paintGL_renderSceneAndBlit(GLuint& outSceneTarget, GLin
     const bool compositeRoundedEdgesOverViewportBackground = hasCanvasBackground
         && canvasBackground.a >= 0.999f && finiteDocumentBounds && cornerRadiusCanvasPx > 0.0f;
     // Bring the display pyramid up to date with whatever the composite above
-    // just changed, then draw the frame from it. Unlike the per-tile mip
-    // chains this replaces, the update is NOT deferred during a stroke: it
-    // costs about a third of the compositing that already happened this frame,
-    // and deferring it is precisely what used to flip the whole canvas to
-    // aliased for the length of a stroke.
-    m_renderer->syncDisplayPyramid(m_canvas.compositionCache(), m_viewport,
-        static_cast<float>(m_canvas.width()), static_cast<float>(m_canvas.height()),
-        effectiveContentFlipH(), effectiveContentFlipV());
+    // just changed, then draw the frame from it. Unlike the per-tile mip chains
+    // this replaces, the update is NOT suspended during a stroke: it costs about
+    // a third of the compositing that already happened this frame, and
+    // suspending it is precisely what used to flip the whole canvas to aliased
+    // for the length of a stroke. The budget below only ever bounds HOW MUCH is
+    // refreshed per frame, never whether the pyramid is used.
+    DisplayPyramidPacing documentPacing;
+    documentPacing.deferrableTileBudget = kDisplayPyramidDeferrableBudget;
+    documentPacing.focusPoint = displayPyramidFocusPoint();
+    m_renderer->syncDisplayPyramid(DisplayPyramidSlot::Document, m_canvas.compositionCache(),
+        m_viewport, static_cast<float>(m_canvas.width()), static_cast<float>(m_canvas.height()),
+        effectiveContentFlipH(), effectiveContentFlipV(), documentPacing);
     m_renderer->drawTiles(m_canvas.compositionGrid(), m_viewport, tileClipWidth, tileClipHeight,
         tileCornerRadiusCanvasPx, effectiveContentFlipH(), effectiveContentFlipV(),
-        compositeRoundedEdgesOverViewportBackground, m_backgroundColor, true, true, true);
+        compositeRoundedEdgesOverViewportBackground, m_backgroundColor, true,
+        DisplayPyramidSlot::Document);
     renderBoardLayers(boardLayerStack);
     if (renderToSceneFbo) {
         m_sceneFboManager.blitToDefaultFbo(this, defaultFbo, surfaceWidth, surfaceHeight);
@@ -12502,7 +12563,6 @@ void OpenGLCanvasWidget::paintGL()
         || (m_transformController.isActive() && !viewportTransformPreviewActive)
         || m_pendingTransform.active || m_autoApplyingTransform
         || m_canvas.undoManager().isUndoRedoInProgress();
-    m_renderer->beginDisplayMipFrame(contentMutationActive);
     paintGLCompositeContexts()[this] = PaintGLCompositeContext {
         paintGLCameraStateChanged(previousCameraFrameState, currentCameraFrameState)
             && !contentMutationActive,
@@ -12625,8 +12685,6 @@ void OpenGLCanvasWidget::paintGL()
     if (fillPreviewAnimating)
         update();
     if (canvasCornerAnimating)
-        update();
-    if (!contentMutationActive && m_renderer->hasPendingVisibleDisplayMipmaps())
         update();
     // A pyramid tile that missed its rebuild draws stale rather than aliased,
     // so this is a catch-up frame, not a quality fallback being undone.

@@ -165,9 +165,11 @@ void GLCompositor::shutdown()
 
 void GLCompositor::ensurePingPongTextures()
 {
-    // Only the main ping-pong pair is swapped into the final composition cache,
-    // so only that pair needs storage for a complete display mip chain.
-    const TextureParams kDisplayTileParams = displayTileTextureParams(kDefaultTileFormat);
+    // Every one of these is a plain single-level tile. The main ping-pong pair
+    // used to carry a full display mip chain because it is swapped into the
+    // composition cache and the cache tiles were the ones drawn minified; the
+    // display pyramid does that job now and keeps its own storage, so the chain
+    // would be pure VRAM.
     const TextureParams kWorkingTileParams = tileTextureParams(kDefaultTileFormat);
     auto ensureTex = [this](GLuint& tex, const TextureParams& params) {
         if (!tex)
@@ -175,7 +177,7 @@ void GLCompositor::ensurePingPongTextures()
     };
 
     for (int i = 0; i < 2; ++i)
-        ensureTex(m_pingPongTex[i], kDisplayTileParams);
+        ensureTex(m_pingPongTex[i], kWorkingTileParams);
     ensureTex(m_groupTempTex[0], kWorkingTileParams);
     ensureTex(m_groupTempTex[1], kWorkingTileParams);
     ensureTex(m_neighborhoodCenterTex, kWorkingTileParams);
@@ -268,7 +270,7 @@ void GLCompositor::compositeTile(const TileKey& key, const std::vector<Composite
     // Transfer result to cache tile via texture swap (zero GPU copy).
     TileData& cacheTile = cache.grid().getOrCreateTile(key);
     if (!cacheTile.hasTexture()) {
-        tileRenderer->ensureDisplayTileTexture(cacheTile);
+        tileRenderer->ensureTileTexture(cacheTile);
     }
 
     const int resultSlot = (resultTex == m_pingPongTex[0]) ? 0 : 1;

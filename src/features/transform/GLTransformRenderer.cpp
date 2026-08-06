@@ -589,10 +589,18 @@ void GLTransformRenderer::buildSourceAtlas(
     m_atlasWidth = m_atlasCols * TILE_SIZE;
     m_atlasHeight = m_atlasRows * TILE_SIZE;
 
-    // 2. Create atlas texture
+    // 2. Create atlas texture.
+    //
+    // With a mip chain: the atlas is at document resolution, so the viewport
+    // preview reads it minified by the camera zoom, and a single tap there aliases
+    // exactly like point sampling (it is why a zoomed-out transform preview used
+    // to look nothing like the smooth canvas around it). The bake samples level 0
+    // through the texture's own non-mipmap filter, so the extra levels change
+    // nothing about committed pixels.
     const GLint filter = useNearestFilter ? GL_NEAREST : GL_LINEAR;
-    m_atlasTexture = createTexture2D(
-        m_gl, m_atlasWidth, m_atlasHeight, tileTextureParams(srcGrid.format(), filter, filter));
+    TextureParams atlasParams = tileTextureParams(srcGrid.format(), filter, filter);
+    atlasParams.levels = mipLevelsFor(m_atlasWidth, m_atlasHeight);
+    m_atlasTexture = createTexture2D(m_gl, m_atlasWidth, m_atlasHeight, atlasParams);
 
     // Clear to transparent
     GLint prevFBO = 0;
@@ -644,6 +652,10 @@ void GLTransformRenderer::buildSourceAtlas(
     // Restore state
     m_gl->glBindFramebuffer(GL_FRAMEBUFFER, prevFBO);
     m_gl->glViewport(prevViewport[0], prevViewport[1], prevViewport[2], prevViewport[3]);
+
+    // Once per atlas build, which is once per transform session (plus whenever the
+    // source changes) — not per frame.
+    m_gl->glGenerateTextureMipmap(m_atlasTexture);
 }
 
 void GLTransformRenderer::buildMaskAtlas(const TileGrid& maskGrid, GLTileRenderer* tileRenderer)

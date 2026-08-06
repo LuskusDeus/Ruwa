@@ -19,6 +19,13 @@ uniform float uCornerRadius;
 uniform int uCompositeRoundedEdgesOverViewportBackground;
 uniform vec4 uViewportBackgroundColor;
 
+// Minification box filter, for the draws that have no display pyramid to sample
+// (a layer's screen-space source, above all — see GLTileRenderer::render).
+// uMinifyTaps is per axis and 1 means "one bilinear tap", which is the old
+// behaviour and what every magnified frame gets.
+uniform int uMinifyTaps;
+uniform vec2 uMinifyStepUV;
+
 in vec2 fragTexCoord;
 
 out vec4 outColor;
@@ -110,9 +117,35 @@ float roundedRectCoverage(vec2 pixelPos, vec2 rectSize, float radius) {
     return 1.0 - smoothstep(0.0, edgeWidth, signedDistance);
 }
 
+// Average of premultiplied samples over the source footprint of one screen
+// pixel. Premultiplied is the space to filter in (main() un-premultiplies after
+// this, and the dither stays after that).
+//
+// The taps clamp to this tile's own sampling rect, so a footprint that crosses a
+// tile border averages the edge texel in twice instead of reading the neighbour
+// tile — the systematic seam error that made a persistent pyramid the right
+// answer for the CANVAS. Here there is no neighbour to read: this path exists
+// for grids that have no pyramid, where the alternative is one bilinear tap
+// skipping most of the source, which is far more visible than the seam.
+vec4 sampleTilePremultiplied(vec2 uv) {
+    if (uMinifyTaps <= 1) {
+        return texture(uTileTexture, uv);
+    }
+
+    float firstTap = -0.5 * float(uMinifyTaps - 1);
+    vec4 sum = vec4(0.0);
+    for (int ty = 0; ty < uMinifyTaps; ++ty) {
+        for (int tx = 0; tx < uMinifyTaps; ++tx) {
+            vec2 offset = (vec2(float(tx), float(ty)) + firstTap) * uMinifyStepUV;
+            sum += texture(uTileTexture, clamp(uv + offset, uSampleMinUV, uSampleMaxUV));
+        }
+    }
+    return sum / float(uMinifyTaps * uMinifyTaps);
+}
+
 void main() {
     vec2 uv = clamp(fragTexCoord, uSampleMinUV, uSampleMaxUV);
-    vec4 color = ditherForDisplay(texture(uTileTexture, uv));
+    vec4 color = ditherForDisplay(sampleTilePremultiplied(uv));
     float tileSize = 1.0 / max(uInvTileSize, 0.000001);
     vec2 canvasPixelPos = uTileOriginPx + fragTexCoord * tileSize;
     float coverage = roundedRectCoverage(canvasPixelPos, uCanvasSize, uCornerRadius);

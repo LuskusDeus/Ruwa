@@ -35,13 +35,6 @@ public:
     Result<void> initialize(const QString& shaderDir);
     void shutdown();
 
-    /// Start one top-level viewport/export frame. During an interactive content
-    /// mutation stale mip chains are not rebuilt; the frame falls back to
-    /// fresh level zero for the entire visible set instead.
-    void beginDisplayMipFrame(bool deferRegeneration);
-    void beginUnrestrictedDisplayMipFrame();
-    bool hasPendingVisibleDisplayMipmaps() const { return m_visibleDisplayMipmapsPending; }
-
     /// Upload all dirty tiles to GPU textures.
     void uploadDirtyTiles(TileGrid& grid);
 
@@ -52,14 +45,15 @@ public:
     ///
     /// When `displayPyramid` is non-null and the camera is minifying, the frame
     /// is drawn from the pyramid's level lattice instead of the level-0 tiles:
-    /// ~40 quads at any zoom, filtering that never changes mid-stroke, and no
-    /// per-tile mip chains. Passing nullptr keeps the legacy path exactly.
+    /// ~40 quads at any zoom, and filtering that never changes mid-stroke.
+    /// Passing nullptr draws the level-0 tiles bilinearly, which is all a grid
+    /// with no pyramid of its own can offer.
     void render(const TileGrid& grid, const Viewport& viewport, uint32_t canvasWidth = 0,
         uint32_t canvasHeight = 0, float cornerRadiusCanvasPx = 0.0f,
         bool canvasContentFlipH = false, bool canvasContentFlipV = false,
         bool compositeRoundedEdgesOverViewportBackground = false,
         const Color& viewportBackgroundColor = Color::transparent(), bool clipToCanvas = true,
-        bool useDisplayMipmaps = true, const DisplayPyramid* displayPyramid = nullptr);
+        const DisplayPyramid* displayPyramid = nullptr);
     uint32_t lastRenderDrawCallCount() const { return m_lastRenderDrawCalls; }
     /// Level the last render() actually sampled (0 = level-zero tiles), and how
     /// far it was lerped toward the next level up. Stage 0 instrumentation.
@@ -72,9 +66,6 @@ public:
     /// Ensure a tile has a GPU texture allocated (lazy creation)
     void ensureTileTexture(TileData& tile);
 
-    /// Ensure a final composition-cache tile has storage for its display mip chain.
-    void ensureDisplayTileTexture(TileData& tile);
-
     /// Reclaim textures that TileData destructors could not free themselves
     /// (no GL context, wrong thread) and feed them back into the pool. Call
     /// once per frame from the GL thread.
@@ -86,12 +77,18 @@ public:
     bool isInitialized() const { return m_initialized; }
 
 private:
-    void ensureTileTextureStorage(TileData& tile, const TextureParams& params);
+    /// Box filter the level-zero path applies per screen pixel. `taps` is per
+    /// axis; 1 = one bilinear tap, which is what a magnified frame gets.
+    struct LevelZeroFilter {
+        int taps = 1;
+        float stepUV = 0.0f;
+    };
 
     bool drawTileQuad(const TileKey& key, const TileData& tile,
         const std::array<float, 16>& vpMatrix, uint32_t canvasWidth, uint32_t canvasHeight,
         bool clipToCanvas, float cornerRadiusCanvasPx,
-        bool compositeRoundedEdgesOverViewportBackground, const Color& viewportBackgroundColor);
+        bool compositeRoundedEdgesOverViewportBackground, const Color& viewportBackgroundColor,
+        const LevelZeroFilter& filter);
 
     std::array<float, 16> createTileModelMatrix(const TileKey& key) const;
     std::array<float, 16> createLevelTileModelMatrix(const TileKey& key, int level) const;
@@ -125,25 +122,13 @@ private:
     // Display pass for the pyramid lattice: one level tile plus the level above
     // it, lerped by the frame's fractional level. Shares tile.vert.glsl.
     std::unique_ptr<GLShaderProgram> m_pyramidTileProgram;
-    // LINEAR/LINEAR/CLAMP for both pyramid taps. Level-0 tiles carry NEAREST
-    // magnification and a (now unused) mip chain on the texture object itself,
-    // so the sampler object has to override them when they feed this path.
-    GLuint m_pyramidSampler = 0;
 
-    // Overrides the texture object's sampling state only for display draws.
-    // One of the two is picked per frame for every visible tile at once: the
-    // mip sampler when the whole visible set has valid mip chains, the
-    // level-zero sampler otherwise. Mixing them per tile is what makes the
-    // dirty tiles of a live stroke visible as a grid, so the choice is never
-    // made per tile — see render().
+    // LINEAR/LINEAR/CLAMP, bound for display draws only — tile textures carry
+    // NEAREST magnification on the object itself, which is what a zoomed-in
+    // frame wants and no minified frame does. Serves both the level-0 path and
+    // the pyramid's two taps: with the mip chains gone there is nothing left to
+    // choose between, which is the point.
     GLuint m_displaySampler = 0;
-    GLuint m_levelZeroLinearSampler = 0;
-
-    static constexpr uint32_t kDisplayMipRegenerationBudget = 2;
-    uint32_t m_displayMipRegenerationBudget = kDisplayMipRegenerationBudget;
-    uint32_t m_displayMipRegenerationsThisFrame = 0;
-    bool m_deferDisplayMipRegeneration = false;
-    bool m_visibleDisplayMipmapsPending = false;
 
     // Recycles tile textures instead of paying glTextureStorage2D per tile.
     // Owned here because every tile texture in the document is created and

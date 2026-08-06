@@ -38,6 +38,13 @@ uniform vec2 uQ3;
 // reading transparent (= fully revealed). Transparent (0) for normal grids, so
 // content transforms are unaffected.
 uniform vec4 uSourceBackgroundColor;
+// Mip level to read the source at, computed on the CPU (see
+// GLTransformViewportPreviewPass::sourceLodForDisplay). It covers the CAMERA's
+// minification only — the transform's own shrink is deliberately left as sharp
+// as the bake makes it, so the preview keeps matching what commit produces.
+// Explicit rather than derivative-based because every tap below sits inside
+// divergent control flow, where implicit derivatives are not dependable.
+uniform float uSourceLod;
 
 in vec2 fragTexCoord;
 out vec4 outColor;
@@ -125,8 +132,12 @@ vec4 sampleSourceAtlas(vec2 worldPos) {
         // Screen coordinates are continuous framebuffer coordinates. Fragment
         // centers therefore already lie at n + 0.5 and map directly to texel
         // centers; adding another half pixel would shift the source.
-        return texture(uSourceAtlasTexture, vec2(sourceScreen.x / sourceSize.x,
-                                                 1.0 - sourceScreen.y / sourceSize.y));
+        //
+        // Level 0 unconditionally: a screen source is already rendered at
+        // display resolution (with the camera's minification filtered in there),
+        // so there is nothing left for a mip to average.
+        return textureLod(uSourceAtlasTexture, vec2(sourceScreen.x / sourceSize.x,
+                                                 1.0 - sourceScreen.y / sourceSize.y), 0.0);
     }
 
     vec2 atlasPixel = worldPos - uAtlasMinTile * uTileSize;
@@ -139,7 +150,12 @@ vec4 sampleSourceAtlas(vec2 worldPos) {
     // This matches the bake path (kTransformFrag sampleAtlas); adding +0.5 here
     // shifts the moved content half a texel and desyncs it from the mask clip,
     // producing the sub-pixel seam at the selection edge that grows with zoom.
-    return texture(uSourceAtlasTexture, atlasPixel / uAtlasSize);
+    //
+    // The atlas is at DOCUMENT resolution, so a zoomed-out frame minifies it by
+    // exactly the camera zoom. One bilinear tap there is point sampling with
+    // extra steps, which is what made the transformed layer alias while the rest
+    // of the canvas (drawn from the display pyramid) stayed smooth.
+    return textureLod(uSourceAtlasTexture, atlasPixel / uAtlasSize, uSourceLod);
 }
 
 vec4 sampleTargetBase(vec2 destScreen) {

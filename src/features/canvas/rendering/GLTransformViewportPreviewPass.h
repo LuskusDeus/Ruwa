@@ -53,6 +53,11 @@ private:
     void ensureRenderTarget(uint32_t width, uint32_t height);
     Result<void> initDeformMeshGrid();
 
+    /// Mip level to read a DOCUMENT-resolution source atlas at, so a zoomed-out
+    /// preview is filtered like the display pyramid filters the rest of the
+    /// canvas. Covers the camera's minification only — see the definition.
+    static float sourceLodForDisplay(const TransformState& state, float cameraZoom);
+
     // Forward-rasterized deform pass. Renders the tessellated B-spline
     // mesh into m_outputTexture with premultiplied src-over blending.
     // Called from render() / renderFromScreenSource() when state has a

@@ -12,7 +12,6 @@
 
 #include <algorithm>
 #include <cmath>
-#include <limits>
 
 namespace aether {
 
@@ -59,47 +58,22 @@ Result<void> GLTileRenderer::initialize(const QString& shaderDir)
         m_tileProgram.reset();
         return { ErrorCode::PipelineCreationFailed, "Failed to create tile display sampler" };
     }
-    m_gl->glSamplerParameteri(m_displaySampler, GL_TEXTURE_MIN_FILTER, GL_LINEAR_MIPMAP_LINEAR);
+    m_gl->glSamplerParameteri(m_displaySampler, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
     m_gl->glSamplerParameteri(m_displaySampler, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
     m_gl->glSamplerParameteri(m_displaySampler, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
     m_gl->glSamplerParameteri(m_displaySampler, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
-
-    m_gl->glGenSamplers(1, &m_levelZeroLinearSampler);
-    if (m_levelZeroLinearSampler == 0) {
-        m_gl->glDeleteSamplers(1, &m_displaySampler);
-        m_displaySampler = 0;
-        m_gl->glDeleteVertexArrays(1, &m_emptyVAO);
-        m_emptyVAO = 0;
-        m_tileProgram.reset();
-        return { ErrorCode::PipelineCreationFailed,
-            "Failed to create tile level-zero display sampler" };
-    }
-    m_gl->glSamplerParameteri(m_levelZeroLinearSampler, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
-    m_gl->glSamplerParameteri(m_levelZeroLinearSampler, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
-    m_gl->glSamplerParameteri(m_levelZeroLinearSampler, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
-    m_gl->glSamplerParameteri(m_levelZeroLinearSampler, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
 
     m_pyramidTileProgram = std::make_unique<GLShaderProgram>(m_gl);
     auto pyramidResult = m_pyramidTileProgram->loadFromFiles(
         shaderDir + "/tile.vert.glsl", shaderDir + "/tile_pyramid.frag.glsl");
     if (!pyramidResult) {
         m_pyramidTileProgram.reset();
-        m_gl->glDeleteSamplers(1, &m_levelZeroLinearSampler);
-        m_levelZeroLinearSampler = 0;
         m_gl->glDeleteSamplers(1, &m_displaySampler);
         m_displaySampler = 0;
         m_gl->glDeleteVertexArrays(1, &m_emptyVAO);
         m_emptyVAO = 0;
         m_tileProgram.reset();
         return pyramidResult;
-    }
-
-    m_gl->glGenSamplers(1, &m_pyramidSampler);
-    if (m_pyramidSampler != 0) {
-        m_gl->glSamplerParameteri(m_pyramidSampler, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
-        m_gl->glSamplerParameteri(m_pyramidSampler, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
-        m_gl->glSamplerParameteri(m_pyramidSampler, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
-        m_gl->glSamplerParameteri(m_pyramidSampler, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
     }
 
     m_initialized = true;
@@ -118,19 +92,9 @@ void GLTileRenderer::shutdown()
     m_tileProgram.reset();
     m_pyramidTileProgram.reset();
 
-    if (m_pyramidSampler) {
-        m_gl->glDeleteSamplers(1, &m_pyramidSampler);
-        m_pyramidSampler = 0;
-    }
-
     if (m_displaySampler) {
         m_gl->glDeleteSamplers(1, &m_displaySampler);
         m_displaySampler = 0;
-    }
-
-    if (m_levelZeroLinearSampler) {
-        m_gl->glDeleteSamplers(1, &m_levelZeroLinearSampler);
-        m_levelZeroLinearSampler = 0;
     }
 
     if (m_emptyVAO) {
@@ -141,40 +105,16 @@ void GLTileRenderer::shutdown()
     m_initialized = false;
 }
 
-void GLTileRenderer::beginDisplayMipFrame(bool deferRegeneration)
-{
-    m_deferDisplayMipRegeneration = deferRegeneration;
-    m_displayMipRegenerationBudget = kDisplayMipRegenerationBudget;
-    m_displayMipRegenerationsThisFrame = 0;
-    m_visibleDisplayMipmapsPending = false;
-}
-
-void GLTileRenderer::beginUnrestrictedDisplayMipFrame()
-{
-    m_deferDisplayMipRegeneration = false;
-    m_displayMipRegenerationBudget = std::numeric_limits<uint32_t>::max();
-    m_displayMipRegenerationsThisFrame = 0;
-    m_visibleDisplayMipmapsPending = false;
-}
-
 // ==========================================================================
 //   T E X T U R E   M A N A G E M E N T
 // ==========================================================================
 
 void GLTileRenderer::ensureTileTexture(TileData& tile)
 {
-    ensureTileTextureStorage(tile, tileTextureParams(tile.format()));
-}
-
-void GLTileRenderer::ensureDisplayTileTexture(TileData& tile)
-{
-    ensureTileTextureStorage(tile, displayTileTextureParams(tile.format()));
-}
-
-void GLTileRenderer::ensureTileTextureStorage(TileData& tile, const TextureParams& params)
-{
     if (tile.hasTexture())
         return;
+
+    const TextureParams params = tileTextureParams(tile.format());
 
     // A recycled texture comes back zero-filled with these sampler params
     // already applied, so this is indistinguishable from the allocation it
@@ -274,8 +214,7 @@ void GLTileRenderer::flushOrphanedTextures()
 void GLTileRenderer::render(const TileGrid& grid, const Viewport& viewport, uint32_t canvasWidth,
     uint32_t canvasHeight, float cornerRadiusCanvasPx, bool canvasContentFlipH,
     bool canvasContentFlipV, bool compositeRoundedEdgesOverViewportBackground,
-    const Color& viewportBackgroundColor, bool clipToCanvas, bool useDisplayMipmaps,
-    const DisplayPyramid* displayPyramid)
+    const Color& viewportBackgroundColor, bool clipToCanvas, const DisplayPyramid* displayPyramid)
 {
     m_lastRenderDrawCalls = 0;
     m_lastRenderLevel = 0;
@@ -321,7 +260,7 @@ void GLTileRenderer::render(const TileGrid& grid, const Viewport& viewport, uint
 
     constexpr float kDisplayFilteringMaxZoom = 2.0f;
     const float zoom = viewport.camera().zoom();
-    const bool minifying = useDisplayMipmaps && zoom < 1.0f;
+    const bool minifying = zoom < 1.0f;
     const bool useDisplayFiltering = zoom <= kDisplayFilteringMaxZoom;
 
     // Pyramid path. The level is a per-frame scalar because zoom is uniform and
@@ -377,39 +316,30 @@ void GLTileRenderer::render(const TileGrid& grid, const Viewport& viewport, uint
             && (key.x < 0 || key.y < 0 || key.x > canvasMaxTileX || key.y > canvasMaxTileY);
     };
 
-    // Minification filtering is decided once for the whole frame, never per
-    // tile. Picking the mip sampler for clean tiles and level zero for stale
-    // ones makes the dirty tiles of a live stroke read as a visible grid over
-    // high-frequency content, because the eye catches the boundary between a
-    // smoothed and an aliased region instantly. Uniform level-zero sampling
-    // over the whole view is plain draft quality, which reads as intentional
-    // and snaps back to mipmapped once the deferred regeneration catches up.
-    bool visibleMipsReady = minifying;
-    if (minifying) {
-        for (const auto& key : visibleKeys) {
-            if (clippedOut(key))
-                continue;
-            const TileData* tile = grid.getTile(key);
-            if (!tile || !tile->hasTexture() || !tile->displayMipmapsDirty())
-                continue;
-            const bool budgetAvailable
-                = m_displayMipRegenerationsThisFrame < m_displayMipRegenerationBudget;
-            if (!m_deferDisplayMipRegeneration && budgetAvailable) {
-                m_gl->glGenerateTextureMipmap(tile->textureId());
-                tile->clearDisplayMipmapsDirty();
-                ++m_displayMipRegenerationsThisFrame;
-            } else {
-                // Keep scanning: tiles regenerated after the frame already fell
-                // back to level zero still shorten the catch-up.
-                m_visibleDisplayMipmapsPending = true;
-                visibleMipsReady = false;
-            }
-        }
-    }
+    // Bilinear level zero, uniformly over the frame. Past the zoom ceiling the
+    // texture object's own NEAREST magnification takes over so pixel-peeping
+    // still shows hard texels.
+    const GLuint frameSampler = useDisplayFiltering ? m_displaySampler : 0;
 
-    GLuint frameSampler = useDisplayFiltering ? m_levelZeroLinearSampler : 0;
-    if (visibleMipsReady)
-        frameSampler = m_displaySampler;
+    // Reaching here while minifying means this grid has no pyramid: a layer's
+    // screen-space source (the transform preview composites the whole stack that
+    // way), a mask preview, a transient export cache. One bilinear tap would
+    // skip most of the source and alias exactly like point sampling, and it is
+    // the reason entering a transform used to turn the whole zoomed-out canvas
+    // crunchy. So the footprint gets an explicit box instead.
+    //
+    // Taps are capped: past 4 per axis the box stops being exact and becomes a
+    // stratified sample of the footprint, which is where the honest quality
+    // ceiling of a per-tile filter sits. The pyramid is what the canvas itself
+    // uses precisely because it has no such ceiling.
+    LevelZeroFilter filter;
+    if (minifying) {
+        constexpr int kMaxMinifyTaps = 4;
+        const float footprintTexels = 1.0f / std::max(zoom, 1.0e-4f);
+        filter.taps = std::clamp(static_cast<int>(std::lround(footprintTexels)), 1, kMaxMinifyTaps);
+        filter.stepUV
+            = (footprintTexels / static_cast<float>(filter.taps)) / static_cast<float>(TILE_SIZE);
+    }
 
     m_tileProgram->use();
     m_gl->glBindVertexArray(m_emptyVAO);
@@ -422,7 +352,7 @@ void GLTileRenderer::render(const TileGrid& grid, const Viewport& viewport, uint
         if (tile && tile->hasTexture()) {
             if (drawTileQuad(key, *tile, vpMatrix, canvasWidth, canvasHeight, clipToCanvas,
                     cornerRadiusCanvasPx, compositeRoundedEdgesOverViewportBackground,
-                    viewportBackgroundColor)) {
+                    viewportBackgroundColor, filter)) {
                 ++m_lastRenderDrawCalls;
             }
         }
@@ -436,7 +366,7 @@ void GLTileRenderer::render(const TileGrid& grid, const Viewport& viewport, uint
 bool GLTileRenderer::drawTileQuad(const TileKey& key, const TileData& tile,
     const std::array<float, 16>& vpMatrix, uint32_t canvasWidth, uint32_t canvasHeight,
     bool clipToCanvas, float cornerRadiusCanvasPx, bool compositeRoundedEdgesOverViewportBackground,
-    const Color& viewportBackgroundColor)
+    const Color& viewportBackgroundColor, const LevelZeroFilter& filter)
 {
     auto model = createTileModelMatrix(key);
     float originX, originY;
@@ -489,6 +419,8 @@ bool GLTileRenderer::drawTileQuad(const TileKey& key, const TileData& tile,
     const float sampleMaxY = (quadMaxY - 0.5f) / static_cast<float>(TILE_SIZE);
     m_tileProgram->setUniform("uSampleMinUV", sampleMinX, sampleMinY);
     m_tileProgram->setUniform("uSampleMaxUV", sampleMaxX, sampleMaxY);
+    m_tileProgram->setUniform("uMinifyTaps", filter.taps);
+    m_tileProgram->setUniform("uMinifyStepUV", filter.stepUV, filter.stepUV);
 
     m_gl->glBindTextureUnit(0, tile.textureId());
 
@@ -503,8 +435,8 @@ bool GLTileRenderer::drawTileQuad(const TileKey& key, const TileData& tile,
 uint32_t GLTileRenderer::renderFromPyramid(const TileGrid& grid, const DisplayPyramid& pyramid,
     const PyramidFrame& frame, const std::array<float, 16>& vpMatrix,
     const VisibleWorldBounds& bounds, uint32_t canvasWidth, uint32_t canvasHeight,
-    bool clipToCanvas, float cornerRadiusCanvasPx,
-    bool compositeRoundedEdgesOverViewportBackground, const Color& viewportBackgroundColor)
+    bool clipToCanvas, float cornerRadiusCanvasPx, bool compositeRoundedEdgesOverViewportBackground,
+    const Color& viewportBackgroundColor)
 {
     const int level = frame.level;
     const int32_t spanPx = DisplayPyramid::levelSpanPixels(level);
@@ -540,7 +472,8 @@ uint32_t GLTileRenderer::renderFromPyramid(const TileGrid& grid, const DisplayPy
     };
 
     const int64_t keyCount = std::max<int64_t>(0,
-        (static_cast<int64_t>(maxKeyX) - minKeyX + 1) * (static_cast<int64_t>(maxKeyY) - minKeyY + 1));
+        (static_cast<int64_t>(maxKeyX) - minKeyX + 1)
+            * (static_cast<int64_t>(maxKeyY) - minKeyY + 1));
     std::vector<PyramidQuad> quads;
     quads.reserve(static_cast<size_t>(std::min<int64_t>(keyCount, 4096)));
 
@@ -589,8 +522,8 @@ uint32_t GLTileRenderer::renderFromPyramid(const TileGrid& grid, const DisplayPy
 
     m_pyramidTileProgram->use();
     m_gl->glBindVertexArray(m_emptyVAO);
-    m_gl->glBindSampler(0, m_pyramidSampler);
-    m_gl->glBindSampler(1, m_pyramidSampler);
+    m_gl->glBindSampler(0, m_displaySampler);
+    m_gl->glBindSampler(1, m_displaySampler);
 
     m_pyramidTileProgram->setUniform("uFineTexture", 0);
     m_pyramidTileProgram->setUniform("uCoarseTexture", 1);
@@ -718,26 +651,22 @@ uint32_t GLTileRenderer::renderFromPyramid(const TileGrid& grid, const DisplayPy
 
         // Same rule in the coarse tile's core texels — which are twice as wide
         // in document pixels, so its straddling texel is a different one.
-        float coarseLowX
-            = clampLowTexel(coarseBaseX + quadMinX * 0.5f, coarseApron, clippedLowX);
-        float coarseLowY
-            = clampLowTexel(coarseBaseY + quadMinY * 0.5f, coarseApron, clippedLowY);
+        float coarseLowX = clampLowTexel(coarseBaseX + quadMinX * 0.5f, coarseApron, clippedLowX);
+        float coarseLowY = clampLowTexel(coarseBaseY + quadMinY * 0.5f, coarseApron, clippedLowY);
         float coarseHighX
             = clampHighTexel(coarseBaseX + quadMaxX * 0.5f, coarseApron, clippedHighX);
         float coarseHighY
             = clampHighTexel(coarseBaseY + quadMaxY * 0.5f, coarseApron, clippedHighY);
         orderClamp(coarseLowX, coarseHighX);
         orderClamp(coarseLowY, coarseHighY);
-        m_pyramidTileProgram->setUniform("uCoarseUVMin",
-            (coarseLowX + coarseApron) / coarseTexSize,
+        m_pyramidTileProgram->setUniform("uCoarseUVMin", (coarseLowX + coarseApron) / coarseTexSize,
             (coarseLowY + coarseApron) / coarseTexSize);
         m_pyramidTileProgram->setUniform("uCoarseUVMax",
             (coarseHighX + coarseApron) / coarseTexSize,
             (coarseHighY + coarseApron) / coarseTexSize);
 
         m_gl->glBindTextureUnit(0, quad.fineTexture);
-        m_gl->glBindTextureUnit(
-            1, quad.coarseTexture != 0 ? quad.coarseTexture : quad.fineTexture);
+        m_gl->glBindTextureUnit(1, quad.coarseTexture != 0 ? quad.coarseTexture : quad.fineTexture);
         m_gl->glDrawArrays(GL_TRIANGLES, 0, 6);
         ++drawCalls;
     }

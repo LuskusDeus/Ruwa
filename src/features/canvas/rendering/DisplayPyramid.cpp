@@ -193,8 +193,7 @@ void DisplayPyramid::clear()
         level.clear();
     }
     if (!m_freeTextures.empty()) {
-        m_gl->glDeleteTextures(
-            static_cast<GLsizei>(m_freeTextures.size()), m_freeTextures.data());
+        m_gl->glDeleteTextures(static_cast<GLsizei>(m_freeTextures.size()), m_freeTextures.data());
         m_freeTextures.clear();
     }
     m_needsSeed = true;
@@ -281,13 +280,23 @@ bool DisplayPyramid::update(const TileGrid& source, const UpdateRequest& request
     m_downsampleProgram->use();
     m_gl->glBindVertexArray(m_emptyVAO);
 
+    const float focusX
+        = request.hasFocusPoint ? request.focusX : 0.5f * (request.worldMinX + request.worldMaxX);
+    const float focusY
+        = request.hasFocusPoint ? request.focusY : 0.5f * (request.worldMinY + request.worldMaxY);
+
     bool complete = true;
+    uint32_t deferrableBuilds = 0;
     std::vector<TileKey> batch;
-    for (int level = 1; level <= topLevel && complete; ++level) {
+    // Climbing past a level that deferred work is safe, and necessary: an absent
+    // tile up there has to be built no matter what, and the parent check below
+    // keeps whatever it builds from freezing.
+    for (int level = 1; level <= topLevel; ++level) {
         if (m_dirty[level].empty()) {
             continue;
         }
         const KeyRange range = rangeForLevel(request, level);
+        const KeyRange parentRange = rangeForLevel(request, level - 1);
 
         batch.clear();
         for (const TileKey& key : m_dirty[level]) {
@@ -299,18 +308,53 @@ bool DisplayPyramid::update(const TileGrid& source, const UpdateRequest& request
             continue;
         }
 
+        if (request.deferrableBudget != 0 && batch.size() > 1) {
+            // Nearest the focus point first, so a budget that runs out spends
+            // what it had on the tiles the user is looking at. Pointless when
+            // the whole batch is going to be built anyway.
+            const float span = static_cast<float>(levelSpanPixels(level));
+            auto distanceToFocus = [span, focusX, focusY](const TileKey& key) {
+                const float dx = (static_cast<float>(key.x) + 0.5f) * span - focusX;
+                const float dy = (static_cast<float>(key.y) + 0.5f) * span - focusY;
+                return dx * dx + dy * dy;
+            };
+            std::sort(
+                batch.begin(), batch.end(), [&distanceToFocus](const TileKey& a, const TileKey& b) {
+                    return distanceToFocus(a) < distanceToFocus(b);
+                });
+        }
+
         // Level 1 reads composition-cache tiles (256x256, no apron); every
         // level above reads pyramid tiles (258x258, apron 1).
         m_downsampleProgram->setUniform("uParentApron", level == 1 ? 0 : kApron);
 
         for (const TileKey& key : batch) {
-            if (request.budget != 0 && m_lastBuildCount >= request.budget) {
+            // An absent tile is not a stale tile: skipping it leaves a hole in
+            // the frame, so it is built whatever the budget says. Keep scanning
+            // after the budget is gone for exactly that reason — a later key in
+            // this batch may be one of them.
+            const bool absent = texture(level, key) == 0;
+            if (!absent && request.deferrableBudget != 0
+                && deferrableBuilds >= request.deferrableBudget) {
                 complete = false;
-                break;
+                continue;
             }
-            buildTile(source, level, key);
-            m_dirty[level].erase(key);
+
+            const bool built = buildTile(source, level, key);
             ++m_lastBuildCount;
+            if (!absent) {
+                ++deferrableBuilds;
+            }
+
+            // Content built over a parent that is itself still dirty is
+            // provisional. Rebuilding that parent does NOT re-mark its
+            // ancestors, so a tile that dropped its dirt here would hold the
+            // provisional pixels until the region next changes.
+            if (built && sampledParentsDirty(level, key, parentRange)) {
+                complete = false;
+                continue;
+            }
+            m_dirty[level].erase(key);
         }
     }
 
@@ -376,6 +420,40 @@ bool DisplayPyramid::buildTile(const TileGrid& source, int level, const TileKey&
     m_gl->glBindTextures(0, 16, parents.data());
     m_gl->glDrawArrays(GL_TRIANGLES, 0, 6);
     return true;
+}
+
+bool DisplayPyramid::sampledParentsDirty(
+    int level, const TileKey& key, const KeyRange& parentRange) const
+{
+    // Level 1's parents are composition-cache tiles. The pyramid does not track
+    // their state at all — the invalidation feed already reported every one that
+    // changed, so what is in the cache right now IS current.
+    if (level < 2) {
+        return false;
+    }
+    const KeySet& parentDirty = m_dirty[level - 1];
+    if (parentDirty.empty()) {
+        return false;
+    }
+    // The whole 4x4 block buildTile reads, not just the 2x2 core: the outer ring
+    // feeds the apron, and a stale apron is a stale seam between two level tiles.
+    //
+    // Parents OUTSIDE the level's own key range are ignored on purpose. Their
+    // dirt is not this request's business — nothing is going to rebuild them
+    // before the child is reconsidered, so waiting on one would keep the child
+    // dirty for ever, and a permanently pending pyramid spins the catch-up
+    // repaint. The ranges nest for the core but not always for the ring, so this
+    // is reachable at the boundary of the padded region: one stale apron texel
+    // outside the visible area is the price.
+    for (int by = -1; by <= 2; ++by) {
+        for (int bx = -1; bx <= 2; ++bx) {
+            const TileKey parentKey { key.x * 2 + bx, key.y * 2 + by };
+            if (parentRange.contains(parentKey) && parentDirty.count(parentKey) != 0) {
+                return true;
+            }
+        }
+    }
+    return false;
 }
 
 void DisplayPyramid::releaseTile(int level, const TileKey& key)

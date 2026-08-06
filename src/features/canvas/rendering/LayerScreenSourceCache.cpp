@@ -250,7 +250,7 @@ void LayerScreenSourceCache::renderDirect(const CompositeLayerInfo& layer, Entry
         renderer.uploadDirtyTiles(*mutableGrid);
         const bool clipToCanvas = kind == SourceKind::LayerColor;
         renderer.drawTiles(*mutableGrid, viewport, canvasWidth, canvasHeight, 0.0f, flipH, flipV,
-            false, Color::transparent(), clipToCanvas, false);
+            false, Color::transparent(), clipToCanvas);
     }
 
     renderer.endFrame();

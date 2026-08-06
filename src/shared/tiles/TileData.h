@@ -98,13 +98,11 @@ public:
         , m_textureId(other.m_textureId)
         , m_format(other.m_format)
         , m_dirty(other.m_dirty)
-        , m_displayMipmapsDirty(other.m_displayMipmapsDirty)
         , m_solid(other.m_solid)
         , m_solidColor(other.m_solidColor)
     {
         other.m_textureId = 0;
         other.m_dirty = false;
-        other.m_displayMipmapsDirty = true;
         other.m_solid = false;
         other.m_solidColor = 0;
     }
@@ -116,12 +114,10 @@ public:
             m_textureId = other.m_textureId;
             m_format = other.m_format;
             m_dirty = other.m_dirty;
-            m_displayMipmapsDirty = other.m_displayMipmapsDirty;
             m_solid = other.m_solid;
             m_solidColor = other.m_solidColor;
             other.m_textureId = 0;
             other.m_dirty = false;
-            other.m_displayMipmapsDirty = true;
             other.m_solid = false;
             other.m_solidColor = 0;
         }
@@ -180,7 +176,6 @@ public:
             m_textureId = 0;
         }
         m_dirty = true;
-        m_displayMipmapsDirty = true;
     }
 
     void setSolidPacked(uint32_t packed)
@@ -223,7 +218,6 @@ public:
         m_pixels[idx + 2] = b;
         m_pixels[idx + 3] = a;
         m_dirty = true;
-        m_displayMipmapsDirty = true;
     }
 
     void getPixel(
@@ -256,7 +250,6 @@ public:
             std::memset(m_pixels.data(), 0, m_pixels.size());
         }
         m_dirty = true;
-        m_displayMipmapsDirty = true;
     }
 
     /// Check if tile has any non-transparent pixel (for sparse cleanup).
@@ -281,31 +274,14 @@ public:
     // ---- GPU texture ----
 
     uint32_t textureId() const { return m_textureId; }
-    void setTextureId(uint32_t id)
-    {
-        m_textureId = id;
-        m_displayMipmapsDirty = true;
-    }
+    void setTextureId(uint32_t id) { m_textureId = id; }
     bool hasTexture() const { return m_textureId != 0; }
 
     // ---- Dirty tracking ----
 
     bool isDirty() const { return m_dirty; }
-    void markDirty()
-    {
-        m_dirty = true;
-        m_displayMipmapsDirty = true;
-    }
-    void clearDirty()
-    {
-        m_dirty = false;
-        // clearDirty() follows both CPU uploads and direct GPU writes. In
-        // either case level zero is authoritative and the display mip chain
-        // must be regenerated before the next minified draw.
-        m_displayMipmapsDirty = true;
-    }
-    bool displayMipmapsDirty() const { return m_displayMipmapsDirty; }
-    void clearDisplayMipmapsDirty() const { m_displayMipmapsDirty = false; }
+    void markDirty() { m_dirty = true; }
+    void clearDirty() { m_dirty = false; }
 
 private:
     /// Shared all-zero buffer returned by const pixels() for an unallocated
@@ -341,14 +317,12 @@ private:
             fillTileSolid(m_pixels.data(), m_format, r, g, b, a);
         }
         m_dirty = true;
-        m_displayMipmapsDirty = true;
     }
 
     std::vector<uint8_t> m_pixels;
     uint32_t m_textureId = 0; // OpenGL texture name (managed externally)
     TilePixelFormat m_format = kDefaultTileFormat; // Per-pixel storage format
     bool m_dirty = true; // Needs GPU upload
-    mutable bool m_displayMipmapsDirty = true; // Level-zero content changed
     bool m_solid = false; // Uniform-color tile with no allocated buffer
     uint32_t m_solidColor = 0; // Packed premultiplied RGBA (r|g<<8|b<<16|a<<24)
 };

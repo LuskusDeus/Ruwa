@@ -116,7 +116,12 @@ Result<void> GLTransformViewportPreviewPass::initialize(const QString& shaderDir
         return { ErrorCode::PipelineCreationFailed,
             "Failed to create transform preview source sampler" };
     }
-    m_gl->glSamplerParameteri(m_previewSourceSampler, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
+    // Mipmap minification so the document-resolution source atlas can be read at
+    // the level the camera zoom calls for (uSourceLod). Immutable single-level
+    // textures — every screen-space source bound through this sampler — stay
+    // mipmap-complete and simply resolve to level 0.
+    m_gl->glSamplerParameteri(
+        m_previewSourceSampler, GL_TEXTURE_MIN_FILTER, GL_LINEAR_MIPMAP_LINEAR);
     m_gl->glSamplerParameteri(m_previewSourceSampler, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
     m_gl->glSamplerParameteri(m_previewSourceSampler, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
     m_gl->glSamplerParameteri(m_previewSourceSampler, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
@@ -241,6 +246,39 @@ void GLTransformViewportPreviewPass::shutdown()
     m_initialized = false;
 }
 
+float GLTransformViewportPreviewPass::sourceLodForDisplay(
+    const TransformState& state, float cameraZoom)
+{
+    // The atlas holds one texel per document pixel, so a screen pixel covers
+    // 1/cameraZoom of them — the same minification the display pyramid handles
+    // for the rest of the canvas, expressed as a mip level.
+    //
+    // The transform's own scale enters only when it MAGNIFIES. Stretching the
+    // layer up cancels part of the camera's minification and must not be
+    // over-blurred; shrinking it deliberately does NOT add blur, because the bake
+    // resamples the source with a single bilinear tap at document resolution. A
+    // preview smoother than the commit would just move the surprise to the moment
+    // the user confirms.
+    const Vector2 origin = state.contentBounds.center();
+    const Vector2 mapped = state.transformPoint(origin);
+    const Vector2 alongX = state.transformPoint({ origin.x + 1.0f, origin.y });
+    const Vector2 alongY = state.transformPoint({ origin.x, origin.y + 1.0f });
+    const float dxx = alongX.x - mapped.x;
+    const float dxy = alongX.y - mapped.y;
+    const float dyx = alongY.x - mapped.x;
+    const float dyy = alongY.y - mapped.y;
+    // Area factor of the forward map; its square root is the isotropic scale.
+    const float areaScale = std::abs(dxx * dyy - dxy * dyx);
+    const float transformScale
+        = (areaScale > 0.0f && std::isfinite(areaScale)) ? std::sqrt(areaScale) : 1.0f;
+
+    const float effectiveZoom = std::max(cameraZoom, 1.0e-4f) * std::max(transformScale, 1.0f);
+    if (effectiveZoom >= 1.0f) {
+        return 0.0f;
+    }
+    return std::log2(1.0f / effectiveZoom);
+}
+
 GLuint GLTransformViewportPreviewPass::render(GLuint sourceAtlasTexture, int32_t sourceAtlasMinTX,
     int32_t sourceAtlasMinTY, uint32_t sourceAtlasWidth, uint32_t sourceAtlasHeight,
     GLuint targetBaseTexture, GLuint selectionMaskAtlasTexture, int32_t selectionMaskAtlasMinTX,
@@ -292,6 +330,7 @@ GLuint GLTransformViewportPreviewPass::render(GLuint sourceAtlasTexture, int32_t
 
     m_program->use();
     m_program->setUniform("uSourceIsScreenTexture", 0);
+    m_program->setUniform("uSourceLod", sourceLodForDisplay(state, cameraZoom));
     m_program->setUniform("uSourceAtlasTexture", 0);
     m_program->setUniform("uTargetBaseTexture", 1);
     m_program->setUniform("uSelectionMaskAtlasTexture", 2);
@@ -425,6 +464,9 @@ GLuint GLTransformViewportPreviewPass::renderFromScreenSource(GLuint sourceScree
 
     m_program->use();
     m_program->setUniform("uSourceIsScreenTexture", 1);
+    // The screen source is already at display resolution; the shader reads it at
+    // level 0 regardless, so this only keeps the uniform defined.
+    m_program->setUniform("uSourceLod", 0.0f);
     m_program->setUniform("uSourceAtlasTexture", 0);
     m_program->setUniform("uTargetBaseTexture", 1);
     m_program->setUniform("uSelectionMaskAtlasTexture", 2);
@@ -642,8 +684,12 @@ GLuint GLTransformViewportPreviewPass::renderDeformMeshPass(GLuint sourceTexture
     // During an interactive drag the source content does not change (only
     // lattice control points do), so regenerating the mip pyramid every
     // frame is wasted GPU work and can introduce driver sync stalls.
+    //
+    // Named, not GL_TEXTURE_2D: glBindTextureUnit above does not move the ACTIVE
+    // texture unit, so the target form generated mips for whatever texture
+    // happened to be bound in the active unit instead of this source.
     if (sourceTexture != m_lastMippedSourceTexture) {
-        m_gl->glGenerateMipmap(GL_TEXTURE_2D);
+        m_gl->glGenerateTextureMipmap(sourceTexture);
         m_lastMippedSourceTexture = sourceTexture;
     }
     if (m_deformMeshSampler) {

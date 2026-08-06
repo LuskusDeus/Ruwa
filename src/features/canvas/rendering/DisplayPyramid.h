@@ -116,10 +116,22 @@ public:
         float worldMinY = 0.0f;
         float worldMaxX = 0.0f;
         float worldMaxY = 0.0f;
-        /// Ceiling on tiles rebuilt this call; 0 = unlimited. Whatever is left
-        /// over stays dirty and draws stale, which is smooth — the only
-        /// artifact is a one-frame content lag in a small region.
-        uint32_t budget = 0;
+        /// Ceiling on rebuilds of tiles that ALREADY hold content; 0 =
+        /// unlimited. What is left over stays dirty and draws STALE, which is
+        /// smooth — the only artifact is a frame or two of content lag in a
+        /// small region.
+        ///
+        /// A tile with no texture yet ignores this budget entirely. Deferring
+        /// one would not leave a stale patch, it would leave a HOLE: the
+        /// display pass has nothing to bind and skips the quad, so the
+        /// background shows through where content should be.
+        uint32_t deferrableBudget = 0;
+        /// Document-space point the rebuild radiates out from, so anything that
+        /// does end up a frame behind is far from where the user is working.
+        /// Unset = the centre of the requested region.
+        bool hasFocusPoint = false;
+        float focusX = 0.0f;
+        float focusY = 0.0f;
     };
 
     /// Rebuild, bottom-up, every dirty tile that the request's world region
@@ -160,6 +172,10 @@ private:
     KeyRange rangeForLevel(const UpdateRequest& request, int level) const;
     /// Returns false when the tile had no content and was dropped instead.
     bool buildTile(const TileGrid& source, int level, const TileKey& key);
+    /// Whether any parent this tile samples is still dirty AND inside the parent
+    /// level's key range, i.e. whether a build right now would produce content
+    /// that this same request is going to make obsolete.
+    bool sampledParentsDirty(int level, const TileKey& key, const KeyRange& parentRange) const;
     void releaseTile(int level, const TileKey& key);
 
     GLuint acquireTexture();
