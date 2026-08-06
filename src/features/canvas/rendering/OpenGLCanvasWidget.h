@@ -506,6 +506,18 @@ private:
     /// children duplicated. Called by convertLayerToSmartObject for groups.
     bool convertGroupToSmartObject(ruwa::core::layers::LayerData* layer);
 
+    /// Wrap a text layer into a smart object whose nested document holds the
+    /// TEXT, still editable, in place.
+    ///
+    /// Two things separate this from the raster path. The glyphs are not baked —
+    /// the contents tab opens on a real text layer, the way Photoshop keeps text
+    /// editable inside a smart object. And the nested canvas is the text's own
+    /// box rather than everything from the document origin out to it: the text is
+    /// moved to the content-space origin and the layer's placement carries the
+    /// offset back, so the object sits exactly where the text did while its
+    /// frame hugs the glyphs. Called by convertLayerToSmartObject for text.
+    bool convertTextToSmartObject(ruwa::core::layers::LayerData* layer);
+
     /// Shared tail of both conversions: refresh the projection caches, notify
     /// the model and push the undo command that swaps the displaced state back.
     void finishLayerContentSwap(

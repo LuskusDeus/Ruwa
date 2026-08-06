@@ -35,6 +35,10 @@ class LayerCompositingBuilder;
  * clips, masks and applies effects exactly like the document that hosts it —
  * there is no second, divergent compositing implementation.
  *
+ * The result is CLIPPED to the nested document's canvas: that canvas is the
+ * smart object's frame, and it is what the contents tab shows. Only the cached
+ * pixels are cut — the nested layers keep whatever they painted outside it.
+ *
  * Requires a current GL context; it is the caller's job to have made one
  * current (and not to call this from inside a frame's compositing pass — the
  * composite runs as its own batch). When the renderer is not up yet, nothing is

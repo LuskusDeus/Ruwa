@@ -6,6 +6,7 @@
 
 #include "features/canvas/rendering/SmartContentCompositor.h"
 
+#include "features/canvas/grid/GridRemap.h"
 #include "features/canvas/rendering/CompositeLayerKeys.h"
 #include "features/canvas/rendering/GLCompositor.h"
 #include "features/canvas/rendering/GLRenderer.h"
@@ -25,6 +26,7 @@
 
 #include <cmath>
 #include <functional>
+#include <iterator>
 #include <memory>
 #include <unordered_set>
 #include <utility>
@@ -276,13 +278,27 @@ bool SmartContentCompositor::ensureCompositeRecursive(
         addRectTileKeys(canvasRect, keys);
     }
 
-    // NOT clipped to the nested canvas. Content space can legitimately extend
-    // outside it — converting a layer that was painted past the document edge
-    // puts pixels at NEGATIVE content coordinates, and the canvas is anchored at
-    // (0,0) because the projection depends on that origin — so clipping here
-    // would silently delete them on the first edit. Ruwa keeps off-canvas pixels
-    // everywhere else too (they survive in the grid and reappear when the canvas
-    // grows); a smart object's contents are no different.
+    // CLIPPED to the nested canvas: a smart object's document has a frame, and
+    // that frame is what the object shows. Anything a nested layer puts outside
+    // it is hidden inside the contents tab (it is off-canvas there), so leaving
+    // it in the flattened pixels made the very same content look different in
+    // the parent document — a nested smart layer dragged past the edge stayed
+    // fully visible once the object was placed.
+    //
+    // Nothing is destroyed by this: the composite is a CACHE. The document's own
+    // layers keep every off-canvas pixel (Ruwa keeps them everywhere else too),
+    // so they come back the moment the nested canvas is big enough to show them.
+    // Tiles entirely outside are dropped before the GPU ever composites them;
+    // the ones straddling the edge are cut to the pixel after the readback.
+    if (!canvasRect.isNull()) {
+        for (auto it = keys.begin(); it != keys.end();) {
+            const QRect tileRect(it->x * static_cast<int>(TILE_SIZE),
+                it->y * static_cast<int>(TILE_SIZE), static_cast<int>(TILE_SIZE),
+                static_cast<int>(TILE_SIZE));
+            it = tileRect.intersects(canvasRect) ? std::next(it) : keys.erase(it);
+        }
+    }
+
     if (keys.empty()) {
         // An empty document — or one whose every layer is hidden — composites to
         // nothing. Installing that (rather than leaving the previous pixels) is
@@ -307,6 +323,18 @@ bool SmartContentCompositor::ensureCompositeRecursive(
         // again. (A missing renderer is the other, retryable case above.)
         content.markCompositeCurrent();
         return false;
+    }
+
+    if (!canvasRect.isNull()) {
+        // Edge tiles only: the key filter above already removed everything that
+        // lies wholly outside. Offset (0,0) — the nested canvas is anchored at
+        // the content-space origin, so this is a pure crop, and the tile-aligned
+        // fast path handles it without touching a single interior pixel.
+        ruwa::core::canvas::remapGridForCanvasRect(
+            *composited, 0, 0, canvasRect.width(), canvasRect.height());
+        // A tile whose only content sat outside the frame is now transparent,
+        // and compositeStackIntoGrid's own prune ran before the crop.
+        composited->pruneEmpty();
     }
 
     content.setCompositeGrid(std::move(composited), document->revision);

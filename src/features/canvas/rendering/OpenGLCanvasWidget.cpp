@@ -3650,14 +3650,17 @@ bool OpenGLCanvasWidget::convertLayerToSmartObject(ruwa::core::layers::LayerData
         return convertGroupToSmartObject(layer);
     }
 
+    // Text is a model, not pixels: it too becomes a nested document, so the
+    // glyphs stay editable instead of being baked.
+    if (layer->isText() && layer->textData) {
+        return convertTextToSmartObject(layer);
+    }
+
     // Content space starts out identical to document space: the smart object
     // shows exactly the pixels the layer showed, placed by an identity
-    // transform. A text layer bakes its glyphs the way rasterization does — its
-    // text model is parked in the undo state, so undo brings it back editable.
+    // transform.
     std::unique_ptr<TileGrid> contentGrid;
-    if (layer->isText()) {
-        contentGrid = rasterizeTextLayerToGrid(layer);
-    } else if (auto cloned = cloneTileGrid(layer->tileGrid.get()); cloned) {
+    if (auto cloned = cloneTileGrid(layer->tileGrid.get()); cloned) {
         // The original grid belongs to the undo state, so the content takes a
         // copy. Rasterization pays the same price in the other direction.
         contentGrid = std::make_unique<TileGrid>(std::move(*cloned));
@@ -3797,6 +3800,91 @@ bool OpenGLCanvasWidget::convertGroupToSmartObject(ruwa::core::layers::LayerData
         layer, std::move(replacedState), QStringLiteral("Convert to Smart Object"));
 
     undoManager.endTransaction();
+    return true;
+}
+
+bool OpenGLCanvasWidget::convertTextToSmartObject(ruwa::core::layers::LayerData* layer)
+{
+    using ruwa::core::layers::LayerData;
+
+    if (!layer || !layer->isText() || !layer->textData) {
+        return false;
+    }
+
+    // Where the glyphs actually land in document space. Read off the retained
+    // payload — that is the geometry the compositor draws, so nothing can be
+    // outside it — with the layout box put through the text transform as the
+    // fallback for a layer whose payload cannot be built (no glyphs yet).
+    Rect worldBounds {};
+    if (ensureTextRetainedPayload(layer) && layer->runtimeRetainedPayload
+        && !layer->runtimeRetainedPayload->empty()) {
+        worldBounds = layer->runtimeRetainedPayload->worldBounds;
+    } else {
+        worldBounds = aether::transformStateWithSourceBounds(layer->textData->transform,
+            computeTextLayoutSourceBounds(*layer->textData))
+                          .transformedAABB();
+    }
+
+    // The nested canvas is the text's box, not "the document origin out to the
+    // text": deriving it from the pixels alone (what a flat content does, via
+    // SmartContent::contentSpaceSize) anchors content space at (0,0) and gives
+    // text placed at 800,600 an 800×600 margin of nothing inside its own object.
+    // The glyphs move to the content origin instead and the layer's placement
+    // carries the offset back, so the object stays exactly where the text was.
+    //
+    // The margin is the same slack collectCompositeLayerKeys gives a transformed
+    // layer: a glyph's antialiased edge (and an italic's overhang) can reach
+    // just past the layout box it was measured from.
+    constexpr float kGlyphMargin = 2.0f;
+    const int left = static_cast<int>(std::floor(worldBounds.left() - kGlyphMargin));
+    const int top = static_cast<int>(std::floor(worldBounds.top() - kGlyphMargin));
+    const int right = static_cast<int>(std::ceil(worldBounds.right() + kGlyphMargin));
+    const int bottom = static_cast<int>(std::ceil(worldBounds.bottom() + kGlyphMargin));
+    const QSize documentSize(std::max(1, right - left), std::max(1, bottom - top));
+
+    // The text MODEL is what moves inside, not a rasterization of it: the
+    // contents tab opens on a real text layer. The original layer keeps its id
+    // and becomes the smart object, so the nested one is a copy — and the layer's
+    // own textData is parked in the undo state below, never shared with it.
+    auto textChild = LayerData::create(ruwa::core::layers::LayerType::Text, layer->name);
+    textChild->nameIsCustom = layer->nameIsCustom;
+    textChild->textData = std::make_unique<ruwa::core::layers::TextLayerData>(*layer->textData);
+    textChild->textData->transform.shiftForCanvasResize(left, top);
+
+    auto document = std::make_shared<ruwa::core::layers::SmartDocument>();
+    document->size = documentSize;
+    document->format
+        = m_layerModel ? m_layerModel->documentTileFormat() : aether::kDefaultTileFormat;
+    document->roots.append(std::move(textChild));
+
+    LayerContentState replacedState = takeLayerContentState(layer);
+
+    layer->type = ruwa::core::layers::LayerType::Smart;
+    layer->smartContent = std::make_shared<ruwa::core::layers::SmartContent>();
+    // Stale on purpose, exactly as in the group conversion: the flatten below
+    // (or the deferred sweep, when GL is not up yet) produces the pixels.
+    layer->smartContent->setDocument(document);
+    layer->smartTransform = TransformState();
+    // Content point c lands at c + translation while scale is 1 and rotation 0,
+    // which is precisely the offset the glyphs were moved by.
+    layer->smartTransform.translation = { static_cast<float>(left), static_cast<float>(top) };
+    layer->runtimeRetainedPayload.reset();
+    layer->runtimeRetainedPayloadKey.clear();
+    layer->runtimeVisualBackend = LayerVisualBackend::RasterTiles;
+
+    // The layer's mask and effect chain stay put, as they do for every other
+    // conversion: they were applied to the text's finished document-space
+    // result, which is what the object now shows.
+
+    recompositeSmartContent(layer->smartContent);
+    // Re-fitting the placement box onto the composited pixels leaves the mapping
+    // alone (the pivot cancels out at scale 1 / rotation 0) and gives the
+    // transform handles something to hug.
+    layer->smartTransform.contentBounds = layer->smartContentBounds();
+    layer->smartTransform.pivot = layer->smartTransform.contentBounds.center();
+
+    finishLayerContentSwap(
+        layer, std::move(replacedState), QStringLiteral("Convert to Smart Object"));
     return true;
 }
 
