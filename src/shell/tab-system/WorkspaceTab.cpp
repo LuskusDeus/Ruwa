@@ -542,12 +542,6 @@ ruwa::core::serialization::ProjectData buildProjectDataFromSnapshot(
     data.foregroundColorRgba = snapshot.foregroundColorRgba;
     data.backgroundColorRgba = snapshot.backgroundColorRgba;
     data.editingForegroundColor = snapshot.editingForegroundColor;
-    data.dockLayoutState = snapshot.dockLayoutState;
-    data.brushOverlayPosNormalized = snapshot.brushOverlayPosNormalized;
-    data.toolStateOverlayPosNormalized = snapshot.toolStateOverlayPosNormalized;
-    data.stylusJoystickPosNormalized = snapshot.stylusJoystickPosNormalized;
-    data.stylusJoystickAbovePanel = snapshot.stylusJoystickAbovePanel;
-    data.canvasWidgets = snapshot.canvasWidgets;
     data.selectedLayerId = snapshot.selectedLayerId;
 
     data.rootLayers.reserve(snapshot.rootLayers.size());
@@ -2161,10 +2155,9 @@ void WorkspaceTab::restoreUserDockLayout()
     };
 
     QSettings settings;
-    const bool useSerializedWorkspaceState = m_hasSerializedWorkspaceState;
-    const QByteArray savedLayout = useSerializedWorkspaceState
-        ? m_serializedDockLayoutState
-        : settings.value(kWorkspaceDockLayoutKey).toByteArray();
+    // Workspace UI state (dock layout + canvas overlays) is a user preference: it always
+    // comes from settings, never from the project being opened.
+    const QByteArray savedLayout = settings.value(kWorkspaceDockLayoutKey).toByteArray();
     const bool hasStoredWorkspaceColors = settings.contains(kWorkspaceForegroundColorKey)
         || settings.contains(kWorkspaceBackgroundColorKey)
         || settings.contains(kWorkspaceEditingForegroundColorKey);
@@ -2199,7 +2192,7 @@ void WorkspaceTab::restoreUserDockLayout()
     };
 
     if (m_canvasPanel) {
-        if (!useSerializedWorkspaceState && hasStoredWorkspaceColors
+        if (hasStoredWorkspaceColors
             && (!m_workspaceColorStateInitialized
                 || m_workspaceColorStateSeededFromCanvasDefaults)) {
             const QColor foreground = QColor::fromRgba(
@@ -2221,81 +2214,54 @@ void WorkspaceTab::restoreUserDockLayout()
         if (savedLayout.isEmpty()) {
             applyPresetCanvasWidgetState(defaultPreset);
         } else {
-            // Restore overlay state from settings
+            // Canvas overlay state is a user preference too: always from settings,
+            // never from the project being opened.
             for (const ruwa::ui::CanvasWidget widget : ruwa::ui::kCanvasWidgets) {
-                const bool visible = useSerializedWorkspaceState
-                    ? m_serializedCanvasWidgets[widget]
-                    : settings.value(canvasWidgetVisibleKey(widget), true).toBool();
+                const bool visible = settings.value(canvasWidgetVisibleKey(widget), true).toBool();
                 m_canvasPanel->setCanvasWidgetVisible(widget, visible);
             }
 
-            const QPointF brushNorm = useSerializedWorkspaceState
-                ? m_serializedBrushOverlayPosNormalized
-                : settings.value(kWorkspaceBrushOverlayPosKey).toPointF();
-            if (brushNorm.x() >= 0 && brushNorm.y() >= 0 && brushNorm.x() <= 1
-                && brushNorm.y() <= 1) {
-                m_canvasPanel->setPendingBrushOverlayPositionNormalized(brushNorm);
-            } else if (!useSerializedWorkspaceState) {
-                const QVariant brushV = settings.value(kWorkspaceBrushOverlayPosKey);
-                if (brushV.canConvert<QPointF>()) {
-                    const QPointF norm = brushV.toPointF();
-                    if (norm.x() >= 0 && norm.y() >= 0 && norm.x() <= 1 && norm.y() <= 1) {
-                        m_canvasPanel->setPendingBrushOverlayPositionNormalized(norm);
-                    }
-                } else {
-                    const QPoint p = brushV.toPoint();
-                    if (p.x() >= 0 && p.y() >= 0) {
-                        m_canvasPanel->setPendingBrushOverlayPosition(p);
-                    }
+            const QVariant brushV = settings.value(kWorkspaceBrushOverlayPosKey);
+            if (brushV.canConvert<QPointF>()) {
+                const QPointF norm = brushV.toPointF();
+                if (norm.x() >= 0 && norm.y() >= 0 && norm.x() <= 1 && norm.y() <= 1) {
+                    m_canvasPanel->setPendingBrushOverlayPositionNormalized(norm);
+                }
+            } else {
+                // Legacy settings stored a raw pixel position.
+                const QPoint p = brushV.toPoint();
+                if (p.x() >= 0 && p.y() >= 0) {
+                    m_canvasPanel->setPendingBrushOverlayPosition(p);
                 }
             }
 
-            const QPointF toolStateNorm = useSerializedWorkspaceState
-                ? m_serializedToolStateOverlayPosNormalized
-                : settings.value(kWorkspaceToolStateOverlayPosKey).toPointF();
-            if (toolStateNorm.x() >= 0 && toolStateNorm.y() >= 0 && toolStateNorm.x() <= 1
-                && toolStateNorm.y() <= 1) {
-                m_canvasPanel->setPendingToolStateOverlayPositionNormalized(toolStateNorm);
-            } else if (!useSerializedWorkspaceState) {
-                const QVariant toolV = settings.value(kWorkspaceToolStateOverlayPosKey);
-                if (toolV.canConvert<QPointF>()) {
-                    const QPointF norm = toolV.toPointF();
-                    if (norm.x() >= 0 && norm.y() >= 0 && norm.x() <= 1 && norm.y() <= 1) {
-                        m_canvasPanel->setPendingToolStateOverlayPositionNormalized(norm);
-                    }
-                } else {
-                    const QPoint p = toolV.toPoint();
-                    if (p.x() >= 0 && p.y() >= 0) {
-                        m_canvasPanel->setPendingToolStateOverlayPosition(p);
-                    }
+            const QVariant toolV = settings.value(kWorkspaceToolStateOverlayPosKey);
+            if (toolV.canConvert<QPointF>()) {
+                const QPointF norm = toolV.toPointF();
+                if (norm.x() >= 0 && norm.y() >= 0 && norm.x() <= 1 && norm.y() <= 1) {
+                    m_canvasPanel->setPendingToolStateOverlayPositionNormalized(norm);
+                }
+            } else {
+                const QPoint p = toolV.toPoint();
+                if (p.x() >= 0 && p.y() >= 0) {
+                    m_canvasPanel->setPendingToolStateOverlayPosition(p);
                 }
             }
 
-            const QPointF joystickNorm = useSerializedWorkspaceState
-                ? m_serializedStylusJoystickPosNormalized
-                : settings.value(kWorkspaceStylusJoystickPosKey).toPointF();
-            if (joystickNorm.x() >= 0 && joystickNorm.y() >= 0 && joystickNorm.x() <= 1
-                && joystickNorm.y() <= 1) {
-                m_canvasPanel->setPendingStylusJoystickPositionNormalized(joystickNorm);
-            } else if (!useSerializedWorkspaceState) {
-                const QVariant joystickV = settings.value(kWorkspaceStylusJoystickPosKey);
-                if (joystickV.canConvert<QPointF>()) {
-                    const QPointF norm = joystickV.toPointF();
-                    if (norm.x() >= 0 && norm.y() >= 0 && norm.x() <= 1 && norm.y() <= 1) {
-                        m_canvasPanel->setPendingStylusJoystickPositionNormalized(norm);
-                    }
-                } else {
-                    const QPoint p = joystickV.toPoint();
-                    if (p.x() >= 0 && p.y() >= 0) {
-                        m_canvasPanel->setPendingStylusJoystickPosition(p);
-                    }
+            const QVariant joystickV = settings.value(kWorkspaceStylusJoystickPosKey);
+            if (joystickV.canConvert<QPointF>()) {
+                const QPointF norm = joystickV.toPointF();
+                if (norm.x() >= 0 && norm.y() >= 0 && norm.x() <= 1 && norm.y() <= 1) {
+                    m_canvasPanel->setPendingStylusJoystickPositionNormalized(norm);
+                }
+            } else {
+                const QPoint p = joystickV.toPoint();
+                if (p.x() >= 0 && p.y() >= 0) {
+                    m_canvasPanel->setPendingStylusJoystickPosition(p);
                 }
             }
 
-            if (useSerializedWorkspaceState) {
-                m_canvasPanel->setPendingStylusJoystickAbovePanel(
-                    m_serializedStylusJoystickAbovePanel);
-            } else if (settings.contains(kWorkspaceStylusJoystickAbovePanelKey)) {
+            if (settings.contains(kWorkspaceStylusJoystickAbovePanelKey)) {
                 m_canvasPanel->setPendingStylusJoystickAbovePanel(
                     settings.value(kWorkspaceStylusJoystickAbovePanelKey, true).toBool());
             }
@@ -2579,26 +2545,6 @@ void WorkspaceTab::saveDockLayoutNow()
     }
 
     const WorkspaceStateSnapshot snapshot = captureWorkspaceStateSnapshot();
-    m_serializedDockLayoutState = snapshot.dockLayoutState;
-    if (snapshot.hasBrushOverlayPos) {
-        m_serializedBrushOverlayPosNormalized = snapshot.brushOverlayPosNormalized;
-    }
-    if (snapshot.hasToolStateOverlayPos) {
-        m_serializedToolStateOverlayPosNormalized = snapshot.toolStateOverlayPosNormalized;
-    }
-    if (snapshot.hasStylusJoystickPos) {
-        m_serializedStylusJoystickPosNormalized = snapshot.stylusJoystickPosNormalized;
-    }
-    m_serializedStylusJoystickAbovePanel = snapshot.stylusJoystickAbovePanel;
-    m_serializedCanvasWidgets = snapshot.canvasWidgets;
-    m_hasSerializedWorkspaceState = !m_serializedDockLayoutState.isEmpty()
-        || (m_serializedBrushOverlayPosNormalized.x() >= 0.0
-            && m_serializedBrushOverlayPosNormalized.y() >= 0.0)
-        || (m_serializedToolStateOverlayPosNormalized.x() >= 0.0
-            && m_serializedToolStateOverlayPosNormalized.y() >= 0.0)
-        || (m_serializedStylusJoystickPosNormalized.x() >= 0.0
-            && m_serializedStylusJoystickPosNormalized.y() >= 0.0)
-        || !m_serializedStylusJoystickAbovePanel || !m_serializedCanvasWidgets.allVisible();
     m_workspaceStateDirty = false;
     m_pendingWorkspaceStateSnapshot = snapshot;
     m_workspaceStateSyncPending = true;
@@ -3179,20 +3125,15 @@ ruwa::core::serialization::ProjectData WorkspaceTab::toProjectData() const
         data.lassoStabilization = m_canvasPanel->lassoStabilization();
         data.lassoFillStabilization = m_canvasPanel->lassoFillStabilization();
         data.lastUsedColorRgba = m_canvasPanel->currentBrushColor().rgba();
-        data.brushOverlayPosNormalized = m_canvasPanel->brushOverlayPositionNormalized();
-        data.toolStateOverlayPosNormalized = m_canvasPanel->toolStateOverlayPositionNormalized();
-        data.stylusJoystickPosNormalized = m_canvasPanel->stylusJoystickPositionNormalized();
-        data.stylusJoystickAbovePanel = m_canvasPanel->stylusJoystickAbovePanel();
-        data.canvasWidgets = m_canvasPanel->canvasWidgetVisibility();
     }
 
     data.foregroundColorRgba = m_workspaceColorState.foreground.rgba();
     data.backgroundColorRgba = m_workspaceColorState.background.rgba();
     data.editingForegroundColor = m_workspaceColorState.editingForeground;
 
-    if (m_serializer) {
-        data.dockLayoutState = saveDockState();
-    }
+    // Workspace UI state (dock layout, canvas overlay positions and visibility) is
+    // intentionally not written here: it is a user preference kept in QSettings by
+    // saveDockLayoutNow(), not part of the document.
 
     return data;
 }
@@ -3220,25 +3161,13 @@ bool WorkspaceTab::fromProjectDataStructure(const ruwa::core::serialization::Pro
     m_settings.canvasSize = data.canvasSize;
     m_settings.canvasBoundsMode = data.canvasBoundsMode;
     m_settings.tileFormat = data.contentTileFormat;
-    m_serializedDockLayoutState = data.dockLayoutState;
-    m_serializedBrushOverlayPosNormalized = data.brushOverlayPosNormalized;
-    m_serializedToolStateOverlayPosNormalized = data.toolStateOverlayPosNormalized;
-    m_serializedStylusJoystickPosNormalized = data.stylusJoystickPosNormalized;
-    m_serializedStylusJoystickAbovePanel = data.stylusJoystickAbovePanel;
-    m_serializedCanvasWidgets = data.canvasWidgets;
+    // Workspace UI state is not read from the project: the dock layout and canvas
+    // overlays come from QSettings in restoreUserDockLayout().
     m_workspaceColorState.foreground = QColor::fromRgba(data.foregroundColorRgba);
     m_workspaceColorState.background = QColor::fromRgba(data.backgroundColorRgba);
     m_workspaceColorState.editingForeground = data.editingForegroundColor;
     m_workspaceColorStateInitialized = true;
     m_workspaceColorStateSeededFromCanvasDefaults = false;
-    m_hasSerializedWorkspaceState = !m_serializedDockLayoutState.isEmpty()
-        || (m_serializedBrushOverlayPosNormalized.x() >= 0.0
-            && m_serializedBrushOverlayPosNormalized.y() >= 0.0)
-        || (m_serializedToolStateOverlayPosNormalized.x() >= 0.0
-            && m_serializedToolStateOverlayPosNormalized.y() >= 0.0)
-        || (m_serializedStylusJoystickPosNormalized.x() >= 0.0
-            && m_serializedStylusJoystickPosNormalized.y() >= 0.0)
-        || !m_serializedStylusJoystickAbovePanel || !m_serializedCanvasWidgets.allVisible();
     if (isInitialized()) {
         restoreUserDockLayout();
     }
@@ -3601,20 +3530,13 @@ WorkspaceTab::ProjectSaveSnapshot WorkspaceTab::captureProjectSaveSnapshot() con
         snapshot.lassoStabilization = m_canvasPanel->lassoStabilization();
         snapshot.lassoFillStabilization = m_canvasPanel->lassoFillStabilization();
         snapshot.lastUsedColorRgba = m_canvasPanel->currentBrushColor().rgba();
-        snapshot.brushOverlayPosNormalized = m_canvasPanel->brushOverlayPositionNormalized();
-        snapshot.toolStateOverlayPosNormalized
-            = m_canvasPanel->toolStateOverlayPositionNormalized();
-        snapshot.stylusJoystickPosNormalized = m_canvasPanel->stylusJoystickPositionNormalized();
-        snapshot.stylusJoystickAbovePanel = m_canvasPanel->stylusJoystickAbovePanel();
-        snapshot.canvasWidgets = m_canvasPanel->canvasWidgetVisibility();
     }
 
     snapshot.foregroundColorRgba = m_workspaceColorState.foreground.rgba();
     snapshot.backgroundColorRgba = m_workspaceColorState.background.rgba();
     snapshot.editingForegroundColor = m_workspaceColorState.editingForeground;
-    if (m_serializer) {
-        snapshot.dockLayoutState = saveDockState();
-    }
+    // No workspace UI state here - dock layout and canvas overlays are user preferences
+    // (QSettings), captured by captureWorkspaceStateSnapshot() instead.
 
     return snapshot;
 }
@@ -4472,13 +4394,6 @@ void WorkspaceTab::resetDockLayout()
     m_savedLayerPropertiesPlacement.reset();
     m_savedColorPlacement.reset();
     m_savedNavigatorPlacement.reset();
-    m_serializedDockLayoutState.clear();
-    m_serializedBrushOverlayPosNormalized = QPointF(-1.0, -1.0);
-    m_serializedToolStateOverlayPosNormalized = QPointF(-1.0, -1.0);
-    m_serializedStylusJoystickPosNormalized = QPointF(-1.0, -1.0);
-    m_serializedStylusJoystickAbovePanel = true;
-    m_serializedCanvasWidgets = ruwa::ui::CanvasWidgetVisibility {};
-    m_hasSerializedWorkspaceState = false;
 
     const bool wasRestoring = m_restoringDockLayout;
     m_restoringDockLayout = true;

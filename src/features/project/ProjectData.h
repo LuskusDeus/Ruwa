@@ -7,7 +7,6 @@
 #include "features/canvas/CanvasBoundsMode.h"
 #include "features/effects/LayerEffectTypes.h"
 #include "shared/tiles/TileFormat.h"
-#include "shared/types/CanvasWidgets.h"
 
 #include <QString>
 #include <QSize>
@@ -237,13 +236,10 @@ struct ProjectData {
     quint32 backgroundColorRgba = 0xFFFFFFFFu;
     bool editingForegroundColor = true;
 
-    // Workspace dock/canvas widget state
-    QByteArray dockLayoutState;
-    QPointF brushOverlayPosNormalized = QPointF(-1.0, -1.0);
-    QPointF toolStateOverlayPosNormalized = QPointF(-1.0, -1.0);
-    QPointF stylusJoystickPosNormalized = QPointF(-1.0, -1.0);
-    bool stylusJoystickAbovePanel = true;
-    ruwa::ui::CanvasWidgetVisibility canvasWidgets;
+    // NOTE: workspace UI state - the dock layout, canvas overlay positions and overlay
+    // visibility - is deliberately NOT part of a project. It is a user preference and
+    // lives only in QSettings ("Workspace/..."). The .rwf format still carries neutral
+    // placeholders in those slots so files stay readable in both directions.
 
     bool isValid() const
     {

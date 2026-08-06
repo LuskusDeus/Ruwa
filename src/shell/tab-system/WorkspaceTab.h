@@ -116,12 +116,8 @@ public:
         quint32 foregroundColorRgba = QColor(Qt::black).rgba();
         quint32 backgroundColorRgba = QColor(Qt::white).rgba();
         bool editingForegroundColor = true;
-        QByteArray dockLayoutState;
-        QPointF brushOverlayPosNormalized = QPointF(-1.0, -1.0);
-        QPointF toolStateOverlayPosNormalized = QPointF(-1.0, -1.0);
-        QPointF stylusJoystickPosNormalized = QPointF(-1.0, -1.0);
-        bool stylusJoystickAbovePanel = true;
-        ruwa::ui::CanvasWidgetVisibility canvasWidgets;
+        // No workspace UI state here: the dock layout and the canvas overlays (positions
+        // and visibility) are user preferences kept in QSettings, never in a project.
     };
 
     struct ProjectSettings {
@@ -627,17 +623,10 @@ private:
     bool m_workspaceStateSyncPending = false;
     std::function<void()> m_loadingShellHideContinuation;
     WorkspaceStateSnapshot m_pendingWorkspaceStateSnapshot;
-    QByteArray m_serializedDockLayoutState;
-    QPointF m_serializedBrushOverlayPosNormalized = QPointF(-1.0, -1.0);
-    QPointF m_serializedToolStateOverlayPosNormalized = QPointF(-1.0, -1.0);
-    QPointF m_serializedStylusJoystickPosNormalized = QPointF(-1.0, -1.0);
     WorkspaceColorState m_workspaceColorState;
     bool m_workspaceColorStateInitialized = false;
     bool m_workspaceColorStateSeededFromCanvasDefaults = false;
     bool m_syncingWorkspaceColorState = false;
-    bool m_serializedStylusJoystickAbovePanel = true;
-    ruwa::ui::CanvasWidgetVisibility m_serializedCanvasWidgets;
-    bool m_hasSerializedWorkspaceState = false;
     bool m_restoringWorkspaceUiState = false;
     void startAutoSaveTimer();
     void stopAutoSaveTimer();

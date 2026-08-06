@@ -400,14 +400,18 @@ QByteArray ProjectSerializer::writeProjectInfo(const ProjectData& data) const
     out << data.foregroundColorRgba;
     out << data.backgroundColorRgba;
     out << static_cast<quint8>(data.editingForegroundColor ? 1 : 0);
-    out << data.dockLayoutState;
-    out << data.brushOverlayPosNormalized;
-    out << data.toolStateOverlayPosNormalized;
-    out << data.stylusJoystickPosNormalized;
-    out << static_cast<quint8>(data.stylusJoystickAbovePanel ? 1 : 0);
-    out << static_cast<quint8>(data.canvasWidgets[ruwa::ui::CanvasWidget::Joystick] ? 1 : 0);
-    out << static_cast<quint8>(data.canvasWidgets[ruwa::ui::CanvasWidget::BrushControl] ? 1 : 0);
-    out << static_cast<quint8>(data.canvasWidgets[ruwa::ui::CanvasWidget::ToolState] ? 1 : 0);
+    // Workspace UI placeholders: the dock layout, canvas overlay positions and overlay
+    // visibility are user preferences stored in QSettings, never in the project. The
+    // slots stay in the stream (as neutral "unset" values) so the section layout is
+    // stable in both directions.
+    out << QByteArray(); // dock layout
+    out << QPointF(-1.0, -1.0); // brush overlay position
+    out << QPointF(-1.0, -1.0); // tool state overlay position
+    out << QPointF(-1.0, -1.0); // stylus joystick position
+    out << static_cast<quint8>(1); // stylus joystick above panel
+    out << static_cast<quint8>(1); // joystick visible
+    out << static_cast<quint8>(1); // brush control visible
+    out << static_cast<quint8>(1); // tool state overlay visible
     out << data.selectedLayerId;
     out << static_cast<quint8>(data.contentTileFormat); // v27: content tile pixel format
 
@@ -645,10 +649,6 @@ bool ProjectSerializer::readProjectInfo(const QByteArray& blob, ProjectData& dat
     quint8 blurValid = 0;
     quint8 smudgeValid = 0;
     quint8 editingForegroundColor = 1;
-    quint8 stylusJoystickAbovePanel = 1;
-    quint8 joystickVisible = 1;
-    quint8 brushControlVisible = 1;
-    quint8 toolStateOverlayVisible = 1;
 
     data.selectedLayerId = QUuid();
     // Pre-v27 files carry no format tag — content tiles were always RGBA8. v27+
@@ -711,21 +711,23 @@ bool ProjectSerializer::readProjectInfo(const QByteArray& blob, ProjectData& dat
             in >> editingForegroundColor;
         }
         if (data.version >= 7) {
-            in >> data.dockLayoutState;
-            in >> data.brushOverlayPosNormalized;
+            // Workspace UI slot: read and discard. Older files carry the dock layout,
+            // canvas overlay positions and overlay visibility here, but all of that is a
+            // user preference (QSettings) and must never be applied from a project.
+            QByteArray discardedDockLayoutState;
+            QPointF discardedOverlayPos;
+            quint8 discardedFlag = 0;
+            in >> discardedDockLayoutState;
+            in >> discardedOverlayPos; // brush overlay
             if (data.version >= 8) {
-                in >> data.toolStateOverlayPosNormalized;
-            } else {
-                data.toolStateOverlayPosNormalized = QPointF(-1.0, -1.0);
+                in >> discardedOverlayPos; // tool state overlay
             }
-            in >> data.stylusJoystickPosNormalized;
-            in >> stylusJoystickAbovePanel;
-            in >> joystickVisible;
-            in >> brushControlVisible;
+            in >> discardedOverlayPos; // stylus joystick
+            in >> discardedFlag; // stylus joystick above panel
+            in >> discardedFlag; // joystick visible
+            in >> discardedFlag; // brush control visible
             if (data.version >= 9) {
-                in >> toolStateOverlayVisible;
-            } else {
-                toolStateOverlayVisible = 1;
+                in >> discardedFlag; // tool state overlay visible
             }
         }
         if (data.version >= 23) {
@@ -763,10 +765,6 @@ bool ProjectSerializer::readProjectInfo(const QByteArray& blob, ProjectData& dat
             data.smudgeToolState = data.brushToolState;
         }
         data.editingForegroundColor = (editingForegroundColor != 0);
-        data.stylusJoystickAbovePanel = (stylusJoystickAbovePanel != 0);
-        data.canvasWidgets[ruwa::ui::CanvasWidget::Joystick] = (joystickVisible != 0);
-        data.canvasWidgets[ruwa::ui::CanvasWidget::BrushControl] = (brushControlVisible != 0);
-        data.canvasWidgets[ruwa::ui::CanvasWidget::ToolState] = (toolStateOverlayVisible != 0);
         if (data.version < 6) {
             data.brushToolState.colorRgba = data.lastUsedColorRgba;
             data.eraserToolState.colorRgba = data.lastUsedColorRgba;
@@ -811,14 +809,6 @@ bool ProjectSerializer::readProjectInfo(const QByteArray& blob, ProjectData& dat
     if (data.version < 19) {
         data.lassoStabilization = 0.0;
         data.lassoFillStabilization = 0.0;
-    }
-    if (data.version < 7) {
-        data.dockLayoutState.clear();
-        data.brushOverlayPosNormalized = QPointF(-1.0, -1.0);
-        data.toolStateOverlayPosNormalized = QPointF(-1.0, -1.0);
-        data.stylusJoystickPosNormalized = QPointF(-1.0, -1.0);
-        data.stylusJoystickAbovePanel = true;
-        data.canvasWidgets = ruwa::ui::CanvasWidgetVisibility {};
     }
     if (data.version < 11) {
         data.canvasBoundsMode = ruwa::core::canvas::CanvasBoundsMode::Bounded;
