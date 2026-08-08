@@ -3204,6 +3204,11 @@ Ruwa использует фреймворк Qt (версия %1), динами�
         <translation>С изменяемым размером</translation>
     </message>
     <message>
+        <location filename="../src/shell/context-menu/DockPanelContextMenu.cpp" line="247"/>
+        <source>Ungroup Panel</source>
+        <translation>Разгруппировать панель</translation>
+    </message>
+    <message>
         <location filename="../src/shell/context-menu/DockPanelContextMenu.cpp" line="248"/>
         <source>Close Panel</source>
         <translation>Закрыть панель</translation>

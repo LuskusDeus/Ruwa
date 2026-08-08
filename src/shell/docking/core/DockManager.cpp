@@ -68,6 +68,17 @@ void DockManager::setContainer(DockContainerWidget* container)
                 emit layoutChanged();
             }
         });
+
+        // A group tab is a second handle on a panel: closing or dragging one
+        // means exactly what the panel's own title bar would mean.
+        connect(m_container, &DockContainerWidget::groupPanelCloseRequested, this,
+            &DockManager::closePanel);
+        connect(m_container, &DockContainerWidget::groupPanelDragStarted, this,
+            &DockManager::onGroupTabDragStarted);
+        connect(m_container, &DockContainerWidget::groupPanelDragMoved, this,
+            [this](DockPanel*, const QPoint& globalPos) { updateDrag(globalPos); });
+        connect(m_container, &DockContainerWidget::groupPanelDragFinished, this,
+            [this](DockPanel*, const QPoint& globalPos) { endDrag(globalPos); });
     }
 }
 
@@ -524,15 +535,16 @@ void DockManager::endDrag(const QPoint& globalPos)
     DockPanel* panel = m_dragState.panel;
     bool wasValid = validateDragOperation();
 
-    DropZone zone = DropZone::None;
-    DockPanel* targetPanel = nullptr;
+    DockDropTarget dropTarget;
     bool isContainerMode = false;
 
     if (wasValid && m_container->overlay() && !shouldIgnoreDockTargets()) {
-        zone = m_container->overlay()->currentDropZone();
-        targetPanel = m_container->overlay()->targetPanel();
+        dropTarget = m_container->overlay()->currentDropTarget();
         isContainerMode = m_container->overlay()->isContainerMode();
     }
+
+    const DropZone zone = dropTarget.zone;
+    DockPanel* targetPanel = dropTarget.panel;
 
     // Always cleanup overlay first
     if (m_container && m_container->overlay()) {
@@ -558,7 +570,11 @@ void DockManager::endDrag(const QPoint& globalPos)
 
         m_inDragOperation = false; // Allow nested dock operation
 
-        if (isInnerZone(zone) && targetPanel) {
+        if (dropTarget.isGroupDrop() && targetPanel) {
+            // Center of a panel, or its group's header: share the cell as tabs.
+            // Must be tested before isInnerZone(), which is also true here.
+            m_container->dockPanelIntoGroup(panel, dropTarget);
+        } else if (isInnerZone(zone) && targetPanel) {
             // Inner zone with target panel - dock relative to that panel
             m_container->dockPanelRelativeTo(panel, targetPanel, position);
         } else {
@@ -750,6 +766,47 @@ void DockManager::onPanelDockRequested()
     }
 }
 
+void DockManager::onPanelUngroupRequested()
+{
+    auto* panel = qobject_cast<DockPanel*>(sender());
+    if (!panel || !m_container) {
+        return;
+    }
+
+    OperationGuard guard(m_inPanelOperation);
+    if (!guard) {
+        return;
+    }
+
+    m_inPanelOperation = false;
+    const bool ungrouped = m_container->ungroupPanel(panel);
+    m_inPanelOperation = true;
+
+    if (ungrouped && !m_inLayoutChange) {
+        OperationGuard layoutGuard(m_inLayoutChange);
+        emit layoutChanged();
+    }
+}
+
+void DockManager::onGroupTabDragStarted(DockPanel* panel, const QPoint& globalPos)
+{
+    if (!panel) {
+        return;
+    }
+
+    startDrag(panel, globalPos);
+
+    // The tab that started this drag lives in the group's header, and that
+    // header dies with its frame the moment the group drops back to a single
+    // panel — taking the implicit mouse grab with it, mid-drag. Move the grab
+    // onto the panel's own title bar, which travels with the panel.
+    if (m_dragState.active) {
+        if (auto* titleBar = panel->titleBar()) {
+            titleBar->takeOverDrag(globalPos);
+        }
+    }
+}
+
 void DockManager::onTitleBarDragStarted(const QPoint& globalPos)
 {
     if (auto* titleBar = qobject_cast<DockPanelTitleBar*>(sender())) {
@@ -795,6 +852,7 @@ void DockManager::connectPanel(DockPanel* panel)
     connect(panel, &DockPanel::closeRequested, this, &DockManager::onPanelCloseRequested);
     connect(panel, &DockPanel::floatRequested, this, &DockManager::onPanelFloatRequested);
     connect(panel, &DockPanel::dockRequested, this, &DockManager::onPanelDockRequested);
+    connect(panel, &DockPanel::ungroupRequested, this, &DockManager::onPanelUngroupRequested);
 
     if (auto* titleBar = panel->titleBar()) {
         connect(

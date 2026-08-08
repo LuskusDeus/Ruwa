@@ -20,6 +20,10 @@ namespace {
 constexpr int kGlassBlurRadius = 24;
 constexpr int kGlassCornerRadius = 8;
 
+/// Group previews grow from this fraction of the cell instead of wiping in from
+/// an edge — there is no edge to come from when the drop lands on top.
+constexpr qreal kGroupPreviewMinScale = 0.8;
+
 QPixmap blurPixmapForGlass(const QPixmap& source, int radius)
 {
     if (source.isNull() || radius <= 0) {
@@ -218,7 +222,17 @@ void DropZoneIndicator::paintEvent(QPaintEvent* /*event*/)
     const QRect widgetGeom = geometry();
     const QPoint offset(m_targetRect.x() - widgetGeom.x(), m_targetRect.y() - widgetGeom.y());
     const QRect targetLocal(offset, m_targetRect.size());
-    const QRectF targetLocalF(targetLocal);
+
+    // An edge zone is *revealed*: the shape stays put and the widget bounds act
+    // as a blind. A group zone is *scaled*: the whole shape grows and fades in,
+    // so it fills the widget rect and carries the animation's opacity.
+    const bool groupPreview = isGroupZone(m_zone);
+    const QRectF targetLocalF
+        = groupPreview ? QRectF(0, 0, width(), height()) : QRectF(targetLocal);
+
+    if (groupPreview) {
+        painter.setOpacity(qBound(0.0, m_animationProgress, 1.0));
+    }
 
     // Clip everything (backdrop + tint) to the rounded final shape. The widget
     // bounds themselves provide the "blind" that exposes only the animated
@@ -374,6 +388,17 @@ QRect DropZoneIndicator::calculateAnimatedRect(qreal progress) const
         {
             int animH = qRound(h * progress);
             return QRect(x, y + h - animH, w, animH);
+        }
+
+    case DropZone::InnerCenter:
+    case DropZone::GroupHeader:
+        // Grow about the centre; paintEvent fades it in over the same progress.
+        {
+            const qreal scale = kGroupPreviewMinScale
+                + (1.0 - kGroupPreviewMinScale) * qBound(0.0, progress, 1.0);
+            const int sw = qRound(w * scale);
+            const int sh = qRound(h * scale);
+            return QRect(x + (w - sw) / 2, y + (h - sh) / 2, sw, sh);
         }
 
     default:

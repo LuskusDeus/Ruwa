@@ -139,6 +139,8 @@ private slots:
     void onPanelCloseRequested();
     void onPanelFloatRequested();
     void onPanelDockRequested();
+    void onPanelUngroupRequested();
+    void onGroupTabDragStarted(DockPanel* panel, const QPoint& globalPos);
     void onTitleBarDragStarted(const QPoint& globalPos);
     void onTitleBarDragging(const QPoint& globalPos);
     void onTitleBarDragFinished(const QPoint& globalPos);

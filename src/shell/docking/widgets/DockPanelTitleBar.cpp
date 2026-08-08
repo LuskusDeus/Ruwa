@@ -269,6 +269,20 @@ QVariantMap DockPanelTitleBar::contextMenuContext() const
 // Events
 // ============================================================================
 
+void DockPanelTitleBar::takeOverDrag(const QPoint& globalPos)
+{
+    m_dragStartPos = globalPos;
+    m_dragging = true;
+
+    if (m_panel && m_panel->isMovable()) {
+        setCursor(Qt::SizeAllCursor);
+    }
+
+    // Explicit grab: no press happened on this widget, so there is no implicit
+    // one to inherit. Released in mouseReleaseEvent.
+    grabMouse();
+}
+
 void DockPanelTitleBar::mousePressEvent(QMouseEvent* event)
 {
     if (event->button() == Qt::LeftButton) {
@@ -314,6 +328,11 @@ void DockPanelTitleBar::mouseReleaseEvent(QMouseEvent* event)
 {
     if (event->button() == Qt::LeftButton) {
         setCursor(Qt::ArrowCursor);
+
+        // Only set by takeOverDrag(); a normal press-drag rides the implicit grab.
+        if (QWidget::mouseGrabber() == this) {
+            releaseMouse();
+        }
 
         if (m_dragging) {
             m_dragging = false;

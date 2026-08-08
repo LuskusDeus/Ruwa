@@ -85,6 +85,7 @@ private:
     HorizontalSeparator* m_sepBeforeTools = nullptr;
     HorizontalSeparator* m_sepBeforeLayerButtons = nullptr;
     BaseStyledWidget* m_floatAction = nullptr;
+    BaseStyledWidget* m_ungroupAction = nullptr;
     BaseStyledWidget* m_closeAction = nullptr;
 };
 

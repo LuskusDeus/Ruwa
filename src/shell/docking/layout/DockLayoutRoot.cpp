@@ -3,6 +3,8 @@
 // DockLayoutRoot.cpp
 #include "DockLayoutRoot.h"
 #include "DockSplitHandle.h"
+#include "shell/docking/widgets/DockGroupHeader.h"
+#include "shell/docking/widgets/DockGroupHost.h"
 #include "shell/docking/widgets/DockPanel.h"
 #include "shell/docking/state/DockLayoutPreset.h"
 #include <QSet>
@@ -10,6 +12,7 @@
 #include <QEasingCurve>
 #include <QJsonArray>
 #include <QCoreApplication>
+#include <QTimer>
 
 namespace ruwa::ui::docking {
 
@@ -112,6 +115,20 @@ DockLayoutRoot::~DockLayoutRoot()
         qDeleteAll(it.value());
     }
     m_handles.clear();
+
+    // Group frames own no panels: give them back to the container first, then
+    // drop the frames (immediately — nothing will run a deferred delete once
+    // the layout root is gone).
+    for (DockGroupHost* host : m_groupHosts) {
+        if (!host) {
+            continue;
+        }
+        for (DockPanel* panel : host->hostedPanels()) {
+            host->releasePanel(panel);
+        }
+        delete host;
+    }
+    m_groupHosts.clear();
 }
 
 DockLeafNode* DockLayoutRoot::addPanel(DockPanel* panel, DockPosition position)
@@ -205,8 +222,11 @@ bool DockLayoutRoot::removePanel(DockPanel* panel)
 
     m_inOperation = true;
 
-    // Remove panel from leaf
-    leaf->takePanel();
+    // Remove this exact panel — takePanel() would drop the group's CURRENT
+    // member, which is not necessarily the one being removed.
+    leaf->removePanel(panel);
+    // syncGroupHosts() only reaches panels still in the tree; this one is out.
+    panel->setGrouped(false);
 
     // Cleanup empty nodes
     cleanupEmptyNodes();
@@ -232,7 +252,7 @@ DockLeafNode* DockLayoutRoot::findLeafForPanel(DockPanel* panel) const
 
     if (m_root->isLeaf()) {
         auto* leaf = static_cast<DockLeafNode*>(m_root.get());
-        return (leaf->panel() == panel) ? leaf : nullptr;
+        return leaf->containsPanel(panel) ? leaf : nullptr;
     }
 
     auto* split = static_cast<DockSplitNode*>(m_root.get());
@@ -248,20 +268,131 @@ QList<DockPanel*> DockLayoutRoot::allPanels() const
     }
 
     if (m_root->isLeaf()) {
-        auto* leaf = static_cast<DockLeafNode*>(m_root.get());
-        if (leaf->hasPanel()) {
-            result.append(leaf->panel());
+        result.append(static_cast<DockLeafNode*>(m_root.get())->panels());
+    } else {
+        auto* split = static_cast<DockSplitNode*>(m_root.get());
+        for (DockLeafNode* leaf : split->allLeaves()) {
+            result.append(leaf->panels());
+        }
+    }
+
+    return result;
+}
+
+QList<DockPanel*> DockLayoutRoot::visiblePanels() const
+{
+    QList<DockPanel*> result;
+
+    if (!m_root) {
+        return result;
+    }
+
+    if (m_root->isLeaf()) {
+        if (DockPanel* p = static_cast<DockLeafNode*>(m_root.get())->panel()) {
+            result.append(p);
         }
     } else {
         auto* split = static_cast<DockSplitNode*>(m_root.get());
         for (DockLeafNode* leaf : split->allLeaves()) {
-            if (leaf->hasPanel()) {
-                result.append(leaf->panel());
+            if (DockPanel* p = leaf->panel()) {
+                result.append(p);
             }
         }
     }
 
     return result;
+}
+
+bool DockLayoutRoot::canGroupPanels(DockPanel* panel, DockPanel* relativeTo) const
+{
+    if (!panel || !relativeTo || panel == relativeTo) {
+        return false;
+    }
+
+    DockLeafNode* targetLeaf = findLeafForPanel(relativeTo);
+    if (!targetLeaf) {
+        return false;
+    }
+
+    // Both sides must accept grouping, otherwise the caller falls back to a
+    // normal split.
+    if (!panel->features().testFlag(PanelFeature::Groupable)) {
+        return false;
+    }
+    for (DockPanel* member : targetLeaf->panels()) {
+        if (member && !member->features().testFlag(PanelFeature::Groupable)) {
+            return false;
+        }
+    }
+
+    return true;
+}
+
+DockLeafNode* DockLayoutRoot::addPanelToGroup(
+    DockPanel* panel, DockPanel* relativeTo, int insertIndex, bool makeCurrent)
+{
+    if (!canGroupPanels(panel, relativeTo)) {
+        return nullptr;
+    }
+
+    DockLeafNode* targetLeaf = findLeafForPanel(relativeTo);
+    if (!targetLeaf) {
+        return nullptr;
+    }
+
+    m_inOperation = true;
+
+    // The panel may already live elsewhere in the tree (re-grouping a docked
+    // panel); take it out first so it is never present twice.
+    if (DockLeafNode* sourceLeaf = findLeafForPanel(panel)) {
+        sourceLeaf->removePanel(panel);
+        if (sourceLeaf != targetLeaf && sourceLeaf->isEmpty()) {
+            cleanupEmptyNodes();
+            // cleanupEmptyNodes may have collapsed the tree around the target,
+            // but never destroys a non-empty leaf, so targetLeaf stays valid.
+        }
+    }
+
+    if (insertIndex < 0) {
+        insertIndex = targetLeaf->indexOfPanel(relativeTo) + 1;
+    }
+    targetLeaf->insertPanel(insertIndex, panel);
+    if (makeCurrent) {
+        targetLeaf->setCurrentPanel(panel);
+    }
+
+    syncHandleWidgets();
+
+    if (m_rootBounds.isValid()) {
+        setRootBounds(m_rootBounds);
+    }
+
+    emit panelAdded(panel);
+    emit layoutChanged();
+
+    m_inOperation = false;
+    return targetLeaf;
+}
+
+bool DockLayoutRoot::setCurrentPanelInGroup(DockPanel* panel)
+{
+    DockLeafNode* leaf = findLeafForPanel(panel);
+    if (!leaf || !leaf->setCurrentPanel(panel)) {
+        return false;
+    }
+
+    if (m_rootBounds.isValid()) {
+        setRootBounds(m_rootBounds);
+    }
+
+    emit layoutChanged();
+    return true;
+}
+
+DockLeafNode* DockLayoutRoot::findLeafAt(const QPoint& globalPos) const
+{
+    DockPanel* panel = findPanelAt(globalPos);
+    return panel ? findLeafForPanel(panel) : nullptr;
 }
 
 DockPanel* DockLayoutRoot::findPanelAt(const QPoint& globalPos) const
@@ -373,6 +504,268 @@ void DockLayoutRoot::syncHandleWidgets()
         // Setup geometry callback
         setupHandleCallback(split);
     }
+
+    // Group frames follow the tree's structure exactly like handles do.
+    syncGroupHosts();
+}
+
+// ============================================================================
+// Group Hosts
+// ============================================================================
+
+QList<DockLeafNode*> DockLayoutRoot::allLeafNodes() const
+{
+    QList<DockLeafNode*> result;
+    if (!m_root) {
+        return result;
+    }
+
+    if (m_root->isLeaf()) {
+        result.append(static_cast<DockLeafNode*>(m_root.get()));
+    } else {
+        result = static_cast<DockSplitNode*>(m_root.get())->allLeaves();
+    }
+    return result;
+}
+
+QWidget* DockLayoutRoot::cellWidget(DockLeafNode* leaf) const
+{
+    if (!leaf) {
+        return nullptr;
+    }
+    if (QWidget* host = leaf->groupHost()) {
+        return host;
+    }
+    return leaf->panel();
+}
+
+QList<QWidget*> DockLayoutRoot::allCellWidgets() const
+{
+    QList<QWidget*> result;
+    for (DockLeafNode* leaf : allLeafNodes()) {
+        if (QWidget* w = cellWidget(leaf)) {
+            result.append(w);
+        }
+    }
+    return result;
+}
+
+DockGroupHost* DockLayoutRoot::groupHostForPanel(DockPanel* panel) const
+{
+    DockLeafNode* leaf = findLeafForPanel(panel);
+    return leaf ? static_cast<DockGroupHost*>(leaf->groupHost()) : nullptr;
+}
+
+DockGroupHost* DockLayoutRoot::groupHostAtHeader(const QPoint& globalPos) const
+{
+    for (DockGroupHost* host : m_groupHosts) {
+        if (!host || !host->isVisible()) {
+            continue;
+        }
+        DockGroupHeader* header = host->header();
+        if (!header || !header->isVisible()) {
+            continue;
+        }
+        const QRect headerRect(header->mapToGlobal(QPoint(0, 0)), header->size());
+        if (headerRect.contains(globalPos)) {
+            return host;
+        }
+    }
+    return nullptr;
+}
+
+void DockLayoutRoot::syncGroupHosts()
+{
+    if (m_destroying || !m_containerWidget) {
+        return;
+    }
+
+    QSet<DockGroupHost*> live;
+
+    for (DockLeafNode* leaf : allLeafNodes()) {
+        // The panels cannot see the tree, so the tree tells them. Done for
+        // every leaf, group or not, so a cell that just collapsed clears it.
+        const bool grouped = leaf->isGroup();
+        for (DockPanel* member : leaf->panels()) {
+            if (member) {
+                member->setGrouped(grouped);
+            }
+        }
+
+        if (!grouped) {
+            auto* host = static_cast<DockGroupHost*>(leaf->groupHost());
+            if (host) {
+                // The cell has dropped to one member. If the VISIBLE one is what
+                // left, the survivor slides into its place first — inside the
+                // frame, which still clips it — and the frame reports back when
+                // that has landed. Either way it stays attached to the leaf, so
+                // it must count as live or the stale sweep below would delete it
+                // mid-animation.
+                if (host->isCollapsing() || host->beginCollapse()) {
+                    live.insert(host);
+                } else {
+                    destroyGroupHost(leaf);
+                }
+            }
+            continue;
+        }
+
+        auto* host = static_cast<DockGroupHost*>(leaf->groupHost());
+        if (!host) {
+            host = new DockGroupHost(leaf, m_containerWidget);
+            host->setAnimationsEnabled(m_layoutAnimationEnabled);
+            host->setAnimationDuration(m_layoutAnimationDuration);
+            host->applyTheme(m_colors);
+            connectGroupHost(host);
+
+            leaf->setGroupHost(host);
+            m_groupHosts.insert(host);
+
+            // The node reserves space for the header in its size constraints,
+            // so it must know the theme-scaled height the widget actually uses.
+            leaf->setHeaderHeight(host->headerHeight());
+
+            if (leaf->bounds().isValid()) {
+                host->setGeometry(leaf->bounds());
+            }
+            host->show();
+            emit groupHostCreated(host);
+        }
+
+        host->syncFromLeaf();
+        live.insert(host);
+    }
+
+    // Whatever is left belongs to a leaf that no longer exists (or no longer
+    // groups). Its key would be dangling, hence the pointer-set sweep.
+    const QSet<DockGroupHost*> stale = m_groupHosts - live;
+    for (DockGroupHost* host : stale) {
+        m_groupHosts.remove(host);
+        emit groupHostAboutToBeDestroyed(host);
+        host->hide();
+        host->deleteLater();
+    }
+}
+
+void DockLayoutRoot::connectGroupHost(DockGroupHost* host)
+{
+    connect(host, &DockGroupHost::panelActivationRequested, this, [this, host](DockPanel* panel) {
+        DockLeafNode* leaf = host->leaf();
+        if (!leaf || !leaf->setCurrentPanel(panel)) {
+            return;
+        }
+        host->setCurrentPanel(panel, /*animated=*/true);
+        emit layoutChanged();
+    });
+
+    connect(host, &DockGroupHost::collapseFinished, this, [this, host]() {
+        if (m_destroying) {
+            return;
+        }
+        // The leaf pointer captured at connect time could be dangling by now —
+        // the collapse takes a couple of hundred ms and tree surgery is free to
+        // run in between. Find the frame by identity among the LIVE leaves; if
+        // it belongs to none, it was orphaned and syncGroupHosts' sweep owns it.
+        for (DockLeafNode* leaf : allLeafNodes()) {
+            if (leaf->groupHost() != host) {
+                continue;
+            }
+
+            destroyGroupHost(leaf);
+
+            // Re-apply the layout by hand. Every other call site runs INSIDE a
+            // layout update, so the cell is re-laid out right after; this one
+            // arrives from an animation, long after the layout settled. Without
+            // it the survivor keeps the member-area geometry it had under the
+            // strip — a header-high strip of dead space above it, forever — and
+            // destroyGroupHost's grow-in animation reads that same rect as its
+            // target and does nothing.
+            setRootBounds(m_rootBounds);
+            return;
+        }
+    });
+
+    connect(
+        host, &DockGroupHost::panelCloseRequested, this, &DockLayoutRoot::groupPanelCloseRequested);
+    connect(host, &DockGroupHost::panelDragStarted, this, &DockLayoutRoot::groupPanelDragStarted);
+    connect(host, &DockGroupHost::panelDragMoved, this, &DockLayoutRoot::groupPanelDragMoved);
+    connect(host, &DockGroupHost::panelDragFinished, this, &DockLayoutRoot::groupPanelDragFinished);
+}
+
+void DockLayoutRoot::destroyGroupHost(DockLeafNode* leaf)
+{
+    if (!leaf) {
+        return;
+    }
+
+    auto* host = static_cast<DockGroupHost*>(leaf->groupHost());
+    if (!host) {
+        leaf->setGroupHost(nullptr);
+        return;
+    }
+
+    // One last sync while the frame still owns its members: it releases the
+    // departed one and promotes the survivor to visible current member. Without
+    // this, losing the member that WAS current leaves the cell blank — the
+    // survivor was hidden, and a solo leaf's setBounds only moves its panel, it
+    // never shows it.
+    host->syncFromLeaf();
+
+    leaf->setGroupHost(nullptr);
+
+    // Where the survivor is standing right now — below the header strip it is
+    // about to reclaim. This is the only part of the flight we can know here.
+    DockPanel* survivor = leaf->panel();
+    const QRect memberRect = host->memberAreaInParent();
+
+    // Hand every hosted panel back to the container before the frame goes, so
+    // the survivor keeps painting while the layout settles.
+    for (DockPanel* panel : host->hostedPanels()) {
+        host->releasePanel(panel);
+        if (panel) {
+            panel->setGrouped(false);
+        }
+    }
+
+    m_groupHosts.remove(host);
+    emit groupHostAboutToBeDestroyed(host);
+
+    const bool animate = m_layoutAnimationEnabled && m_layoutAnimationDuration > 0
+        && host->isVisible() && survivor && survivor->isVisible() && memberRect.isValid();
+
+    if (!animate) {
+        host->hide();
+        // deleteLater, not delete: this runs from inside header signal handlers
+        // (dragging the last-but-one tab out of the group).
+        host->deleteLater();
+        return;
+    }
+
+    // The survivor grows into the vacated strip while the strip collapses into
+    // it: same duration, so they finish as one motion.
+    //
+    // The DESTINATION cannot be read here. This runs mid-surgery, and the
+    // caller often is not done — ungroupPanel() splits this very cell moments
+    // later, and cleanupEmptyNodes() can move it. Taking leaf->bounds() now
+    // would fly the panel to a rectangle that no longer exists by the time it
+    // lands. So the target is read on the next turn, once every synchronous
+    // setRootBounds has settled the layout; this handler runs before those, so
+    // its queued call is delivered before the frame is composited.
+    QPointer<DockPanel> survivorRef(survivor);
+    const int duration = m_layoutAnimationDuration;
+    QTimer::singleShot(0, survivor, [survivorRef, memberRect, duration]() {
+        DockPanel* panel = survivorRef.data();
+        if (!panel || !panel->isVisible() || panel->isAnimatingDocking()) {
+            return;
+        }
+        const QRect target = panel->geometry();
+        if (!target.isValid() || target == memberRect) {
+            return;
+        }
+        panel->animateDocking(memberRect, target, duration);
+    });
+
+    host->runFarewell(duration);
 }
 
 void DockLayoutRoot::applyTheme(const ruwa::ui::core::ThemeColors& colors)
@@ -382,6 +775,40 @@ void DockLayoutRoot::applyTheme(const ruwa::ui::core::ThemeColors& colors)
     for (auto it = m_handles.begin(); it != m_handles.end(); ++it) {
         for (DockSplitHandle* handle : it.value()) {
             handle->applyTheme(colors);
+        }
+    }
+
+    for (DockGroupHost* host : m_groupHosts) {
+        if (!host) {
+            continue;
+        }
+        host->applyTheme(colors);
+
+        // The strip is theme-scaled, so a theme with a different scale changes
+        // how much of the cell the members actually get. The node reserves that
+        // space in its size constraints and has to be told.
+        if (DockLeafNode* leaf = host->leaf()) {
+            leaf->setHeaderHeight(host->headerHeight());
+        }
+    }
+}
+
+void DockLayoutRoot::setLayoutAnimationEnabled(bool enabled)
+{
+    m_layoutAnimationEnabled = enabled;
+    for (DockGroupHost* host : m_groupHosts) {
+        if (host) {
+            host->setAnimationsEnabled(enabled);
+        }
+    }
+}
+
+void DockLayoutRoot::setLayoutAnimationDuration(int ms)
+{
+    m_layoutAnimationDuration = qMax(0, ms);
+    for (DockGroupHost* host : m_groupHosts) {
+        if (host) {
+            host->setAnimationDuration(m_layoutAnimationDuration);
         }
     }
 }
@@ -418,6 +845,18 @@ std::optional<PanelPlacement> DockLayoutRoot::getPanelPlacement(DockPanel* panel
     DockLeafNode* leaf = findLeafForPanel(panel);
     if (!leaf)
         return std::nullopt;
+
+    // Center means "back into the same cell as this sibling".
+    // DockContainerWidget::addPanelRelativeTo reads it that way and re-groups;
+    // if the two are no longer groupable it degrades to docking beside it.
+    if (leaf->isGroup()) {
+        for (DockPanel* member : leaf->panels()) {
+            if (member && member != panel) {
+                return PanelPlacement::relativeToPanel(
+                    panel->persistentKey(), member->persistentKey(), DockPosition::Center);
+            }
+        }
+    }
 
     DockLayoutNode* parent = leaf->parent();
     if (!parent) {
@@ -535,9 +974,30 @@ QJsonObject DockLayoutRoot::serializeNode(const DockLayoutNode* node) const
     if (node->isLeaf()) {
         const auto* leaf = static_cast<const DockLeafNode*>(node);
         obj["type"] = QStringLiteral("leaf");
-        if (DockPanel* panel = leaf->panel()) {
-            obj["panelId"] = panel->persistentKey();
-            obj["panelTitle"] = panel->title();
+
+        const QList<DockPanel*> members = leaf->panels();
+
+        // Single-panel leaves keep the flat pre-group format so older builds
+        // (and every existing preset resource) still read them.
+        if (DockPanel* current = leaf->panel()) {
+            obj["panelId"] = current->persistentKey();
+            obj["panelTitle"] = current->title();
+        }
+
+        if (members.size() > 1) {
+            QJsonArray panelsArray;
+            for (DockPanel* member : members) {
+                if (!member) {
+                    continue;
+                }
+                QJsonObject memberObj;
+                memberObj["panelId"] = member->persistentKey();
+                memberObj["panelTitle"] = member->title();
+                panelsArray.append(memberObj);
+            }
+            obj["panels"] = panelsArray;
+            obj["currentIndex"] = leaf->currentIndex();
+            obj["headerHeight"] = leaf->headerHeight();
         }
         return obj;
     }
@@ -577,14 +1037,40 @@ DockLayoutNodePtr DockLayoutRoot::deserializeNode(const QJsonObject& nodeObj,
     const int anchoredSize = nodeObj.value("anchoredSize").toInt(0);
 
     if (type == QLatin1String("leaf")) {
-        const QString panelId = nodeObj.value("panelId").toString();
-        const QString panelTitle = nodeObj.value("panelTitle").toString();
-        DockPanel* panel = panelResolver(panelId, panelTitle);
-        if (!panel) {
-            return nullptr;
+        auto leaf = std::make_unique<DockLeafNode>();
+
+        // Grouped leaf: "panels" is authoritative. The flat panelId/panelTitle
+        // pair is still written for the current member, so a group read by an
+        // older build degrades to that one panel instead of failing.
+        const QJsonArray panelsArray = nodeObj.value("panels").toArray();
+        if (!panelsArray.isEmpty()) {
+            for (const QJsonValue& value : panelsArray) {
+                const QJsonObject memberObj = value.toObject();
+                DockPanel* member = panelResolver(memberObj.value("panelId").toString(),
+                    memberObj.value("panelTitle").toString());
+                if (member) {
+                    leaf->addPanel(member);
+                }
+            }
+
+            if (!leaf->hasPanel()) {
+                return nullptr;
+            }
+
+            leaf->setCurrentIndex(nodeObj.value("currentIndex").toInt(0));
+            const int header = nodeObj.value("headerHeight").toInt(kDefaultGroupHeaderHeight);
+            if (header > 0) {
+                leaf->setHeaderHeight(header);
+            }
+        } else {
+            DockPanel* panel = panelResolver(
+                nodeObj.value("panelId").toString(), nodeObj.value("panelTitle").toString());
+            if (!panel) {
+                return nullptr;
+            }
+            leaf->setPanel(panel);
         }
 
-        auto leaf = std::make_unique<DockLeafNode>(panel);
         leaf->setAnchor(anchor);
         leaf->setAnchoredSize(anchoredSize);
         return leaf;
@@ -637,15 +1123,12 @@ bool DockLayoutRoot::sanitizeNodeRecursive(DockLayoutNodePtr& node, QSet<DockPan
 
     if (node->isLeaf()) {
         auto* leaf = static_cast<DockLeafNode*>(node.get());
-        DockPanel* panel = leaf->panel();
-        const bool invalidLeaf = !panel || seenPanels.contains(panel);
-        if (invalidLeaf) {
+        const bool changed = sanitizeLeafNode(leaf, seenPanels);
+        if (!leaf->hasPanel()) {
             node.reset();
             return true;
         }
-
-        seenPanels.insert(panel);
-        return false;
+        return changed;
     }
 
     auto* split = static_cast<DockSplitNode*>(node.get());
@@ -663,6 +1146,29 @@ bool DockLayoutRoot::sanitizeNodeRecursive(DockLayoutNodePtr& node, QSet<DockPan
             node = std::move(collapsedChild);
             return true;
         }
+    }
+
+    return changed;
+}
+
+bool DockLayoutRoot::sanitizeLeafNode(DockLeafNode* leaf, QSet<DockPanel*>& seenPanels)
+{
+    if (!leaf) {
+        return false;
+    }
+
+    bool changed = false;
+
+    // Drop null and duplicate members. A panel may appear exactly once in the
+    // whole tree; a group leaf makes it possible to violate that per member,
+    // not just per leaf.
+    for (DockPanel* member : leaf->panels()) {
+        if (!member || seenPanels.contains(member)) {
+            leaf->removePanel(member);
+            changed = true;
+            continue;
+        }
+        seenPanels.insert(member);
     }
 
     return changed;
@@ -686,15 +1192,11 @@ bool DockLayoutRoot::sanitizeSplitNode(DockSplitNode* split, QSet<DockPanel*>& s
 
         if (child->isLeaf()) {
             auto* leaf = static_cast<DockLeafNode*>(child);
-            DockPanel* panel = leaf->panel();
-            const bool invalidLeaf = !panel || seenPanels.contains(panel);
-            if (invalidLeaf) {
+            changed = sanitizeLeafNode(leaf, seenPanels) || changed;
+            if (!leaf->hasPanel()) {
                 split->removeChildAt(i);
                 changed = true;
-                continue;
             }
-
-            seenPanels.insert(panel);
             continue;
         }
 
@@ -1155,6 +1657,29 @@ DockPanel* DockLayoutRoot::getFirstPanelInNode(DockLayoutNode* node) const
     return leaves.isEmpty() ? nullptr : leaves.first()->panel();
 }
 
+QWidget* DockLayoutRoot::edgeCellWidget(
+    DockLayoutNode* node, bool rightEdge, SplitDirection splitDir) const
+{
+    if (!node) {
+        return nullptr;
+    }
+    if (node->isLeaf()) {
+        return cellWidget(static_cast<DockLeafNode*>(node));
+    }
+
+    auto* split = static_cast<DockSplitNode*>(node);
+    QList<DockLeafNode*> leaves = split->allLeaves();
+    if (leaves.isEmpty()) {
+        return nullptr;
+    }
+    // A nested split running the same way has a genuine first/last cell; one
+    // running across it shares the whole edge, so any cell identifies it.
+    if (split->direction() == splitDir) {
+        return cellWidget(rightEdge ? leaves.last() : leaves.first());
+    }
+    return cellWidget(leaves.first());
+}
+
 void DockLayoutRoot::captureLayoutState()
 {
     m_capturedGeometries.clear();
@@ -1165,33 +1690,14 @@ void DockLayoutRoot::captureLayoutState()
     // Set flag to defer showing new handles until animation starts
     m_preparingAnimation = true;
 
-    // Capture panel geometries
-    QList<DockPanel*> panels = allPanels();
-    for (DockPanel* panel : panels) {
-        if (panel && panel->isVisible()) {
-            m_capturedGeometries[panel] = panel->geometry();
+    // Capture cell geometries
+    for (QWidget* cell : allCellWidgets()) {
+        if (cell && cell->isVisible()) {
+            m_capturedGeometries[cell] = cell->geometry();
         }
     }
 
-    // Helper to get edge panel - must match the logic in animateLayoutChange()
-    auto getEdgePanelForCapture
-        = [](DockLayoutNode* node, bool getRightEdge, SplitDirection splitDir) -> DockPanel* {
-        if (!node)
-            return nullptr;
-        if (node->isLeaf()) {
-            return static_cast<DockLeafNode*>(node)->panel();
-        }
-        auto* split = static_cast<DockSplitNode*>(node);
-        QList<DockLeafNode*> leaves = split->allLeaves();
-        if (leaves.isEmpty())
-            return nullptr;
-        if (split->direction() == splitDir) {
-            return getRightEdge ? leaves.last()->panel() : leaves.first()->panel();
-        }
-        return leaves.first()->panel();
-    };
-
-    // Capture handle geometries by POSITION (adjacent panels), not by pointer
+    // Capture handle geometries by POSITION (adjacent cells), not by pointer
     // This survives handle recreation in syncHandleWidgets()
     for (auto it = m_handles.begin(); it != m_handles.end(); ++it) {
         DockSplitNode* splitNode = it.key();
@@ -1203,20 +1709,18 @@ void DockLayoutRoot::captureLayoutState()
             if (!handle || !handle->isVisible())
                 continue;
 
-            // Get adjacent panels to identify this handle position
-            // Use the SAME logic as animateLayoutChange() - getEdgePanel
+            // Get adjacent cells to identify this handle position
             DockLayoutNode* leftChild = splitNode->childAt(i);
             DockLayoutNode* rightChild = splitNode->childAt(i + 1);
 
-            // For leftChild we want its RIGHT edge panel (adjacent to handle)
-            // For rightChild we want its LEFT edge panel (adjacent to handle)
-            DockPanel* leftPanel = getEdgePanelForCapture(leftChild, true, splitDir);
-            DockPanel* rightPanel = getEdgePanelForCapture(rightChild, false, splitDir);
+            // For leftChild we want its RIGHT edge cell (adjacent to handle)
+            // For rightChild we want its LEFT edge cell (adjacent to handle)
+            QWidget* leftCell = edgeCellWidget(leftChild, true, splitDir);
+            QWidget* rightCell = edgeCellWidget(rightChild, false, splitDir);
 
-            if (leftPanel && rightPanel) {
-                // Key: pair of adjacent panels
-                QPair<DockPanel*, DockPanel*> key(leftPanel, rightPanel);
-                m_capturedHandlePositions[key] = handle->geometry();
+            if (leftCell && rightCell) {
+                m_capturedHandlePositions[QPair<QWidget*, QWidget*>(leftCell, rightCell)]
+                    = handle->geometry();
             }
 
             // Also store by pointer for backward compatibility
@@ -1249,15 +1753,24 @@ void DockLayoutRoot::animateLayoutChange(DockPanel* excludePanel)
         m_layoutAnimation->stop();
     }
 
-    m_excludedPanel = excludePanel;
+    // A grouped panel is excluded through its frame: the frame is what moves in
+    // container space.
+    m_excludedCell = excludePanel;
+    if (excludePanel) {
+        if (DockLeafNode* leaf = findLeafForPanel(excludePanel)) {
+            if (QWidget* host = leaf->groupHost()) {
+                m_excludedCell = host;
+            }
+        }
+    }
+
     m_targetGeometries.clear();
     m_targetHandleGeometries.clear();
 
-    // Capture new panel geometries
-    QList<DockPanel*> panels = allPanels();
-    for (DockPanel* panel : panels) {
-        if (panel && panel->isVisible() && panel != excludePanel) {
-            m_targetGeometries[panel] = panel->geometry();
+    // Capture new cell geometries
+    for (QWidget* cell : allCellWidgets()) {
+        if (cell && cell->isVisible() && cell != m_excludedCell) {
+            m_targetGeometries[cell] = cell->geometry();
         }
     }
 
@@ -1273,9 +1786,9 @@ void DockLayoutRoot::animateLayoutChange(DockPanel* excludePanel)
     // Check if we have anything to animate
     bool needsAnimation = false;
     for (auto it = m_targetGeometries.begin(); it != m_targetGeometries.end(); ++it) {
-        DockPanel* panel = it.key();
-        if (m_capturedGeometries.contains(panel)) {
-            QRect oldGeom = m_capturedGeometries[panel];
+        QWidget* cell = it.key();
+        if (m_capturedGeometries.contains(cell)) {
+            QRect oldGeom = m_capturedGeometries[cell];
             QRect newGeom = it.value();
             if (oldGeom != newGeom) {
                 needsAnimation = true;
@@ -1284,52 +1797,34 @@ void DockLayoutRoot::animateLayoutChange(DockPanel* excludePanel)
         }
     }
 
-    // Helper lambda to get edge panel from a node (for needsAnimation check)
-    auto getEdgePanelForCheck
-        = [](DockLayoutNode* node, bool getRightEdge, SplitDirection splitDir) -> DockPanel* {
-        if (!node)
-            return nullptr;
-        if (node->isLeaf()) {
-            return static_cast<DockLeafNode*>(node)->panel();
-        }
-        auto* split = static_cast<DockSplitNode*>(node);
-        QList<DockLeafNode*> leaves = split->allLeaves();
-        if (leaves.isEmpty())
-            return nullptr;
-        if (split->direction() == splitDir) {
-            return getRightEdge ? leaves.last()->panel() : leaves.first()->panel();
-        }
-        return leaves.first()->panel();
-    };
-
     // Also check handles for animation need (including new handles)
-    // Use m_capturedHandlePositions to check by adjacent panels, not by pointer
+    // Use m_capturedHandlePositions to check by adjacent cells, not by pointer
     if (!needsAnimation) {
         for (auto it = m_targetHandleGeometries.begin(); it != m_targetHandleGeometries.end();
             ++it) {
             DockSplitHandle* handle = it.key();
             QRect targetGeom = it.value();
 
-            // Get adjacent panels to identify this handle position
+            // Get adjacent cells to identify this handle position
             DockSplitNode* splitNode = handle->splitNode();
             int handleIdx = handle->handleIndex();
 
-            DockPanel* leftPanel = nullptr;
-            DockPanel* rightPanel = nullptr;
+            QWidget* leftCell = nullptr;
+            QWidget* rightCell = nullptr;
 
             if (splitNode && handleIdx >= 0 && handleIdx < splitNode->childCount() - 1) {
                 DockLayoutNode* leftChild = splitNode->childAt(handleIdx);
                 DockLayoutNode* rightChild = splitNode->childAt(handleIdx + 1);
                 SplitDirection splitDir = splitNode->direction();
 
-                leftPanel = getEdgePanelForCheck(leftChild, true, splitDir);
-                rightPanel = getEdgePanelForCheck(rightChild, false, splitDir);
+                leftCell = edgeCellWidget(leftChild, true, splitDir);
+                rightCell = edgeCellWidget(rightChild, false, splitDir);
             }
 
-            // Check if handle existed at this position (by panel pair)
-            QPair<DockPanel*, DockPanel*> posKey(leftPanel, rightPanel);
+            // Check if handle existed at this position (by cell pair)
+            QPair<QWidget*, QWidget*> posKey(leftCell, rightCell);
             bool existedAtPosition
-                = leftPanel && rightPanel && m_capturedHandlePositions.contains(posKey);
+                = leftCell && rightCell && m_capturedHandlePositions.contains(posKey);
 
             if (existedAtPosition) {
                 // Handle existed - check if geometry changed
@@ -1369,33 +1864,11 @@ void DockLayoutRoot::animateLayoutChange(DockPanel* excludePanel)
 
     // Restore old geometries before starting animation
     for (auto it = m_targetGeometries.begin(); it != m_targetGeometries.end(); ++it) {
-        DockPanel* panel = it.key();
-        if (m_capturedGeometries.contains(panel)) {
-            panel->setGeometry(m_capturedGeometries[panel]);
+        QWidget* cell = it.key();
+        if (m_capturedGeometries.contains(cell)) {
+            cell->setGeometry(m_capturedGeometries[cell]);
         }
     }
-
-    // Helper to get edge panel from a layout node
-    auto getEdgePanel
-        = [](DockLayoutNode* node, bool getRightEdge, SplitDirection splitDir) -> DockPanel* {
-        if (!node)
-            return nullptr;
-        if (node->isLeaf()) {
-            return static_cast<DockLeafNode*>(node)->panel();
-        }
-        // For nested splits, get the appropriate edge panel
-        auto* split = static_cast<DockSplitNode*>(node);
-        QList<DockLeafNode*> leaves = split->allLeaves();
-        if (leaves.isEmpty())
-            return nullptr;
-
-        // If nested split has same direction, get first or last based on edge
-        // If nested split has different direction, any panel works (they share the edge)
-        if (split->direction() == splitDir) {
-            return getRightEdge ? leaves.last()->panel() : leaves.first()->panel();
-        }
-        return leaves.first()->panel();
-    };
 
     // Restore old handle geometries OR set initial geometry for new handles
     for (auto it = m_targetHandleGeometries.begin(); it != m_targetHandleGeometries.end(); ++it) {
@@ -1403,27 +1876,27 @@ void DockLayoutRoot::animateLayoutChange(DockPanel* excludePanel)
         QRect targetGeom = it.value();
         QRect startGeom = targetGeom; // Default: start at target
 
-        // Get adjacent panels for this handle to check m_capturedHandlePositions
+        // Get adjacent cells for this handle to check m_capturedHandlePositions
         DockSplitNode* splitNode = handle->splitNode();
         int handleIdx = handle->handleIndex();
 
-        DockPanel* leftPanel = nullptr;
-        DockPanel* rightPanel = nullptr;
+        QWidget* leftCell = nullptr;
+        QWidget* rightCell = nullptr;
 
         if (splitNode && handleIdx >= 0 && handleIdx < splitNode->childCount() - 1) {
             DockLayoutNode* leftChild = splitNode->childAt(handleIdx);
             DockLayoutNode* rightChild = splitNode->childAt(handleIdx + 1);
             SplitDirection splitDir = splitNode->direction();
 
-            leftPanel = getEdgePanel(leftChild, true, splitDir);
-            rightPanel = getEdgePanel(rightChild, false, splitDir);
+            leftCell = edgeCellWidget(leftChild, true, splitDir);
+            rightCell = edgeCellWidget(rightChild, false, splitDir);
         }
 
         // Check if this handle position existed before (by adjacent panels)
         // This works even after handles are recreated because we identify by panel pair
-        QPair<DockPanel*, DockPanel*> positionKey(leftPanel, rightPanel);
+        QPair<QWidget*, QWidget*> positionKey(leftCell, rightCell);
         bool handleExistedAtPosition
-            = leftPanel && rightPanel && m_capturedHandlePositions.contains(positionKey);
+            = leftCell && rightCell && m_capturedHandlePositions.contains(positionKey);
 
         if (handleExistedAtPosition) {
             // Existing handle position - restore old geometry from position map
@@ -1435,56 +1908,54 @@ void DockLayoutRoot::animateLayoutChange(DockPanel* excludePanel)
             handle->setGeometry(m_capturedHandleGeometries[handle]);
         } else {
             // New handle - find the correct starting position
-            // The handle should start at the edge of the existing panel
+            // The handle should start at the edge of the existing cell
 
             if (splitNode && handleIdx >= 0 && handleIdx < splitNode->childCount() - 1) {
-                bool leftExisted = leftPanel && m_capturedGeometries.contains(leftPanel);
-                bool rightExisted = rightPanel && m_capturedGeometries.contains(rightPanel);
+                const bool leftExisted = leftCell && m_capturedGeometries.contains(leftCell);
+                const bool rightExisted = rightCell && m_capturedGeometries.contains(rightCell);
 
-                if (leftExisted && leftPanel) { }
-                if (rightExisted && rightPanel) { }
                 if (handle->direction() == SplitDirection::Horizontal) {
-                    // Vertical handle between left and right panels
+                    // Vertical handle between left and right cells
                     if (leftExisted && !rightExisted) {
-                        // New panel on RIGHT - handle starts at right edge of existing panel
-                        QRect oldLeftGeom = m_capturedGeometries[leftPanel];
+                        // New cell on RIGHT - handle starts at right edge of existing cell
+                        QRect oldLeftGeom = m_capturedGeometries[leftCell];
                         startGeom
                             = QRect(oldLeftGeom.right(), targetGeom.y(), 0, targetGeom.height());
                     } else if (rightExisted && !leftExisted) {
-                        // New panel on LEFT - handle starts at left edge of existing panel
-                        QRect oldRightGeom = m_capturedGeometries[rightPanel];
+                        // New cell on LEFT - handle starts at left edge of existing cell
+                        QRect oldRightGeom = m_capturedGeometries[rightCell];
                         startGeom
                             = QRect(oldRightGeom.left(), targetGeom.y(), 0, targetGeom.height());
                     } else if (!leftExisted && !rightExisted) {
-                        // Both panels are new - use target position
+                        // Both cells are new - use target position
                         startGeom = targetGeom;
                     } else {
                         // Both existed but no handle was between them before
                         // This shouldn't happen normally, but start from midpoint
-                        QRect oldLeftGeom = m_capturedGeometries[leftPanel];
-                        QRect oldRightGeom = m_capturedGeometries[rightPanel];
+                        QRect oldLeftGeom = m_capturedGeometries[leftCell];
+                        QRect oldRightGeom = m_capturedGeometries[rightCell];
                         int midX = (oldLeftGeom.right() + oldRightGeom.left()) / 2;
                         startGeom = QRect(midX, targetGeom.y(), 0, targetGeom.height());
                     }
                 } else {
-                    // Horizontal handle between top and bottom panels
+                    // Horizontal handle between top and bottom cells
                     if (leftExisted && !rightExisted) {
-                        // New panel on BOTTOM - handle starts at bottom edge of existing panel
-                        QRect oldTopGeom = m_capturedGeometries[leftPanel];
+                        // New cell on BOTTOM - handle starts at bottom edge of existing cell
+                        QRect oldTopGeom = m_capturedGeometries[leftCell];
                         startGeom
                             = QRect(targetGeom.x(), oldTopGeom.bottom(), targetGeom.width(), 0);
                     } else if (rightExisted && !leftExisted) {
-                        // New panel on TOP - handle starts at top edge of existing panel
-                        QRect oldBottomGeom = m_capturedGeometries[rightPanel];
+                        // New cell on TOP - handle starts at top edge of existing cell
+                        QRect oldBottomGeom = m_capturedGeometries[rightCell];
                         startGeom
                             = QRect(targetGeom.x(), oldBottomGeom.top(), targetGeom.width(), 0);
                     } else if (!leftExisted && !rightExisted) {
-                        // Both panels are new - use target position
+                        // Both cells are new - use target position
                         startGeom = targetGeom;
                     } else {
                         // Both existed but no handle was between them before
-                        QRect oldTopGeom = m_capturedGeometries[leftPanel];
-                        QRect oldBottomGeom = m_capturedGeometries[rightPanel];
+                        QRect oldTopGeom = m_capturedGeometries[leftCell];
+                        QRect oldBottomGeom = m_capturedGeometries[rightCell];
                         int midY = (oldTopGeom.bottom() + oldBottomGeom.top()) / 2;
                         startGeom = QRect(targetGeom.x(), midY, targetGeom.width(), 0);
                     }
@@ -1518,20 +1989,25 @@ void DockLayoutRoot::onLayoutAnimationValueChanged(const QVariant& value)
 
     double progress = value.toDouble();
 
-    // Interpolate all panel geometries
+    // Interpolate all cell geometries
     for (auto it = m_targetGeometries.begin(); it != m_targetGeometries.end(); ++it) {
-        DockPanel* panel = it.key();
+        QWidget* cell = it.key();
 
-        // Skip if panel was removed or is being animated separately
-        if (!panel || panel == m_excludedPanel || panel->isAnimatingDocking()) {
+        // Skip if the cell was removed or is being animated separately
+        if (!cell || cell == m_excludedCell) {
+            continue;
+        }
+        if (auto* panel = qobject_cast<DockPanel*>(cell)) {
+            if (panel->isAnimatingDocking()) {
+                continue;
+            }
+        }
+
+        if (!m_capturedGeometries.contains(cell)) {
             continue;
         }
 
-        if (!m_capturedGeometries.contains(panel)) {
-            continue;
-        }
-
-        QRect oldGeom = m_capturedGeometries[panel];
+        QRect oldGeom = m_capturedGeometries[cell];
         QRect newGeom = it.value();
 
         // Interpolate
@@ -1540,7 +2016,7 @@ void DockLayoutRoot::onLayoutAnimationValueChanged(const QVariant& value)
         int w = oldGeom.width() + qRound((newGeom.width() - oldGeom.width()) * progress);
         int h = oldGeom.height() + qRound((newGeom.height() - oldGeom.height()) * progress);
 
-        panel->setGeometry(x, y, w, h);
+        cell->setGeometry(x, y, w, h);
     }
 
     // Interpolate all handle geometries
@@ -1568,15 +2044,20 @@ void DockLayoutRoot::onLayoutAnimationFinished()
 {
     m_animatingLayout = false;
 
-    // Apply final panel geometries
+    // Apply final cell geometries
     for (auto it = m_targetGeometries.begin(); it != m_targetGeometries.end(); ++it) {
-        DockPanel* panel = it.key();
+        QWidget* cell = it.key();
 
-        if (!panel || panel == m_excludedPanel || panel->isAnimatingDocking()) {
+        if (!cell || cell == m_excludedCell) {
             continue;
         }
+        if (auto* panel = qobject_cast<DockPanel*>(cell)) {
+            if (panel->isAnimatingDocking()) {
+                continue;
+            }
+        }
 
-        panel->setGeometry(it.value());
+        cell->setGeometry(it.value());
     }
 
     // Apply final handle geometries
@@ -1595,7 +2076,7 @@ void DockLayoutRoot::onLayoutAnimationFinished()
     m_targetHandleGeometries.clear();
     m_capturedHandlePositions.clear();
     m_deferredHandles.clear();
-    m_excludedPanel = nullptr;
+    m_excludedCell = nullptr;
 }
 
 } // namespace ruwa::ui::docking

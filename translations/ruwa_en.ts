@@ -3189,6 +3189,11 @@ Ruwa uses the Qt framework (version %1), dynamically linked under the GNU Lesser
         <translation type="unfinished"></translation>
     </message>
     <message>
+        <location filename="../src/shell/context-menu/DockPanelContextMenu.cpp" line="247"/>
+        <source>Ungroup Panel</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
         <location filename="../src/shell/context-menu/DockPanelContextMenu.cpp" line="248"/>
         <source>Close Panel</source>
         <translation type="unfinished"></translation>

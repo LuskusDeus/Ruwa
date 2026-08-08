@@ -50,12 +50,16 @@ enum class DropZone {
     InnerTop = 0x0040,
     InnerBottom = 0x0080,
 
-    // Center (for tabbing - future)
+    // Center: drop into the hovered panel, forming (or joining) a tab group
     InnerCenter = 0x0100,
+
+    // Group header strip: explicit tab insertion at a known index
+    GroupHeader = 0x0200,
 
     // Masks
     OuterMask = OuterLeft | OuterRight | OuterTop | OuterBottom,
-    InnerMask = InnerLeft | InnerRight | InnerTop | InnerBottom | InnerCenter,
+    InnerMask = InnerLeft | InnerRight | InnerTop | InnerBottom | InnerCenter | GroupHeader,
+    GroupMask = InnerCenter | GroupHeader,
     AllMask = OuterMask | InnerMask
 };
 
@@ -99,13 +103,33 @@ enum class PanelFeature {
     Floatable = 0x04,
     Resizable = 0x08,
     Dockable = 0x10,
+    /// May share a layout cell with other panels as a tab group.
+    /// NOTE: added after features were already persisted as a raw int
+    /// (legacy Default == 0x1F). DockStateSerializer upgrades legacy values,
+    /// see kLegacyPanelFeatureDefault below.
+    Groupable = 0x20,
 
-    Default = Closable | Movable | Floatable | Resizable | Dockable,
+    Default = Closable | Movable | Floatable | Resizable | Dockable | Groupable,
     All = Default
 };
 
 Q_DECLARE_FLAGS(PanelFeatures, PanelFeature)
 Q_DECLARE_OPERATORS_FOR_FLAGS(PanelFeatures)
+
+/// Value of PanelFeature::Default before Groupable existed. Serialized states
+/// written by older builds store this; restoring one must not silently make
+/// every panel un-groupable.
+constexpr int kLegacyPanelFeatureDefault = 0x1F;
+
+/// Upgrade a persisted feature int: anything saved as the old "all features"
+/// value gains Groupable, everything else is taken literally.
+inline PanelFeatures panelFeaturesFromPersistedInt(int value)
+{
+    if (value == kLegacyPanelFeatureDefault) {
+        return PanelFeature::Default;
+    }
+    return PanelFeatures(QFlag(value));
+}
 
 /**
  * @brief Size constraints for panels
@@ -203,6 +227,49 @@ struct PanelSizeHints {
     bool hasUserFloatingSize() const { return userFloatingWidth > 0 || userFloatingHeight > 0; }
 };
 
+// ============================================================================
+// Tab groups
+// ============================================================================
+
+/**
+ * @brief Which side of a reference tab a dropped panel is inserted on
+ *
+ * Drives the direction the incumbent panel slides during the group insertion
+ * animation: inserting After pushes it left, Before pushes it right.
+ */
+enum class GroupInsertSide { Before, After };
+
+/**
+ * @brief Default height of the group header strip, in unscaled px
+ *
+ * Sits directly above the selected member's own title bar (19px), so a grouped
+ * panel is this much shorter than a solo one.
+ */
+constexpr int kDefaultGroupHeaderHeight = 22;
+
+/**
+ * @brief Resolved drop description handed from the overlay to the container
+ *
+ * Replaces the old (zone, targetPanel) pair: a center/header drop additionally
+ * needs to know WHERE inside the group the panel lands, which the overlay is
+ * the only place that knows (it hit-tests the header tabs).
+ */
+struct DockDropTarget {
+    DropZone zone = DropZone::None;
+    /// Panel under the cursor. For a group, the member whose tab was hit
+    /// (GroupHeader) or the group's current member (InnerCenter).
+    DockPanel* panel = nullptr;
+    /// Insertion index within the target group, or -1 for "next to panel".
+    int groupInsertIndex = -1;
+    GroupInsertSide side = GroupInsertSide::After;
+
+    bool isValid() const { return zone != DropZone::None; }
+    bool isGroupDrop() const
+    {
+        return (static_cast<int>(zone) & static_cast<int>(DropZone::GroupMask)) != 0;
+    }
+};
+
 /**
  * @brief Unique identifier for dock panels
  */
@@ -250,6 +317,17 @@ inline bool isInnerZone(DropZone zone)
 }
 
 /**
+ * @brief Check if drop zone forms or joins a tab group
+ *
+ * A subset of isInnerZone(): the group zones are inner zones too, so any
+ * dispatch on the zone must test this one FIRST.
+ */
+inline bool isGroupZone(DropZone zone)
+{
+    return (static_cast<int>(zone) & static_cast<int>(DropZone::GroupMask)) != 0;
+}
+
+/**
  * @brief Convert drop zone to dock position
  */
 inline DockPosition zoneToDockPosition(DropZone zone)
@@ -268,6 +346,7 @@ inline DockPosition zoneToDockPosition(DropZone zone)
     case DropZone::InnerBottom:
         return DockPosition::Bottom;
     case DropZone::InnerCenter:
+    case DropZone::GroupHeader:
         return DockPosition::Center;
     default:
         return DockPosition::None;

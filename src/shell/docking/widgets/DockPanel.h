@@ -105,6 +105,19 @@ public:
     bool isDockable() const { return m_features.testFlag(PanelFeature::Dockable); }
     void setDockable(bool dockable);
 
+    /// May share a layout cell with other panels as a tab group. Checked on
+    /// BOTH sides of a group drop (DockLayoutRoot::canGroupPanels), so a panel
+    /// that opts out can neither join a group nor be turned into one.
+    bool isGroupable() const { return m_features.testFlag(PanelFeature::Groupable); }
+    void setGroupable(bool groupable);
+
+    /// True while this panel shares its layout cell with others, as a tab
+    /// group. Maintained by DockLayoutRoot::syncGroupHosts — the panel has no
+    /// view of the layout tree, and callers that act on it (the context menu)
+    /// re-validate against the tree anyway.
+    bool isGrouped() const { return m_grouped; }
+    void setGrouped(bool grouped);
+
     bool isTitleBarVisible() const { return m_titleBarVisible; }
     void setTitleBarVisible(bool visible);
 
@@ -289,6 +302,10 @@ public:
     /// Close the panel
     void closePanel();
 
+    /// Leave the tab group and take a layout cell of this panel's own.
+    /// No-op unless the panel is grouped; DockManager does the work.
+    void ungroupPanel();
+
     /// Bring panel to front (for floating panels)
     void raise();
 
@@ -329,6 +346,8 @@ signals:
     void closeRequested();
     void floatRequested();
     void dockRequested();
+    void ungroupRequested();
+    void groupedChanged(bool grouped);
     void dockingAnimationFinished();
     void userHorizontalDockedWidthChanged(int width);
     void userVerticalDockedHeightChanged(int height);
@@ -385,6 +404,8 @@ private:
     CornerRadii calculateCornerRadii() const;
     void applyDockingAnimationFrame(double progress);
     void applySubtitleContentLayoutOptions();
+    /// Root layout margins; the top one is dropped while grouped.
+    void applyContentInsets();
     void updateBodyMask();
     void updateContentTransitionGeometry();
     void scheduleContentTransitionGeometryUpdate();
@@ -419,6 +440,7 @@ private:
     QWidget* m_content = nullptr;
     bool m_contentCreated = false;
     bool m_titleBarVisible = true;
+    bool m_grouped = false;
     bool m_overlayAnimationSuspended = false;
     bool m_contentTransitionUpdateQueued = false;
     qreal m_borderOpacity = 1.0;

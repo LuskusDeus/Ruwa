@@ -133,7 +133,7 @@ bool DockStateSerializer::restoreState(const QJsonObject& state)
             continue;
         }
         if (panelObj.contains("features")) {
-            panel->setFeatures(static_cast<PanelFeatures>(
+            panel->setFeatures(panelFeaturesFromPersistedInt(
                 panelObj["features"].toInt(static_cast<int>(PanelFeature::Default))));
         }
         panel->setUserHorizontalDockedWidth(panelObj["userHorizontalDockedWidth"].toInt(-1));

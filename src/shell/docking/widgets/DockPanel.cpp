@@ -78,6 +78,46 @@ QPainterPath buildRoundedPanelPath(const QRectF& rect, const DockPanel::CornerRa
     return path;
 }
 
+/**
+ * @brief The same outline, minus the top edge
+ *
+ * For a grouped member: the group header sits directly above it and already
+ * closes the cell's outline there. Stroking the top edge as well would put a
+ * light line between the tab strip and the panel's own title bar — two pieces
+ * of chrome that should read as one.
+ */
+QPainterPath buildOpenTopPanelPath(const QRectF& rect, const DockPanel::CornerRadii& radii)
+{
+    if (rect.isEmpty()) {
+        return QPainterPath();
+    }
+
+    const qreal maxHorizontalRadius = rect.width() / 2.0;
+    const qreal maxVerticalRadius = rect.height() / 2.0;
+    const qreal maxRadius = qMin(maxHorizontalRadius, maxVerticalRadius);
+    const qreal bottomRight = qBound<qreal>(0.0, radii.bottomRight, maxRadius);
+    const qreal bottomLeft = qBound<qreal>(0.0, radii.bottomLeft, maxRadius);
+
+    QPainterPath path;
+    path.moveTo(rect.left(), rect.top());
+    path.lineTo(rect.left(), rect.bottom() - bottomLeft);
+    if (bottomLeft > 0.0) {
+        path.quadTo(rect.left(), rect.bottom(), rect.left() + bottomLeft, rect.bottom());
+    } else {
+        path.lineTo(rect.left(), rect.bottom());
+    }
+
+    path.lineTo(rect.right() - bottomRight, rect.bottom());
+    if (bottomRight > 0.0) {
+        path.quadTo(rect.right(), rect.bottom(), rect.right(), rect.bottom() - bottomRight);
+    } else {
+        path.lineTo(rect.right(), rect.bottom());
+    }
+
+    path.lineTo(rect.right(), rect.top());
+    return path;
+}
+
 class DockPanelBorderOverlay final : public QWidget {
 public:
     explicit DockPanelBorderOverlay(DockPanel* panel)
@@ -104,7 +144,9 @@ protected:
 
         const QRectF panelRect(kDockPanelOuterInset, kDockPanelOuterInset,
             width() - (kDockPanelOuterInset * 2.0), height() - (kDockPanelOuterInset * 2.0));
-        const QPainterPath panelPath = buildRoundedPanelPath(panelRect, m_panel->cornerRadii());
+        const QPainterPath panelPath = m_panel->isGrouped()
+            ? buildOpenTopPanelPath(panelRect, m_panel->cornerRadii())
+            : buildRoundedPanelPath(panelRect, m_panel->cornerRadii());
 
         QColor borderColor = ruwa::ui::core::ThemeManager::instance().colors().border;
         borderColor = borderColor.darker(133); // 25% darker overlay border
@@ -461,6 +503,13 @@ void DockPanel::setDockable(bool dockable)
     setFeatures(f);
 }
 
+void DockPanel::setGroupable(bool groupable)
+{
+    PanelFeatures f = m_features;
+    f.setFlag(PanelFeature::Groupable, groupable);
+    setFeatures(f);
+}
+
 void DockPanel::setTitleBarVisible(bool visible)
 {
     if (m_titleBarVisible == visible) {
@@ -614,6 +663,29 @@ void DockPanel::closePanel()
     emit closeRequested();
 }
 
+void DockPanel::ungroupPanel()
+{
+    if (m_grouped) {
+        emit ungroupRequested();
+    }
+}
+
+void DockPanel::setGrouped(bool grouped)
+{
+    if (m_grouped == grouped) {
+        return;
+    }
+    m_grouped = grouped;
+
+    // The top corners belong to the group header while grouped, and come back
+    // to the panel the moment it is on its own again. Same for the top inset:
+    // the title bar has to butt against the strip with nothing in between.
+    applyContentInsets();
+    updateCornerRadii();
+
+    emit groupedChanged(grouped);
+}
+
 void DockPanel::raise()
 {
     QFrame::raise();
@@ -759,6 +831,14 @@ DockPanel::CornerRadii DockPanel::calculateCornerRadii() const
     radii.bottomLeft = m_baseCornerRadius;
     radii.bottomRight = m_baseCornerRadius;
 
+    // A grouped member is not the top of its cell — the group header strip is,
+    // and it draws the rounded top corners for the whole group. Keeping them
+    // here would cut two notches out of the header's bottom edge.
+    if (m_grouped) {
+        radii.topLeft = 0;
+        radii.topRight = 0;
+    }
+
     return radii;
 }
 
@@ -829,9 +909,8 @@ void DockPanel::moveEvent(QMoveEvent* event)
 void DockPanel::setupUI()
 {
     QVBoxLayout* layout = new QVBoxLayout(this);
-    layout->setContentsMargins(kDockPanelContentInset, kDockPanelContentInset,
-        kDockPanelContentInset, kDockPanelContentInset);
     layout->setSpacing(0);
+    applyContentInsets();
 
     m_bodyContainer = new QWidget(this);
     m_bodyContainer->setAttribute(Qt::WA_TranslucentBackground);
@@ -922,6 +1001,22 @@ void DockPanel::ensureContentCreated()
     m_contentCreated = true;
     updateContentTransitionGeometry();
     updateOverlayVisibility();
+}
+
+void DockPanel::applyContentInsets()
+{
+    auto* rootLayout = layout();
+    if (!rootLayout) {
+        return;
+    }
+
+    // The inset exists to keep the content off the panel's own rounded outline.
+    // A grouped member has no outline along its top — the group header strip is
+    // there — so keeping it would leave a strip of the panel's `surface` colour
+    // between the tab strip and the title bar, reading as a gap between them.
+    const int top = m_grouped ? 0 : kDockPanelContentInset;
+    rootLayout->setContentsMargins(
+        kDockPanelContentInset, top, kDockPanelContentInset, kDockPanelContentInset);
 }
 
 void DockPanel::updateBodyMask()

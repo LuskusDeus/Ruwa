@@ -5,6 +5,7 @@
 #include "DockFloatingContainer.h"
 #include "shell/docking/overlay/DockPanelEntranceOverlay.h"
 #include "shell/docking/overlay/DockOverlay.h"
+#include "shell/docking/widgets/DockGroupHost.h"
 #include "shell/docking/widgets/DockPanel.h"
 #include "shell/docking/layout/DockLayoutRoot.h"
 #include "shell/docking/layout/DockSplitNode.h"
@@ -230,7 +231,15 @@ void DockContainerWidget::addPanelRelativeTo(
             panel->setFloatingContainer(nullptr);
         }
         panel->setState(PanelState::Docked);
-        m_layoutRoot->addPanelRelativeTo(panel, relativeTo, position);
+        // Center means "share the cell": this is how a panel hidden out of a
+        // group is restored back INTO it (see DockLayoutRoot::getPanelPlacement).
+        // If the two are no longer groupable, addPanelRelativeTo maps Center to
+        // Right, which is the old behaviour.
+        const bool grouped = (position == DockPosition::Center)
+            && m_layoutRoot->addPanelToGroup(panel, relativeTo) != nullptr;
+        if (!grouped) {
+            m_layoutRoot->addPanelRelativeTo(panel, relativeTo, position);
+        }
 
         // Ensure bounds are set if container has valid geometry
         if (rect().isValid()) {
@@ -446,40 +455,8 @@ void DockContainerWidget::dockPanel(DockPanel* panel, DockPosition position)
         return;
 
     // Capture floating container's geometry for animation
-    QRect sourceGeom;
-    bool wasFloating = false;
-
-    // Remove from floating containers first
-    for (auto* container : m_floatingContainers) {
-        if (container && container->panel() == panel) {
-            // Don't process if already being removed
-            if (m_containersBeingRemoved.contains(container)) {
-                continue;
-            }
-
-            // Capture geometry for animation
-            sourceGeom = container->geometry();
-            wasFloating = true;
-
-            // Save floating size before docking
-            // This ensures the panel returns to the same size when floated again
-            panel->setUserFloatingSize(sourceGeom.width(), sourceGeom.height());
-
-            panel->setFloatingContainer(nullptr);
-
-            if (auto* layout = container->layout()) {
-                layout->removeWidget(panel);
-            }
-
-            panel->setParent(this);
-            panel->hide();
-
-            m_inOperation = false;
-            removeFloatingContainer(container);
-            m_inOperation = true;
-            break;
-        }
-    }
+    const QRect sourceGeom = detachFromFloating(panel);
+    const bool wasFloating = sourceGeom.isValid();
 
     if (m_layoutRoot) {
         // Capture layout state for animation (before adding panel)
@@ -547,38 +524,8 @@ void DockContainerWidget::dockPanelRelativeTo(
         return;
 
     // Capture floating container's geometry for animation
-    QRect sourceGeom;
-    bool wasFloating = false;
-
-    // Remove from floating containers first
-    for (auto* container : m_floatingContainers) {
-        if (container && container->panel() == panel) {
-            if (m_containersBeingRemoved.contains(container))
-                continue;
-
-            // Capture geometry for animation
-            sourceGeom = container->geometry();
-            wasFloating = true;
-
-            // Save floating size before docking
-            // This ensures the panel returns to the same size when floated again
-            panel->setUserFloatingSize(sourceGeom.width(), sourceGeom.height());
-
-            panel->setFloatingContainer(nullptr);
-
-            if (auto* layout = container->layout()) {
-                layout->removeWidget(panel);
-            }
-
-            panel->setParent(this);
-            panel->hide();
-
-            m_inOperation = false;
-            removeFloatingContainer(container);
-            m_inOperation = true;
-            break;
-        }
-    }
+    const QRect sourceGeom = detachFromFloating(panel);
+    const bool wasFloating = sourceGeom.isValid();
 
     if (m_layoutRoot) {
         // Capture layout state for animation (before adding panel)
@@ -621,6 +568,162 @@ void DockContainerWidget::dockPanelRelativeTo(
 
     emit panelDocked(panel);
     emit layoutChanged();
+}
+
+void DockContainerWidget::dockPanelIntoGroup(DockPanel* panel, const DockDropTarget& target)
+{
+    DockPanel* relativeTo = target.panel;
+    if (!panel || !relativeTo || panel == relativeTo || !m_layoutRoot) {
+        return;
+    }
+
+    setFloatingPanelsFrozen(false);
+
+    // Not groupable after all — a feature opt-out, or the target left the tree
+    // while the panel was in flight. Docking beside it is the closest answer.
+    if (!containsPanel(relativeTo) || !m_layoutRoot->canGroupPanels(panel, relativeTo)) {
+        dockPanelRelativeTo(panel, relativeTo, DockPosition::Right);
+        return;
+    }
+
+    if (!validateOperation("dockPanelIntoGroup"))
+        return;
+
+    ContainerOperationGuard guard(m_inOperation);
+    if (!guard)
+        return;
+
+    const QRect sourceGeom = detachFromFloating(panel);
+    const bool animate = m_animationsEnabled && m_animationDuration > 0 && sourceGeom.isValid();
+
+    if (m_animationsEnabled) {
+        m_layoutRoot->captureLayoutState();
+    }
+
+    m_inOperation = false;
+    // While animating, the selection stays on the incumbent: it has to remain
+    // visible to slide out from under the arriving panel, and only hands over
+    // once the flight lands.
+    DockLeafNode* leaf = m_layoutRoot->addPanelToGroup(
+        panel, relativeTo, target.groupInsertIndex, /*makeCurrent=*/!animate);
+    m_inOperation = true;
+
+    if (!leaf) {
+        m_inOperation = false;
+        dockPanelRelativeTo(panel, relativeTo, DockPosition::Right);
+        return;
+    }
+
+    if (rect().isValid()) {
+        m_layoutRoot->setRootBounds(layoutBounds());
+    }
+
+    panel->setFloatingContainer(nullptr);
+    panel->setState(PanelState::Docked);
+
+    DockGroupHost* host = m_layoutRoot->groupHostForPanel(panel);
+
+    if (animate && host) {
+        // The frame adopted the panel during the sync above; take it back for
+        // the flight. As a child of the container it is not clipped by the
+        // frame's viewport, so it stays visible the whole way in.
+        host->releasePanel(panel);
+        panel->setGeometry(sourceGeom);
+        panel->show();
+        panel->raise();
+
+        // Same duration on both sides: the incumbent finishes clearing the slot
+        // on the frame the newcomer settles into it.
+        host->runInsertionSlide(target.side, m_animationDuration);
+
+        // The MODEL keeps the incumbent current for the length of the flight
+        // (it has to stay visible to slide out), but the strip must not: the
+        // tab that just appeared is the one being dropped, and highlighting the
+        // outgoing one until the landing — then snapping — reads as the wrong
+        // tab having been selected all along.
+        host->previewCurrentTab(panel);
+        panel->animateDocking(sourceGeom, host->memberAreaInParent(), m_animationDuration);
+
+        QPointer<DockGroupHost> hostRef(host);
+        QPointer<DockPanel> panelRef(panel);
+        connect(
+            panel, &DockPanel::dockingAnimationFinished, this,
+            [this, hostRef, panelRef]() {
+                if (m_layoutRoot && !hostRef.isNull() && !panelRef.isNull()) {
+                    m_layoutRoot->setCurrentPanelInGroup(panelRef.data());
+                    hostRef->finishInsertion(panelRef.data());
+                    // finishInsertion appends; re-read the tab order from the leaf.
+                    hostRef->syncFromLeaf();
+                }
+                onPanelDockingAnimationFinished();
+            },
+            Qt::SingleShotConnection);
+    } else if (host) {
+        host->syncFromLeaf();
+    } else {
+        panel->show();
+    }
+
+    // The cell itself does not move for a group drop, but a neighbouring cell
+    // may have collapsed if the panel came out of another group.
+    if (m_animationsEnabled) {
+        m_layoutRoot->animateLayoutChange(panel);
+    }
+
+    emit panelDocked(panel);
+    emit layoutChanged();
+}
+
+bool DockContainerWidget::ungroupPanel(DockPanel* panel)
+{
+    if (!panel || !m_layoutRoot) {
+        return false;
+    }
+
+    DockLeafNode* leaf = m_layoutRoot->findLeafForPanel(panel);
+    if (!leaf || !leaf->isGroup()) {
+        return false;
+    }
+
+    DockPanel* sibling = nullptr;
+    for (DockPanel* member : leaf->panels()) {
+        if (member && member != panel) {
+            sibling = member;
+            break;
+        }
+    }
+    if (!sibling) {
+        return false;
+    }
+
+    setFloatingPanelsFrozen(false);
+
+    // Where the panel sits right now, in container coordinates: the start of
+    // its flight into the new cell. It is a child of the group's viewport, so
+    // this is not its own geometry.
+    const QRect sourceGeom(panel->mapTo(this, QPoint(0, 0)), panel->size());
+
+    if (m_animationsEnabled) {
+        m_layoutRoot->captureLayoutState();
+    }
+
+    // addPanelRelativeTo strips existing tree membership first, which is what
+    // takes the panel out of the group (and collapses the group if that leaves
+    // one member, header farewell included).
+    addPanelRelativeTo(panel, sibling, DockPosition::Right);
+
+    if (m_animationsEnabled && m_animationDuration > 0 && sourceGeom.isValid()) {
+        panel->animateDocking(sourceGeom, panel->geometry(), m_animationDuration);
+        panel->raise();
+        connect(panel, &DockPanel::dockingAnimationFinished, this,
+            &DockContainerWidget::onPanelDockingAnimationFinished, Qt::SingleShotConnection);
+    }
+
+    if (m_animationsEnabled) {
+        m_layoutRoot->animateLayoutChange(panel);
+    }
+
+    return true;
 }
 
 // ============================================================================
@@ -752,10 +855,22 @@ void DockContainerWidget::restoreDockedPanel(DockPanel* panel)
         m_panels[panel->id()] = panel;
     }
 
-    panel->setParent(this);
+    // A grouped panel belongs to its frame's viewport, not to the container:
+    // reparenting it here would pull it out of the group it was just restored
+    // into. The frame decides its geometry and visibility.
+    DockGroupHost* host = m_layoutRoot ? m_layoutRoot->groupHostForPanel(panel) : nullptr;
+    if (!host) {
+        panel->setParent(this);
+    }
+
     panel->setFloatingContainer(nullptr);
     panel->setState(PanelState::Docked);
-    panel->show();
+
+    if (host) {
+        host->syncFromLeaf();
+    } else {
+        panel->show();
+    }
 }
 
 // ============================================================================
@@ -967,6 +1082,30 @@ void DockContainerWidget::setupUI()
         }
     });
 
+    // A group frame hands its members back to the container as it dies, and
+    // setParent() appends: every released panel lands on TOP of the child
+    // stack. If a panel is being dragged at that moment — and it always is when
+    // the group was taken apart by dragging its second-to-last member out — the
+    // survivor is stacked over the floating one, which then sits behind it
+    // until the next mouse move happens to re-raise it.
+    //
+    // Queued, because the release loop is not the last thing the teardown does:
+    // the frame's own destructor hands back whatever is left after this.
+    connect(
+        m_layoutRoot.get(), &DockLayoutRoot::groupHostAboutToBeDestroyed, this,
+        [this](DockGroupHost*) { raiseFloatingContainers(); }, Qt::QueuedConnection);
+
+    // Group header interactions: the container owns neither panel lifetime nor
+    // drag state, so these travel on to DockManager unchanged.
+    connect(m_layoutRoot.get(), &DockLayoutRoot::groupPanelCloseRequested, this,
+        &DockContainerWidget::groupPanelCloseRequested);
+    connect(m_layoutRoot.get(), &DockLayoutRoot::groupPanelDragStarted, this,
+        &DockContainerWidget::groupPanelDragStarted);
+    connect(m_layoutRoot.get(), &DockLayoutRoot::groupPanelDragMoved, this,
+        &DockContainerWidget::groupPanelDragMoved);
+    connect(m_layoutRoot.get(), &DockLayoutRoot::groupPanelDragFinished, this,
+        &DockContainerWidget::groupPanelDragFinished);
+
     createOverlay();
 }
 
@@ -992,6 +1131,44 @@ DockFloatingContainer* DockContainerWidget::createFloatingContainer(DockPanel* p
         m_panels[panel->id()] = panel;
     }
     return container;
+}
+
+QRect DockContainerWidget::detachFromFloating(DockPanel* panel)
+{
+    if (!panel) {
+        return QRect();
+    }
+
+    for (auto* container : m_floatingContainers) {
+        if (!container || container->panel() != panel) {
+            continue;
+        }
+        // Don't process if already being removed
+        if (m_containersBeingRemoved.contains(container)) {
+            continue;
+        }
+
+        const QRect sourceGeom = container->geometry();
+
+        // Save floating size before docking, so the panel returns to the same
+        // size the next time it is floated.
+        panel->setUserFloatingSize(sourceGeom.width(), sourceGeom.height());
+        panel->setFloatingContainer(nullptr);
+
+        if (auto* layout = container->layout()) {
+            layout->removeWidget(panel);
+        }
+
+        panel->setParent(this);
+        panel->hide();
+
+        m_inOperation = false;
+        removeFloatingContainer(container);
+        m_inOperation = true;
+        return sourceGeom;
+    }
+
+    return QRect();
 }
 
 void DockContainerWidget::removeFloatingContainer(DockFloatingContainer* container)

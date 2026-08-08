@@ -240,6 +240,18 @@ void DockPanelContextMenu::buildUi()
         hideAnimated();
     });
 
+    // Sits right under "Detach from Layout": both answer "get this panel out of
+    // where it currently is", one to a window, one to its own layout cell.
+    m_ungroupAction = addStandardMenuActionRow(
+        icons.getIcon(ruwa::ui::core::IconProvider::StandardIcon::LayoutSwitch),
+        tr("Ungroup Panel"), false);
+    connect(m_ungroupAction, &BaseStyledWidget::clicked, this, [this]() {
+        if (m_panel) {
+            m_panel->ungroupPanel();
+        }
+        hideAnimated();
+    });
+
     m_sepBeforeClose = new HorizontalSeparator(contentWidget());
     m_sepBeforeClose->setMargins(theme.scaled(4), theme.scaled(4));
     contentLayout()->addWidget(m_sepBeforeClose);
@@ -395,6 +407,9 @@ void DockPanelContextMenu::rebuildStandardMenu()
 
     const bool canFloat = hasPanel && m_panel->isFloatable();
     m_floatAction->setEnabled(canFloat);
+
+    // Only meaningful for a panel that actually shares a cell right now.
+    m_ungroupAction->setVisible(hasPanel && m_panel->isGrouped());
 
     const bool canClose = hasPanel && m_panel->isClosable();
     m_sepBeforeClose->setVisible(canClose);

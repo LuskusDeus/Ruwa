@@ -26,6 +26,7 @@ namespace ruwa::ui::docking {
 
 class DockPanel;
 class DockSplitHandle;
+class DockGroupHost;
 
 /**
  * @brief Coordinator between layout tree and Qt widgets
@@ -100,6 +101,39 @@ public:
         DockPanel* panel, DockPanel* relativeTo, DockPosition position);
 
     /**
+     * @brief Add panel into the same layout cell as another panel, as a tab group
+     *
+     * Forms a group if @p relativeTo is currently solo, or joins the existing
+     * one. The inserted panel becomes the group's current member.
+     *
+     * @param panel Panel to add
+     * @param relativeTo Panel whose cell is joined
+     * @param insertIndex Tab-order index, or -1 for "right after relativeTo"
+     * @param makeCurrent false leaves the selection on the incumbent member.
+     *        The drop animation needs this: the incumbent has to stay visible
+     *        while it slides out from under the arriving panel, which only
+     *        becomes current once its docking animation lands.
+     * @return The group leaf, or nullptr if the panels refuse to be grouped
+     *         (PanelFeature::Groupable) or relativeTo is not in the tree
+     */
+    DockLeafNode* addPanelToGroup(
+        DockPanel* panel, DockPanel* relativeTo, int insertIndex = -1, bool makeCurrent = true);
+
+    /**
+     * @brief Would addPanelToGroup() accept these two panels?
+     *
+     * Asked by the overlay before it offers a group drop zone at all, so the
+     * user never sees a target that the drop would then refuse.
+     */
+    bool canGroupPanels(DockPanel* panel, DockPanel* relativeTo) const;
+
+    /**
+     * @brief Make @p panel the visible member of its group
+     * @return true if the selection changed
+     */
+    bool setCurrentPanelInGroup(DockPanel* panel);
+
+    /**
      * @brief Remove panel from the layout
      *
      * @param panel Panel to remove
@@ -116,9 +150,14 @@ public:
     DockLeafNode* findLeafForPanel(DockPanel* panel) const;
 
     /**
-     * @brief Get all panels in the layout
+     * @brief Get all panels in the layout, including hidden group members
      */
     QList<DockPanel*> allPanels() const;
+
+    /**
+     * @brief Get one panel per layout cell: the current member of each group
+     */
+    QList<DockPanel*> visiblePanels() const;
 
     /**
      * @brief Find panel at a given position
@@ -127,6 +166,11 @@ public:
      * @return Panel at position, or nullptr if not found
      */
     DockPanel* findPanelAt(const QPoint& globalPos) const;
+
+    /**
+     * @brief Find the layout cell (leaf, possibly a group) at a given position
+     */
+    DockLeafNode* findLeafAt(const QPoint& globalPos) const;
 
     // === Geometry ===
 
@@ -152,6 +196,29 @@ public:
      */
     void syncHandleWidgets();
 
+    // === Group Hosts ===
+
+    /**
+     * @brief Create/destroy group frames so they match the tree
+     *
+     * Called from syncHandleWidgets(): both are "widgets that must follow the
+     * tree's structure". A leaf that became a group gains a DockGroupHost and
+     * hands its panels to it; one that dropped back to a single panel gives the
+     * survivor back to the container widget and loses the host.
+     */
+    void syncGroupHosts();
+
+    /// Group frame of the cell holding @p panel, or nullptr if it is not grouped.
+    DockGroupHost* groupHostForPanel(DockPanel* panel) const;
+
+    /**
+     * @brief Group frame whose HEADER STRIP contains @p globalPos
+     *
+     * The header is the one part of a cell that belongs to no panel, so
+     * findPanelAt() misses it entirely — hit-testing it needs the frames.
+     */
+    DockGroupHost* groupHostAtHeader(const QPoint& globalPos) const;
+
     /**
      * @brief Raise all handle widgets above panels
      *
@@ -172,13 +239,13 @@ public:
     /**
      * @brief Enable/disable layout animations
      */
-    void setLayoutAnimationEnabled(bool enabled) { m_layoutAnimationEnabled = enabled; }
+    void setLayoutAnimationEnabled(bool enabled);
     bool isLayoutAnimationEnabled() const { return m_layoutAnimationEnabled; }
 
     /**
      * @brief Set layout animation duration
      */
-    void setLayoutAnimationDuration(int ms) { m_layoutAnimationDuration = qMax(0, ms); }
+    void setLayoutAnimationDuration(int ms);
     int layoutAnimationDuration() const { return m_layoutAnimationDuration; }
 
     /**
@@ -257,6 +324,18 @@ signals:
      */
     void panelRemoved(DockPanel* panel);
 
+    /// A group frame appeared / is about to go away (for higher layers that
+    /// need to hook into it, e.g. DockManager's drag handling).
+    void groupHostCreated(DockGroupHost* host);
+    void groupHostAboutToBeDestroyed(DockGroupHost* host);
+
+    /// Forwarded from a group header. Acted on by DockContainerWidget /
+    /// DockManager, which own panel lifetime and dragging.
+    void groupPanelCloseRequested(DockPanel* panel);
+    void groupPanelDragStarted(DockPanel* panel, const QPoint& globalPos);
+    void groupPanelDragMoved(DockPanel* panel, const QPoint& globalPos);
+    void groupPanelDragFinished(DockPanel* panel, const QPoint& globalPos);
+
 private slots:
     void onHandleDragStarted(DockSplitNode* node, int handleIndex);
     void onHandleDragMoved(DockSplitNode* node, int handleIndex, int delta);
@@ -325,11 +404,39 @@ private:
      */
     DockPanel* getFirstPanelInNode(DockLayoutNode* node) const;
 
+    /**
+     * @brief Widget that occupies a leaf's cell
+     *
+     * The group frame for a grouped leaf, the panel itself otherwise. This is
+     * the widget the layout animation moves — a grouped panel's own geometry is
+     * relative to its host's viewport, not to the container.
+     */
+    QWidget* cellWidget(DockLeafNode* leaf) const;
+
+    /// Cell widget of every leaf in the tree.
+    QList<QWidget*> allCellWidgets() const;
+
+    /**
+     * @brief Cell widget touching one edge of a node, in a split's direction
+     *
+     * Identifies a handle by the two cells it separates, which survives handle
+     * recreation. Was three copies of the same lambda before groups; a group
+     * must resolve to its frame here, never to whichever member is on top.
+     */
+    QWidget* edgeCellWidget(DockLayoutNode* node, bool rightEdge, SplitDirection splitDir) const;
+
+    /// Every leaf in the tree, root included.
+    QList<DockLeafNode*> allLeafNodes() const;
+
+    void destroyGroupHost(DockLeafNode* leaf);
+    void connectGroupHost(DockGroupHost* host);
+
     QJsonObject serializeNode(const DockLayoutNode* node) const;
     DockLayoutNodePtr deserializeNode(const QJsonObject& nodeObj,
         const std::function<DockPanel*(const QString& panelId, const QString& panelTitle)>&
             panelResolver) const;
     bool sanitizeNodeRecursive(DockLayoutNodePtr& node, QSet<DockPanel*>& seenPanels);
+    bool sanitizeLeafNode(DockLeafNode* leaf, QSet<DockPanel*>& seenPanels);
     bool sanitizeSplitNode(DockSplitNode* split, QSet<DockPanel*>& seenPanels);
 
 private:
@@ -339,6 +446,12 @@ private:
 
     // Handle widgets keyed by split node
     QMap<DockSplitNode*, QList<DockSplitHandle*>> m_handles;
+
+    // Live group frames. Deliberately NOT keyed by leaf: a leaf can be
+    // destroyed by tree surgery, and looking up a dangling key to find the
+    // orphaned host would be undefined. Orphans are found by walking the tree
+    // for live hosts and deleting whatever is left in this set.
+    QSet<DockGroupHost*> m_groupHosts;
 
     // Theme colors
     ruwa::ui::core::ThemeColors m_colors;
@@ -352,16 +465,20 @@ private:
     int m_layoutAnimationDuration = 250; // ms
     bool m_animatingLayout = false;
     QPointer<QVariantAnimation> m_layoutAnimation;
-    QMap<DockPanel*, QRect> m_capturedGeometries; // Old geometries
-    QMap<DockPanel*, QRect> m_targetGeometries; // New geometries
-    DockPanel* m_excludedPanel = nullptr; // Panel excluded from animation
+    // Keyed by CELL widget (panel, or group frame for a grouped cell): a
+    // grouped panel's geometry lives in its host's viewport coordinates and
+    // must never be interpolated in container space.
+    QMap<QWidget*, QRect> m_capturedGeometries; // Old geometries
+    QMap<QWidget*, QRect> m_targetGeometries; // New geometries
+    QWidget* m_excludedCell = nullptr; // Cell excluded from animation
 
     // Handle animation (animated alongside panels)
     QMap<DockSplitHandle*, QRect> m_capturedHandleGeometries;
     QMap<DockSplitHandle*, QRect> m_targetHandleGeometries;
 
-    // Handle positions keyed by adjacent panels (survives handle recreation)
-    QMap<QPair<DockPanel*, DockPanel*>, QRect> m_capturedHandlePositions;
+    // Handle positions keyed by adjacent cell widgets (survives handle
+    // recreation, and stays stable when a group switches its visible member)
+    QMap<QPair<QWidget*, QWidget*>, QRect> m_capturedHandlePositions;
 
     // Flag to defer showing new handles until animation starts
     bool m_preparingAnimation = false;

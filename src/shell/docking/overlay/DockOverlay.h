@@ -21,6 +21,7 @@ class DockCompassWidget;
 class DropZoneIndicator;
 class DockDimOverlay;
 class DockFloatingContainer;
+class DockGroupHost;
 
 /**
  * @brief Overlay widget shown during drag & drop operations
@@ -49,6 +50,16 @@ public:
 
     DropZone currentDropZone() const { return m_currentZone; }
     DockPanel* targetPanel() const { return m_targetPanel.data(); }
+
+    /**
+     * @brief The full drop description, zone plus group insertion point
+     *
+     * A group drop also needs to know WHERE inside the target group the panel
+     * lands, and this is the only place that knows: the tab hit test happens
+     * here, against header geometry that exists nowhere else.
+     */
+    DockDropTarget currentDropTarget() const;
+
     bool hasValidDropZone() const { return m_currentZone != DropZone::None; }
     bool isContainerMode() const { return m_containerMode; }
 
@@ -72,6 +83,8 @@ private:
     void updateDropIndicator();
     void updateIndicatorGeometry(); // Update geometry without changing state
     QRect calculateDropRect(DropZone zone) const;
+    /// Rect of the target's whole layout cell (group frame, or the bare panel).
+    QRect targetCellRect() const;
     DropZone zoneAtContainerEdge(const QPoint& localPos) const;
     DropZone zoneAtContainerPosition(const QPoint& localPos) const; // For container mode
     DropZone zoneAtPosition(const QPoint& localPos) const;
@@ -92,6 +105,16 @@ private:
     // State
     DropZone m_currentZone = DropZone::None;
     DropZone m_prevZone = DropZone::None;
+
+    // Group drop state. m_groupHeaderHost is the frame whose header the cursor
+    // is over (GroupHeader zone); m_caretHost is the one currently showing an
+    // insertion caret, tracked separately so the caret is always cleared from
+    // the frame that actually has it, even after the target changed.
+    QPointer<DockGroupHost> m_groupHeaderHost;
+    QPointer<DockGroupHost> m_caretHost;
+    int m_groupInsertIndex = -1;
+    GroupInsertSide m_groupInsertSide = GroupInsertSide::After;
+
     QRect m_prevDropRect;
     bool m_inUpdate = false;
     bool m_containerMode = false; // Always container mode (whole-container drop zones)
@@ -135,6 +158,13 @@ private:
     void updateTargetPanel(const QPoint& globalPos);
     void updateCompassForTargetPanel();
     DropZone zoneAtPanelPosition(const QPoint& globalPos) const;
+
+    /// The panel being dragged, or nullptr when there is no floating source.
+    DockPanel* draggedPanel() const;
+    /// Would dropping the dragged panel onto @p target form a legal group?
+    bool canGroupWith(DockPanel* target) const;
+    /// Move (or clear, with index -1) the insertion caret in a group header.
+    void setHeaderCaret(DockGroupHost* host, int index);
 };
 
 } // namespace ruwa::ui::docking

@@ -255,6 +255,10 @@ CanvasPanel::CanvasPanel(const QSize& canvasSize, const QRect& exportFrame, QWid
     setClosable(false);
     setFloatable(true);
     setTitleBarVisible(false);
+    // The document surface is not a tool panel: it has no title bar to name it
+    // in a tab strip, and hiding the drawing area behind another panel's tab is
+    // never what the user meant by dropping something on the canvas.
+    setGroupable(false);
 
     setMinimumPanelSize(200, 200);
     setPreferredPanelSize(800, 600);
@@ -2290,7 +2294,7 @@ bool CanvasPanel::replaceSmartLayerContents(const ruwa::core::layers::LayerId& i
         DecodedSmartSource decoded = watcher->result();
         if (!decoded.grid) {
             ruwa::ui::widgets::MessagePopupManager::show(this,
-                tr("This file could not be read as an image."), { { tr("OK"), true, []() {} } },
+                tr("This file could not be read as an image."), { { tr("OK"), true, []() { } } },
                 360);
             return;
         }

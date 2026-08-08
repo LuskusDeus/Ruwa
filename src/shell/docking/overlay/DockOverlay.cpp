@@ -7,6 +7,8 @@
 #include "DockDimOverlay.h"
 #include "shell/docking/core/DockContainerWidget.h"
 #include "shell/docking/core/DockFloatingContainer.h"
+#include "shell/docking/widgets/DockGroupHeader.h"
+#include "shell/docking/widgets/DockGroupHost.h"
 #include "shell/docking/widgets/DockPanel.h"
 #include "shell/docking/layout/DockLayoutRoot.h"
 
@@ -139,6 +141,8 @@ void DockOverlay::updateDropZone(const QPoint& globalPos)
     m_cursorSpeedSampleValid = true;
 
     if (cursorTooFast) {
+        setHeaderCaret(nullptr, -1);
+        m_groupInsertIndex = -1;
         if (m_currentZone != DropZone::None) {
             m_currentZone = DropZone::None;
             m_compass->setHighlightedZone(DropZone::None);
@@ -150,6 +154,21 @@ void DockOverlay::updateDropZone(const QPoint& globalPos)
 
     // First check container edges for outer zones (higher priority)
     newZone = zoneAtContainerEdge(localPos);
+
+    // A group header is the most explicit target there is: it outranks both the
+    // compass and the panel-relative regions, which would otherwise read the
+    // strip as the target panel's top edge and offer a split instead.
+    if (newZone == DropZone::None && !m_groupHeaderHost.isNull()
+        && canGroupWith(m_targetPanel.data())) {
+        if (DockGroupHeader* header = m_groupHeaderHost->header()) {
+            GroupInsertSide side = GroupInsertSide::After;
+            const int index = header->insertIndexAt(globalPos, &side);
+            newZone = DropZone::GroupHeader;
+            m_groupInsertIndex = index;
+            m_groupInsertSide = side;
+            setHeaderCaret(m_groupHeaderHost.data(), index);
+        }
+    }
 
     if (newZone == DropZone::None) {
         // Check compass buttons
@@ -168,6 +187,15 @@ void DockOverlay::updateDropZone(const QPoint& globalPos)
                 newZone = zoneAtContainerPosition(localPos);
             }
         }
+    }
+
+    // Any zone but GroupHeader means the caret belongs to nobody. InnerCenter
+    // leaves the index at -1, which addPanelToGroup reads as "right after the
+    // panel we were dropped on".
+    if (newZone != DropZone::GroupHeader) {
+        m_groupInsertIndex = -1;
+        m_groupInsertSide = GroupInsertSide::After;
+        setHeaderCaret(nullptr, -1);
     }
 
     if (newZone != m_currentZone) {
@@ -194,6 +222,16 @@ void DockOverlay::setFloatingContainer(DockFloatingContainer* container)
     m_floatingContainer = container;
 }
 
+DockDropTarget DockOverlay::currentDropTarget() const
+{
+    DockDropTarget target;
+    target.zone = m_currentZone;
+    target.panel = m_targetPanel.data();
+    target.groupInsertIndex = m_groupInsertIndex;
+    target.side = m_groupInsertSide;
+    return target;
+}
+
 void DockOverlay::hideOverlay()
 {
     // Stop geometry update timer
@@ -202,6 +240,11 @@ void DockOverlay::hideOverlay()
     }
     m_lastTargetGeometry = QRect();
     m_geometryStableTicks = 0;
+
+    setHeaderCaret(nullptr, -1);
+    m_groupHeaderHost = nullptr;
+    m_groupInsertIndex = -1;
+    m_groupInsertSide = GroupInsertSide::After;
 
     m_targetPanel = nullptr;
     m_currentZone = DropZone::None;
@@ -428,8 +471,42 @@ void DockOverlay::updateIndicatorGeometry()
     raiseFloatingContainer(/*force=*/false);
 }
 
+QRect DockOverlay::targetCellRect() const
+{
+    if (m_targetPanel.isNull()) {
+        return QRect();
+    }
+
+    // For a grouped target the cell is the frame, not the panel: the preview
+    // has to cover the header strip too, or it would appear to exclude the very
+    // tabs the panel is about to join.
+    QWidget* cell = m_targetPanel.data();
+    if (!m_container.isNull()) {
+        if (DockLayoutRoot* layoutRoot = m_container->layoutRoot()) {
+            if (DockGroupHost* host = layoutRoot->groupHostForPanel(m_targetPanel.data())) {
+                cell = host;
+            }
+        }
+    }
+
+    return QRect(mapFromGlobal(cell->mapToGlobal(QPoint(0, 0))), cell->size());
+}
+
 QRect DockOverlay::calculateDropRect(DropZone zone) const
 {
+    // Group drops preview the whole cell rather than a slice of it: the panel
+    // lands on top of the target, it does not take space away from it.
+    if (isGroupZone(zone)) {
+        QRect cellRect = targetCellRect();
+        constexpr int kGroupPreviewInset = 10;
+        if (cellRect.width() > kGroupPreviewInset * 4
+            && cellRect.height() > kGroupPreviewInset * 4) {
+            cellRect.adjust(
+                kGroupPreviewInset, kGroupPreviewInset, -kGroupPreviewInset, -kGroupPreviewInset);
+        }
+        return cellRect;
+    }
+
     QRect baseRect;
 
     if (isOuterZone(zone)) {
@@ -657,16 +734,25 @@ void DockOverlay::updateTargetPanel(const QPoint& globalPos)
 {
     if (!m_containerMode || !m_container) {
         m_targetPanel = nullptr;
+        m_groupHeaderHost = nullptr;
         return;
     }
 
     DockLayoutRoot* layoutRoot = m_container->layoutRoot();
     if (!layoutRoot) {
         m_targetPanel = nullptr;
+        m_groupHeaderHost = nullptr;
         return;
     }
 
-    DockPanel* newTarget = layoutRoot->findPanelAt(globalPos);
+    // The header strip belongs to the group frame, not to any panel, so
+    // findPanelAt() reports nothing there. Resolve it first and target the
+    // group's visible member, so the compass, dim layer and drop indicator all
+    // still have a panel to work from.
+    m_groupHeaderHost = layoutRoot->groupHostAtHeader(globalPos);
+
+    DockPanel* newTarget = m_groupHeaderHost.isNull() ? layoutRoot->findPanelAt(globalPos)
+                                                      : m_groupHeaderHost->currentPanel();
 
     // Check if target panel changed
     if (newTarget != m_targetPanel) {
@@ -766,8 +852,61 @@ DropZone DockOverlay::zoneAtPanelPosition(const QPoint& globalPos) const
     if (nearBottom)
         return DropZone::InnerBottom;
 
-    // Not near any edge - no zone (allows floating)
+    // Center region: form (or join) a tab group. Deliberately smaller than
+    // "everything the edge margins didn't claim" — the ring left between them
+    // keeps the old escape hatch, where dropping over a panel simply floats.
+    constexpr qreal kCenterFraction = 0.5;
+    const QRect centerRect(qRound(w * (1.0 - kCenterFraction) / 2.0),
+        qRound(h * (1.0 - kCenterFraction) / 2.0), qRound(w * kCenterFraction),
+        qRound(h * kCenterFraction));
+
+    if (centerRect.contains(localPos) && canGroupWith(m_targetPanel.data())) {
+        return DropZone::InnerCenter;
+    }
+
+    // Not near any edge, not in the center - no zone (allows floating)
     return DropZone::None;
+}
+
+// ============================================================================
+// Groups
+// ============================================================================
+
+DockPanel* DockOverlay::draggedPanel() const
+{
+    return m_floatingContainer.isNull() ? nullptr : m_floatingContainer->panel();
+}
+
+bool DockOverlay::canGroupWith(DockPanel* target) const
+{
+    if (!target || m_container.isNull()) {
+        return false;
+    }
+
+    DockLayoutRoot* layoutRoot = m_container->layoutRoot();
+    if (!layoutRoot) {
+        return false;
+    }
+
+    return layoutRoot->canGroupPanels(draggedPanel(), target);
+}
+
+void DockOverlay::setHeaderCaret(DockGroupHost* host, int index)
+{
+    // Always clear through the frame that owns the caret: by the time the caret
+    // moves, m_groupHeaderHost may already point somewhere else.
+    if (!m_caretHost.isNull() && m_caretHost.data() != host) {
+        if (DockGroupHeader* header = m_caretHost->header()) {
+            header->setDropInsertIndex(-1);
+        }
+    }
+
+    m_caretHost = host;
+    if (host) {
+        if (DockGroupHeader* header = host->header()) {
+            header->setDropInsertIndex(index);
+        }
+    }
 }
 
 } // namespace ruwa::ui::docking

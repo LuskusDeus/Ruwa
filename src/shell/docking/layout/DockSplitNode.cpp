@@ -471,7 +471,9 @@ DockLeafNode* DockSplitNode::findLeafForPanel(DockPanel* panel) const
     for (const auto& child : m_children) {
         if (child->isLeaf()) {
             auto* leaf = static_cast<DockLeafNode*>(child.get());
-            if (leaf->panel() == panel) {
+            // containsPanel, not panel(): a grouped leaf holds several panels
+            // and only one of them is current.
+            if (leaf->containsPanel(panel)) {
                 return leaf;
             }
         } else if (child->isSplit()) {

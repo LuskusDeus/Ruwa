@@ -67,6 +67,24 @@ public:
     void dockPanel(DockPanel* panel, DockPosition position);
     void dockPanelRelativeTo(DockPanel* panel, DockPanel* relativeTo, DockPosition position);
 
+    /**
+     * @brief Drop a panel into another panel's cell as a tab group
+     *
+     * Falls back to dockPanelRelativeTo(Right) if the two panels turn out not
+     * to be groupable, so a caller never has to pre-validate.
+     */
+    void dockPanelIntoGroup(DockPanel* panel, const DockDropTarget& target);
+
+    /**
+     * @brief Take a panel out of its tab group into a cell of its own
+     *
+     * Docks it to the right of the group it leaves. If that leaves the group
+     * with a single member, the group collapses and its header animates away.
+     *
+     * @return false if the panel is not currently grouped
+     */
+    bool ungroupPanel(DockPanel* panel);
+
     QList<DockFloatingContainer*> floatingContainers() const { return m_floatingContainers; }
 
     // === Layout System ===
@@ -136,6 +154,14 @@ signals:
     void panelFloated(DockPanel* panel);
     void panelDocked(DockPanel* panel);
     void layoutChanged();
+
+    /// Forwarded from a group header (via DockLayoutRoot) for DockManager,
+    /// which owns panel lifetime and drag state.
+    void groupPanelCloseRequested(DockPanel* panel);
+    void groupPanelDragStarted(DockPanel* panel, const QPoint& globalPos);
+    void groupPanelDragMoved(DockPanel* panel, const QPoint& globalPos);
+    void groupPanelDragFinished(DockPanel* panel, const QPoint& globalPos);
+
     void panelEntranceAnimationFinished();
     void panelEntranceAnimationCancelled();
 
@@ -150,6 +176,14 @@ private:
     void createOverlay();
     DockFloatingContainer* createFloatingContainer(DockPanel* panel);
     void removeFloatingContainer(DockFloatingContainer* container);
+
+    /**
+     * @brief Take @p panel out of its floating container, if it has one
+     *
+     * @return The container's geometry (the source rect of a docking
+     *         animation), or an invalid rect if the panel was not floating.
+     */
+    QRect detachFromFloating(DockPanel* panel);
     void updateAllPanelCornerRadii();
 
     /// Raise all floating containers above docked panels and handles
