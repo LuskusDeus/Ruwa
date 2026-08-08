@@ -5,6 +5,7 @@
 #define RUWA_SHARED_WIDGETS_INPUTS_STYLEDINPUTFIELD_H
 
 #include <QWidget>
+#include <QLocale>
 #include <QString>
 #include <QVariant>
 
@@ -37,7 +38,12 @@ public:
     QString text() const;
 
     void setValue(int value);
+    /// Number fields: the current value, clamped to the range. Text that does not
+    /// parse (empty, half-typed, pasted with a group separator) yields the last
+    /// value that did — never the range minimum.
     int value() const;
+    /// Number fields: true when the visible text parses and sits inside the range.
+    bool hasValidValue() const;
 
     void addItem(const QString& text, const QVariant& userData = QVariant());
     void addItems(const QStringList& texts);
@@ -89,6 +95,9 @@ private:
     QWidget* inputWidget() const;
     void updateScaledSizes();
     void updateThemeColors();
+    /// Number fields: rewrite the text to the canonical form of the committed
+    /// value when focus leaves, so what is shown is always what value() returns.
+    void commitNumericFixup();
 
 private slots:
     void onThemeChanged();
@@ -103,6 +112,10 @@ private:
 
     int m_intMin { 1 };
     int m_intMax { 99999 };
+    /// Last value that parsed and validated — what an unparsable field falls back to.
+    int m_lastValidValue { 1 };
+    /// Locale the number text is read with; the same one the validator uses.
+    QLocale m_numberLocale;
 
     qreal m_focusProgress { 0.0 };
     qreal m_hoverProgress { 0.0 };

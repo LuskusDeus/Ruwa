@@ -18,6 +18,7 @@
 #include <QEvent>
 #include <QFontMetrics>
 #include <QSizePolicy>
+#include <QLocale>
 
 namespace ruwa::ui::widgets {
 
@@ -39,6 +40,103 @@ QString boxedLabelText(const QString& raw)
     const QString t = raw.trimmed();
     return t.isEmpty() ? QString() : t.toUpper();
 }
+
+// ----------------------------------------------------------------------------
+// Number text
+//
+// QIntValidator reads its input through the locale, so with the default number
+// options it happily accepts a group separator — "3 000" pasted from a browser,
+// Excel or the Windows calculator (U+00A0 in Russian, "," in English). The value
+// was then read back with QString::toInt(), which is C-locale and rejects that
+// same string: the field showed a number nobody could parse, no valueChanged was
+// emitted, and every consumer (thumbnail, memory hint, aspect lock) kept the old
+// size while the document was created from the fallback minimum.
+//
+// The text is therefore normalised to bare digits before anything looks at it,
+// and the validator is handed a locale that rejects separators outright.
+// ----------------------------------------------------------------------------
+
+/// Strip everything a locale may legally sprinkle between digits: any kind of
+/// space (U+00A0 and the narrow spaces included, QChar::isSpace covers them),
+/// the apostrophe groupings, and the locale's own group separator. When
+/// \a cursorPos is given it is moved along with the text it points into.
+QString normalizeIntegerText(const QString& raw, const QLocale& locale, int* cursorPos = nullptr)
+{
+    const QString group = locale.groupSeparator();
+    const QChar groupChar = (group.size() == 1) ? group.at(0) : QChar();
+
+    const int cursor = cursorPos ? *cursorPos : 0;
+    int movedCursor = cursor;
+
+    QString out;
+    out.reserve(raw.size());
+    for (int i = 0; i < raw.size(); ++i) {
+        const QChar ch = raw.at(i);
+        const bool separator = ch.isSpace() || ch == u'\''
+            || ch == u'’' // right single quotation mark, de-CH grouping
+            || (!groupChar.isNull() && ch == groupChar);
+        if (separator) {
+            if (i < cursor)
+                --movedCursor;
+            continue;
+        }
+        out.append(ch);
+    }
+
+    if (cursorPos)
+        *cursorPos = qBound(0, movedCursor, out.size());
+    return out;
+}
+
+/// Read \a raw as an integer the same way the validator accepted it. Tries the
+/// field locale first (so localized digits still work), then the C locale.
+int parseIntegerText(const QString& raw, const QLocale& locale, bool* ok)
+{
+    const QString normalized = normalizeIntegerText(raw, locale);
+    if (normalized.isEmpty()) {
+        if (ok)
+            *ok = false;
+        return 0;
+    }
+
+    bool parsed = false;
+    int value = locale.toInt(normalized, &parsed);
+    if (!parsed)
+        value = normalized.toInt(&parsed);
+
+    if (ok)
+        *ok = parsed;
+    return parsed ? value : 0;
+}
+
+/// Locale used for number fields: the system one, minus the group separator that
+/// made a pasted "3 000" pass validation and then fail to parse.
+QLocale strictNumberLocale()
+{
+    QLocale locale;
+    locale.setNumberOptions(locale.numberOptions() | QLocale::RejectGroupSeparator);
+    return locale;
+}
+
+/// QIntValidator that rewrites separators out of the input before judging it.
+/// QLineEdit adopts the string the validator hands back, so a pasted "3 000"
+/// lands in the field as "3000" instead of being silently dropped whole.
+class IntegerFieldValidator : public QIntValidator {
+public:
+    IntegerFieldValidator(int minimum, int maximum, QObject* parent)
+        : QIntValidator(minimum, maximum, parent)
+    {
+        setLocale(strictNumberLocale());
+    }
+
+    QValidator::State validate(QString& input, int& pos) const override
+    {
+        QString normalized = normalizeIntegerText(input, locale(), &pos);
+        if (normalized != input)
+            input = normalized;
+        return QIntValidator::validate(input, pos);
+    }
+};
 } // namespace
 
 // ============================================================================
@@ -154,12 +252,18 @@ void StyledInputField::setupUI(FieldType type)
             m_lineEdit->installEventFilter(this);
             containerLayout->addWidget(m_lineEdit);
             if (type == FieldType::Number) {
-                m_lineEdit->setValidator(new QIntValidator(m_intMin, m_intMax, m_lineEdit));
+                m_numberLocale = strictNumberLocale();
+                m_lineEdit->setValidator(
+                    new IntegerFieldValidator(m_intMin, m_intMax, m_lineEdit));
+                m_lastValidValue = m_intMin;
                 connect(m_lineEdit, &QLineEdit::textChanged, this, [this](const QString& t) {
                     bool ok = false;
-                    const int v = t.toInt(&ok);
-                    if (ok)
-                        emit valueChanged(v);
+                    const int v = parseIntegerText(t, m_numberLocale, &ok);
+                    if (!ok)
+                        return; // half-typed or unparsable: commitNumericFixup settles it
+                    const int clamped = qBound(m_intMin, v, m_intMax);
+                    m_lastValidValue = clamped;
+                    emit valueChanged(clamped);
                 });
             } else {
                 connect(m_lineEdit, &QLineEdit::textChanged, this, &StyledInputField::textChanged);
@@ -321,6 +425,10 @@ bool StyledInputField::eventFilter(QObject* watched, QEvent* event)
             startFocusAnimation(true);
             break;
         case QEvent::FocusOut:
+            // Settle the number before anyone reads it: editingFinished is no use
+            // here, QLineEdit withholds it while the validator says Intermediate,
+            // which is exactly the empty / out-of-range state that needs fixing.
+            commitNumericFixup();
             startFocusAnimation(false);
             break;
         case QEvent::Enter:
@@ -486,8 +594,10 @@ QString StyledInputField::text() const
 void StyledInputField::setValue(int value)
 {
     if (m_type == FieldType::Number && m_lineEdit) {
+        const int clamped = qBound(m_intMin, value, m_intMax);
+        m_lastValidValue = clamped;
         const QSignalBlocker blocker(m_lineEdit);
-        m_lineEdit->setText(QString::number(value));
+        m_lineEdit->setText(QString::number(clamped));
     }
 }
 
@@ -495,12 +605,44 @@ int StyledInputField::value() const
 {
     if (m_type == FieldType::Number && m_lineEdit) {
         bool ok = false;
-        const int v = m_lineEdit->text().toInt(&ok);
-        if (ok)
-            return v;
-        return m_intMin;
+        const int v = parseIntegerText(m_lineEdit->text(), m_numberLocale, &ok);
+        // Falling back to m_intMin here used to hand a 1-pixel canvas to whoever
+        // asked while the field still showed a plausible number. The last value
+        // that actually validated is the only honest answer.
+        return ok ? qBound(m_intMin, v, m_intMax) : m_lastValidValue;
     }
     return 0;
+}
+
+bool StyledInputField::hasValidValue() const
+{
+    if (m_type != FieldType::Number || !m_lineEdit)
+        return false;
+    bool ok = false;
+    const int v = parseIntegerText(m_lineEdit->text(), m_numberLocale, &ok);
+    return ok && v >= m_intMin && v <= m_intMax;
+}
+
+void StyledInputField::commitNumericFixup()
+{
+    if (m_type != FieldType::Number || !m_lineEdit)
+        return;
+
+    bool ok = false;
+    const int parsed = parseIntegerText(m_lineEdit->text(), m_numberLocale, &ok);
+    const int resolved = ok ? qBound(m_intMin, parsed, m_intMax) : m_lastValidValue;
+
+    const bool valueMoved = (resolved != m_lastValidValue);
+    m_lastValidValue = resolved;
+
+    const QString canonical = QString::number(resolved);
+    if (m_lineEdit->text() != canonical) {
+        const QSignalBlocker blocker(m_lineEdit);
+        m_lineEdit->setText(canonical);
+    }
+
+    if (valueMoved)
+        emit valueChanged(resolved);
 }
 
 void StyledInputField::addItem(const QString& text, const QVariant& userData)
@@ -565,12 +707,13 @@ void StyledInputField::setRange(int min, int max)
 {
     m_intMin = min;
     m_intMax = max;
+    m_lastValidValue = qBound(min, m_lastValidValue, max);
     if (m_type == FieldType::Number && m_lineEdit) {
         auto* mutValidator = const_cast<QValidator*>(m_lineEdit->validator());
         if (auto* v = qobject_cast<QIntValidator*>(mutValidator))
             v->setRange(min, max);
         else
-            m_lineEdit->setValidator(new QIntValidator(min, max, m_lineEdit));
+            m_lineEdit->setValidator(new IntegerFieldValidator(min, max, m_lineEdit));
     }
 }
 

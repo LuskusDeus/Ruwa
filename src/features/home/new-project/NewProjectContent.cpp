@@ -39,6 +39,13 @@ namespace {
 constexpr int kDefaultProjectWidth = 2048;
 constexpr int kDefaultProjectHeight = 2048;
 
+/// Bounds a new canvas dimension must land in. The width/height fields validate
+/// against the same numbers, but the clamp below is what the document is built
+/// from — a field can sit in an intermediate state (empty, out of range) and
+/// must never turn into a zero- or one-pixel canvas behind the user's back.
+constexpr int kMinCanvasDimension = 1;
+constexpr int kMaxCanvasDimension = 100000;
+
 const int BASE_MAIN_MARGIN_H = 36;
 const int BASE_MAIN_MARGIN_V = 28;
 const int BASE_MAIN_SPACING = 26;
@@ -365,6 +372,10 @@ void NewProjectContent::setupContent()
     m_createButton->setSizePolicy(QSizePolicy::Preferred, QSizePolicy::Fixed);
     m_createButton->setFixedHeight(theme.scaled(BASE_BUTTON_HEIGHT));
     connect(m_createButton, &QPushButton::clicked, this, [this]() {
+        // Settle the size fields first: a field still holding focus may carry text
+        // that has not been committed yet, and the thumbnail beside it would be
+        // showing a different size than the document about to be created.
+        clearAllInputFocus();
         emit projectCreateRequested(projectName(), canvasSize(), infiniteCanvasEnabled(),
             colorMode(), backgroundColor(), tileFormat());
     });
@@ -478,9 +489,10 @@ QString NewProjectContent::projectName() const
 
 QSize NewProjectContent::canvasSize() const
 {
-    int width = m_widthField ? m_widthField->value() : kDefaultProjectWidth;
-    int height = m_heightField ? m_heightField->value() : kDefaultProjectHeight;
-    return QSize(width, height);
+    const int width = m_widthField ? m_widthField->value() : kDefaultProjectWidth;
+    const int height = m_heightField ? m_heightField->value() : kDefaultProjectHeight;
+    return QSize(qBound(kMinCanvasDimension, width, kMaxCanvasDimension),
+        qBound(kMinCanvasDimension, height, kMaxCanvasDimension));
 }
 
 bool NewProjectContent::infiniteCanvasEnabled() const
@@ -527,7 +539,7 @@ void NewProjectContent::createSettingsPanel(QWidget* fieldParent)
 
     m_widthField = new ProjectSettingsField(
         tr("Width"), ProjectSettingsField::FieldType::Number, fieldParent);
-    m_widthField->setRange(1, 100000);
+    m_widthField->setRange(kMinCanvasDimension, kMaxCanvasDimension);
     m_widthField->setValue(kDefaultProjectWidth);
     connect(m_widthField, &ProjectSettingsField::valueChanged, this,
         &NewProjectContent::onWidthChanged);
@@ -538,7 +550,7 @@ void NewProjectContent::createSettingsPanel(QWidget* fieldParent)
 
     m_heightField = new ProjectSettingsField(
         tr("Height"), ProjectSettingsField::FieldType::Number, fieldParent);
-    m_heightField->setRange(1, 100000);
+    m_heightField->setRange(kMinCanvasDimension, kMaxCanvasDimension);
     m_heightField->setValue(kDefaultProjectHeight);
     connect(m_heightField, &ProjectSettingsField::valueChanged, this,
         &NewProjectContent::onHeightChanged);

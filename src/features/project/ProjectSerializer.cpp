@@ -53,6 +53,12 @@ constexpr int kMaxLayerDepth = 512;
 // reaching a widget.
 constexpr int kMaxSmartDocumentDimension = 1000000;
 
+// The document's own canvas size gets the same treatment, except it cannot be
+// clamped: a zero-width canvas is not a size to repair, it is a file that never
+// described a document. Opening one leaves the tab spinning forever, so it is
+// rejected up front with an error the user can read.
+constexpr int kMaxCanvasDimension = kMaxSmartDocumentDimension;
+
 // Conservative lower bounds (in bytes) on the on-disk size of one element of
 // each repeated structure. Used by countFitsInStream() to reject impossible
 // counts. These are deliberate under-estimates: it is always safe to accept a
@@ -780,6 +786,14 @@ bool ProjectSerializer::readProjectInfo(const QByteArray& blob, ProjectData& dat
 
     if (in.status() != QDataStream::Ok) {
         m_lastError = QStringLiteral("Corrupted ProjectInfo section");
+        return false;
+    }
+
+    if (w == 0 || h == 0 || w > static_cast<quint32>(kMaxCanvasDimension)
+        || h > static_cast<quint32>(kMaxCanvasDimension)) {
+        m_lastError = QStringLiteral("Invalid canvas size %1x%2 in ProjectInfo — file corrupt")
+                          .arg(w)
+                          .arg(h);
         return false;
     }
 
