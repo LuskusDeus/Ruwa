@@ -1207,23 +1207,6 @@ PolygonFillWorkArea computePolygonFillWorkArea(const std::vector<aether::Vector2
     return workArea;
 }
 
-std::vector<aether::Vector2> buildClosedPolygon(const std::vector<aether::Vector2>& points)
-{
-    if (points.size() < 3) {
-        return {};
-    }
-
-    std::vector<aether::Vector2> closed = points;
-    const aether::Vector2& first = closed.front();
-    const aether::Vector2& last = closed.back();
-    const float dx = first.x - last.x;
-    const float dy = first.y - last.y;
-    if ((dx * dx + dy * dy) > 0.01f) {
-        closed.push_back(first);
-    }
-    return closed;
-}
-
 std::vector<aether::TileKey> collectVisibleDirtyKeys(const aether::Viewport& viewport,
     const aether::CompositionCache& cache, float canvasWidth, float canvasHeight, bool flipH,
     bool flipV)
@@ -4772,30 +4755,13 @@ void OpenGLCanvasWidget::refreshLassoFillPreview()
         return;
     }
 
-    const std::vector<Vector2> closedPoly = buildClosedPolygon(m_lassoFillPoints);
-    if (closedPoly.size() < 3) {
-        clearLassoFillPreview();
-        return;
-    }
-
-    std::vector<Vector2> previewPolygon = closedPoly;
-    if (hasFiniteDocumentBounds()) {
-        const int canvasW = static_cast<int>(m_canvas.width());
-        const int canvasH = static_cast<int>(m_canvas.height());
-        if (canvasW <= 0 || canvasH <= 0) {
-            clearLassoFillPreview();
-            return;
-        }
-
-        previewPolygon = clipPolygonToCanvas(
-            previewPolygon, static_cast<float>(canvasW), static_cast<float>(canvasH));
-        if (previewPolygon.size() < 3) {
-            clearLassoFillPreview();
-            return;
-        }
-    }
-
-    const Rect bounds = retainedPolygonBounds(previewPolygon);
+    // The polygon is handed to the preview OPEN and UNCLIPPED. Closing it and
+    // clipping it to the canvas used to happen here, per added point: both
+    // renumber the vertices, which is exactly what an incrementally accumulated
+    // mask cannot survive. The mask closes the polygon implicitly (its parity fan
+    // is pivoted on the first point) and clips to the canvas with a stencil gate,
+    // so the shape is unchanged while the work per point stays O(1).
+    const Rect bounds = retainedPolygonBounds(m_lassoFillPoints);
     if (!rectHasArea(bounds)) {
         clearLassoFillPreview();
         return;
@@ -4810,14 +4776,12 @@ void OpenGLCanvasWidget::refreshLassoFillPreview()
         || m_lassoFillPreview.color.g != previewColor.g
         || m_lassoFillPreview.color.b != previewColor.b
         || m_lassoFillPreview.color.a != previewColor.a;
-    const bool polygonChanged = !m_lassoFillPreview.active
-        || !polygonsEquivalent(m_lassoFillPreview.polygon, previewPolygon);
-    const bool boundsChanged = !m_lassoFillPreview.active || m_lassoFillPreview.bounds.x != bounds.x
-        || m_lassoFillPreview.bounds.y != bounds.y
-        || m_lassoFillPreview.bounds.width != bounds.width
-        || m_lassoFillPreview.bounds.height != bounds.height;
+    // Points are only ever appended within a stroke, so the count is a complete
+    // change test — and unlike comparing the polygons it does not grow with it.
+    const bool polygonChanged
+        = !m_lassoFillPreview.active || m_lassoFillPreview.pointCount != m_lassoFillPoints.size();
 
-    if (!(targetChanged || colorChanged || polygonChanged || boundsChanged)) {
+    if (!(targetChanged || colorChanged || polygonChanged)) {
         return;
     }
 
@@ -4825,16 +4789,23 @@ void OpenGLCanvasWidget::refreshLassoFillPreview()
     m_lassoFillPreview.targetLayerId = layer->id;
     m_lassoFillPreview.revision += 1;
     m_lassoFillPreview.bounds = bounds;
-    m_lassoFillPreview.polygon = previewPolygon;
+    m_lassoFillPreview.pointCount = m_lassoFillPoints.size();
     m_lassoFillPreview.color = previewColor;
 
-    m_lassoFillViewportPreview.active = true;
-    m_lassoFillViewportPreview.targetLayerId = layer->id;
-    m_lassoFillViewportPreview.polygonWorld = std::move(previewPolygon);
-    m_lassoFillViewportPreview.screenPolygonDirty = true;
-    m_lassoFillViewportPreview.screenMaskDirty = true;
+    auto& session = m_lassoFillViewportPreview;
+    session.active = true;
+    session.targetLayerId = layer->id;
+    if (session.polygonWorld.size() > m_lassoFillPoints.size()) {
+        // Not a continuation of what the session holds — start over.
+        session.polygonWorld.clear();
+        session.polygonScreen.clear();
+        session.screenBoundsValid = false;
+    }
+    session.polygonWorld.insert(session.polygonWorld.end(),
+        m_lassoFillPoints.begin() + static_cast<std::ptrdiff_t>(session.polygonWorld.size()),
+        m_lassoFillPoints.end());
     if (targetChanged) {
-        m_lassoFillViewportPreview.screenSourcesDirty = true;
+        session.screenSourcesDirty = true;
     }
 }
 
@@ -4849,9 +4820,18 @@ void OpenGLCanvasWidget::clearLassoFillPreview(bool markDirtyTiles)
     m_lassoFillPreview.targetLayerId = QUuid();
     m_lassoFillPreview.revision = 0;
     m_lassoFillPreview.bounds = {};
-    m_lassoFillPreview.polygon.clear();
+    m_lassoFillPreview.pointCount = 0;
     m_lassoFillPreview.color = {};
     m_lassoFillViewportPreview = {};
+    // The mask accumulates in a stencil buffer across frames. Dropping the
+    // session is not enough: a new stroke that happened to start at the very same
+    // point would otherwise be taken for a continuation of this one. Touches no
+    // GL object, so it is safe from the non-paint callers of this function.
+    if (m_renderer) {
+        if (auto* maskRenderer = m_renderer->lassoMaskRenderer()) {
+            maskRenderer->invalidateAccumulation();
+        }
+    }
 }
 
 void OpenGLCanvasWidget::beginRectSelection(
@@ -12146,83 +12126,117 @@ void OpenGLCanvasWidget::paintGL_renderLassoFillOverlay(
         session.flipH = flipH;
         session.flipV = flipV;
         session.viewportRevision += 1;
-        session.screenPolygonDirty = true;
-        session.screenMaskDirty = true;
         session.screenSourcesDirty = true;
+        // Screen coordinates are camera-derived, so a camera move is the one
+        // thing that invalidates the whole projected polygon (and with it the
+        // accumulated mask, via forceRebuild below).
+        session.polygonScreen.clear();
+        session.screenBoundsValid = false;
+        session.maskRebuildPending = true;
         m_layerScreenSourceCache->invalidateByViewport();
     }
     if (session.viewportRevision == 0) {
         session.viewportRevision = 1;
     }
 
-    if (session.screenPolygonDirty) {
+    if (session.polygonScreen.size() > session.polygonWorld.size()) {
         session.polygonScreen.clear();
-        session.polygonScreen.reserve(session.polygonWorld.size());
-        for (const Vector2& point : session.polygonWorld) {
-            session.polygonScreen.push_back(screenFromDocumentWorld(point));
+        session.screenBoundsValid = false;
+        session.maskRebuildPending = true;
+    }
+    // Project only what is new. Everything before this index was projected on an
+    // earlier frame under the same camera and cannot have moved.
+    for (std::size_t i = session.polygonScreen.size(); i < session.polygonWorld.size(); ++i) {
+        const Vector2 point = screenFromDocumentWorld(session.polygonWorld[i]);
+        session.polygonScreen.push_back(point);
+        if (!session.screenBoundsValid) {
+            session.screenMinX = point.x;
+            session.screenMaxX = point.x;
+            session.screenMinY = point.y;
+            session.screenMaxY = point.y;
+            session.screenBoundsValid = true;
+        } else {
+            session.screenMinX = std::min(session.screenMinX, point.x);
+            session.screenMinY = std::min(session.screenMinY, point.y);
+            session.screenMaxX = std::max(session.screenMaxX, point.x);
+            session.screenMaxY = std::max(session.screenMaxY, point.y);
         }
+    }
 
-        if (session.polygonScreen.size() < 3) {
-            session.clippedScreenBounds = {};
-            return;
-        }
+    if (session.polygonScreen.size() < 3 || !session.screenBoundsValid) {
+        session.clippedScreenBounds = {};
+        return;
+    }
 
-        float minX = session.polygonScreen.front().x;
-        float minY = session.polygonScreen.front().y;
-        float maxX = minX;
-        float maxY = minY;
-        for (const Vector2& point : session.polygonScreen) {
-            minX = std::min(minX, point.x);
-            minY = std::min(minY, point.y);
-            maxX = std::max(maxX, point.x);
-            maxY = std::max(maxY, point.y);
-        }
+    // The polygon is clipped to the canvas on the GPU, as a stencil gate on the
+    // mask, rather than geometrically on the point list — geometric clipping
+    // inserts and drops vertices, which would break the append-only accumulation
+    // for no visual difference (the pad along a clip edge falls inside the fill).
+    const bool finiteDocumentBounds = hasFiniteDocumentBounds();
+    GLLassoMaskRenderer::CanvasGate canvasGate;
+    if (finiteDocumentBounds && m_canvas.width() > 0 && m_canvas.height() > 0) {
+        const auto documentWidth = static_cast<float>(m_canvas.width());
+        const auto documentHeight = static_cast<float>(m_canvas.height());
+        canvasGate.enabled = true;
+        canvasGate.corners = { { screenFromDocumentWorld({ 0.0f, 0.0f }),
+            screenFromDocumentWorld({ documentWidth, 0.0f }),
+            screenFromDocumentWorld({ documentWidth, documentHeight }),
+            screenFromDocumentWorld({ 0.0f, documentHeight }) } };
+    }
 
+    {
         constexpr int kLassoFillMaskPaddingPx = 2;
         const QRect viewportRect(0, 0, viewportWidth, viewportHeight);
-        const QRect polygonRect(static_cast<int>(std::floor(minX)) - kLassoFillMaskPaddingPx,
-            static_cast<int>(std::floor(minY)) - kLassoFillMaskPaddingPx,
+        const int floorX = static_cast<int>(std::floor(session.screenMinX));
+        const int floorY = static_cast<int>(std::floor(session.screenMinY));
+        const QRect polygonRect(floorX - kLassoFillMaskPaddingPx, floorY - kLassoFillMaskPaddingPx,
             std::max(1,
-                static_cast<int>(std::ceil(maxX)) - static_cast<int>(std::floor(minX)) + 1
+                static_cast<int>(std::ceil(session.screenMaxX)) - floorX + 1
                     + kLassoFillMaskPaddingPx * 2),
             std::max(1,
-                static_cast<int>(std::ceil(maxY)) - static_cast<int>(std::floor(minY)) + 1
+                static_cast<int>(std::ceil(session.screenMaxY)) - floorY + 1
                     + kLassoFillMaskPaddingPx * 2));
         session.clippedScreenBounds = polygonRect.intersected(viewportRect);
-        session.screenPolygonDirty = false;
-        session.screenMaskDirty = true;
+        if (canvasGate.enabled) {
+            // The gate zeroes the mask outside the canvas, so nothing beyond the
+            // document's screen box can differ from the scene. Keeps the redrawn
+            // region as tight as the geometric clip used to make it.
+            float gateMinX = canvasGate.corners[0].x;
+            float gateMinY = canvasGate.corners[0].y;
+            float gateMaxX = gateMinX;
+            float gateMaxY = gateMinY;
+            for (const Vector2& corner : canvasGate.corners) {
+                gateMinX = std::min(gateMinX, corner.x);
+                gateMinY = std::min(gateMinY, corner.y);
+                gateMaxX = std::max(gateMaxX, corner.x);
+                gateMaxY = std::max(gateMaxY, corner.y);
+            }
+            const QRect gateRect(static_cast<int>(std::floor(gateMinX)),
+                static_cast<int>(std::floor(gateMinY)),
+                std::max(1,
+                    static_cast<int>(std::ceil(gateMaxX)) - static_cast<int>(std::floor(gateMinX))
+                        + 1),
+                std::max(1,
+                    static_cast<int>(std::ceil(gateMaxY)) - static_cast<int>(std::floor(gateMinY))
+                        + 1));
+            session.clippedScreenBounds = session.clippedScreenBounds.intersected(gateRect);
+        }
     }
 
     if (!session.clippedScreenBounds.isValid() || session.clippedScreenBounds.isEmpty()) {
         return;
     }
 
-    if (session.screenMaskDirty || !session.screenMaskTexture) {
-        std::vector<Vector2> localScreenPolygon;
-        localScreenPolygon.reserve(session.polygonScreen.size());
-        for (const Vector2& point : session.polygonScreen) {
-            localScreenPolygon.push_back(
-                { point.x - static_cast<float>(session.clippedScreenBounds.x()),
-                    point.y - static_cast<float>(session.clippedScreenBounds.y()) });
-        }
-
-        const auto maskResult
-            = maskRenderer->renderMask(localScreenPolygon, session.clippedScreenBounds);
-        if (!maskResult.isValid()) {
-            session.screenMaskTexture = 0;
-            session.screenMaskBounds = {};
-            return;
-        }
-
-        session.screenMaskTexture = maskResult.texture;
-        session.screenMaskBounds = maskResult.bounds;
-        session.screenMaskDirty = false;
-    }
-
-    if (!session.screenMaskTexture || !session.screenMaskBounds.isValid()
-        || session.screenMaskBounds.isEmpty()) {
+    const auto maskResult = maskRenderer->accumulate(session.polygonScreen,
+        QSize(viewportWidth, viewportHeight), canvasGate, session.maskRebuildPending);
+    if (!maskResult.isValid()) {
+        session.screenMaskTexture = 0;
+        session.screenMaskBounds = {};
         return;
     }
+    session.maskRebuildPending = false;
+    session.screenMaskTexture = maskResult.texture;
+    session.screenMaskBounds = maskResult.bounds;
 
     const CompositeLayerInfo* targetLayerInfo = nullptr;
     std::function<void(const std::vector<CompositeLayerInfo>&)> findTarget
@@ -12246,7 +12260,6 @@ void OpenGLCanvasWidget::paintGL_renderLassoFillOverlay(
         return;
     }
 
-    const bool finiteDocumentBounds = hasFiniteDocumentBounds();
     const uint32_t canvasWidth = finiteDocumentBounds ? m_canvas.width() : 0u;
     const uint32_t canvasHeight = finiteDocumentBounds ? m_canvas.height() : 0u;
     // Acquire the target's RAW (unmasked) color: the fill is applied on top by
@@ -12376,7 +12389,9 @@ void OpenGLCanvasWidget::paintGL_renderLassoFillOverlay(
         }
     }
 
-    QRect maskBounds = session.screenMaskBounds;
+    // The region to redraw is the lasso's own box, NOT the mask texture's bounds:
+    // the mask spans the whole viewport so that it can be accumulated in place.
+    QRect maskBounds = session.clippedScreenBounds;
     if (effectPadScreen > 0) {
         maskBounds = maskBounds.adjusted(
             -effectPadScreen, -effectPadScreen, effectPadScreen, effectPadScreen);

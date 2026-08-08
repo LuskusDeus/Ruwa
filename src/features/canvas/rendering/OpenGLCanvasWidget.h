@@ -889,7 +889,7 @@ private:
         QUuid targetLayerId;
         uint64_t revision = 0;
         Rect bounds {};
-        std::vector<Vector2> polygon;
+        std::size_t pointCount = 0;
         Color color {};
     };
     mutable LassoFillPreviewState m_lassoFillPreview;
@@ -897,11 +897,28 @@ private:
         bool active = false;
         QUuid targetLayerId;
         uint64_t viewportRevision = 0;
+        /// Open and unclipped, strictly append-only within a stroke — the
+        /// invariant the incrementally accumulated lasso mask rests on.
         std::vector<Vector2> polygonWorld;
+        /// polygonWorld projected to screen. Only the tail is ever converted;
+        /// a camera change clears it and the whole thing is redone.
         std::vector<Vector2> polygonScreen;
+        /// Running bounds of polygonScreen, so the draw region costs nothing to
+        /// keep up to date as the stroke grows.
+        bool screenBoundsValid = false;
+        float screenMinX = 0.0f;
+        float screenMinY = 0.0f;
+        float screenMaxX = 0.0f;
+        float screenMaxY = 0.0f;
+        /// Where the preview is actually drawn: the polygon's box, clipped to the
+        /// viewport. Distinct from screenMaskBounds, which is the mask texture's
+        /// (viewport-sized) sampling window.
         QRect clippedScreenBounds;
-        bool screenPolygonDirty = true;
-        bool screenMaskDirty = true;
+        /// Set when the projected polygon is invalidated, cleared only once the
+        /// mask has actually been rebuilt. A frame can bail out between the two
+        /// (an off-screen lasso, too few points), and the accumulated stencil
+        /// must not be extended with geometry from a different camera.
+        bool maskRebuildPending = true;
         GLuint screenMaskTexture = 0;
         QRect screenMaskBounds;
         bool screenSourcesDirty = true;
