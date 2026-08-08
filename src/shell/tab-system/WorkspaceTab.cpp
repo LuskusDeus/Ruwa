@@ -433,6 +433,34 @@ bool smartContentAlreadyCollected(
     return false;
 }
 
+void writeLayerTileFields(ruwa::core::serialization::LayerEntry& entry,
+    const ruwa::core::layers::LayerData* layer, bool includePixels)
+{
+    const auto* pixelGrid = layer ? layer->pixelGrid() : nullptr;
+    if (!pixelGrid) {
+        return;
+    }
+
+    // A grid keeps its real storage format even when this smart instance does
+    // not carry the shared payload. That makes every reference to one content
+    // agree during save validation, while the bytes are still stored once.
+    entry.tileFormat = pixelGrid->format();
+    if (!includePixels) {
+        return;
+    }
+
+    const int contentTileBytes = static_cast<int>(aether::tileByteSize(pixelGrid->format()));
+    entry.tiles.reserve(static_cast<int>(pixelGrid->tiles().size()));
+    for (const auto& [key, tile] : pixelGrid->tiles()) {
+        ruwa::core::serialization::TileEntry tileEntry;
+        tileEntry.x = key.x;
+        tileEntry.y = key.y;
+        tileEntry.pixels
+            = QByteArray(reinterpret_cast<const char*>(tile.pixels()), contentTileBytes);
+        entry.tiles.append(std::move(tileEntry));
+    }
+}
+
 ruwa::core::serialization::LayerEntry buildLayerEntryFromSnapshot(
     const std::shared_ptr<ruwa::core::layers::LayerData>& layer, QSet<QUuid>& collectedContentIds)
 {
@@ -474,18 +502,7 @@ ruwa::core::serialization::LayerEntry buildLayerEntryFromSnapshot(
     ruwa::core::layers::LayerModel::writeSmartContentEntryFields(
         entry, layer.get(), nestedConverter);
 
-    if (const auto* pixelGrid = skipPixels ? nullptr : layer->pixelGrid(); pixelGrid) {
-        const int contentTileBytes = static_cast<int>(aether::tileByteSize(pixelGrid->format()));
-        entry.tiles.reserve(static_cast<int>(pixelGrid->tiles().size()));
-        for (const auto& [key, tile] : pixelGrid->tiles()) {
-            ruwa::core::serialization::TileEntry tileEntry;
-            tileEntry.x = key.x;
-            tileEntry.y = key.y;
-            tileEntry.pixels
-                = QByteArray(reinterpret_cast<const char*>(tile.pixels()), contentTileBytes);
-            entry.tiles.append(std::move(tileEntry));
-        }
-    }
+    writeLayerTileFields(entry, layer.get(), !skipPixels);
 
     if (layer->hasMask()) {
         entry.hasMask = true;
@@ -1901,6 +1918,17 @@ void WorkspaceTab::tryFinishAsyncStartup()
 
     m_asyncStartupCompleted = true;
     m_suppressModifiedChanges = false;
+    if (m_requiresFormatMigrationSave) {
+        // The in-memory document is now losslessly repaired, but the file on
+        // disk still has the ambiguous v27-v31 layout. Treat migration like a
+        // real document change so normal save/autosave rewrites it atomically as
+        // v32 instead of leaving the only repaired copy in memory.
+        markProjectModified();
+        ruwa::ui::widgets::MessagePopupManager::show(this,
+            tr("This project was recovered from an older mixed-format RWF file.\n"
+               "Save it to upgrade the file and preserve the recovered layer formats."),
+            { { tr("OK"), false, []() { } } }, 440);
+    }
     emit startupCompleted();
     updateInitialPresentationReadiness();
 }
@@ -3043,19 +3071,7 @@ ruwa::core::serialization::ProjectData WorkspaceTab::toProjectData() const
             ruwa::core::layers::LayerModel::writeSmartContentEntryFields(
                 entry, ld.get(), nestedConverter);
 
-            if (const auto* pixelGrid = skipPixels ? nullptr : ld->pixelGrid(); pixelGrid) {
-                const int contentTileBytes
-                    = static_cast<int>(aether::tileByteSize(pixelGrid->format()));
-                entry.tiles.reserve(static_cast<int>(pixelGrid->tiles().size()));
-                for (const auto& [key, tile] : pixelGrid->tiles()) {
-                    TileEntry t;
-                    t.x = key.x;
-                    t.y = key.y;
-                    t.pixels = QByteArray(
-                        reinterpret_cast<const char*>(tile.pixels()), contentTileBytes);
-                    entry.tiles.append(std::move(t));
-                }
-            }
+            writeLayerTileFields(entry, ld.get(), !skipPixels);
 
             if (ld->hasMask()) {
                 entry.hasMask = true;
@@ -3177,8 +3193,8 @@ bool WorkspaceTab::fromProjectDataStructure(const ruwa::core::serialization::Pro
     }
 
     auto* model = m_layersPanel->layerModel();
-    // Ensure the model stamps the file's format on freshly created content grids
-    // (entryToLayerData reads documentTileFormat) before the tree is built.
+    // Restore the document default before building the tree. Each serialized
+    // layer restores its own tileFormat; this default is for newly created grids.
     model->setDocumentTileFormat(data.contentTileFormat);
     m_layersPanel->setDisplayFrame(effectiveDisplayFrame());
     m_layersPanel->setThumbnailLoadingMode(true);
@@ -3672,6 +3688,9 @@ void WorkspaceTab::discardPendingWorkspaceStateSync()
 void WorkspaceTab::finalizeSuccessfulSave(const QString& filePath, quint64 savedRevision)
 {
     m_filePath = filePath;
+    // Every successful save uses CURRENT_VERSION, so the on-disk project no
+    // longer needs the v27-v31 mixed-format migration path.
+    m_requiresFormatMigrationSave = false;
     if (savedRevision == m_projectChangeRevision) {
         setModified(false);
     }
@@ -3719,6 +3738,7 @@ WorkspaceTab* WorkspaceTab::createFromLoadedData(ruwa::core::serialization::Proj
     tab->m_filePath = filePath;
     tab->m_tabTitle = projData.tabTitle;
     tab->m_tabIconAlias = projData.tabIconAlias;
+    tab->m_requiresFormatMigrationSave = projData.recoveredMixedTileFormats;
 
     // Defer layer population until after initialize()
     tab->m_pendingProjectData
@@ -3761,6 +3781,7 @@ void WorkspaceTab::acceptLoadedProjectData(
     m_settings.canvasSize = data.canvasSize;
     m_settings.canvasBoundsMode = data.canvasBoundsMode;
     m_settings.tileFormat = data.contentTileFormat;
+    m_requiresFormatMigrationSave = data.recoveredMixedTileFormats;
     m_waitingForAsyncProjectData = false;
     m_pendingProjectData
         = std::make_unique<ruwa::core::serialization::ProjectData>(std::move(data));

@@ -84,7 +84,13 @@ struct LayerEntry {
     bool backgroundTransparent = false;
     bool clippedToBelow = false;
     bool nameIsCustom = false;
-    QList<TileEntry> tiles; // Pixel layer tile payload (Raster/Smart, premultiplied RGBA8)
+    // Pixel storage belongs to the content grid, not to the document as a
+    // whole. Imported images deliberately remain RGBA8 inside 16F/32F
+    // documents, while newly painted grids use the document format. Serialized
+    // since v32; tagged v27-v31 files infer populated grids from their exact
+    // payload sizes, while empty grids inherit ProjectData::contentTileFormat.
+    aether::TilePixelFormat tileFormat = aether::TilePixelFormat::RGBA8;
+    QList<TileEntry> tiles; // Pixel layer tile payload (Raster/Smart, premultiplied RGBA)
 
     // ---- Smart-object content identity and source (file version >= 29) ----
     //
@@ -188,7 +194,7 @@ struct ProjectData {
         bool valid = false;
     };
 
-    static constexpr quint32 CURRENT_VERSION = 31; // Per-effect content-space flag (smart filters)
+    static constexpr quint32 CURRENT_VERSION = 32; // Per-content-grid pixel format
 
     quint32 version = CURRENT_VERSION;
 
@@ -203,12 +209,12 @@ struct ProjectData {
         = ruwa::core::canvas::CanvasBoundsMode::Bounded;
     ExportFrame exportFrame;
 
-    // Pixel storage format of CONTENT tile payloads in this file (v27+). Mask
-    // tiles are always RGBA8 and are unaffected. Files written before v27 had no
-    // tag and were always RGBA8; the reader defaults to RGBA8 for them. On load
-    // the serializer converts content tiles from this format to the live
-    // document format (aether::kDefaultTileFormat) so consumers never see a
-    // mismatched payload.
+    // Default pixel storage format for newly created content grids in this
+    // document (v27+). Since v32 each LayerEntry also records the actual format
+    // of its own grid, allowing deliberately cheap RGBA8 imports inside a
+    // 16F/32F document. Mask tiles are always RGBA8 and are unaffected. Empty
+    // grids from older files inherit this format; populated v27-v31 grids can
+    // be migrated from their unambiguous payload sizes.
     aether::TilePixelFormat contentTileFormat = aether::kDefaultTileFormat;
 
     // Recovery flag (not serialized). Set by the loader when a file's header
@@ -217,6 +223,13 @@ struct ProjectData {
     // have TILE_BYTE_SIZE-truncated content payloads, so the tile reader loads
     // them as a raw prefix of the live-format buffer instead of failing.
     bool legacyUntaggedContentTiles = false;
+
+    // Migration flag (not serialized). Set when a tagged v27-v31 file contains
+    // content grids whose exact payload sizes prove that their real formats
+    // differ from contentTileFormat. The workspace marks such a project
+    // modified so its next save upgrades the file to the self-describing v32
+    // layout.
+    bool recoveredMixedTileFormats = false;
 
     // Layers (root level, children are nested)
     QList<LayerEntry> rootLayers;

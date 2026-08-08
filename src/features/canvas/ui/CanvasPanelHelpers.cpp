@@ -87,8 +87,8 @@ PremultipliedColor sampleRasterLayerPixel(const ruwa::core::layers::LayerData* l
     if (!tile)
         return out;
 
-    // Format-aware read: content grids may be RGBA8/16F/32F under the
-    // per-document format model, and the accessor also resolves solid tiles.
+    // Format-aware read: each content grid may be RGBA8/16F/32F independently,
+    // and the accessor also resolves solid tiles.
     // The returned values are already normalized premultiplied floats.
     float rgba[4];
     aether::readTilePixelF(

@@ -15,6 +15,16 @@ a release.
 
 ## [Unreleased]
 
+### Fixed
+- Projects with 8-bit imported images inside 16-bit or 32-bit documents now
+  preserve each content grid's actual pixel format, so saving and reopening a
+  mixed-format composition no longer reports a corrupted first layer.
+- Affected RWF v27-v31 files are recovered by validating the exact payload size
+  of every tile in a grid, then upgraded to the self-describing v32 layout on
+  save. Ambiguous or internally conflicting payloads remain rejected.
+- Fill operations now interpret snapshots using the target grid's actual
+  format, including RGBA8 imported layers in higher-precision documents.
+
 ## [0.2.9-alpha] — 2026-08-03 — "Rearrangeable panels, richer tooltips, and cleaner gradients"
 
 This update makes the workspace yours to arrange: tools and layer actions

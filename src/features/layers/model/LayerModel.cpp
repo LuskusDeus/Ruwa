@@ -2330,6 +2330,9 @@ LayerEntry LayerModel::layerDataToEntry(const LayerData* data)
     entry.backgroundColorRgba = data->backgroundColor.rgba();
     entry.backgroundTransparent = data->backgroundTransparent;
     entry.clippedToBelow = data->clippedToBelow;
+    if (const auto* pixelGrid = data->pixelGrid()) {
+        entry.tileFormat = pixelGrid->format();
+    }
     const auto& transform = serializedTransformForLayer(data);
     entry.contentBounds = toSerializedRect(transform.contentBounds);
     entry.translation = toSerializedVec2(transform.translation);
@@ -2509,12 +2512,12 @@ std::shared_ptr<LayerData> LayerModel::entryToLayerData(const LayerEntry& entry,
     data->parent = parent;
     data->depth = parent ? parent->depth + 1 : 0;
 
-    // Create tile storage for paintable raster layers. Stamp the document format
-    // BEFORE the async content-tile restore fills tiles (documentTileFormat is set
-    // from the file's contentTileFormat prior to loadFromEntries).
+    // Create tile storage in the serialized grid format BEFORE the async
+    // content-tile restore fills it. Pre-v32 entries already inherit the
+    // document format in ProjectSerializer; v32 entries preserve mixed grids.
     if (data->isRaster()) {
         data->tileGrid = std::make_unique<aether::TileGrid>();
-        data->tileGrid->setFormat(documentTileFormat());
+        data->tileGrid->setFormat(entry.tileFormat);
     } else if (data->isIsolatedPixelLayer()) {
         // v29: entries sharing a contentId are instances of one smart object, so
         // the second and later ones adopt the content the first one built —
@@ -2537,7 +2540,7 @@ std::shared_ptr<LayerData> LayerModel::entryToLayerData(const LayerEntry& entry,
             data->smartContent = std::move(sharedContent);
         } else {
             data->setSmartGrid(std::make_unique<aether::TileGrid>());
-            data->smartGrid()->setFormat(documentTileFormat());
+            data->smartGrid()->setFormat(entry.tileFormat);
             SmartContent* content = data->ensureSmartContent();
             if (!entry.smartContentId.isNull() && !selfReferencing) {
                 content->contentId = entry.smartContentId;

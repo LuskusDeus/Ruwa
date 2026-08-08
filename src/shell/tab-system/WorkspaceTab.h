@@ -616,6 +616,7 @@ private:
     QList<std::shared_ptr<ruwa::core::layers::LayerData>> m_layerCutClipboard;
     bool m_suppressThemeRefreshLoadingShell = false;
     bool m_saveInProgress = false;
+    bool m_requiresFormatMigrationSave = false;
     quint64 m_projectChangeRevision = 0;
     bool m_suppressModifiedChanges
         = false; ///< True during initial setup (new/load) - don't mark modified

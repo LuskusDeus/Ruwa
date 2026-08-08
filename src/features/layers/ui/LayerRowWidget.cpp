@@ -390,8 +390,8 @@ PremultipliedColor sampleLayerPixel(const LayerData* data, int x, int y, const Q
             && localY < static_cast<int>(aether::TILE_SIZE)) {
             const aether::TileData* tile = grid->getTile(aether::TileKey { tileX, tileY });
             if (tile) {
-                // CONTENT grids follow the document format (RGBA8/16F/32F); read
-                // via the format-aware accessor and quantize to the 8-bit premult
+                // CONTENT grids carry their own format (RGBA8/16F/32F); read via
+                // the format-aware accessor and quantize to the 8-bit premult
                 // thumbnail. Solid tiles keep no pixel buffer, so the const
                 // accessor would read zeros — take their packed color directly.
                 float f[4];

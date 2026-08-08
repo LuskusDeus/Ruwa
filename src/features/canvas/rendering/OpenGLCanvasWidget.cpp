@@ -960,10 +960,10 @@ template <typename RawTileMap> RawTileMap snapshotRawTiles(const aether::TileGri
         return tiles;
     }
 
-    // Raw snapshots are sized for the grid's own pixel format (document content
-    // grids use the per-document format; layer-mask grids are RGBA8). tile->pixels()
-    // returns tileByteSize(format) bytes, so copying that many keeps wider
-    // formats intact instead of truncating to the 8-bit size.
+    // Raw snapshots are sized for the grid's own pixel format; imported content
+    // may remain RGBA8 inside a 16F/32F document, while masks are always RGBA8.
+    // tile->pixels() returns tileByteSize(format) bytes, so copying that many
+    // keeps every representation intact.
     const uint32_t tileBytes = aether::tileByteSize(grid.format());
 
     using SnapshotEntry = std::pair<aether::TileKey, const aether::TileData*>;
@@ -1874,6 +1874,7 @@ public:
         FillOrigin origin;
         FillColor color;
         FillCanvasBounds canvasBounds;
+        TilePixelFormat contentFormat = kDefaultTileFormat;
         std::shared_ptr<std::atomic<bool>> cancelState;
     };
 
@@ -1908,13 +1909,13 @@ public:
         // OpenGL context; the CPU fill remains the authoritative, stable path.
         FloodFillResult result = request->algorithm == OpenGLCanvasWidget::FillAlgorithm::Classic
             ? classicFloodFillRawTiles(request->layerSnapshotTiles, request->origin.x,
-                  request->origin.y, request->color.r, request->color.g, request->color.b,
-                  request->color.a, request->selectionMaskTiles, request->canvasBounds.width,
-                  request->canvasBounds.height)
+                   request->origin.y, request->color.r, request->color.g, request->color.b,
+                   request->color.a, request->selectionMaskTiles, request->canvasBounds.width,
+                   request->canvasBounds.height, request->contentFormat)
             : floodFillRawTiles(request->layerSnapshotTiles, request->origin.x, request->origin.y,
                   request->color.r, request->color.g, request->color.b, request->color.a,
                   request->selectionMaskTiles, request->canvasBounds.width,
-                  request->canvasBounds.height);
+                  request->canvasBounds.height, request->contentFormat);
 
         if (isCancelled(*request)) {
             return;
@@ -6318,7 +6319,7 @@ void OpenGLCanvasWidget::executeDeferredFillKickoff(uint64_t sequence)
         useFillWorker ? FillPreviewRawTileMap {} : std::move(layerSnapshotTiles),
         useFillWorker ? FillPreviewRawTileMap {} : std::move(selectionMaskTiles), {}, {}, {},
         std::move(kickoff.selectionRestore), kickoff.origin, kickoff.color, kickoff.canvasBounds,
-        kickoff.maskTarget, kickoff.forceFinalResultOnly, useFillWorker);
+        targetGrid->format(), kickoff.maskTarget, kickoff.forceFinalResultOnly, useFillWorker);
 
     if (!useFillWorker) {
         return;
@@ -6334,6 +6335,7 @@ void OpenGLCanvasWidget::executeDeferredFillKickoff(uint64_t sequence)
     request->origin = kickoff.origin;
     request->color = kickoff.color;
     request->canvasBounds = kickoff.canvasBounds;
+    request->contentFormat = targetGrid->format();
     request->cancelState = std::make_shared<std::atomic<bool>>(false);
 
     m_fillWorkerCancelState = request->cancelState;
@@ -6516,8 +6518,9 @@ void OpenGLCanvasWidget::startAsyncFillSession(const QUuid& layerId, FillAlgorit
     FillPreviewRawTileMap layerSnapshotTiles, FillPreviewRawTileMap selectionMaskTiles,
     FillPreviewRawTileMap initialPreviewTiles, FillPreviewRawTileMap initialMaskTiles,
     FloodFillResult initialPendingResult, SelectionRestoreContext selectionRestore,
-    FillOrigin origin, FillColor color, FillCanvasBounds canvasBounds, bool maskTarget,
-    bool forceFinalResultOnly, bool waitForExternalResultOnly)
+    FillOrigin origin, FillColor color, FillCanvasBounds canvasBounds,
+    aether::TilePixelFormat contentFormat, bool maskTarget, bool forceFinalResultOnly,
+    bool waitForExternalResultOnly)
 {
     const int originX = origin.x;
     const int originY = origin.y;
@@ -6533,13 +6536,8 @@ void OpenGLCanvasWidget::startAsyncFillSession(const QUuid& layerId, FillAlgorit
     const bool finalResultOnly = waitForExternalResultOnly || forceFinalResultOnly
         || algorithm == FillAlgorithm::Classic
         || (algorithm == FillAlgorithm::Smart && !selectionMaskTiles.empty());
-    // CONTENT tile format for this fill: document layers use the per-document
-    // format; layer masks are RGBA8. Threaded into the worker so raw snapshot
-    // tiles (sized by the grid format in snapshotRawTiles) are decoded correctly.
-    // All content grids share the document format (Slice 2).
-    const aether::TilePixelFormat contentFormat = maskTarget
-        ? aether::TilePixelFormat::RGBA8
-        : (m_layerModel ? m_layerModel->documentTileFormat() : aether::kDefaultTileFormat);
+    // The caller captures the target grid's actual format alongside the raw
+    // snapshot. It can differ from the document default for imported content.
     m_fillPreview.active = true;
     m_fillPreview.algorithm = algorithm;
     m_fillPreview.finalResultOnly = finalResultOnly;

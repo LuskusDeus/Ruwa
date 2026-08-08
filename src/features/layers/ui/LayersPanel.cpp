@@ -575,11 +575,11 @@ QImage tileToImage(const aether::TileData* tile)
         return image;
     }
 
-    // Format-aware read: content tiles may be RGBA8 / RGBA16F / RGBA32F under
-    // the per-document format model. Route every pixel through the normalized
-    // premultiplied-float accessor (which also resolves solid tiles — their
-    // const pixels() reads as transparent) and pack it into the 8-bit
-    // premultiplied QImage with correct R,G,B,A channel order. A raw memcpy here
+    // Format-aware read: each content grid may be RGBA8 / RGBA16F / RGBA32F.
+    // Route every pixel through the normalized premultiplied-float accessor,
+    // which also resolves solid tiles (their const pixels() reads as
+    // transparent), and pack it into the 8-bit premultiplied QImage with correct
+    // R,G,B,A channel order. A raw memcpy here
     // would (a) mis-size/truncate 16F/32F buffers and (b) swap R/B against
     // QImage's ARGB32 byte order. NOTE: this merge path is inherently 8-bit
     // (QImage is ARGB32), so higher-precision tiles are quantized to 8-bit on

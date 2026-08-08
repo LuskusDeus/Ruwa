@@ -129,9 +129,9 @@ private:
     QUuid m_layerId;
     bool m_maskTarget = false;
     /// Pixel format of the snapshotted tiles, captured from the target grid at
-    /// construction. Content grids follow the document format; mask targets are
-    /// RGBA8. RawTileMap/compressed buffers carry no tag, so every size/interpret
-    /// site queries this instead of the global knob.
+    /// construction. Imported content may differ from the document default;
+    /// mask targets are RGBA8. RawTileMap/compressed buffers carry no tag, so
+    /// every size/interpret site queries this instead of the global knob.
     TilePixelFormat m_contentFormat = kDefaultTileFormat;
     std::unordered_set<TileKey, TileKeyHash> m_createdTiles;
     std::unordered_set<TileKey, TileKeyHash> m_removedTiles;

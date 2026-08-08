@@ -110,6 +110,66 @@ QByteArray extractSection(const QByteArray& fileBytes, quint32 type)
     return {};
 }
 
+QByteArray buildV28LayerTree(const QList<QByteArray>& tilePayloads)
+{
+    return buildBytes([&](QDataStream& s) {
+        s << quint32(1); // root count
+        s << QUuid::createUuid();
+        s << QStringLiteral("Legacy layer");
+        s << quint8(0); // nameIsCustom
+        s << quint8(0); // raster
+        s << quint8(1); // visible
+        s << quint8(0); // locked
+        s << quint8(1); // expanded
+        s << qreal(1.0);
+        s << quint8(0); // blendMode
+        s << quint8(0); // groupCompositingMode
+        s << quint8(0); // displayColorIndex
+        s << quint32(0xFFFFFFFFu);
+        s << quint8(0); // backgroundTransparent
+        s << quint8(0); // clippedToBelow
+        for (int i = 0; i < 11; ++i) {
+            s << float(0.0f);
+        }
+        s << quint8(0); // hasFreeCorners
+        s << quint8(0); // hasDeformMesh
+        s << quint8(0); // hasTextPayload
+        s << quint32(tilePayloads.size());
+        for (qsizetype i = 0; i < tilePayloads.size(); ++i) {
+            s << qint32(i) << qint32(0) << tilePayloads.at(i);
+        }
+        s << quint8(0); // hasMask
+        s << quint32(0); // child count
+    });
+}
+
+QString writeV28Project(const QTemporaryDir& dir, const QString& fileName,
+    aether::TilePixelFormat documentFormat, const QList<QByteArray>& tilePayloads)
+{
+    ProjectData source;
+    source.projectName = QStringLiteral("legacy format source");
+    source.canvasSize = QSize(64, 64);
+    source.contentTileFormat = documentFormat;
+    const QString sourcePath = dir.filePath(fileName + QStringLiteral(".source"));
+    ProjectSerializer writer;
+    REQUIRE(writer.save(sourcePath, source));
+    QFile sourceFile(sourcePath);
+    REQUIRE(sourceFile.open(QIODevice::ReadOnly));
+    const QByteArray infoBlob = extractSection(sourceFile.readAll(), kSectionProjectInfo);
+    REQUIRE_FALSE(infoBlob.isEmpty());
+
+    const QByteArray layerBlob = buildV28LayerTree(tilePayloads);
+    const QByteArray file = buildBytes([&](QDataStream& s) {
+        writeHeader(s, 28);
+        s << quint32(kSectionProjectInfo) << quint64(infoBlob.size());
+        s.writeRawData(infoBlob.constData(), infoBlob.size());
+        s << quint32(kSectionLayerTree) << quint64(layerBlob.size());
+        s.writeRawData(layerBlob.constData(), layerBlob.size());
+        s << quint32(kSectionEnd) << quint64(0);
+    });
+    return writeTempFile(dir, fileName, file);
+}
+
 } // namespace
 
 TEST_CASE("Well-formed project round-trips through save/load", "[serializer]")
@@ -149,6 +209,201 @@ TEST_CASE("Well-formed project round-trips through save/load", "[serializer]")
     CHECK(loaded.rootLayers[0].tiles[0].pixels.size() == tile.pixels.size());
 }
 
+TEST_CASE("Mixed content-grid formats round-trip without converting imported pixels",
+    "[serializer][tile-format]")
+{
+    QTemporaryDir dir;
+    REQUIRE(dir.isValid());
+
+    ProjectData data;
+    data.projectName = QStringLiteral("mixed formats");
+    data.canvasSize = QSize(256, 256);
+    data.contentTileFormat = aether::TilePixelFormat::RGBA16F;
+
+    LayerEntry imported;
+    imported.id = QUuid::createUuid();
+    imported.name = QStringLiteral("Imported RGBA8");
+    imported.type = 0;
+    imported.tileFormat = aether::TilePixelFormat::RGBA8;
+    TileEntry importedTile;
+    importedTile.pixels = QByteArray(
+        static_cast<int>(aether::tileByteSize(imported.tileFormat)), '\x11');
+    imported.tiles.append(importedTile);
+
+    LayerEntry painted;
+    painted.id = QUuid::createUuid();
+    painted.name = QStringLiteral("Painted RGBA16F");
+    painted.type = 0;
+    painted.tileFormat = aether::TilePixelFormat::RGBA16F;
+    TileEntry paintedTile;
+    paintedTile.pixels
+        = QByteArray(static_cast<int>(aether::tileByteSize(painted.tileFormat)), '\x22');
+    painted.tiles.append(paintedTile);
+
+    LayerEntry emptyHighPrecision;
+    emptyHighPrecision.id = QUuid::createUuid();
+    emptyHighPrecision.name = QStringLiteral("Empty RGBA32F");
+    emptyHighPrecision.type = 0;
+    emptyHighPrecision.tileFormat = aether::TilePixelFormat::RGBA32F;
+
+    data.rootLayers = { imported, painted, emptyHighPrecision };
+
+    const QString path = dir.filePath("mixed-formats.rwf");
+    ProjectSerializer writer;
+    REQUIRE(writer.save(path, data));
+
+    ProjectSerializer reader;
+    ProjectData loaded;
+    REQUIRE(reader.load(path, loaded));
+    REQUIRE(loaded.rootLayers.size() == 3);
+    CHECK(loaded.contentTileFormat == aether::TilePixelFormat::RGBA16F);
+    CHECK(loaded.rootLayers[0].tileFormat == aether::TilePixelFormat::RGBA8);
+    CHECK(loaded.rootLayers[0].tiles[0].pixels == importedTile.pixels);
+    CHECK(loaded.rootLayers[1].tileFormat == aether::TilePixelFormat::RGBA16F);
+    CHECK(loaded.rootLayers[1].tiles[0].pixels == paintedTile.pixels);
+    CHECK(loaded.rootLayers[2].tileFormat == aether::TilePixelFormat::RGBA32F);
+    CHECK(loaded.rootLayers[2].tiles.isEmpty());
+}
+
+TEST_CASE("Save rejects a tile payload that disagrees with its grid format",
+    "[serializer][tile-format]")
+{
+    QTemporaryDir dir;
+    REQUIRE(dir.isValid());
+
+    ProjectData data;
+    data.projectName = QStringLiteral("invalid mixed formats");
+    data.canvasSize = QSize(64, 64);
+
+    LayerEntry layer;
+    layer.id = QUuid::createUuid();
+    layer.name = QStringLiteral("Broken RGBA16F");
+    layer.type = 0;
+    layer.tileFormat = aether::TilePixelFormat::RGBA16F;
+    TileEntry tile;
+    tile.pixels = QByteArray(
+        static_cast<int>(aether::tileByteSize(aether::TilePixelFormat::RGBA8)), '\0');
+    layer.tiles.append(tile);
+    data.rootLayers.append(layer);
+
+    ProjectSerializer writer;
+    REQUIRE_FALSE(writer.save(dir.filePath("invalid.rwf"), data));
+    CHECK(writer.lastError().contains(QStringLiteral("RGBA16F")));
+    CHECK_FALSE(QFileInfo::exists(dir.filePath("invalid.rwf")));
+}
+
+TEST_CASE("Save rejects an unknown content-grid format", "[serializer][tile-format]")
+{
+    QTemporaryDir dir;
+    REQUIRE(dir.isValid());
+
+    ProjectData data;
+    data.projectName = QStringLiteral("unknown format");
+    data.canvasSize = QSize(64, 64);
+
+    LayerEntry layer;
+    layer.id = QUuid::createUuid();
+    layer.type = 0;
+    layer.tileFormat = static_cast<aether::TilePixelFormat>(99);
+    data.rootLayers.append(layer);
+
+    ProjectSerializer writer;
+    REQUIRE_FALSE(writer.save(dir.filePath("unknown-format.rwf"), data));
+    CHECK(writer.lastError().contains(QStringLiteral("unsupported tile format"),
+        Qt::CaseInsensitive));
+}
+
+TEST_CASE("Empty grids from before v32 inherit the document format",
+    "[serializer][tile-format][compatibility]")
+{
+    QTemporaryDir dir;
+    REQUIRE(dir.isValid());
+
+    const QString path = writeV28Project(dir, QStringLiteral("empty-v28.rwf"),
+        aether::TilePixelFormat::RGBA16F, {});
+    ProjectSerializer reader;
+    ProjectData loaded;
+    REQUIRE(reader.load(path, loaded));
+    REQUIRE(loaded.rootLayers.size() == 1);
+    CHECK(loaded.rootLayers[0].tileFormat == aether::TilePixelFormat::RGBA16F);
+    CHECK_FALSE(loaded.recoveredMixedTileFormats);
+}
+
+TEST_CASE("Pre-v32 mixed-format grids are recovered from exact tile payload sizes",
+    "[serializer][tile-format][compatibility][recovery]")
+{
+    QTemporaryDir dir;
+    REQUIRE(dir.isValid());
+
+    constexpr aether::TilePixelFormat formats[] = { aether::TilePixelFormat::RGBA8,
+        aether::TilePixelFormat::RGBA16F, aether::TilePixelFormat::RGBA32F };
+    for (const aether::TilePixelFormat format : formats) {
+        const QString formatName = QString::fromLatin1(aether::tileFormatName(format));
+        const QByteArray pixels(static_cast<int>(aether::tileByteSize(format)),
+            static_cast<char>(0x31 + static_cast<int>(format)));
+        const QString path = writeV28Project(dir,
+            QStringLiteral("mixed-v28-%1.rwf").arg(formatName),
+            aether::TilePixelFormat::RGBA16F, { pixels });
+
+        ProjectSerializer reader;
+        ProjectData loaded;
+        REQUIRE(reader.load(path, loaded));
+        REQUIRE(loaded.rootLayers.size() == 1);
+        CHECK(loaded.contentTileFormat == aether::TilePixelFormat::RGBA16F);
+        CHECK(loaded.rootLayers[0].tileFormat == format);
+        REQUIRE(loaded.rootLayers[0].tiles.size() == 1);
+        CHECK(loaded.rootLayers[0].tiles[0].pixels == pixels);
+        CHECK(loaded.recoveredMixedTileFormats
+            == (format != aether::TilePixelFormat::RGBA16F));
+
+        // The normal writer upgrades the in-memory representation to v32.
+        const QString migratedPath
+            = dir.filePath(QStringLiteral("migrated-v32-%1.rwf").arg(formatName));
+        ProjectSerializer writer;
+        REQUIRE(writer.save(migratedPath, loaded));
+
+        ProjectData migrated;
+        REQUIRE(reader.load(migratedPath, migrated));
+        CHECK(migrated.version == ProjectData::CURRENT_VERSION);
+        CHECK(migrated.rootLayers[0].tileFormat == format);
+        CHECK_FALSE(migrated.recoveredMixedTileFormats);
+    }
+}
+
+TEST_CASE("Pre-v32 recovery rejects conflicting formats inside one grid",
+    "[serializer][tile-format][compatibility][recovery]")
+{
+    QTemporaryDir dir;
+    REQUIRE(dir.isValid());
+
+    const QByteArray rgba8(
+        static_cast<int>(aether::tileByteSize(aether::TilePixelFormat::RGBA8)), '\0');
+    const QByteArray rgba16f(
+        static_cast<int>(aether::tileByteSize(aether::TilePixelFormat::RGBA16F)), '\0');
+    const QString path = writeV28Project(dir, QStringLiteral("conflicting-v28.rwf"),
+        aether::TilePixelFormat::RGBA16F, { rgba8, rgba16f });
+
+    ProjectSerializer reader;
+    ProjectData loaded;
+    REQUIRE_FALSE(reader.load(path, loaded));
+    CHECK(reader.lastError().contains(QStringLiteral("conflicting legacy tile payload formats")));
+}
+
+TEST_CASE("Pre-v32 recovery rejects an unknown tile payload size",
+    "[serializer][tile-format][compatibility][recovery]")
+{
+    QTemporaryDir dir;
+    REQUIRE(dir.isValid());
+
+    const QString path = writeV28Project(dir, QStringLiteral("unknown-size-v28.rwf"),
+        aether::TilePixelFormat::RGBA16F, { QByteArray(123, '\0') });
+
+    ProjectSerializer reader;
+    ProjectData loaded;
+    REQUIRE_FALSE(reader.load(path, loaded));
+    CHECK(reader.lastError().contains(QStringLiteral("unsupported 123-byte legacy tile payload")));
+}
+
 TEST_CASE("Bad magic bytes are rejected", "[serializer]")
 {
     QTemporaryDir dir;
@@ -179,6 +434,23 @@ TEST_CASE("Truncated header (no version) is rejected", "[serializer]")
     ProjectSerializer reader;
     ProjectData loaded;
     REQUIRE_FALSE(reader.load(path, loaded));
+}
+
+TEST_CASE("A future project format is rejected explicitly", "[serializer][compatibility]")
+{
+    QTemporaryDir dir;
+    REQUIRE(dir.isValid());
+
+    const QByteArray buf = buildBytes([](QDataStream& s) {
+        writeHeader(s, ProjectData::CURRENT_VERSION + 1);
+    });
+    const QString path = writeTempFile(dir, "future-version.rwf", buf);
+
+    ProjectSerializer reader;
+    ProjectData loaded;
+    REQUIRE_FALSE(reader.load(path, loaded));
+    CHECK(reader.lastError().contains(QStringLiteral("Unsupported project format version")));
+    CHECK_FALSE(reader.validate(path));
 }
 
 TEST_CASE("Section size larger than the file is rejected without huge allocation", "[serializer]")
@@ -313,14 +585,15 @@ TEST_CASE("Shared smart content is written once and reloads as instances", "[ser
     TileEntry tile;
     tile.x = 0;
     tile.y = 0;
-    tile.pixels
-        = QByteArray(static_cast<int>(aether::tileByteSize(aether::TilePixelFormat::RGBA8)), '\0');
+    tile.pixels = QByteArray(
+        static_cast<int>(aether::tileByteSize(aether::TilePixelFormat::RGBA16F)), '\0');
 
     // Two layers showing one smart object: same contentId, same pixels.
     LayerEntry first;
     first.id = QUuid::createUuid();
     first.name = QStringLiteral("Object");
     first.type = 6; // smart
+    first.tileFormat = aether::TilePixelFormat::RGBA16F;
     first.smartContentId = contentId;
     first.smartSourceHash = QByteArray("hash-bytes");
     first.tiles.append(tile);
@@ -345,6 +618,8 @@ TEST_CASE("Shared smart content is written once and reloads as instances", "[ser
     CHECK(loaded.rootLayers[0].smartContentId == contentId);
     CHECK(loaded.rootLayers[1].smartContentId == contentId);
     CHECK(loaded.rootLayers[0].smartSourceHash == QByteArray("hash-bytes"));
+    CHECK(loaded.rootLayers[0].tileFormat == aether::TilePixelFormat::RGBA16F);
+    CHECK(loaded.rootLayers[1].tileFormat == aether::TilePixelFormat::RGBA16F);
 
     // ...but the pixels are stored exactly once.
     CHECK(loaded.rootLayers[0].tiles.size() == 1);
@@ -498,6 +773,7 @@ TEST_CASE("A smart object's nested document round-trips and is stored once", "[s
     nestedTop.id = QUuid::createUuid();
     nestedTop.name = QStringLiteral("Contents top");
     nestedTop.type = 0; // raster
+    nestedTop.tileFormat = aether::TilePixelFormat::RGBA16F;
 
     LayerEntry nestedBottom;
     nestedBottom.id = QUuid::createUuid();
@@ -559,6 +835,9 @@ TEST_CASE("A smart object's nested document round-trips and is stored once", "[s
     CHECK(loadedObject.smartDocumentLayers[0].id == nestedTop.id);
 
     const LayerEntry& loadedNestedBottom = loadedObject.smartDocumentLayers[1];
+    CHECK(loadedObject.smartDocumentLayers[0].tileFormat
+        == aether::TilePixelFormat::RGBA16F);
+    CHECK(loadedNestedBottom.tileFormat == aether::TilePixelFormat::RGBA8);
     REQUIRE(loadedNestedBottom.tiles.size() == 1);
     CHECK(loadedNestedBottom.tiles[0].pixels.size() == tileBytes);
     REQUIRE(loadedNestedBottom.hasMask);

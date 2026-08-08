@@ -42,8 +42,8 @@ enum class SectionType : quint32 {
  * Each section:
  *   [SectionType u32]  [DataSize u64]  [Data bytes...]
  *
- * Unknown sections are skipped by size, so older readers
- * can open files written by newer versions.
+ * Unknown sections are skipped by size. A newer format version is rejected
+ * explicitly when it changes the layout of a known section.
  */
 class ProjectSerializer {
 public:
@@ -89,7 +89,8 @@ private:
     bool readLayerTree(const QByteArray& blob, ProjectData& data) const;
     bool readLayerEffects(const QByteArray& blob, ProjectData& data) const;
     LayerEntry readLayerEntry(QDataStream& in, quint32 version, quint32 tileSize,
-        aether::TilePixelFormat contentFormat, bool legacyUntaggedTiles, int depth) const;
+        aether::TilePixelFormat contentFormat, bool legacyUntaggedTiles,
+        bool& recoveredMixedTileFormats, int depth) const;
     ruwa::core::effects::LayerEffectState readLayerEffectState(
         QDataStream& in, quint32 fileVersion) const;
 

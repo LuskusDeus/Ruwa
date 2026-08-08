@@ -184,14 +184,16 @@ inline void fillTileSolid(
 //
 //   Per-document tile format is now live: the real document format is chosen at
 //   New Project (8/16/32-bit), stored on the document (LayerModel /
-//   WorkspaceTab / the .rwf contentTileFormat tag) and stamped onto every
-//   content grid, so a document's tiles are self-describing via grid.format().
+//   WorkspaceTab / the .rwf contentTileFormat tag) and stamped onto newly
+//   created content grids. Every grid remains self-describing via grid.format().
 //
 //   This constant is therefore NO LONGER the application-wide format. It is only
 //   the FALLBACK default for grids created WITHOUT a document context
 //   (scratch/preview/warm-up grids that have no owning document to inherit
-//   from). RGBA8 is the correct shipping default here: cheapest, and byte-
-//   identical to the pre-refactor path (tileByteSize(RGBA8) == TILE_BYTE_SIZE).
+//   from). Imported image grids are another deliberate exception: they remain
+//   RGBA8 even in a 16F/32F document and serialize their own grid format. RGBA8
+//   is the correct shipping fallback here: cheapest, and byte-identical to the
+//   pre-refactor path (tileByteSize(RGBA8) == TILE_BYTE_SIZE).
 //
 //   To smoke-test the higher-precision paths, create a 16- or 32-bit project
 //   from New Project (do NOT flip this back to 16F — that only changes the

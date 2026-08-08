@@ -647,7 +647,8 @@ private:
         FillPreviewRawTileMap layerSnapshotTiles, FillPreviewRawTileMap selectionMaskTiles,
         FillPreviewRawTileMap initialPreviewTiles, FillPreviewRawTileMap initialMaskTiles,
         FloodFillResult initialPendingResult, SelectionRestoreContext selectionRestore,
-        FillOrigin origin, FillColor color, FillCanvasBounds canvasBounds, bool maskTarget = false,
+        FillOrigin origin, FillColor color, FillCanvasBounds canvasBounds,
+        aether::TilePixelFormat contentFormat, bool maskTarget = false,
         bool forceFinalResultOnly = false, bool waitForExternalResultOnly = false);
     void scheduleDeferredFillKickoff(const QUuid& layerId, FillAlgorithm algorithm,
         SelectionRestoreContext selectionRestore, FillOrigin origin, FillColor color,

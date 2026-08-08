@@ -12,6 +12,7 @@
 #include <QRegularExpression>
 #include <QDebug>
 #include <QIODevice>
+#include <QHash>
 #include "shared/tiles/TileTypes.h"
 #include "shared/tiles/TileFormat.h"
 #include "shared/tiles/TilePixelAccess.h"
@@ -71,6 +72,171 @@ constexpr int kMinTextStyleRunBytes = 16; // start(4)+length(4)+family len(4)+fo
 constexpr int kMinEffectsEntryBytes = 20; // layerId(16) + effect count(4)
 constexpr int kMinEffectStateBytes = 24; // instanceId(16)+typeId len(4)+version(4)
 
+bool isSupportedTileFormat(aether::TilePixelFormat format)
+{
+    switch (format) {
+    case aether::TilePixelFormat::RGBA8:
+    case aether::TilePixelFormat::RGBA16F:
+    case aether::TilePixelFormat::RGBA32F:
+        return true;
+    }
+    return false;
+}
+
+bool tileFormatForPayloadSize(int byteSize, aether::TilePixelFormat& format)
+{
+    constexpr aether::TilePixelFormat formats[] = { aether::TilePixelFormat::RGBA8,
+        aether::TilePixelFormat::RGBA16F, aether::TilePixelFormat::RGBA32F };
+    for (const aether::TilePixelFormat candidate : formats) {
+        if (byteSize == static_cast<int>(aether::tileByteSize(candidate))) {
+            format = candidate;
+            return true;
+        }
+    }
+    return false;
+}
+
+QString layerLabel(const LayerEntry& layer)
+{
+    if (!layer.name.isEmpty()) {
+        return QStringLiteral("\"") + layer.name + QStringLiteral("\"");
+    }
+    return layer.id.toString(QUuid::WithoutBraces);
+}
+
+QString validateLayerForSave(const LayerEntry& layer,
+    QHash<QUuid, aether::TilePixelFormat>& smartContentFormats, int depth)
+{
+    if (!isSupportedTileFormat(layer.tileFormat)) {
+        return QStringLiteral("Layer %1 has unsupported tile format %2")
+            .arg(layerLabel(layer))
+            .arg(static_cast<int>(layer.tileFormat));
+    }
+
+    if (!layer.smartContentId.isNull()) {
+        const auto existing = smartContentFormats.constFind(layer.smartContentId);
+        if (existing != smartContentFormats.cend() && *existing != layer.tileFormat) {
+            return QStringLiteral("Smart content %1 is referenced with conflicting tile formats")
+                .arg(layer.smartContentId.toString(QUuid::WithoutBraces));
+        }
+        smartContentFormats.insert(layer.smartContentId, layer.tileFormat);
+    }
+
+    const int expectedTileBytes = static_cast<int>(aether::tileByteSize(layer.tileFormat));
+    for (const TileEntry& tile : layer.tiles) {
+        if (tile.pixels.size() != expectedTileBytes) {
+            return QStringLiteral("Layer %1 has a %2-byte tile, but %3 requires %4 bytes")
+                .arg(layerLabel(layer))
+                .arg(tile.pixels.size())
+                .arg(QString::fromLatin1(aether::tileFormatName(layer.tileFormat)))
+                .arg(expectedTileBytes);
+        }
+    }
+
+    if (layer.hasMask) {
+        for (const TileEntry& tile : layer.maskTiles) {
+            if (!tile.solid && tile.pixels.size() != static_cast<int>(aether::TILE_BYTE_SIZE)) {
+                return QStringLiteral("Layer %1 has an invalid mask tile payload")
+                    .arg(layerLabel(layer));
+            }
+        }
+    }
+
+    if (layer.hasSmartDocument
+        && (layer.smartDocumentFormat < static_cast<int>(aether::TilePixelFormat::RGBA8)
+            || layer.smartDocumentFormat > static_cast<int>(aether::TilePixelFormat::RGBA32F))) {
+        return QStringLiteral("Layer %1 has unsupported smart-document format %2")
+            .arg(layerLabel(layer))
+            .arg(layer.smartDocumentFormat);
+    }
+
+    for (const LayerEntry& nested : layer.smartDocumentLayers) {
+        if (const QString error
+            = validateLayerForSave(nested, smartContentFormats, depth + 1);
+            !error.isEmpty()) {
+            return error;
+        }
+    }
+    for (const LayerEntry& child : layer.children) {
+        if (const QString error = validateLayerForSave(child, smartContentFormats, depth + 1);
+            !error.isEmpty()) {
+            return error;
+        }
+    }
+    return {};
+}
+
+QString validateProjectForSave(const ProjectData& data)
+{
+    if (!isSupportedTileFormat(data.contentTileFormat)) {
+        return QStringLiteral("Unsupported document tile format %1")
+            .arg(static_cast<int>(data.contentTileFormat));
+    }
+
+    QHash<QUuid, aether::TilePixelFormat> smartContentFormats;
+    for (const LayerEntry& layer : data.rootLayers) {
+        if (const QString error = validateLayerForSave(layer, smartContentFormats, 0);
+            !error.isEmpty()) {
+            return error;
+        }
+    }
+    return {};
+}
+
+QString collectLegacySmartContentFormats(const QList<LayerEntry>& layers,
+    QHash<QUuid, aether::TilePixelFormat>& formats)
+{
+    for (const LayerEntry& layer : layers) {
+        if (!layer.smartContentId.isNull() && !layer.tiles.isEmpty()) {
+            const auto existing = formats.constFind(layer.smartContentId);
+            if (existing != formats.cend() && *existing != layer.tileFormat) {
+                return QStringLiteral(
+                    "Smart content %1 has conflicting recovered tile formats (%2 and %3)")
+                    .arg(layer.smartContentId.toString(QUuid::WithoutBraces))
+                    .arg(QString::fromLatin1(aether::tileFormatName(*existing)))
+                    .arg(QString::fromLatin1(aether::tileFormatName(layer.tileFormat)));
+            }
+            formats.insert(layer.smartContentId, layer.tileFormat);
+        }
+        if (const QString error
+            = collectLegacySmartContentFormats(layer.smartDocumentLayers, formats);
+            !error.isEmpty()) {
+            return error;
+        }
+        if (const QString error = collectLegacySmartContentFormats(layer.children, formats);
+            !error.isEmpty()) {
+            return error;
+        }
+    }
+    return {};
+}
+
+void applyLegacySmartContentFormats(
+    QList<LayerEntry>& layers, const QHash<QUuid, aether::TilePixelFormat>& formats)
+{
+    for (LayerEntry& layer : layers) {
+        if (!layer.smartContentId.isNull()) {
+            const auto format = formats.constFind(layer.smartContentId);
+            if (format != formats.cend()) {
+                layer.tileFormat = *format;
+            }
+        }
+        applyLegacySmartContentFormats(layer.smartDocumentLayers, formats);
+        applyLegacySmartContentFormats(layer.children, formats);
+    }
+}
+
+QString normalizeLegacySmartContentFormats(QList<LayerEntry>& layers)
+{
+    QHash<QUuid, aether::TilePixelFormat> formats;
+    if (const QString error = collectLegacySmartContentFormats(layers, formats);
+        !error.isEmpty()) {
+        return error;
+    }
+    applyLegacySmartContentFormats(layers, formats);
+    return {};
+}
+
 // True when `count` elements, each at least `minElementBytes` on disk, could
 // actually be present in the bytes still available on `in`. A count that fails
 // this is structurally impossible for the remaining data and signals a corrupt
@@ -90,10 +256,9 @@ bool countFitsInStream(QDataStream& in, quint32 count, int minElementBytes)
 // each pixel through the normalized-float accessor. A no-op (just returns the
 // source) when the formats already match.
 //
-// Under the per-document format model a loaded document simply ADOPTS its
-// saved content format (document format := file contentTileFormat), so normal
-// loads store tiles size-exact with no conversion. This helper is retained for
-// a future explicit "change document bit depth" command, hence [[maybe_unused]].
+// Normal loads preserve every content grid's saved format and therefore need
+// no conversion. This helper is retained for a future explicit "change content
+// bit depth" command, hence [[maybe_unused]].
 [[maybe_unused]] QByteArray convertTileBytes(
     const QByteArray& src, aether::TilePixelFormat from, aether::TilePixelFormat to)
 {
@@ -164,8 +329,14 @@ QString resolveSmartSourcePath(
 
 bool ProjectSerializer::save(const QString& filePath, const ProjectData& data)
 {
+    m_lastError.clear();
     if (!data.isValid()) {
         m_lastError = QStringLiteral("Invalid project data");
+        return false;
+    }
+    if (const QString validationError = validateProjectForSave(data);
+        !validationError.isEmpty()) {
+        m_lastError = validationError;
         return false;
     }
 
@@ -223,6 +394,7 @@ bool ProjectSerializer::save(const QString& filePath, const ProjectData& data)
 
 bool ProjectSerializer::load(const QString& filePath, ProjectData& data)
 {
+    m_lastError.clear();
     QFile file(filePath);
     if (!file.open(QIODevice::ReadOnly)) {
         m_lastError = QStringLiteral("Cannot open file: %1").arg(file.errorString());
@@ -341,7 +513,8 @@ bool ProjectSerializer::validate(const QString& filePath) const
         return false;
 
     in >> version;
-    return in.status() == QDataStream::Ok && version >= 1;
+    return in.status() == QDataStream::Ok && version >= 1
+        && version <= ProjectData::CURRENT_VERSION;
 }
 
 QString ProjectSerializer::defaultFileName(const QString& projectName)
@@ -523,6 +696,11 @@ void ProjectSerializer::writeLayerEntry(
     out << static_cast<quint8>(layer.smartSourceKind);
     out << layer.smartSourceHash;
 
+    // v32: every populated or empty content grid preserves its own format.
+    // Imported images deliberately remain RGBA8 inside higher-precision
+    // documents, so the document default is not sufficient to describe them.
+    out << static_cast<quint8>(layer.tileFormat);
+
     // A text layer stores its glyphs, not pixels; an instance stores nothing,
     // because the entry that first carried this content already wrote the
     // pixels. A content only counts as written once pixels actually went out,
@@ -661,6 +839,7 @@ bool ProjectSerializer::readProjectInfo(const QByteArray& blob, ProjectData& dat
     // overrides this from the stream below.
     data.contentTileFormat = aether::TilePixelFormat::RGBA8;
     data.legacyUntaggedContentTiles = false;
+    data.recoveredMixedTileFormats = false;
 
     in >> data.projectName;
     in >> data.tabTitle;
@@ -789,6 +968,12 @@ bool ProjectSerializer::readProjectInfo(const QByteArray& blob, ProjectData& dat
         return false;
     }
 
+    if (!isSupportedTileFormat(data.contentTileFormat)) {
+        m_lastError = QStringLiteral("Unsupported document tile format %1")
+                          .arg(static_cast<int>(data.contentTileFormat));
+        return false;
+    }
+
     if (w == 0 || h == 0 || w > static_cast<quint32>(kMaxCanvasDimension)
         || h > static_cast<quint32>(kMaxCanvasDimension)) {
         m_lastError = QStringLiteral("Invalid canvas size %1x%2 in ProjectInfo — file corrupt")
@@ -860,10 +1045,21 @@ bool ProjectSerializer::readLayerTree(const QByteArray& blob, ProjectData& data)
     const quint32 tileSize = static_cast<quint32>(aether::TILE_SIZE);
     for (quint32 i = 0; i < count; ++i) {
         data.rootLayers.append(readLayerEntry(in, data.version, tileSize, data.contentTileFormat,
-            data.legacyUntaggedContentTiles, 0));
+            data.legacyUntaggedContentTiles, data.recoveredMixedTileFormats, 0));
 
         if (in.status() != QDataStream::Ok) {
-            m_lastError = QStringLiteral("Corrupted layer entry at index %1").arg(i);
+            const QString detail = m_lastError;
+            m_lastError = detail.isEmpty()
+                ? QStringLiteral("Corrupted layer entry at index %1").arg(i)
+                : QStringLiteral("Corrupted layer entry at index %1: %2").arg(i).arg(detail);
+            return false;
+        }
+    }
+
+    if (data.version >= 29 && data.version < 32 && !data.legacyUntaggedContentTiles) {
+        if (const QString error = normalizeLegacySmartContentFormats(data.rootLayers);
+            !error.isEmpty()) {
+            m_lastError = error;
             return false;
         }
     }
@@ -948,7 +1144,8 @@ ruwa::core::effects::LayerEffectState ProjectSerializer::readLayerEffectState(
 }
 
 LayerEntry ProjectSerializer::readLayerEntry(QDataStream& in, quint32 version, quint32 tileSize,
-    aether::TilePixelFormat contentFormat, bool legacyUntaggedTiles, int depth) const
+    aether::TilePixelFormat contentFormat, bool legacyUntaggedTiles,
+    bool& recoveredMixedTileFormats, int depth) const
 {
     LayerEntry layer;
 
@@ -1107,7 +1304,28 @@ LayerEntry ProjectSerializer::readLayerEntry(QDataStream& in, quint32 version, q
         layer.smartSourcePath
             = resolveSmartSourcePath(storedRelativePath, storedAbsolutePath, m_projectDirectory);
     }
+    layer.tileFormat = contentFormat;
+    if (version >= 32) {
+        quint8 tileFormat = 0;
+        in >> tileFormat;
+        if (in.status() != QDataStream::Ok) {
+            m_lastError = QStringLiteral("Cannot read tile format for layer %1")
+                              .arg(layerLabel(layer));
+            return layer;
+        }
+        if (tileFormat > static_cast<quint8>(aether::TilePixelFormat::RGBA32F)) {
+            m_lastError = QStringLiteral("Unsupported tile format %1 in layer %2")
+                              .arg(static_cast<int>(tileFormat))
+                              .arg(layerLabel(layer));
+            in.setStatus(QDataStream::ReadCorruptData);
+            return layer;
+        }
+        layer.tileFormat = static_cast<aether::TilePixelFormat>(tileFormat);
+    }
     if (version >= 2) {
+        const bool inferLegacyGridFormat
+            = version >= 27 && version < 32 && !legacyUntaggedTiles;
+        bool legacyGridFormatInferred = false;
         in >> tileCount;
         if (!countFitsInStream(in, tileCount, kMinTileEntryBytes)) {
             m_lastError = QStringLiteral("Corrupted layer tile count");
@@ -1149,19 +1367,56 @@ LayerEntry ProjectSerializer::readLayerEntry(QDataStream& in, quint32 version, q
                 continue;
             }
 
-            // Content tiles are stored in the file's recorded content format.
-            const quint32 expectedBytes = aether::tileByteSize(contentFormat);
+            if (inferLegacyGridFormat) {
+                aether::TilePixelFormat payloadFormat = aether::TilePixelFormat::RGBA8;
+                if (!tileFormatForPayloadSize(tile.pixels.size(), payloadFormat)) {
+                    m_lastError = QStringLiteral(
+                        "Layer %1 has an unsupported %2-byte legacy tile payload")
+                                      .arg(layerLabel(layer))
+                                      .arg(tile.pixels.size());
+                    in.setStatus(QDataStream::ReadCorruptData);
+                    return layer;
+                }
+                if (!legacyGridFormatInferred) {
+                    layer.tileFormat = payloadFormat;
+                    legacyGridFormatInferred = true;
+                    if (payloadFormat != contentFormat) {
+                        recoveredMixedTileFormats = true;
+                    }
+                } else if (payloadFormat != layer.tileFormat) {
+                    m_lastError = QStringLiteral(
+                        "Layer %1 contains conflicting legacy tile payload formats (%2 and %3)")
+                                      .arg(layerLabel(layer))
+                                      .arg(QString::fromLatin1(
+                                          aether::tileFormatName(layer.tileFormat)))
+                                      .arg(QString::fromLatin1(
+                                          aether::tileFormatName(payloadFormat)));
+                    in.setStatus(QDataStream::ReadCorruptData);
+                    return layer;
+                }
+
+                layer.tiles.append(std::move(tile));
+                continue;
+            }
+
+            // Content tiles are stored in this grid's explicitly recorded
+            // format (v32), or the document format inherited by files before
+            // per-document precision was introduced.
+            const quint32 expectedBytes = aether::tileByteSize(layer.tileFormat);
             if (tile.pixels.size() != static_cast<int>(expectedBytes)) {
-                m_lastError = QStringLiteral("Corrupted layer tile payload");
+                m_lastError
+                    = QStringLiteral("Layer %1 has a %2-byte tile, but %3 requires %4 bytes")
+                          .arg(layerLabel(layer))
+                          .arg(tile.pixels.size())
+                          .arg(QString::fromLatin1(aether::tileFormatName(layer.tileFormat)))
+                          .arg(expectedBytes);
                 in.setStatus(QDataStream::ReadCorruptData);
                 return layer;
             }
-            // Per-document format: the loaded document adopts this file's content
-            // format (WorkspaceTab stamps documentTileFormat = data.contentTileFormat
-            // and its restore memcpy sizes by grid.format()), so the payload is kept
-            // size-exact in contentFormat with NO conversion. Converting to a global
-            // knob here would mis-size the buffer against the grid on any doc whose
-            // depth differs from the knob.
+            // Keep the payload size-exact with no conversion. LayerModel creates
+            // the destination grid in layer.tileFormat before the deferred restore
+            // copies these bytes, so imported RGBA8 and painted 16F/32F content can
+            // coexist without either one changing representation.
 
             layer.tiles.append(std::move(tile));
         }
@@ -1205,7 +1460,8 @@ LayerEntry ProjectSerializer::readLayerEntry(QDataStream& in, quint32 version, q
                 // the one depth budget has to bound every level of nesting
                 // together — smart objects inside smart objects included.
                 layer.smartDocumentLayers.append(readLayerEntry(
-                    in, version, tileSize, contentFormat, legacyUntaggedTiles, depth + 1));
+                    in, version, tileSize, contentFormat, legacyUntaggedTiles,
+                    recoveredMixedTileFormats, depth + 1));
                 if (in.status() != QDataStream::Ok) {
                     return layer;
                 }
@@ -1316,7 +1572,8 @@ LayerEntry ProjectSerializer::readLayerEntry(QDataStream& in, quint32 version, q
     layer.children.reserve(static_cast<int>(childCount));
     for (quint32 i = 0; i < childCount; ++i) {
         layer.children.append(
-            readLayerEntry(in, version, tileSize, contentFormat, legacyUntaggedTiles, depth + 1));
+            readLayerEntry(in, version, tileSize, contentFormat, legacyUntaggedTiles,
+                recoveredMixedTileFormats, depth + 1));
         // Bail on the first corrupt child instead of spinning the rest of the
         // (bounded) count doing nothing — the stream can no longer be trusted.
         if (in.status() != QDataStream::Ok) {
@@ -1351,7 +1608,12 @@ bool ProjectSerializer::readHeader(QDataStream& in, quint32& version) const
         return false;
     }
 
-    if (version > ProjectData::CURRENT_VERSION) { }
+    if (version < 1 || version > ProjectData::CURRENT_VERSION) {
+        m_lastError = QStringLiteral("Unsupported project format version %1 (supported: 1-%2)")
+                          .arg(version)
+                          .arg(ProjectData::CURRENT_VERSION);
+        return false;
+    }
 
     return true;
 }
