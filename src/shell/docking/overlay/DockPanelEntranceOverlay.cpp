@@ -4,7 +4,10 @@
 
 #include "shell/docking/core/DockContainerWidget.h"
 #include "shell/docking/core/DockFloatingContainer.h"
+#include "shell/docking/layout/DockLayoutRoot.h"
 #include "shell/docking/layout/DockSplitHandle.h"
+#include "shell/docking/widgets/DockGroupHeader.h"
+#include "shell/docking/widgets/DockGroupHost.h"
 #include "shell/docking/widgets/DockPanel.h"
 
 #include <QEvent>
@@ -47,7 +50,7 @@ DockPanelEntranceOverlay::DockPanelEntranceOverlay(
             continue;
         }
 
-        const QRect panelRect(panel->mapTo(m_container, QPoint(0, 0)), panel->size());
+        const QRect panelRect = cellRectFor(panel);
         if (!panelRect.isValid() || panelRect.intersected(rect()).isEmpty()) {
             continue;
         }
@@ -255,6 +258,14 @@ QPixmap DockPanelEntranceOverlay::captureSideSnapshot(
     };
 
     for (const QPointer<DockPanel>& panel : panels) {
+        // The header strip of a grouped member is not a DockPanel, so nothing
+        // else here would composite it: the group would slide in headless and
+        // the strip would snap into place at the end of the animation. Drawn
+        // before the member — they only meet along one seam, and the member's
+        // border overlay owns it.
+        if (DockGroupHost* host = groupHostFor(panel.data())) {
+            drawWidget(host->header());
+        }
         drawWidget(panel.data());
     }
     const QList<DockSplitHandle*> handles = m_container->findChildren<DockSplitHandle*>();
@@ -263,6 +274,33 @@ QPixmap DockPanelEntranceOverlay::captureSideSnapshot(
     }
 
     return snapshot;
+}
+
+DockGroupHost* DockPanelEntranceOverlay::groupHostFor(DockPanel* panel) const
+{
+    if (!panel || !m_container) {
+        return nullptr;
+    }
+    DockLayoutRoot* root = m_container->layoutRoot();
+    return root ? root->groupHostForPanel(panel) : nullptr;
+}
+
+QRect DockPanelEntranceOverlay::cellRectFor(DockPanel* panel) const
+{
+    if (!panel || !m_container) {
+        return {};
+    }
+
+    // A grouped member does not fill its cell: the header strip sits above it.
+    // Travelling on the member's rect alone would leave the strip outside the
+    // corridor, where the mask clips it away entirely.
+    if (DockGroupHost* host = groupHostFor(panel)) {
+        // The frame is a child of the container, so its geometry already is in
+        // container coordinates.
+        return host->geometry();
+    }
+
+    return QRect(panel->mapTo(m_container, QPoint(0, 0)), panel->size());
 }
 
 DockPanelEntranceOverlay::EntranceEdge DockPanelEntranceOverlay::edgeFor(

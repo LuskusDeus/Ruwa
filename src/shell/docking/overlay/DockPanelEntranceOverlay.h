@@ -16,6 +16,7 @@ class QVariantAnimation;
 namespace ruwa::ui::docking {
 
 class DockContainerWidget;
+class DockGroupHost;
 class DockPanel;
 
 /**
@@ -58,6 +59,11 @@ private:
 
     QPixmap captureSideSnapshot(
         const QRect& targetRect, const QList<QPointer<DockPanel>>& panels) const;
+    /// The frame @p panel is a tab of, or null when it stands alone.
+    DockGroupHost* groupHostFor(DockPanel* panel) const;
+    /// The panel's whole layout cell in container coordinates — for a grouped
+    /// member that is the frame, header strip included, not the member itself.
+    QRect cellRectFor(DockPanel* panel) const;
     EntranceEdge edgeFor(const QRect& panelRect, const QRect& stationaryRect) const;
     QPoint startOffsetFor(EntranceEdge edge, const QRect& targetRect) const;
 
