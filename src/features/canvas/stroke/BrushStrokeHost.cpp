@@ -27,6 +27,7 @@ constexpr size_t kRealtimePreviewSamplingMinDabs = 48;
 constexpr size_t kRealtimePreviewSamplingMaxDabs = 768;
 constexpr size_t kStrokeInputBatchMaxSamples = 24;
 constexpr qint64 kStrokeInputBatchBudgetMs = 4;
+constexpr size_t kStrokeInputCompactionCadenceSamples = 8;
 // Ordering-only nudge for recovered samples that share a timestamp. This keeps
 // their geometry without pretending each point consumed a full input-frame.
 constexpr float kStrokeInputMonotonicNudgeSec = 0.0005f;
@@ -315,6 +316,7 @@ void BrushStrokeHost::beginStroke(
     m_strokeInputDevice = inputDevice;
     m_strokeInputTimer.stop();
     m_processingQueuedStrokeInput = false;
+    m_queuedSamplesSinceCompaction = 0;
     m_queuedStrokeSamples.clear();
     clearStrokeRuntimeState();
 
@@ -642,6 +644,21 @@ void BrushStrokeHost::addStrokeSampleAtElapsed(float worldX, float worldY, float
 
     m_queuedStrokeSamples.push_back(
         { worldX, worldY, pressure, strokeElapsedSeconds, inputDevice });
+    if (!processImmediately) {
+        ++m_queuedSamplesSinceCompaction;
+        const float queuedAge = stroke_input_queue::queuedAgeSeconds(m_queuedStrokeSamples);
+        // Native WinTab is deliberately lossless while the renderer keeps up.
+        // Once its deferred queue is more than one frame old, compact only
+        // samples that the existing distance/pressure/time interpolation can
+        // reconstruct within a sub-pixel error. The tolerance grows modestly
+        // with queue age, preventing oversampled paths from accumulating latency
+        // without turning this into a fixed-Hz throttle or changing healthy devices.
+        if (queuedAge >= stroke_input_queue::kReductionActivationAgeSeconds
+            && m_queuedSamplesSinceCompaction >= kStrokeInputCompactionCadenceSamples) {
+            stroke_input_queue::compact(m_queuedStrokeSamples, viewportZoom(), queuedAge);
+            m_queuedSamplesSinceCompaction = 0;
+        }
+    }
     if (processImmediately) {
         processQueuedStrokeInput();
     } else {
@@ -688,7 +705,7 @@ void BrushStrokeHost::processQueuedStrokeInputImpl(bool drainAll)
     }
 
     while (m_isDrawing && !m_queuedStrokeSamples.empty()) {
-        const QueuedStrokeSample sample = m_queuedStrokeSamples.front();
+        const StrokeInputSample sample = m_queuedStrokeSamples.front();
         m_queuedStrokeSamples.pop_front();
         m_strokeInputDevice = sample.inputDevice;
         continueStrokeImmediate(
@@ -712,6 +729,8 @@ void BrushStrokeHost::processQueuedStrokeInputImpl(bool drainAll)
     }
     if (!drainAll && m_isDrawing && !m_queuedStrokeSamples.empty()) {
         scheduleQueuedStrokeInput();
+    } else if (m_queuedStrokeSamples.empty()) {
+        m_queuedSamplesSinceCompaction = 0;
     }
     // If endStroke was requested while a backlog existed, run the deferred
     // completion once the queue has drained. This is the async tail of the
@@ -1346,6 +1365,7 @@ void BrushStrokeHost::completeEndStrokeAfterQueueDrain()
     m_strokeInputTimer.stop();
     m_queuedStrokeSamples.clear();
     m_processingQueuedStrokeInput = false;
+    m_queuedSamplesSinceCompaction = 0;
     m_stabilizerCatchupTimer.stop();
     m_isDrawing = false;
     ruwa::core::brushes::clearStrokeStabilizer(m_stabilizationState);

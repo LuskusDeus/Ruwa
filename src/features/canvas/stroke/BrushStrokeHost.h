@@ -6,6 +6,7 @@
 #include "features/brush/engine/StrokeStabilizer.h"
 #include "features/brush/engine/BrushStrokeReplay.h"
 #include "features/canvas/stroke/StrokeFinalizationController.h"
+#include "features/canvas/stroke/StrokeInputQueue.h"
 #include "shared/tiles/TileBrush.h"
 #include "shared/types/Types.h"
 #include "shared/undo/SelectionState.h"
@@ -42,7 +43,7 @@ class BrushStrokeHost final : public QObject {
     Q_OBJECT
 
 public:
-    enum class StrokeInputDevice { Stylus, Mouse };
+    using StrokeInputDevice = aether::StrokeInputDevice;
 
     struct SyncCommit {
         StrokeSnapshot snapshot;
@@ -128,14 +129,6 @@ private slots:
     void processStabilizerCatchup();
 
 private:
-    struct QueuedStrokeSample {
-        float worldX = 0.0f;
-        float worldY = 0.0f;
-        float pressure = 1.0f;
-        float strokeElapsedSeconds = 0.0f;
-        StrokeInputDevice inputDevice = StrokeInputDevice::Stylus;
-    };
-
     struct LiveStrokePoint {
         Vector2 point {};
         float pressure = 1.0f;
@@ -275,9 +268,10 @@ private:
     float m_inputPressureSmoothY = 0.0f;
     float m_inputPressureSmoothElapsedSeconds = 0.0f;
 
-    std::deque<QueuedStrokeSample> m_queuedStrokeSamples;
+    std::deque<StrokeInputSample> m_queuedStrokeSamples;
     QTimer m_strokeInputTimer;
     bool m_processingQueuedStrokeInput = false;
+    std::size_t m_queuedSamplesSinceCompaction = 0;
     std::vector<LiveStrokePoint> m_liveStrokePoints;
     // The vertex emitted just before the current anchor (m_lastStroke*). Gives
     // the incoming tangent for the Catmull-Rom curve emission so the silhouette
