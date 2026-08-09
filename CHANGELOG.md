@@ -15,7 +15,7 @@ a release.
 
 ## [Unreleased]
 
-## [0.3.0-alpha] — 2026-08-09 — "Editable smart objects, tabbed panels, and one quality at every zoom"
+## [0.3.0-alpha] — 2026-08-10 — "Editable smart objects, tabbed panels, and one quality at every zoom"
 
 A smart object is now a document you can open: double-click it and its layers,
 groups, masks, and effects appear in their own tab, committed back to the parent

@@ -59,7 +59,7 @@ QVector<ReleaseNoteEntry> releaseNoteEntries()
     return {
         { QCoreApplication::translate("ReleaseNotesOverlay",
               "Editable smart objects, tabbed panels, and one quality at every zoom"),
-            QStringLiteral("0.3.0-alpha"), QStringLiteral("09.08.2026"),
+            QStringLiteral("0.3.0-alpha"), QStringLiteral("10.08.2026"),
             QCoreApplication::translate("ReleaseNotesOverlay",
                 "<p><b>A smart object is now a document you can open and edit in its own tab, "
                 "duplicates of it are instances that share one set of contents, panels group into "
