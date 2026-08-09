@@ -112,9 +112,16 @@ DockGroupHost::~DockGroupHost()
     // Members are owned by the docking system, not by this frame: hand every
     // one of them back to the container so destroying a host never destroys a
     // panel. DockLayoutRoot normally releases them first; this is the net.
+    //
+    // Only panels this frame STILL holds. A member listed here may long since
+    // have been adopted by another host — that is what a whole-tree rebuild
+    // (restoring a layout over a live one) does: the new frames take the panels
+    // first, and only then is this one swept as stale. Reparenting on the
+    // membership list alone would rip those panels out of the frame that now
+    // owns them and leave the group looking empty until a tab is clicked.
     QWidget* container = parentWidget();
     for (const auto& p : m_hosted) {
-        if (!p.isNull() && p->parentWidget() != container) {
+        if (!p.isNull() && p->parentWidget() == m_viewport) {
             p->setParent(container);
         }
     }
@@ -616,6 +623,29 @@ void DockGroupHost::finishCollapse()
     }
     m_collapsing = false;
     emit collapseFinished();
+}
+
+void DockGroupHost::detachFromLayout()
+{
+    stopSlide();
+
+    // Hand back only what this frame still physically holds: releasePanel()
+    // ignores a panel that already lives somewhere else, which is exactly the
+    // case after a layout rebuild handed the members to their new frames.
+    const QList<QPointer<DockPanel>> hosted = m_hosted;
+    for (const auto& p : hosted) {
+        releasePanel(p.data());
+    }
+    m_hosted.clear();
+    m_currentPanel = nullptr;
+
+    // The leaf that owned this frame is gone (or has disowned it); nothing may
+    // route header or layout events back into it from here on.
+    m_leaf = nullptr;
+    if (m_header) {
+        m_header->setPanels({});
+        m_header->setDropInsertIndex(-1);
+    }
 }
 
 void DockGroupHost::runFarewell(int duration)

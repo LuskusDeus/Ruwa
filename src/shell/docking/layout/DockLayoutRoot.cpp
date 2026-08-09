@@ -642,6 +642,12 @@ void DockLayoutRoot::syncGroupHosts()
     for (DockGroupHost* host : stale) {
         m_groupHosts.remove(host);
         emit groupHostAboutToBeDestroyed(host);
+        // Its leaf is already gone (a whole-tree replacement destroys every
+        // leaf at once), so the frame's m_leaf dangles from here on and the
+        // panels it lists may already belong to the frames built above.
+        // Detaching now, synchronously, is what keeps the deferred delete from
+        // reclaiming a panel another frame is showing.
+        host->detachFromLayout();
         host->hide();
         host->deleteLater();
     }

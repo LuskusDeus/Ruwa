@@ -150,6 +150,18 @@ public:
     bool isCollapsing() const { return m_collapsing; }
 
     /**
+     * @brief Cut this frame loose from the tree without any animation
+     *
+     * For a host that lost its leaf to tree surgery rather than to a normal
+     * teardown — restoring a layout over a live one replaces the whole tree, so
+     * every existing frame becomes stale at once while the new ones have
+     * already adopted the panels. Releasing here (rather than leaving it to the
+     * destructor, which runs a deleteLater later) keeps a panel from being
+     * reclaimed after another frame took it over.
+     */
+    void detachFromLayout();
+
+    /**
      * @brief Play the group's disappearance, then delete this frame
      *
      * The header strip collapses upward over @p duration while the survivor —
