@@ -48,9 +48,13 @@ locked features.
 - **Non-destructive editing.** Layer effects, adjustment layers, and masks stay
   editable, while Smart, Board, and text layers retain their source content
   through transforms.
+- **Smart objects with a document inside.** A smart object opens in its own tab
+  as a full layer stack, duplicates share their contents as instances, and
+  filters can run in content space so they follow the object's placement.
 - **An open-ended workspace.** Infinite canvas, Board Layers, reusable layouts,
-  dockable panels, and configurable shortcuts keep tools and references close.
-  Tool and layer buttons reorder by drag and drop, and unused ones can be hidden.
+  dockable panels that group into tabs, and configurable shortcuts keep tools
+  and references close. Tool and layer buttons reorder by drag and drop, and
+  unused ones can be hidden.
 - **Precise placement.** Auto snapping aligns moves and transforms to the canvas,
   to other layers, and to equal spacing between neighbours, with live guides and
   measurements.
@@ -63,7 +67,7 @@ locked features.
 
 | Item | Detail |
 | --- | --- |
-| Current release | `0.2.9-alpha` |
+| Current release | `0.3.0-alpha` |
 | Primary platform | Windows 10/11 x64 |
 | Graphics requirement | OpenGL 4.5 |
 | Technology | C++23, Qt 6, CMake |

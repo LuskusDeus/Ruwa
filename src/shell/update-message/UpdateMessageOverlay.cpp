@@ -699,8 +699,8 @@ void UpdateMessageOverlay::setupUI()
     heroTextLayout->addWidget(statusLabel);
 
     auto* heroTitleLabel = new QLabel(QCoreApplication::translate("UpdateMessageOverlay",
-                                          "Rearrangeable panels, richer tooltips, and cleaner "
-                                          "gradients."),
+                                          "Editable smart objects, tabbed panels, and one quality "
+                                          "at every zoom."),
         heroText);
     QFont heroTitleFont = colors.fonts.getUIFont(theme.scaledFontSize(HeroTitleFontSize));
     heroTitleFont.setWeight(QFont::DemiBold);
@@ -716,9 +716,9 @@ void UpdateMessageOverlay::setupUI()
 
     auto* descriptionLabel
         = new QLabel(QCoreApplication::translate("UpdateMessageOverlay",
-                         "This update makes the workspace yours to arrange, gives Ruwa its own "
-                         "tooltips with shortcuts in them, and removes gradient banding from "
-                         "8-bit documents."),
+                         "A smart object is now a document you can open and edit in its own tab, "
+                         "panels group into tabs, and the canvas keeps one quality at every "
+                         "zoom."),
             leftWidget);
     descriptionLabel->setWordWrap(true);
     descriptionLabel->setFont(colors.fonts.getUIFont(theme.scaledFontSize(BodyFontSize)));
@@ -734,22 +734,22 @@ void UpdateMessageOverlay::setupUI()
 
     addReleaseHighlightRow(highlightsWidget, highlightsLayout, colors, theme, ChangelogBadge::New,
         QCoreApplication::translate("UpdateMessageOverlay",
-            "Tools and layer actions reorder by drag and drop, and single buttons can be hidden."));
+            "Smart objects open as a document of their own, and duplicates share it as "
+            "instances."));
     addReleaseHighlightRow(highlightsWidget, highlightsLayout, colors, theme,
         ChangelogBadge::Updated,
         QCoreApplication::translate("UpdateMessageOverlay",
-            "Themed tooltips carry the action's shortcut, and every panel title bar gets a close "
-            "cross."));
+            "Smart layers take masks and merges, and a filter can run in the object's own "
+            "space."));
     addReleaseHighlightRow(highlightsWidget, highlightsLayout, colors, theme,
         ChangelogBadge::Improved,
         QCoreApplication::translate("UpdateMessageOverlay",
-            "Large thumbnail previews, Navigator zoom controls, and a live readout while "
-            "transforming."));
+            "Panels group into tabs, and zooming out no longer changes image quality."));
     addReleaseHighlightRow(highlightsWidget, highlightsLayout, colors, theme,
         ChangelogBadge::BugFix,
         QCoreApplication::translate("UpdateMessageOverlay",
-            "No more gradient banding on 8-bit documents, no dirty-tile flicker while zoomed out, "
-            "and no crash on a fast undo burst."));
+            "Opening a project no longer rearranges your workspace, and mixed-format projects save "
+            "and reopen correctly."));
 
     leftLayout->addWidget(highlightsWidget);
     leftLayout->addStretch();

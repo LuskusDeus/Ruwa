@@ -15,7 +15,80 @@ a release.
 
 ## [Unreleased]
 
+## [0.3.0-alpha] — 2026-08-09 — "Editable smart objects, tabbed panels, and one quality at every zoom"
+
+A smart object is now a document you can open: double-click it and its layers,
+groups, masks, and effects appear in their own tab, committed back to the parent
+as a single undo step. Duplicates share those contents as instances, smart
+layers accept masks and merge, a group or a whole multi-selection converts into
+one object, and a filter can be told to run in content space so it follows the
+object's placement. Panels group into tabs when dropped on one another, the
+workspace arrangement is a preference again instead of something a project
+carries into your window, and a new display pyramid keeps the canvas looking the
+same whether you are zoomed in or drawing zoomed out.
+
+### Added
+- Smart objects hold a nested document. Opening one gives it a tab with the full
+  editing environment — layers, groups, masks, effects, nested objects — and
+  saving or closing the tab commits the result into the parent as one undo step.
+- Duplicating a smart layer creates an instance: the contents are shared, so
+  editing one updates them all, while transform, mask, and effects stay per
+  layer. The Layers panel marks instances, and painting into one detaches it
+  first.
+- `Replace Contents` rebuilds an object's pixels from a file while keeping the
+  placement already arranged; every instance follows. `New Smart Object via Copy`
+  detaches on purpose.
+- Smart layers accept layer masks and take part in merges. Merging rasterizes the
+  object first, as expected, and undo unwinds the whole preparation.
+- Converting to a smart object works from a group and from a multi-selection: the
+  selected layers become one object holding them, not one object per layer.
+- Each layer effect gained a space: document space, as before, or content space,
+  where it is baked into the object's contents before its placement, so it
+  rotates, scales, and deforms along with it.
+- Right-clicking a multi-selection in the Layers panel keeps the selection and
+  opens a menu for the whole set — visibility, locks, colour, group, merge,
+  duplicate, delete, rasterize, clear, masks, and effects — each run as a single
+  undo step.
+- Dropping a panel on the centre of another groups them into tabs. The group's
+  header strip behaves like the document tab strip at the top of the window,
+  including its animations, and a group taken apart returns its panels to the
+  layout.
+- Objects imported into or placed in a project record where they came from, both
+  relative to the project file and absolute, in preparation for linked contents.
+
+### Improved
+- Zooming out no longer changes image quality. Levels above the composition
+  cache live in a persistent pyramid, so a stroke no longer turns the whole
+  canvas aliased for a few frames and no longer draws a live map of dirty tiles.
+  At low zoom the number of quads the canvas issues is roughly constant instead
+  of growing with the visible tile count.
+- Minified content is filtered everywhere, not only on the canvas: board layers,
+  the export and overview previews, and the transform preview each got the
+  filtering they were missing, and the pyramid replaced the old per-tile mip
+  chains, so the memory cost is a wash.
+- Drawing a lasso selection or lasso fill costs the same whether the outline is
+  short or long. The screen mask is now extended as points arrive instead of
+  being recomputed from the whole polygon every frame.
+- Brush dynamics bound to the `Time` input advance evenly with a stylus. Dabs
+  carry their own de-jittered clock instead of the coarse timestamps the pen
+  driver stamps whole bursts of samples with, which used to turn a smooth
+  time-driven gradient into hard bands.
+- A smart object's flattened pixels are clipped to its own canvas, so the object
+  shows the same picture on the parent canvas as inside its contents tab.
+  Converting text carries the text model inside, so the contents tab opens on
+  editable type and the object's box is the text's own box.
+- Project files reached format v32, carrying nested documents, content identity,
+  and per-grid pixel formats. Files written by earlier versions still open and
+  are upgraded on save, and a file with ten instances of one object stores those
+  pixels once.
+
 ### Fixed
+- The dock layout, the canvas overlay positions, and their visibility are user
+  preferences again. Opening a project no longer rearranges the application into
+  whatever arrangement that file happened to remember. Saved layout presets still
+  carry overlay positions, which is the point of saving one.
+- A smart object's contents tab closes together with the document it belongs to,
+  in every order of open tabs, instead of leaving a stranded tab mid-animation.
 - Projects with 8-bit imported images inside 16-bit or 32-bit documents now
   preserve each content grid's actual pixel format, so saving and reopening a
   mixed-format composition no longer reports a corrupted first layer.
@@ -24,6 +97,13 @@ a release.
   save. Ambiguous or internally conflicting payloads remain rejected.
 - Fill operations now interpret snapshots using the target grid's actual
   format, including RGBA8 imported layers in higher-precision documents.
+- A canvas size pasted with a group separator — `3 000` from a browser, a
+  spreadsheet, or the calculator — is read as the number the field accepted
+  instead of silently falling back, which could create a one-pixel project that
+  hung on load. Such a file is now rejected rather than opened.
+- Merging a masked layer no longer resurrects what the mask hid.
+- Panel groups slide in with the rest of the workspace during the startup
+  animation instead of having their tab strip appear on the last frame.
 
 ## [0.2.9-alpha] — 2026-08-03 — "Rearrangeable panels, richer tooltips, and cleaner gradients"
 

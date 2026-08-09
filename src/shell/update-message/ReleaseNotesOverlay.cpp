@@ -58,6 +58,61 @@ QVector<ReleaseNoteEntry> releaseNoteEntries()
 {
     return {
         { QCoreApplication::translate("ReleaseNotesOverlay",
+              "Editable smart objects, tabbed panels, and one quality at every zoom"),
+            QStringLiteral("0.3.0-alpha"), QStringLiteral("09.08.2026"),
+            QCoreApplication::translate("ReleaseNotesOverlay",
+                "<p><b>A smart object is now a document you can open and edit in its own tab, "
+                "duplicates of it are instances that share one set of contents, panels group into "
+                "tabs, and a new display pyramid keeps the canvas looking the same at every "
+                "zoom.</b></p>"
+                "<p><b>New</b></p>"
+                "<ul>"
+                "<li>Smart objects hold a nested document. Double-click one to open its layers, "
+                "groups, masks and effects in their own tab; saving or closing it commits the "
+                "result into the parent as a single undo step.</li>"
+                "<li>Duplicating a smart layer makes an instance: the contents are shared, while "
+                "transform, mask and effects stay per layer.</li>"
+                "<li>Replace Contents rebuilds an object's pixels from a file and keeps the "
+                "placement you arranged — every instance follows.</li>"
+                "<li>Smart layers accept layer masks and take part in merges.</li>"
+                "<li>Convert to Smart Object works from a group and from a multi-selection, making "
+                "one object that holds those layers.</li>"
+                "<li>Every layer effect gained a space: content space bakes it into the object's "
+                "contents, so it rotates, scales and deforms with the object.</li>"
+                "<li>Right-clicking a multi-selection in the Layers panel now acts on the whole "
+                "selection instead of throwing it away.</li>"
+                "<li>Dropping a panel on the centre of another groups them into tabs, with the "
+                "same "
+                "tab strip the document tabs use.</li>"
+                "</ul>"
+                "<p><b>Improved</b></p>"
+                "<ul>"
+                "<li>Zooming out no longer changes image quality, and drawing while zoomed out no "
+                "longer turns the canvas aliased for a few frames.</li>"
+                "<li>Minified content is filtered everywhere: board layers, the export and "
+                "overview "
+                "previews, and the transform preview.</li>"
+                "<li>A lasso selection or fill costs the same whether the outline is short or "
+                "long.</li>"
+                "<li>Brush dynamics bound to Time advance evenly with a stylus instead of stepping "
+                "in bands.</li>"
+                "<li>Project files reached format v32. Older files load unchanged, and a file with "
+                "ten instances of one object stores those pixels once.</li>"
+                "</ul>"
+                "<p><b>Fixes</b></p>"
+                "<ul>"
+                "<li>The dock layout and the canvas overlays are your preference again: opening a "
+                "project no longer rearranges the application.</li>"
+                "<li>A smart object's contents tab closes together with the document it belongs "
+                "to.</li>"
+                "<li>An 8-bit image imported into a 16- or 32-bit document no longer breaks the "
+                "saved project; affected files are recovered on open.</li>"
+                "<li>A canvas size pasted as \"3 000\" is read as the number the field accepted, "
+                "instead of creating a one-pixel project.</li>"
+                "<li>Merging a masked layer no longer brings back what the mask hid.</li>"
+                "<li>Panel groups slide in with the rest of the workspace at startup.</li>"
+                "</ul>") },
+        { QCoreApplication::translate("ReleaseNotesOverlay",
               "Rearrangeable panels, richer tooltips, and cleaner gradients"),
             QStringLiteral("0.2.9-alpha"), QStringLiteral("03.08.2026"),
             QCoreApplication::translate("ReleaseNotesOverlay",
