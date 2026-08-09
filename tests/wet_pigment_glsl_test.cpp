@@ -13,10 +13,9 @@ using aether::wet_pigment_gpu::kLatentGlsl;
 
 TEST_CASE("Wet pigment GLSL exposes the complete latent reservoir contract", "[pigment][gpu]")
 {
-    constexpr std::array<std::string_view, 6> samplers {
-        "uPigmentLut0", "uPigmentLut1", "uReservoirPigments0",
-        "uReservoirPigments1", "uReservoirCorrectionAndAlpha", "uReservoirColorMoments"
-    };
+    constexpr std::array<std::string_view, 6> samplers { "uPigmentLut0", "uPigmentLut1",
+        "uReservoirPigments0", "uReservoirPigments1", "uReservoirCorrectionAndAlpha",
+        "uReservoirColorMoments" };
     for (const auto sampler : samplers)
         REQUIRE(kLatentGlsl.find(sampler) != std::string_view::npos);
 }
@@ -38,10 +37,8 @@ TEST_CASE("Wet pigment GLSL implements encode mix and decode", "[pigment][gpu]")
     REQUIRE(kLatentGlsl.find("isnan(") != std::string_view::npos);
     REQUIRE(kLatentGlsl.find("isinf(") != std::string_view::npos);
     REQUIRE(kLatentGlsl.find("int sample =") == std::string_view::npos);
-    REQUIRE(kLatentGlsl.find("if (pigment == 1) return 0.018;")
-        != std::string_view::npos);
-    REQUIRE(kLatentGlsl.find("if (alpha <= 1.0e-6) return wetZero();")
-        != std::string_view::npos);
+    REQUIRE(kLatentGlsl.find("if (pigment == 1) return 0.018;") != std::string_view::npos);
+    REQUIRE(kLatentGlsl.find("if (alpha <= 1.0e-6) return wetZero();") != std::string_view::npos);
     REQUIRE(kLatentGlsl.find("storedPigments0 * inverseAlpha") != std::string_view::npos);
     REQUIRE(kLatentGlsl.find("latent.pigments0 * alpha") != std::string_view::npos);
     REQUIRE(kLatentGlsl.find("correctionAndAlpha = vec4(0.0, 0.0, 0.0, alpha)")
@@ -51,15 +48,13 @@ TEST_CASE("Wet pigment GLSL implements encode mix and decode", "[pigment][gpu]")
     REQUIRE(kLatentGlsl.find("mix(pigmentLinear, latent.colorMean, endpointWeight)")
         != std::string_view::npos);
     REQUIRE(kLatentGlsl.find("endpointWeight * latent.correction") == std::string_view::npos);
-    REQUIRE(kLatentGlsl.find("linear - wetDecodePigmentsLinear(latent)")
-        == std::string_view::npos);
+    REQUIRE(kLatentGlsl.find("linear - wetDecodePigmentsLinear(latent)") == std::string_view::npos);
 }
 
 TEST_CASE("Wet pickup variants share one four-plane latent update", "[pigment][gpu]")
 {
     using namespace aether::wet_pigment_gpu;
-    REQUIRE(kWetPickupUpdateGlsl.find("WetLatent wetPickupAtRate(")
-        != std::string_view::npos);
+    REQUIRE(kWetPickupUpdateGlsl.find("WetLatent wetPickupAtRate(") != std::string_view::npos);
     REQUIRE(kWetPickupUpdateGlsl.find("WetLatent wetPickupUpdate(") != std::string_view::npos);
     REQUIRE(kWetPickupUpdateGlsl.find("wetMix4(") != std::string_view::npos);
     REQUIRE(kWetPerDabPickupMain.find("wetPickupUpdate(") != std::string_view::npos);
@@ -85,11 +80,9 @@ TEST_CASE("Wet pickup variants share one four-plane latent update", "[pigment][g
     // later pickup. The removed bespoke initializer adjusted spread by alpha and
     // then multiplied the canvas contribution by alpha a second time, producing
     // a dark transient only at the partially covered boundary of two strokes.
-    REQUIRE(kWetPickupUpdateGlsl.find(
-                "wetPickupAtRate(wetZero(), wetZero(), canvas, 1.0)")
+    REQUIRE(kWetPickupUpdateGlsl.find("wetPickupAtRate(wetZero(), wetZero(), canvas, 1.0)")
         != std::string_view::npos);
-    REQUIRE(kWetPickupUpdateGlsl.find(
-                "spread += (1.0 - spread) * (1.0 - canvas.alpha)")
+    REQUIRE(kWetPickupUpdateGlsl.find("spread += (1.0 - spread) * (1.0 - canvas.alpha)")
         == std::string_view::npos);
     for (int location = 0; location < 4; ++location) {
         const std::string declaration = "layout(location = " + std::to_string(location) + ") out";
@@ -117,8 +110,7 @@ TEST_CASE("RGBA8 coverage edge does not inject pen pigment", "[pigment][gpu][reg
     REQUIRE(penFraction < 0.10f);
 
     constexpr float incorrectPenRefill = pickup - canvasWeight - penWeight;
-    constexpr float incorrectPenFraction
-        = (penWeight + incorrectPenRefill)
+    constexpr float incorrectPenFraction = (penWeight + incorrectPenRefill)
         / (previousWeight + canvasWeight + penWeight + incorrectPenRefill);
     REQUIRE(incorrectPenFraction > 0.70f);
 }
@@ -136,14 +128,12 @@ TEST_CASE("Wet apply variants decode four planes into one canvas output", "[pigm
     REQUIRE(kWetBatchedApplyMain.find("wetDecodePremultiplied(") != std::string_view::npos);
     REQUIRE(kWetPerDabApplyPreamble.find("outPigments0") == std::string_view::npos);
     REQUIRE(kWetBatchedApplyPreamble.find("outPigments0") == std::string_view::npos);
-    REQUIRE(kWetPerDabApplyPreamble.find("uniform int uPreserveCanvasAlpha")
-        != std::string_view::npos);
+    REQUIRE(
+        kWetPerDabApplyPreamble.find("uniform int uPreserveCanvasAlpha") != std::string_view::npos);
     REQUIRE(kWetBatchedApplyPreamble.find("uniform int uPreserveCanvasAlpha")
         != std::string_view::npos);
-    REQUIRE(kWetPerDabApplyPreamble.find("uniform int uQuantizeTo8Bit")
-        != std::string_view::npos);
-    REQUIRE(kWetBatchedApplyPreamble.find("uniform int uQuantizeTo8Bit")
-        != std::string_view::npos);
+    REQUIRE(kWetPerDabApplyPreamble.find("uniform int uQuantizeTo8Bit") != std::string_view::npos);
+    REQUIRE(kWetBatchedApplyPreamble.find("uniform int uQuantizeTo8Bit") != std::string_view::npos);
     REQUIRE(kWetApplyCoverageGlsl.find("deposited.a < canvas.a") != std::string_view::npos);
     REQUIRE(kWetApplyCoverageGlsl.find("straightColor * canvas.a") != std::string_view::npos);
     REQUIRE(kWetApplyCoverageGlsl.find("color.rgb = floor") == std::string_view::npos);

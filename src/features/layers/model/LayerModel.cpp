@@ -2608,8 +2608,8 @@ std::shared_ptr<LayerData> LayerModel::entryToLayerData(const LayerEntry& entry,
                 }
                 aether::TileData& dst
                     = pixelGrid->getOrCreateTile(aether::TileKey { tile.x, tile.y });
-                std::memcpy(dst.pixels(), tile.pixels.constData(),
-                    static_cast<size_t>(contentTileBytes));
+                std::memcpy(
+                    dst.pixels(), tile.pixels.constData(), static_cast<size_t>(contentTileBytes));
                 dst.markDirty();
             }
         }
@@ -2635,8 +2635,8 @@ void LayerModel::restoreSmartDocumentFromEntry(SmartContent& content, const Laye
     auto document = std::make_shared<SmartDocument>();
     document->size = entry.smartDocumentSize;
     document->format = entry.smartDocumentFormat == 2 ? aether::TilePixelFormat::RGBA32F
-        : entry.smartDocumentFormat == 1               ? aether::TilePixelFormat::RGBA16F
-                                                       : aether::TilePixelFormat::RGBA8;
+        : entry.smartDocumentFormat == 1              ? aether::TilePixelFormat::RGBA16F
+                                                      : aether::TilePixelFormat::RGBA8;
 
     // Claim the slot BEFORE building the layers, not after: a nested layer that
     // is an instance of this very content would otherwise find no document here

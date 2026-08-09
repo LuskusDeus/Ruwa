@@ -104,8 +104,8 @@ QString layerLabel(const LayerEntry& layer)
     return layer.id.toString(QUuid::WithoutBraces);
 }
 
-QString validateLayerForSave(const LayerEntry& layer,
-    QHash<QUuid, aether::TilePixelFormat>& smartContentFormats, int depth)
+QString validateLayerForSave(
+    const LayerEntry& layer, QHash<QUuid, aether::TilePixelFormat>& smartContentFormats, int depth)
 {
     if (!isSupportedTileFormat(layer.tileFormat)) {
         return QStringLiteral("Layer %1 has unsupported tile format %2")
@@ -151,8 +151,7 @@ QString validateLayerForSave(const LayerEntry& layer,
     }
 
     for (const LayerEntry& nested : layer.smartDocumentLayers) {
-        if (const QString error
-            = validateLayerForSave(nested, smartContentFormats, depth + 1);
+        if (const QString error = validateLayerForSave(nested, smartContentFormats, depth + 1);
             !error.isEmpty()) {
             return error;
         }
@@ -183,8 +182,8 @@ QString validateProjectForSave(const ProjectData& data)
     return {};
 }
 
-QString collectLegacySmartContentFormats(const QList<LayerEntry>& layers,
-    QHash<QUuid, aether::TilePixelFormat>& formats)
+QString collectLegacySmartContentFormats(
+    const QList<LayerEntry>& layers, QHash<QUuid, aether::TilePixelFormat>& formats)
 {
     for (const LayerEntry& layer : layers) {
         if (!layer.smartContentId.isNull() && !layer.tiles.isEmpty()) {
@@ -229,8 +228,7 @@ void applyLegacySmartContentFormats(
 QString normalizeLegacySmartContentFormats(QList<LayerEntry>& layers)
 {
     QHash<QUuid, aether::TilePixelFormat> formats;
-    if (const QString error = collectLegacySmartContentFormats(layers, formats);
-        !error.isEmpty()) {
+    if (const QString error = collectLegacySmartContentFormats(layers, formats); !error.isEmpty()) {
         return error;
     }
     applyLegacySmartContentFormats(layers, formats);
@@ -334,8 +332,7 @@ bool ProjectSerializer::save(const QString& filePath, const ProjectData& data)
         m_lastError = QStringLiteral("Invalid project data");
         return false;
     }
-    if (const QString validationError = validateProjectForSave(data);
-        !validationError.isEmpty()) {
+    if (const QString validationError = validateProjectForSave(data); !validationError.isEmpty()) {
         m_lastError = validationError;
         return false;
     }
@@ -1309,8 +1306,8 @@ LayerEntry ProjectSerializer::readLayerEntry(QDataStream& in, quint32 version, q
         quint8 tileFormat = 0;
         in >> tileFormat;
         if (in.status() != QDataStream::Ok) {
-            m_lastError = QStringLiteral("Cannot read tile format for layer %1")
-                              .arg(layerLabel(layer));
+            m_lastError
+                = QStringLiteral("Cannot read tile format for layer %1").arg(layerLabel(layer));
             return layer;
         }
         if (tileFormat > static_cast<quint8>(aether::TilePixelFormat::RGBA32F)) {
@@ -1323,8 +1320,7 @@ LayerEntry ProjectSerializer::readLayerEntry(QDataStream& in, quint32 version, q
         layer.tileFormat = static_cast<aether::TilePixelFormat>(tileFormat);
     }
     if (version >= 2) {
-        const bool inferLegacyGridFormat
-            = version >= 27 && version < 32 && !legacyUntaggedTiles;
+        const bool inferLegacyGridFormat = version >= 27 && version < 32 && !legacyUntaggedTiles;
         bool legacyGridFormatInferred = false;
         in >> tileCount;
         if (!countFitsInStream(in, tileCount, kMinTileEntryBytes)) {
@@ -1370,10 +1366,10 @@ LayerEntry ProjectSerializer::readLayerEntry(QDataStream& in, quint32 version, q
             if (inferLegacyGridFormat) {
                 aether::TilePixelFormat payloadFormat = aether::TilePixelFormat::RGBA8;
                 if (!tileFormatForPayloadSize(tile.pixels.size(), payloadFormat)) {
-                    m_lastError = QStringLiteral(
-                        "Layer %1 has an unsupported %2-byte legacy tile payload")
-                                      .arg(layerLabel(layer))
-                                      .arg(tile.pixels.size());
+                    m_lastError
+                        = QStringLiteral("Layer %1 has an unsupported %2-byte legacy tile payload")
+                              .arg(layerLabel(layer))
+                              .arg(tile.pixels.size());
                     in.setStatus(QDataStream::ReadCorruptData);
                     return layer;
                 }
@@ -1384,13 +1380,12 @@ LayerEntry ProjectSerializer::readLayerEntry(QDataStream& in, quint32 version, q
                         recoveredMixedTileFormats = true;
                     }
                 } else if (payloadFormat != layer.tileFormat) {
-                    m_lastError = QStringLiteral(
-                        "Layer %1 contains conflicting legacy tile payload formats (%2 and %3)")
-                                      .arg(layerLabel(layer))
-                                      .arg(QString::fromLatin1(
-                                          aether::tileFormatName(layer.tileFormat)))
-                                      .arg(QString::fromLatin1(
-                                          aether::tileFormatName(payloadFormat)));
+                    m_lastError
+                        = QStringLiteral(
+                            "Layer %1 contains conflicting legacy tile payload formats (%2 and %3)")
+                              .arg(layerLabel(layer))
+                              .arg(QString::fromLatin1(aether::tileFormatName(layer.tileFormat)))
+                              .arg(QString::fromLatin1(aether::tileFormatName(payloadFormat)));
                     in.setStatus(QDataStream::ReadCorruptData);
                     return layer;
                 }
@@ -1452,16 +1447,14 @@ LayerEntry ProjectSerializer::readLayerEntry(QDataStream& in, quint32 version, q
                     std::clamp<int>(docHeight, 0, kMaxSmartDocumentDimension));
             // Unknown formats read as RGBA8 rather than indexing a switch with
             // whatever the file said.
-            layer.smartDocumentFormat
-                = (docFormat <= 2) ? static_cast<int>(docFormat) : 0;
+            layer.smartDocumentFormat = (docFormat <= 2) ? static_cast<int>(docFormat) : 0;
             layer.smartDocumentLayers.reserve(static_cast<int>(nestedCount));
             for (quint32 i = 0; i < nestedCount; ++i) {
                 // depth + 1: a nested document is a whole tree of its own, and
                 // the one depth budget has to bound every level of nesting
                 // together — smart objects inside smart objects included.
-                layer.smartDocumentLayers.append(readLayerEntry(
-                    in, version, tileSize, contentFormat, legacyUntaggedTiles,
-                    recoveredMixedTileFormats, depth + 1));
+                layer.smartDocumentLayers.append(readLayerEntry(in, version, tileSize,
+                    contentFormat, legacyUntaggedTiles, recoveredMixedTileFormats, depth + 1));
                 if (in.status() != QDataStream::Ok) {
                     return layer;
                 }
@@ -1571,9 +1564,8 @@ LayerEntry ProjectSerializer::readLayerEntry(QDataStream& in, quint32 version, q
 
     layer.children.reserve(static_cast<int>(childCount));
     for (quint32 i = 0; i < childCount; ++i) {
-        layer.children.append(
-            readLayerEntry(in, version, tileSize, contentFormat, legacyUntaggedTiles,
-                recoveredMixedTileFormats, depth + 1));
+        layer.children.append(readLayerEntry(in, version, tileSize, contentFormat,
+            legacyUntaggedTiles, recoveredMixedTileFormats, depth + 1));
         // Bail on the first corrupt child instead of spinning the rest of the
         // (bounded) count doing nothing — the stream can no longer be trusted.
         if (in.status() != QDataStream::Ok) {

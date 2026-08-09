@@ -253,8 +253,7 @@ void StyledInputField::setupUI(FieldType type)
             containerLayout->addWidget(m_lineEdit);
             if (type == FieldType::Number) {
                 m_numberLocale = strictNumberLocale();
-                m_lineEdit->setValidator(
-                    new IntegerFieldValidator(m_intMin, m_intMax, m_lineEdit));
+                m_lineEdit->setValidator(new IntegerFieldValidator(m_intMin, m_intMax, m_lineEdit));
                 m_lastValidValue = m_intMin;
                 connect(m_lineEdit, &QLineEdit::textChanged, this, [this](const QString& t) {
                     bool ok = false;

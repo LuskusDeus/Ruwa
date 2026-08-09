@@ -374,9 +374,9 @@ std::vector<CompositeLayerInfo> LayerCompositingBuilder::buildLayerStackRecursiv
         = (!offscreen && m_context.getActiveLayer) ? m_context.getActiveLayer() : nullptr;
     const bool hasStroke = !offscreen && m_context.getBrushHasActiveStroke
         && m_context.getBrushHasActiveStroke() && activeLayerPtr != nullptr;
-    const TileGrid* selectionMaskGrid
-        = (!offscreen && m_context.getSelectionMaskGrid) ? m_context.getSelectionMaskGrid()
-                                                         : nullptr;
+    const TileGrid* selectionMaskGrid = (!offscreen && m_context.getSelectionMaskGrid)
+        ? m_context.getSelectionMaskGrid()
+        : nullptr;
     const bool selectionMaskHasSoftAlpha = selectionMaskGrid
         && (m_context.getSelectionMaskHasSoftAlpha ? m_context.getSelectionMaskHasSoftAlpha()
                                                    : hasSoftMaskAlpha(selectionMaskGrid));

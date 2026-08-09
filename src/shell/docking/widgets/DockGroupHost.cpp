@@ -77,8 +77,8 @@ DockGroupHost::DockGroupHost(DockLeafNode* leaf, QWidget* parent)
 
     connect(m_header, &DockGroupHeader::panelActivationRequested, this,
         &DockGroupHost::panelActivationRequested);
-    connect(m_header, &DockGroupHeader::panelCloseStarted, this,
-        &DockGroupHost::onPanelCloseStarted);
+    connect(
+        m_header, &DockGroupHeader::panelCloseStarted, this, &DockGroupHost::onPanelCloseStarted);
     connect(m_header, &DockGroupHeader::panelFarewellFinished, this,
         &DockGroupHost::onPanelFarewellFinished);
     connect(m_header, &DockGroupHeader::panelDragStarted, this, &DockGroupHost::panelDragStarted);
@@ -741,8 +741,7 @@ void DockGroupHost::paintEvent(QPaintEvent* /*event*/)
     painter.setRenderHint(QPainter::Antialiasing);
     painter.setPen(Qt::NoPen);
     painter.setBrush(m_colors.surfaceAlt);
-    painter.drawPath(
-        buildMemberBackdrop(QRectF(member), m_header ? m_header->cornerRadius() : 0));
+    painter.drawPath(buildMemberBackdrop(QRectF(member), m_header ? m_header->cornerRadius() : 0));
 }
 
 void DockGroupHost::resizeEvent(QResizeEvent* event)

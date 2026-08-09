@@ -226,8 +226,8 @@ TEST_CASE("Mixed content-grid formats round-trip without converting imported pix
     imported.type = 0;
     imported.tileFormat = aether::TilePixelFormat::RGBA8;
     TileEntry importedTile;
-    importedTile.pixels = QByteArray(
-        static_cast<int>(aether::tileByteSize(imported.tileFormat)), '\x11');
+    importedTile.pixels
+        = QByteArray(static_cast<int>(aether::tileByteSize(imported.tileFormat)), '\x11');
     imported.tiles.append(importedTile);
 
     LayerEntry painted;
@@ -265,8 +265,8 @@ TEST_CASE("Mixed content-grid formats round-trip without converting imported pix
     CHECK(loaded.rootLayers[2].tiles.isEmpty());
 }
 
-TEST_CASE("Save rejects a tile payload that disagrees with its grid format",
-    "[serializer][tile-format]")
+TEST_CASE(
+    "Save rejects a tile payload that disagrees with its grid format", "[serializer][tile-format]")
 {
     QTemporaryDir dir;
     REQUIRE(dir.isValid());
@@ -281,8 +281,8 @@ TEST_CASE("Save rejects a tile payload that disagrees with its grid format",
     layer.type = 0;
     layer.tileFormat = aether::TilePixelFormat::RGBA16F;
     TileEntry tile;
-    tile.pixels = QByteArray(
-        static_cast<int>(aether::tileByteSize(aether::TilePixelFormat::RGBA8)), '\0');
+    tile.pixels
+        = QByteArray(static_cast<int>(aether::tileByteSize(aether::TilePixelFormat::RGBA8)), '\0');
     layer.tiles.append(tile);
     data.rootLayers.append(layer);
 
@@ -309,8 +309,8 @@ TEST_CASE("Save rejects an unknown content-grid format", "[serializer][tile-form
 
     ProjectSerializer writer;
     REQUIRE_FALSE(writer.save(dir.filePath("unknown-format.rwf"), data));
-    CHECK(writer.lastError().contains(QStringLiteral("unsupported tile format"),
-        Qt::CaseInsensitive));
+    CHECK(writer.lastError().contains(
+        QStringLiteral("unsupported tile format"), Qt::CaseInsensitive));
 }
 
 TEST_CASE("Empty grids from before v32 inherit the document format",
@@ -319,8 +319,8 @@ TEST_CASE("Empty grids from before v32 inherit the document format",
     QTemporaryDir dir;
     REQUIRE(dir.isValid());
 
-    const QString path = writeV28Project(dir, QStringLiteral("empty-v28.rwf"),
-        aether::TilePixelFormat::RGBA16F, {});
+    const QString path = writeV28Project(
+        dir, QStringLiteral("empty-v28.rwf"), aether::TilePixelFormat::RGBA16F, {});
     ProjectSerializer reader;
     ProjectData loaded;
     REQUIRE(reader.load(path, loaded));
@@ -341,9 +341,9 @@ TEST_CASE("Pre-v32 mixed-format grids are recovered from exact tile payload size
         const QString formatName = QString::fromLatin1(aether::tileFormatName(format));
         const QByteArray pixels(static_cast<int>(aether::tileByteSize(format)),
             static_cast<char>(0x31 + static_cast<int>(format)));
-        const QString path = writeV28Project(dir,
-            QStringLiteral("mixed-v28-%1.rwf").arg(formatName),
-            aether::TilePixelFormat::RGBA16F, { pixels });
+        const QString path
+            = writeV28Project(dir, QStringLiteral("mixed-v28-%1.rwf").arg(formatName),
+                aether::TilePixelFormat::RGBA16F, { pixels });
 
         ProjectSerializer reader;
         ProjectData loaded;
@@ -353,8 +353,7 @@ TEST_CASE("Pre-v32 mixed-format grids are recovered from exact tile payload size
         CHECK(loaded.rootLayers[0].tileFormat == format);
         REQUIRE(loaded.rootLayers[0].tiles.size() == 1);
         CHECK(loaded.rootLayers[0].tiles[0].pixels == pixels);
-        CHECK(loaded.recoveredMixedTileFormats
-            == (format != aether::TilePixelFormat::RGBA16F));
+        CHECK(loaded.recoveredMixedTileFormats == (format != aether::TilePixelFormat::RGBA16F));
 
         // The normal writer upgrades the in-memory representation to v32.
         const QString migratedPath
@@ -441,9 +440,8 @@ TEST_CASE("A future project format is rejected explicitly", "[serializer][compat
     QTemporaryDir dir;
     REQUIRE(dir.isValid());
 
-    const QByteArray buf = buildBytes([](QDataStream& s) {
-        writeHeader(s, ProjectData::CURRENT_VERSION + 1);
-    });
+    const QByteArray buf
+        = buildBytes([](QDataStream& s) { writeHeader(s, ProjectData::CURRENT_VERSION + 1); });
     const QString path = writeTempFile(dir, "future-version.rwf", buf);
 
     ProjectSerializer reader;
@@ -676,8 +674,8 @@ TEST_CASE("Smart source path follows a project moved with its assets", "[seriali
     ProjectData loaded;
     REQUIRE(reader.load(movedPath, loaded));
     REQUIRE(loaded.rootLayers.size() == 1);
-    CHECK(QFileInfo(loaded.rootLayers[0].smartSourcePath)
-        == QFileInfo(movedDir.filePath(assetName)));
+    CHECK(
+        QFileInfo(loaded.rootLayers[0].smartSourcePath) == QFileInfo(movedDir.filePath(assetName)));
 }
 
 TEST_CASE("Files written before v29 load with no smart content identity", "[serializer]")
@@ -835,8 +833,7 @@ TEST_CASE("A smart object's nested document round-trips and is stored once", "[s
     CHECK(loadedObject.smartDocumentLayers[0].id == nestedTop.id);
 
     const LayerEntry& loadedNestedBottom = loadedObject.smartDocumentLayers[1];
-    CHECK(loadedObject.smartDocumentLayers[0].tileFormat
-        == aether::TilePixelFormat::RGBA16F);
+    CHECK(loadedObject.smartDocumentLayers[0].tileFormat == aether::TilePixelFormat::RGBA16F);
     CHECK(loadedNestedBottom.tileFormat == aether::TilePixelFormat::RGBA8);
     REQUIRE(loadedNestedBottom.tiles.size() == 1);
     CHECK(loadedNestedBottom.tiles[0].pixels.size() == tileBytes);

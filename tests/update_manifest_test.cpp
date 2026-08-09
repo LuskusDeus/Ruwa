@@ -65,14 +65,13 @@ TEST_CASE("update manifest rejects traversal and duplicate destinations", "[upda
     const QByteArray fileEntry = QByteArrayLiteral(R"(,
         {"source":"Shaders/a.glsl","target":"RUWA.EXE","size":1,"sha256":")")
         + QByteArray(64, 'b') + QByteArrayLiteral(R"("})");
-    duplicate.replace(
-        QByteArrayLiteral("        }],\n        \"delete\""),
-        QByteArrayLiteral("        }") + fileEntry
-            + QByteArrayLiteral("],\n        \"delete\""));
+    duplicate.replace(QByteArrayLiteral("        }],\n        \"delete\""),
+        QByteArrayLiteral("        }") + fileEntry + QByteArrayLiteral("],\n        \"delete\""));
     CHECK_FALSE(UpdateManifest::parse(duplicate, 64 * 1024 * 1024).has_value());
 }
 
-TEST_CASE("update manifest rejects wrong product platform and invalid version", "[updates][manifest]")
+TEST_CASE(
+    "update manifest rejects wrong product platform and invalid version", "[updates][manifest]")
 {
     QByteArray wrongProduct = validManifest();
     wrongProduct.replace("\"product\":\"Ruwa\"", "\"product\":\"Other\"");

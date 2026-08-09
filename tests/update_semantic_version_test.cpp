@@ -45,8 +45,8 @@ TEST_CASE("semantic version parser rejects malformed input", "[updates][semver]"
     const QStringList invalidVersions { QString(), QStringLiteral("1"), QStringLiteral("1.2"),
         QStringLiteral("1.2.3.4"), QStringLiteral("01.2.3"), QStringLiteral("1.02.3"),
         QStringLiteral("1.2.03"), QStringLiteral("1.2.3-"), QStringLiteral("1.2.3-alpha..1"),
-        QStringLiteral("1.2.3-alpha.01"), QStringLiteral("1.2.3+"),
-        QStringLiteral("1.2.3+build_1"), QStringLiteral("garbage-1.2.3") };
+        QStringLiteral("1.2.3-alpha.01"), QStringLiteral("1.2.3+"), QStringLiteral("1.2.3+build_1"),
+        QStringLiteral("garbage-1.2.3") };
     for (const QString& version : invalidVersions) {
         CAPTURE(version.toStdString());
         CHECK_FALSE(SemanticVersion::parse(version).has_value());

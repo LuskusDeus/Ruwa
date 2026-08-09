@@ -22,8 +22,7 @@ FloodFillResult::RawTileMap singlePixelMask()
 
 uint8_t rawMaskAlphaAt(const FloodFillResult::RawTileMap& mask, uint32_t x, uint32_t y)
 {
-    const TileKey key { static_cast<int32_t>(x / TILE_SIZE),
-        static_cast<int32_t>(y / TILE_SIZE) };
+    const TileKey key { static_cast<int32_t>(x / TILE_SIZE), static_cast<int32_t>(y / TILE_SIZE) };
     const auto it = mask.find(key);
     if (it == mask.end()) {
         return 0;
@@ -80,8 +79,7 @@ TEST_CASE("Alpha-locked masked fill scales color coverage by the selection",
     REQUIRE(a == 128);
 }
 
-TEST_CASE("Alpha-locked masked fill cannot create opaque content",
-    "[fill][lasso][alpha-lock]")
+TEST_CASE("Alpha-locked masked fill cannot create opaque content", "[fill][lasso][alpha-lock]")
 {
     TileGrid grid;
 
@@ -107,8 +105,8 @@ TEST_CASE("Magic Wand mask selects only the connected matching-color region",
     REQUIRE(rawMaskAlphaAt(mask, 1, 0) == 255);
     REQUIRE(rawMaskAlphaAt(mask, 2, 0) == 0);
 
-    const auto snapshotMask = buildMagicWandSelectionMask(snapshotContentTiles(grid), 0, 0, 3, 1,
-        grid.format());
+    const auto snapshotMask
+        = buildMagicWandSelectionMask(snapshotContentTiles(grid), 0, 0, 3, 1, grid.format());
     REQUIRE(snapshotMask == mask);
 
     const auto classicFillResult = classicFloodFillRawTiles(

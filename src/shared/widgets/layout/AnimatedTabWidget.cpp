@@ -557,8 +557,8 @@ void AnimatedTabWidget::slideToTab(ruwa::core::BaseTab* newTab, ruwa::core::Base
     QUuid newTabId = newTab->id();
     QParallelAnimationGroup* group = m_animation;
 
-    connect(m_animation, &QParallelAnimationGroup::finished, this,
-        [this, oldTabId, newTabId, group]() {
+    connect(
+        m_animation, &QParallelAnimationGroup::finished, this, [this, oldTabId, newTabId, group]() {
             // Look up tabs by UUID - they might have been deleted
             ruwa::core::BaseTab* oldT = m_displayedTabs.value(oldTabId, nullptr);
             ruwa::core::BaseTab* newT = m_displayedTabs.value(newTabId, nullptr);

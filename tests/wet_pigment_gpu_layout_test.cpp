@@ -31,12 +31,11 @@ TEST_CASE("Wet pigment GPU texture units do not overlap", "[pigment][gpu]")
 
 TEST_CASE("Wet pigment working color never round-trips through RGBA8", "[pigment][gpu]")
 {
-    REQUIRE(workingColorFormat(aether::TilePixelFormat::RGBA8)
-        == aether::TilePixelFormat::RGBA16F);
-    REQUIRE(workingColorFormat(aether::TilePixelFormat::RGBA16F)
-        == aether::TilePixelFormat::RGBA16F);
-    REQUIRE(workingColorFormat(aether::TilePixelFormat::RGBA32F)
-        == aether::TilePixelFormat::RGBA32F);
+    REQUIRE(workingColorFormat(aether::TilePixelFormat::RGBA8) == aether::TilePixelFormat::RGBA16F);
+    REQUIRE(
+        workingColorFormat(aether::TilePixelFormat::RGBA16F) == aether::TilePixelFormat::RGBA16F);
+    REQUIRE(
+        workingColorFormat(aether::TilePixelFormat::RGBA32F) == aether::TilePixelFormat::RGBA32F);
 }
 
 TEST_CASE("Wet float working color preserves muted RGB at one-byte alpha", "[pigment][gpu]")

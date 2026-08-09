@@ -42,7 +42,6 @@ void distort_set_doc_frame_uniforms(
 void* distort_create_pass(
     RuwaEffectGpuContext gpu, const char* source, const char* debug_name, const char* cache_key);
 void distort_destroy_pass(void* pass_instance, RuwaEffectGpuContext gpu);
-RuwaEffectPipeline distort_begin(
-    void* pass_instance, const RuwaEffectPassInput* input);
+RuwaEffectPipeline distort_begin(void* pass_instance, const RuwaEffectPassInput* input);
 
 #endif /* RUWA_STANDARD_DISTORT_COMMON_H */

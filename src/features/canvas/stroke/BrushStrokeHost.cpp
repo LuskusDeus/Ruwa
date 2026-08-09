@@ -2386,8 +2386,8 @@ void BrushStrokeHost::emitLiquifyDwell()
     // the dwell takes over. No pen sample arrived, so this is the idle entry
     // point: it advances in real time and leaves the stabilizer's period
     // estimate alone.
-    const float elapsed = advanceDabDynamicsClockIdle(
-        static_cast<double>(strokeElapsedSecondsNow()) * 1000.0);
+    const float elapsed
+        = advanceDabDynamicsClockIdle(static_cast<double>(strokeElapsedSecondsNow()) * 1000.0);
     rasterizeStrokeSegment(grid, paintMask, executionBackend, m_lastStrokeInputX,
         m_lastStrokeInputY, m_lastStrokeInputX, m_lastStrokeInputY, m_lastStrokeInputPressure,
         m_lastStrokeInputPressure, elapsed, elapsed);

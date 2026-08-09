@@ -17,7 +17,7 @@ SnapScene finiteCanvasScene()
     scene.finiteCanvas = true;
     return scene;
 }
-}
+} // namespace
 
 TEST_CASE("transform snap canvas exposes center and finite edges")
 {
@@ -45,16 +45,16 @@ TEST_CASE("transform snap canvas exposes center and finite edges")
     oddCanvas.canvasSize = { 101.0f, 81.0f };
     const auto oddCandidates
         = TransformSnapSolver::pointCandidates(oddCanvas, settings, { 50.0f, 40.0f }, {}, true);
-    REQUIRE(std::any_of(oddCandidates.begin(), oddCandidates.end(), [](const SnapRelation& relation) {
-        return relation.axis == SnapAxis::X && relation.targetCoordinate == 50.5f;
-    }));
+    REQUIRE(
+        std::any_of(oddCandidates.begin(), oddCandidates.end(), [](const SnapRelation& relation) {
+            return relation.axis == SnapAxis::X && relation.targetCoordinate == 50.5f;
+        }));
 }
 
 TEST_CASE("transform snap hysteresis captures at eight and releases after fourteen screen pixels")
 {
     SnapSettings settings;
-    TransformSnapSession session(
-        settings, finiteCanvasScene(), SnapCoordinatePolicy::Continuous);
+    TransformSnapSession session(settings, finiteCanvasScene(), SnapCoordinatePolicy::Continuous);
 
     REQUIRE(session.solvePoint({ 92.0f, 40.0f }, nullptr, 1.0f, true).xRelation.has_value());
     REQUIRE(session.solvePoint({ 87.0f, 40.0f }, nullptr, 1.0f, true).xRelation.has_value());
@@ -73,11 +73,9 @@ TEST_CASE("transform snap thresholds are measured through zoomed and rotated vie
     TransformSnapSession outsideThreshold(
         settings, finiteCanvasScene(), SnapCoordinatePolicy::Continuous);
 
-    REQUIRE(
-        atThreshold.solvePoint({ 46.1f, 40.0f }, &viewport, 2.0f, true).xRelation.has_value());
-    REQUIRE_FALSE(outsideThreshold
-                      .solvePoint({ 45.8f, 40.0f }, &viewport, 2.0f, true)
-                      .xRelation.has_value());
+    REQUIRE(atThreshold.solvePoint({ 46.1f, 40.0f }, &viewport, 2.0f, true).xRelation.has_value());
+    REQUIRE_FALSE(
+        outsideThreshold.solvePoint({ 45.8f, 40.0f }, &viewport, 2.0f, true).xRelation.has_value());
 }
 
 TEST_CASE("latched transform relation does not switch to a nearby target")
@@ -114,8 +112,7 @@ TEST_CASE("same-parent targets win deterministic transform snap ties")
             SnapTargetType::Raster },
         { { 100.0f, 0.0f, 10.0f, 10.0f }, preferredId, parentId, SnapTargetType::Raster },
     };
-    TransformSnapSession session(
-        settings, scene, SnapCoordinatePolicy::Continuous, parentId);
+    TransformSnapSession session(settings, scene, SnapCoordinatePolicy::Continuous, parentId);
 
     const SnapResult result = session.solvePoint({ 94.0f, 5.0f }, nullptr, 1.0f);
     REQUIRE(result.xRelation.has_value());
@@ -126,8 +123,7 @@ TEST_CASE("same-parent targets win deterministic transform snap ties")
 TEST_CASE("exact snap relations override pixel-aligned free movement")
 {
     SnapSettings settings;
-    TransformSnapSession pixel(
-        settings, finiteCanvasScene(), SnapCoordinatePolicy::PixelAligned);
+    TransformSnapSession pixel(settings, finiteCanvasScene(), SnapCoordinatePolicy::PixelAligned);
 
     // An odd-width aggregate bounds, typical for a multi-layer selection, has a half-pixel
     // center. It must still align exactly to the even-width canvas center.
@@ -153,8 +149,7 @@ TEST_CASE("equal spacing prefers a two-sided symmetric candidate")
         { { 40.0f, 0.0f, 10.0f, 10.0f }, QUuid::createUuid(), {}, SnapTargetType::Raster },
     };
     TransformSnapSession session(settings, scene, SnapCoordinatePolicy::Continuous);
-    const SnapResult result
-        = session.solveMove({ 24.0f, 0.0f, 10.0f, 10.0f }, nullptr, 1.0f);
+    const SnapResult result = session.solveMove({ 24.0f, 0.0f, 10.0f, 10.0f }, nullptr, 1.0f);
 
     REQUIRE(result.xRelation.has_value());
     REQUIRE(result.xRelation->type == SnapRelationType::EqualSpacing);
@@ -174,8 +169,7 @@ TEST_CASE("spacing metric trims fractional trailing zeros")
         { { 41.0f, 0.0f, 10.0f, 10.0f }, QUuid::createUuid(), {}, SnapTargetType::Raster },
     };
     TransformSnapSession session(settings, scene, SnapCoordinatePolicy::Continuous);
-    const SnapResult result
-        = session.solveMove({ 24.5f, 0.0f, 10.0f, 10.0f }, nullptr, 1.0f);
+    const SnapResult result = session.solveMove({ 24.5f, 0.0f, 10.0f, 10.0f }, nullptr, 1.0f);
 
     REQUIRE(result.xRelation.has_value());
     REQUIRE(result.xRelation->type == SnapRelationType::EqualSpacing);
@@ -192,8 +186,7 @@ TEST_CASE("equal spacing recognizes a repeated horizontal and vertical row gap")
         { { 20.0f, 0.0f, 10.0f, 10.0f }, QUuid::createUuid(), {}, SnapTargetType::Raster },
         { { 40.0f, 0.0f, 10.0f, 10.0f }, QUuid::createUuid(), {}, SnapTargetType::Raster },
     };
-    TransformSnapSession horizontalSession(
-        settings, horizontal, SnapCoordinatePolicy::Continuous);
+    TransformSnapSession horizontalSession(settings, horizontal, SnapCoordinatePolicy::Continuous);
     const SnapResult horizontalResult
         = horizontalSession.solveMove({ 62.0f, 0.0f, 10.0f, 10.0f }, nullptr, 1.0f);
     REQUIRE(horizontalResult.xRelation.has_value());
@@ -226,8 +219,7 @@ TEST_CASE("equal spacing visualizes every gap in the snapped chain")
         { { 60.0f, 0.0f, 10.0f, 10.0f }, QUuid::createUuid(), {}, SnapTargetType::Raster },
     };
     TransformSnapSession session(settings, scene, SnapCoordinatePolicy::Continuous);
-    const SnapResult result
-        = session.solveMove({ 92.0f, 0.0f, 10.0f, 10.0f }, nullptr, 1.0f);
+    const SnapResult result = session.solveMove({ 92.0f, 0.0f, 10.0f, 10.0f }, nullptr, 1.0f);
 
     REQUIRE(result.xRelation.has_value());
     REQUIRE(result.xRelation->type == SnapRelationType::EqualSpacing);
@@ -251,8 +243,7 @@ TEST_CASE("zero equal spacing has no dimension or metric label")
         { { 20.0f, 0.0f, 10.0f, 10.0f }, QUuid::createUuid(), {}, SnapTargetType::Raster },
     };
     TransformSnapSession session(settings, scene, SnapCoordinatePolicy::Continuous);
-    const SnapResult result
-        = session.solveMove({ 10.0f, 0.0f, 10.0f, 10.0f }, nullptr, 1.0f);
+    const SnapResult result = session.solveMove({ 10.0f, 0.0f, 10.0f, 10.0f }, nullptr, 1.0f);
 
     REQUIRE(result.correction.x == Catch::Approx(0.0f));
     REQUIRE(result.visualState.spacingDimensions.empty());

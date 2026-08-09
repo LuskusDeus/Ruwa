@@ -51,7 +51,7 @@ void stylize_set_doc_frame_inverse(
 RuwaEffectPipeline stylize_create_graphics(
     RuwaEffectGpuContext gpu, const char* source, const char* debug_name, const char* cache_key);
 RuwaEffectSampler stylize_create_linear_sampler_or_null(RuwaEffectGpuContext gpu);
-void stylize_upload_gaussian_kernel(const RuwaEffectGpuApi* gpu_api,
-    RuwaEffectGpuContext gpu, RuwaEffectPipeline pipeline, int radius, int maximum_radius);
+void stylize_upload_gaussian_kernel(const RuwaEffectGpuApi* gpu_api, RuwaEffectGpuContext gpu,
+    RuwaEffectPipeline pipeline, int radius, int maximum_radius);
 
 #endif /* RUWA_STANDARD_STYLIZE_COMMON_H */

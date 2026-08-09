@@ -38,10 +38,10 @@ typedef struct RuwaEffectParamValue {
     RuwaEffectParamType type;
     union {
         RuwaBool as_bool;
-        int32_t  as_int;
-        double   as_real;
-        float    as_color[4]; /* r,g,b,a in [0,1] */
-        int32_t  as_choice;   /* index into RuwaEffectParamDef::choices */
+        int32_t as_int;
+        double as_real;
+        float as_color[4]; /* r,g,b,a in [0,1] */
+        int32_t as_choice; /* index into RuwaEffectParamDef::choices */
     } value;
 } RuwaEffectParamValue;
 
@@ -53,15 +53,15 @@ typedef struct RuwaEffectParamValue {
  * viewport preview); otherwise it is origin + fragTexCoord * outputSize *
  * document_px_per_texel and the host fills the basis from the output size. */
 typedef struct RuwaEffectRegionFrame {
-    float   origin_x;
-    float   origin_y;
-    float   document_px_per_texel;
+    float origin_x;
+    float origin_y;
+    float document_px_per_texel;
     RuwaBool valid;
     RuwaBool use_affine;
-    float   basis_xx; /* d(documentPos)/d(fragTexCoord.x), x component */
-    float   basis_xy; /* d(documentPos)/d(fragTexCoord.x), y component */
-    float   basis_yx; /* d(documentPos)/d(fragTexCoord.y), x component */
-    float   basis_yy; /* d(documentPos)/d(fragTexCoord.y), y component */
+    float basis_xx; /* d(documentPos)/d(fragTexCoord.x), x component */
+    float basis_xy; /* d(documentPos)/d(fragTexCoord.x), y component */
+    float basis_yx; /* d(documentPos)/d(fragTexCoord.y), x component */
+    float basis_yy; /* d(documentPos)/d(fragTexCoord.y), y component */
 } RuwaEffectRegionFrame;
 
 /* --- Per-invocation pass input (§2.1) ------------------------------------
@@ -72,41 +72,41 @@ typedef struct RuwaEffectPassInput {
     uint32_t struct_size;
 
     /* Target region geometry. */
-    uint32_t                   output_width;
-    uint32_t                   output_height;
-    RuwaEffectEvaluationSpace  evaluation_space;
+    uint32_t output_width;
+    uint32_t output_height;
+    RuwaEffectEvaluationSpace evaluation_space;
     /* Multiplies pixel-radius sampling distances so a DOCUMENT-pixel radius has
      * the right magnitude in the current space (1.0 in document-tile space; the
      * camera zoom in viewport space). */
-    float                      space_scale;
-    RuwaEffectRegionFrame      region;
+    float space_scale;
+    RuwaEffectRegionFrame region;
     /* True when source spans the WHOLE layer (its materialised bbox) — the
      * guarantee a distortion (reads_whole_layer) needs before sampling far from
      * a fragment. When false, a distortion pass must pass its input through. */
-    RuwaBool                   whole_layer_source;
+    RuwaBool whole_layer_source;
 
     /* Textures (any may be null). */
-    RuwaEffectTexture source_texture;      /* this pass's chain input */
-    RuwaEffectTexture target_texture;      /* default write target, output-sized */
+    RuwaEffectTexture source_texture; /* this pass's chain input */
+    RuwaEffectTexture target_texture; /* default write target, output-sized */
     RuwaEffectTexture layer_alpha_texture; /* layer shape BEFORE the chain (stroke/glow/bevel) */
-    RuwaEffectTexture backdrop_texture;    /* backing under the layer (requires_backdrop) */
+    RuwaEffectTexture backdrop_texture; /* backing under the layer (requires_backdrop) */
 
     /* Output-space rect downstream actually reads; a pass MAY clip writes to it
      * via begin_roi_scissor (optimization only). roi_width == 0 means
      * "unknown / everything is needed". */
-    int32_t  roi_x;
-    int32_t  roi_y;
+    int32_t roi_x;
+    int32_t roi_y;
     uint32_t roi_width;
     uint32_t roi_height;
 
     /* Resolved parameters, in the SAME ORDER the descriptor declared them.
      * `param_keys[i]` is the stable key of `param_values[i]`. A plugin may index
      * by declaration order or match by key. */
-    uint32_t                     param_count;
-    const char* const*           param_keys;
-    const RuwaEffectParamValue*  param_values;
+    uint32_t param_count;
+    const char* const* param_keys;
+    const RuwaEffectParamValue* param_values;
     /* Schema version of the effect state being rendered (LayerEffectState::version). */
-    uint32_t                     state_version;
+    uint32_t state_version;
 } RuwaEffectPassInput;
 
 /* --- Shader source view --------------------------------------------------
@@ -114,12 +114,12 @@ typedef struct RuwaEffectPassInput {
  * GL program. The plugin only hands over source. Provide a stable `cache_key`
  * so identical sources share a linked program across pass instances / frames. */
 typedef struct RuwaEffectShaderSource {
-    uint32_t              struct_size;
+    uint32_t struct_size;
     RuwaEffectShaderStage stage;
-    const char*           source;        /* GLSL text */
-    uint32_t              source_length; /* bytes; 0 => `source` is null-terminated */
-    const char*           debug_name;    /* for logs; may be null */
-    const char*           cache_key;     /* stable; may be null (no caching) */
+    const char* source; /* GLSL text */
+    uint32_t source_length; /* bytes; 0 => `source` is null-terminated */
+    const char* debug_name; /* for logs; may be null */
+    const char* cache_key; /* stable; may be null (no caching) */
 } RuwaEffectShaderSource;
 
 /* --- Host GPU command API (§2.2 / §6) ------------------------------------
@@ -139,93 +139,82 @@ typedef struct RuwaEffectGpuApi {
     /* [R] Persistent, plugin-owned textures. Created with NEAREST/CLAMP_TO_EDGE
      * defaults; use a sampler object for filtered reads. Resize by destroy +
      * create. Must be destroyed in destroy_pass (before the context dies). */
-    RuwaEffectTexture (RUWA_EFFECT_CALL *create_texture)(
-        RuwaEffectGpuContext gpu, uint32_t width, uint32_t height,
-        RuwaEffectTextureFormat format);
-    void (RUWA_EFFECT_CALL *destroy_texture)(
-        RuwaEffectGpuContext gpu, RuwaEffectTexture texture);
-    uint32_t (RUWA_EFFECT_CALL *texture_width)(
-        RuwaEffectGpuContext gpu, RuwaEffectTexture texture);
-    uint32_t (RUWA_EFFECT_CALL *texture_height)(
-        RuwaEffectGpuContext gpu, RuwaEffectTexture texture);
+    RuwaEffectTexture(RUWA_EFFECT_CALL* create_texture)(
+        RuwaEffectGpuContext gpu, uint32_t width, uint32_t height, RuwaEffectTextureFormat format);
+    void(RUWA_EFFECT_CALL* destroy_texture)(RuwaEffectGpuContext gpu, RuwaEffectTexture texture);
+    uint32_t(RUWA_EFFECT_CALL* texture_width)(RuwaEffectGpuContext gpu, RuwaEffectTexture texture);
+    uint32_t(RUWA_EFFECT_CALL* texture_height)(RuwaEffectGpuContext gpu, RuwaEffectTexture texture);
 
     /* [R] Persistent, plugin-owned sampler objects. */
-    RuwaEffectSampler (RUWA_EFFECT_CALL *create_sampler)(
-        RuwaEffectGpuContext gpu, RuwaEffectSamplerFilter min_filter,
-        RuwaEffectSamplerFilter mag_filter, RuwaEffectSamplerWrap wrap);
-    void (RUWA_EFFECT_CALL *destroy_sampler)(
-        RuwaEffectGpuContext gpu, RuwaEffectSampler sampler);
+    RuwaEffectSampler(RUWA_EFFECT_CALL* create_sampler)(RuwaEffectGpuContext gpu,
+        RuwaEffectSamplerFilter min_filter, RuwaEffectSamplerFilter mag_filter,
+        RuwaEffectSamplerWrap wrap);
+    void(RUWA_EFFECT_CALL* destroy_sampler)(RuwaEffectGpuContext gpu, RuwaEffectSampler sampler);
 
     /* [R] Pipelines. Graphics pipelines pair the host's shared fullscreen vertex
      * shader with the plugin fragment source; compute pipelines take one compute
      * source. The `fragment` / `compute` source's `stage` field must match. */
-    RuwaEffectPipeline (RUWA_EFFECT_CALL *create_graphics_pipeline)(
+    RuwaEffectPipeline(RUWA_EFFECT_CALL* create_graphics_pipeline)(
         RuwaEffectGpuContext gpu, const RuwaEffectShaderSource* fragment);
-    void (RUWA_EFFECT_CALL *destroy_graphics_pipeline)(
+    void(RUWA_EFFECT_CALL* destroy_graphics_pipeline)(
         RuwaEffectGpuContext gpu, RuwaEffectPipeline pipeline);
-    RuwaEffectComputePipeline (RUWA_EFFECT_CALL *create_compute_pipeline)(
+    RuwaEffectComputePipeline(RUWA_EFFECT_CALL* create_compute_pipeline)(
         RuwaEffectGpuContext gpu, const RuwaEffectShaderSource* compute);
-    void (RUWA_EFFECT_CALL *destroy_compute_pipeline)(
+    void(RUWA_EFFECT_CALL* destroy_compute_pipeline)(
         RuwaEffectGpuContext gpu, RuwaEffectComputePipeline pipeline);
 
     /* [C] Transient, host-owned scratch sized to the current region and valid
      * only for THIS render_pass call. The plugin must not destroy it. Formats
      * RGBA8 / RGBA16F (high precision); returns null on failure. */
-    RuwaEffectTexture (RUWA_EFFECT_CALL *alloc_scratch_texture)(
+    RuwaEffectTexture(RUWA_EFFECT_CALL* alloc_scratch_texture)(
         RuwaEffectGpuContext gpu, RuwaEffectTextureFormat format);
 
     /* [C] Graphics. begin_render_pass binds `target` as the colour attachment,
      * sets the viewport to the target texture's own size and disables blending.
      * draw_fullscreen issues the shared 6-vertex fullscreen triangle pair. */
-    void (RUWA_EFFECT_CALL *begin_render_pass)(
-        RuwaEffectGpuContext gpu, RuwaEffectTexture target);
-    void (RUWA_EFFECT_CALL *bind_graphics_pipeline)(
+    void(RUWA_EFFECT_CALL* begin_render_pass)(RuwaEffectGpuContext gpu, RuwaEffectTexture target);
+    void(RUWA_EFFECT_CALL* bind_graphics_pipeline)(
         RuwaEffectGpuContext gpu, RuwaEffectPipeline pipeline);
-    void (RUWA_EFFECT_CALL *bind_texture)(
-        RuwaEffectGpuContext gpu, uint32_t unit, RuwaEffectTexture texture,
-        RuwaEffectSampler sampler /* may be null for the default */);
-    void (RUWA_EFFECT_CALL *draw_fullscreen)(RuwaEffectGpuContext gpu);
+    void(RUWA_EFFECT_CALL* bind_texture)(RuwaEffectGpuContext gpu, uint32_t unit,
+        RuwaEffectTexture texture, RuwaEffectSampler sampler /* may be null for the default */);
+    void(RUWA_EFFECT_CALL* draw_fullscreen)(RuwaEffectGpuContext gpu);
 
     /* [C] ROI scissor. Returns RUWA_TRUE if a scissor was enabled (a 1-texel
      * guard ring is always added); the caller must pass that back to
      * end_roi_scissor. No-op / RUWA_FALSE when the ROI is unknown or full. */
-    RuwaBool (RUWA_EFFECT_CALL *begin_roi_scissor)(
+    RuwaBool(RUWA_EFFECT_CALL* begin_roi_scissor)(
         RuwaEffectGpuContext gpu, int32_t expand_x, int32_t expand_y);
-    void (RUWA_EFFECT_CALL *end_roi_scissor)(
-        RuwaEffectGpuContext gpu, RuwaBool scissor_active);
+    void(RUWA_EFFECT_CALL* end_roi_scissor)(RuwaEffectGpuContext gpu, RuwaBool scissor_active);
 
     /* [C] Compute / image load-store. */
-    void (RUWA_EFFECT_CALL *bind_compute_pipeline)(
+    void(RUWA_EFFECT_CALL* bind_compute_pipeline)(
         RuwaEffectGpuContext gpu, RuwaEffectComputePipeline pipeline);
-    void (RUWA_EFFECT_CALL *bind_image_texture)(
-        RuwaEffectGpuContext gpu, uint32_t unit, RuwaEffectTexture texture,
-        RuwaEffectImageAccess access, RuwaEffectTextureFormat format);
-    void (RUWA_EFFECT_CALL *dispatch_compute)(
+    void(RUWA_EFFECT_CALL* bind_image_texture)(RuwaEffectGpuContext gpu, uint32_t unit,
+        RuwaEffectTexture texture, RuwaEffectImageAccess access, RuwaEffectTextureFormat format);
+    void(RUWA_EFFECT_CALL* dispatch_compute)(
         RuwaEffectGpuContext gpu, uint32_t groups_x, uint32_t groups_y, uint32_t groups_z);
-    void (RUWA_EFFECT_CALL *memory_barrier)(
+    void(RUWA_EFFECT_CALL* memory_barrier)(
         RuwaEffectGpuContext gpu, uint32_t barrier_bits /* RuwaEffectBarrierBits */);
 
     /* [C] Uniforms. Operate on the currently bound graphics or compute pipeline;
      * a missing / optimised-out uniform name is silently ignored. */
-    void (RUWA_EFFECT_CALL *set_uniform_int)(
-        RuwaEffectGpuContext gpu, const char* name, int32_t v);
-    void (RUWA_EFFECT_CALL *set_uniform_int2)(
+    void(RUWA_EFFECT_CALL* set_uniform_int)(RuwaEffectGpuContext gpu, const char* name, int32_t v);
+    void(RUWA_EFFECT_CALL* set_uniform_int2)(
         RuwaEffectGpuContext gpu, const char* name, int32_t x, int32_t y);
-    void (RUWA_EFFECT_CALL *set_uniform_float)(
-        RuwaEffectGpuContext gpu, const char* name, float v);
-    void (RUWA_EFFECT_CALL *set_uniform_float2)(
+    void(RUWA_EFFECT_CALL* set_uniform_float)(RuwaEffectGpuContext gpu, const char* name, float v);
+    void(RUWA_EFFECT_CALL* set_uniform_float2)(
         RuwaEffectGpuContext gpu, const char* name, float x, float y);
-    void (RUWA_EFFECT_CALL *set_uniform_float3)(
+    void(RUWA_EFFECT_CALL* set_uniform_float3)(
         RuwaEffectGpuContext gpu, const char* name, float x, float y, float z);
-    void (RUWA_EFFECT_CALL *set_uniform_float4)(
+    void(RUWA_EFFECT_CALL* set_uniform_float4)(
         RuwaEffectGpuContext gpu, const char* name, float x, float y, float z, float w);
     /* `values` is tightly packed x0,y0,x1,y1,… for `count` vec2 elements. */
-    void (RUWA_EFFECT_CALL *set_uniform_vec2_array)(
+    void(RUWA_EFFECT_CALL* set_uniform_vec2_array)(
         RuwaEffectGpuContext gpu, const char* name, const float* values, uint32_t count);
 
     /* [C] Full-texture copy (internal crop / passthrough shape). src and dst
      * must share dimensions and be colour-renderable. */
-    void (RUWA_EFFECT_CALL *blit_texture)(
+    void(RUWA_EFFECT_CALL* blit_texture)(
         RuwaEffectGpuContext gpu, RuwaEffectTexture src, RuwaEffectTexture dst);
 } RuwaEffectGpuApi;
 

@@ -62,8 +62,7 @@ public:
     using OnContentChangedFn = std::function<void(const QUuid& contentId)>;
 
     SmartContentSwapCommand(std::shared_ptr<ruwa::core::layers::SmartContent> content,
-        SmartContentState replacedState, QString commandText,
-        OnContentChangedFn onContentChanged);
+        SmartContentState replacedState, QString commandText, OnContentChangedFn onContentChanged);
 
     void undo() override;
     void redo() override;

@@ -1909,9 +1909,9 @@ public:
         // OpenGL context; the CPU fill remains the authoritative, stable path.
         FloodFillResult result = request->algorithm == OpenGLCanvasWidget::FillAlgorithm::Classic
             ? classicFloodFillRawTiles(request->layerSnapshotTiles, request->origin.x,
-                   request->origin.y, request->color.r, request->color.g, request->color.b,
-                   request->color.a, request->selectionMaskTiles, request->canvasBounds.width,
-                   request->canvasBounds.height, request->contentFormat)
+                  request->origin.y, request->color.r, request->color.g, request->color.b,
+                  request->color.a, request->selectionMaskTiles, request->canvasBounds.width,
+                  request->canvasBounds.height, request->contentFormat)
             : floodFillRawTiles(request->layerSnapshotTiles, request->origin.x, request->origin.y,
                   request->color.r, request->color.g, request->color.b, request->color.a,
                   request->selectionMaskTiles, request->canvasBounds.width,
@@ -3753,9 +3753,9 @@ bool OpenGLCanvasWidget::convertGroupToSmartObject(ruwa::core::layers::LayerData
             root->depth = 0;
             root->updateChildrenDepth();
         }
-        undoManager.push(std::make_unique<aether::LayerRemoveCommand>(m_layerModel,
-            std::move(undoClones), std::move(restorePositions), [this]() { requestRender(); },
-            [this]() { notifyCanvasInteraction(true); }));
+        undoManager.push(std::make_unique<aether::LayerRemoveCommand>(
+            m_layerModel, std::move(undoClones), std::move(restorePositions),
+            [this]() { requestRender(); }, [this]() { notifyCanvasInteraction(true); }));
     }
     document->roots = std::move(contentRoots);
 
@@ -3807,8 +3807,8 @@ bool OpenGLCanvasWidget::convertTextToSmartObject(ruwa::core::layers::LayerData*
         && !layer->runtimeRetainedPayload->empty()) {
         worldBounds = layer->runtimeRetainedPayload->worldBounds;
     } else {
-        worldBounds = aether::transformStateWithSourceBounds(layer->textData->transform,
-            computeTextLayoutSourceBounds(*layer->textData))
+        worldBounds = aether::transformStateWithSourceBounds(
+            layer->textData->transform, computeTextLayoutSourceBounds(*layer->textData))
                           .transformedAABB();
     }
 

@@ -59,7 +59,7 @@ class OpenGLCanvasWidget;
 namespace ruwa::core::layers {
 class LayerModel;
 struct SmartDocument;
-}
+} // namespace ruwa::core::layers
 
 namespace ruwa::ui::widgets {
 class CanvasBrushQuickPopup;

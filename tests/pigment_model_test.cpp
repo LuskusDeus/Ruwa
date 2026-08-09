@@ -15,15 +15,14 @@ namespace {
 
 float distance(const PigmentModel::Srgb& a, const PigmentModel::Srgb& b)
 {
-    return std::sqrt((a.r - b.r) * (a.r - b.r) + (a.g - b.g) * (a.g - b.g)
-        + (a.b - b.b) * (a.b - b.b));
+    return std::sqrt(
+        (a.r - b.r) * (a.r - b.r) + (a.g - b.g) * (a.g - b.g) + (a.b - b.b) * (a.b - b.b));
 }
 
 float srgbToLinear(float value)
 {
     value = std::clamp(value, 0.0f, 1.0f);
-    return value <= 0.04045f ? value / 12.92f
-                             : std::pow((value + 0.055f) / 1.055f, 2.4f);
+    return value <= 0.04045f ? value / 12.92f : std::pow((value + 0.055f) / 1.055f, 2.4f);
 }
 
 std::array<float, 3> toOklab(const PigmentModel::Srgb& color)
@@ -71,8 +70,7 @@ TEST_CASE("Pigment mixing preserves endpoints and symmetry", "[pigment]")
 
     REQUIRE(distance(PigmentModel::mix(green, blue, 0.0f), green) < 1.0e-6f);
     REQUIRE(distance(PigmentModel::mix(green, blue, 1.0f), blue) < 1.0e-6f);
-    REQUIRE(distance(PigmentModel::mix(green, blue, 0.35f),
-                PigmentModel::mix(blue, green, 0.65f))
+    REQUIRE(distance(PigmentModel::mix(green, blue, 0.35f), PigmentModel::mix(blue, green, 0.65f))
         < 1.0e-5f);
 }
 
@@ -89,12 +87,8 @@ TEST_CASE("Yellow and blue form a green-dominant mixture", "[pigment]")
 
 TEST_CASE("Green and blue do not collapse toward black", "[pigment][regression]")
 {
-    const PigmentModel::Srgb green {
-        3.0f / 255.0f, 254.0f / 255.0f, 14.0f / 255.0f
-    };
-    const PigmentModel::Srgb blue {
-        1.0f / 255.0f, 1.0f / 255.0f, 254.0f / 255.0f
-    };
+    const PigmentModel::Srgb green { 3.0f / 255.0f, 254.0f / 255.0f, 14.0f / 255.0f };
+    const PigmentModel::Srgb blue { 1.0f / 255.0f, 1.0f / 255.0f, 254.0f / 255.0f };
     const auto mixed = PigmentModel::mix(green, blue, 0.5f);
     CAPTURE(mixed.r, mixed.g, mixed.b);
     REQUIRE(std::max(mixed.r, std::max(mixed.g, mixed.b)) > 0.12f);
@@ -102,8 +96,7 @@ TEST_CASE("Green and blue do not collapse toward black", "[pigment][regression]"
     REQUIRE(mixed.b > mixed.r);
 }
 
-TEST_CASE("Small virtual-black fraction has finite physical absorption",
-    "[pigment][regression]")
+TEST_CASE("Small virtual-black fraction has finite physical absorption", "[pigment][regression]")
 {
     PigmentModel::Concentrations dilutedBlack {};
     dilutedBlack[0] = 0.90f;
@@ -171,14 +164,15 @@ TEST_CASE("Latent accumulation is associative", "[pigment][reservoir]")
     const auto green = PigmentModel::encode({ 0.02f, 0.85f, 0.08f });
     const auto blue = PigmentModel::encode({ 0.03f, 0.08f, 0.95f });
 
-    const auto firstGrouping = PigmentModel::mix(PigmentModel::mix(red, green, 0.5f), blue, 1.0f / 3.0f);
-    const auto secondGrouping = PigmentModel::mix(red, PigmentModel::mix(green, blue, 0.5f), 2.0f / 3.0f);
+    const auto firstGrouping
+        = PigmentModel::mix(PigmentModel::mix(red, green, 0.5f), blue, 1.0f / 3.0f);
+    const auto secondGrouping
+        = PigmentModel::mix(red, PigmentModel::mix(green, blue, 0.5f), 2.0f / 3.0f);
     REQUIRE(distance(PigmentModel::decode(firstGrouping), PigmentModel::decode(secondGrouping))
         < 1.0e-5f);
 }
 
-TEST_CASE("RGB colors survive pigment encoding within the quality contract",
-    "[pigment][roundtrip]")
+TEST_CASE("RGB colors survive pigment encoding within the quality contract", "[pigment][roundtrip]")
 {
     constexpr std::array<PigmentModel::Srgb, 16> colors {
         PigmentModel::Srgb { 0.0f, 0.0f, 0.0f },

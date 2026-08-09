@@ -91,8 +91,8 @@ TEST_CASE("Pigment LUT rejects corrupted binary data", "[pigment][lut][serializa
     REQUIRE_THROWS_AS(PigmentLut::deserialize(bytes), std::invalid_argument);
 }
 
-TEST_CASE("Pigment LUT rejects pre-finite-black resources",
-    "[pigment][lut][serialization][regression]")
+TEST_CASE(
+    "Pigment LUT rejects pre-finite-black resources", "[pigment][lut][serialization][regression]")
 {
     const auto lut = PigmentLut::generate(3);
     auto bytes = lut.serialize();

@@ -182,8 +182,8 @@ struct SmartContent {
      * nothing to declare the cache stale, which forces the first read to
      * composite.
      */
-    void setDocument(std::shared_ptr<SmartDocument> newDocument,
-        quint64 compositeRevisionForCurrentGrid = 0);
+    void setDocument(
+        std::shared_ptr<SmartDocument> newDocument, quint64 compositeRevisionForCurrentGrid = 0);
 
     /**
      * @brief Turn a flat content into a document-backed one without changing a

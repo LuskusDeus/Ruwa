@@ -7,8 +7,7 @@
 
 /* Gaussian Blur */
 void* blur_gaussian_create_pass(void* user_data, RuwaEffectGpuContext gpu);
-int32_t blur_gaussian_pixel_expansion_radius(
-    void* user_data, const RuwaEffectStateView* state);
+int32_t blur_gaussian_pixel_expansion_radius(void* user_data, const RuwaEffectStateView* state);
 RuwaEffectTexture blur_gaussian_render_pass(
     void* pass_instance, RuwaEffectGpuContext gpu, const RuwaEffectPassInput* input);
 void blur_gaussian_destroy_pass(void* pass_instance, RuwaEffectGpuContext gpu);
@@ -38,16 +37,14 @@ void blur_radial_destroy_pass(void* pass_instance, RuwaEffectGpuContext gpu);
 
 /* Sharpen */
 void* blur_sharpen_create_pass(void* user_data, RuwaEffectGpuContext gpu);
-int32_t blur_sharpen_pixel_expansion_radius(
-    void* user_data, const RuwaEffectStateView* state);
+int32_t blur_sharpen_pixel_expansion_radius(void* user_data, const RuwaEffectStateView* state);
 RuwaEffectTexture blur_sharpen_render_pass(
     void* pass_instance, RuwaEffectGpuContext gpu, const RuwaEffectPassInput* input);
 void blur_sharpen_destroy_pass(void* pass_instance, RuwaEffectGpuContext gpu);
 
 /* Unsharp Mask */
 void* blur_unsharp_mask_create_pass(void* user_data, RuwaEffectGpuContext gpu);
-int32_t blur_unsharp_mask_pixel_expansion_radius(
-    void* user_data, const RuwaEffectStateView* state);
+int32_t blur_unsharp_mask_pixel_expansion_radius(void* user_data, const RuwaEffectStateView* state);
 RuwaEffectTexture blur_unsharp_mask_render_pass(
     void* pass_instance, RuwaEffectGpuContext gpu, const RuwaEffectPassInput* input);
 void blur_unsharp_mask_destroy_pass(void* pass_instance, RuwaEffectGpuContext gpu);

@@ -280,10 +280,7 @@ public:
     bool commitSmartContentEdits();
 
     /// True for a contents tab carrying edits that have not been committed back.
-    bool hasUncommittedSmartContentEdits() const
-    {
-        return isSmartContentEditor() && isModified();
-    }
+    bool hasUncommittedSmartContentEdits() const { return isSmartContentEditor() && isModified(); }
 
     void seedStartupImageImportPaths(const QStringList& filePaths);
     void seedStartupImageImport(const QImage& image, const QString& layerName);

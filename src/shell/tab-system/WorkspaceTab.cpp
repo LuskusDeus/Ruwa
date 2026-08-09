@@ -3896,8 +3896,8 @@ QUuid WorkspaceTab::smartEditDocumentTabId() const
     // Bounded by the same depth the composite refuses to descend past, so a
     // corrupted chain can never spin here.
     for (int step = 0; manager && tab->isSmartContentEditor()
-         && step <= aether::SmartContentCompositor::kMaxNestingDepth;
-         ++step) {
+        && step <= aether::SmartContentCompositor::kMaxNestingDepth;
+        ++step) {
         auto* parent = qobject_cast<WorkspaceTab*>(manager->tab(tab->m_smartEditParentTabId));
         if (!parent) {
             break;
@@ -4101,8 +4101,8 @@ std::shared_ptr<ruwa::core::layers::SmartDocument> WorkspaceTab::buildSmartDocum
     // A copy that belongs to the parent document from now on: nested smart
     // objects must stop sharing their content with the layers still open in this
     // tab, or an edit made here after the commit would leak across.
-    document->roots = ruwa::core::layers::SmartDocument::cloneRootsForSeparateOwner(
-        model->rootLayers());
+    document->roots
+        = ruwa::core::layers::SmartDocument::cloneRootsForSeparateOwner(model->rootLayers());
     return document;
 }
 

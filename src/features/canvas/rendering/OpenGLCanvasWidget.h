@@ -300,8 +300,7 @@ public:
     /// Flatten ONE smart content now (and re-project the layers showing it).
     /// False when nothing had to be done, or when the composite could not run —
     /// see refreshSmartContentComposites for the context rules.
-    bool recompositeSmartContent(
-        const std::shared_ptr<ruwa::core::layers::SmartContent>& content);
+    bool recompositeSmartContent(const std::shared_ptr<ruwa::core::layers::SmartContent>& content);
     /// Install edited contents for the smart object identified by @p contentId
     /// and flatten them (undoable, content-level: every instance follows).
     ///

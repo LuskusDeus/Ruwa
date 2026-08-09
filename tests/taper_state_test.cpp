@@ -54,6 +54,5 @@ TEST_CASE("Taper range update starts at new dabs or the moving tail", "[brush][t
     const auto movingEnd = makeState(1001, 0.0f, 0.1f, true);
     REQUIRE(updateRangeStart(movingEnd, 1000, 850) == 850);
 
-    REQUIRE(
-        updateRangeStart(startOnly, 0, std::numeric_limits<std::size_t>::max()) == 0);
+    REQUIRE(updateRangeStart(startOnly, 0, std::numeric_limits<std::size_t>::max()) == 0);
 }
