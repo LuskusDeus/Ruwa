@@ -153,8 +153,8 @@ TEST_CASE("stroke input queue measures geometry in screen pixels", "[brush][inpu
 {
     const auto parameters = aether::stroke_input_queue::parametersForQueueAge(0.030f);
     const auto first = sample(0.0f, 0.0f, 0.5f, 0.000f);
-    const auto middle = sample(5.0f, 0.5f, 0.5f, 0.005f);
-    const auto last = sample(10.0f, 0.0f, 0.5f, 0.010f);
+    const auto middle = sample(5.0f, 0.5f, 0.5f, 0.004f);
+    const auto last = sample(10.0f, 0.0f, 0.5f, 0.008f);
 
     CHECK_FALSE(
         aether::stroke_input_queue::canRemoveMiddleSample(first, middle, last, 1.0f, parameters));
