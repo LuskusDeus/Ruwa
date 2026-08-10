@@ -6,6 +6,7 @@
 #include <QWidget>
 #include <QHash>
 #include <QList>
+#include <QPointer>
 #include <QUuid>
 #include <QPropertyAnimation>
 #include <QParallelAnimationGroup>
@@ -97,7 +98,7 @@ private:
     ruwa::core::TabManager* m_tabManager = nullptr;
 
     // Track which tabs we're displaying (by UUID)
-    QHash<QUuid, ruwa::core::BaseTab*> m_displayedTabs;
+    QHash<QUuid, QPointer<ruwa::core::BaseTab>> m_displayedTabs;
 
     // Animation state
     QParallelAnimationGroup* m_animation = nullptr;

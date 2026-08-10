@@ -255,7 +255,7 @@ void AnimatedTabWidget::onTabAdded(ruwa::core::BaseTab* tab)
 
     const QUuid id = tab->id();
 
-    if (m_displayedTabs.contains(id)) {
+    if (m_displayedTabs.value(id).data() == tab) {
         return; // Already tracking this tab
     }
 
@@ -271,8 +271,10 @@ void AnimatedTabWidget::onTabAdded(ruwa::core::BaseTab* tab)
     if (m_tabManager && m_tabManager->activeTab() == tab) {
         positionTab(tab, 0);
         tab->show();
-        QTimer::singleShot(0, this, [this, tab]() {
-            if (!m_displayedTabs.contains(tab->id()))
+        const QPointer<ruwa::core::BaseTab> guardedTab(tab);
+        QTimer::singleShot(0, this, [this, guardedTab]() {
+            auto* tab = guardedTab.data();
+            if (!tab || m_displayedTabs.value(tab->id()).data() != tab)
                 return;
             tab->initialize();
             tab->activate();
@@ -368,8 +370,10 @@ void AnimatedTabWidget::onActiveTabChanged(ruwa::core::BaseTab* newTab, ruwa::co
 
     // Handle case when all tabs are closed
     if (!newTab) {
-        for (auto* tab : m_displayedTabs) {
-            tab->hide();
+        for (const auto& trackedTab : std::as_const(m_displayedTabs)) {
+            if (auto* tab = trackedTab.data()) {
+                tab->hide();
+            }
         }
         // If we were closing a tab, confirm it now
         m_closingTabId = QUuid();
@@ -379,7 +383,7 @@ void AnimatedTabWidget::onActiveTabChanged(ruwa::core::BaseTab* newTab, ruwa::co
     }
 
     // Make sure new tab is in our display
-    if (!m_displayedTabs.contains(newTab->id())) {
+    if (m_displayedTabs.value(newTab->id()).data() != newTab) {
         onTabAdded(newTab);
     }
 
@@ -387,7 +391,7 @@ void AnimatedTabWidget::onActiveTabChanged(ruwa::core::BaseTab* newTab, ruwa::co
     // If we're closing a tab, oldTab might be the closing tab (still in m_displayedTabs)
     ruwa::core::BaseTab* animateFrom = nullptr;
 
-    if (oldTab && m_displayedTabs.contains(oldTab->id())) {
+    if (oldTab && m_displayedTabs.value(oldTab->id()).data() == oldTab) {
         animateFrom = oldTab;
     }
 
@@ -397,8 +401,11 @@ void AnimatedTabWidget::onActiveTabChanged(ruwa::core::BaseTab* newTab, ruwa::co
     const bool needsDeferredInit = !newTab->isInitialized();
 
     if (needsDeferredInit) {
-        QTimer::singleShot(0, this,
-            [this, newTab, animateFrom]() { runDeferredInitAndSlide(newTab, animateFrom); });
+        const QPointer<ruwa::core::BaseTab> guardedNewTab(newTab);
+        const QPointer<ruwa::core::BaseTab> guardedOldTab(animateFrom);
+        QTimer::singleShot(0, this, [this, guardedNewTab, guardedOldTab]() {
+            runDeferredInitAndSlide(guardedNewTab.data(), guardedOldTab.data());
+        });
         return;
     }
 
@@ -427,13 +434,13 @@ void AnimatedTabWidget::runDeferredInitAndSlide(
         return;
 
     // Tab might have been removed while we were deferred
-    if (!m_displayedTabs.contains(newTab->id()))
+    if (m_displayedTabs.value(newTab->id()).data() != newTab)
         return;
 
     // Heavy work: create tab content (widgets, layouts, etc.)
     newTab->initialize();
 
-    if (oldTab && oldTab != newTab && m_displayedTabs.contains(oldTab->id())) {
+    if (oldTab && oldTab != newTab && m_displayedTabs.value(oldTab->id()).data() == oldTab) {
         slideToTab(newTab, oldTab);
     } else {
         // No animation source - just show
@@ -455,7 +462,8 @@ void AnimatedTabWidget::slideToTab(ruwa::core::BaseTab* newTab, ruwa::core::Base
         return;
     }
 
-    // Stop any existing animation
+    // Stop any existing animation. The next transition starts from the widgets'
+    // current positions below, so an interrupted slide continues without a jump.
     if (m_animation) {
         m_animation->stop();
         m_animation->deleteLater();
@@ -466,7 +474,7 @@ void AnimatedTabWidget::slideToTab(ruwa::core::BaseTab* newTab, ruwa::core::Base
     // This prevents "silhouette" artifacts from interrupted animations where
     // the previous outgoing tab was left visible at a mid-slide position.
     for (auto it = m_displayedTabs.constBegin(); it != m_displayedTabs.constEnd(); ++it) {
-        ruwa::core::BaseTab* tab = it.value();
+        ruwa::core::BaseTab* tab = it.value().data();
         if (tab && tab != newTab && tab != oldTab) {
             tab->hide();
         }
@@ -552,16 +560,22 @@ void AnimatedTabWidget::slideToTab(ruwa::core::BaseTab* newTab, ruwa::core::Base
         m_animation->addAnimation(animOverlay);
     }
 
-    // Store UUIDs for safe lookup after animation (tabs might be deleted during animation)
-    QUuid oldTabId = oldTab->id();
-    QUuid newTabId = newTab->id();
+    // QPointer is the lifetime guard. A UUID lookup alone is insufficient: the
+    // map previously retained a non-null raw pointer after QObject destruction.
+    const QPointer<ruwa::core::BaseTab> guardedOldTab(oldTab);
+    const QPointer<ruwa::core::BaseTab> guardedNewTab(newTab);
     QParallelAnimationGroup* group = m_animation;
 
-    connect(
-        m_animation, &QParallelAnimationGroup::finished, this, [this, oldTabId, newTabId, group]() {
-            // Look up tabs by UUID - they might have been deleted
-            ruwa::core::BaseTab* oldT = m_displayedTabs.value(oldTabId, nullptr);
-            ruwa::core::BaseTab* newT = m_displayedTabs.value(newTabId, nullptr);
+    connect(m_animation, &QParallelAnimationGroup::finished, this,
+        [this, guardedOldTab, guardedNewTab, group]() {
+            ruwa::core::BaseTab* oldT = guardedOldTab.data();
+            ruwa::core::BaseTab* newT = guardedNewTab.data();
+            if (oldT && m_displayedTabs.value(oldT->id()).data() != oldT) {
+                oldT = nullptr;
+            }
+            if (newT && m_displayedTabs.value(newT->id()).data() != newT) {
+                newT = nullptr;
+            }
 
             // Hide old tab if it still exists
             if (oldT) {
@@ -658,7 +672,7 @@ void AnimatedTabWidget::resizeEvent(QResizeEvent* event)
     // The animation only drives the "pos" property, so we update width/height here.
     if (m_animation && m_animation->state() == QAbstractAnimation::Running) {
         for (auto it = m_displayedTabs.constBegin(); it != m_displayedTabs.constEnd(); ++it) {
-            ruwa::core::BaseTab* tab = it.value();
+            ruwa::core::BaseTab* tab = it.value().data();
             if (tab && tab->isVisible()) {
                 tab->resize(width(), height());
             }
@@ -669,7 +683,7 @@ void AnimatedTabWidget::resizeEvent(QResizeEvent* event)
     // No animation — just position the active tab
     if (m_tabManager) {
         if (auto* active = m_tabManager->activeTab()) {
-            if (m_displayedTabs.contains(active->id())) {
+            if (m_displayedTabs.value(active->id()).data() == active) {
                 positionTab(active, 0);
             }
         }
