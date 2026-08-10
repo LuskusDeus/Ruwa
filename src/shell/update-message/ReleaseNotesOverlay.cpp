@@ -101,6 +101,8 @@ QVector<ReleaseNoteEntry> releaseNoteEntries()
                 "</ul>"
                 "<p><b>Fixes</b></p>"
                 "<ul>"
+                "<li>Closing or switching a tab while it is still animating no longer "
+                "crashes.</li>"
                 "<li>The dock layout and the canvas overlays are your preference again: opening a "
                 "project no longer rearranges the application.</li>"
                 "<li>A smart object's contents tab closes together with the document it belongs "

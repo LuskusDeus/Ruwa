@@ -83,6 +83,10 @@ same whether you are zoomed in or drawing zoomed out.
   pixels once.
 
 ### Fixed
+- Closing or switching a tab while it is still animating no longer crashes. The
+  tab strip tracked its tabs through raw pointers, which stayed non-null after a
+  tab was destroyed, so the end of a slide or a pending deferred initialization
+  could reach into a freed tab.
 - The dock layout, the canvas overlay positions, and their visibility are user
   preferences again. Opening a project no longer rearranges the application into
   whatever arrangement that file happened to remember. Saved layout presets still
