@@ -51,12 +51,23 @@ NavigatorWidget::NavigatorWidget(QWidget* parent)
         if (m_overviewCache->hasActiveTransitions()) {
             m_overviewCache->advanceTransitions();
             overviewChanged = true;
-            if (!m_overviewCache->hasActiveTransitions()) {
-                if (m_overviewCache->hasDirtyTiles()) {
-                    scheduleOverviewRefresh();
-                } else {
-                    emit presentationReadyChanged();
-                }
+        }
+
+        // dirtyTiles() withholds a tile that is mid-fade, so its opacity does not
+        // snap back to zero halfway through. That leaves the tile MARKED with
+        // nothing scheduled to come back for it, and undo is where that bites:
+        // holding it re-invalidates the same tiles far faster than a fade lasts,
+        // so the last invalidation of a run reliably lands during one. Recovery
+        // used to hang on the single tick that observed the last fade ending —
+        // miss it (panel hidden, GL not ready yet, a refresh dropped on the way)
+        // and the tile kept its old pixels until something unrelated dirtied it
+        // again. Asking every tick instead of only on that edge is what makes it
+        // self-correcting.
+        if (!m_overviewCache->hasActiveTransitions()) {
+            if (m_overviewCache->hasDirtyTiles()) {
+                scheduleOverviewRefresh();
+            } else if (overviewChanged) {
+                emit presentationReadyChanged();
             }
         }
 
