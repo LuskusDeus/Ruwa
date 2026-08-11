@@ -68,6 +68,9 @@ private:
     void onSearchTextChanged(const QString& text);
     void scrollToSetting(QWidget* settingWidget);
     void loadSettings();
+    /// Re-read the stored values into the setting widgets. Cheap and idempotent:
+    /// used when settings are changed outside this panel (first-run integration).
+    void syncFromSettings();
     void applyUpdateCheckResult(bool hasUpdate, const QString& versionInfo);
     void finishPendingUpdateRecheck();
 

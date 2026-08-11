@@ -180,6 +180,16 @@ SettingsContent::SettingsContent(QWidget* parent)
     // Connect to theme changes
     connect(&ruwa::ui::core::ThemeManager::instance(), &ruwa::ui::core::ThemeManager::themeChanged,
         this, &SettingsContent::onThemeChanged);
+
+    // This panel is built together with the first-run integration page, so the values it
+    // captured at construction are stale by the time that page hands over. Re-read them.
+    connect(&ruwa::core::SettingsManager::instance(),
+        &ruwa::core::SettingsManager::firstRunIntegrationCompletedChanged, this,
+        [this](bool completed) {
+            if (completed) {
+                syncFromSettings();
+            }
+        });
 }
 
 void SettingsContent::setupContent()
@@ -811,10 +821,6 @@ void SettingsContent::loadSettings()
     auto& settings = ruwa::core::SettingsManager::instance();
     const auto& current = settings.settings();
 
-    // Block signals during loading to prevent save() being called
-    // when we're just restoring saved values
-
-    // Load appearance settings
     // Apply saved theme (in case main.cpp didn't do it)
     if (!current.appearance.themeId.isNull()) {
         auto& themeManager = ruwa::ui::core::ThemeManager::instance();
@@ -824,6 +830,19 @@ void SettingsContent::loadSettings()
         }
     }
 
+    if (m_welcomeBannerSelector) {
+        m_welcomeBannerSelector->loadFromSettings();
+    }
+
+    syncFromSettings();
+}
+
+void SettingsContent::syncFromSettings()
+{
+    auto& settings = ruwa::core::SettingsManager::instance();
+    const auto& current = settings.settings();
+
+    // Block signals while restoring saved values so save() is not called back.
     if (m_themeSelector && !current.appearance.themeId.isNull()) {
         m_themeSelector->blockSignals(true);
         m_themeSelector->setSelectedTheme(current.appearance.themeId);
@@ -845,10 +864,6 @@ void SettingsContent::loadSettings()
         m_topBarTabAlignmentChoice->setSelectedIndex(
             current.appearance.topBarTabAlignment == 1 ? 1 : 0);
         m_topBarTabAlignmentChoice->blockSignals(false);
-    }
-
-    if (m_welcomeBannerSelector) {
-        m_welcomeBannerSelector->loadFromSettings();
     }
 
     // Load editor settings (autoSaveInterval: 0->0, 2->1, 5->2, 10->3)
