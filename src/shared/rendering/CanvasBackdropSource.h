@@ -17,6 +17,17 @@ namespace ruwa::shared::rendering {
 /// the widget rect and covers the seam.
 inline constexpr double kGlassSilhouetteInsetPx = 0.75;
 
+/// Shared geometry and optics of the refracting glass bevel. The canvas GPU
+/// pass and raster QWidget backdrops use these values so the same glass keeps
+/// the same apparent thickness and displacement outside the canvas. The two
+/// optical values are mirrored in backdrop_refract.frag.glsl, which cannot
+/// include a C++ header.
+inline constexpr double kGlassRefractionWidthPx = 22.0;
+inline constexpr double kGlassRefractionShiftPx = 28.0;
+inline constexpr int kGlassMaxRefractionShiftDevicePx = 44;
+inline constexpr double kGlassIndexOfRefraction = 1.5;
+inline constexpr double kGlassChromaticDispersion = 0.055;
+
 /// Coordinates translucent QWidget chrome with the same-frame GPU backdrop.
 class ICanvasBackdropSource {
 public:

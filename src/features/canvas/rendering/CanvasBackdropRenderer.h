@@ -117,21 +117,12 @@ private:
     /// kLiquidGlassInnerShadowEnabled), since the bevel may separate the panel
     /// from the canvas on its own. 0.16 was the value it shipped at.
     static constexpr float kBevelShadeAmount = 0.0f;
-    /// Width of the refracting bevel band along the rim, in logical pixels.
-    static constexpr float kRefractionWidthLogicalPx = 22.0f;
-    /// Peak outward displacement of the refracted sample, in logical pixels.
-    /// This is what makes a straight edge read as glass: it has to reach far
-    /// enough outside the panel to visibly squeeze the scene into the bevel.
-    static constexpr float kRefractionShiftLogicalPx = 28.0f;
-    /// Ceiling for the displacement in device pixels; the capture padding is
-    /// sized from it, so the bent sample always lands on real captured source.
-    static constexpr int kMaxRefractionShiftDevicePx = 44;
-
-    /// The bent sample reaches kMaxRefractionShiftDevicePx outside the widget
+    /// The bent sample reaches kGlassMaxRefractionShiftDevicePx outside the widget
     /// rect (times the ~1.12 peak of the bevel profile), and the blur kernel
     /// then reaches further still from there.
     static constexpr int kCapturePaddingDevicePx
-        = kKernelReachDevicePx + (kMaxRefractionShiftDevicePx * 6) / 5 + 2;
+        = kKernelReachDevicePx
+        + (ruwa::shared::rendering::kGlassMaxRefractionShiftDevicePx * 6) / 5 + 2;
 };
 
 } // namespace aether
