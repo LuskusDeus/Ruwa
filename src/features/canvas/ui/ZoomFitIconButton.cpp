@@ -9,8 +9,10 @@ ZoomFitIconButton::ZoomFitIconButton(QWidget* parent)
     : ruwa::ui::workspace::ToolButton(ruwa::ui::workspace::ToolButton::Mode::Action, parent)
 {
     setBaseSquareSize(28, 16);
-    setChromeStyle(ruwa::ui::workspace::ToolButton::ChromeStyle::Surface);
-    setBorderVisible(true);
+    // Lives on the frosted zoom panel: no standing plate or outline of its own,
+    // hover only.
+    setChromeStyle(ruwa::ui::workspace::ToolButton::ChromeStyle::Toolbar);
+    setBorderVisible(false);
     setMutedNormalIcon(true);
     setIconType(ruwa::ui::core::IconProvider::StandardIcon::Zoom);
     setToolTip(tr("Zoom to Fit"));

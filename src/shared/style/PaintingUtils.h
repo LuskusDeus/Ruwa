@@ -112,9 +112,14 @@ inline void drawGradientBorder(QPainter& painter, const QRectF& outerRect, qreal
     pen.setWidthF(penWidth);
     pen.setCosmetic(true);
 
+    // Restore, like every other helper here. Leaking this pen means the next
+    // fill a caller draws is silently outlined in the border colour, which is
+    // where stray 1px outlines on overlay content came from.
+    painter.save();
     painter.setPen(pen);
     painter.setBrush(Qt::NoBrush);
     painter.drawPath(path);
+    painter.restore();
 }
 
 // ----------------------------------------------------------------------------
@@ -127,6 +132,11 @@ inline void drawGradientBorder(QPainter& painter, const QRectF& outerRect, qreal
 
 /// Opacity of the diagonal specular rim.
 inline constexpr qreal kLiquidGlassRimOpacity = 0.15;
+/// Off for now: the lit top edge and the dark bottom edge are on trial, and the
+/// refracting bevel may already be doing their job. The pass is kept intact -
+/// flip this back to true to get it, and its GPU counterpart is
+/// CanvasBackdropRenderer::kBevelShadeAmount.
+inline constexpr bool kLiquidGlassInnerShadowEnabled = false;
 /// Opacity of the inner-shadow pair.
 inline constexpr qreal kLiquidGlassShadowOpacity = 0.05;
 /// Default inner-shadow penetration in logical px (scale at the call site).
@@ -278,6 +288,11 @@ inline void drawLiquidGlassInnerShadow(QPainter& painter, const QPainterPath& sh
     const QColor& primary, qreal depth = kLiquidGlassShadowDepth,
     qreal opacity = kLiquidGlassShadowOpacity)
 {
+    // Gated here rather than at the call sites so the joystick base, which asks
+    // for the shadow directly, follows the same switch as drawLiquidGlass().
+    if (!kLiquidGlassInnerShadowEnabled) {
+        return;
+    }
     if (shape.isEmpty() || depth <= 0.5 || opacity <= 0.0) {
         return;
     }

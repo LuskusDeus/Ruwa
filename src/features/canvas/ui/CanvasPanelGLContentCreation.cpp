@@ -214,8 +214,12 @@ bool CanvasPanel::createGLContent()
                 const QPoint mapped = m_glWidget->mapFrom(m_contentWidget, contentPoint);
                 const QPointF fractionalOffset(
                     localRect.x() - integralTopLeft.x(), localRect.y() - integralTopLeft.y());
+                // Read live rather than cached on themeChanged: the provider
+                // already runs per frame, and this way the tint can never lag a
+                // theme switch behind the widget chrome painted over it.
                 regions.push_back({ QRectF(QPointF(mapped) + fractionalOffset, localRect.size()),
-                    cornerRadius, opacity });
+                    cornerRadius, opacity,
+                    ruwa::ui::core::WidgetStyleManager::instance().colors().surface });
             };
             const auto effectOpacity = [](const QGraphicsOpacityEffect* effect) {
                 return effect ? effect->opacity() : 1.0;

@@ -12,9 +12,11 @@ uniform vec2 uSourceUvMax;
 uniform vec2 uRectSize;
 uniform float uCornerRadius;
 uniform float uOpacity;
-uniform float uDarken;
+uniform vec3 uSurfaceTint;
+uniform float uSurfaceTintAmount;
 uniform float uRefractionWidth;
 uniform float uEdgeInset;
+uniform float uBevelShade;
 
 in vec2 fragTexCoord;
 out vec4 outColor;
@@ -50,12 +52,19 @@ void main() {
     float rim = clamp(1.0 + distanceToEdge / bevelWidth, 0.0, 1.0);
     float shape = rim * rim * (3.0 - 2.0 * rim);
 
-    glass *= clamp(uDarken, 0.0, 1.0);
+    // Tint towards the theme surface instead of multiplying towards black. A
+    // multiply can only ever darken, so dark artwork under the panel crushes
+    // and anything drawn on the glass loses its contrast with it; pulling
+    // towards a fixed colour gives the frost a floor as well as a ceiling, and
+    // lands it on the theme's own value whatever is behind the canvas.
+    glass = mix(glass, uSurfaceTint, clamp(uSurfaceTintAmount, 0.0, 1.0));
 
     // Neutral, symmetrical edge darkening adds separation from the canvas
     // without implying a light direction or reintroducing a highlight. Cubed so
     // it sits in the outer part of the bevel instead of shading the whole band.
-    glass *= 1.0 - shape * shape * shape * 0.16;
+    // Currently off (uBevelShade is 0): on trial together with the widget-side
+    // inner shadow, since the refracting bevel may already separate enough.
+    glass *= 1.0 - shape * shape * shape * clamp(uBevelShade, 0.0, 1.0);
 
     outColor = vec4(glass, coverage * clamp(uOpacity, 0.0, 1.0));
 }

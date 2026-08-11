@@ -104,9 +104,10 @@ void BrushControlOverlay::setupWidget()
         = new ruwa::ui::workspace::ToolButton(ruwa::ui::workspace::ToolButton::Mode::Action, this);
     m_brushPackButton->setIconType(IconProvider::StandardIcon::Brushpack);
     m_brushPackButton->setBaseSquareSize(BaseButtonSize, BaseIconSize);
-    m_brushPackButton->setChromeStyle(ruwa::ui::workspace::ToolButton::ChromeStyle::Surface);
-    m_brushPackButton->setChromeOpacity(ButtonChromeOpacityPercent / 100.0);
-    m_brushPackButton->setBorderVisible(true);
+    // No standing plate or outline: on the glass it read as a second panel
+    // rather than a button. Same chrome as the tool-state HUD - hover only.
+    m_brushPackButton->setChromeStyle(ruwa::ui::workspace::ToolButton::ChromeStyle::Toolbar);
+    m_brushPackButton->setBorderVisible(false);
     m_brushPackButton->setMutedNormalIcon(true);
 }
 

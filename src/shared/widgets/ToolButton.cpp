@@ -23,6 +23,14 @@ const int BASE_GROUP_INDICATOR_SIZE = 7;
 const int BASE_GROUP_INDICATOR_MARGIN = 4;
 const int BASE_LABEL_FONT_SIZE = 9;
 const int BASE_ICON_LABEL_SPACING = 7;
+
+/// Hover fill: the accent colour at a tenth, for every chrome style.
+const qreal HOVER_ALPHA = 0.10;
+
+/// Disabled icons are darkened rather than only faded. The canvas overlays are
+/// transparent to the artwork, and a light muted grey at half alpha disappears
+/// completely over a white canvas.
+const int DISABLED_ICON_DARKEN = 150;
 } // namespace
 
 ToolButton::ToolButton(QWidget* parent)
@@ -271,22 +279,18 @@ void ToolButton::paintEvent(QPaintEvent* event)
         painter.drawRoundedRect(rect, radius, radius);
     }
 
-    // Hover state (only when not active)
+    // Hover state (only when not active). One treatment for every chrome style:
+    // the accent at a tenth. PrimaryHover used to be the only style that lit up
+    // in the accent colour while the rest fell back to a grey surface wash,
+    // which made those buttons look singled out. PrimaryHover still differs in
+    // that it also pulls its icon towards the accent.
     if (enabled && hoverProgress() > 0 && activeProgress() < 1.0) {
-        QColor hoverColor;
-        qreal hoverAlpha = 0.0;
-        if (m_chromeStyle == ChromeStyle::PrimaryHover) {
-            hoverColor = colors.primary;
-            hoverAlpha = (colors.isDark ? 0.14 : 0.10) * hoverProgress() * (1.0 - activeProgress());
-        } else {
-            hoverColor = m_chromeStyle == ChromeStyle::Overlay ? colors.overlay(0.06)
-                                                               : colors.surfaceHover();
-            hoverAlpha = hoverColor.alphaF() * hoverProgress() * (1.0 - activeProgress());
-            if (m_chromeStyle == ChromeStyle::Surface) {
-                hoverAlpha *= m_chromeOpacity;
-            }
+        QColor hoverColor = colors.primary;
+        qreal hoverAlpha = HOVER_ALPHA * hoverProgress() * (1.0 - activeProgress());
+        if (m_chromeStyle == ChromeStyle::Surface) {
+            hoverAlpha *= m_chromeOpacity;
         }
-        hoverColor.setAlphaF(hoverAlpha);
+        hoverColor.setAlphaF(qBound(0.0, hoverAlpha, 1.0));
         painter.setBrush(hoverColor);
         painter.drawRoundedRect(rect, radius, radius);
     }
@@ -335,8 +339,8 @@ void ToolButton::paintEvent(QPaintEvent* event)
     }
     const QColor activeColor = colors.textOnPrimary();
     const QColor enabledContentColor = lerpColor(normalContentColor, activeColor, activeProgress());
-    const QColor contentColor
-        = lerpColor(colors.textDisabled(), enabledContentColor, m_enabledProgress);
+    const QColor contentColor = lerpColor(
+        colors.textDisabled().darker(DISABLED_ICON_DARKEN), enabledContentColor, m_enabledProgress);
 
     const QString label = text();
     const bool hasIcon = !m_sourceIcon.isNull();

@@ -170,7 +170,6 @@ private:
     static constexpr int SliderSurfaceOpacityPercent = 58;
     static constexpr int SliderTrackOpacityPercent = 0;
     static constexpr int SliderFillOpacityPercent = 85;
-    static constexpr int ButtonChromeOpacityPercent = 58;
 
     // Calculated dimensions (vertical layout)
     static constexpr int BaseWidth = BasePadding + BaseSliderWidth + BasePadding;

@@ -151,6 +151,7 @@ protected:
         QRectF lineRect(
             rect().center().x() - lineW / 2.0, handleH / 2.0 - lineH / 2.0, lineW, lineH);
         qreal lineRadius = lineRect.height() / 2.0;
+        p.setPen(Qt::NoPen);
         p.setBrush(colors.textMuted);
         p.drawRoundedRect(lineRect, lineRadius, lineRadius);
     }

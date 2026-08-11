@@ -223,6 +223,12 @@ bool CanvasBackdropRenderer::render(GLuint sourceFbo, GLuint defaultFbo, int sur
             = static_cast<float>(std::max<qreal>(0.0, region.cornerRadius * cornerScale));
         item.opacity = static_cast<float>(std::clamp<qreal>(region.opacity, 0.0, 1.0));
         item.targetIndex = targetIndex;
+        if (region.surfaceTint.isValid()) {
+            item.tintR = static_cast<float>(region.surfaceTint.redF());
+            item.tintG = static_cast<float>(region.surfaceTint.greenF());
+            item.tintB = static_cast<float>(region.surfaceTint.blueF());
+            item.tintAmount = kGlassSurfaceTint;
+        }
 
         const float captureWidth = static_cast<float>(captureRect.width());
         const float captureHeight = static_cast<float>(captureRect.height());
@@ -322,9 +328,11 @@ bool CanvasBackdropRenderer::render(GLuint sourceFbo, GLuint defaultFbo, int sur
         m_gl->glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
         m_compositeProgram->use();
         m_compositeProgram->setUniform("uSource", 0);
-        m_compositeProgram->setUniform("uDarken", kGlassDarken);
+        m_compositeProgram->setUniform("uSurfaceTint", item.tintR, item.tintG, item.tintB);
+        m_compositeProgram->setUniform("uSurfaceTintAmount", item.tintAmount);
         m_compositeProgram->setUniform("uRefractionWidth", refractionWidth);
         m_compositeProgram->setUniform("uEdgeInset", kSilhouetteInsetLogicalPx * deviceScale);
+        m_compositeProgram->setUniform("uBevelShade", kBevelShadeAmount);
         m_compositeProgram->setUniform("uSourceUvMin", item.sourceUvMinX, item.sourceUvMinY);
         m_compositeProgram->setUniform("uSourceUvMax", item.sourceUvMaxX, item.sourceUvMaxY);
         m_compositeProgram->setUniform("uRectSize", static_cast<float>(item.targetRect.width()),
