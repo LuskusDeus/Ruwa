@@ -121,16 +121,19 @@ protected:
         p.setPen(Qt::NoPen);
         const int radius = ruwa::ui::core::WidgetStyleManager::instance().scaled(6);
 
-        // Same-frame GPU backdrop blur; solid fallback.
+        // Same-frame GPU backdrop blur; solid fallback. Glass, so it ends on
+        // the backdrop's silhouette rather than the rect.
         QPainterPath bgPath;
-        bgPath.addRoundedRect(rect(), radius, radius);
+        bgPath.addRoundedRect(ruwa::ui::painting::glassSilhouetteRect(QRectF(rect())),
+            ruwa::ui::painting::glassSilhouetteRadius(radius),
+            ruwa::ui::painting::glassSilhouetteRadius(radius));
         QColor tint = colors.surface;
         tint.setAlpha(ruwa::ui::painting::kBackdropTintAlpha);
         if (!ruwa::ui::painting::drawBackdropBlurTint(p, this, m_backdropSource, bgPath, tint)) {
             QColor bg = colors.surface;
             bg.setAlpha(200); // Semi-transparent to blend with canvas
             p.setBrush(bg);
-            p.drawRoundedRect(rect(), radius, radius);
+            p.drawPath(bgPath);
         }
 
         QColor borderColor = colors.border;

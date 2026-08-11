@@ -306,8 +306,10 @@ void CanvasStylusJoystickWidget::paintEvent(QPaintEvent* event)
 
     // Base body: same-frame GPU backdrop blur clipped to the circular base.
     painter.setPen(Qt::NoPen);
+    // Glass, so it ends on the backdrop's silhouette rather than the base edge.
+    const qreal baseGlassR = ruwa::ui::painting::glassSilhouetteRadius(baseR);
     QPainterPath basePath;
-    basePath.addEllipse(c, baseR, baseR);
+    basePath.addEllipse(c, baseGlassR, baseGlassR);
     QColor baseTint = colors.surface;
     baseTint.setAlpha(ruwa::ui::painting::kBackdropTintAlpha);
     if (!ruwa::ui::painting::drawBackdropBlurTint(
@@ -315,7 +317,7 @@ void CanvasStylusJoystickWidget::paintEvent(QPaintEvent* event)
         QColor baseBg = colors.surface;
         baseBg.setAlpha(200);
         painter.setBrush(baseBg);
-        painter.drawEllipse(c, baseR, baseR);
+        painter.drawEllipse(c, baseGlassR, baseGlassR);
     }
 
     const QRectF bodyRect(

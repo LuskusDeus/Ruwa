@@ -46,6 +46,14 @@ Result<void> CanvasBackdropRenderer::initialize(const QString& shaderDir)
         return blurResult;
     }
 
+    m_refractProgram = std::make_unique<GLShaderProgram>(m_gl);
+    auto refractResult = m_refractProgram->loadFromFiles(
+        shaderDir + "/composite.vert.glsl", shaderDir + "/backdrop_refract.frag.glsl");
+    if (!refractResult) {
+        shutdown();
+        return refractResult;
+    }
+
     m_compositeProgram = std::make_unique<GLShaderProgram>(m_gl);
     auto compositeResult = m_compositeProgram->loadFromFiles(
         shaderDir + "/composite.vert.glsl", shaderDir + "/backdrop_composite.frag.glsl");
@@ -80,6 +88,7 @@ void CanvasBackdropRenderer::shutdown()
         m_vao = 0;
     }
     m_blurProgram.reset();
+    m_refractProgram.reset();
     m_compositeProgram.reset();
     m_initialized = false;
 }
@@ -116,7 +125,7 @@ void CanvasBackdropRenderer::releaseTarget(RegionTarget& target)
         }
     };
     releasePair(target.halfFbo, target.halfTexture);
-    releasePair(target.quarterFbo, target.quarterTexture);
+    releasePair(target.refractFbo, target.refractTexture);
     releasePair(target.blurAFbo, target.blurATexture);
     releasePair(target.blurBFbo, target.blurBTexture);
     target = {};
@@ -139,16 +148,14 @@ bool CanvasBackdropRenderer::ensureTarget(RegionTarget& target, int captureWidth
 
     target.blurWidth = blurWidth;
     target.blurHeight = blurHeight;
-    target.quarterWidth = blurWidth * 2;
-    target.quarterHeight = blurHeight * 2;
-    target.halfWidth = blurWidth * 4;
-    target.halfHeight = blurHeight * 4;
+    target.halfWidth = blurWidth * 2;
+    target.halfHeight = blurHeight * 2;
 
     bool ok = createColorTarget(
         target.halfWidth, target.halfHeight, target.halfFbo, target.halfTexture);
     ok = ok
         && createColorTarget(
-            target.quarterWidth, target.quarterHeight, target.quarterFbo, target.quarterTexture);
+            target.halfWidth, target.halfHeight, target.refractFbo, target.refractTexture);
     ok = ok
         && createColorTarget(
             target.blurWidth, target.blurHeight, target.blurAFbo, target.blurATexture);
@@ -241,8 +248,16 @@ bool CanvasBackdropRenderer::render(GLuint sourceFbo, GLuint defaultFbo, int sur
     m_gl->glDisable(GL_SCISSOR_TEST);
     m_gl->glColorMask(GL_TRUE, GL_TRUE, GL_TRUE, GL_TRUE);
 
-    // Capture and reduce every source region before compositing any result back
-    // into the default framebuffer. This prevents overlap feedback.
+    const float deviceScale = static_cast<float>(
+        std::min<qreal>(logicalToSurfaceScaleX, logicalToSurfaceScaleY));
+    const float refractionWidth = kRefractionWidthLogicalPx * deviceScale;
+    const float refractionShift = std::min(kRefractionShiftLogicalPx * deviceScale,
+        static_cast<float>(kMaxRefractionShiftDevicePx));
+
+    m_gl->glActiveTexture(GL_TEXTURE0);
+
+    // Capture, refract and reduce every source region before compositing any
+    // result back into the default framebuffer. This prevents overlap feedback.
     for (const PreparedRegion& item : prepared) {
         RegionTarget& target = m_targets[item.targetIndex];
         const int sourceBottom = surfaceHeight - item.captureRect.y() - item.captureRect.height();
@@ -254,18 +269,28 @@ bool CanvasBackdropRenderer::render(GLuint sourceFbo, GLuint defaultFbo, int sur
             item.captureRect.x() + item.captureRect.width(), sourceTop, 0, 0, target.halfWidth,
             target.halfHeight, GL_COLOR_BUFFER_BIT, GL_LINEAR);
 
-        m_gl->glBindFramebuffer(GL_READ_FRAMEBUFFER, target.halfFbo);
-        m_gl->glBindFramebuffer(GL_DRAW_FRAMEBUFFER, target.quarterFbo);
-        m_gl->glBlitFramebuffer(0, 0, target.halfWidth, target.halfHeight, 0, 0,
-            target.quarterWidth, target.quarterHeight, GL_COLOR_BUFFER_BIT, GL_LINEAR);
+        // Bend first, frost second: the blur below runs on the refracted image,
+        // so the two effects stop fighting over the rim.
+        m_gl->glBindFramebuffer(GL_FRAMEBUFFER, target.refractFbo);
+        m_gl->glViewport(0, 0, target.halfWidth, target.halfHeight);
+        m_refractProgram->use();
+        m_refractProgram->setUniform("uSource", 0);
+        m_refractProgram->setUniform("uSourceUvMin", item.sourceUvMinX, item.sourceUvMinY);
+        m_refractProgram->setUniform("uSourceUvMax", item.sourceUvMaxX, item.sourceUvMaxY);
+        m_refractProgram->setUniform("uRectSize", static_cast<float>(item.targetRect.width()),
+            static_cast<float>(item.targetRect.height()));
+        m_refractProgram->setUniform("uCornerRadius", item.cornerRadius);
+        m_refractProgram->setUniform("uRefractionWidth", refractionWidth);
+        m_refractProgram->setUniform("uRefractionShift", refractionShift);
+        m_gl->glBindTextureUnit(0, target.halfTexture);
+        drawFullscreen();
 
-        m_gl->glBindFramebuffer(GL_READ_FRAMEBUFFER, target.quarterFbo);
+        m_gl->glBindFramebuffer(GL_READ_FRAMEBUFFER, target.refractFbo);
         m_gl->glBindFramebuffer(GL_DRAW_FRAMEBUFFER, target.blurAFbo);
-        m_gl->glBlitFramebuffer(0, 0, target.quarterWidth, target.quarterHeight, 0, 0,
-            target.blurWidth, target.blurHeight, GL_COLOR_BUFFER_BIT, GL_LINEAR);
+        m_gl->glBlitFramebuffer(0, 0, target.halfWidth, target.halfHeight, 0, 0, target.blurWidth,
+            target.blurHeight, GL_COLOR_BUFFER_BIT, GL_LINEAR);
     }
 
-    m_gl->glActiveTexture(GL_TEXTURE0);
     for (const PreparedRegion& item : prepared) {
         RegionTarget& target = m_targets[item.targetIndex];
         const float horizontalStep = static_cast<float>(kKernelReachDevicePx)
@@ -297,6 +322,9 @@ bool CanvasBackdropRenderer::render(GLuint sourceFbo, GLuint defaultFbo, int sur
         m_gl->glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
         m_compositeProgram->use();
         m_compositeProgram->setUniform("uSource", 0);
+        m_compositeProgram->setUniform("uDarken", kGlassDarken);
+        m_compositeProgram->setUniform("uRefractionWidth", refractionWidth);
+        m_compositeProgram->setUniform("uEdgeInset", kSilhouetteInsetLogicalPx * deviceScale);
         m_compositeProgram->setUniform("uSourceUvMin", item.sourceUvMinX, item.sourceUvMinY);
         m_compositeProgram->setUniform("uSourceUvMax", item.sourceUvMaxX, item.sourceUvMaxY);
         m_compositeProgram->setUniform("uRectSize", static_cast<float>(item.targetRect.width()),

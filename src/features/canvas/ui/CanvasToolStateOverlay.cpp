@@ -1306,8 +1306,11 @@ void CanvasToolStateOverlay::drawBackground(QPainter& painter)
     // Capsule: rounded ends with radius = half the strip height.
     const int radius = height() / 2;
 
+    // Glass, so it ends on the backdrop's silhouette rather than the rect.
     QPainterPath bgPath;
-    bgPath.addRoundedRect(rect(), radius, radius);
+    bgPath.addRoundedRect(ruwa::ui::painting::glassSilhouetteRect(QRectF(rect())),
+        ruwa::ui::painting::glassSilhouetteRadius(radius),
+        ruwa::ui::painting::glassSilhouetteRadius(radius));
 
     painter.setPen(Qt::NoPen);
 

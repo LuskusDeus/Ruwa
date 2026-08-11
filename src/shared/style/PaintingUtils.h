@@ -31,6 +31,25 @@ namespace ruwa::ui::painting {
 /// Alpha of the theme surface tint painted over canvas backdrop blur.
 inline constexpr int kBackdropTintAlpha = 112;
 
+/// Shape of the glass in a backdrop-blurred overlay: the widget rect pulled in
+/// to where the GPU pass ends its own silhouette (see kGlassSilhouetteInsetPx).
+/// Everything painted *as glass* - the tint, the inner shadow - has to use it,
+/// or it stands proud of the blur by the inset and shows around the corners,
+/// through the overlay's half-transparent border. The border itself is not
+/// glass and stays on the widget rect.
+inline QRectF glassSilhouetteRect(const QRectF& rect)
+{
+    const qreal inset = ruwa::shared::rendering::kGlassSilhouetteInsetPx;
+    const QRectF inner = rect.adjusted(inset, inset, -inset, -inset);
+    return inner.isValid() ? inner : rect;
+}
+
+/// Radius that keeps glassSilhouetteRect() concentric with the widget's corners.
+inline qreal glassSilhouetteRadius(qreal radius)
+{
+    return qMax<qreal>(0.0, radius - ruwa::shared::rendering::kGlassSilhouetteInsetPx);
+}
+
 namespace detail {
 inline constexpr int kBayer4[4][4] = {
     { 0, 8, 2, 10 },
@@ -387,8 +406,12 @@ inline void drawLiquidGlass(QPainter& painter, const QRectF& rect, qreal radius,
         return;
     }
 
+    // The shadow is glass and stops on the backdrop's silhouette; the rim below
+    // is a border and stays on the widget's own stroke.
+    const QRectF shapeRect = glassSilhouetteRect(rect);
+    const qreal shapeRadius = glassSilhouetteRadius(radius);
     QPainterPath shape;
-    shape.addRoundedRect(rect, radius, radius);
+    shape.addRoundedRect(shapeRect, shapeRadius, shapeRadius);
 
     const QRectF rimRect = rect.adjusted(0.5, 0.5, -0.5, -0.5);
     const qreal rimRadius = qMax<qreal>(0.0, radius - 0.5);
