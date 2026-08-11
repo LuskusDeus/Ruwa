@@ -40,7 +40,7 @@ class Separator;
  */
 class CanvasToolStateOverlay : public QWidget, public IContextMenuProvider {
     Q_OBJECT
-    Q_PROPERTY(int animatedWidth READ animatedWidth WRITE setAnimatedWidth)
+    Q_PROPERTY(qreal transitionProgress READ transitionProgress WRITE setTransitionProgress)
 
 public:
     explicit CanvasToolStateOverlay(QWidget* parent = nullptr);
@@ -110,9 +110,11 @@ private:
     QSize canvasPageNaturalSize(int index) const;
     void updateVisibleContentGeometry(int contentWidth, int contentHeight);
     void updateInteractivePageLayout(int contentWidth, int contentHeight);
-    int animatedWidth() const;
-    void setAnimatedWidth(int width);
-    void animateOverlayWidth(int targetWidth);
+    qreal transitionProgress() const;
+    void setTransitionProgress(qreal progress);
+    void animateOverlayGeometry(const QSize& targetSize);
+    bool isGeometryAnimating() const;
+    QSize animatedToolStackSize(qreal t, const QSize& stripSize) const;
     void drawBackground(QPainter& painter);
     void connectParameterSlider(ProgressHandleSlider* slider, QElapsedTimer& timer,
         void (CanvasToolStateOverlay::*changeSignal)(qreal));
@@ -132,6 +134,9 @@ private:
     static constexpr int kSectionSpacingBase = 6;
     static constexpr int kSectionSeparatorHeightBase = 24;
     static constexpr int kSliderEmitIntervalMs = 8;
+    // One clock for the whole strip: the size/position animation and both page
+    // slides share it, so the frame and its content never drift apart.
+    static constexpr int kTransitionDurationMs = 300;
 
     AnimatedStackedWidget* m_canvasModeStack = nullptr;
     QWidget* m_interactivePage = nullptr;
@@ -174,8 +179,15 @@ private:
     QLabel* m_canvasResizeOldSizeValueLabel = nullptr;
     QLabel* m_canvasResizeNewSizeValueLabel = nullptr;
     QSize m_lastAppliedSize;
-    QPropertyAnimation* m_widthAnimation = nullptr;
-    qreal m_widthAnimationAnchorCenterX = 0.0;
+    QPropertyAnimation* m_geometryAnimation = nullptr;
+    qreal m_transitionProgress = 1.0;
+    qreal m_transitionAnchorCenterX = 0.0;
+    // Endpoints interpolated by setTransitionProgress(). The tool stack travels
+    // on the same clock as the strip so nothing snaps when the slide lands.
+    QSize m_transitionStartSize;
+    QSize m_transitionTargetSize;
+    QSize m_toolStackStartSize;
+    QSize m_toolStackTargetSize;
     QSize m_pendingAnimatedSize;
     int m_canvasPageSizeIndexOverride = -1;
     int m_toolPageSizeIndexOverride = -1;

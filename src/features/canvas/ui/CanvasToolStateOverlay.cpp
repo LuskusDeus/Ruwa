@@ -52,6 +52,40 @@ constexpr int kSliderSurfaceOpacityPercent = 58;
 constexpr int kSliderTrackOpacityPercent = 0;
 constexpr int kSliderFillOpacityPercent = 85;
 
+// Symmetric ease for a transition that starts from rest: the strip's size and
+// the sliding pages run the same curve, so they read as one movement.
+constexpr QEasingCurve::Type kTransitionEasing = QEasingCurve::InOutCubic;
+// Re-targeting mid-flight: the strip is already moving, so an in-out curve
+// (zero velocity at t=0) would visibly stall. Pick up at full speed instead.
+constexpr QEasingCurve::Type kTransitionInterruptEasing = QEasingCurve::OutCubic;
+
+int lerpInt(int from, int to, qreal t)
+{
+    return qRound(from + (to - from) * t);
+}
+
+/// Nudge @p value by a pixel, if needed, so it has the same parity as @p reference.
+///
+/// The strip stays centred on a fixed anchor while its width animates, so its
+/// left edge travels at half the rate of the width, while every centring offset
+/// inside it travels the same half rate the other way. Those are two independent
+/// roundings of a half-pixel quantity, and they only cancel when the width steps
+/// by an even number: on an odd step they land on opposite sides and the content
+/// jumps a pixel sideways for one frame — a fast left-right shimmer through the
+/// slow parts of the curve, where the width creeps a pixel at a time.
+///
+/// Holding the animated width on one parity makes every one of those halvings
+/// exact, so the whole chain steps in whole pixels. The parity is taken from the
+/// target, so the animation still lands on it exactly; the pixel of slack is
+/// spent on the very first frame instead, where nothing has moved yet.
+int alignToParityOf(int value, int reference, bool growing)
+{
+    if (((value ^ reference) & 1) == 0) {
+        return value;
+    }
+    return growing ? value + 1 : value - 1;
+}
+
 QSize pageHint(QWidget* page)
 {
     if (!page) {
@@ -447,14 +481,22 @@ CanvasToolStateOverlay::CanvasToolStateOverlay(QWidget* parent)
     setMouseTracking(true);
     setTabletTracking(true);
     setSizePolicy(QSizePolicy::Fixed, QSizePolicy::Fixed);
-    m_widthAnimation = new QPropertyAnimation(this, "animatedWidth", this);
-    m_widthAnimation->setDuration(220);
-    m_widthAnimation->setEasingCurve(QEasingCurve::OutCubic);
-    connect(m_widthAnimation, &QPropertyAnimation::finished, this, [this]() {
+    m_geometryAnimation = new QPropertyAnimation(this, "transitionProgress", this);
+    m_geometryAnimation->setDuration(kTransitionDurationMs);
+    m_geometryAnimation->setEasingCurve(kTransitionEasing);
+    m_geometryAnimation->setStartValue(0.0);
+    m_geometryAnimation->setEndValue(1.0);
+    connect(m_geometryAnimation, &QPropertyAnimation::finished, this, [this]() {
+        m_transitionProgress = 1.0;
+        m_transitionStartSize = QSize();
+        m_transitionTargetSize = QSize();
+        m_toolStackStartSize = QSize();
+        m_toolStackTargetSize = QSize();
         if (!m_pendingAnimatedSize.isValid()) {
             return;
         }
         setFixedSize(m_pendingAnimatedSize);
+        // Endpoints were reached by interpolation, so this only re-asserts them.
         syncStackSizes();
         updateGeometry();
         update();
@@ -502,27 +544,11 @@ void CanvasToolStateOverlay::setCanvasPageIndex(int index)
         return;
     }
 
-    if (!isVisible() || currentIndex < 0) {
-        m_canvasPageSizeIndexOverride = index;
-        updateOverlaySize();
-        m_canvasModeStack->setCurrentIndex(index);
-        return;
-    }
-
-    if (m_widthAnimation && m_widthAnimation->state() == QAbstractAnimation::Running) {
-        m_widthAnimation->stop();
-        m_pendingAnimatedSize = QSize();
-    }
-
-    auto& theme = ThemeManager::instance();
-    const int sidePadding = theme.scaled(kPanelHorizontalPaddingBase);
-    const QSize currentSize = canvasPageNaturalSize(currentIndex);
-    const QSize targetSize = canvasPageNaturalSize(index);
-    const int stableContentWidth = qMax(1, width() - sidePadding * 2);
-    const int stableContentHeight = qMax(currentSize.height(), targetSize.height());
-
-    updateVisibleContentGeometry(stableContentWidth, stableContentHeight);
+    // Size toward the incoming page and start the slide on the same tick, so the
+    // strip and its content move as one. Doing the resize only after the slide
+    // finished (the old behaviour) read as two separate, snappy steps.
     m_canvasPageSizeIndexOverride = index;
+    updateOverlaySize();
     m_canvasModeStack->setCurrentIndex(index);
 }
 
@@ -712,13 +738,10 @@ void CanvasToolStateOverlay::setActiveTool(workspace::ToolId tool)
         return;
     }
 
-    const QSize currentSize = toolPageNaturalSize(toolPageIndex());
-    const QSize targetSize = toolPageNaturalSize(index);
+    // The stack keeps its current size here: updateOverlaySize() picks that up as
+    // the animation's start and interpolates it to the incoming page's size in
+    // step with the strip, so the centred tool content never jumps at the end.
     m_toolPageSizeIndexOverride = index;
-    m_toolContentStack->setFixedSize(currentSize.expandedTo(targetSize));
-    updateVisibleContentGeometry(
-        qMax(1, width() - ThemeManager::instance().scaled(kPanelHorizontalPaddingBase) * 2),
-        qMax(1, height() - ThemeManager::instance().scaled(kPanelPaddingBase) * 2));
     updateOverlaySize();
     m_toolContentStack->setCurrentIndex(index);
 }
@@ -793,7 +816,9 @@ void CanvasToolStateOverlay::setupUi()
     m_canvasModeStack->setStyleSheet(QStringLiteral("background: transparent; border: none;"));
     m_canvasModeStack->setSlideOrientation(AnimatedStackedWidget::SlideOrientation::Vertical);
     m_canvasModeStack->setSuspendLayoutDuringAnimation(true);
-    m_canvasModeStack->setAnimationDuration(220);
+    m_canvasModeStack->setAnimationDuration(kTransitionDurationMs);
+    m_canvasModeStack->setAnimationEasing(kTransitionEasing);
+    m_canvasModeStack->setInterruptEasing(kTransitionInterruptEasing);
     m_canvasModeStack->setSizePolicy(QSizePolicy::Fixed, QSizePolicy::Fixed);
     rootLayout->addWidget(m_canvasModeStack, 0, Qt::AlignCenter);
 
@@ -847,7 +872,9 @@ void CanvasToolStateOverlay::setupUi()
     m_toolContentStack->setSlideOrientation(AnimatedStackedWidget::SlideOrientation::Vertical);
     m_toolContentStack->setPreservePageSize(true);
     m_toolContentStack->setSuspendLayoutDuringAnimation(true);
-    m_toolContentStack->setAnimationDuration(220);
+    m_toolContentStack->setAnimationDuration(kTransitionDurationMs);
+    m_toolContentStack->setAnimationEasing(kTransitionEasing);
+    m_toolContentStack->setInterruptEasing(kTransitionInterruptEasing);
     m_toolContentStack->setSizePolicy(QSizePolicy::Fixed, QSizePolicy::Fixed);
     const auto addPlaceholderPage = [this](workspace::ToolId tool) {
         addToolPage(tool, createToolPlaceholderPage(nullptr, m_toolContentStack));
@@ -1177,17 +1204,21 @@ void CanvasToolStateOverlay::updateInteractivePageLayout(int contentWidth, int c
 
 void CanvasToolStateOverlay::syncStackSizes()
 {
+    // A running transition owns every size in here (see setTransitionProgress).
+    // Writing endpoint sizes mid-flight would fight it and land as a jump of the
+    // centred content; re-assert the current frame instead.
+    if (isGeometryAnimating()) {
+        setTransitionProgress(m_transitionProgress);
+        return;
+    }
+
     auto& theme = ThemeManager::instance();
     const int bodyHeight = theme.scaled(kMinimumContentHeightBase);
 
     if (m_toolContentStack) {
         const int toolIndex
             = m_toolPageSizeIndexOverride >= 0 ? m_toolPageSizeIndexOverride : toolPageIndex();
-        QSize toolSize = toolPageNaturalSize(toolIndex);
-        if (m_widthAnimation && m_widthAnimation->state() == QAbstractAnimation::Running) {
-            toolSize = toolSize.expandedTo(m_toolContentStack->size());
-        }
-        m_toolContentStack->setFixedSize(toolSize);
+        m_toolContentStack->setFixedSize(toolPageNaturalSize(toolIndex));
     }
 
     const int sidePadding = theme.scaled(kPanelHorizontalPaddingBase);
@@ -1198,22 +1229,74 @@ void CanvasToolStateOverlay::syncStackSizes()
     updateVisibleContentGeometry(visibleContentWidth, qMax(bodyHeight, naturalCanvasSize.height()));
 }
 
-int CanvasToolStateOverlay::animatedWidth() const
+bool CanvasToolStateOverlay::isGeometryAnimating() const
 {
-    return width();
+    return m_geometryAnimation && m_geometryAnimation->state() == QAbstractAnimation::Running;
 }
 
-void CanvasToolStateOverlay::setAnimatedWidth(int widthValue)
+qreal CanvasToolStateOverlay::transitionProgress() const
 {
-    const int newWidth = qMax(1, widthValue);
-    const int currentHeight = height();
-    const int newX = qRound(m_widthAnimationAnchorCenterX - newWidth / 2.0);
+    return m_transitionProgress;
+}
 
-    setFixedSize(newWidth, currentHeight);
+QSize CanvasToolStateOverlay::animatedToolStackSize(qreal t, const QSize& stripSize) const
+{
+    if (!m_toolStackStartSize.isValid() || !m_toolStackTargetSize.isValid()
+        || !m_transitionTargetSize.isValid()) {
+        return QSize();
+    }
+
+    // The stack sits centred inside the strip, so what must step in whole pixels
+    // is the *difference* between the two widths — hence the parity reference is
+    // the strip's current size less the chrome around the stack at the target.
+    const int widthReference
+        = stripSize.width() - (m_transitionTargetSize.width() - m_toolStackTargetSize.width());
+    const int heightReference
+        = stripSize.height() - (m_transitionTargetSize.height() - m_toolStackTargetSize.height());
+
+    return QSize(qMax(1,
+                     alignToParityOf(
+                         lerpInt(m_toolStackStartSize.width(), m_toolStackTargetSize.width(), t),
+                         widthReference,
+                         m_toolStackTargetSize.width() >= m_toolStackStartSize.width())),
+        qMax(1,
+            alignToParityOf(lerpInt(m_toolStackStartSize.height(), m_toolStackTargetSize.height(), t),
+                heightReference, m_toolStackTargetSize.height() >= m_toolStackStartSize.height())));
+}
+
+void CanvasToolStateOverlay::setTransitionProgress(qreal progress)
+{
+    m_transitionProgress = progress;
+
+    if (!m_transitionStartSize.isValid() || !m_transitionTargetSize.isValid()) {
+        return;
+    }
+
+    const qreal t = qBound(0.0, progress, 1.0);
+    const int newWidth = qMax(1,
+        alignToParityOf(lerpInt(m_transitionStartSize.width(), m_transitionTargetSize.width(), t),
+            m_transitionTargetSize.width(),
+            m_transitionTargetSize.width() >= m_transitionStartSize.width()));
+    const int newHeight = qMax(1,
+        alignToParityOf(lerpInt(m_transitionStartSize.height(), m_transitionTargetSize.height(), t),
+            m_transitionTargetSize.height(),
+            m_transitionTargetSize.height() >= m_transitionStartSize.height()));
+    const int newX = qRound(m_transitionAnchorCenterX - newWidth / 2.0);
+
+    // The tool stack rides the same curve as the strip: its width is what the
+    // strip's width is made of, so they must reach their targets together.
+    if (m_toolContentStack) {
+        const QSize toolSize = animatedToolStackSize(t, QSize(newWidth, newHeight));
+        if (toolSize.isValid()) {
+            m_toolContentStack->setFixedSize(toolSize);
+        }
+    }
+
+    setFixedSize(newWidth, newHeight);
     move(newX, y());
     updateVisibleContentGeometry(
         qMax(1, newWidth - ThemeManager::instance().scaled(kPanelHorizontalPaddingBase) * 2),
-        qMax(1, currentHeight - ThemeManager::instance().scaled(kPanelPaddingBase) * 2));
+        qMax(1, newHeight - ThemeManager::instance().scaled(kPanelPaddingBase) * 2));
     updateGeometry();
     update();
     if (m_backdropSource) {
@@ -1221,21 +1304,35 @@ void CanvasToolStateOverlay::setAnimatedWidth(int widthValue)
     }
 }
 
-void CanvasToolStateOverlay::animateOverlayWidth(int targetWidth)
+void CanvasToolStateOverlay::animateOverlayGeometry(const QSize& targetSize)
 {
-    if (!m_widthAnimation) {
+    if (!m_geometryAnimation) {
         return;
     }
 
-    if (m_widthAnimation->state() == QAbstractAnimation::Running) {
-        m_widthAnimation->stop();
+    const bool wasAnimating = isGeometryAnimating();
+    if (wasAnimating) {
+        m_geometryAnimation->stop();
     }
 
-    m_widthAnimationAnchorCenterX = x() + width() / 2.0;
-    m_pendingAnimatedSize = QSize(targetWidth, height());
-    m_widthAnimation->setStartValue(width());
-    m_widthAnimation->setEndValue(targetWidth);
-    m_widthAnimation->start();
+    m_transitionAnchorCenterX = x() + width() / 2.0;
+    m_transitionStartSize = size();
+    m_transitionTargetSize = targetSize;
+    m_pendingAnimatedSize = targetSize;
+
+    if (m_toolContentStack) {
+        const int toolIndex
+            = m_toolPageSizeIndexOverride >= 0 ? m_toolPageSizeIndexOverride : toolPageIndex();
+        // Start from wherever the stack currently is — mid-flight when this
+        // interrupts a running transition — so re-targeting stays continuous.
+        m_toolStackStartSize = m_toolContentStack->size();
+        m_toolStackTargetSize = toolPageNaturalSize(toolIndex);
+    }
+
+    m_geometryAnimation->setEasingCurve(
+        wasAnimating ? kTransitionInterruptEasing : kTransitionEasing);
+    m_transitionProgress = 0.0;
+    m_geometryAnimation->start();
 }
 
 void CanvasToolStateOverlay::updateOverlaySize()
@@ -1257,31 +1354,40 @@ void CanvasToolStateOverlay::updateOverlaySize()
         qMax(1, contentWidth + sidePadding * 2), qMax(1, contentHeight + panelPadding * 2));
     m_lastAppliedSize = newSize;
 
-    // A width animation toward this exact target is effectively "already applying"
-    // newSize; setAnimatedWidth() keeps the content laid out each tick, so just
-    // refresh and let it land.
-    const bool animatingToTarget = m_widthAnimation
-        && m_widthAnimation->state() == QAbstractAnimation::Running
-        && m_pendingAnimatedSize == newSize;
+    // A transition toward this exact target is effectively "already applying"
+    // newSize; setTransitionProgress() keeps the content laid out each tick, so
+    // just refresh and let it land.
+    const bool animatingToTarget = isGeometryAnimating() && m_pendingAnimatedSize == newSize;
     // Only skip the resize when the widget ACTUALLY has newSize. Trusting the
     // cached size alone is unsafe: the real geometry can diverge from it (e.g. an
-    // interrupted width animation in setCanvasPageIndex() leaves the strip at an
+    // interrupted transition in setCanvasPageIndex() leaves the strip at an
     // intermediate width without finalizing to the target). If we early-returned
     // on the stale cache, the strip would stay too narrow and clip the tool
     // content (a tool's sliders get cut off inside m_toolViewport).
     const bool sizeAlreadyApplied = (size() == newSize);
+    // Two tool pages can be the same width while their content differs in size;
+    // the strip then has nothing to animate but the stack still does, and
+    // letting syncStackSizes() snap it would jump the centred content.
+    const int pendingToolIndex
+        = m_toolPageSizeIndexOverride >= 0 ? m_toolPageSizeIndexOverride : toolPageIndex();
+    const bool toolStackAtTarget = !m_toolContentStack
+        || m_toolContentStack->size() == toolPageNaturalSize(pendingToolIndex);
 
-    if (animatingToTarget || sizeAlreadyApplied) {
+    if (animatingToTarget || (sizeAlreadyApplied && toolStackAtTarget)) {
         updateVisibleContentGeometry(qMax(1, width() - sidePadding * 2), contentHeight);
         update();
         return;
     }
 
-    if (!isVisible() || width() <= 0 || height() != newSize.height()) {
-        if (m_widthAnimation && m_widthAnimation->state() == QAbstractAnimation::Running) {
-            m_widthAnimation->stop();
+    if (!isVisible() || width() <= 0) {
+        if (isGeometryAnimating()) {
+            m_geometryAnimation->stop();
         }
         m_pendingAnimatedSize = QSize();
+        m_transitionStartSize = QSize();
+        m_transitionTargetSize = QSize();
+        m_toolStackStartSize = QSize();
+        m_toolStackTargetSize = QSize();
         setFixedSize(newSize);
         updateVisibleContentGeometry(contentWidth, contentHeight);
         updateGeometry();
@@ -1293,7 +1399,9 @@ void CanvasToolStateOverlay::updateOverlaySize()
         return;
     }
 
-    animateOverlayWidth(newSize.width());
+    // Height rides the same animation as width — a canvas-mode page that is
+    // taller used to snap the whole strip in one frame before sliding.
+    animateOverlayGeometry(newSize);
 }
 
 void CanvasToolStateOverlay::drawBackground(QPainter& painter)

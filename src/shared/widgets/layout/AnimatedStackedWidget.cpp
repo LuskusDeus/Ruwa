@@ -402,12 +402,16 @@ void AnimatedStackedWidget::updateTransitionGeometry(qreal progress)
     const int outgoingOffset = qRound(outgoingRatio * distance);
     const int incomingOffset = qRound(incomingRatio * distance);
 
+    // setGeometry, not move: the stack itself may be resizing under us (a parent
+    // animating the strip's width in step with this slide). Carrying the base
+    // rect's size every tick keeps the pages tracking it, instead of holding the
+    // size they had at t=0 and snapping when the finished handler re-applies it.
     if (m_orientation == SlideOrientation::Horizontal) {
-        outgoingWidget->move(outgoingBaseRect.x() + outgoingOffset, outgoingBaseRect.y());
-        incomingWidget->move(incomingBaseRect.x() + incomingOffset, incomingBaseRect.y());
+        outgoingWidget->setGeometry(outgoingBaseRect.translated(outgoingOffset, 0));
+        incomingWidget->setGeometry(incomingBaseRect.translated(incomingOffset, 0));
     } else {
-        outgoingWidget->move(outgoingBaseRect.x(), outgoingBaseRect.y() + outgoingOffset);
-        incomingWidget->move(incomingBaseRect.x(), incomingBaseRect.y() + incomingOffset);
+        outgoingWidget->setGeometry(outgoingBaseRect.translated(0, outgoingOffset));
+        incomingWidget->setGeometry(incomingBaseRect.translated(0, incomingOffset));
     }
 }
 
