@@ -283,6 +283,14 @@ void GLCompositor::compositeTile(const TileKey& key, const std::vector<Composite
     // The one place where a cache tile's pixels are known to have changed.
     // The display pyramid keys off this, never off texture identity — the swap
     // above hands the tile a different texture object on every composite.
+    //
+    // Two signals, on purpose. The feed (push) is what makes the pyramid cheap:
+    // it rebuilds exactly what moved. The version stamp (pull) is what makes it
+    // CORRECT: the pyramid re-derives staleness from it whenever it thinks it
+    // has settled, so a mutation path that forgets to fire the feed costs a
+    // frame of lag instead of a ghost tile that survives until the user paints
+    // over it.
+    cacheTile.bumpContentVersion();
     cache.noteTileContentChanged(key);
     const qint64 dbgSwapUs = dbgSwapTimer.nsecsElapsed() / 1000;
 

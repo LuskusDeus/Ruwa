@@ -308,6 +308,13 @@ void GLRenderer::resetDisplayPyramid(DisplayPyramidSlot slot)
     entry->pending = false;
 }
 
+void GLRenderer::clearDisplayPyramidPending(DisplayPyramidSlot slot)
+{
+    if (DisplayPyramidEntry* entry = displayPyramidEntry(slot)) {
+        entry->pending = false;
+    }
+}
+
 void GLRenderer::syncDisplayPyramid(DisplayPyramidSlot slot, CompositionCache& cache,
     const Viewport& viewport, float canvasWidth, float canvasHeight, bool contentFlipH,
     bool contentFlipV, const DisplayPyramidPacing& pacing)
@@ -371,6 +378,9 @@ void GLRenderer::syncDisplayPyramid(DisplayPyramidSlot slot, CompositionCache& c
     request.worldMaxX = bounds.maxX;
     request.worldMaxY = bounds.maxY;
     request.deferrableBudget = pacing.deferrableTileBudget;
+    // Compositing this frame already ran, and it is culled to the viewport —
+    // whatever is left here is a position the cache is knowingly out of date on.
+    request.pendingSourcePositions = &cache.dirtyPositions();
     if (pacing.focusPoint) {
         request.hasFocusPoint = true;
         request.focusX = pacing.focusPoint->x;

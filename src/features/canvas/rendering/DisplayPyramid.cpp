@@ -13,6 +13,8 @@
 
 #include <algorithm>
 #include <cmath>
+#include <cstddef>
+#include <iterator>
 
 namespace aether {
 
@@ -157,6 +159,10 @@ float DisplayPyramid::continuousLevelForZoom(float zoom)
 
 void DisplayPyramid::invalidate(const TileKey& level0Key)
 {
+    // Content moved, so whatever the pyramid holds is worth re-checking once it
+    // has caught up. Armed before the seed check: a re-seed does not make the
+    // audit unnecessary, it is one of the paths that needs it most.
+    m_auditPending = true;
     if (m_needsSeed) {
         // The next update() re-derives everything from the source grid anyway.
         return;
@@ -170,13 +176,33 @@ void DisplayPyramid::invalidate(const TileKey& level0Key)
     }
 }
 
+void DisplayPyramid::invalidateLevelTile(int level, const TileKey& key)
+{
+    TileKey ancestor = key;
+    for (int l = std::max(level, 1); l <= kMaxLevel; ++l) {
+        m_dirty[l].insert(ancestor);
+        ancestor = { ancestor.x >> 1, ancestor.y >> 1 };
+    }
+}
+
 void DisplayPyramid::invalidateAll()
 {
-    for (auto& level : m_dirty) {
-        level.clear();
+    // Every tile the pyramid HOLDS has to be marked here, not just left to the
+    // re-seed. seedFrom() derives its dirt from the source grid, so it can only
+    // ever mark ancestors of tiles that still EXIST — a level tile whose
+    // level-0 footprint has been removed would keep its texture, never be
+    // reconsidered, and draw for ever. (Textures are not freed here; clear() is
+    // the call that does that.)
+    for (int level = 1; level <= kMaxLevel; ++level) {
+        for (const auto& entry : m_levels[level]) {
+            invalidateLevelTile(level, entry.first);
+        }
     }
     m_needsSeed = true;
     m_pendingWork = true;
+    m_auditPending = true;
+    m_auditCursor = 0;
+    m_auditLevel = 1;
 }
 
 void DisplayPyramid::clear()
@@ -198,6 +224,9 @@ void DisplayPyramid::clear()
     }
     m_needsSeed = true;
     m_pendingWork = true;
+    m_auditPending = false;
+    m_auditCursor = 0;
+    m_auditLevel = 1;
 }
 
 void DisplayPyramid::adoptFormat(TilePixelFormat format)
@@ -218,12 +247,15 @@ void DisplayPyramid::adoptFormat(TilePixelFormat format)
 
 void DisplayPyramid::seedFrom(const TileGrid& source)
 {
-    for (auto& level : m_dirty) {
-        level.clear();
-    }
+    // The dirty sets are NOT cleared first: invalidateAll() put the tiles the
+    // pyramid already holds in there, and those are exactly the ones the source
+    // grid can no longer tell us about.
     m_needsSeed = false;
     for (const auto& entry : source.tiles()) {
-        invalidate(entry.first);
+        // Not invalidate(): its early break assumes a dirty level implies every
+        // level above it is dirty too, which the marks left by invalidateAll()
+        // do not guarantee.
+        invalidateLevelTile(1, ancestorKey(entry.first, 1));
     }
 }
 
@@ -261,16 +293,28 @@ bool DisplayPyramid::update(const TileGrid& source, const UpdateRequest& request
     // The display lerps level L with L+1, so both must be current.
     const int topLevel = std::clamp(request.topLevel + 1, 1, kMaxLevel);
 
-    bool anyDirty = false;
-    for (int level = 1; level <= topLevel; ++level) {
-        if (!m_dirty[level].empty()) {
-            anyDirty = true;
-            break;
+    auto anyDirtyUpTo = [this](int top) {
+        for (int level = 1; level <= top; ++level) {
+            if (!m_dirty[level].empty()) {
+                return true;
+            }
         }
-    }
-    if (!anyDirty) {
-        m_pendingWork = false;
-        return true;
+        return false;
+    };
+
+    if (!anyDirtyUpTo(topLevel)) {
+        // Settled as far as the feed knows. Spend the frame re-deriving the
+        // truth from the cache instead: this is the only thing standing between
+        // a missed invalidation and a ghost tile that outlives everything short
+        // of painting over it. Reporting the sweep as pending work is what keeps
+        // it going across the catch-up frames until it has covered everything.
+        if (m_auditPending) {
+            auditLevels(source, request, topLevel);
+        }
+        if (!anyDirtyUpTo(topLevel)) {
+            m_pendingWork = m_auditPending;
+            return !m_auditPending;
+        }
     }
 
     GLFboViewportBlendGuard guard(m_gl);
@@ -288,6 +332,9 @@ bool DisplayPyramid::update(const TileGrid& source, const UpdateRequest& request
     bool complete = true;
     uint32_t deferrableBuilds = 0;
     std::vector<TileKey> batch;
+    for (auto& level : m_sourceBlocked) {
+        level.clear();
+    }
     // Climbing past a level that deferred work is safe, and necessary: an absent
     // tile up there has to be built no matter what, and the parent check below
     // keeps whatever it builds from freezing.
@@ -334,6 +381,21 @@ bool DisplayPyramid::update(const TileGrid& source, const UpdateRequest& request
             // after the budget is gone for exactly that reason — a later key in
             // this batch may be one of them.
             const bool absent = texture(level, key) == 0;
+
+            // Waiting on the compositor, not on this request. The tile keeps
+            // its dirt no matter what happens below, and the level above is
+            // told so it can inherit the distinction.
+            const bool blocked = sampledSourceBlocked(level, key, parentRange, request);
+            if (blocked) {
+                m_sourceBlocked[level].insert(key);
+                if (!absent) {
+                    // Rebuilding would only re-derive the same wrong pixels over
+                    // the same wrong source. Keep what is on screen and wait for
+                    // the recomposite to invalidate this for real.
+                    continue;
+                }
+            }
+
             if (!absent && request.deferrableBudget != 0
                 && deferrableBuilds >= request.deferrableBudget) {
                 complete = false;
@@ -350,8 +412,12 @@ bool DisplayPyramid::update(const TileGrid& source, const UpdateRequest& request
             // provisional. Rebuilding that parent does NOT re-mark its
             // ancestors, so a tile that dropped its dirt here would hold the
             // provisional pixels until the region next changes.
-            if (built && sampledParentsDirty(level, key, parentRange)) {
-                complete = false;
+            if (built && (blocked || sampledParentsDirty(level, key, parentRange))) {
+                // Only a deferral is work this request could still finish;
+                // blocked tiles must not ask for a catch-up frame.
+                if (!blocked) {
+                    complete = false;
+                }
                 continue;
             }
             m_dirty[level].erase(key);
@@ -375,7 +441,7 @@ bool DisplayPyramid::buildTile(const TileGrid& source, int level, const TileKey&
     // The 4x4 block of parents, row-major from (-1,-1) to (2,2). The 2x2 core
     // supplies the whole 256x256 output core; the outer ring only ever feeds
     // the apron.
-    std::array<GLuint, 16> parents {};
+    std::array<GLuint, kParentBlockSize> parents {};
     bool coreHasContent = false;
     for (int by = -1; by <= 2; ++by) {
         for (int bx = -1; bx <= 2; ++bx) {
@@ -413,6 +479,12 @@ bool DisplayPyramid::buildTile(const TileGrid& source, int level, const TileKey&
             return false;
         }
     }
+    // Stamp what this is about to be built FROM, and stamp the tile itself so
+    // its own children can notice this rebuild. Sampled here rather than reused
+    // from the loop above so the audit and the build read the source the exact
+    // same way.
+    entry.parentVersions = sampleParentVersions(source, level, key);
+    entry.version = ++m_nextTileVersion;
 
     // Every one of the 258x258 texels is written by the draw, so recycled
     // storage needs no clear.
@@ -422,12 +494,132 @@ bool DisplayPyramid::buildTile(const TileGrid& source, int level, const TileKey&
     return true;
 }
 
+std::array<uint64_t, DisplayPyramid::kParentBlockSize> DisplayPyramid::sampleParentVersions(
+    const TileGrid& source, int level, const TileKey& key) const
+{
+    std::array<uint64_t, kParentBlockSize> versions {};
+    for (int by = -1; by <= 2; ++by) {
+        for (int bx = -1; bx <= 2; ++bx) {
+            const TileKey parentKey { key.x * 2 + bx, key.y * 2 + by };
+            const size_t slot = static_cast<size_t>((bx + 1) + 4 * (by + 1));
+            if (level == 1) {
+                const TileData* tile = source.getTile(parentKey);
+                // hasTexture() mirrors buildTile: a tile with no texture
+                // contributes transparency exactly like an absent one, so both
+                // stamp 0 and a tile gaining its texture reads as a change.
+                if (tile != nullptr && tile->hasTexture()) {
+                    versions[slot] = tile->contentVersion();
+                }
+                continue;
+            }
+            const LevelMap& parents = m_levels[level - 1];
+            auto it = parents.find(parentKey);
+            if (it != parents.end() && it->second.texture != 0) {
+                versions[slot] = it->second.version;
+            }
+        }
+    }
+    return versions;
+}
+
+uint32_t DisplayPyramid::auditLevels(
+    const TileGrid& source, const UpdateRequest& request, int topLevel)
+{
+    uint32_t stale = 0;
+    size_t examined = 0;
+
+    if (m_auditLevel < 1 || m_auditLevel > topLevel) {
+        m_auditLevel = 1;
+        m_auditCursor = 0;
+    }
+
+    // Bottom-up, same as a rebuild: a stale level-1 tile marked here also marks
+    // its whole ancestor chain, so the levels above are consistent by the time
+    // the sweep reaches them.
+    while (m_auditLevel <= topLevel && examined < kAuditTilesPerPass) {
+        const LevelMap& tiles = m_levels[m_auditLevel];
+        if (m_auditCursor >= tiles.size()) {
+            ++m_auditLevel;
+            m_auditCursor = 0;
+            continue;
+        }
+
+        const KeyRange range = rangeForLevel(request, m_auditLevel);
+        auto it = std::next(tiles.begin(), static_cast<std::ptrdiff_t>(m_auditCursor));
+        for (; it != tiles.end() && examined < kAuditTilesPerPass; ++it, ++examined) {
+            ++m_auditCursor;
+            if (!range.contains(it->first)) {
+                // Out of range is not audited: nothing in this request would
+                // rebuild it anyway, and marking it would make hasPendingWork()
+                // spin the catch-up repaint on a tile nobody is looking at.
+                continue;
+            }
+            const auto current = sampleParentVersions(source, m_auditLevel, it->first);
+            if (it->second.parentVersions == current) {
+                continue;
+            }
+            invalidateLevelTile(m_auditLevel, it->first);
+            ++stale;
+        }
+    }
+
+    if (m_auditLevel > topLevel) {
+        // A full sweep finished. Nothing re-arms it until content changes again,
+        // so a canvas nobody is editing audits nothing. The flag is written last
+        // on purpose: marks this pass just made are carried by the dirty sets,
+        // and the tiles behind them get a fresh stamp when they rebuild.
+        m_auditLevel = 1;
+        m_auditCursor = 0;
+        m_auditPending = false;
+    }
+    return stale;
+}
+
+bool DisplayPyramid::sampledSourceBlocked(int level, const TileKey& key,
+    const KeyRange& parentRange, const UpdateRequest& request) const
+{
+    if (level == 1) {
+        const auto* pending = request.pendingSourcePositions;
+        if (pending == nullptr || pending->empty()) {
+            return false;
+        }
+        // The whole 4x4 block, for the same reason sampledParentsDirty checks
+        // it: the outer ring feeds the apron, and a stale apron is a seam.
+        for (int by = -1; by <= 2; ++by) {
+            for (int bx = -1; bx <= 2; ++bx) {
+                if (pending->count(TileKey { key.x * 2 + bx, key.y * 2 + by }) != 0) {
+                    return true;
+                }
+            }
+        }
+        return false;
+    }
+
+    const KeySet& blockedParents = m_sourceBlocked[level - 1];
+    if (blockedParents.empty()) {
+        return false;
+    }
+    // Bounded to the parent level's range for the same reason as
+    // sampledParentsDirty: a parent this request never looked at cannot have
+    // been recorded as blocked, so anything outside it is simply unknown.
+    for (int by = -1; by <= 2; ++by) {
+        for (int bx = -1; bx <= 2; ++bx) {
+            const TileKey parentKey { key.x * 2 + bx, key.y * 2 + by };
+            if (parentRange.contains(parentKey) && blockedParents.count(parentKey) != 0) {
+                return true;
+            }
+        }
+    }
+    return false;
+}
+
 bool DisplayPyramid::sampledParentsDirty(
     int level, const TileKey& key, const KeyRange& parentRange) const
 {
-    // Level 1's parents are composition-cache tiles. The pyramid does not track
-    // their state at all — the invalidation feed already reported every one that
-    // changed, so what is in the cache right now IS current.
+    // Level 1's parents are composition-cache tiles, which the pyramid does not
+    // track between frames. Two other things cover them instead: whether the
+    // cache is out of date is sampledSourceBlocked()'s question, and whether it
+    // changed without saying so is auditLevels()'s.
     if (level < 2) {
         return false;
     }

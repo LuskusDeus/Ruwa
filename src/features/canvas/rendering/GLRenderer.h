@@ -113,6 +113,11 @@ public:
     /// stale-source check is pointer identity, and a fresh cache can land on the
     /// address of the one before it.
     void resetDisplayPyramid(DisplayPyramidSlot slot);
+    /// Forget that a slot owed work. For a frame that decides NOT to sync a slot
+    /// at all: hasPendingDisplayPyramidWork() drives a catch-up repaint, and a
+    /// slot left pending by the last frame that did sync it would ask for that
+    /// repaint at the frame rate, for ever.
+    void clearDisplayPyramidPending(DisplayPyramidSlot slot);
     bool hasPendingDisplayPyramidWork() const;
 
     // Compositor: composite dirty tiles from layer stack into cache

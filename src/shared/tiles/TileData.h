@@ -11,6 +11,7 @@
 #include "TileFormat.h"
 
 #include <array>
+#include <atomic>
 #include <cstring>
 #include <memory>
 #include <mutex>
@@ -96,12 +97,14 @@ public:
     TileData(TileData&& other) noexcept
         : m_pixels(std::move(other.m_pixels))
         , m_textureId(other.m_textureId)
+        , m_contentVersion(other.m_contentVersion)
         , m_format(other.m_format)
         , m_dirty(other.m_dirty)
         , m_solid(other.m_solid)
         , m_solidColor(other.m_solidColor)
     {
         other.m_textureId = 0;
+        other.m_contentVersion = 0;
         other.m_dirty = false;
         other.m_solid = false;
         other.m_solidColor = 0;
@@ -112,11 +115,13 @@ public:
         if (this != &other) {
             m_pixels = std::move(other.m_pixels);
             m_textureId = other.m_textureId;
+            m_contentVersion = other.m_contentVersion;
             m_format = other.m_format;
             m_dirty = other.m_dirty;
             m_solid = other.m_solid;
             m_solidColor = other.m_solidColor;
             other.m_textureId = 0;
+            other.m_contentVersion = 0;
             other.m_dirty = false;
             other.m_solid = false;
             other.m_solidColor = 0;
@@ -277,6 +282,21 @@ public:
     void setTextureId(uint32_t id) { m_textureId = id; }
     bool hasTexture() const { return m_textureId != 0; }
 
+    // ---- Content version ----
+    //
+    //   A globally unique stamp, bumped by whoever KNOWS the tile's pixels just
+    //   changed. It exists so a consumer can answer "is what I derived from this
+    //   tile still current?" without being told.
+    //
+    //   Texture identity cannot answer that question for a composition-cache
+    //   tile: GLCompositor::compositeTile swaps one of its two ping-pong
+    //   textures in on every composite, so the id ALTERNATES between two values
+    //   and returns to a previous one after two composites. A monotonic counter
+    //   never repeats, which is what makes it usable as a cache key.
+
+    uint64_t contentVersion() const { return m_contentVersion; }
+    void bumpContentVersion() { m_contentVersion = nextContentVersion(); }
+
     // ---- Dirty tracking ----
 
     bool isDirty() const { return m_dirty; }
@@ -284,6 +304,16 @@ public:
     void clearDirty() { m_dirty = false; }
 
 private:
+    /// Tiles are written from worker threads (compression, brush execution) as
+    /// well as the GL thread, so the shared counter is atomic. Relaxed is
+    /// enough: the only requirement is that no two bumps ever produce the same
+    /// value, and nothing is published through this counter.
+    static uint64_t nextContentVersion()
+    {
+        static std::atomic<uint64_t> s_counter { 0 };
+        return s_counter.fetch_add(1, std::memory_order_relaxed) + 1;
+    }
+
     /// Shared all-zero buffer returned by const pixels() for an unallocated
     /// tile. Sized to the largest supported format so a consumer reading
     /// tileByteSize(format) bytes for any format stays in bounds.
@@ -321,6 +351,7 @@ private:
 
     std::vector<uint8_t> m_pixels;
     uint32_t m_textureId = 0; // OpenGL texture name (managed externally)
+    uint64_t m_contentVersion = 0; // 0 = never stamped (see bumpContentVersion)
     TilePixelFormat m_format = kDefaultTileFormat; // Per-pixel storage format
     bool m_dirty = true; // Needs GPU upload
     bool m_solid = false; // Uniform-color tile with no allocated buffer

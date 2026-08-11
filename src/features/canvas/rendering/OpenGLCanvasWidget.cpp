@@ -10608,8 +10608,15 @@ void OpenGLCanvasWidget::paintGL_runComposite(const std::vector<CompositeLayerIn
 
 void OpenGLCanvasWidget::renderBoardLayers(const std::vector<CompositeLayerInfo>& boardLayerStack)
 {
-    if (m_exportPreviewHideBoardLayers || !m_renderer || !m_renderer->compositor()
-        || !m_renderer->tileRenderer()) {
+    if (!m_renderer || !m_renderer->compositor() || !m_renderer->tileRenderer()) {
+        return;
+    }
+    // Every path below can decide there is nothing to draw and return without
+    // syncing the board slot. Whatever it still owed died with the board, and
+    // leaving the flag set would keep asking paintGL for a catch-up frame that
+    // can never clear it. The sync, when it happens, sets the flag again.
+    m_renderer->clearDisplayPyramidPending(DisplayPyramidSlot::Board);
+    if (m_exportPreviewHideBoardLayers) {
         return;
     }
     if (boardLayerStack.empty()) {
