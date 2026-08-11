@@ -6,6 +6,7 @@
 #include "commands/CommandRegistry.h"
 #include "shared/i18n/CommandLocalization.h"
 #include "commands/ShortcutManager.h"
+#include "features/canvas/CanvasModifierShortcutManager.h"
 #include "shared/widgets/layout/SmoothScrollArea.h"
 #include "shared/widgets/layout/AnimatedStackedWidget.h"
 #include "features/settings/shortcuts/CategoryItemWidget.h"
@@ -57,6 +58,7 @@ const int BASE_SHORTCUTS_META_FONT_SIZE = 10;
 const int BASE_SHORTCUTS_HEADER_GAP = 10;
 const int BASE_DIVIDER_VSPACE_TOP = 6;
 const int BASE_DIVIDER_VSPACE_BOTTOM = 8;
+const QString CANVAS_MODIFIER_CATEGORY = QStringLiteral("__canvas_modifier_shortcuts__");
 
 } // namespace
 
@@ -91,6 +93,13 @@ ShortcutManagerTab::~ShortcutManagerTab()
     auto& sm = ruwa::core::ShortcutManager::instance();
     disconnect(&sm, &ruwa::core::ShortcutManager::shortcutChanged, this,
         &ShortcutManagerTab::onShortcutManagerChanged);
+    disconnect(&sm, &ruwa::core::ShortcutManager::shortcutConflictsChanged, this,
+        &ShortcutManagerTab::updateConflictIndicators);
+    auto& canvasShortcuts
+        = ruwa::features::canvas::CanvasModifierShortcutManager::instance();
+    disconnect(&canvasShortcuts,
+        &ruwa::features::canvas::CanvasModifierShortcutManager::shortcutChanged, this,
+        &ShortcutManagerTab::onCanvasModifierManagerChanged);
 }
 
 void ShortcutManagerTab::paintEvent(QPaintEvent* event)
@@ -215,21 +224,30 @@ void ShortcutManagerTab::createLayout()
             if (!catIcon.isNull()) {
                 group->setIcon(catIcon);
             }
-            const auto cmds = registry.commandsInCategory(m_categorySourceNames[i]);
-            for (auto* cmd : cmds) {
-                const auto& info = cmd->info();
-                const QString title
-                    = loc.title(info.id).isEmpty() ? info.title : loc.title(info.id);
-                const QString desc = loc.description(info.id).isEmpty() ? info.description
-                                                                        : loc.description(info.id);
-                auto* row = new ShortcutRowWidget(info.id, title, desc,
-                    shortcuts.shortcutFor(info.id), shortcuts.defaultShortcutFor(info.id), allBody);
-                connect(row, &ShortcutRowWidget::shortcutChanged, this,
-                    &ShortcutManagerTab::onShortcutChanged);
-                connect(row, &ShortcutRowWidget::resetRequested, this,
-                    &ShortcutManagerTab::onResetRequested);
-                group->addSettingsWidget(row);
-                m_rowWidgets.insert(info.id, row);
+            if (m_categorySourceNames[i] == CANVAS_MODIFIER_CATEGORY) {
+                for (const auto& definition :
+                    ruwa::features::canvas::CanvasModifierShortcutManager::definitions()) {
+                    group->addSettingsWidget(createCanvasModifierRow(definition.id, allBody));
+                }
+            } else {
+                const auto cmds = registry.commandsInCategory(m_categorySourceNames[i]);
+                for (auto* cmd : cmds) {
+                    const auto& info = cmd->info();
+                    const QString title
+                        = loc.title(info.id).isEmpty() ? info.title : loc.title(info.id);
+                    const QString desc = loc.description(info.id).isEmpty()
+                        ? info.description
+                        : loc.description(info.id);
+                    auto* row = new ShortcutRowWidget(info.id, title, desc,
+                        shortcuts.shortcutFor(info.id), shortcuts.defaultShortcutFor(info.id),
+                        allBody);
+                    connect(row, &ShortcutRowWidget::shortcutChanged, this,
+                        &ShortcutManagerTab::onShortcutChanged);
+                    connect(row, &ShortcutRowWidget::resetRequested, this,
+                        &ShortcutManagerTab::onResetRequested);
+                    group->addSettingsWidget(row);
+                    m_rowWidgets.insert(info.id, row);
+                }
             }
             allLayout->addWidget(group);
             m_allShortcutGroups.append(group);
@@ -413,8 +431,15 @@ void ShortcutManagerTab::createLayout()
     // === Connect signals ===
     connect(&ruwa::core::ShortcutManager::instance(), &ruwa::core::ShortcutManager::shortcutChanged,
         this, &ShortcutManagerTab::onShortcutManagerChanged);
+    connect(&ruwa::core::ShortcutManager::instance(),
+        &ruwa::core::ShortcutManager::shortcutConflictsChanged, this,
+        &ShortcutManagerTab::updateConflictIndicators);
+    connect(&ruwa::features::canvas::CanvasModifierShortcutManager::instance(),
+        &ruwa::features::canvas::CanvasModifierShortcutManager::shortcutChanged, this,
+        &ShortcutManagerTab::onCanvasModifierManagerChanged);
 
     connect(&theme, &ThemeManager::themeChanged, this, &ShortcutManagerTab::onThemeChanged);
+    updateConflictIndicators();
 }
 
 // ============================================================================
@@ -501,11 +526,85 @@ void ShortcutManagerTab::createCategories()
         totalCount += static_cast<int>(commands.size());
     }
 
+    auto* canvasModifierCategory = new SettingsCategory(tr("Canvas modifier shortcuts"), this);
+    canvasModifierCategory->setHeaderVisible(false);
+    const QIcon canvasModifierIcon = icons.getIcon(IconProvider::StandardIcon::Hand);
+    canvasModifierCategory->setIcon(canvasModifierIcon);
+    for (const auto& definition :
+        ruwa::features::canvas::CanvasModifierShortcutManager::definitions()) {
+        canvasModifierCategory->addSettingsWidget(
+            createCanvasModifierRow(definition.id, canvasModifierCategory));
+    }
+    const int canvasModifierCount
+        = static_cast<int>(
+            ruwa::features::canvas::CanvasModifierShortcutManager::definitions().size());
+    m_categories.append(canvasModifierCategory);
+    m_categoryDisplayNames.append(tr("Canvas modifier shortcuts"));
+    m_categorySourceNames.append(CANVAS_MODIFIER_CATEGORY);
+    m_itemTitles.append(tr("Canvas modifier shortcuts"));
+    m_itemSubtitles.append(tr("Move content · Eyedropper · Pan canvas"));
+    m_itemIcons.append(canvasModifierIcon);
+    m_itemCounts.append(canvasModifierCount);
+    totalCount += canvasModifierCount;
+
     // Prepend synthetic "All shortcuts" entry (index 0).
     m_itemTitles.prepend(tr("All shortcuts"));
     m_itemSubtitles.prepend(tr("Everything in this preset"));
     m_itemIcons.prepend(icons.getIcon(IconProvider::StandardIcon::List));
     m_itemCounts.prepend(totalCount);
+}
+
+ShortcutRowWidget* ShortcutManagerTab::createCanvasModifierRow(
+    const QString& shortcutId, QWidget* parent)
+{
+    using ruwa::features::canvas::CanvasModifierAction;
+    auto& shortcuts = ruwa::features::canvas::CanvasModifierShortcutManager::instance();
+
+    QString title;
+    QString description;
+    for (const auto& definition :
+        ruwa::features::canvas::CanvasModifierShortcutManager::definitions()) {
+        if (definition.id != shortcutId) {
+            continue;
+        }
+        switch (definition.action) {
+        case CanvasModifierAction::MoveContent:
+            title = tr("Move content tool");
+            description = tr("Hold to temporarily activate the content move tool");
+            break;
+        case CanvasModifierAction::Eyedropper:
+            title = tr("Eyedropper");
+            description = tr("Hold to temporarily sample a color from the canvas");
+            break;
+        case CanvasModifierAction::PanCanvas:
+            title = tr("Pan canvas");
+            description = tr("Hold to temporarily pan the canvas");
+            break;
+        }
+        break;
+    }
+
+    QVector<QPair<QString, int>> choices;
+    for (int key : ruwa::features::canvas::CanvasModifierShortcutManager::supportedKeys()) {
+        choices.append(
+            { ruwa::features::canvas::CanvasModifierShortcutManager::keyDisplayName(key), key });
+    }
+
+    auto* row = new ShortcutRowWidget(shortcutId, title, description,
+        shortcuts.keyForId(shortcutId), shortcuts.defaultKeyForId(shortcutId), choices, parent);
+    connect(row, &ShortcutRowWidget::choiceChanged, this,
+        &ShortcutManagerTab::onCanvasModifierChanged);
+    connect(row, &ShortcutRowWidget::resetRequested, this,
+        &ShortcutManagerTab::onResetRequested);
+    m_rowWidgets.insert(shortcutId, row);
+    return row;
+}
+
+bool ShortcutManagerTab::isCanvasModifierShortcut(const QString& shortcutId) const
+{
+    return ruwa::features::canvas::CanvasModifierShortcutManager::instance().defaultKeyForId(
+               shortcutId)
+        != 0;
 }
 
 // ============================================================================
@@ -565,30 +664,6 @@ void ShortcutManagerTab::onShortcutChanged(
     const QString& commandId, const QKeySequence& newShortcut)
 {
     auto& sm = ruwa::core::ShortcutManager::instance();
-
-    // Check for conflicts
-    if (sm.isShortcutInUse(newShortcut, commandId) && !newShortcut.isEmpty()) {
-        const QString conflicting = sm.commandForShortcut(newShortcut);
-        auto* conflictCmd = ruwa::core::CommandRegistry::instance().command(conflicting);
-        QString conflictName;
-        if (conflictCmd) {
-            const QString locTitle = ruwa::i18n::CommandLocalization::instance().title(conflicting);
-            conflictName = locTitle.isEmpty() ? conflictCmd->info().title : locTitle;
-        } else {
-            conflictName = conflicting;
-        }
-
-        QMessageBox::warning(this, tr("Shortcut Conflict"),
-            tr("This shortcut is already used by \"%1\".\nPlease choose a different shortcut.")
-                .arg(conflictName));
-
-        // Revert to current shortcut in all rows for this command
-        for (auto* row : m_rowWidgets.values(commandId)) {
-            row->setShortcut(sm.shortcutFor(commandId));
-        }
-        return;
-    }
-
     sm.setShortcut(commandId, newShortcut);
     sm.saveToSettings();
 }
@@ -620,15 +695,30 @@ QStringList ShortcutManagerTab::commandIdsForItem(int itemIndex) const
     if (itemIndex <= 0) {
         // "All shortcuts" — every command in every visible category.
         for (const QString& src : m_categorySourceNames) {
-            for (auto* cmd : registry.commandsInCategory(src)) {
-                ids << cmd->info().id;
+            if (src == CANVAS_MODIFIER_CATEGORY) {
+                for (const auto& definition :
+                    ruwa::features::canvas::CanvasModifierShortcutManager::definitions()) {
+                    ids << definition.id;
+                }
+            } else {
+                for (auto* cmd : registry.commandsInCategory(src)) {
+                    ids << cmd->info().id;
+                }
             }
         }
     } else {
         const int catIndex = itemIndex - 1;
         if (catIndex >= 0 && catIndex < m_categorySourceNames.size()) {
-            for (auto* cmd : registry.commandsInCategory(m_categorySourceNames[catIndex])) {
-                ids << cmd->info().id;
+            const QString& source = m_categorySourceNames[catIndex];
+            if (source == CANVAS_MODIFIER_CATEGORY) {
+                for (const auto& definition :
+                    ruwa::features::canvas::CanvasModifierShortcutManager::definitions()) {
+                    ids << definition.id;
+                }
+            } else {
+                for (auto* cmd : registry.commandsInCategory(source)) {
+                    ids << cmd->info().id;
+                }
             }
         }
     }
@@ -644,8 +734,13 @@ void ShortcutManagerTab::updateShortcutsHeaderMeta()
     auto& sm = ruwa::core::ShortcutManager::instance();
     const QStringList ids = commandIdsForItem(m_selectedItemIndex);
     int customized = 0;
+    auto& canvasShortcuts
+        = ruwa::features::canvas::CanvasModifierShortcutManager::instance();
     for (const QString& id : ids) {
-        if (sm.shortcutFor(id) != sm.defaultShortcutFor(id)) {
+        const bool isCustomized = isCanvasModifierShortcut(id)
+            ? canvasShortcuts.hasCustomShortcut(id)
+            : sm.shortcutFor(id) != sm.defaultShortcutFor(id);
+        if (isCustomized) {
             ++customized;
         }
     }
@@ -683,6 +778,11 @@ QHash<QString, QKeySequence> ShortcutManagerTab::captureCurrentCustomBindings() 
     return out;
 }
 
+QHash<QString, int> ShortcutManagerTab::captureCurrentCanvasModifierBindings() const
+{
+    return ruwa::features::canvas::CanvasModifierShortcutManager::instance().customBindings();
+}
+
 void ShortcutManagerTab::applyPreset(const QUuid& presetId)
 {
     auto& store = ruwa::features::settings::shortcuts::ShortcutPresetStore::instance();
@@ -692,11 +792,11 @@ void ShortcutManagerTab::applyPreset(const QUuid& presetId)
 
     auto& sm = ruwa::core::ShortcutManager::instance();
 
-    // Reset every command to its default, then apply preset overrides.
+    // Reset every command and canvas hold binding, then apply preset overrides.
     QStringList allIds;
     allIds.reserve(m_rowWidgets.size());
     for (auto it = m_rowWidgets.constBegin(); it != m_rowWidgets.constEnd(); ++it) {
-        if (!allIds.contains(it.key()))
+        if (!isCanvasModifierShortcut(it.key()) && !allIds.contains(it.key()))
             allIds << it.key();
     }
     for (const QString& id : allIds) {
@@ -705,7 +805,16 @@ void ShortcutManagerTab::applyPreset(const QUuid& presetId)
     for (auto it = preset->bindings.constBegin(); it != preset->bindings.constEnd(); ++it) {
         sm.setShortcut(it.key(), it.value());
     }
+
+    auto& canvasShortcuts
+        = ruwa::features::canvas::CanvasModifierShortcutManager::instance();
+    canvasShortcuts.resetAllShortcuts();
+    for (auto it = preset->canvasModifierBindings.constBegin();
+         it != preset->canvasModifierBindings.constEnd(); ++it) {
+        canvasShortcuts.setShortcut(it.key(), it.value());
+    }
     sm.saveToSettings();
+    canvasShortcuts.saveToSettings();
     updateShortcutsHeaderMeta();
 }
 
@@ -783,6 +892,11 @@ int ShortcutManagerTab::countBoundShortcutsInPreset(const QUuid& presetId) const
         if (seen.contains(id))
             continue;
         seen.insert(id);
+
+        if (isCanvasModifierShortcut(id)) {
+            ++bound;
+            continue;
+        }
 
         QKeySequence effective;
         if (preset->bindings.contains(id)) {
@@ -863,6 +977,7 @@ void ShortcutManagerTab::onNewPresetClicked()
     p.id = QUuid::createUuid();
     p.name = store.suggestUniqueName(tr("Custom"));
     p.bindings = captureCurrentCustomBindings();
+    p.canvasModifierBindings = captureCurrentCanvasModifierBindings();
     m_selectedPresetId = p.id;
     store.addCustomPreset(p);
 }
@@ -985,18 +1100,40 @@ void ShortcutManagerTab::onResetSectionClicked()
         return;
     }
     auto& sm = ruwa::core::ShortcutManager::instance();
+    auto& canvasShortcuts
+        = ruwa::features::canvas::CanvasModifierShortcutManager::instance();
     const QStringList ids = commandIdsForItem(m_selectedItemIndex);
     for (const QString& id : ids) {
-        sm.resetShortcut(id);
+        if (isCanvasModifierShortcut(id)) {
+            canvasShortcuts.resetShortcut(id);
+        } else {
+            sm.resetShortcut(id);
+        }
     }
     sm.saveToSettings();
+    canvasShortcuts.saveToSettings();
     updateShortcutsHeaderMeta();
 }
 
 void ShortcutManagerTab::onResetRequested(const QString& commandId)
 {
-    ruwa::core::ShortcutManager::instance().resetShortcut(commandId);
-    ruwa::core::ShortcutManager::instance().saveToSettings();
+    if (isCanvasModifierShortcut(commandId)) {
+        auto& canvasShortcuts
+            = ruwa::features::canvas::CanvasModifierShortcutManager::instance();
+        canvasShortcuts.resetShortcut(commandId);
+        canvasShortcuts.saveToSettings();
+    } else {
+        ruwa::core::ShortcutManager::instance().resetShortcut(commandId);
+        ruwa::core::ShortcutManager::instance().saveToSettings();
+    }
+}
+
+void ShortcutManagerTab::onCanvasModifierChanged(const QString& shortcutId, int key)
+{
+    auto& canvasShortcuts
+        = ruwa::features::canvas::CanvasModifierShortcutManager::instance();
+    canvasShortcuts.setShortcut(shortcutId, key);
+    canvasShortcuts.saveToSettings();
 }
 
 void ShortcutManagerTab::onShortcutManagerChanged(
@@ -1005,10 +1142,36 @@ void ShortcutManagerTab::onShortcutManagerChanged(
     for (auto* row : m_rowWidgets.values(commandId)) {
         row->setShortcut(newShortcut);
     }
+    updateConflictIndicators();
     updateShortcutsHeaderMeta();
     // Bound counts on preset cards reflect the active shortcuts.
     for (int i = 0; i < m_presetItems.size() && i < m_presetIds.size(); ++i) {
         m_presetItems[i]->setShortcutCount(countBoundShortcutsInPreset(m_presetIds[i]));
+    }
+}
+
+void ShortcutManagerTab::onCanvasModifierManagerChanged(const QString& shortcutId, int key)
+{
+    for (auto* row : m_rowWidgets.values(shortcutId)) {
+        row->setChoice(key);
+    }
+    updateConflictIndicators();
+    updateShortcutsHeaderMeta();
+    for (int i = 0; i < m_presetItems.size() && i < m_presetIds.size(); ++i) {
+        m_presetItems[i]->setShortcutCount(countBoundShortcutsInPreset(m_presetIds[i]));
+    }
+}
+
+void ShortcutManagerTab::updateConflictIndicators()
+{
+    auto& shortcuts = ruwa::core::ShortcutManager::instance();
+    auto& canvasShortcuts
+        = ruwa::features::canvas::CanvasModifierShortcutManager::instance();
+    for (auto it = m_rowWidgets.constBegin(); it != m_rowWidgets.constEnd(); ++it) {
+        const bool conflicted = isCanvasModifierShortcut(it.key())
+            ? canvasShortcuts.isShortcutConflicted(it.key())
+            : shortcuts.isShortcutConflicted(it.key());
+        it.value()->setConflicted(conflicted);
     }
 }
 

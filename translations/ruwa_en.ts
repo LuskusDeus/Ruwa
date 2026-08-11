@@ -2232,6 +2232,48 @@ Rasterize the layer to transform the selection?</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
+        <location filename="../src/features/settings/shortcuts/ShortcutManagerTab.cpp" line="523"/>
+        <location filename="../src/features/settings/shortcuts/ShortcutManagerTab.cpp" line="536"/>
+        <location filename="../src/features/settings/shortcuts/ShortcutManagerTab.cpp" line="538"/>
+        <source>Canvas modifier shortcuts</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location filename="../src/features/settings/shortcuts/ShortcutManagerTab.cpp" line="539"/>
+        <source>Move content · Eyedropper · Pan canvas</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location filename="../src/features/settings/shortcuts/ShortcutManagerTab.cpp" line="566"/>
+        <source>Move content tool</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location filename="../src/features/settings/shortcuts/ShortcutManagerTab.cpp" line="567"/>
+        <source>Hold to temporarily activate the content move tool</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location filename="../src/features/settings/shortcuts/ShortcutManagerTab.cpp" line="570"/>
+        <source>Eyedropper</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location filename="../src/features/settings/shortcuts/ShortcutManagerTab.cpp" line="571"/>
+        <source>Hold to temporarily sample a color from the canvas</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location filename="../src/features/settings/shortcuts/ShortcutManagerTab.cpp" line="574"/>
+        <source>Pan canvas</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location filename="../src/features/settings/shortcuts/ShortcutManagerTab.cpp" line="575"/>
+        <source>Hold to temporarily pan the canvas</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
         <location filename="../src/features/settings/shortcuts/ShortcutManagerTab.cpp" line="581"/>
         <source>Shortcut Conflict</source>
         <translation type="unfinished"></translation>
@@ -4386,6 +4428,14 @@ Ruwa uses the Qt framework (version %1), dynamically linked under the GNU Lesser
 </context>
 <context>
     <name>ruwa::ui::widgets::ShortcutRowWidget</name>
+    <message>
+        <source>Duplicate shortcut — disabled</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Shortcut conflict</source>
+        <translation type="unfinished"></translation>
+    </message>
     <message>
         <location filename="../src/features/settings/shortcuts/ShortcutRowWidget.cpp" line="94"/>
         <source>Reset</source>

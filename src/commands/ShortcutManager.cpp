@@ -47,7 +47,7 @@ void ShortcutManager::registerAllShortcuts()
     // Clear existing shortcuts
     qDeleteAll(m_shortcuts);
     m_shortcuts.clear();
-    m_shortcutToCommand.clear();
+    m_shortcutToCommands.clear();
 
     // Register shortcuts for all commands
     for (Command* cmd : CommandRegistry::instance().allCommands()) {
@@ -56,6 +56,7 @@ void ShortcutManager::registerAllShortcuts()
             createShortcut(cmd->id(), seq);
         }
     }
+    refreshShortcutEnabledStates();
 }
 
 void ShortcutManager::createShortcut(const QString& commandId, const QKeySequence& sequence)
@@ -73,17 +74,11 @@ void ShortcutManager::createShortcut(const QString& commandId, const QKeySequenc
     });
 
     m_shortcuts.insert(commandId, shortcut);
-    m_shortcutToCommand.insert(sequence, commandId);
+    m_shortcutToCommands.insert(sequence, commandId);
 }
 
 void ShortcutManager::setShortcut(const QString& commandId, const QKeySequence& shortcut)
 {
-    // Check for conflicts
-    if (!shortcut.isEmpty() && isShortcutInUse(shortcut, commandId)) {
-        QString conflicting = commandForShortcut(shortcut);
-        return;
-    }
-
     m_customShortcuts.insert(commandId, shortcut);
     updateShortcut(commandId);
 
@@ -128,9 +123,23 @@ bool ShortcutManager::hasCustomShortcut(const QString& commandId) const
     return m_customShortcuts.contains(commandId);
 }
 
+bool ShortcutManager::isShortcutConflicted(const QString& commandId) const
+{
+    const QKeySequence shortcut = shortcutFor(commandId);
+    if (shortcut.isEmpty()) {
+        return false;
+    }
+    return m_externallyConflictedShortcuts.contains(shortcut)
+        || m_shortcutToCommands.values(shortcut).size() > 1;
+}
+
 QString ShortcutManager::commandForShortcut(const QKeySequence& shortcut) const
 {
-    return m_shortcutToCommand.value(shortcut);
+    if (shortcut.isEmpty() || m_externallyConflictedShortcuts.contains(shortcut)) {
+        return {};
+    }
+    const auto commands = m_shortcutToCommands.values(shortcut);
+    return commands.size() == 1 ? commands.first() : QString();
 }
 
 QString ShortcutManager::commandForKeyEvent(const QKeyEvent* event) const
@@ -142,7 +151,7 @@ QString ShortcutManager::commandForKeyEvent(const QKeyEvent* event) const
     const int key = event->key();
     const Qt::KeyboardModifiers mods = event->modifiers() & ~Qt::KeypadModifier;
     const int combined = key | static_cast<int>(mods);
-    QString cmdId = m_shortcutToCommand.value(QKeySequence(combined));
+    QString cmdId = commandForShortcut(QKeySequence(combined));
     if (!cmdId.isEmpty())
         return cmdId;
 
@@ -152,7 +161,7 @@ QString ShortcutManager::commandForKeyEvent(const QKeyEvent* event) const
         const int physicalKey = qtKeyFromNativeVirtualKey(nativeVK);
         if (physicalKey != 0 && physicalKey != key) {
             const int physicalCombined = physicalKey | static_cast<int>(mods);
-            cmdId = m_shortcutToCommand.value(QKeySequence(physicalCombined));
+            cmdId = commandForShortcut(QKeySequence(physicalCombined));
             if (!cmdId.isEmpty())
                 return cmdId;
         }
@@ -241,8 +250,23 @@ int ShortcutManager::qtKeyFromNativeVirtualKey(quint32 nativeVirtualKey)
 bool ShortcutManager::isShortcutInUse(
     const QKeySequence& shortcut, const QString& excludeCommandId) const
 {
-    QString existing = m_shortcutToCommand.value(shortcut);
-    return !existing.isEmpty() && existing != excludeCommandId;
+    const auto commands = m_shortcutToCommands.values(shortcut);
+    for (const QString& commandId : commands) {
+        if (commandId != excludeCommandId) {
+            return true;
+        }
+    }
+    return false;
+}
+
+void ShortcutManager::setExternallyConflictedShortcuts(const QSet<QKeySequence>& shortcuts)
+{
+    if (m_externallyConflictedShortcuts == shortcuts) {
+        return;
+    }
+    m_externallyConflictedShortcuts = shortcuts;
+    refreshShortcutEnabledStates();
+    emit shortcutConflictsChanged();
 }
 
 void ShortcutManager::pushShortcutsDisabled()
@@ -250,10 +274,7 @@ void ShortcutManager::pushShortcutsDisabled()
     const bool wasEnabled = (m_shortcutsDisableCount == 0);
     ++m_shortcutsDisableCount;
     if (wasEnabled) {
-        for (auto it = m_shortcuts.constBegin(); it != m_shortcuts.constEnd(); ++it) {
-            if (QShortcut* sc = it.value())
-                sc->setEnabled(false);
-        }
+        refreshShortcutEnabledStates();
     }
 }
 
@@ -264,10 +285,7 @@ void ShortcutManager::popShortcutsDisabled()
     }
     --m_shortcutsDisableCount;
     if (m_shortcutsDisableCount == 0) {
-        for (auto it = m_shortcuts.constBegin(); it != m_shortcuts.constEnd(); ++it) {
-            if (QShortcut* sc = it.value())
-                sc->setEnabled(true);
-        }
+        refreshShortcutEnabledStates();
     }
 }
 
@@ -284,9 +302,7 @@ void ShortcutManager::updateShortcut(const QString& commandId)
 
         // Remove from reverse lookup
         QKeySequence oldSeq = old->key();
-        if (m_shortcutToCommand.value(oldSeq) == commandId) {
-            m_shortcutToCommand.remove(oldSeq);
-        }
+        m_shortcutToCommands.remove(oldSeq, commandId);
 
         delete old;
     }
@@ -295,6 +311,17 @@ void ShortcutManager::updateShortcut(const QString& commandId)
     QKeySequence newSeq = shortcutFor(commandId);
     if (!newSeq.isEmpty()) {
         createShortcut(commandId, newSeq);
+    }
+    refreshShortcutEnabledStates();
+}
+
+void ShortcutManager::refreshShortcutEnabledStates()
+{
+    const bool globallyEnabled = shortcutsEnabled();
+    for (auto it = m_shortcuts.constBegin(); it != m_shortcuts.constEnd(); ++it) {
+        if (QShortcut* shortcut = it.value()) {
+            shortcut->setEnabled(globallyEnabled && !isShortcutConflicted(it.key()));
+        }
     }
 }
 

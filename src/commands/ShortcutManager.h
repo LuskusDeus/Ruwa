@@ -13,6 +13,8 @@
 #include <QObject>
 #include <QHash>
 #include <QKeySequence>
+#include <QMultiHash>
+#include <QSet>
 #include <QShortcut>
 #include <QStringList>
 
@@ -27,7 +29,7 @@ namespace ruwa::core {
  * Features:
  * - Automatic registration of default shortcuts from commands
  * - User customization with persistence
- * - Conflict detection
+ * - Conflict detection with automatic disabling of ambiguous shortcuts
  * - Context-aware activation
  */
 class ShortcutManager : public QObject {
@@ -66,6 +68,9 @@ public:
     /// Check if command has custom shortcut
     bool hasCustomShortcut(const QString& commandId) const;
 
+    /// Whether this command shares its shortcut with another binding.
+    bool isShortcutConflicted(const QString& commandId) const;
+
     // === Conflict Detection ===
 
     /// Find command that uses this shortcut (empty string if none)
@@ -81,6 +86,9 @@ public:
 
     /// Check if shortcut is already in use
     bool isShortcutInUse(const QKeySequence& shortcut, const QString& excludeCommandId = {}) const;
+
+    /// Marks sequences owned by non-command shortcut systems (for example canvas holds).
+    void setExternallyConflictedShortcuts(const QSet<QKeySequence>& shortcuts);
 
     // === Global Blocking (reference-counted) ===
 
@@ -115,6 +123,9 @@ signals:
     /// Emitted when a shortcut is used (for UI like last-used list)
     void shortcutUsed(const QString& commandId);
 
+    /// Emitted when conflict state changes without changing a command's sequence.
+    void shortcutConflictsChanged();
+
 private:
     ShortcutManager();
     ~ShortcutManager() override;
@@ -123,6 +134,7 @@ private:
 
     void createShortcut(const QString& commandId, const QKeySequence& sequence);
     void updateShortcut(const QString& commandId);
+    void refreshShortcutEnabledStates();
     void recordShortcutUsed(const QString& commandId);
     void saveLastUsedToSettings() const;
 
@@ -131,7 +143,8 @@ private:
     QHash<QString, QShortcut*> m_shortcuts; // commandId -> QShortcut
     int m_shortcutsDisableCount = 0; // >0 when overlays block shortcuts
     QHash<QString, QKeySequence> m_customShortcuts; // commandId -> custom sequence
-    QHash<QKeySequence, QString> m_shortcutToCommand; // reverse lookup
+    QMultiHash<QKeySequence, QString> m_shortcutToCommands; // reverse lookup, including conflicts
+    QSet<QKeySequence> m_externallyConflictedShortcuts;
     QStringList m_lastUsedShortcuts; // last 5 used (most recent first)
 };
 

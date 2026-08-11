@@ -21,6 +21,7 @@
 #include "TextEditingController.h"
 
 #include "CanvasPanelHelpers.h"
+#include "features/canvas/CanvasModifierShortcutManager.h"
 #include "features/canvas/ui/CanvasOverlayContextActions.h"
 #include "features/canvas/grid/GridRemap.h"
 #include "shared/resources/IconProvider.h"
@@ -4087,8 +4088,8 @@ void CanvasPanel::endTemporaryTool()
     // markTemporaryToolUsed, or released while it is still running, here) means the
     // key was tapped and the stroke simply outlasted the tap: picking a tool and
     // using it in the same breath is a deliberate, permanent switch.
-    // Always-revert gestures (Space/Alt/Ctrl, stylus side button) have no tap
-    // meaning and keep reverting unconditionally.
+    // Always-revert gestures (the configurable canvas hold keys and stylus side
+    // button) have no tap meaning and keep reverting unconditionally.
     if (!alwaysRevert && releasedMidStroke) {
         return;
     }
@@ -4104,7 +4105,9 @@ void CanvasPanel::endTemporaryTool()
 
 void CanvasPanel::noteUndoForTemporaryMoveTool()
 {
-    if (!m_tempToolHold.active || m_tempToolHold.heldKey != Qt::Key_Control
+    const int moveKey = ruwa::features::canvas::CanvasModifierShortcutManager::instance().keyFor(
+        ruwa::features::canvas::CanvasModifierAction::MoveContent);
+    if (!m_tempToolHold.active || m_tempToolHold.heldKey != moveKey
         || m_tempToolHold.previousTool == ToolId::Move || toolMode() != ToolId::Move) {
         return;
     }
@@ -4119,10 +4122,11 @@ bool CanvasPanel::temporaryMoveToolUndoCooldownActive()
         return false;
     }
 
-    const bool temporaryCtrlMove = m_tempToolHold.active
-        && m_tempToolHold.heldKey == Qt::Key_Control && m_tempToolHold.previousTool != ToolId::Move
-        && toolMode() == ToolId::Move;
-    if (!temporaryCtrlMove || !m_temporaryMoveToolUndoCooldownTimer.isValid()
+    const int moveKey = ruwa::features::canvas::CanvasModifierShortcutManager::instance().keyFor(
+        ruwa::features::canvas::CanvasModifierAction::MoveContent);
+    const bool temporaryMove = m_tempToolHold.active && m_tempToolHold.heldKey == moveKey
+        && m_tempToolHold.previousTool != ToolId::Move && toolMode() == ToolId::Move;
+    if (!temporaryMove || !m_temporaryMoveToolUndoCooldownTimer.isValid()
         || m_temporaryMoveToolUndoCooldownTimer.elapsed() >= kTemporaryMoveToolUndoCooldownMs) {
         resetTemporaryMoveToolUndoCooldown();
         return false;
@@ -4142,14 +4146,18 @@ bool CanvasPanel::finalizeTemporaryToolHoldForKeyRelease(int key)
         return false;
     }
 
+    const int panKey = ruwa::features::canvas::CanvasModifierShortcutManager::instance().keyFor(
+        ruwa::features::canvas::CanvasModifierAction::PanCanvas);
     const bool shiftSpaceRelease
-        = m_tempToolHold.shiftSpaceCombo && (key == Qt::Key_Space || key == Qt::Key_Shift);
+        = m_tempToolHold.shiftSpaceCombo && (key == panKey || key == Qt::Key_Shift);
     const bool normalKeyRelease = !m_tempToolHold.shiftSpaceCombo && key == m_tempToolHold.heldKey;
     if (!shiftSpaceRelease && !normalKeyRelease) {
         return false;
     }
 
-    if (key == Qt::Key_Control && m_glWidget && m_glWidget->isTransformActive()
+    const int moveKey = ruwa::features::canvas::CanvasModifierShortcutManager::instance().keyFor(
+        ruwa::features::canvas::CanvasModifierAction::MoveContent);
+    if (key == moveKey && m_glWidget && m_glWidget->isTransformActive()
         && m_glWidget->isMoveOnlyTransform()) {
         confirmTransform();
     }
@@ -4199,7 +4207,28 @@ bool CanvasPanel::isTemporaryToolHoldKeyPressed() const
         = [](int virtualKey) { return (GetAsyncKeyState(virtualKey) & 0x8000) != 0; };
 
     if (m_tempToolHold.shiftSpaceCombo) {
-        return isVirtualKeyPressed(VK_SHIFT) && isVirtualKeyPressed(VK_SPACE);
+        const int panKey
+            = ruwa::features::canvas::CanvasModifierShortcutManager::instance().keyFor(
+                ruwa::features::canvas::CanvasModifierAction::PanCanvas);
+        int panVirtualKey = 0;
+        switch (panKey) {
+        case Qt::Key_Control:
+            panVirtualKey = VK_CONTROL;
+            break;
+        case Qt::Key_Alt:
+            panVirtualKey = VK_MENU;
+            break;
+        case Qt::Key_Shift:
+            panVirtualKey = VK_SHIFT;
+            break;
+        case Qt::Key_Space:
+            panVirtualKey = VK_SPACE;
+            break;
+        default:
+            break;
+        }
+        return panVirtualKey != 0 && isVirtualKeyPressed(VK_SHIFT)
+            && isVirtualKeyPressed(panVirtualKey);
     }
 
     switch (m_tempToolHold.heldKey) {
@@ -4259,15 +4288,19 @@ bool CanvasPanel::isTemporaryToolHoldKeyPressed() const
 
 std::optional<ToolId> CanvasPanel::toolModeForKey(int key) const
 {
-    // Space is always temporary Hand (pan), regardless of shortcut config
-    if (key == Qt::Key_Space)
-        return ToolId::Hand;
-    // Alt is always temporary Eyedropper (pipette), regardless of shortcut config
-    if (key == Qt::Key_Alt)
-        return ToolId::Eyedropper;
-    // Ctrl is always temporary Move (pan), regardless of shortcut config
-    if (key == Qt::Key_Control)
-        return ToolId::Move;
+    using ruwa::features::canvas::CanvasModifierAction;
+    const auto specialAction
+        = ruwa::features::canvas::CanvasModifierShortcutManager::instance().actionForKey(key);
+    if (specialAction) {
+        switch (*specialAction) {
+        case CanvasModifierAction::MoveContent:
+            return ToolId::Move;
+        case CanvasModifierAction::Eyedropper:
+            return ToolId::Eyedropper;
+        case CanvasModifierAction::PanCanvas:
+            return ToolId::Hand;
+        }
+    }
 
     // Look up command mapped to this key via ShortcutManager
     const auto& sm = ruwa::core::ShortcutManager::instance();
@@ -4284,13 +4317,9 @@ std::optional<ToolId> CanvasPanel::toolModeForKeyEvent(const QKeyEvent* event) c
         return std::nullopt;
 
     const int key = event->key();
-    // Modifier keys are layout-independent, handle them directly
-    if (key == Qt::Key_Space)
-        return ToolId::Hand;
-    if (key == Qt::Key_Alt)
-        return ToolId::Eyedropper;
-    if (key == Qt::Key_Control)
-        return ToolId::Move;
+    if (ruwa::features::canvas::CanvasModifierShortcutManager::instance().actionForKey(key)) {
+        return toolModeForKey(key);
+    }
 
     // Layout-independent lookup via ShortcutManager
     const auto& sm = ruwa::core::ShortcutManager::instance();

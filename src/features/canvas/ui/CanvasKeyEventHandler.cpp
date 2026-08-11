@@ -10,6 +10,7 @@
 
 #include "commands/CommandExecutor.h"
 #include "commands/ShortcutManager.h"
+#include "features/canvas/CanvasModifierShortcutManager.h"
 
 #include <QAbstractSpinBox>
 #include <QApplication>
@@ -64,6 +65,14 @@ static bool isBrushAdjustmentCommand(const QString& commandId)
 
 bool CanvasKeyEventHandler::handleEvent(QObject* watched, QEvent* event)
 {
+    using ruwa::features::canvas::CanvasModifierAction;
+    auto& canvasShortcuts
+        = ruwa::features::canvas::CanvasModifierShortcutManager::instance();
+    const int moveContentKey = canvasShortcuts.keyFor(CanvasModifierAction::MoveContent);
+    const int panCanvasKey = canvasShortcuts.keyFor(CanvasModifierAction::PanCanvas);
+    const bool panCanvasShortcutActive
+        = canvasShortcuts.actionForKey(panCanvasKey) == CanvasModifierAction::PanCanvas;
+
     if (event->type() == QEvent::ShortcutOverride) {
         auto* ke = static_cast<QKeyEvent*>(event);
         if (ruwa::core::ShortcutManager::instance().shortcutsEnabled() && !ke->isAutoRepeat()
@@ -71,7 +80,7 @@ bool CanvasKeyEventHandler::handleEvent(QObject* watched, QEvent* event)
             && !m_host->temporaryToolHoldActive() && m_host->inputGlWidget()
             && m_host->hasInputFocusOrCursorOverCanvas() && !m_host->isDrawingActive()) {
             auto toolOpt = m_host->inputToolModeForKeyEvent(ke);
-            if (toolOpt && ke->key() != Qt::Key_Space && ke->key() != Qt::Key_Alt) {
+            if (toolOpt && !canvasShortcuts.actionForKey(ke->key())) {
                 m_host->setPendingTemporaryToolKey(resolvePhysicalKey(ke), false);
             }
         }
@@ -82,11 +91,26 @@ bool CanvasKeyEventHandler::handleEvent(QObject* watched, QEvent* event)
         }
         if (ke->key() == Qt::Key_Control && !ke->isAutoRepeat()) {
             m_host->setCtrlModifierPressed(true);
-            const bool ctrlOnly = (ke->modifiers()
-                                      & (Qt::ControlModifier | Qt::ShiftModifier | Qt::AltModifier
-                                          | Qt::MetaModifier))
-                == Qt::ControlModifier;
-            if (ctrlOnly && ruwa::core::ShortcutManager::instance().shortcutsEnabled()
+        }
+        if (ke->key() == moveContentKey && !ke->isAutoRepeat()) {
+            const auto requiredModifier = [&]() -> Qt::KeyboardModifier {
+                switch (moveContentKey) {
+                case Qt::Key_Control:
+                    return Qt::ControlModifier;
+                case Qt::Key_Alt:
+                    return Qt::AltModifier;
+                case Qt::Key_Shift:
+                    return Qt::ShiftModifier;
+                default:
+                    return Qt::NoModifier;
+                }
+            }();
+            const auto relevantModifiers = ke->modifiers()
+                & (Qt::ControlModifier | Qt::ShiftModifier | Qt::AltModifier | Qt::MetaModifier);
+            const bool moveKeyOnly = moveContentKey == Qt::Key_Space
+                ? relevantModifiers == Qt::NoModifier
+                : relevantModifiers == requiredModifier;
+            if (moveKeyOnly && ruwa::core::ShortcutManager::instance().shortcutsEnabled()
                 && m_host->inputGlWidget() && m_host->hasInputFocusOrCursorOverCanvas()) {
                 const bool blockTempMoveInTransform = m_host->isTransformInputActive();
                 const bool blockTempMoveInSelectionInteraction
@@ -94,9 +118,9 @@ bool CanvasKeyEventHandler::handleEvent(QObject* watched, QEvent* event)
                 const bool blockTempMoveInDrawing = m_host->isInputDrawingActive();
                 if (!blockTempMoveInTransform && !blockTempMoveInSelectionInteraction
                     && !blockTempMoveInDrawing && !m_host->temporaryToolHoldActive()) {
-                    auto toolOpt = m_host->inputToolModeForKey(Qt::Key_Control);
+                    auto toolOpt = m_host->inputToolModeForKey(moveContentKey);
                     if (toolOpt && *toolOpt != m_host->currentInputTool()) {
-                        m_host->setPendingTemporaryToolKey(Qt::Key_Control, true);
+                        m_host->setPendingTemporaryToolKey(moveContentKey, true);
                         const QString cmdId = m_host->commandIdForInputToolMode(*toolOpt);
                         if (!cmdId.isEmpty()) {
                             ruwa::core::CommandExecutor::instance().execute(cmdId);
@@ -123,8 +147,12 @@ bool CanvasKeyEventHandler::handleEvent(QObject* watched, QEvent* event)
             }
             if (physKey == Qt::Key_T && ctrlOnly && !ke->isAutoRepeat()
                 && m_host->isCursorOverCanvas()) {
-                ruwa::core::CommandExecutor::instance().execute(QStringLiteral("edit.transform"));
-                return true;
+                const QString commandId
+                    = ruwa::core::ShortcutManager::instance().commandForKeyEvent(ke);
+                if (commandId == QLatin1String("edit.transform")) {
+                    ruwa::core::CommandExecutor::instance().execute(commandId);
+                    return true;
+                }
             }
 
             // QShortcut uses the key produced by the active layout.  Keep brush adjustments
@@ -140,21 +168,22 @@ bool CanvasKeyEventHandler::handleEvent(QObject* watched, QEvent* event)
             }
 
             const bool activeSelectionInteraction = m_host->isAnySelectionInteractionActive();
-            const bool spaceWithShift
-                = ke->key() == Qt::Key_Space && ke->modifiers().testFlag(Qt::ShiftModifier);
-            const bool shiftWhileSpaceHeld = ke->key() == Qt::Key_Shift
+            const bool panWithShift = panCanvasShortcutActive && panCanvasKey != Qt::Key_Shift
+                && ke->key() == panCanvasKey && ke->modifiers().testFlag(Qt::ShiftModifier);
+            const bool shiftWhilePanHeld = panCanvasShortcutActive && panCanvasKey != Qt::Key_Shift
+                && ke->key() == Qt::Key_Shift
                 && m_host->temporaryToolHoldActive()
-                && m_host->temporaryToolHeldKeyIs(Qt::Key_Space)
+                && m_host->temporaryToolHeldKeyIs(panCanvasKey)
                 && !m_host->temporaryToolShiftSpaceCombo();
-            if ((spaceWithShift || shiftWhileSpaceHeld) && !ke->isAutoRepeat()
+            if ((panWithShift || shiftWhilePanHeld) && !ke->isAutoRepeat()
                 && !m_host->temporaryToolShiftSpaceCombo() && m_host->inputGlWidget()
                 && m_host->hasInputFocusOrCursorOverCanvas() && !m_host->isDrawingActive()) {
                 const bool blockInTransform = m_host->isTransformInputActive();
                 const bool blockInSelection = m_host->isAnySelectionInteractionActive();
                 if (!blockInTransform && !blockInSelection
                     && m_host->currentInputTool() != ToolId::RotateView) {
-                    if (spaceWithShift) {
-                        m_host->setPendingTemporaryToolKey(Qt::Key_Space, true);
+                    if (panWithShift) {
+                        m_host->setPendingTemporaryToolKey(panCanvasKey, true);
                         ruwa::core::CommandExecutor::instance().execute(
                             QStringLiteral("tools.rotate-view"));
                         m_host->clearPendingTemporaryToolKey();
@@ -168,17 +197,21 @@ bool CanvasKeyEventHandler::handleEvent(QObject* watched, QEvent* event)
                 }
             }
 
-            if (ke->key() == Qt::Key_Space && !ke->isAutoRepeat() && activeSelectionInteraction) {
+            if (panCanvasShortcutActive && ke->key() == panCanvasKey && !ke->isAutoRepeat()
+                && activeSelectionInteraction) {
                 m_host->beginSpaceSelectionMove();
                 return true;
             }
-            if (ke->key() == Qt::Key_Space && !ke->isAutoRepeat()
+            if (panCanvasShortcutActive && ke->key() == panCanvasKey && !ke->isAutoRepeat()
                 && m_host->isInputDrawingActive()) {
                 m_host->beginSpaceStrokeMove();
                 return true;
             }
 
-            const bool isTempToolKey = (ke->key() == Qt::Key_Space || ke->key() == Qt::Key_Alt);
+            const auto modifierAction = canvasShortcuts.actionForKey(ke->key());
+            // MoveContent has stricter modifier/context checks and is handled above.
+            const bool isTempToolKey
+                = modifierAction && modifierAction != CanvasModifierAction::MoveContent;
             const ToolId currentTool = m_host->currentInputTool();
             // Lasso Fill deliberately remains available for the temporary Eyedropper:
             // unlike selection tools, it does not use Alt as a subtract modifier.
@@ -186,11 +219,12 @@ bool CanvasKeyEventHandler::handleEvent(QObject* watched, QEvent* event)
                 || currentTool == ToolId::SquareSelection || currentTool == ToolId::CircleSelection
                 || currentTool == ToolId::MagicWand || currentTool == ToolId::Move;
             const bool blockTempHandInSelectionInteraction
-                = (ke->key() == Qt::Key_Space) && activeSelectionInteraction;
+                = modifierAction == CanvasModifierAction::PanCanvas && activeSelectionInteraction;
             const bool blockTempEyedropperInTransform
-                = (ke->key() == Qt::Key_Alt) && m_host->isTransformInputActive();
+                = modifierAction == CanvasModifierAction::Eyedropper
+                && m_host->isTransformInputActive();
             const bool blockTempEyedropperForTool
-                = (ke->key() == Qt::Key_Alt) && blocksTemporaryEyedropper;
+                = modifierAction == CanvasModifierAction::Eyedropper && blocksTemporaryEyedropper;
             if (isTempToolKey && !ke->isAutoRepeat() && !blockTempHandInSelectionInteraction
                 && !blockTempEyedropperInTransform && !blockTempEyedropperForTool
                 && !m_host->temporaryToolHoldActive() && m_host->inputGlWidget()
@@ -219,12 +253,12 @@ bool CanvasKeyEventHandler::handleEvent(QObject* watched, QEvent* event)
             m_host->setAltModifierPressed(false);
         }
         if (ruwa::core::ShortcutManager::instance().shortcutsEnabled()) {
-            if (!ke->isAutoRepeat() && ke->key() == Qt::Key_Space
+            if (!ke->isAutoRepeat() && ke->key() == panCanvasKey
                 && m_host->isSpaceSelectionMoveActive()) {
                 m_host->endSpaceSelectionMove();
                 return true;
             }
-            if (!ke->isAutoRepeat() && ke->key() == Qt::Key_Space
+            if (!ke->isAutoRepeat() && ke->key() == panCanvasKey
                 && m_host->isSpaceStrokeMoveActive()) {
                 m_host->endSpaceStrokeMove();
                 return true;

@@ -2238,6 +2238,48 @@ Rasterize the layer to transform the selection?</source>
         <translation>Всё в этом пресете</translation>
     </message>
     <message>
+        <location filename="../src/features/settings/shortcuts/ShortcutManagerTab.cpp" line="523"/>
+        <location filename="../src/features/settings/shortcuts/ShortcutManagerTab.cpp" line="536"/>
+        <location filename="../src/features/settings/shortcuts/ShortcutManagerTab.cpp" line="538"/>
+        <source>Canvas modifier shortcuts</source>
+        <translation>Модификаторы инструментов холста</translation>
+    </message>
+    <message>
+        <location filename="../src/features/settings/shortcuts/ShortcutManagerTab.cpp" line="539"/>
+        <source>Move content · Eyedropper · Pan canvas</source>
+        <translation>Перемещение содержимого · Пипетка · Панорамирование холста</translation>
+    </message>
+    <message>
+        <location filename="../src/features/settings/shortcuts/ShortcutManagerTab.cpp" line="566"/>
+        <source>Move content tool</source>
+        <translation>Инструмент перемещения содержимого</translation>
+    </message>
+    <message>
+        <location filename="../src/features/settings/shortcuts/ShortcutManagerTab.cpp" line="567"/>
+        <source>Hold to temporarily activate the content move tool</source>
+        <translation>Удерживайте для временного включения инструмента перемещения содержимого</translation>
+    </message>
+    <message>
+        <location filename="../src/features/settings/shortcuts/ShortcutManagerTab.cpp" line="570"/>
+        <source>Eyedropper</source>
+        <translation>Пипетка</translation>
+    </message>
+    <message>
+        <location filename="../src/features/settings/shortcuts/ShortcutManagerTab.cpp" line="571"/>
+        <source>Hold to temporarily sample a color from the canvas</source>
+        <translation>Удерживайте для временного взятия цвета с холста</translation>
+    </message>
+    <message>
+        <location filename="../src/features/settings/shortcuts/ShortcutManagerTab.cpp" line="574"/>
+        <source>Pan canvas</source>
+        <translation>Панорамирование холста</translation>
+    </message>
+    <message>
+        <location filename="../src/features/settings/shortcuts/ShortcutManagerTab.cpp" line="575"/>
+        <source>Hold to temporarily pan the canvas</source>
+        <translation>Удерживайте для временного панорамирования холста</translation>
+    </message>
+    <message>
         <location filename="../src/features/settings/shortcuts/ShortcutManagerTab.cpp" line="581"/>
         <source>Shortcut Conflict</source>
         <translation>Конфликт сочетания клавиш</translation>
@@ -4408,6 +4450,14 @@ Ruwa использует фреймворк Qt (версия %1), динами�
 </context>
 <context>
     <name>ruwa::ui::widgets::ShortcutRowWidget</name>
+    <message>
+        <source>Duplicate shortcut — disabled</source>
+        <translation>Повторяющийся шорткат — отключён</translation>
+    </message>
+    <message>
+        <source>Shortcut conflict</source>
+        <translation>Конфликт шортката</translation>
+    </message>
     <message>
         <location filename="../src/features/settings/shortcuts/ShortcutRowWidget.cpp" line="94"/>
         <source>Reset</source>

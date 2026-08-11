@@ -11,6 +11,7 @@
 #include "shared/resources/FontManager.h"
 #include "commands/CommandRegistry.h"
 #include "commands/ShortcutManager.h"
+#include "features/canvas/CanvasModifierShortcutManager.h"
 #include "commands/definitions/CommandDefinitions.h"
 #include "features/settings/SettingsManager.h"
 #include "features/brush/manager/BrushManager.h"
@@ -126,6 +127,7 @@ Application::~Application()
     // factory-reset restart. In that path the next process recreates defaults.
     if (!s_factoryResetRestartInProgress) {
         core::ShortcutManager::instance().saveToSettings();
+        features::canvas::CanvasModifierShortcutManager::instance().saveToSettings();
     }
 
     // Cleanup OpenGL
@@ -192,6 +194,7 @@ void Application::initializeManagers()
     pumpStartupUi();
     auto& shortcuts = core::ShortcutManager::instance();
     shortcuts.loadFromSettings();
+    features::canvas::CanvasModifierShortcutManager::instance();
     pumpStartupUi();
 
     // 4. D I S C O R D   R I C H   P R E S E N C E

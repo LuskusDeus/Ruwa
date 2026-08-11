@@ -69,6 +69,8 @@ private slots:
     void onShortcutChanged(const QString& commandId, const QKeySequence& newShortcut);
     void onResetRequested(const QString& commandId);
     void onShortcutManagerChanged(const QString& commandId, const QKeySequence& newShortcut);
+    void onCanvasModifierChanged(const QString& shortcutId, int key);
+    void onCanvasModifierManagerChanged(const QString& shortcutId, int key);
     void onCategorySelected(int index);
     void onResetSectionClicked();
     void onNewPresetClicked();
@@ -87,9 +89,13 @@ private:
     void applySearchFilter();
     void updateScaledSizes();
     void updateThemeColors();
+    void updateConflictIndicators();
     void applyAspectRatioMargins();
     void updateShortcutsHeaderMeta();
     QStringList commandIdsForItem(int itemIndex) const;
+    ruwa::ui::widgets::ShortcutRowWidget* createCanvasModifierRow(
+        const QString& shortcutId, QWidget* parent);
+    bool isCanvasModifierShortcut(const QString& shortcutId) const;
 
 private:
     // Header
@@ -121,6 +127,7 @@ private:
     void rebuildPresetsList();
     void applyPreset(const QUuid& presetId);
     QHash<QString, QKeySequence> captureCurrentCustomBindings() const;
+    QHash<QString, int> captureCurrentCanvasModifierBindings() const;
     int countBoundShortcutsInPreset(const QUuid& presetId) const;
     void exportPresetToFile(const QUuid& presetId);
     void importPresetFromFile(const QString& path);

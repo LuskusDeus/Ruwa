@@ -114,6 +114,7 @@
         <file alias="Random">resources/icons/Random.png</file>
         <file alias="Direction">resources/icons/Direction.png</file>
         <file alias="NotAvailable">resources/icons/NotAvailable.png</file>
+        <file alias="Warning">resources/icons/Warning.png</file>
         <file alias="Liquify">resources/icons/Liquify.png</file>
         <file alias="LiquifyPush">resources/icons/LiquifyPush.png</file>
         <file alias="LiquifyTwirlCW">resources/icons/LiquifyTwirl_cw.png</file>

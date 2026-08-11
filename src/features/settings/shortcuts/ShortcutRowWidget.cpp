@@ -3,6 +3,7 @@
 // ShortcutRowWidget.cpp
 #include "features/settings/shortcuts/ShortcutRowWidget.h"
 #include "shared/widgets/inputs/CommandInputWidget.h"
+#include "shared/widgets/inputs/AnimatedComboBox.h"
 #include "shared/widgets/CapsuleButton.h"
 #include "shared/style/WidgetStyleManager.h"
 #include "features/theme/manager/ThemeManager.h"
@@ -37,6 +38,25 @@ ShortcutRowWidget::ShortcutRowWidget(const QString& commandId, const QString& co
     , m_commandDescription(commandDescription)
     , m_shortcut(shortcut)
     , m_defaultShortcut(defaultShortcut)
+{
+    setupUI();
+    updateScaledSizes();
+
+    connect(&ThemeManager::instance(), &ThemeManager::themeChanged, this,
+        &ShortcutRowWidget::onThemeChanged);
+}
+
+ShortcutRowWidget::ShortcutRowWidget(const QString& commandId, const QString& commandTitle,
+    const QString& commandDescription, int choice, int defaultChoice,
+    const QVector<QPair<QString, int>>& choices, QWidget* parent)
+    : BaseStyledPanel("SettingsPanel", parent)
+    , m_commandId(commandId)
+    , m_commandTitle(commandTitle)
+    , m_commandDescription(commandDescription)
+    , m_usesChoiceInput(true)
+    , m_choice(choice)
+    , m_defaultChoice(defaultChoice)
+    , m_choices(choices)
 {
     setupUI();
     updateScaledSizes();
@@ -81,15 +101,37 @@ void ShortcutRowWidget::setupUI()
 
     m_layout->addLayout(leftLayout, 1);
 
-    // Right side: CommandInputWidget + Reset button
-    m_commandInput = new CommandInputWidget(this);
-    m_commandInput->setCommandId(m_commandId);
-    m_commandInput->setKeySequence(m_shortcut);
+    // Right side: regular recorder or a constrained single-key selector.
+    if (m_usesChoiceInput) {
+        m_choiceInput = new AnimatedComboBox(this);
+        for (const auto& option : m_choices) {
+            m_choiceInput->addItem(option.first, option.second);
+        }
+        m_choiceInput->setCurrentIndex(m_choiceInput->findIndexByData(m_choice));
+        connect(m_choiceInput, &AnimatedComboBox::currentIndexChanged, this, [this](int index) {
+            const int selected = m_choiceInput->itemData(index).toInt();
+            if (selected != m_choice) {
+                emit choiceChanged(m_commandId, selected);
+            }
+        });
+        m_layout->addWidget(m_choiceInput, 0, Qt::AlignVCenter);
+    } else {
+        m_commandInput = new CommandInputWidget(this);
+        m_commandInput->setCommandId(m_commandId);
+        m_commandInput->setKeySequence(m_shortcut);
 
-    connect(m_commandInput, &CommandInputWidget::shortcutRecorded, this,
-        [this](const QKeySequence& seq) { emit shortcutChanged(m_commandId, seq); });
+        connect(m_commandInput, &CommandInputWidget::shortcutRecorded, this,
+            [this](const QKeySequence& seq) { emit shortcutChanged(m_commandId, seq); });
 
-    m_layout->addWidget(m_commandInput, 0, Qt::AlignVCenter);
+        m_layout->addWidget(m_commandInput, 0, Qt::AlignVCenter);
+    }
+
+    m_warningIcon = new QLabel(this);
+    m_warningIcon->setAttribute(Qt::WA_TranslucentBackground);
+    m_warningIcon->setToolTip(tr("Duplicate shortcut — disabled"));
+    m_warningIcon->setAccessibleName(tr("Shortcut conflict"));
+    m_warningIcon->setVisible(false);
+    m_layout->addWidget(m_warningIcon, 0, Qt::AlignVCenter);
 
     m_resetButton = new CapsuleButton(tr("Reset"), CapsuleButton::Variant::Secondary, this);
     m_resetButton->setBaseMinimumWidth(0);
@@ -136,6 +178,11 @@ void ShortcutRowWidget::updateScaledSizes()
         m_resetButton->setSizeScale(0.68);
         m_resetButton->syncSizeToText();
     }
+    if (m_choiceInput) {
+        m_choiceInput->setFixedWidth(mgr.scaled(128));
+        m_choiceInput->setPopupMinWidth(mgr.scaled(128));
+    }
+    updateWarningIcon();
 
     const int h = m_commandDescription.isEmpty() ? mgr.scaled(BASE_ROW_HEIGHT)
                                                  : mgr.scaled(BASE_ROW_HEIGHT_WITH_DESC);
@@ -157,6 +204,20 @@ void ShortcutRowWidget::updateThemeColors()
     if (m_resetButton) {
         m_resetButton->update();
     }
+    updateWarningIcon();
+}
+
+void ShortcutRowWidget::updateWarningIcon()
+{
+    if (!m_warningIcon) {
+        return;
+    }
+    auto& mgr = WidgetStyleManager::instance();
+    const int iconSize = mgr.scaled(18);
+    const QIcon icon = IconProvider::instance().getColoredIcon(
+        QStringLiteral("Warning"), mgr.colors().warning);
+    m_warningIcon->setFixedSize(iconSize, iconSize);
+    m_warningIcon->setPixmap(icon.pixmap(iconSize, iconSize));
 }
 
 void ShortcutRowWidget::setShortcut(const QKeySequence& shortcut)
@@ -168,11 +229,32 @@ void ShortcutRowWidget::setShortcut(const QKeySequence& shortcut)
     updateResetButtonVisibility();
 }
 
+void ShortcutRowWidget::setChoice(int choice)
+{
+    m_choice = choice;
+    if (m_choiceInput) {
+        m_choiceInput->setCurrentIndex(m_choiceInput->findIndexByData(choice));
+    }
+    updateResetButtonVisibility();
+}
+
+void ShortcutRowWidget::setConflicted(bool conflicted)
+{
+    if (m_conflicted == conflicted) {
+        return;
+    }
+    m_conflicted = conflicted;
+    if (m_warningIcon) {
+        m_warningIcon->setVisible(conflicted);
+    }
+}
+
 void ShortcutRowWidget::updateResetButtonVisibility()
 {
     if (!m_resetButton)
         return;
-    const bool canReset = (m_shortcut != m_defaultShortcut);
+    const bool canReset = m_usesChoiceInput ? (m_choice != m_defaultChoice)
+                                            : (m_shortcut != m_defaultShortcut);
     m_resetButton->setVisible(canReset);
     m_resetButton->setEnabled(canReset);
 }
@@ -182,9 +264,12 @@ bool ShortcutRowWidget::matchesSearch(const QString& query) const
     if (query.isEmpty())
         return true;
     const QString q = query.toLower();
+    QString bindingText = m_shortcut.toString(QKeySequence::NativeText);
+    if (m_usesChoiceInput && m_choiceInput) {
+        bindingText = m_choiceInput->currentText();
+    }
     return m_commandTitle.toLower().contains(q) || m_commandDescription.toLower().contains(q)
-        || m_commandId.toLower().contains(q)
-        || m_shortcut.toString(QKeySequence::NativeText).toLower().contains(q);
+        || m_commandId.toLower().contains(q) || bindingText.toLower().contains(q);
 }
 
 void ShortcutRowWidget::onThemeChanged()

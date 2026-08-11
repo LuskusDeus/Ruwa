@@ -13,17 +13,18 @@
 namespace ruwa::features::settings::shortcuts {
 
 /**
- * @brief A named set of command → shortcut overrides.
+ * @brief A named set of command and canvas hold-shortcut overrides.
  *
  * "Default" (built-in) has an empty @ref bindings — i.e. every command uses
- * its compiled-in default. Custom presets store only the deltas from the
- * defaults (matches ShortcutManager's m_customShortcuts representation).
+ * its compiled-in defaults. Custom presets store only the deltas from the
+ * defaults, including the three single-key canvas bindings.
  */
 struct ShortcutPreset {
     QUuid id;
     QString name;
     bool isBuiltIn = false;
     QHash<QString, QKeySequence> bindings; // commandId -> overridden sequence
+    QHash<QString, int> canvasModifierBindings; // canvas action id -> overridden single key
 
     QJsonObject toJson() const;
     static ShortcutPreset fromJson(const QJsonObject& obj);

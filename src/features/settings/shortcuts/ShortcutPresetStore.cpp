@@ -30,6 +30,12 @@ QJsonObject ShortcutPreset::toJson() const
         bindingsObj.insert(it.key(), it.value().toString(QKeySequence::PortableText));
     }
     obj.insert(QStringLiteral("bindings"), bindingsObj);
+
+    QJsonObject canvasModifierBindingsObj;
+    for (auto it = canvasModifierBindings.begin(); it != canvasModifierBindings.end(); ++it) {
+        canvasModifierBindingsObj.insert(it.key(), it.value());
+    }
+    obj.insert(QStringLiteral("canvasModifierBindings"), canvasModifierBindingsObj);
     return obj;
 }
 
@@ -43,6 +49,11 @@ ShortcutPreset ShortcutPreset::fromJson(const QJsonObject& obj)
     for (auto it = bindingsObj.begin(); it != bindingsObj.end(); ++it) {
         p.bindings.insert(
             it.key(), QKeySequence(it.value().toString(), QKeySequence::PortableText));
+    }
+    const QJsonObject canvasModifierBindingsObj
+        = obj.value(QStringLiteral("canvasModifierBindings")).toObject();
+    for (auto it = canvasModifierBindingsObj.begin(); it != canvasModifierBindingsObj.end(); ++it) {
+        p.canvasModifierBindings.insert(it.key(), it.value().toInt());
     }
     return p;
 }
