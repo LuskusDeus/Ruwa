@@ -103,6 +103,7 @@ signals:
 
 protected:
     void paintEvent(QPaintEvent* event) override;
+    void changeEvent(QEvent* event) override;
     void enterEvent(QEnterEvent* event) override;
     void leaveEvent(QEvent* event) override;
     void mousePressEvent(QMouseEvent* event) override;
@@ -113,6 +114,12 @@ protected:
     bool eventFilter(QObject* watched, QEvent* event) override;
 
 private:
+    AnimatedComboPopup* ensurePopup();
+    void schedulePopupWarmUp();
+    void warmUpPopup();
+    int availablePopupWidth() const;
+    bool popupContentNeedsRebuild() const;
+    void markPopupContentDirty();
     void openPopup();
     void closePopup();
     void togglePopup();
@@ -138,6 +145,14 @@ private:
 
     AnimatedComboPopup* m_popup = nullptr;
     QList<QMetaObject::Connection> m_scrollAreaPositionConnections;
+
+    // The popup is built and painted once off the click path (see warmUpPopup)
+    // and only rebuilt when its content or the widths it was laid out for change.
+    bool m_popupWarmUpScheduled = false;
+    bool m_popupWarmedUp = false;
+    bool m_popupContentDirty = true;
+    int m_popupBuiltForComboWidth = -1;
+    int m_popupBuiltForAvailableWidth = -1;
 
     qreal m_hoverProgress = 0.0;
     qreal m_pressProgress = 0.0;

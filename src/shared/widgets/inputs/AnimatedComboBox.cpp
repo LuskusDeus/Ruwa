@@ -17,7 +17,9 @@
 #include <QMouseEvent>
 #include <QPainter>
 #include <QPainterPath>
+#include <QPixmap>
 #include <QPropertyAnimation>
+#include <QTimer>
 #include <QVariant>
 #include <QStyleOption>
 #include <QVariantAnimation>
@@ -545,6 +547,31 @@ public:
         m_posAnim->start();
     }
 
+    // Pays the one-time costs of a first show — style polish, layout, font
+    // fallback and glyph rasterization for the row labels — while the popup is
+    // still hidden, so the first click only has to position and fade it in.
+    void warmUp()
+    {
+        ensurePolished();
+        m_layout->activate();
+
+        if (size().isEmpty()) {
+            return;
+        }
+
+        // QGraphicsOpacityEffect at 0.0 would skip the source entirely and warm
+        // nothing, so render the raw widget tree instead.
+        const bool effectWasEnabled = m_opacityEffect->isEnabled();
+        m_opacityEffect->setEnabled(false);
+
+        QPixmap scratch(size());
+        scratch.fill(Qt::transparent);
+        render(&scratch, QPoint(), QRegion(), QWidget::DrawChildren);
+
+        m_opacityEffect->setEnabled(effectWasEnabled);
+        m_opacityEffect->setOpacity(m_popupOpacity);
+    }
+
     void forceHide()
     {
         m_isVisible = false;
@@ -840,21 +867,11 @@ AnimatedComboBox::AnimatedComboBox(QWidget* parent)
     setFixedHeight(24);
     setCursor(Qt::PointingHandCursor);
 
-    m_popup = new AnimatedComboPopup(window());
-    m_popup->setProperty("ruwa_owner_combo", QVariant::fromValue(static_cast<QWidget*>(this)));
-    m_popup->hide();
-
-    m_popup->setOnItemActivated([this](int index) {
-        const bool changed = (m_currentIndex != index);
-        setCurrentIndex(index);
-        closePopup();
-        emit activated(index);
-        if (changed) {
-            emit currentIndexChanged(index);
-        }
-    });
-    m_popup->setOnHoveredIndexChanged([this](int index) { emit itemHovered(index); });
-    m_popup->setOnPopupHidden([this]() { emit popupHidden(); });
+    // The popup is created on first use — see ensurePopup(). Building it here
+    // would parent it to whatever window() resolves to during construction,
+    // which is usually the still-parentless host widget rather than the real
+    // window, and force a reparent (plus a full relayout of whichever scroll
+    // area the combo ended up in) on the first click.
 
     m_hoverAnim = new QPropertyAnimation(this, "hoverProgress", this);
     m_hoverAnim->setDuration(170);
@@ -895,6 +912,7 @@ void AnimatedComboBox::addItem(const AnimatedComboItem& item)
     if (m_currentIndex < 0 && !item.separator && !item.category && item.enabled) {
         m_currentIndex = m_items.size() - 1;
     }
+    markPopupContentDirty();
     if (isPopupActive()) {
         syncPopupItems();
     }
@@ -908,6 +926,7 @@ void AnimatedComboBox::addCategory(const QString& text)
     item.enabled = false;
     item.category = true;
     m_items.append(item);
+    markPopupContentDirty();
     if (isPopupActive()) {
         syncPopupItems();
     }
@@ -919,6 +938,7 @@ void AnimatedComboBox::addSeparator()
     item.separator = true;
     item.enabled = false;
     m_items.append(item);
+    markPopupContentDirty();
     if (isPopupActive()) {
         syncPopupItems();
     }
@@ -928,6 +948,7 @@ void AnimatedComboBox::clear()
 {
     m_items.clear();
     m_currentIndex = -1;
+    markPopupContentDirty();
     closePopup();
     update();
 }
@@ -1014,6 +1035,7 @@ void AnimatedComboBox::setPopupMinWidth(int width)
         return;
     }
     m_popupMinWidth = normalized;
+    markPopupContentDirty();
     if (isPopupActive()) {
         syncPopupItems();
         updatePopupPosition();
@@ -1034,6 +1056,7 @@ void AnimatedComboBox::setPopupPresentation(PopupPresentation presentation)
         return;
     }
     m_popupPresentation = presentation;
+    markPopupContentDirty();
     if (isPopupActive()) {
         syncPopupItems();
         updatePopupPosition();
@@ -1048,6 +1071,7 @@ void AnimatedComboBox::setPopupColumns(int columns)
         return;
     }
     m_popupColumns = normalized;
+    markPopupContentDirty();
     if (isPopupActive()) {
         syncPopupItems();
         updatePopupPosition();
@@ -1061,6 +1085,7 @@ void AnimatedComboBox::setPopupCardSize(const QSize& size)
         return;
     }
     m_popupCardSize = normalized;
+    markPopupContentDirty();
     if (isPopupActive()) {
         syncPopupItems();
         updatePopupPosition();
@@ -1073,6 +1098,7 @@ void AnimatedComboBox::setItemPreviewImage(int index, const QImage& image)
         return;
     }
     m_items[index].previewImage = image;
+    markPopupContentDirty();
     if (isPopupActive()) {
         syncPopupItems();
         updatePopupPosition();
@@ -1200,10 +1226,28 @@ void AnimatedComboBox::paintEvent(QPaintEvent* event)
     p.restore();
 }
 
+void AnimatedComboBox::changeEvent(QEvent* event)
+{
+    QWidget::changeEvent(event);
+
+    switch (event->type()) {
+    case QEvent::FontChange:
+    case QEvent::StyleChange:
+    case QEvent::LanguageChange:
+        markPopupContentDirty();
+        break;
+    default:
+        break;
+    }
+}
+
 void AnimatedComboBox::enterEvent(QEnterEvent* event)
 {
     QWidget::enterEvent(event);
     animateHoverTo(1.0);
+    // Warm up on approach, not on show: a page can hold dozens of combos and
+    // warming them all at once would stall the frame they appear in.
+    schedulePopupWarmUp();
 }
 
 void AnimatedComboBox::leaveEvent(QEvent* event)
@@ -1217,6 +1261,9 @@ void AnimatedComboBox::leaveEvent(QEvent* event)
 void AnimatedComboBox::mousePressEvent(QMouseEvent* event)
 {
     if (event->button() == Qt::LeftButton && isEnabled()) {
+        // The popup opens on release, so this is the last chance to warm it up
+        // off the opening path — for pointers that never sent an enter event.
+        warmUpPopup();
         m_pressAnim->stop();
         m_pressAnim->setStartValue(m_pressProgress);
         m_pressAnim->setEndValue(1.0);
@@ -1296,6 +1343,8 @@ void AnimatedComboBox::keyPressEvent(QKeyEvent* event)
 void AnimatedComboBox::focusInEvent(QFocusEvent* event)
 {
     QWidget::focusInEvent(event);
+    // Keyboard users open with Space/Enter and never hover.
+    schedulePopupWarmUp();
     update();
 }
 
@@ -1342,6 +1391,83 @@ bool AnimatedComboBox::eventFilter(QObject* watched, QEvent* event)
     return QWidget::eventFilter(watched, event);
 }
 
+AnimatedComboPopup* AnimatedComboBox::ensurePopup()
+{
+    QWidget* host = window();
+
+    if (m_popup) {
+        // The combo can migrate between windows (a panel being floated, a tab
+        // moved), so keep the popup attached to the current one.
+        if (host && m_popup->parentWidget() != host) {
+            m_popup->setParent(host, popupWindowFlags());
+        }
+        return m_popup;
+    }
+
+    m_popup = new AnimatedComboPopup(host);
+    m_popup->setProperty("ruwa_owner_combo", QVariant::fromValue(static_cast<QWidget*>(this)));
+    m_popup->hide();
+
+    m_popup->setOnItemActivated([this](int index) {
+        const bool changed = (m_currentIndex != index);
+        setCurrentIndex(index);
+        closePopup();
+        emit activated(index);
+        if (changed) {
+            emit currentIndexChanged(index);
+        }
+    });
+    m_popup->setOnHoveredIndexChanged([this](int index) { emit itemHovered(index); });
+    m_popup->setOnPopupHidden([this]() { emit popupHidden(); });
+
+    return m_popup;
+}
+
+void AnimatedComboBox::schedulePopupWarmUp()
+{
+    if (m_popupWarmedUp || m_popupWarmUpScheduled) {
+        return;
+    }
+
+    m_popupWarmUpScheduled = true;
+    QTimer::singleShot(0, this, [this]() {
+        m_popupWarmUpScheduled = false;
+        warmUpPopup();
+    });
+}
+
+void AnimatedComboBox::warmUpPopup()
+{
+    if (m_popupWarmedUp || m_items.isEmpty() || !isVisible() || isPopupActive()) {
+        return;
+    }
+
+    AnimatedComboPopup* popup = ensurePopup();
+    syncPopupItems();
+    updatePopupPosition();
+    popup->warmUp();
+    m_popupWarmedUp = true;
+}
+
+int AnimatedComboBox::availablePopupWidth() const
+{
+    if (QWidget* host = window()) {
+        return qMax(1, host->width() - 16);
+    }
+    return std::numeric_limits<int>::max();
+}
+
+bool AnimatedComboBox::popupContentNeedsRebuild() const
+{
+    return m_popupContentDirty || m_popupBuiltForComboWidth != width()
+        || m_popupBuiltForAvailableWidth != availablePopupWidth();
+}
+
+void AnimatedComboBox::markPopupContentDirty()
+{
+    m_popupContentDirty = true;
+}
+
 void AnimatedComboBox::openPopup()
 {
     if (isPopupActive() || m_items.isEmpty()) {
@@ -1352,11 +1478,15 @@ void AnimatedComboBox::openPopup()
         m_currentIndex = firstSelectableIndex();
     }
 
-    if (!m_popup->parentWidget() || m_popup->parentWidget() != window()) {
-        m_popup->setParent(window(), popupWindowFlags());
-    }
+    ensurePopup();
 
-    syncPopupItems();
+    // A warmed-up popup already holds these rows laid out for the current
+    // widths; rebuilding them would undo the work done off the click path.
+    if (popupContentNeedsRebuild()) {
+        syncPopupItems();
+    } else {
+        m_popup->setSelectedIndex(m_currentIndex);
+    }
     updatePopupPosition();
     m_popup->showAnimated(m_popup->pos());
     animateArrowTo(1.0);
@@ -1406,10 +1536,7 @@ void AnimatedComboBox::togglePopup()
 void AnimatedComboBox::syncPopupItems()
 {
     int effectiveColumns = m_popupColumns;
-    int availableWidth = std::numeric_limits<int>::max();
-    if (window()) {
-        availableWidth = qMax(1, window()->width() - 16);
-    }
+    const int availableWidth = availablePopupWidth();
     if (m_popupPresentation == PopupPresentation::PreviewGrid) {
         while (effectiveColumns > 1
             && effectiveColumns * m_popupCardSize.width()
@@ -1424,6 +1551,10 @@ void AnimatedComboBox::syncPopupItems()
     m_popup->setItems(m_items, m_currentIndex, popupMinimumWidth, font(), m_popupPresentation,
         effectiveColumns, m_popupCardSize);
     m_popup->setSelectedIndex(m_currentIndex);
+
+    m_popupContentDirty = false;
+    m_popupBuiltForComboWidth = width();
+    m_popupBuiltForAvailableWidth = availableWidth;
 }
 
 void AnimatedComboBox::updatePopupPosition()
