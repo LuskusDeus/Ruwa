@@ -43,10 +43,6 @@ private:
     /// Recovered WM_MOUSEMOVE samples + current event (same idea as brush continueStroke).
     void dispatchUncoalescedWorldMoves(
         QMouseEvent* event, const std::function<void(float, float)>& applyWorld);
-    void beginPendingRightClick(QMouseEvent* event);
-    void updatePendingRightClick(QMouseEvent* event);
-    bool consumePendingRightClick(QMouseEvent* event);
-    void cancelPendingRightClick();
     void handleTextToolPress(const aether::Vector2& worldPos);
     void clearPendingMoveToolContentHit();
 
@@ -58,9 +54,6 @@ private:
 
     CanvasInputHost* m_host = nullptr;
     CanvasPanel* m_panel = nullptr;
-    bool m_pendingRightClick = false;
-    QPoint m_pendingRightClickPressPos;
-    QPoint m_pendingRightClickLastGlobalPos;
     bool m_textSelecting = false;
     bool m_pendingMoveToolContentHit = false;
     QUuid m_pendingMoveToolContentLayerId;

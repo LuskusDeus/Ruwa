@@ -132,51 +132,6 @@ CanvasMouseInputHandler::CanvasMouseInputHandler(CanvasPanel* panel)
 {
 }
 
-void CanvasMouseInputHandler::beginPendingRightClick(QMouseEvent* event)
-{
-    if (!event) {
-        return;
-    }
-
-    m_pendingRightClick = true;
-    m_pendingRightClickPressPos = event->globalPosition().toPoint();
-    m_pendingRightClickLastGlobalPos = m_pendingRightClickPressPos;
-}
-
-void CanvasMouseInputHandler::updatePendingRightClick(QMouseEvent* event)
-{
-    if (!m_pendingRightClick || !event) {
-        return;
-    }
-
-    m_pendingRightClickLastGlobalPos = event->globalPosition().toPoint();
-}
-
-bool CanvasMouseInputHandler::consumePendingRightClick(QMouseEvent* event)
-{
-    if (!m_pendingRightClick || !event || event->button() != Qt::RightButton) {
-        return false;
-    }
-
-    updatePendingRightClick(event);
-    const bool shouldShowPopup = m_pendingRightClick;
-    const QPoint popupGlobalPos = m_pendingRightClickLastGlobalPos;
-    cancelPendingRightClick();
-
-    if (shouldShowPopup && m_panel) {
-        m_panel->showBrushQuickPopup(popupGlobalPos);
-        return true;
-    }
-    return false;
-}
-
-void CanvasMouseInputHandler::cancelPendingRightClick()
-{
-    m_pendingRightClick = false;
-    m_pendingRightClickPressPos = {};
-    m_pendingRightClickLastGlobalPos = {};
-}
-
 void CanvasMouseInputHandler::clearPendingMoveToolContentHit()
 {
     m_pendingMoveToolContentHit = false;
@@ -376,7 +331,6 @@ bool CanvasMouseInputHandler::handleMousePress(QMouseEvent* event)
 
     if (m_panel->temporaryMoveToolUndoCooldownActive()) {
         clearPendingMoveToolContentHit();
-        cancelPendingRightClick();
         event->accept();
         return true;
     }
@@ -485,7 +439,6 @@ bool CanvasMouseInputHandler::handleMousePress(QMouseEvent* event)
                 return true;
             }
 
-            cancelPendingRightClick();
             event->accept();
             return true;
         }
@@ -792,7 +745,9 @@ bool CanvasMouseInputHandler::handleMousePress(QMouseEvent* event)
         return false;
     }
     if (event->button() == Qt::RightButton) {
-        beginPendingRightClick(event);
+        // The radial menu opens on the press so the same right-click can be
+        // held and dragged onto a seat; the widget claims the release.
+        m_panel->showRadialMenu(event->globalPosition().toPoint(), true);
         event->accept();
         return true;
     }
@@ -846,7 +801,6 @@ bool CanvasMouseInputHandler::handleMouseMove(QMouseEvent* event)
     if (!glWidget || !glWidget->isInitialized()) {
         if (glWidget)
             glWidget->endPanSampling();
-        cancelPendingRightClick();
         m_panel->m_isPanning = false;
         m_panel->m_isZoomDragging = false;
         m_panel->m_isRotatingView = false;
@@ -868,11 +822,9 @@ bool CanvasMouseInputHandler::handleMouseMove(QMouseEvent* event)
     const QPoint localPos = panelLocalPos(m_panel, event);
     if (m_panel->temporaryMoveToolUndoCooldownActive()) {
         clearPendingMoveToolContentHit();
-        cancelPendingRightClick();
         event->accept();
         return true;
     }
-    updatePendingRightClick(event);
     auto& stylusInput = ruwa::services::input::StylusInputManager::instance();
 
     if (stylusInput.shouldIgnoreCanvasMouseMove(event)) {
@@ -1314,11 +1266,6 @@ bool CanvasMouseInputHandler::handleMouseRelease(QMouseEvent* event)
     }
     if (m_panel->temporaryMoveToolUndoCooldownActive()) {
         clearPendingMoveToolContentHit();
-        cancelPendingRightClick();
-        event->accept();
-        return true;
-    }
-    if (consumePendingRightClick(event)) {
         event->accept();
         return true;
     }
@@ -1436,9 +1383,6 @@ bool CanvasMouseInputHandler::handleMouseRelease(QMouseEvent* event)
         m_panel->updateToolCursor();
         event->accept();
         return true;
-    }
-    if (event->button() == Qt::RightButton) {
-        cancelPendingRightClick();
     }
     return false;
 }

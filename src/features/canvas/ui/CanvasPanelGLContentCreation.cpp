@@ -16,6 +16,7 @@
 #include "features/brush/ui/BrushPackOverlay.h"
 #include "features/brush/ui/BrushPackPanel.h"
 #include "features/brush/ui/BrushSizeCurve.h"
+#include "features/canvas/radial-menu/RadialMenuWidget.h"
 #include "features/canvas/ui/CanvasToolStateOverlay.h"
 #include "features/canvas/ui/CanvasZoomInfoOverlay.h"
 #include "features/canvas/ui/CanvasStylusJoystickContainerWidget.h"
@@ -243,6 +244,16 @@ bool CanvasPanel::createGLContent()
                 if (QWidget* zoomPanel = m_stylusJoystick->zoomPanelWidget()) {
                     appendRegion(zoomPanel, QRectF(zoomPanel->rect()),
                         ruwa::ui::core::WidgetStyleManager::instance().scaled(6), opacity);
+                }
+            }
+            if (m_radialMenu) {
+                // The radial menu is a scatter of small pieces rather than one
+                // silhouette, so it contributes a region per hub, button, label
+                // and title. They never overlap, so no feedback between them.
+                const qreal opacity = m_radialMenu->showProgress();
+                const auto shapes = m_radialMenu->backdropShapes();
+                for (const auto& shape : shapes) {
+                    appendRegion(m_radialMenu, shape.rect, shape.radius, opacity * shape.opacity);
                 }
             }
             return regions;

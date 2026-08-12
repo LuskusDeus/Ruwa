@@ -8,7 +8,7 @@
 
 #include "CanvasTabletHandler.h"
 #include "CanvasMouseInputHandler.h"
-#include "CanvasBrushQuickPopupManager.h"
+#include "features/canvas/radial-menu/RadialMenuController.h"
 #include "CanvasSelectionPopupManager.h"
 #include "CanvasKeyEventHandler.h"
 #include "CanvasSpaceMoveHandler.h"
@@ -128,7 +128,7 @@ QWidget* CanvasPanel::createContent()
 
     m_tabletHandler = new CanvasTabletHandler(this);
     m_mouseHandler = new CanvasMouseInputHandler(this);
-    m_brushQuickPopupManager = new CanvasBrushQuickPopupManager(this);
+    m_radialMenuController = new RadialMenuController(this);
     m_popupManager = new CanvasSelectionPopupManager(this);
     m_keyHandler = new CanvasKeyEventHandler(this);
     m_spaceMoveHandler = new CanvasSpaceMoveHandler(this);

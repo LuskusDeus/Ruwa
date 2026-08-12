@@ -8,7 +8,7 @@
 #include "CanvasPanel.h"
 #include "CanvasTabletHandler.h"
 #include "CanvasMouseInputHandler.h"
-#include "CanvasBrushQuickPopupManager.h"
+#include "features/canvas/radial-menu/RadialMenuController.h"
 #include "CanvasSelectionPopupManager.h"
 #include "CanvasKeyEventHandler.h"
 #include "CanvasSpaceMoveHandler.h"
@@ -47,7 +47,6 @@
 #include "features/canvas/ui/CanvasZoomInfoOverlay.h"
 #include "features/canvas/ui/CanvasSelectionSizeOverlay.h"
 #include "features/canvas/ui/CanvasPositionPickerOverlay.h"
-#include "features/canvas/ui/CanvasBrushQuickPopup.h"
 #include "features/brush/ui/BrushPackOverlay.h"
 #include "features/brush/ui/BrushPackPanel.h"
 #include "features/brush/manager/BrushManager.h"
@@ -943,7 +942,7 @@ void CanvasPanel::setToolMode(ToolId tool)
         }
     }
     logStep("temp-tool-hold");
-    hideBrushQuickPopup();
+    hideRadialMenu();
 
     const ToolId previousTool = currentTool;
 
@@ -1022,7 +1021,7 @@ void CanvasPanel::enterTransformMode()
 {
     if (!m_glWidget || !m_glWidget->isInitialized())
         return;
-    hideBrushQuickPopup();
+    hideRadialMenu();
     m_ctrlPressed = (QApplication::keyboardModifiers() & Qt::ControlModifier) != 0;
     m_glWidget->enterTransformMode();
     updateCursorManagerOverlay();
@@ -1035,7 +1034,7 @@ void CanvasPanel::confirmTransform()
 {
     if (!m_glWidget)
         return;
-    hideBrushQuickPopup();
+    hideRadialMenu();
     m_glWidget->confirmTransform();
     updateCursorManagerOverlay();
     emit transformModeChanged(false);
@@ -1055,7 +1054,7 @@ void CanvasPanel::cancelTransform()
 {
     if (!m_glWidget)
         return;
-    hideBrushQuickPopup();
+    hideRadialMenu();
     m_glWidget->cancelTransform();
     updateCursorManagerOverlay();
     emit transformModeChanged(false);
@@ -1146,9 +1145,6 @@ void CanvasPanel::setBrushColor(uint8_t r, uint8_t g, uint8_t b, uint8_t a)
     }
 
     persistGlobalToolState();
-    if (m_brushQuickPopupManager && m_brushQuickPopupManager->isBrushQuickPopupVisible()) {
-        m_brushQuickPopupManager->refreshBrushQuickPopup();
-    }
 }
 
 void CanvasPanel::applyCurrentBrushColor(const QColor& color)
@@ -1347,36 +1343,25 @@ QString CanvasPanel::selectedBrushIdForCurrentContext() const
     return {};
 }
 
-void CanvasPanel::showBrushQuickPopup(const QPoint& globalPos)
+void CanvasPanel::showRadialMenu(const QPoint& globalPos, bool armReleaseSelect)
 {
-    // The quick popup edits brush size/opacity and swaps brushes, so it only
-    // makes sense for the painting tools that use a brush.
-    switch (toolMode()) {
-    case ToolId::Brush:
-    case ToolId::Eraser:
-    case ToolId::Smudge:
-    case ToolId::Blur:
-    case ToolId::Liquify:
-        break;
-    default:
-        return;
-    }
-
-    if (m_brushQuickPopupManager) {
-        m_brushQuickPopupManager->showBrushQuickPopup(globalPos);
+    // Unlike the brush quick popup it replaces, the radial menu is not tied to
+    // a tool: every seat is user-configured, so it opens for any tool.
+    if (m_radialMenuController) {
+        m_radialMenuController->showRadialMenu(globalPos, armReleaseSelect);
     }
 }
 
-void CanvasPanel::hideBrushQuickPopup()
+void CanvasPanel::hideRadialMenu()
 {
-    if (m_brushQuickPopupManager) {
-        m_brushQuickPopupManager->hideBrushQuickPopup();
+    if (m_radialMenuController) {
+        m_radialMenuController->hideRadialMenu();
     }
 }
 
-bool CanvasPanel::isBrushQuickPopupVisible() const
+bool CanvasPanel::isRadialMenuVisible() const
 {
-    return m_brushQuickPopupManager && m_brushQuickPopupManager->isBrushQuickPopupVisible();
+    return m_radialMenuController && m_radialMenuController->isRadialMenuVisible();
 }
 
 void CanvasPanel::emitBrushSelectionContextChanged()
@@ -1396,9 +1381,6 @@ void CanvasPanel::setBrushSizeNormalized(qreal size)
     if (m_brushOverlay) {
         m_brushOverlay->setBrushSize(clamped);
         persistGlobalToolState();
-        if (m_brushQuickPopupManager && m_brushQuickPopupManager->isBrushQuickPopupVisible()) {
-            m_brushQuickPopupManager->refreshBrushQuickPopup();
-        }
         return;
     }
 
@@ -1410,9 +1392,6 @@ void CanvasPanel::setBrushSizeNormalized(qreal size)
     }
     updateBrushCursorOverlayRadius();
     persistGlobalToolState();
-    if (m_brushQuickPopupManager && m_brushQuickPopupManager->isBrushQuickPopupVisible()) {
-        m_brushQuickPopupManager->refreshBrushQuickPopup();
-    }
 }
 
 void CanvasPanel::setBrushOpacityNormalized(qreal opacity)
@@ -1433,9 +1412,6 @@ void CanvasPanel::setBrushOpacityNormalized(qreal opacity)
             static_cast<uint8_t>(color.green()), static_cast<uint8_t>(color.blue()), alpha);
     }
     persistGlobalToolState();
-    if (m_brushQuickPopupManager && m_brushQuickPopupManager->isBrushQuickPopupVisible()) {
-        m_brushQuickPopupManager->refreshBrushQuickPopup();
-    }
 }
 
 void CanvasPanel::adjustBrushSizeNormalized(qreal delta)
@@ -1877,10 +1853,6 @@ bool CanvasPanel::applyBrushSelectionForTool(ToolId tool, const QString& request
     if (selectionChanged && emitSyncSignal) {
         emit brushSelectionContextChanged(tool, resolvedBrushId);
     }
-    if (selectionChanged && m_brushQuickPopupManager
-        && m_brushQuickPopupManager->isBrushQuickPopupVisible()) {
-        m_brushQuickPopupManager->refreshBrushQuickPopup();
-    }
 
     return !resolvedBrushId.isEmpty();
 }
@@ -1961,9 +1933,6 @@ void CanvasPanel::flushPendingToolStateApply()
 
     restoreToolState(tool);
     updateBrushCursorOverlayRadius();
-    if (m_brushQuickPopupManager && m_brushQuickPopupManager->isBrushQuickPopupVisible()) {
-        m_brushQuickPopupManager->refreshBrushQuickPopup();
-    }
     emitBrushSelectionContextChanged();
 }
 

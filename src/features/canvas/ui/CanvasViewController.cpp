@@ -14,7 +14,7 @@
 #include "features/canvas-resize/CanvasResizeController.h"
 #include "features/canvas/rendering/OpenGLCanvasWidget.h"
 #include "features/canvas/scene/ZoomLimits.h"
-#include "features/canvas/ui/CanvasBrushQuickPopup.h"
+#include "features/canvas/radial-menu/RadialMenuWidget.h"
 #include "features/canvas/ui/CanvasStylusJoystickContainerWidget.h"
 #include "features/canvas/ui/CanvasToolStateOverlay.h"
 #include "features/canvas/ui/CanvasSelectionSizeOverlay.h"
@@ -315,7 +315,7 @@ void CanvasViewController::positionZoomInfoOverlay()
     addOccupiedRect(m_panel->m_selectionColorPickerOverlay
             ? m_panel->m_selectionColorPickerOverlay->picker()
             : nullptr);
-    addOccupiedRect(m_panel->m_brushQuickPopup);
+    addOccupiedRect(m_panel->m_radialMenu);
     addOccupiedRect(m_panel->m_imageImportSelectionOverlay);
 
     std::sort(occupiedRects.begin(), occupiedRects.end(), [](const QRect& lhs, const QRect& rhs) {

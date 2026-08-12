@@ -62,7 +62,7 @@ struct SmartDocument;
 } // namespace ruwa::core::layers
 
 namespace ruwa::ui::widgets {
-class CanvasBrushQuickPopup;
+class RadialMenuWidget;
 class BrushControlOverlay;
 class BrushPackPanel;
 class CanvasToolStateOverlay;
@@ -79,7 +79,7 @@ class CanvasPositionPickerOverlay;
 namespace ruwa::ui::workspace {
 
 class CanvasCursorManager;
-class CanvasBrushQuickPopupManager;
+class RadialMenuController;
 class CanvasTabletHandler;
 class CanvasMouseInputHandler;
 class CanvasSelectionPopupManager;
@@ -96,7 +96,7 @@ class ImageImportSelectionOverlay;
 
 class CanvasPanel : public ruwa::ui::docking::DockPanel, public CanvasInputHost {
     friend class CanvasMouseInputHandler;
-    friend class CanvasBrushQuickPopupManager;
+    friend class RadialMenuController;
     friend class CanvasSelectionPopupManager;
     friend class CanvasSpaceMoveHandler;
     friend class CanvasImageImportHelper;
@@ -223,9 +223,11 @@ public:
     ToolId brushSelectionToolMode() const;
     bool selectBrushForCurrentContext(const QString& brushId);
     QString selectedBrushIdForCurrentContext() const;
-    void showBrushQuickPopup(const QPoint& globalPos);
-    void hideBrushQuickPopup();
-    bool isBrushQuickPopupVisible() const;
+    /// Open the configurable radial menu centred on @p globalPos (canvas right-click).
+    /// @p armReleaseSelect keeps the opening button's release as the pick.
+    void showRadialMenu(const QPoint& globalPos, bool armReleaseSelect = false);
+    void hideRadialMenu();
+    bool isRadialMenuVisible() const;
 
     // Layer model integration
     void setLayerModel(ruwa::core::layers::LayerModel* model);
@@ -851,8 +853,8 @@ private:
     bool m_canvasResizeOverlaySignalsConnected = false;
     CanvasTabletHandler* m_tabletHandler = nullptr;
     CanvasMouseInputHandler* m_mouseHandler = nullptr;
-    CanvasBrushQuickPopupManager* m_brushQuickPopupManager = nullptr;
-    ruwa::ui::widgets::CanvasBrushQuickPopup* m_brushQuickPopup = nullptr;
+    RadialMenuController* m_radialMenuController = nullptr;
+    ruwa::ui::widgets::RadialMenuWidget* m_radialMenu = nullptr;
     CanvasSelectionPopupManager* m_popupManager = nullptr;
     CanvasKeyEventHandler* m_keyHandler = nullptr;
     CanvasSpaceMoveHandler* m_spaceMoveHandler = nullptr;
