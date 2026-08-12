@@ -27,7 +27,6 @@ class PresetListRowWidget : public QWidget, public ruwa::ui::widgets::IContextMe
     Q_OBJECT
     Q_PROPERTY(qreal hoverProgress READ hoverProgress WRITE setHoverProgress)
     Q_PROPERTY(qreal selectionProgress READ selectionProgress WRITE setSelectionProgress)
-    Q_PROPERTY(qreal pressProgress READ pressProgress WRITE setPressProgress)
     Q_PROPERTY(qreal renameHoverProgress READ renameHoverProgress WRITE setRenameHoverProgress)
     Q_PROPERTY(qreal deleteHoverProgress READ deleteHoverProgress WRITE setDeleteHoverProgress)
 
@@ -83,9 +82,6 @@ public:
     qreal selectionProgress() const { return m_selectionProgress; }
     void setSelectionProgress(qreal progress);
 
-    qreal pressProgress() const { return m_pressProgress; }
-    void setPressProgress(qreal progress);
-
     qreal renameHoverProgress() const { return m_renameHoverProgress; }
     void setRenameHoverProgress(qreal progress);
 
@@ -134,7 +130,7 @@ private:
     bool isOverAnyAction(const QPoint& pos) const;
 
     void drawStarToggle(
-        QPainter& painter, const QRect& btnRect, bool checked, bool hovered, bool pressed) const;
+        QPainter& painter, const QRect& btnRect, bool checked, bool hovered) const;
     QSize previewSizePx() const;
     void drawPreview(QPainter& painter, const QRectF& rect, const QColor& borderColor) const;
 
@@ -160,13 +156,11 @@ private:
 
     qreal m_hoverProgress = 0.0;
     qreal m_selectionProgress = 0.0;
-    qreal m_pressProgress = 0.0;
     qreal m_renameHoverProgress = 0.0;
     qreal m_deleteHoverProgress = 0.0;
 
     QPropertyAnimation* m_hoverAnimation = nullptr;
     QPropertyAnimation* m_selectionAnimation = nullptr;
-    QPropertyAnimation* m_pressAnimation = nullptr;
     QPropertyAnimation* m_renameHoverAnimation = nullptr;
     QPropertyAnimation* m_deleteHoverAnimation = nullptr;
     QLineEdit* m_editor = nullptr;

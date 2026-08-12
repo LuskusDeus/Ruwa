@@ -41,10 +41,6 @@ public:
     void setBorderVisible(bool visible);
     void setColorizeIcon(bool colorize);
     void setMutedNormalIcon(bool muted);
-    /// When disabled, the button skips the transient pressed/darkening overlay
-    /// and only shows hover + the active-state animation. Useful for toggles
-    /// where the press flash would flicker against the smooth toggle animation.
-    void setPressFeedbackEnabled(bool enabled);
     void setHasGroupIndicator(bool hasGroupIndicator);
     bool hasGroupIndicator() const { return m_hasGroupIndicator; }
     /// Reset a mouse press that has transitioned into a drag operation.
@@ -84,7 +80,6 @@ private:
     bool m_borderVisible = false;
     bool m_colorizeIcon = true;
     bool m_mutedNormalIcon = false;
-    bool m_pressFeedback = true;
     bool m_hasGroupIndicator = false;
 
     qreal m_enabledProgress = 1.0;

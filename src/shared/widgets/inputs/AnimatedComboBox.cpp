@@ -184,12 +184,8 @@ protected:
             p.setBrush(hover);
             p.drawRoundedRect(r, 5, 5);
         }
-        if (isPressed()) {
-            QColor press = colors.overlay(0.12);
-            p.setPen(Qt::NoPen);
-            p.setBrush(press);
-            p.drawRoundedRect(r, 5, 5);
-        }
+        // No press wash on a row: hover already marks it, and the popup closes on
+        // release, so the flash only ever shows as a blink on the way out.
         if (m_selected) {
             QColor active = colors.overlay(0.08);
             p.setPen(Qt::NoPen);
@@ -282,10 +278,6 @@ protected:
         if (hoverProgress() > 0.0) {
             background = ruwa::ui::core::ThemeColors::interpolate(
                 background, colors.overlayHover(), hoverProgress() * 0.35);
-        }
-        if (isPressed()) {
-            background
-                = ruwa::ui::core::ThemeColors::interpolate(background, colors.overlay(0.18), 0.7);
         }
         if (activeProgress() > 0.0) {
             background = ruwa::ui::core::ThemeColors::interpolate(
@@ -877,10 +869,6 @@ AnimatedComboBox::AnimatedComboBox(QWidget* parent)
     m_hoverAnim->setDuration(170);
     m_hoverAnim->setEasingCurve(QEasingCurve::OutCubic);
 
-    m_pressAnim = new QPropertyAnimation(this, "pressProgress", this);
-    m_pressAnim->setDuration(90);
-    m_pressAnim->setEasingCurve(QEasingCurve::OutCubic);
-
     m_arrowAnim = new QPropertyAnimation(this, "arrowProgress", this);
     m_arrowAnim->setDuration(160);
     m_arrowAnim->setEasingCurve(QEasingCurve::OutCubic);
@@ -1118,16 +1106,6 @@ void AnimatedComboBox::setHoverProgress(qreal progress)
     update();
 }
 
-void AnimatedComboBox::setPressProgress(qreal progress)
-{
-    const qreal value = qBound(0.0, progress, 1.0);
-    if (qFuzzyCompare(m_pressProgress, value)) {
-        return;
-    }
-    m_pressProgress = value;
-    update();
-}
-
 void AnimatedComboBox::setArrowProgress(qreal progress)
 {
     const qreal value = qBound(0.0, progress, 1.0);
@@ -1163,12 +1141,8 @@ void AnimatedComboBox::paintEvent(QPaintEvent* event)
         p.setBrush(hover);
         p.drawRoundedRect(box, 6, 6);
     }
-    if (m_pressProgress > 0.001) {
-        QColor press = colors.overlay(0.12);
-        press.setAlphaF(press.alphaF() * m_pressProgress);
-        p.setBrush(press);
-        p.drawRoundedRect(box, 6, 6);
-    }
+    // No press wash: the arrow flip and the popup opening carry the click, and a
+    // separate darkening under them reads as a hard flash.
 
     // Border: BorderSubtle / BorderSubtleAlpha50, animate to BorderSubtleHover on hover (like
     // ChoiceButton)
@@ -1219,7 +1193,7 @@ void AnimatedComboBox::paintEvent(QPaintEvent* event)
     p.translate(arrowX, arrowY);
     p.rotate(180.0 * m_arrowProgress);
     QColor arrowColor = ruwa::ui::core::ThemeColors::interpolate(
-        colors.textDisabled(), colors.text, qMin(1.0, m_hoverProgress + (m_pressProgress * 0.35)));
+        colors.textDisabled(), colors.text, m_hoverProgress);
     p.setPen(QPen(arrowColor, 1.6, Qt::SolidLine, Qt::RoundCap, Qt::RoundJoin));
     p.drawLine(QPointF(-3.5, -1.0), QPointF(0.0, 2.2));
     p.drawLine(QPointF(0.0, 2.2), QPointF(3.5, -1.0));
@@ -1264,10 +1238,6 @@ void AnimatedComboBox::mousePressEvent(QMouseEvent* event)
         // The popup opens on release, so this is the last chance to warm it up
         // off the opening path — for pointers that never sent an enter event.
         warmUpPopup();
-        m_pressAnim->stop();
-        m_pressAnim->setStartValue(m_pressProgress);
-        m_pressAnim->setEndValue(1.0);
-        m_pressAnim->start();
         event->accept();
         return;
     }
@@ -1277,10 +1247,6 @@ void AnimatedComboBox::mousePressEvent(QMouseEvent* event)
 void AnimatedComboBox::mouseReleaseEvent(QMouseEvent* event)
 {
     if (event->button() == Qt::LeftButton && isEnabled()) {
-        m_pressAnim->stop();
-        m_pressAnim->setStartValue(m_pressProgress);
-        m_pressAnim->setEndValue(0.0);
-        m_pressAnim->start();
         if (rect().contains(event->pos())) {
             togglePopup();
         }

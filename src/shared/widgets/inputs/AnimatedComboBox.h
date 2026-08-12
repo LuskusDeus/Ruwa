@@ -35,7 +35,6 @@ class AnimatedComboPopup;
 class AnimatedComboBox : public QWidget {
     Q_OBJECT
     Q_PROPERTY(qreal hoverProgress READ hoverProgress WRITE setHoverProgress)
-    Q_PROPERTY(qreal pressProgress READ pressProgress WRITE setPressProgress)
     Q_PROPERTY(qreal arrowProgress READ arrowProgress WRITE setArrowProgress)
 
 public:
@@ -87,9 +86,6 @@ public:
 
     qreal hoverProgress() const { return m_hoverProgress; }
     void setHoverProgress(qreal progress);
-
-    qreal pressProgress() const { return m_pressProgress; }
-    void setPressProgress(qreal progress);
 
     qreal arrowProgress() const { return m_arrowProgress; }
     void setArrowProgress(qreal progress);
@@ -155,11 +151,9 @@ private:
     int m_popupBuiltForAvailableWidth = -1;
 
     qreal m_hoverProgress = 0.0;
-    qreal m_pressProgress = 0.0;
     qreal m_arrowProgress = 0.0;
 
     QPropertyAnimation* m_hoverAnim = nullptr;
-    QPropertyAnimation* m_pressAnim = nullptr;
     QPropertyAnimation* m_arrowAnim = nullptr;
 };
 

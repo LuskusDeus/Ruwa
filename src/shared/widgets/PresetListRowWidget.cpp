@@ -64,10 +64,6 @@ void PresetListRowWidget::setupAnimations()
     m_selectionAnimation->setDuration(ANIMATION_DURATION + 50);
     m_selectionAnimation->setEasingCurve(QEasingCurve::OutCubic);
 
-    m_pressAnimation = new QPropertyAnimation(this, "pressProgress", this);
-    m_pressAnimation->setDuration(110);
-    m_pressAnimation->setEasingCurve(QEasingCurve::OutCubic);
-
     m_renameHoverAnimation = new QPropertyAnimation(this, "renameHoverProgress", this);
     m_renameHoverAnimation->setDuration(140);
     m_renameHoverAnimation->setEasingCurve(QEasingCurve::OutCubic);
@@ -269,14 +265,6 @@ void PresetListRowWidget::setSelectionProgress(qreal progress)
 {
     if (!qFuzzyCompare(m_selectionProgress, progress)) {
         m_selectionProgress = progress;
-        update();
-    }
-}
-
-void PresetListRowWidget::setPressProgress(qreal progress)
-{
-    if (!qFuzzyCompare(m_pressProgress, progress)) {
-        m_pressProgress = progress;
         update();
     }
 }
@@ -658,18 +646,15 @@ void PresetListRowWidget::updateEditorStyle()
 }
 
 void PresetListRowWidget::drawStarToggle(
-    QPainter& painter, const QRect& btnRect, bool checked, bool hovered, bool pressed) const
+    QPainter& painter, const QRect& btnRect, bool checked, bool hovered) const
 {
     const auto& theme = ThemeManager::instance();
     const auto& colors = theme.colors();
     int radius = theme.scaled(BASE_CORNER_RADIUS) - 2;
 
-    if (hovered || pressed) {
+    if (hovered) {
         QColor btnBg = colors.text;
-        if (pressed) {
-            btnBg = btnBg.darker(110);
-        }
-        btnBg.setAlphaF(hovered ? 0.15 : 0.25);
+        btnBg.setAlphaF(0.15);
         painter.setPen(Qt::NoPen);
         painter.setBrush(btnBg);
         painter.drawRoundedRect(btnRect, qMax(2, radius), qMax(2, radius));
@@ -890,7 +875,6 @@ void PresetListRowWidget::paintEvent(QPaintEvent* event)
     QColor bgColor = blend(
         Qt::transparent, hoverBg, m_popupChromeStyle ? m_hoverProgress : m_hoverProgress * 0.75);
     bgColor = blend(bgColor, selectedBg, m_selectionProgress);
-    bgColor = blend(bgColor, colors.shadow(colors.isDark ? 34 : 22), m_pressProgress * 0.32);
 
     QColor borderColor
         = blend(colors.borderSubtle(), colors.borderSubtleHover(), m_hoverProgress * 0.85);
@@ -1030,21 +1014,23 @@ void PresetListRowWidget::paintEvent(QPaintEvent* event)
         painter.drawText(badgeRect, Qt::AlignCenter, m_item.badgeText);
     }
 
-    auto drawIconAction = [&](const QRect& btnRect, qreal hoverLevel, bool pressed, bool danger,
+    // Hover alone carries these inline actions: a press step would jump the
+    // plate to a fixed alpha for the length of a click and read as a flash.
+    auto drawIconAction = [&](const QRect& btnRect, qreal hoverLevel, bool danger,
                               IconProvider::StandardIcon icon) {
         const auto& c = ThemeManager::instance().colors();
         int r = qMax(4, ThemeManager::instance().scaled(BASE_CORNER_RADIUS) - 3);
         const qreal hp = qBound<qreal>(0.0, hoverLevel, 1.0);
 
-        if (hp > 0.001 || pressed) {
-            const int bgAlpha = pressed ? (danger ? 46 : 40) : qRound((danger ? 34 : 28) * hp);
+        if (hp > 0.001) {
+            const int bgAlpha = qRound((danger ? 34 : 28) * hp);
             QColor btnBg = danger ? ThemeColors::withAlpha(c.error, bgAlpha)
                                   : ThemeColors::withAlpha(c.overlayColor, bgAlpha);
             if (m_popupChromeStyle) {
                 painter.setPen(Qt::NoPen);
             } else {
                 QColor btnBorder = danger
-                    ? ThemeColors::withAlpha(c.error, pressed ? 110 : qRound(96 * hp))
+                    ? ThemeColors::withAlpha(c.error, qRound(96 * hp))
                     : ThemeColors::withAlpha(
                           c.borderSubtleHover(), qRound(c.borderSubtleHover().alpha() * hp));
                 painter.setPen(QPen(btnBorder, 1));
@@ -1074,32 +1060,26 @@ void PresetListRowWidget::paintEvent(QPaintEvent* event)
             const PresetMenuExtraAction& ax = m_extraActions[i];
             const QRect& br = m_layoutExtras[i];
             if (ax.useStarToggle) {
-                drawStarToggle(painter, br, ax.checked,
-                    i < m_extraHovered.size() && m_extraHovered[i],
-                    i < m_extraPressed.size() && m_extraPressed[i]);
+                drawStarToggle(
+                    painter, br, ax.checked, i < m_extraHovered.size() && m_extraHovered[i]);
             } else {
                 const qreal hov = (i < m_extraHovered.size() && m_extraHovered[i]) ? 1.0 : 0.0;
-                const bool prs = i < m_extraPressed.size() && m_extraPressed[i];
-                drawIconAction(br, hov, prs, ax.dangerHover, ax.icon);
+                drawIconAction(br, hov, ax.dangerHover, ax.icon);
             }
         }
 
         if (m_isRenamable) {
-            drawIconAction(m_layoutRename, m_renameHoverProgress, m_renamePressed, false,
+            drawIconAction(m_layoutRename, m_renameHoverProgress, false,
                 IconProvider::StandardIcon::Edit);
         }
         if (m_isDeletable) {
-            drawIconAction(m_layoutDelete, m_deleteHoverProgress, m_deletePressed, true,
+            drawIconAction(m_layoutDelete, m_deleteHoverProgress, true,
                 IconProvider::StandardIcon::Trash);
         }
     }
 
-    if (m_pressProgress > 0.0) {
-        painter.setPen(Qt::NoPen);
-        painter.setBrush(ThemeColors::withAlpha(
-            colors.overlayColor, static_cast<int>(10 + 18 * m_pressProgress)));
-        painter.drawRoundedRect(plateRect, radius, radius);
-    }
+    // No press overlay: hover and the selection fade already answer the click,
+    // and a darkening on top of them lands in one frame and reads as a flash.
 }
 
 void PresetListRowWidget::enterEvent(QEnterEvent* event)
@@ -1144,12 +1124,6 @@ void PresetListRowWidget::mousePressEvent(QMouseEvent* event)
             m_deletePressed = true;
         } else {
             m_isPressed = true;
-            m_pressAnimation->stop();
-            m_pressAnimation->setDuration(90);
-            m_pressAnimation->setEasingCurve(QEasingCurve::OutCubic);
-            m_pressAnimation->setStartValue(m_pressProgress);
-            m_pressAnimation->setEndValue(1.0);
-            m_pressAnimation->start();
         }
         update();
     }
@@ -1172,12 +1146,6 @@ void PresetListRowWidget::mouseReleaseEvent(QMouseEvent* event)
         m_isPressed = false;
         m_renamePressed = false;
         m_deletePressed = false;
-        m_pressAnimation->stop();
-        m_pressAnimation->setDuration(150);
-        m_pressAnimation->setEasingCurve(QEasingCurve::OutCubic);
-        m_pressAnimation->setStartValue(m_pressProgress);
-        m_pressAnimation->setEndValue(0.0);
-        m_pressAnimation->start();
         for (int i = 0; i < m_extraPressed.size(); ++i) {
             m_extraPressed[i] = false;
         }

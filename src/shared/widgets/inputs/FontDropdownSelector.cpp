@@ -596,10 +596,6 @@ FontDropdownSelector::FontDropdownSelector(QWidget* parent)
     m_hoverAnim->setDuration(170);
     m_hoverAnim->setEasingCurve(QEasingCurve::OutCubic);
 
-    m_pressAnim = new QPropertyAnimation(this, "pressProgress", this);
-    m_pressAnim->setDuration(90);
-    m_pressAnim->setEasingCurve(QEasingCurve::OutCubic);
-
     m_arrowAnim = new QPropertyAnimation(this, "arrowProgress", this);
     m_arrowAnim->setDuration(160);
     m_arrowAnim->setEasingCurve(QEasingCurve::OutCubic);
@@ -676,16 +672,6 @@ void FontDropdownSelector::setHoverProgress(qreal progress)
     update();
 }
 
-void FontDropdownSelector::setPressProgress(qreal progress)
-{
-    const qreal value = qBound(0.0, progress, 1.0);
-    if (qFuzzyCompare(m_pressProgress, value)) {
-        return;
-    }
-    m_pressProgress = value;
-    update();
-}
-
 void FontDropdownSelector::setArrowProgress(qreal progress)
 {
     const qreal value = qBound(0.0, progress, 1.0);
@@ -719,12 +705,8 @@ void FontDropdownSelector::paintEvent(QPaintEvent* event)
         p.setBrush(hover);
         p.drawRoundedRect(box, 6, 6);
     }
-    if (m_pressProgress > 0.001) {
-        QColor press = colors.overlay(0.12);
-        press.setAlphaF(press.alphaF() * m_pressProgress);
-        p.setBrush(press);
-        p.drawRoundedRect(box, 6, 6);
-    }
+    // No press wash: the arrow flip and the popup opening carry the click, and a
+    // separate darkening under them reads as a hard flash.
 
     QColor top = ruwa::ui::core::ThemeColors::interpolate(
         colors.borderSubtle(), colors.borderSubtleHover(), m_hoverProgress);
@@ -752,7 +734,7 @@ void FontDropdownSelector::paintEvent(QPaintEvent* event)
     p.translate(arrowX, arrowY);
     p.rotate(180.0 * m_arrowProgress);
     QColor arrowColor = ruwa::ui::core::ThemeColors::interpolate(
-        colors.textDisabled(), colors.text, qMin(1.0, m_hoverProgress + (m_pressProgress * 0.35)));
+        colors.textDisabled(), colors.text, m_hoverProgress);
     p.setPen(QPen(arrowColor, 1.6, Qt::SolidLine, Qt::RoundCap, Qt::RoundJoin));
     p.drawLine(QPointF(-3.5, -1.0), QPointF(0.0, 2.2));
     p.drawLine(QPointF(0.0, 2.2), QPointF(3.5, -1.0));
@@ -776,10 +758,6 @@ void FontDropdownSelector::leaveEvent(QEvent* event)
 void FontDropdownSelector::mousePressEvent(QMouseEvent* event)
 {
     if (event->button() == Qt::LeftButton && isEnabled()) {
-        m_pressAnim->stop();
-        m_pressAnim->setStartValue(m_pressProgress);
-        m_pressAnim->setEndValue(1.0);
-        m_pressAnim->start();
         event->accept();
         return;
     }
@@ -789,10 +767,6 @@ void FontDropdownSelector::mousePressEvent(QMouseEvent* event)
 void FontDropdownSelector::mouseReleaseEvent(QMouseEvent* event)
 {
     if (event->button() == Qt::LeftButton && isEnabled()) {
-        m_pressAnim->stop();
-        m_pressAnim->setStartValue(m_pressProgress);
-        m_pressAnim->setEndValue(0.0);
-        m_pressAnim->start();
         if (rect().contains(event->pos())) {
             togglePopup();
         }

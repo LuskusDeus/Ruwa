@@ -158,15 +158,6 @@ void ToolButton::setMutedNormalIcon(bool muted)
     update();
 }
 
-void ToolButton::setPressFeedbackEnabled(bool enabled)
-{
-    if (m_pressFeedback == enabled) {
-        return;
-    }
-    m_pressFeedback = enabled;
-    update();
-}
-
 void ToolButton::setHasGroupIndicator(bool hasGroupIndicator)
 {
     if (m_hasGroupIndicator == hasGroupIndicator) {
@@ -260,9 +251,6 @@ void ToolButton::paintEvent(QPaintEvent* event)
 
     if (enabled && m_chromeStyle == ChromeStyle::Surface) {
         QColor bgColor = colors.surfaceAlt;
-        if (m_pressFeedback && m_isPressed) {
-            bgColor = bgColor.darker(110);
-        }
         bgColor.setAlphaF(bgColor.alphaF() * m_chromeOpacity);
         painter.setBrush(bgColor);
         painter.drawRoundedRect(rect, radius, radius);
@@ -271,9 +259,6 @@ void ToolButton::paintEvent(QPaintEvent* event)
     // Interpolate background based on activeProgress
     if (enabled && activeProgress() > 0 && m_chromeStyle == ChromeStyle::Toolbar) {
         QColor bgColor = colors.primary;
-        if (m_pressFeedback && m_isPressed) {
-            bgColor = colors.primaryPressed();
-        }
         bgColor.setAlphaF(bgColor.alphaF() * activeProgress());
         painter.setBrush(bgColor);
         painter.drawRoundedRect(rect, radius, radius);
@@ -295,25 +280,9 @@ void ToolButton::paintEvent(QPaintEvent* event)
         painter.drawRoundedRect(rect, radius, radius);
     }
 
-    // Pressed overlay for non-checked buttons
-    if (enabled && m_pressFeedback && m_isPressed && activeProgress() < 1.0) {
-        QColor pressColor;
-        qreal pressAlpha = 0.0;
-        if (m_chromeStyle == ChromeStyle::PrimaryHover) {
-            pressColor = colors.primary;
-            pressAlpha = (colors.isDark ? 0.22 : 0.17) * (1.0 - activeProgress());
-        } else {
-            pressColor = m_chromeStyle == ChromeStyle::Overlay ? colors.overlay(0.10)
-                                                               : colors.surfaceHover();
-            pressAlpha = pressColor.alphaF() * 1.5 * (1.0 - activeProgress());
-            if (m_chromeStyle == ChromeStyle::Surface) {
-                pressAlpha *= m_chromeOpacity;
-            }
-        }
-        pressColor.setAlphaF(qBound(0.0, pressAlpha, 1.0));
-        painter.setBrush(pressColor);
-        painter.drawRoundedRect(rect, radius, radius);
-    }
+    // No pressed overlay: the button answers a click through its hover and
+    // active animations only. A transient press wash lands in one frame and
+    // reads as a hard flash against those eased transitions.
 
     if (m_borderVisible) {
         QColor borderColor = colors.border;

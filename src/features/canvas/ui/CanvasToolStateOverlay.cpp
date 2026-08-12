@@ -118,9 +118,6 @@ workspace::ToolButton* createToolButton(IconProvider::StandardIcon iconType,
     auto* button = new workspace::ToolButton(mode, parent);
     button->setIconType(iconType);
     button->setToolTip(tooltip);
-    // No transient press darkening anywhere in this HUD: it flickers against the
-    // smooth hover/toggle animations.
-    button->setPressFeedbackEnabled(false);
     return button;
 }
 
@@ -148,7 +145,6 @@ workspace::ToolButton* createRedoToolButton(const QString& tooltip, QWidget* par
 {
     auto* button = new workspace::ToolButton(workspace::ToolButton::Mode::Action, parent);
     button->setToolTip(tooltip);
-    button->setPressFeedbackEnabled(false);
 
     auto& theme = ThemeManager::instance();
     const int iconSize = theme.scaled(20);

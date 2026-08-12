@@ -13,8 +13,6 @@
 #include <QLinearGradient>
 #include <QHBoxLayout>
 #include <QLabel>
-#include <QMouseEvent>
-#include <QPropertyAnimation>
 #include <QStackedWidget>
 
 namespace ruwa::ui::widgets {
@@ -69,26 +67,11 @@ UpdatesActionButton::UpdatesActionButton(QWidget* parent)
 
     m_contentLayout->addStretch();
 
-    m_pressAnimation = new QPropertyAnimation(this, "pressProgress", this);
-    m_pressAnimation->setDuration(140);
-    m_pressAnimation->setEasingCurve(QEasingCurve::OutCubic);
-
     updateContent();
     updateScaledSizes();
 
     connect(&ruwa::ui::core::ThemeManager::instance(), &ruwa::ui::core::ThemeManager::themeChanged,
         this, &UpdatesActionButton::onThemeChanged);
-}
-
-void UpdatesActionButton::setPressProgress(qreal progress)
-{
-    const qreal bounded = qBound(0.0, progress, 1.0);
-    if (qFuzzyCompare(m_pressProgress, bounded)) {
-        return;
-    }
-
-    m_pressProgress = bounded;
-    update();
 }
 
 void UpdatesActionButton::setState(UpdateState state)
@@ -234,14 +217,6 @@ void UpdatesActionButton::paintEvent(QPaintEvent* event)
         ruwa::ui::painting::drawGradientBorder(painter, rect, borderRadius,
             ruwa::ui::core::ThemeColors::adjustBrightness(colors.background, 7.7),
             ruwa::ui::core::ThemeColors::adjustBrightness(colors.background, 6.2));
-
-        if (m_pressProgress > 0.0) {
-            painter.setPen(Qt::NoPen);
-            QColor pressOverlay = colors.shadow(25);
-            pressOverlay.setAlpha(qRound(pressOverlay.alpha() * m_pressProgress));
-            painter.setBrush(pressOverlay);
-            painter.drawRoundedRect(fillRect, fillRadius, fillRadius);
-        }
     } else {
         painter.setPen(Qt::NoPen);
         QColor baseFill = colors.overlayBase();
@@ -266,45 +241,7 @@ void UpdatesActionButton::paintEvent(QPaintEvent* event)
                 ruwa::ui::core::ThemeColors::withAlpha(borderTop, borderTop.alpha() / 2));
         }
 
-        if (m_pressProgress > 0.0) {
-            painter.setPen(Qt::NoPen);
-            QColor pressOverlay = colors.shadow(18);
-            pressOverlay.setAlpha(qRound(pressOverlay.alpha() * m_pressProgress));
-            painter.setBrush(pressOverlay);
-            painter.drawRoundedRect(fillRect, fillRadius, fillRadius);
-        }
     }
-}
-
-void UpdatesActionButton::mousePressEvent(QMouseEvent* event)
-{
-    if (event->button() == Qt::LeftButton && isEnabled()) {
-        startPressAnimation(true);
-    }
-
-    BaseAnimatedButton::mousePressEvent(event);
-}
-
-void UpdatesActionButton::mouseReleaseEvent(QMouseEvent* event)
-{
-    if (event->button() == Qt::LeftButton) {
-        startPressAnimation(false);
-    }
-
-    BaseAnimatedButton::mouseReleaseEvent(event);
-}
-
-void UpdatesActionButton::startPressAnimation(bool pressed)
-{
-    if (!m_pressAnimation) {
-        return;
-    }
-
-    m_pressAnimation->stop();
-    m_pressAnimation->setDuration(pressed ? 90 : 170);
-    m_pressAnimation->setStartValue(m_pressProgress);
-    m_pressAnimation->setEndValue(pressed ? 1.0 : 0.0);
-    m_pressAnimation->start();
 }
 
 void UpdatesActionButton::onThemeChanged()

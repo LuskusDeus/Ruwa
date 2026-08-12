@@ -9,8 +9,6 @@
 
 class QLabel;
 class QHBoxLayout;
-class QMouseEvent;
-class QPropertyAnimation;
 class QStackedWidget;
 
 namespace ruwa::ui::widgets {
@@ -27,7 +25,6 @@ class DotGridLoadingIndicator;
  */
 class UpdatesActionButton : public BaseAnimatedButton {
     Q_OBJECT
-    Q_PROPERTY(qreal pressProgress READ pressProgress WRITE setPressProgress)
 
 public:
     explicit UpdatesActionButton(QWidget* parent = nullptr);
@@ -35,19 +32,14 @@ public:
 
     void setState(UpdateState state);
     UpdateState state() const { return m_state; }
-    qreal pressProgress() const { return m_pressProgress; }
-    void setPressProgress(qreal progress);
 
 protected:
     void paintEvent(QPaintEvent* event) override;
-    void mousePressEvent(QMouseEvent* event) override;
-    void mouseReleaseEvent(QMouseEvent* event) override;
 
 private:
     void updateContent();
     void updateScaledSizes();
     void updateLoadingIndicator();
-    void startPressAnimation(bool pressed);
 
 private slots:
     void onThemeChanged();
@@ -59,8 +51,6 @@ private:
     QLabel* m_iconLabel { nullptr };
     QLabel* m_textLabel { nullptr };
     DotGridLoadingIndicator* m_loadingIndicator { nullptr };
-    QPropertyAnimation* m_pressAnimation { nullptr };
-    qreal m_pressProgress { 0.0 };
 };
 
 } // namespace ruwa::ui::widgets

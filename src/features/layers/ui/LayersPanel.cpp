@@ -1320,13 +1320,8 @@ protected:
             p.setBrush(hover);
             p.drawRoundedRect(r, 4, 4);
         }
-        if (isPressed() && !disabled) {
-            QColor press = colors.primaryPressed();
-            press.setAlphaF(0.45);
-            p.setPen(Qt::NoPen);
-            p.setBrush(press);
-            p.drawRoundedRect(r, 4, 4);
-        }
+        // The checked-state animation is the whole answer to a click. An
+        // un-eased press wash on top of it only reads as a hard flash.
 
         QColor iconColor;
         if (disabled) {
@@ -1404,13 +1399,7 @@ protected:
             p.setBrush(hover);
             p.drawRoundedRect(r, 4, 4);
         }
-        if (isPressed() && !disabled) {
-            QColor press = colors.primaryPressed();
-            press.setAlphaF(0.45);
-            p.setPen(Qt::NoPen);
-            p.setBrush(press);
-            p.drawRoundedRect(r, 4, 4);
-        }
+        // No press wash: the hover fade is the only chrome these buttons show.
 
         QColor iconColor;
         if (disabled) {
