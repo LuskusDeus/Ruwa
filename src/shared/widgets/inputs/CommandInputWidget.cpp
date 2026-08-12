@@ -108,10 +108,10 @@ qreal CommandInputWidget::naturalContentWidth() const
         ? ShortcutKeycapRenderer::SizeVariant::Compact
         : ShortcutKeycapRenderer::SizeVariant::Regular;
     if (m_recording) {
-        return ShortcutKeycapRenderer::contentSize(tr("Press shortcut..."), sizeVariant).width();
+        return ShortcutKeycapRenderer::labelSize(tr("Press shortcut..."), sizeVariant).width();
     }
-    if (m_keySequence.isEmpty()) {
-        return ShortcutKeycapRenderer::contentSize(tr("Click to assign"), sizeVariant).width();
+    if (!ShortcutKeycapRenderer::isRenderable(m_keySequence)) {
+        return ShortcutKeycapRenderer::labelSize(tr("Click to assign"), sizeVariant).width();
     }
     return ShortcutKeycapRenderer::contentSize(m_keySequence, sizeVariant).width();
 }
@@ -215,7 +215,27 @@ bool CommandInputWidget::eventFilter(QObject* watched, QEvent* event)
             return true;
         }
 
-        const QKeySequence seq(key | static_cast<int>(ke->modifiers()));
+        // Store the key by its POSITION on the US layout, never by the character the
+        // active layout puts there: with a Cyrillic layout Qt reports Key_Ф where the
+        // US layout has F, and a shortcut recorded that way could not be triggered
+        // from a Latin layout. ShortcutManager::commandForKeyEvent() resolves incoming
+        // events through the same table, so both ends agree on what a physical key is.
+        int recordedKey
+            = ruwa::core::ShortcutManager::qtKeyFromNativeVirtualKey(ke->nativeVirtualKey());
+        if (recordedKey == 0) {
+            // Keys outside that table are fine as long as they carry no layout of their
+            // own — arrows, F13+, keypad, and everything else Qt reports above
+            // Qt::Key_Escape, plus the printable ASCII range. A printable non-ASCII key
+            // is nothing but the current layout's character, so refuse to store it and
+            // keep waiting instead of writing a binding that can never fire.
+            recordedKey = key;
+            const bool nonLatinCharacterKey = recordedKey > 0x7F && recordedKey < Qt::Key_Escape;
+            if (nonLatinCharacterKey || recordedKey == Qt::Key_unknown) {
+                return true;
+            }
+        }
+
+        const QKeySequence seq(recordedKey | static_cast<int>(ke->modifiers()));
         if (!seq.isEmpty()) {
             emit shortcutRecorded(seq);
             stopRecording();
@@ -259,10 +279,10 @@ void CommandInputWidget::drawContentLayer(QPainter& painter, const QRectF& rect)
         ? ShortcutKeycapRenderer::SizeVariant::Compact
         : ShortcutKeycapRenderer::SizeVariant::Regular;
     if (m_recording) {
-        ShortcutKeycapRenderer::paint(painter, contentRect, tr("Press shortcut..."),
+        ShortcutKeycapRenderer::paintLabel(painter, contentRect, tr("Press shortcut..."),
             Qt::AlignRight | Qt::AlignVCenter, sizeVariant, textColor, true);
-    } else if (m_keySequence.isEmpty()) {
-        ShortcutKeycapRenderer::paint(painter, contentRect, tr("Click to assign"),
+    } else if (!ShortcutKeycapRenderer::isRenderable(m_keySequence)) {
+        ShortcutKeycapRenderer::paintLabel(painter, contentRect, tr("Click to assign"),
             Qt::AlignRight | Qt::AlignVCenter, sizeVariant, colors.textMuted);
     } else {
         ShortcutKeycapRenderer::paint(painter, contentRect, m_keySequence,

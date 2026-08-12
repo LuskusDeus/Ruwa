@@ -9,14 +9,40 @@
 #include "commands/CommandExecutor.h"
 #include "commands/Command.h"
 
+#include <QAbstractSpinBox>
+#include <QApplication>
 #include <QKeyEvent>
+#include <QLineEdit>
+#include <QPlainTextEdit>
 #include <QSettings>
 #include <QShortcut>
+#include <QTextEdit>
+#include <QWidget>
 #include <QtConcurrent>
 
 namespace {
 constexpr int MAX_LAST_USED = 5;
+
+bool isTextInputWidget(const QWidget* widget)
+{
+    for (const QWidget* current = widget; current; current = current->parentWidget()) {
+        if (qobject_cast<const QLineEdit*>(current) || qobject_cast<const QTextEdit*>(current)
+            || qobject_cast<const QPlainTextEdit*>(current)
+            || qobject_cast<const QAbstractSpinBox*>(current)) {
+            return true;
+        }
+    }
+    return false;
 }
+
+/// Whether the key is on its way to a text editor, either as the event's target or
+/// as the focus widget: a layout-remapped key must never be stolen from typing.
+bool isTextInputTarget(const QObject* watched)
+{
+    return isTextInputWidget(qobject_cast<const QWidget*>(watched))
+        || isTextInputWidget(QApplication::focusWidget());
+}
+} // namespace
 
 namespace ruwa::core {
 
@@ -36,6 +62,67 @@ ShortcutManager::~ShortcutManager() = default;
 void ShortcutManager::setShortcutContext(QWidget* contextWidget)
 {
     m_contextWidget = contextWidget;
+
+    // Installed on the application so it sees key presses no QShortcut consumed.
+    // Filters run most-recently-installed first, so anything that grabs the keyboard
+    // later - the shortcut recorder, for one - still gets the event before we do.
+    if (m_contextWidget && !m_layoutFilterInstalled) {
+        if (QCoreApplication* app = QCoreApplication::instance()) {
+            app->installEventFilter(this);
+            m_layoutFilterInstalled = true;
+        }
+    }
+}
+
+bool ShortcutManager::eventFilter(QObject* watched, QEvent* event)
+{
+    if (event->type() == QEvent::KeyPress) {
+        const QString commandId = layoutFallbackCommand(watched, static_cast<QKeyEvent*>(event));
+        if (!commandId.isEmpty()) {
+            activateShortcut(commandId);
+            return true;
+        }
+    }
+    return QObject::eventFilter(watched, event);
+}
+
+QString ShortcutManager::layoutFallbackCommand(const QObject* watched, const QKeyEvent* event) const
+{
+    if (!event || !m_contextWidget || !shortcutsEnabled()) {
+        return {};
+    }
+
+    // Only step in when the active layout disagrees with the physical key. Under a
+    // Latin layout Qt's own matching has already had its say - it either fired the
+    // QShortcut (and then no KeyPress reaches us at all) or deliberately did not -
+    // and re-deciding here would fire commands twice.
+    const int physicalKey = qtKeyFromNativeVirtualKey(event->nativeVirtualKey());
+    if (physicalKey == 0 || physicalKey == event->key()) {
+        return {};
+    }
+
+    // Whatever an editor is about to receive is text, not a command.
+    if (isTextInputTarget(watched)) {
+        return {};
+    }
+
+    const Qt::KeyboardModifiers mods = event->modifiers() & ~Qt::KeypadModifier;
+    const QString commandId
+        = commandForShortcut(QKeySequence(physicalKey | static_cast<int>(mods)));
+    if (commandId.isEmpty()) {
+        return {};
+    }
+
+    // Gate on the real QShortcut so conflicts, cleared bindings and the disabled
+    // states from refreshShortcutEnabledStates() apply to this path identically.
+    const QShortcut* shortcut = m_shortcuts.value(commandId);
+    return (shortcut && shortcut->isEnabled()) ? commandId : QString();
+}
+
+void ShortcutManager::activateShortcut(const QString& commandId)
+{
+    recordShortcutUsed(commandId);
+    CommandExecutor::instance().execute(commandId);
 }
 
 void ShortcutManager::registerAllShortcuts()
@@ -68,10 +155,8 @@ void ShortcutManager::createShortcut(const QString& commandId, const QKeySequenc
     QShortcut* shortcut = new QShortcut(sequence, m_contextWidget);
     shortcut->setContext(Qt::ApplicationShortcut);
 
-    connect(shortcut, &QShortcut::activated, this, [this, commandId]() {
-        recordShortcutUsed(commandId);
-        CommandExecutor::instance().execute(commandId);
-    });
+    connect(shortcut, &QShortcut::activated, this,
+        [this, commandId]() { activateShortcut(commandId); });
 
     m_shortcuts.insert(commandId, shortcut);
     m_shortcutToCommands.insert(sequence, commandId);

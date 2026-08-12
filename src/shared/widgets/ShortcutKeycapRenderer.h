@@ -59,6 +59,41 @@ public:
             textColor, emphasized);
     }
 
+    /**
+     * Size and paint for a caption shown in place of keys ("Click to assign",
+     * "Press shortcut..."). Bypasses shortcut parsing: QKeySequence::fromString()
+     * happily turns arbitrary prose into a single Qt::Key_unknown chord, which is
+     * not empty but renders to nothing, so a parsed caption would silently vanish.
+     */
+    static QSizeF labelSize(const QString& text, SizeVariant sizeVariant)
+    {
+        return labelLayout(text, sizeVariant).size;
+    }
+
+    static void paintLabel(QPainter& painter, const QRectF& availableRect, const QString& text,
+        Qt::Alignment alignment, SizeVariant sizeVariant, const QColor& textColor = QColor(),
+        bool emphasized = false)
+    {
+        paintLayout(painter, availableRect, labelLayout(text, sizeVariant), alignment, textColor,
+            emphasized);
+    }
+
+    /// Whether @p shortcut has anything to draw: a stored sequence can carry
+    /// Qt::Key_unknown, which yields no keycaps at all.
+    static bool isRenderable(const QKeySequence& shortcut)
+    {
+        if (shortcut.isEmpty()) {
+            return false;
+        }
+        for (int chordIndex = 0; chordIndex < shortcut.count(); ++chordIndex) {
+            const QKeyCombination chord = shortcut[chordIndex];
+            if (chord.key() == Qt::Key_unknown || nativeKeyText(chord.key()).isEmpty()) {
+                return false;
+            }
+        }
+        return true;
+    }
+
 private:
     struct Part {
         QString text;
@@ -98,13 +133,16 @@ private:
         return text.trimmed();
     }
 
+    /// Parses @p shortcutText, or returns an empty sequence when it is not a
+    /// shortcut at all. isRenderable() rather than isEmpty() decides that: an
+    /// unparsable string comes back as a non-empty Qt::Key_unknown chord.
     static QKeySequence sequenceFromText(const QString& shortcutText)
     {
         QKeySequence shortcut = QKeySequence::fromString(shortcutText, QKeySequence::NativeText);
-        if (shortcut.isEmpty()) {
+        if (!isRenderable(shortcut)) {
             shortcut = QKeySequence::fromString(shortcutText, QKeySequence::PortableText);
         }
-        return shortcut;
+        return isRenderable(shortcut) ? shortcut : QKeySequence();
     }
 
     static Layout baseLayout(SizeVariant sizeVariant)
@@ -189,11 +227,14 @@ private:
         if (!shortcut.isEmpty()) {
             return layoutFor(shortcut, sizeVariant);
         }
+        return labelLayout(shortcutText, sizeVariant);
+    }
 
+    /// One keycap holding @p text verbatim.
+    static Layout labelLayout(const QString& text, SizeVariant sizeVariant)
+    {
         Layout layout = baseLayout(sizeVariant);
-        if (!shortcutText.trimmed().isEmpty()) {
-            appendPart(layout, shortcutText.trimmed(), true, QFontMetricsF(layout.font), sizeVariant);
-        }
+        appendPart(layout, text.trimmed(), true, QFontMetricsF(layout.font), sizeVariant);
         finishLayout(layout);
         return layout;
     }

@@ -116,6 +116,11 @@ public:
     /// Save custom shortcuts to settings
     void saveToSettings() const;
 
+protected:
+    /// Fires bindings Qt's own QShortcut matching could not see because the active
+    /// keyboard layout renames the key (see layoutFallbackCommand).
+    bool eventFilter(QObject* watched, QEvent* event) override;
+
 signals:
     /// Emitted when a shortcut is changed
     void shortcutChanged(const QString& commandId, const QKeySequence& newShortcut);
@@ -134,12 +139,17 @@ private:
 
     void createShortcut(const QString& commandId, const QKeySequence& sequence);
     void updateShortcut(const QString& commandId);
+    /// Command bound to @p event's PHYSICAL key, when the active layout made Qt
+    /// report a different key than the one the binding was recorded with.
+    QString layoutFallbackCommand(const QObject* watched, const QKeyEvent* event) const;
+    void activateShortcut(const QString& commandId);
     void refreshShortcutEnabledStates();
     void recordShortcutUsed(const QString& commandId);
     void saveLastUsedToSettings() const;
 
 private:
     QWidget* m_contextWidget = nullptr;
+    bool m_layoutFilterInstalled = false;
     QHash<QString, QShortcut*> m_shortcuts; // commandId -> QShortcut
     int m_shortcutsDisableCount = 0; // >0 when overlays block shortcuts
     QHash<QString, QKeySequence> m_customShortcuts; // commandId -> custom sequence
