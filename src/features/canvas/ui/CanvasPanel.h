@@ -259,6 +259,18 @@ public:
     /// Erase the content under the active selection. Returns false when there is
     /// no selection (or a transform is in flight).
     bool deleteSelectionContent();
+    /// True while the canvas holds an active selection mask.
+    bool hasActiveSelection() const;
+    /// True when the layer the selection commands act on carries a mask.
+    bool selectedLayerHasMask() const;
+    /// Replace the selection with the selected layer's content silhouette.
+    void selectActiveLayerContent();
+    /// Replace the selection with the selected layer's mask coverage.
+    void selectActiveLayerMaskContent();
+    /// Mirror the content under the selection in place (animated, undoable).
+    /// False when there is no selection, or a transform/stroke owns the pixels.
+    bool flipSelectionContentHorizontally();
+    bool flipSelectionContentVertically();
     /// Copy the pixels under the active selection (edit clipboard + system
     /// clipboard image). False when there is nothing copyable.
     bool copySelectionPixels();

@@ -571,6 +571,66 @@
       "заливка-выделения"
     ]
   },
+  "selection.selectLayerContent": {
+    "title": "Выделить содержимое слоя",
+    "category": "Выделение",
+    "description": "Выделить непрозрачные пиксели текущего слоя по форме, которую даёт его цепочка эффектов",
+    "aliases": [
+      "select-layer-content",
+      "select-opaque",
+      "выделить-содержимое",
+      "содержимое-слоя"
+    ]
+  },
+  "selection.selectLayerMask": {
+    "title": "Выделить маску слоя",
+    "category": "Выделение",
+    "description": "Загрузить маску текущего слоя в выделение: частично раскрытые области станут частично выделенными",
+    "aliases": [
+      "select-layer-mask",
+      "mask-to-selection",
+      "выделить-маску",
+      "маска-в-выделение"
+    ]
+  },
+  "selection.deleteContent": {
+    "title": "Удалить содержимое",
+    "category": "Выделение",
+    "description": "Стереть пиксели внутри активного выделения",
+    "aliases": [
+      "delete-selection",
+      "erase-selection",
+      "удалить-выделенное",
+      "стереть-выделенное"
+    ]
+  },
+  "selection.transform": {
+    "title": "Трансформировать выделенное",
+    "category": "Выделение",
+    "description": "Перейти в режим трансформации содержимого под активным выделением",
+    "aliases": [
+      "transform-selection",
+      "трансформировать-выделенное"
+    ]
+  },
+  "selection.flipHorizontal": {
+    "title": "Отразить выделенное по горизонтали",
+    "category": "Выделение",
+    "description": "Зеркально отразить содержимое под активным выделением слева направо, на месте",
+    "aliases": [
+      "flip-selection-horizontal",
+      "отразить-по-горизонтали"
+    ]
+  },
+  "selection.flipVertical": {
+    "title": "Отразить выделенное по вертикали",
+    "category": "Выделение",
+    "description": "Зеркально отразить содержимое под активным выделением сверху вниз, на месте",
+    "aliases": [
+      "flip-selection-vertical",
+      "отразить-по-вертикали"
+    ]
+  },
   "file.export": {
     "title": "Экспорт",
     "category": "Файл",

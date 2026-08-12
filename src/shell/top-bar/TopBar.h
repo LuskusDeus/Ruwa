@@ -221,6 +221,9 @@ private:
     QList<MenuItem> fileItemsWithEnabledState() const;
     QList<MenuItem> editItemsWithEnabledState() const;
     QList<MenuItem> viewItemsWithEnabledState();
+    /// Edit -> Selection submenu, rebuilt on every open so each entry reflects
+    /// its command's current canExecute() (selection present, layer has a mask...).
+    MenuItem buildSelectionMenuItem() const;
     MenuItem buildPanelsMenuItem();
     MenuItem buildCanvasWidgetsMenuItem();
     static QString canvasWidgetLabel(CanvasWidget widget);

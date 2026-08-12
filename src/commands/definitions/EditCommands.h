@@ -53,6 +53,54 @@ public:
     void execute(const CommandContext& ctx, const QVariantMap& args = {}) override;
 };
 
+/// Replace the selection with the selected layer's content silhouette — the
+/// same thing Ctrl+click on a layer thumbnail does.
+class SelectLayerContentCommand : public Command {
+public:
+    CommandInfo info() const override;
+    bool canExecute(const CommandContext& ctx) const override;
+    void execute(const CommandContext& ctx, const QVariantMap& args = {}) override;
+};
+
+/// Replace the selection with the selected layer's mask coverage (gray mask
+/// areas become partially selected).
+class SelectLayerMaskCommand : public Command {
+public:
+    CommandInfo info() const override;
+    bool canExecute(const CommandContext& ctx) const override;
+    void execute(const CommandContext& ctx, const QVariantMap& args = {}) override;
+};
+
+/// Erase the pixels under the active selection. Unlike edit.delete this is not
+/// focus-sensitive: it always means the selection, never the layer.
+class DeleteSelectionContentCommand : public Command {
+public:
+    CommandInfo info() const override;
+    bool canExecute(const CommandContext& ctx) const override;
+    void execute(const CommandContext& ctx, const QVariantMap& args = {}) override;
+};
+
+class TransformSelectionCommand : public Command {
+public:
+    CommandInfo info() const override;
+    bool canExecute(const CommandContext& ctx) const override;
+    void execute(const CommandContext& ctx, const QVariantMap& args = {}) override;
+};
+
+class FlipSelectionHorizontalCommand : public Command {
+public:
+    CommandInfo info() const override;
+    bool canExecute(const CommandContext& ctx) const override;
+    void execute(const CommandContext& ctx, const QVariantMap& args = {}) override;
+};
+
+class FlipSelectionVerticalCommand : public Command {
+public:
+    CommandInfo info() const override;
+    bool canExecute(const CommandContext& ctx) const override;
+    void execute(const CommandContext& ctx, const QVariantMap& args = {}) override;
+};
+
 /**
  * @brief Context-sensitive Delete: what it removes depends on where focus is.
  *

@@ -194,7 +194,8 @@ CommandInfo DeselectCommand::info() const
 
 bool DeselectCommand::canExecute(const CommandContext& ctx) const
 {
-    return ctx.activeCanvasPanel() != nullptr;
+    auto* canvasPanel = ctx.activeCanvasPanel();
+    return canvasPanel && canvasPanel->hasActiveSelection();
 }
 
 void DeselectCommand::execute(const CommandContext& ctx, const QVariantMap& args)
@@ -219,7 +220,8 @@ CommandInfo FillSelectionCommand::info() const
 
 bool FillSelectionCommand::canExecute(const CommandContext& ctx) const
 {
-    return ctx.activeCanvasPanel() != nullptr;
+    auto* canvasPanel = ctx.activeCanvasPanel();
+    return canvasPanel && canvasPanel->hasActiveSelection();
 }
 
 void FillSelectionCommand::execute(const CommandContext& ctx, const QVariantMap& args)
@@ -228,6 +230,163 @@ void FillSelectionCommand::execute(const CommandContext& ctx, const QVariantMap&
 
     if (auto* canvasPanel = ctx.activeCanvasPanel()) {
         canvasPanel->fillSelectionWithCurrentColor();
+    }
+}
+
+CommandInfo SelectLayerContentCommand::info() const
+{
+    return CommandInfo { .id = "selection.selectLayerContent",
+        .title = "Select Layer Content",
+        .category = "Selection",
+        .description = "Select the opaque pixels of the current layer, following the shape its "
+                       "effect chain renders",
+        .aliases = { "select-layer-content", "select-opaque" },
+        .defaultShortcut = QKeySequence(),
+        .icon = QIcon() };
+}
+
+bool SelectLayerContentCommand::canExecute(const CommandContext& ctx) const
+{
+    return ctx.activeCanvasPanel() != nullptr;
+}
+
+void SelectLayerContentCommand::execute(const CommandContext& ctx, const QVariantMap& args)
+{
+    Q_UNUSED(args);
+
+    if (auto* canvasPanel = ctx.activeCanvasPanel()) {
+        canvasPanel->selectActiveLayerContent();
+    }
+}
+
+CommandInfo SelectLayerMaskCommand::info() const
+{
+    return CommandInfo { .id = "selection.selectLayerMask",
+        .title = "Select Layer Mask",
+        .category = "Selection",
+        .description = "Load the current layer's mask into the selection; partially revealed areas "
+                       "become partially selected",
+        .aliases = { "select-layer-mask", "mask-to-selection" },
+        .defaultShortcut = QKeySequence(),
+        .icon = QIcon() };
+}
+
+bool SelectLayerMaskCommand::canExecute(const CommandContext& ctx) const
+{
+    auto* canvasPanel = ctx.activeCanvasPanel();
+    return canvasPanel && canvasPanel->selectedLayerHasMask();
+}
+
+void SelectLayerMaskCommand::execute(const CommandContext& ctx, const QVariantMap& args)
+{
+    Q_UNUSED(args);
+
+    if (auto* canvasPanel = ctx.activeCanvasPanel()) {
+        canvasPanel->selectActiveLayerMaskContent();
+    }
+}
+
+CommandInfo DeleteSelectionContentCommand::info() const
+{
+    return CommandInfo { .id = "selection.deleteContent",
+        .title = "Delete Content",
+        .category = "Selection",
+        .description = "Erase the pixels inside the active selection",
+        .aliases = { "delete-selection", "erase-selection" },
+        .defaultShortcut = QKeySequence(),
+        .icon = QIcon() };
+}
+
+bool DeleteSelectionContentCommand::canExecute(const CommandContext& ctx) const
+{
+    auto* canvasPanel = ctx.activeCanvasPanel();
+    return canvasPanel && canvasPanel->hasActiveSelection();
+}
+
+void DeleteSelectionContentCommand::execute(const CommandContext& ctx, const QVariantMap& args)
+{
+    Q_UNUSED(args);
+
+    if (auto* canvasPanel = ctx.activeCanvasPanel()) {
+        canvasPanel->deleteSelectionContent();
+    }
+}
+
+CommandInfo TransformSelectionCommand::info() const
+{
+    return CommandInfo { .id = "selection.transform",
+        .title = "Transform Selection",
+        .category = "Selection",
+        .description = "Enter transform mode on the content under the active selection",
+        .aliases = { "transform-selection" },
+        .defaultShortcut = QKeySequence(),
+        .icon = QIcon() };
+}
+
+bool TransformSelectionCommand::canExecute(const CommandContext& ctx) const
+{
+    auto* canvasPanel = ctx.activeCanvasPanel();
+    return canvasPanel && canvasPanel->hasActiveSelection() && !canvasPanel->isTransformActive();
+}
+
+void TransformSelectionCommand::execute(const CommandContext& ctx, const QVariantMap& args)
+{
+    Q_UNUSED(args);
+
+    if (auto* canvasPanel = ctx.activeCanvasPanel()) {
+        canvasPanel->enterTransformMode();
+    }
+}
+
+CommandInfo FlipSelectionHorizontalCommand::info() const
+{
+    return CommandInfo { .id = "selection.flipHorizontal",
+        .title = "Flip Selection Horizontally",
+        .category = "Selection",
+        .description = "Mirror the content under the active selection left to right, in place",
+        .aliases = { "flip-selection-horizontal" },
+        .defaultShortcut = QKeySequence(),
+        .icon = QIcon() };
+}
+
+bool FlipSelectionHorizontalCommand::canExecute(const CommandContext& ctx) const
+{
+    auto* canvasPanel = ctx.activeCanvasPanel();
+    return canvasPanel && canvasPanel->hasActiveSelection();
+}
+
+void FlipSelectionHorizontalCommand::execute(const CommandContext& ctx, const QVariantMap& args)
+{
+    Q_UNUSED(args);
+
+    if (auto* canvasPanel = ctx.activeCanvasPanel()) {
+        canvasPanel->flipSelectionContentHorizontally();
+    }
+}
+
+CommandInfo FlipSelectionVerticalCommand::info() const
+{
+    return CommandInfo { .id = "selection.flipVertical",
+        .title = "Flip Selection Vertically",
+        .category = "Selection",
+        .description = "Mirror the content under the active selection top to bottom, in place",
+        .aliases = { "flip-selection-vertical" },
+        .defaultShortcut = QKeySequence(),
+        .icon = QIcon() };
+}
+
+bool FlipSelectionVerticalCommand::canExecute(const CommandContext& ctx) const
+{
+    auto* canvasPanel = ctx.activeCanvasPanel();
+    return canvasPanel && canvasPanel->hasActiveSelection();
+}
+
+void FlipSelectionVerticalCommand::execute(const CommandContext& ctx, const QVariantMap& args)
+{
+    Q_UNUSED(args);
+
+    if (auto* canvasPanel = ctx.activeCanvasPanel()) {
+        canvasPanel->flipSelectionContentVertically();
     }
 }
 
@@ -284,6 +443,12 @@ void registerEditCommands(CommandRegistry& registry)
     registry.registerCommand(std::make_unique<PasteCommand>());
     registry.registerCommand(std::make_unique<DeselectCommand>());
     registry.registerCommand(std::make_unique<FillSelectionCommand>());
+    registry.registerCommand(std::make_unique<SelectLayerContentCommand>());
+    registry.registerCommand(std::make_unique<SelectLayerMaskCommand>());
+    registry.registerCommand(std::make_unique<DeleteSelectionContentCommand>());
+    registry.registerCommand(std::make_unique<TransformSelectionCommand>());
+    registry.registerCommand(std::make_unique<FlipSelectionHorizontalCommand>());
+    registry.registerCommand(std::make_unique<FlipSelectionVerticalCommand>());
     registry.registerCommand(std::make_unique<ContextualDeleteCommand>());
 }
 

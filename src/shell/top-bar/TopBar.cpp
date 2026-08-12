@@ -718,7 +718,38 @@ void TopBar::setupEditMenu()
     m_editItems.append(commandMenuItem(tr("Copy"), QStringLiteral("edit.copy")));
     m_editItems.append(commandMenuItem(tr("Paste"), QStringLiteral("edit.paste")));
     m_editItems.append(MenuItem::Separator());
+    // Placeholder: editItemsWithEnabledState() swaps it for a freshly built one
+    // so the submenu's per-command enabled state is current on every open.
+    m_editItems.append(buildSelectionMenuItem());
+    m_editItems.append(MenuItem::Separator());
     m_editItems.append(commandMenuItem(tr("Preferences..."), QStringLiteral("nav.settings")));
+}
+
+MenuItem TopBar::buildSelectionMenuItem() const
+{
+    const auto& executor = ruwa::core::CommandExecutor::instance();
+    const auto entry = [&executor](const QString& text, const QString& commandId) {
+        MenuItem item = commandMenuItem(text, commandId);
+        item.enabled = executor.canExecute(commandId);
+        return item;
+    };
+
+    MenuItem selectionItem;
+    selectionItem.text = tr("Selection");
+    selectionItem.enabled = isInWorkspace();
+    selectionItem.submenu = {
+        entry(tr("Select Layer Content"), QStringLiteral("selection.selectLayerContent")),
+        entry(tr("Select Layer Mask"), QStringLiteral("selection.selectLayerMask")),
+        entry(tr("Deselect"), QStringLiteral("selection.deselect")),
+        MenuItem::Separator(),
+        entry(tr("Fill"), QStringLiteral("selection.fill")),
+        entry(tr("Delete Content"), QStringLiteral("selection.deleteContent")),
+        MenuItem::Separator(),
+        entry(tr("Transform Selection"), QStringLiteral("selection.transform")),
+        entry(tr("Flip Horizontal"), QStringLiteral("selection.flipHorizontal")),
+        entry(tr("Flip Vertical"), QStringLiteral("selection.flipVertical")),
+    };
+    return selectionItem;
 }
 
 void TopBar::setupViewMenu()
@@ -1214,21 +1245,26 @@ QList<MenuItem> TopBar::fileItemsWithEnabledState() const
 
 QList<MenuItem> TopBar::editItemsWithEnabledState() const
 {
+    // Keyed by command id rather than by index: inserting a menu entry used to
+    // silently shift the hardcoded indices and grey out the wrong items.
+    static const QStringList kWorkspaceOnlyIds { QStringLiteral("edit.undo"),
+        QStringLiteral("edit.redo"), QStringLiteral("edit.cut"), QStringLiteral("edit.copy"),
+        QStringLiteral("edit.paste") };
+
     QList<MenuItem> items = m_editItems;
     const bool inWorkspace = isInWorkspace();
-    // Indices: 0=Undo, 1=Redo, 2=sep, 3=Cut, 4=Copy, 5=Paste, 6=sep, 7=Preferences
-    if (inWorkspace)
-        return items;
-    if (items.size() > 5)
-        items[5].enabled = false; // Paste
-    if (items.size() > 4)
-        items[4].enabled = false; // Copy
-    if (items.size() > 3)
-        items[3].enabled = false; // Cut
-    if (items.size() > 1)
-        items[1].enabled = false; // Redo
-    if (items.size() > 0)
-        items[0].enabled = false; // Undo
+    for (MenuItem& item : items) {
+        if (item.separator) {
+            continue;
+        }
+        if (item.hasSubmenu()) {
+            item = buildSelectionMenuItem();
+            continue;
+        }
+        if (kWorkspaceOnlyIds.contains(item.commandId)) {
+            item.enabled = inWorkspace;
+        }
+    }
     return items;
 }
 

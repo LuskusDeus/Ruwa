@@ -2187,6 +2187,29 @@ void CanvasPanel::selectLayerMaskContent(const ruwa::core::layers::LayerId& id)
     updateSelectionActionPopup(true);
 }
 
+void CanvasPanel::selectActiveLayerContent()
+{
+    if (m_layerModel) {
+        selectLayerContent(m_layerModel->selectedLayerId());
+    }
+}
+
+void CanvasPanel::selectActiveLayerMaskContent()
+{
+    if (m_layerModel) {
+        selectLayerMaskContent(m_layerModel->selectedLayerId());
+    }
+}
+
+bool CanvasPanel::selectedLayerHasMask() const
+{
+    if (!m_layerModel) {
+        return false;
+    }
+    const auto* layer = m_layerModel->layerById(m_layerModel->selectedLayerId());
+    return layer && layer->hasMask();
+}
+
 bool CanvasPanel::startTextLayerEditing(const ruwa::core::layers::LayerId& id)
 {
     if (!m_layerModel || !m_textEditingController || id.isNull()) {
@@ -2405,6 +2428,29 @@ bool CanvasPanel::deleteSelectionContent()
     }
     updateSelectionActionPopup(true);
     return cleared;
+}
+
+bool CanvasPanel::hasActiveSelection() const
+{
+    return m_glWidget && m_glWidget->hasSelectionMask();
+}
+
+bool CanvasPanel::flipSelectionContentHorizontally()
+{
+    if (!m_glWidget || !m_glWidget->flipSelectionHorizontally()) {
+        return false;
+    }
+    updateSelectionActionPopup();
+    return true;
+}
+
+bool CanvasPanel::flipSelectionContentVertically()
+{
+    if (!m_glWidget || !m_glWidget->flipSelectionVertically()) {
+        return false;
+    }
+    updateSelectionActionPopup();
+    return true;
 }
 
 bool CanvasPanel::copySelectionPixels()
