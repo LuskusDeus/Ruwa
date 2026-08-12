@@ -347,12 +347,21 @@ void ProgressHandleSlider::paintEvent(QPaintEvent* event)
                 textOnEmpty, colors.textMuted, 0.15 * (1.0 - m_hoverProgress));
         }
 
-        // Draw the empty-track text first, then overlay the selected range in primary colors.
-        p.setPen(textOnEmpty);
-        p.drawText(textRect, Qt::AlignRight | Qt::AlignVCenter, text);
+        // The two passes must not share pixels. Overlaying the filled ink on top
+        // of an already painted empty-track glyph leaves every antialiased edge
+        // blended halfway between the two inks -- and at 8px a thin face has no
+        // fully covered pixel at all, so the whole label washes out to a mid-tone.
+        // Complementary clips keep each glyph edge blending with the track only.
+        const QRect filled = progress.toRect();
 
         p.save();
-        p.setClipRect(progress);
+        p.setClipRegion(QRegion(rect()) - QRegion(filled));
+        p.setPen(textOnEmpty);
+        p.drawText(textRect, Qt::AlignRight | Qt::AlignVCenter, text);
+        p.restore();
+
+        p.save();
+        p.setClipRect(filled);
         p.setPen(textOnFilled);
         p.drawText(textRect, Qt::AlignRight | Qt::AlignVCenter, text);
         p.restore();
