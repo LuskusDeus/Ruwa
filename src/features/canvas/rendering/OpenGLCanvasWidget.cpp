@@ -6285,6 +6285,65 @@ bool OpenGLCanvasWidget::flipSelectionVertically()
     return startAnimatedSelectionFlip(false, true);
 }
 
+bool OpenGLCanvasWidget::canFlipActiveTransform() const
+{
+    return m_transformController.isActive() && !m_transformController.isDragging()
+        && !m_moveOnlyTransform && !m_autoApplyingTransform
+        && m_transformController.canAnimateFlip();
+}
+
+bool OpenGLCanvasWidget::flipActiveTransformHorizontally()
+{
+    return flipActiveTransform(true, false);
+}
+
+bool OpenGLCanvasWidget::flipActiveTransformVertically()
+{
+    return flipActiveTransform(false, true);
+}
+
+bool OpenGLCanvasWidget::flipActiveTransform(bool flipHorizontal, bool flipVertical)
+{
+    if ((!flipHorizontal && !flipVertical) || !canFlipActiveTransform()) {
+        return false;
+    }
+
+    const TransformState before = m_transformController.state();
+    const TransformInteractionMode mode = m_transformController.interactionMode();
+
+    bool started = false;
+    if (flipHorizontal) {
+        started = m_transformController.animateFlipHorizontal() || started;
+    }
+    if (flipVertical) {
+        started = m_transformController.animateFlipVertical() || started;
+    }
+    if (!started) {
+        return false;
+    }
+
+    // Record the flip as its own undo step, but build the command by hand rather
+    // than going through begin/commitTransformUndoStep: committing finalizes the
+    // pending animation, which would snap the mirror into place instead of
+    // playing it. The endpoint is already known, so undo/redo jump between the
+    // two states while the eased flip keeps running on screen.
+    if (m_transformUndoManager) {
+        TransformState after = before;
+        after.scale = m_transformController.animatedTargetScale();
+        if (!transformStatesNearlyEqual(before, after)) {
+            m_transformUndoManager->push(std::make_unique<TransformSessionCommand>(
+                &m_transformController, before, mode, after, mode,
+                [this]() { onTransformUndoStateRestored(); }));
+        }
+    }
+
+    m_prevTransformDirtyValid = false;
+    invalidateTransformViewportPreviewTransform();
+    m_canvas.dirtyManager().onStructureChanged();
+    requestRender();
+    return true;
+}
+
 bool OpenGLCanvasWidget::startAnimatedSelectionFlip(bool flipHorizontal, bool flipVertical)
 {
     if (!flipHorizontal && !flipVertical)

@@ -18,6 +18,10 @@ namespace ruwa::ui::widgets {
  * optional \c enabled (bool, default true).
  *
  * Separator: \c QVariantMap with \c separator = true (no \c id; row is non-clickable).
+ *
+ * Context key \c simpleIconActions adds one trailing row of icon-only buttons sharing the row
+ * width: \c QVariantMap with \c id (int), \c standardIcon (int, \c IconProvider::StandardIcon),
+ * optional \c tooltip (QString), optional \c enabled (bool, default true).
  */
 class SimpleActionsContextMenu : public StandardContextMenu {
     Q_OBJECT

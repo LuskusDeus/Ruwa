@@ -341,6 +341,13 @@ public:
     bool flipSelectionHorizontally();
     bool flipSelectionVertically();
 
+    /// Mirror the content of the running transform session in place (the same
+    /// eased flip the selection popup plays, minus the auto-confirm): the
+    /// session stays open so the flip can be combined with further edits.
+    bool canFlipActiveTransform() const;
+    bool flipActiveTransformHorizontally();
+    bool flipActiveTransformVertically();
+
     /// Fill tool: flood fill at (worldX, worldY) with brush color. Returns true if pixels were
     /// filled.
     bool performFill(int worldX, int worldY);
@@ -558,6 +565,7 @@ private:
     TileGrid* activeLayerTileGrid() const;
     ruwa::core::layers::LayerData* activeLayer() const;
     bool startAnimatedSelectionFlip(bool flipHorizontal, bool flipVertical);
+    bool flipActiveTransform(bool flipHorizontal, bool flipVertical);
 
     // Update tile position index after brush stroke
     void updateTileIndex(const ruwa::core::layers::LayerData* layer,

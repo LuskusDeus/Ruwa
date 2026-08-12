@@ -1091,6 +1091,12 @@ void CanvasPanel::onSimpleContextAction(int actionId)
     case TransformActionModeDeform:
         m_glWidget->setTransformInteractionMode(aether::TransformInteractionMode::Deform);
         break;
+    case TransformActionFlipHorizontal:
+        m_glWidget->flipActiveTransformHorizontally();
+        break;
+    case TransformActionFlipVertical:
+        m_glWidget->flipActiveTransformVertically();
+        break;
     default:
         break;
     }

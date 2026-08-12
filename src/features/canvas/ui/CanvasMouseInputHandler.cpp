@@ -18,6 +18,7 @@
 #include "features/brush/ui/BrushSizeCurve.h"
 #include "features/canvas/ui/CanvasCursorManager.h"
 #include "features/canvas/ui/CanvasPositionPickerOverlay.h"
+#include "shared/resources/IconProvider.h"
 #include "shared/tiles/TileBrush.h"
 #include "shell/context-menu/ContextMenuSystem.h"
 #include "services/input/StylusDebugService.h"
@@ -447,8 +448,36 @@ bool CanvasMouseInputHandler::handleMousePress(QMouseEvent* event)
                     currentMode != aether::TransformInteractionMode::Deform);
                 actions.push_back(deformAction);
 
+                // Mirroring shares the eased flip the selection popup plays, so it
+                // rides along here as an icon-only pair under a separator.
+                const bool canFlip = gl->canFlipActiveTransform();
+                QVariantMap separator;
+                separator.insert(QStringLiteral("separator"), true);
+                actions.push_back(separator);
+
+                QVariantList iconActions;
+                QVariantMap flipHorizontalAction;
+                flipHorizontalAction.insert(QStringLiteral("id"),
+                    static_cast<int>(CanvasPanel::TransformActionFlipHorizontal));
+                flipHorizontalAction.insert(QStringLiteral("standardIcon"),
+                    static_cast<int>(ruwa::ui::core::IconProvider::StandardIcon::FlipHorizontal));
+                flipHorizontalAction.insert(
+                    QStringLiteral("tooltip"), QObject::tr("Flip horizontally"));
+                flipHorizontalAction.insert(QStringLiteral("enabled"), canFlip);
+                iconActions.push_back(flipHorizontalAction);
+
+                QVariantMap flipVerticalAction;
+                flipVerticalAction.insert(QStringLiteral("id"),
+                    static_cast<int>(CanvasPanel::TransformActionFlipVertical));
+                flipVerticalAction.insert(QStringLiteral("standardIcon"),
+                    static_cast<int>(ruwa::ui::core::IconProvider::StandardIcon::FlipVertical));
+                flipVerticalAction.insert(QStringLiteral("tooltip"), QObject::tr("Flip vertically"));
+                flipVerticalAction.insert(QStringLiteral("enabled"), canFlip);
+                iconActions.push_back(flipVerticalAction);
+
                 QVariantMap context;
                 context.insert(QStringLiteral("simpleActions"), actions);
+                context.insert(QStringLiteral("simpleIconActions"), iconActions);
                 ruwa::ui::widgets::ContextMenuSystem::instance().showContextMenu(
                     ruwa::ui::widgets::ContextMenuType::SimpleActions,
                     event->globalPosition().toPoint(), context, m_panel);

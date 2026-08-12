@@ -3,9 +3,12 @@
 #include "SimpleActionsContextMenu.h"
 
 #include "shared/resources/IconProvider.h"
+#include "shared/style/WidgetStyle.h"
 #include "shared/widgets/BaseStyledWidget.h"
 #include "features/theme/manager/ThemeManager.h"
 
+#include <QHBoxLayout>
+#include <QIcon>
 #include <QLatin1String>
 #include <QMouseEvent>
 #include <QPainter>
@@ -21,6 +24,7 @@ namespace ruwa::ui::widgets {
 namespace {
 constexpr auto kKeySimpleActions = "simpleActions";
 constexpr auto kKeySimpleColorActions = "simpleColorActions";
+constexpr auto kKeySimpleIconActions = "simpleIconActions";
 constexpr auto kKeyChecked = "checked";
 constexpr auto kKeyStandardIcon = "standardIcon";
 constexpr auto kKeyColorRgba = "colorRgba";
@@ -51,6 +55,41 @@ protected:
         painter.drawLine(marginH, y, qMax(marginH + 1, width() - marginH), y);
     }
 };
+
+/// Icon-only sibling of StandardContextMenu::addStandardMenuActionRow: same hover
+/// pill and icon metrics, but the icon is centred and the button shares the row
+/// width with its neighbours instead of running the full menu width.
+BaseStyledWidget* createIconActionButton(const QIcon& icon, QWidget* parent)
+{
+    using namespace ruwa::ui::core;
+
+    auto style = WidgetStyle::defaultButtonStyle();
+    style.name = QStringLiteral("SimpleContextMenuIconAction");
+    style.metrics.fixedHeight = true;
+    style.metrics.fixedWidth = false;
+    style.metrics.baseHeight = 30;
+    style.metrics.baseCornerRadius = 4;
+    style.background.color = ColorSource::Transparent;
+    style.border.enabled = false;
+    style.activeBackground.enabled = false;
+    style.activeBorder.enabled = false;
+    style.hover.enabled = true;
+    style.hover.color = ColorSource::OverlayHover;
+    style.hover.maxOpacity = 1.0;
+    style.press.enabled = true;
+    style.press.color = ColorSource::OverlayHover;
+    style.content.iconPosition = IconPosition::Center;
+    style.content.baseIconSize = 16;
+    style.content.basePadding = { 0, 0, 0, 0 };
+    style.content.colorizeIcon = true;
+    style.content.textColor = ColorSource::Text;
+    style.content.textHoverColor = style.content.textColor;
+    style.content.textActiveColor = style.content.textColor;
+
+    auto* button = new BaseStyledWidget(style, parent);
+    button->setIcon(icon);
+    return button;
+}
 
 struct SimpleMenuColorAction {
     int actionId = 0;
@@ -298,8 +337,9 @@ QSize SimpleActionsContextMenu::expandMenuContentHint(const QSize& hint) const
     // height from action count and the optional color strip.
     const QVariantList list = context().value(QLatin1String(kKeySimpleActions)).toList();
     const QVariantList colorList = context().value(QLatin1String(kKeySimpleColorActions)).toList();
+    const QVariantList iconList = context().value(QLatin1String(kKeySimpleIconActions)).toList();
     int minH = 0;
-    if (!list.isEmpty() || !colorList.isEmpty()) {
+    if (!list.isEmpty() || !colorList.isEmpty() || !iconList.isEmpty()) {
         const int rowH = theme.scaled(30);
         const int sepH = theme.scaled(9);
         const int vmargins = theme.scaled(6) + theme.scaled(6);
@@ -316,8 +356,13 @@ QSize SimpleActionsContextMenu::expandMenuContentHint(const QSize& hint) const
             }
         }
 
+        if (!iconList.isEmpty()) {
+            ++widgetCount;
+            contentH += rowH;
+        }
+
         if (!colorList.isEmpty()) {
-            if (!list.isEmpty()) {
+            if (!list.isEmpty() || !iconList.isEmpty()) {
                 ++widgetCount;
                 contentH += sepH;
             }
@@ -385,9 +430,43 @@ void SimpleActionsContextMenu::rebuildStandardMenu()
         }
     }
 
+    const QVariantList iconList = context().value(QLatin1String(kKeySimpleIconActions)).toList();
+    if (!iconList.isEmpty()) {
+        auto* row = new QWidget(m_actionLayout->parentWidget());
+        row->setAttribute(Qt::WA_TranslucentBackground);
+        auto* rowLayout = new QHBoxLayout(row);
+        rowLayout->setContentsMargins(0, 0, 0, 0);
+        rowLayout->setSpacing(ruwa::ui::core::ThemeManager::instance().scaled(2));
+
+        for (const QVariant& v : iconList) {
+            const QVariantMap m = v.toMap();
+            const int actionId = m.value(QStringLiteral("id")).toInt();
+            QIcon icon;
+            if (m.contains(QLatin1String(kKeyStandardIcon))) {
+                const int ei = m.value(QLatin1String(kKeyStandardIcon)).toInt();
+                icon = icons.getIcon(static_cast<ruwa::ui::core::IconProvider::StandardIcon>(ei));
+            }
+
+            BaseStyledWidget* button = createIconActionButton(icon, row);
+            button->setToolTip(m.value(QStringLiteral("tooltip")).toString());
+            const bool enabled = m.value(QStringLiteral("enabled"), true).toBool();
+            button->setEnabled(enabled);
+            if (enabled) {
+                connect(button, &BaseStyledWidget::clicked, this, [this, actionId]() {
+                    hide();
+                    deleteLater();
+                    emit actionTriggered(actionId);
+                });
+            }
+            rowLayout->addWidget(button, 1);
+        }
+
+        m_actionLayout->addWidget(row);
+    }
+
     const QVariantList colorList = context().value(QLatin1String(kKeySimpleColorActions)).toList();
     if (!colorList.isEmpty()) {
-        if (!list.isEmpty()) {
+        if (!list.isEmpty() || !iconList.isEmpty()) {
             m_actionLayout->addWidget(new SimpleMenuSeparatorLine(m_actionLayout->parentWidget()));
         }
 

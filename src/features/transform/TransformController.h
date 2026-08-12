@@ -789,6 +789,20 @@ public:
 
     bool hasSnapSession() const { return m_snapSession != nullptr; }
 
+    /// Mirroring is a scale sign flip, which only exists while the transform is
+    /// still a similarity: a free quad or a deform mesh has no scale to negate.
+    bool canAnimateFlip() const
+    {
+        return m_active && !m_state.hasFreeQuad() && !m_state.hasDeformMesh();
+    }
+
+    /// Endpoint of a running flip/scale animation (the live scale when idle), so
+    /// callers can record the outcome without cutting the animation short.
+    Vector2 animatedTargetScale() const
+    {
+        return m_scaleAnimationActive ? m_targetScale : m_state.scale;
+    }
+
     bool animateFlipHorizontal()
     {
         if (!m_active || m_state.hasFreeQuad() || m_state.hasDeformMesh())

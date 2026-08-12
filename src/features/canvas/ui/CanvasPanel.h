@@ -109,7 +109,12 @@ class CanvasPanel : public ruwa::ui::docking::DockPanel, public CanvasInputHost 
 public:
     using PersistedToolState = CanvasPersistedToolState;
 
-    enum TransformContextActionId { TransformActionModeClassic = 1, TransformActionModeDeform = 2 };
+    enum TransformContextActionId {
+        TransformActionModeClassic = 1,
+        TransformActionModeDeform = 2,
+        TransformActionFlipHorizontal = 3,
+        TransformActionFlipVertical = 4,
+    };
 
     explicit CanvasPanel(
         const QSize& canvasSize, const QRect& exportFrame = QRect(), QWidget* parent = nullptr);
