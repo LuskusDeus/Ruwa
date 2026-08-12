@@ -8,6 +8,7 @@
 #include "features/theme/manager/ThemeColors.h"
 #include "shared/resources/IconProvider.h"
 #include "shared/style/PaintingUtils.h"
+#include "shared/widgets/ShortcutKeycapRenderer.h"
 
 #include <QVBoxLayout>
 #include <QFontMetrics>
@@ -24,6 +25,7 @@
 #include <QTimer>
 #include <QDateTime>
 #include <QCursor>
+#include <QtMath>
 namespace ruwa::ui::widgets {
 
 namespace {
@@ -97,10 +99,9 @@ int menuItemReservedRightPx(const MenuItem& item, const QFont& baseFont)
     }
     const QString shortcutText = menuItemShortcutText(item);
     if (!shortcutText.isEmpty()) {
-        QFont shortcutFont = baseFont;
-        shortcutFont.setPointSize(8);
-        const int sw = QFontMetrics(shortcutFont).horizontalAdvance(shortcutText);
-        reservedRight = qMax(reservedRight, sw + 24);
+        const QSizeF shortcutSize = ShortcutKeycapRenderer::contentSize(
+            shortcutText, ShortcutKeycapRenderer::SizeVariant::Compact);
+        reservedRight = qMax(reservedRight, qCeil(shortcutSize.width()) + 24);
     }
     return reservedRight;
 }
@@ -222,15 +223,11 @@ void MenuItemWidget::paintEvent(QPaintEvent* event)
     const QString shortcutText = menuItemShortcutText(m_item);
     if (!shortcutText.isEmpty()) {
         QColor shortcutColor = m_item.enabled ? colors.textMuted : colors.textDisabled();
-        painter.setPen(shortcutColor);
-
-        QFont shortcutFont = font();
-        shortcutFont.setPointSize(8);
-        painter.setFont(shortcutFont);
-
         const int shortcutBlockW = reservedRight - rightMargin;
         QRect shortcutRect(width() - reservedRight, 0, qMax(1, shortcutBlockW), height());
-        painter.drawText(shortcutRect, Qt::AlignRight | Qt::AlignVCenter, shortcutText);
+        ShortcutKeycapRenderer::paint(painter, shortcutRect, shortcutText,
+            Qt::AlignRight | Qt::AlignVCenter, ShortcutKeycapRenderer::SizeVariant::Compact,
+            shortcutColor, m_isHovered && m_item.enabled);
     }
 }
 

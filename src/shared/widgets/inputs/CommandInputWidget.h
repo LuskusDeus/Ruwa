@@ -8,7 +8,6 @@
 
 #include <QKeySequence>
 #include <QRectF>
-#include <QStringList>
 
 class QObject;
 class QEvent;
@@ -68,8 +67,6 @@ private:
     void startRecording();
     void stopRecording();
     void updateDisplayedShortcut();
-    QStringList displayedKeyParts() const;
-    QStringList currentParts() const;
     qreal naturalContentWidth() const;
     QRectF keyGroupRect(const QRectF& rect) const;
     bool eventFilter(QObject* watched, QEvent* event) override;

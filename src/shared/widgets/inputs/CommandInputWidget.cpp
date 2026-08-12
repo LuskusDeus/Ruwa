@@ -3,19 +3,15 @@
 // CommandInputWidget.cpp
 #include "CommandInputWidget.h"
 #include "commands/ShortcutManager.h"
-#include "features/theme/manager/ThemeColors.h"
 #include "features/theme/manager/ThemeManager.h"
-#include "shared/style/PaintingUtils.h"
-#include "shared/style/WidgetStyleManager.h"
+#include "shared/widgets/ShortcutKeycapRenderer.h"
 
 #include <QApplication>
 #include <QCoreApplication>
 #include <QCursor>
-#include <QKeyCombination>
 #include <QKeyEvent>
 #include <QMouseEvent>
 #include <QPainter>
-#include <QVector>
 
 namespace ruwa::ui::widgets {
 
@@ -28,15 +24,6 @@ const int BASE_MIN_WIDTH_COMPACT = 100;
 const int BASE_HEIGHT_COMPACT = 28;
 const int BASE_OUTER_RADIUS = 9;
 const int BASE_OUTER_PADDING_H = 8;
-const int BASE_KEYCAP_PADDING_H = 10;
-const int BASE_KEYCAP_PADDING_H_COMPACT = 8;
-const int BASE_KEYCAP_HEIGHT = 28;
-const int BASE_KEYCAP_HEIGHT_COMPACT = 23;
-const int BASE_KEYCAP_RADIUS = 6;
-const int BASE_KEYCAP_DEPTH = 4;
-const int BASE_KEYCAP_DEPTH_COMPACT = 3;
-const int BASE_PLUS_GAP = 5;
-const int BASE_PLUS_FONT_SIZE = 8;
 const int BASE_HOVER_PADDING_V = 5;
 
 } // namespace
@@ -115,98 +102,18 @@ void CommandInputWidget::updateDisplayedShortcut()
     update();
 }
 
-QStringList CommandInputWidget::displayedKeyParts() const
-{
-    if (m_keySequence.isEmpty()) {
-        return {};
-    }
-
-    const QKeyCombination combination = m_keySequence[0];
-    const Qt::KeyboardModifiers modifiers = combination.keyboardModifiers();
-    const Qt::Key key = combination.key();
-
-    QStringList parts;
-    if (modifiers.testFlag(Qt::ControlModifier)) {
-        parts << QStringLiteral("Ctrl");
-    }
-    if (modifiers.testFlag(Qt::ShiftModifier)) {
-        parts << QStringLiteral("Shift");
-    }
-    if (modifiers.testFlag(Qt::AltModifier)) {
-        parts << QStringLiteral("Alt");
-    }
-    if (modifiers.testFlag(Qt::MetaModifier)) {
-        parts << QStringLiteral("Meta");
-    }
-
-    if (key != Qt::Key_unknown && key != Qt::Key_Control && key != Qt::Key_Shift
-        && key != Qt::Key_Alt && key != Qt::Key_Meta) {
-        QString keyText = QKeySequence(int(key)).toString(QKeySequence::NativeText).trimmed();
-        if (keyText.isEmpty()) {
-            keyText = QKeySequence(int(key)).toString(QKeySequence::PortableText).trimmed();
-        }
-        if (!keyText.isEmpty()) {
-            parts << keyText;
-        }
-    }
-
-    if (!parts.isEmpty()) {
-        return parts;
-    }
-
-    const QString fallbackText = m_keySequence.toString(QKeySequence::NativeText).trimmed();
-    if (fallbackText.isEmpty()) {
-        return {};
-    }
-    return { fallbackText };
-}
-
-QStringList CommandInputWidget::currentParts() const
-{
-    if (m_recording) {
-        return { tr("Press shortcut...") };
-    }
-    QStringList parts = displayedKeyParts();
-    if (parts.isEmpty()) {
-        parts = { tr("Click to assign") };
-    }
-    return parts;
-}
-
 qreal CommandInputWidget::naturalContentWidth() const
 {
-    auto& theme = ThemeManager::instance();
-    auto& mgr = WidgetStyleManager::instance();
-
-    QFont font = this->font();
-    const int fontSize = (m_sizeVariant == SizeVariant::Compact)
-        ? mgr.scaledFontSize(8)
-        : mgr.scaledFontSize(style().content.baseFontSize);
-    font.setPointSize(fontSize);
-    font.setBold(m_recording);
-
-    const QStringList parts = currentParts();
-
-    const int keycapPaddingH
-        = theme.scaled(m_sizeVariant == SizeVariant::Compact ? BASE_KEYCAP_PADDING_H_COMPACT
-                                                             : BASE_KEYCAP_PADDING_H);
-    const int plusGap = theme.scaled(BASE_PLUS_GAP);
-
-    QFontMetrics fm(font);
-    QFont plusFont = font;
-    plusFont.setPointSize(mgr.scaledFontSize(BASE_PLUS_FONT_SIZE));
-    plusFont.setBold(false);
-    QFontMetrics plusFm(plusFont);
-    const int plusWidth = plusFm.horizontalAdvance(QStringLiteral("+"));
-
-    qreal totalWidth = 0.0;
-    for (const QString& part : parts) {
-        totalWidth += fm.horizontalAdvance(part) + keycapPaddingH * 2;
+    const auto sizeVariant = m_sizeVariant == SizeVariant::Compact
+        ? ShortcutKeycapRenderer::SizeVariant::Compact
+        : ShortcutKeycapRenderer::SizeVariant::Regular;
+    if (m_recording) {
+        return ShortcutKeycapRenderer::contentSize(tr("Press shortcut..."), sizeVariant).width();
     }
-    if (parts.size() > 1) {
-        totalWidth += (parts.size() - 1) * (plusWidth + plusGap * 2);
+    if (m_keySequence.isEmpty()) {
+        return ShortcutKeycapRenderer::contentSize(tr("Click to assign"), sizeVariant).width();
     }
-    return totalWidth;
+    return ShortcutKeycapRenderer::contentSize(m_keySequence, sizeVariant).width();
 }
 
 QSize CommandInputWidget::sizeHint() const
@@ -229,68 +136,12 @@ QSize CommandInputWidget::minimumSizeHint() const
 QRectF CommandInputWidget::keyGroupRect(const QRectF& rect) const
 {
     auto& theme = ThemeManager::instance();
-    auto& mgr = WidgetStyleManager::instance();
-
-    QFont font = this->font();
-    const int fontSize = (m_sizeVariant == SizeVariant::Compact)
-        ? mgr.scaledFontSize(8)
-        : mgr.scaledFontSize(style().content.baseFontSize);
-    font.setPointSize(fontSize);
-    font.setBold(m_recording);
-
-    const QStringList parts = currentParts();
-
-    int keycapPaddingH
-        = theme.scaled(m_sizeVariant == SizeVariant::Compact ? BASE_KEYCAP_PADDING_H_COMPACT
-                                                             : BASE_KEYCAP_PADDING_H);
-    const int keycapHeight = theme.scaled(
-        m_sizeVariant == SizeVariant::Compact ? BASE_KEYCAP_HEIGHT_COMPACT : BASE_KEYCAP_HEIGHT);
-    const int plusGap = theme.scaled(BASE_PLUS_GAP);
     const int outerPadding = theme.scaled(BASE_OUTER_PADDING_H);
     const QRectF contentRect = rect.adjusted(outerPadding, 0, -outerPadding, 0);
-
-    QFontMetrics fm(font);
-    QFont plusFont = font;
-    plusFont.setPointSize(mgr.scaledFontSize(BASE_PLUS_FONT_SIZE));
-    plusFont.setBold(false);
-    QFontMetrics plusFm(plusFont);
-    const int plusWidth = plusFm.horizontalAdvance(QStringLiteral("+"));
-
-    qreal totalWidth = 0.0;
-    for (const QString& part : parts) {
-        totalWidth += fm.horizontalAdvance(part) + keycapPaddingH * 2;
-    }
-    if (parts.size() > 1) {
-        totalWidth += (parts.size() - 1) * (plusWidth + plusGap * 2);
-    }
-
-    if (totalWidth > contentRect.width() && totalWidth > 0) {
-        const qreal scale = qBound<qreal>(0.55, contentRect.width() / totalWidth, 1.0);
-        keycapPaddingH = qMax(theme.scaled(4), qRound(keycapPaddingH * scale));
-
-        font.setPointSizeF(qMax<qreal>(6.0, font.pointSizeF() * scale));
-        fm = QFontMetrics(font);
-
-        plusFont.setPointSizeF(qMax<qreal>(6.0, plusFont.pointSizeF() * scale));
-        plusFm = QFontMetrics(plusFont);
-
-        totalWidth = 0.0;
-        for (const QString& part : parts) {
-            totalWidth += fm.horizontalAdvance(part) + keycapPaddingH * 2;
-        }
-        if (parts.size() > 1) {
-            totalWidth += (parts.size() - 1)
-                * (plusFm.horizontalAdvance(QStringLiteral("+")) + plusGap * 2);
-        }
-    }
-
-    qreal x = contentRect.right() - totalWidth;
-    if (x < contentRect.left()) {
-        x = contentRect.left();
-    }
-
-    const qreal y = rect.center().y() - keycapHeight / 2.0;
-    return QRectF(x, y, qMin<qreal>(totalWidth, contentRect.width()), keycapHeight);
+    const QSizeF contentSize(qMin(naturalContentWidth(), contentRect.width()),
+        m_sizeVariant == SizeVariant::Compact ? theme.scaled(21) : theme.scaled(28));
+    return QRectF(contentRect.right() - contentSize.width(),
+        rect.center().y() - contentSize.height() / 2.0, contentSize.width(), contentSize.height());
 }
 
 void CommandInputWidget::startRecording()
@@ -379,7 +230,6 @@ bool CommandInputWidget::eventFilter(QObject* watched, QEvent* event)
 void CommandInputWidget::drawContentLayer(QPainter& painter, const QRectF& rect)
 {
     auto& theme = ThemeManager::instance();
-    auto& mgr = WidgetStyleManager::instance();
     const auto& colors = theme.colors();
 
     QColor textColor = colors.text;
@@ -388,14 +238,6 @@ void CommandInputWidget::drawContentLayer(QPainter& painter, const QRectF& rect)
     } else if (!isEnabled()) {
         textColor = colors.textDisabled();
     }
-
-    QFont font = painter.font();
-    const int fontSize = (m_sizeVariant == SizeVariant::Compact)
-        ? mgr.scaledFontSize(8)
-        : mgr.scaledFontSize(style().content.baseFontSize);
-    font.setPointSize(fontSize);
-    font.setBold(m_recording);
-    painter.setFont(font);
 
     const int outerPadding = theme.scaled(BASE_OUTER_PADDING_H);
     const int hoverPaddingV = theme.scaled(BASE_HOVER_PADDING_V);
@@ -412,111 +254,19 @@ void CommandInputWidget::drawContentLayer(QPainter& painter, const QRectF& rect)
         painter.drawRoundedRect(groupRect.adjusted(0.5, 0.5, -0.5, -0.5), radius, radius);
     }
 
-    QStringList parts;
-    if (m_recording) {
-        parts = { tr("Press shortcut...") };
-    } else {
-        parts = displayedKeyParts();
-        if (parts.isEmpty()) {
-            parts = { tr("Click to assign") };
-            textColor = colors.textMuted;
-        }
-    }
-
-    const int keycapHeight = theme.scaled(
-        m_sizeVariant == SizeVariant::Compact ? BASE_KEYCAP_HEIGHT_COMPACT : BASE_KEYCAP_HEIGHT);
-    int keycapPaddingH
-        = theme.scaled(m_sizeVariant == SizeVariant::Compact ? BASE_KEYCAP_PADDING_H_COMPACT
-                                                             : BASE_KEYCAP_PADDING_H);
-    const int plusGap = theme.scaled(BASE_PLUS_GAP);
-    const qreal keyRadius = theme.scaled(BASE_KEYCAP_RADIUS);
-    const qreal keyDepth = theme.scaled(
-        m_sizeVariant == SizeVariant::Compact ? BASE_KEYCAP_DEPTH_COMPACT : BASE_KEYCAP_DEPTH);
     const QRectF contentRect = rect.adjusted(outerPadding, 0, -outerPadding, 0);
-    const qreal keyY = rect.center().y() - keycapHeight / 2.0;
-
-    QFontMetrics fm(font);
-    QFont plusFont = font;
-    plusFont.setPointSize(mgr.scaledFontSize(BASE_PLUS_FONT_SIZE));
-    plusFont.setBold(false);
-    QFontMetrics plusFm(plusFont);
-    const QString plusText = QStringLiteral("+");
-    const int plusWidth = plusFm.horizontalAdvance(plusText);
-
-    QVector<qreal> widths;
-    qreal totalWidth = 0.0;
-    for (const QString& part : parts) {
-        const qreal w = fm.horizontalAdvance(part) + keycapPaddingH * 2;
-        widths.append(w);
-        totalWidth += w;
-    }
-    if (parts.size() > 1) {
-        totalWidth += (parts.size() - 1) * (plusWidth + plusGap * 2);
-    }
-
-    qreal scale = 1.0;
-    if (totalWidth > contentRect.width() && totalWidth > 0) {
-        scale = qBound<qreal>(0.55, contentRect.width() / totalWidth, 1.0);
-        keycapPaddingH = qMax(theme.scaled(4), qRound(keycapPaddingH * scale));
-        QFont scaledFont = font;
-        scaledFont.setPointSizeF(qMax<qreal>(6.0, font.pointSizeF() * scale));
-        font = scaledFont;
-        painter.setFont(font);
-        fm = QFontMetrics(font);
-
-        QFont scaledPlusFont = plusFont;
-        scaledPlusFont.setPointSizeF(qMax<qreal>(6.0, plusFont.pointSizeF() * scale));
-        plusFont = scaledPlusFont;
-        plusFm = QFontMetrics(plusFont);
-        widths.clear();
-        totalWidth = 0.0;
-        for (const QString& part : parts) {
-            const qreal w = fm.horizontalAdvance(part) + keycapPaddingH * 2;
-            widths.append(w);
-            totalWidth += w;
-        }
-        if (parts.size() > 1) {
-            totalWidth += (parts.size() - 1) * (plusFm.horizontalAdvance(plusText) + plusGap * 2);
-        }
-    }
-
-    qreal x = contentRect.right() - totalWidth;
-    if (x < contentRect.left()) {
-        x = contentRect.left();
-    }
-    const qreal keyState = m_recording ? 1.0 : hover;
-    const QColor keyBg = m_recording
-        ? ThemeColors::withAlpha(colors.primary, colors.isDark ? 32 : 44)
-        : ThemeColors::interpolate(
-              colors.overlayBase(), colors.overlayHover(), 0.75 + 0.25 * keyState);
-    QColor keyBorderTop = m_recording ? ThemeColors::withAlpha(colors.primary, 132)
-                                      : ThemeColors::interpolate(colors.borderSubtle(),
-                                            colors.borderSubtleHover(), 0.25 + 0.55 * keyState);
-    QColor keyBorderBottom = keyBorderTop;
-    keyBorderBottom.setAlpha(qRound(keyBorderBottom.alpha() * 0.5));
-    QColor plusColor = ThemeColors::interpolate(keyBorderBottom, keyBorderTop, 0.7);
-    plusColor.setAlpha(qMax(plusColor.alpha(), colors.isDark ? 128 : 112));
-
-    for (int i = 0; i < parts.size(); ++i) {
-        const QRectF keyRect(x, keyY, widths[i], keycapHeight);
-
-        ruwa::ui::painting::drawKeycapFrame(
-            painter, keyRect, keyRadius, keyDepth, keyBg, keyBorderTop, keyBorderBottom);
-
-        painter.setPen(textColor);
-        painter.setFont(font);
-        const QRectF textRect = keyRect.adjusted(0, 0, 0, -keyDepth);
-        painter.drawText(textRect.toRect(), Qt::AlignCenter, parts[i]);
-
-        x += widths[i];
-        if (i < parts.size() - 1) {
-            painter.setFont(plusFont);
-            painter.setPen(plusColor);
-            const QRectF plusRect(
-                x + plusGap, rect.top(), plusFm.horizontalAdvance(plusText), rect.height());
-            painter.drawText(plusRect.toRect(), Qt::AlignCenter, plusText);
-            x += plusFm.horizontalAdvance(plusText) + plusGap * 2;
-        }
+    const auto sizeVariant = m_sizeVariant == SizeVariant::Compact
+        ? ShortcutKeycapRenderer::SizeVariant::Compact
+        : ShortcutKeycapRenderer::SizeVariant::Regular;
+    if (m_recording) {
+        ShortcutKeycapRenderer::paint(painter, contentRect, tr("Press shortcut..."),
+            Qt::AlignRight | Qt::AlignVCenter, sizeVariant, textColor, true);
+    } else if (m_keySequence.isEmpty()) {
+        ShortcutKeycapRenderer::paint(painter, contentRect, tr("Click to assign"),
+            Qt::AlignRight | Qt::AlignVCenter, sizeVariant, colors.textMuted);
+    } else {
+        ShortcutKeycapRenderer::paint(painter, contentRect, m_keySequence,
+            Qt::AlignRight | Qt::AlignVCenter, sizeVariant, textColor, hover > 0.0);
     }
 }
 

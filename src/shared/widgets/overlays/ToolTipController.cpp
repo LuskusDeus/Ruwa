@@ -4,9 +4,9 @@
 #include "shared/widgets/overlays/ToolTipController.h"
 
 #include "commands/ShortcutManager.h"
-#include "features/theme/manager/ThemeColors.h"
 #include "features/theme/manager/ThemeManager.h"
 #include "shared/style/PaintingUtils.h"
+#include "shared/widgets/ShortcutKeycapRenderer.h"
 #include "shared/style/WidgetStyleManager.h"
 
 #include <QAbstractTextDocumentLayout>
@@ -14,10 +14,8 @@
 #include <QEasingCurve>
 #include <QEvent>
 #include <QFont>
-#include <QFontMetricsF>
 #include <QGuiApplication>
 #include <QHelpEvent>
-#include <QKeyCombination>
 #include <QPainter>
 #include <QPalette>
 #include <QScreen>
@@ -26,12 +24,8 @@
 #include <QTimer>
 #include <QToolTip>
 #include <QVariantAnimation>
-#include <QVector>
 #include <QWidget>
 #include <QtMath>
-
-#include <array>
-#include <utility>
 
 namespace ruwa::ui::widgets {
 
@@ -56,12 +50,6 @@ constexpr int kDefaultVisibleDurationMs = 10000;
 constexpr int kMaximumVisibleDurationMs = 30000;
 constexpr int kShortcutGap = 12;
 constexpr int kShortcutRowGap = 7;
-constexpr int kKeyCapHeight = 21;
-constexpr int kKeyCapHorizontalPadding = 6;
-constexpr int kKeyCapMinimumWidth = 21;
-constexpr int kKeyCapSpacing = 3;
-constexpr int kKeyCapRadius = 5;
-constexpr int kKeyCapDepth = 3;
 constexpr auto kShortcutCommandProperty = "ruwaToolTipShortcutCommand";
 constexpr auto kShortcutVisibleProperty = "ruwaToolTipShortcutVisible";
 
@@ -86,25 +74,6 @@ int defaultVisibleDuration(const QString& text)
 {
     const int additionalCharacters = qMax(0, text.size() - 100);
     return qMin(kMaximumVisibleDurationMs, kDefaultVisibleDurationMs + additionalCharacters * 40);
-}
-
-QString nativeKeyText(Qt::Key key)
-{
-    return QKeySequence(QKeyCombination(Qt::NoModifier, key)).toString(QKeySequence::NativeText);
-}
-
-QString nativeModifierText(Qt::KeyboardModifier modifier)
-{
-    const QString sentinelKey = nativeKeyText(Qt::Key_F24);
-    QString text
-        = QKeySequence(QKeyCombination(modifier, Qt::Key_F24)).toString(QKeySequence::NativeText);
-    if (!sentinelKey.isEmpty() && text.endsWith(sentinelKey)) {
-        text.chop(sentinelKey.size());
-    }
-    while (text.endsWith(QLatin1Char('+'))) {
-        text.chop(1);
-    }
-    return text;
 }
 
 } // namespace
@@ -179,9 +148,9 @@ public:
 
         m_document.setTextWidth(-1.0);
         const qreal naturalWidth = qMax<qreal>(1.0, m_document.idealWidth());
-        const qreal shortcutWidth = m_shortcutWidth;
-        const qreal horizontalGap = m_shortcutParts.isEmpty() ? 0.0 : theme.scaled(kShortcutGap);
-        const bool placeShortcutBesideText = !m_shortcutParts.isEmpty()
+        const qreal shortcutWidth = m_shortcutSize.width();
+        const qreal horizontalGap = m_shortcutSize.isEmpty() ? 0.0 : theme.scaled(kShortcutGap);
+        const bool placeShortcutBesideText = !m_shortcutSize.isEmpty()
             && naturalWidth + horizontalGap + shortcutWidth <= maximumTextWidth;
         const qreal textWidth = qBound<qreal>(1.0, naturalWidth,
             placeShortcutBesideText ? maximumTextWidth - horizontalGap - shortcutWidth
@@ -196,15 +165,15 @@ public:
 
         if (placeShortcutBesideText) {
             contentWidth += horizontalGap + shortcutWidth;
-            contentHeight = qMax(contentHeight, m_shortcutHeight);
+            contentHeight = qMax(contentHeight, m_shortcutSize.height());
             m_documentOrigin.setY(
                 m_verticalPadding + (contentHeight - documentSize.height()) * 0.5);
             m_shortcutOrigin = QPointF(m_horizontalPadding + documentSize.width() + horizontalGap,
-                m_verticalPadding + (contentHeight - m_shortcutHeight) * 0.5);
-        } else if (!m_shortcutParts.isEmpty()) {
+                m_verticalPadding + (contentHeight - m_shortcutSize.height()) * 0.5);
+        } else if (!m_shortcutSize.isEmpty()) {
             const qreal verticalGap = theme.scaled(kShortcutRowGap);
             contentWidth = qMax(contentWidth, shortcutWidth);
-            contentHeight += verticalGap + m_shortcutHeight;
+            contentHeight += verticalGap + m_shortcutSize.height();
             m_shortcutOrigin = QPointF(
                 m_horizontalPadding, m_verticalPadding + documentSize.height() + verticalGap);
         }
@@ -338,139 +307,35 @@ protected:
         m_document.documentLayout()->draw(&painter, context);
         painter.restore();
 
-        paintShortcut(painter, colors);
+        paintShortcut(painter);
         painter.restore();
     }
 
 private:
-    struct ShortcutPart {
-        QString text;
-        qreal width = 0.0;
-        bool keyCap = false;
-    };
-
-    void appendShortcutPart(const QString& text, bool keyCap, const QFontMetricsF& metrics)
-    {
-        if (text.isEmpty()) {
-            return;
-        }
-
-        qreal width = metrics.horizontalAdvance(text);
-        if (keyCap) {
-            const auto& theme = ruwa::ui::core::ThemeManager::instance();
-            width = qMax<qreal>(theme.scaled(kKeyCapMinimumWidth),
-                width + theme.scaled(kKeyCapHorizontalPadding) * 2);
-        }
-        m_shortcutParts.append({ text, width, keyCap });
-    }
-
     void prepareShortcut(const QKeySequence& shortcut)
     {
-        const auto& theme = ruwa::ui::core::ThemeManager::instance();
-        const auto& colors = theme.colors();
-
-        m_shortcutParts.clear();
-        m_shortcutFont = colors.fonts.getCodeFont(theme.scaledFontSize(8));
-        m_shortcutFont.setWeight(QFont::DemiBold);
-        const QFontMetricsF metrics(m_shortcutFont);
-        m_shortcutHeight
-            = qMax<qreal>(theme.scaled(kKeyCapHeight), qCeil(metrics.height()) + theme.scaled(6));
-
-        constexpr std::array modifierOrder { Qt::ControlModifier, Qt::AltModifier,
-            Qt::ShiftModifier, Qt::MetaModifier, Qt::KeypadModifier, Qt::GroupSwitchModifier };
-        for (int chordIndex = 0; chordIndex < shortcut.count(); ++chordIndex) {
-            if (chordIndex > 0) {
-                appendShortcutPart(QStringLiteral(","), false, metrics);
-            }
-
-            const QKeyCombination chord = shortcut[chordIndex];
-            bool hasPart = false;
-            const Qt::KeyboardModifiers modifiers = chord.keyboardModifiers();
-            for (const Qt::KeyboardModifier modifier : modifierOrder) {
-                if (!modifiers.testFlag(modifier)) {
-                    continue;
-                }
-                const QString modifierText = nativeModifierText(modifier);
-                if (modifierText.isEmpty()) {
-                    continue;
-                }
-                if (hasPart) {
-                    appendShortcutPart(QStringLiteral("+"), false, metrics);
-                }
-                appendShortcutPart(modifierText, true, metrics);
-                hasPart = true;
-            }
-
-            const QString keyText = nativeKeyText(chord.key());
-            if (!keyText.isEmpty()) {
-                if (hasPart) {
-                    appendShortcutPart(QStringLiteral("+"), false, metrics);
-                }
-                appendShortcutPart(keyText, true, metrics);
-            }
-        }
-
-        m_shortcutWidth = 0.0;
-        const qreal spacing = theme.scaled(kKeyCapSpacing);
-        for (qsizetype i = 0; i < m_shortcutParts.size(); ++i) {
-            if (i > 0) {
-                m_shortcutWidth += spacing;
-            }
-            m_shortcutWidth += m_shortcutParts[i].width;
-        }
+        m_shortcut = shortcut;
+        m_shortcutSize = ShortcutKeycapRenderer::contentSize(
+            shortcut, ShortcutKeycapRenderer::SizeVariant::Compact);
     }
 
-    void paintShortcut(QPainter& painter, const ruwa::ui::core::ThemeColors& colors)
+    void paintShortcut(QPainter& painter)
     {
-        if (m_shortcutParts.isEmpty()) {
+        if (m_shortcutSize.isEmpty()) {
             return;
         }
-
-        const auto& theme = ruwa::ui::core::ThemeManager::instance();
-        painter.save();
-        painter.setFont(m_shortcutFont);
-        painter.translate(m_shortcutOrigin);
-
-        const qreal spacing = theme.scaled(kKeyCapSpacing);
-        const qreal keyDepth = theme.scaled(kKeyCapDepth);
-        const QColor keyFill = ruwa::ui::core::ThemeColors::interpolate(
-            colors.overlayBase(), colors.overlayHover(), 0.75);
-        QColor keyBorderTop = ruwa::ui::core::ThemeColors::interpolate(
-            colors.borderSubtle(), colors.borderSubtleHover(), 0.25);
-        QColor keyBorderBottom = keyBorderTop;
-        keyBorderBottom.setAlpha(qRound(keyBorderBottom.alpha() * 0.5));
-        QColor separatorColor
-            = ruwa::ui::core::ThemeColors::interpolate(keyBorderBottom, keyBorderTop, 0.7);
-        separatorColor.setAlpha(qMax(separatorColor.alpha(), colors.isDark ? 128 : 112));
-        qreal x = 0.0;
-        for (const ShortcutPart& part : std::as_const(m_shortcutParts)) {
-            const QRectF partRect(x, 0.0, part.width, m_shortcutHeight);
-            if (part.keyCap) {
-                ruwa::ui::painting::drawKeycapFrame(painter, partRect, theme.scaled(kKeyCapRadius),
-                    keyDepth, keyFill, keyBorderTop, keyBorderBottom);
-
-                painter.setPen(colors.text);
-                painter.drawText(
-                    partRect.adjusted(0.0, 0.0, 0.0, -keyDepth), Qt::AlignCenter, part.text);
-            } else {
-                painter.setPen(separatorColor);
-                painter.drawText(partRect, Qt::AlignCenter, part.text);
-            }
-            x += part.width + spacing;
-        }
-        painter.restore();
+        ShortcutKeycapRenderer::paint(painter, QRectF(m_shortcutOrigin, m_shortcutSize), m_shortcut,
+            Qt::AlignLeft | Qt::AlignVCenter, ShortcutKeycapRenderer::SizeVariant::Compact);
     }
 
     QTextDocument m_document;
     QVariantAnimation* m_presentationAnimation = nullptr;
     QPixmap m_glassBackdrop;
     QRectF m_panelRect;
-    QVector<ShortcutPart> m_shortcutParts;
-    QFont m_shortcutFont;
+    QKeySequence m_shortcut;
     QPointF m_documentOrigin;
     QPointF m_shortcutOrigin;
-    qreal m_shortcutWidth = 0.0;
-    qreal m_shortcutHeight = 0.0;
+    QSizeF m_shortcutSize;
     qreal m_presentationProgress = 0.0;
     bool m_hiding = false;
     int m_horizontalPadding = 0;

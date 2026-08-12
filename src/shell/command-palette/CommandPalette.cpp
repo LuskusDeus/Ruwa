@@ -13,6 +13,7 @@
 #include "features/theme/manager/ThemeManager.h"
 #include "shared/style/PaintingUtils.h"
 #include "shared/widgets/SmoothScrollbar.h"
+#include "shared/widgets/ShortcutKeycapRenderer.h"
 
 #include <QCoreApplication>
 #include <QEvent>
@@ -1010,30 +1011,12 @@ void CommandPalette::drawItem(QPainter& painter, int index, const QRectF& rect)
         painter.drawText(categoryRect, Qt::AlignLeft | Qt::AlignTop, item.category);
     }
 
-    // Shortcut badge
+    // Shortcut keycaps
     if (!item.shortcut.isEmpty()) {
-        QFont shortcutFont = font();
-        shortcutFont.setPointSize(theme.scaledFontSize(8));
-        painter.setFont(shortcutFont);
-
-        QFontMetrics fm(shortcutFont);
-        int badgeW = fm.horizontalAdvance(item.shortcut) + theme.scaled(12);
-        int badgeH = theme.scaled(22);
-
-        QRectF badgeRect(
-            contentRect.right() - badgeW, contentRect.center().y() - badgeH / 2.0, badgeW, badgeH);
-
-        QColor badgeBg = isSelected
-            ? ThemeColors::withAlpha(colors.primary, qRound(42 * qMax<qreal>(selectionProg, 0.35)))
-            : colors.surfaceAlt;
-
-        painter.setPen(Qt::NoPen);
-        painter.setBrush(badgeBg);
-        painter.drawRoundedRect(badgeRect, theme.scaled(4), theme.scaled(4));
-
         QColor badgeText = isSelected ? colors.text : colors.textMuted;
-        painter.setPen(badgeText);
-        painter.drawText(badgeRect, Qt::AlignCenter, item.shortcut);
+        ShortcutKeycapRenderer::paint(painter, contentRect, item.shortcut,
+            Qt::AlignRight | Qt::AlignVCenter, ShortcutKeycapRenderer::SizeVariant::Compact,
+            badgeText, isSelected && selectionProg > 0.0);
     }
 }
 
