@@ -22,6 +22,7 @@
 
 #include "CanvasPanelHelpers.h"
 #include "features/canvas/CanvasModifierShortcutManager.h"
+#include "features/canvas/overlays/ToolCursorIcons.h"
 #include "features/canvas/ui/CanvasOverlayContextActions.h"
 #include "features/canvas/grid/GridRemap.h"
 #include "shared/resources/IconProvider.h"
@@ -3899,8 +3900,11 @@ void CanvasPanel::updateCursorManagerOverlay()
     const bool useBrush
         = !transformActive && CanvasToolStateController::isDrawInstrument(currentTool);
     const bool useEyedropper = !transformActive && (currentTool == ToolId::Eyedropper);
+    const bool useToolCursor
+        = !transformActive && !aether::toolCursorIconResource(currentTool).isEmpty();
     m_cursorManager->setUseGLBrushCursor(useBrush);
     m_cursorManager->setUseGLEyedropperCursor(useEyedropper);
+    m_cursorManager->setUseGLToolCursor(useToolCursor);
     m_cursorManager->setActiveOverlay(nullptr);
 
     if (!transformActive) {
@@ -3911,6 +3915,9 @@ void CanvasPanel::updateCursorManagerOverlay()
     }
     if (!useEyedropper && m_glWidget) {
         m_glWidget->setEyedropperCursorState(false, 0, 0);
+    }
+    if (!useToolCursor && m_glWidget) {
+        m_glWidget->setToolCursorState(false, 0, 0);
     }
     m_cursorManager->refreshCursorPosition();
 }
@@ -3950,12 +3957,13 @@ void CanvasPanel::updateToolCursor()
         }
         return;
     }
-    if (currentTool == ToolId::Move) {
+    // Tools with a GL pointer cursor (move, fill, magic wand, lasso) must not
+    // request a system cursor: a requested cursor suppresses the GL overlay.
+    if (!aether::toolCursorIconResource(currentTool).isEmpty()
+        && !(m_glWidget && m_glWidget->isTransformActive())) {
         if (m_cursorManager) {
-            m_cursorManager->setRequestedCursor(Qt::SizeAllCursor);
+            m_cursorManager->clearRequestedCursor();
             m_cursorManager->refreshCursorPosition();
-        } else {
-            setCursor(Qt::SizeAllCursor);
         }
         return;
     }

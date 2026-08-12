@@ -427,6 +427,11 @@ public:
     void setEyedropperCursorState(bool visible, float centerX, float centerY,
         const QColor& selectedColor = QColor(0, 0, 0, 255));
 
+    /// Tool cursor (GL-rendered pointer arrow plus a tool badge, both inverted).
+    /// @param toolIconResource QRC path of the badge icon, e.g. ":/icons/Move".
+    void setToolCursorState(
+        bool visible, float centerX, float centerY, const QString& toolIconResource = QString());
+
     /// Sample color from the rendered scene texture at world position (what the user sees).
     /// Returns true if sampling succeeded and out is filled; false if scene FBO unavailable.
     bool sampleColorFromScene(float worldX, float worldY, QColor& out);

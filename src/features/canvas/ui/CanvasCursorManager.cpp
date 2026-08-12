@@ -223,6 +223,16 @@ void CanvasCursorManager::setEyedropperCursorCallback(EyedropperCursorCallback c
     m_eyedropperCursorCallback = std::move(callback);
 }
 
+void CanvasCursorManager::setUseGLToolCursor(bool use)
+{
+    m_useGLToolCursor = use;
+}
+
+void CanvasCursorManager::setToolCursorCallback(ToolCursorCallback callback)
+{
+    m_toolCursorCallback = std::move(callback);
+}
+
 void CanvasCursorManager::setActiveOverlay(QWidget* overlay)
 {
     if (m_activeOverlay == overlay) {
@@ -255,6 +265,9 @@ void CanvasCursorManager::setSuppressed(bool suppressed)
         if (m_eyedropperCursorCallback) {
             m_eyedropperCursorCallback(std::nullopt);
         }
+        if (m_toolCursorCallback) {
+            m_toolCursorCallback(std::nullopt);
+        }
         m_wasOverCanvas = false;
         applyOverlayState(false);
     }
@@ -268,6 +281,9 @@ void CanvasCursorManager::updateCursorPosition(const QPoint& globalPos)
         }
         if (m_eyedropperCursorCallback) {
             m_eyedropperCursorCallback(std::nullopt);
+        }
+        if (m_toolCursorCallback) {
+            m_toolCursorCallback(std::nullopt);
         }
         m_wasOverCanvas = false;
         applyOverlayState(false);
@@ -300,6 +316,9 @@ void CanvasCursorManager::updateCursorPosition(const QPoint& globalPos)
     if (m_useGLEyedropperCursor && m_eyedropperCursorCallback) {
         m_eyedropperCursorCallback(
             showToolOverlay ? std::optional<QPoint>(globalPos) : std::nullopt);
+    }
+    if (m_useGLToolCursor && m_toolCursorCallback) {
+        m_toolCursorCallback(showToolOverlay ? std::optional<QPoint>(globalPos) : std::nullopt);
     }
 
     m_wasOverCanvas = overCanvas;
@@ -424,7 +443,7 @@ void CanvasCursorManager::applyOverlayState(bool overCanvas)
         if (m_activeOverlay) {
             m_activeOverlay->hide();
         }
-    } else if (overCanvas && (m_useGLBrushCursor || m_useGLEyedropperCursor)) {
+    } else if (overCanvas && (m_useGLBrushCursor || m_useGLEyedropperCursor || m_useGLToolCursor)) {
         applyCursor(QCursor(Qt::BlankCursor));
         if (m_activeOverlay) {
             m_activeOverlay->hide();

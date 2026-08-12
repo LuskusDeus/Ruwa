@@ -75,6 +75,14 @@ public:
     using EyedropperCursorCallback = std::function<void(const std::optional<QPoint>& globalPos)>;
     void setEyedropperCursorCallback(EyedropperCursorCallback callback);
 
+    /// When true, use the GL-rendered tool cursor (pointer arrow + tool badge).
+    void setUseGLToolCursor(bool use);
+
+    /// Callback for the GL tool cursor. Contains the global position when the
+    /// cursor should be visible; std::nullopt means that it should be hidden.
+    using ToolCursorCallback = std::function<void(const std::optional<QPoint>& globalPos)>;
+    void setToolCursorCallback(ToolCursorCallback callback);
+
     /// Call from parent's mouseMoveEvent to update overlay position and visibility.
     void updateCursorPosition(const QPoint& globalPos);
 
@@ -129,6 +137,8 @@ private:
     BrushCursorCallback m_brushCursorCallback;
     bool m_useGLEyedropperCursor = false;
     EyedropperCursorCallback m_eyedropperCursorCallback;
+    bool m_useGLToolCursor = false;
+    ToolCursorCallback m_toolCursorCallback;
     bool m_suppressed = false;
     bool m_overlayDragActive
         = false; ///< An on-canvas overlay widget is being dragged (laggy follow).

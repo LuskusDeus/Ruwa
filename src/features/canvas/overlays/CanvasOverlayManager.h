@@ -18,6 +18,7 @@ class TransformOverlay;
 class CanvasResizeOverlayGL;
 class BrushCursorOverlayGL;
 class EyedropperCursorOverlayGL;
+class ToolCursorOverlayGL;
 class LassoOverlay;
 class LassoFillOverlay;
 class TextEditOverlayGL;
@@ -26,7 +27,8 @@ class TextEditOverlayGL;
  * @brief Centralized manager for all GL overlays rendered on the canvas.
  *
  * Owns and initializes: TransformOverlay, CanvasResizeOverlayGL,
- * BrushCursorOverlayGL, EyedropperCursorOverlayGL, LassoOverlay, LassoFillOverlay.
+ * BrushCursorOverlayGL, EyedropperCursorOverlayGL, ToolCursorOverlayGL, LassoOverlay,
+ * LassoFillOverlay.
  */
 class CanvasOverlayManager {
 public:
@@ -43,6 +45,7 @@ public:
     CanvasResizeOverlayGL* canvasResizeOverlay() const;
     BrushCursorOverlayGL* brushCursorOverlay() const;
     EyedropperCursorOverlayGL* eyedropperCursorOverlay() const;
+    ToolCursorOverlayGL* toolCursorOverlay() const;
     LassoOverlay* lassoOverlay() const;
     LassoFillOverlay* lassoFillOverlay() const;
     TextEditOverlayGL* textEditOverlay() const;
@@ -52,6 +55,7 @@ private:
     std::unique_ptr<CanvasResizeOverlayGL> m_canvasResizeOverlay;
     std::unique_ptr<BrushCursorOverlayGL> m_brushCursorOverlay;
     std::unique_ptr<EyedropperCursorOverlayGL> m_eyedropperCursorOverlay;
+    std::unique_ptr<ToolCursorOverlayGL> m_toolCursorOverlay;
     std::unique_ptr<LassoOverlay> m_lassoOverlay;
     std::unique_ptr<LassoFillOverlay> m_lassoFillOverlay;
     std::unique_ptr<TextEditOverlayGL> m_textEditOverlay;

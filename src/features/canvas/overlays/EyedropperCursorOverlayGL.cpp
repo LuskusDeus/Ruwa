@@ -9,7 +9,9 @@
 
 #include <QOpenGLContext>
 
+#include <algorithm>
 #include <cmath>
+#include <cstddef>
 #include <vector>
 
 namespace aether {
@@ -37,7 +39,7 @@ void main() {
     ivec2 texelCoord = ivec2(clamp(floor(uCenter.x), 0.0, uViewportSize.x - 1.0),
                               clamp(floor(uCenter.y), 0.0, uViewportSize.y - 1.0));
     vec4 sampled = texelFetch(uSceneTexture, texelCoord, 0);
-    fragColor = vec4(sampled.rgb, 0.95);
+    fragColor = vec4(sampled.rgb, 1.0);
 }
 )";
 
@@ -151,6 +153,20 @@ Result<void> EyedropperCursorOverlayGL::initialize()
     m_locSolidColorMVP = m_gl->glGetUniformLocation(m_solidColorProgram, "uMVP");
     m_locSolidColor = m_gl->glGetUniformLocation(m_solidColorProgram, "uColor");
 
+    m_iconRenderer = std::make_unique<GLCursorIconRenderer>(m_gl);
+    auto iconResult = m_iconRenderer->initialize();
+    if (!iconResult) {
+        for (GLuint* program :
+            { &m_colorFromCenterProgram, &m_invertProgram, &m_solidColorProgram }) {
+            if (*program) {
+                m_gl->glDeleteProgram(*program);
+                *program = 0;
+            }
+        }
+        m_iconRenderer.reset();
+        return { iconResult.error().code, iconResult.error().message };
+    }
+
     // VAO / VBO
     m_gl->glGenVertexArrays(1, &m_vao);
     m_gl->glGenBuffers(1, &m_vbo);
@@ -190,7 +206,11 @@ void EyedropperCursorOverlayGL::shutdown()
         if (m_solidColorProgram) {
             m_gl->glDeleteProgram(m_solidColorProgram);
         }
+        if (m_iconRenderer) {
+            m_iconRenderer->shutdown();
+        }
     }
+    m_iconRenderer.reset();
 
     m_vbo = 0;
     m_vao = 0;
@@ -244,114 +264,94 @@ void EyedropperCursorOverlayGL::render(float centerX, float centerY, int viewpor
     m_gl->glBindVertexArray(m_vao);
     m_gl->glBindBuffer(GL_ARRAY_BUFFER, m_vbo);
 
-    auto uploadAndDraw = [this, &vertices]() {
+    auto uploadAndDraw = [this, &vertices](GLenum mode) {
         m_gl->glBufferSubData(GL_ARRAY_BUFFER, 0,
             static_cast<GLsizeiptr>(vertices.size() * sizeof(float)), vertices.data());
-        m_gl->glDrawArrays(GL_TRIANGLE_FAN, 0, static_cast<GLsizei>(vertices.size() / 2));
+        m_gl->glDrawArrays(mode, 0, static_cast<GLsizei>(vertices.size() / 2));
     };
 
-    const float headCx = centerX;
-    const float headCy = centerY - kHeadCenterOffsetY;
-    const float outerR = kHeadRadius + kBorderThickness;
-    const float innerR = kHeadRadius;
+    auto useInvertProgram = [&]() {
+        m_gl->glUseProgram(m_invertProgram);
+        m_gl->glUniformMatrix4fv(m_locInvertMVP, 1, GL_FALSE, mvpArr.data());
+        m_gl->glUniform4f(m_locInvertColor, 0, 0, 0, 0.95f);
+        m_gl->glUniform1i(m_locInvertSceneTexture, 0);
+        m_gl->glUniform2f(m_locInvertViewportSize, vpW, vpH);
+    };
 
-    // 1. Thin outer border, sampled as an inverse of the scene under the widget.
-    drawTeardrop(headCx, headCy, outerR, centerY, vertices);
-    m_gl->glUseProgram(m_invertProgram);
-    m_gl->glUniformMatrix4fv(m_locInvertMVP, 1, GL_FALSE, mvpArr.data());
-    m_gl->glUniform4f(m_locInvertColor, 0, 0, 0, 0.95f);
-    m_gl->glUniform1i(m_locInvertSceneTexture, 0);
-    m_gl->glUniform2f(m_locInvertViewportSize, vpW, vpH);
-    uploadAndDraw();
+    constexpr float pi = 3.14159265f;
+    const float innerR = kInnerRadius;
+    const float outerR = kOuterRadius;
+    const float midR = (innerR + outerR) * 0.5f;
+    // The seam between the two halves is the same visual width as the outline.
+    const float seamDeg = kBorderThickness / midR * 180.0f / pi;
 
-    // 2. Current selected color fills the bottom half and the pointer tail.
-    drawTeardrop(headCx, headCy, innerR, centerY - kBorderThickness, vertices);
-    m_gl->glUseProgram(m_solidColorProgram);
-    m_gl->glUniformMatrix4fv(m_locSolidColorMVP, 1, GL_FALSE, mvpArr.data());
-    m_gl->glUniform4f(m_locSolidColor, static_cast<float>(selectedColor.redF()),
-        static_cast<float>(selectedColor.greenF()), static_cast<float>(selectedColor.blueF()),
-        0.98f);
-    uploadAndDraw();
+    // 1. One inverted ring, slightly wider than the color band on both rims. The
+    //    color halves are drawn on top and leave that overhang uncovered, so the
+    //    outline, the inner rim and the two seams all come from this single pass.
+    buildAnnulusSector(centerX, centerY, innerR - kBorderThickness, outerR + kBorderThickness, 0.0f,
+        360.0f, kArcSegments, vertices);
+    useInvertProgram();
+    uploadAndDraw(GL_TRIANGLE_STRIP);
 
-    // 3. The upper swatch is the color sampled exactly under the cursor tip.
-    drawSemicircle(headCx, headCy, innerR, true, 40, vertices);
+    // 2. Upper half: the color sampled exactly under the cursor.
+    buildAnnulusSector(centerX, centerY, innerR, outerR, 180.0f + seamDeg, 360.0f - seamDeg,
+        kArcSegments / 2, vertices);
     m_gl->glUseProgram(m_colorFromCenterProgram);
     m_gl->glUniformMatrix4fv(m_locColorFromCenterMVP, 1, GL_FALSE, mvpArr.data());
     m_gl->glUniform1i(m_locColorFromCenterSceneTexture, 0);
     m_gl->glUniform2f(m_locColorFromCenterViewportSize, vpW, vpH);
     m_gl->glUniform2f(m_locColorFromCenterCenter, centerWindowX, centerWindowY);
-    uploadAndDraw();
+    uploadAndDraw(GL_TRIANGLE_STRIP);
 
-    // 4. Inverted divider between sampled and selected swatches.
-    drawRect(headCx - innerR, headCy - kDividerThickness * 0.5f, headCx + innerR,
-        headCy + kDividerThickness * 0.5f, vertices);
-    m_gl->glUseProgram(m_invertProgram);
-    m_gl->glUniformMatrix4fv(m_locInvertMVP, 1, GL_FALSE, mvpArr.data());
-    m_gl->glUniform4f(m_locInvertColor, 0, 0, 0, 0.95f);
-    m_gl->glUniform1i(m_locInvertSceneTexture, 0);
-    m_gl->glUniform2f(m_locInvertViewportSize, vpW, vpH);
-    uploadAndDraw();
+    // 3. Lower half: the currently selected color.
+    buildAnnulusSector(
+        centerX, centerY, innerR, outerR, seamDeg, 180.0f - seamDeg, kArcSegments / 2, vertices);
+    m_gl->glUseProgram(m_solidColorProgram);
+    m_gl->glUniformMatrix4fv(m_locSolidColorMVP, 1, GL_FALSE, mvpArr.data());
+    m_gl->glUniform4f(m_locSolidColor, static_cast<float>(selectedColor.redF()),
+        static_cast<float>(selectedColor.greenF()), static_cast<float>(selectedColor.blueF()),
+        1.0f);
+    uploadAndDraw(GL_TRIANGLE_STRIP);
 
     m_gl->glBindVertexArray(0);
+
+    // 4. The pointer itself. Windows delivers the system cursor one frame behind
+    //    the position this overlay is drawn at, so the tool icon is drawn here
+    //    instead and stays locked to the ring.
+    drawIcon(centerX, centerY, mvpArr, vpW, vpH);
+
     m_gl->glDisable(GL_BLEND);
 }
 
-void EyedropperCursorOverlayGL::drawTeardrop(
-    float cx, float cy, float radius, float tipY, std::vector<float>& vertices)
+void EyedropperCursorOverlayGL::drawIcon(float centerX, float centerY,
+    const std::array<float, 16>& mvp, float viewportW, float viewportH)
 {
-    constexpr float pi = 3.14159265f;
-    constexpr int arcSegments = 52;
-
-    vertices.clear();
-    vertices.reserve((arcSegments + 4) * 2);
-    vertices.push_back(cx);
-    vertices.push_back(cy + radius * 0.22f);
-
-    const float tipDistance = std::abs(tipY - cy);
-    const float tangentAngle
-        = tipDistance > radius ? std::asin(radius / tipDistance) * 180.0f / pi : 30.0f;
-    const float overlapAngle = kTailCircleOverlapPx / radius * 180.0f / pi;
-    const float startDeg = tangentAngle - overlapAngle;
-    const float endDeg = -180.0f - tangentAngle + overlapAngle;
-    for (int i = 0; i <= arcSegments; ++i) {
-        const float t = static_cast<float>(i) / static_cast<float>(arcSegments);
-        const float deg = startDeg + (endDeg - startDeg) * t;
-        const float angle = deg * pi / 180.0f;
-        vertices.push_back(cx + radius * std::cos(angle));
-        vertices.push_back(cy + radius * std::sin(angle));
+    if (!m_iconRenderer) {
+        return;
     }
-
-    vertices.push_back(cx);
-    vertices.push_back(tipY);
-    vertices.push_back(cx + radius * std::cos(startDeg * pi / 180.0f));
-    vertices.push_back(cy + radius * std::sin(startDeg * pi / 180.0f));
+    m_iconRenderer->drawAtHotspot(QString::fromUtf8(kIconResourcePath), kIconSizePx, kIconHotspotU,
+        kIconHotspotV, centerX, centerY, mvp, viewportW, viewportH);
 }
 
-void EyedropperCursorOverlayGL::drawSemicircle(
-    float cx, float cy, float radius, bool upper, int segments, std::vector<float>& vertices)
+void EyedropperCursorOverlayGL::buildAnnulusSector(float cx, float cy, float innerRadius,
+    float outerRadius, float startDeg, float endDeg, int segments, std::vector<float>& vertices)
 {
     constexpr float pi = 3.14159265f;
 
+    segments = std::max(segments, 2);
     vertices.clear();
-    vertices.reserve((segments + 3) * 2);
-    vertices.push_back(cx);
-    vertices.push_back(cy);
+    vertices.reserve(static_cast<std::size_t>(segments + 1) * 4);
 
-    const float start = upper ? pi : 0.0f;
-    const float end = upper ? 2.0f * pi : pi;
     for (int i = 0; i <= segments; ++i) {
         const float t = static_cast<float>(i) / static_cast<float>(segments);
-        const float angle = start + (end - start) * t;
-        vertices.push_back(cx + radius * std::cos(angle));
-        vertices.push_back(cy + radius * std::sin(angle));
+        const float angle = (startDeg + (endDeg - startDeg) * t) * pi / 180.0f;
+        const float cosA = std::cos(angle);
+        const float sinA = std::sin(angle);
+        vertices.push_back(cx + innerRadius * cosA);
+        vertices.push_back(cy + innerRadius * sinA);
+        vertices.push_back(cx + outerRadius * cosA);
+        vertices.push_back(cy + outerRadius * sinA);
     }
-}
-
-void EyedropperCursorOverlayGL::drawRect(
-    float left, float top, float right, float bottom, std::vector<float>& vertices)
-{
-    vertices = { (left + right) * 0.5f, (top + bottom) * 0.5f, left, top, right, top, right, bottom,
-        left, bottom, left, top };
 }
 
 } // namespace aether

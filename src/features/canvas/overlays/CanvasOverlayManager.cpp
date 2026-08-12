@@ -9,6 +9,7 @@
 #include "features/canvas/overlays/CanvasResizeOverlayGL.h"
 #include "features/canvas/overlays/BrushCursorOverlayGL.h"
 #include "features/canvas/overlays/EyedropperCursorOverlayGL.h"
+#include "features/canvas/overlays/ToolCursorOverlayGL.h"
 #include "features/canvas/overlays/LassoOverlay.h"
 #include "features/canvas/overlays/LassoFillOverlay.h"
 #include "features/canvas/overlays/TextEditOverlayGL.h"
@@ -43,6 +44,10 @@ Result<void> CanvasOverlayManager::initialize(QOpenGLFunctions_4_5_Core* gl)
     auto eyedropperResult = m_eyedropperCursorOverlay->initialize();
     if (!eyedropperResult) { }
 
+    m_toolCursorOverlay = std::make_unique<ToolCursorOverlayGL>(gl);
+    auto toolCursorResult = m_toolCursorOverlay->initialize();
+    if (!toolCursorResult) { }
+
     m_lassoOverlay = std::make_unique<LassoOverlay>(gl);
     auto lassoResult = m_lassoOverlay->initialize();
     if (!lassoResult) { }
@@ -63,6 +68,7 @@ void CanvasOverlayManager::shutdown()
     m_textEditOverlay.reset();
     m_lassoFillOverlay.reset();
     m_lassoOverlay.reset();
+    m_toolCursorOverlay.reset();
     m_eyedropperCursorOverlay.reset();
     m_brushCursorOverlay.reset();
     m_canvasResizeOverlay.reset();
@@ -87,6 +93,11 @@ BrushCursorOverlayGL* CanvasOverlayManager::brushCursorOverlay() const
 EyedropperCursorOverlayGL* CanvasOverlayManager::eyedropperCursorOverlay() const
 {
     return m_eyedropperCursorOverlay.get();
+}
+
+ToolCursorOverlayGL* CanvasOverlayManager::toolCursorOverlay() const
+{
+    return m_toolCursorOverlay.get();
 }
 
 LassoOverlay* CanvasOverlayManager::lassoOverlay() const

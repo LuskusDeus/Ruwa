@@ -93,6 +93,7 @@
         <file alias="Camera">resources/icons/Camera.png</file>
         <file alias="Confirm">resources/icons/Confirm.png</file>
         <file alias="Move">resources/icons/Move.png</file>
+        <file alias="CursorPointer">resources/icons/CursorPointer.png</file>
         <file alias="Alpha">resources/icons/Alpha.png</file>
         <file alias="ZeroAlphaBrush">resources/icons/ZeroAlphaBrush.png</file>
         <file alias="Lock">resources/icons/Lock.png</file>

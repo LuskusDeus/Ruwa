@@ -16,6 +16,7 @@
 #include "features/brush/ui/BrushPackOverlay.h"
 #include "features/brush/ui/BrushPackPanel.h"
 #include "features/brush/ui/BrushSizeCurve.h"
+#include "features/canvas/overlays/ToolCursorIcons.h"
 #include "features/canvas/radial-menu/RadialMenuWidget.h"
 #include "features/canvas/ui/CanvasToolStateOverlay.h"
 #include "features/canvas/ui/CanvasZoomInfoOverlay.h"
@@ -388,6 +389,27 @@ bool CanvasPanel::createGLContent()
         const float centerX = static_cast<float>(static_cast<qreal>(localPos.x()) * scaleX);
         const float centerY = static_cast<float>(static_cast<qreal>(localPos.y()) * scaleY);
         m_glWidget->setEyedropperCursorState(true, centerX, centerY, currentBrushColor());
+    });
+    m_cursorManager->setToolCursorCallback([this](const std::optional<QPoint>& globalPos) {
+        if (!m_glWidget || !m_glWidget->isInitialized())
+            return;
+        if (!globalPos) {
+            m_glWidget->setToolCursorState(false, 0, 0);
+            return;
+        }
+        const QPoint localPos = m_glWidget->mapFromGlobal(*globalPos);
+        const qreal scaleX = m_glWidget->width() > 0
+            ? static_cast<qreal>(m_glWidget->viewport().width())
+                / static_cast<qreal>(m_glWidget->width())
+            : 1.0;
+        const qreal scaleY = m_glWidget->height() > 0
+            ? static_cast<qreal>(m_glWidget->viewport().height())
+                / static_cast<qreal>(m_glWidget->height())
+            : 1.0;
+        const float centerX = static_cast<float>(static_cast<qreal>(localPos.x()) * scaleX);
+        const float centerY = static_cast<float>(static_cast<qreal>(localPos.y()) * scaleY);
+        m_glWidget->setToolCursorState(
+            true, centerX, centerY, aether::toolCursorIconResource(toolMode()));
     });
     m_cursorManager->setSuppressed(m_cursorManagerSuppressedByLoading);
     updateCursorManagerOverlay();
