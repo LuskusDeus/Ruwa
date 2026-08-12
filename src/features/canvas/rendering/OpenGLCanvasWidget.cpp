@@ -121,8 +121,11 @@
 
 namespace {
 
-/// Display-pyramid rebuilds an interactive frame may spend on tiles that already
-/// hold content. Absent tiles are never counted — see DisplayPyramidPacing.
+/// Display-pyramid rebuilds a frame may spend on tiles that already hold
+/// content, while a continuous preview is running — see
+/// OpenGLCanvasWidget::displayPyramidDeferrableBudget, which is the only thing
+/// that applies this, and never to a discrete edit. Absent tiles are never
+/// counted — see DisplayPyramidPacing.
 ///
 /// A rebuild is one 258x258 draw with four taps, so the GPU side is noise; the
 /// cost that matters is ~20 GL calls each, and this caps that at the same order
@@ -2103,6 +2106,28 @@ std::optional<Vector2> OpenGLCanvasWidget::displayPyramidFocusPoint() const
     }
     return documentWorldFromScreen(
         { m_cursorOverlayState.brushCenterX, m_cursorOverlayState.brushCenterY });
+}
+
+uint32_t OpenGLCanvasWidget::displayPyramidDeferrableBudget() const
+{
+    // The budget buys a cheaper frame with content lag as the currency, and that
+    // is only ever a good trade while the content is going to move again next
+    // frame anyway: a stroke, a live fill or transform preview. There the dirty
+    // set is small and the cap barely bites; when it does, one frame of lag in
+    // the corners is invisible against the next dab.
+    //
+    // A DISCRETE change — undo, a visibility toggle, an effect edit — is the
+    // opposite case. Its dirty set can cover the whole viewport, the compositor
+    // recomposites all of it with no budget at all, and no further frame is
+    // coming to hide the difference. Pacing the pyramid there just publishes the
+    // lag: the level-zero tap updates instantly while the level the frame is
+    // mostly showing arrives several frames later, tile by tile, cursor-outwards
+    // — i.e. the edges of the screen last. Finish the cascade instead.
+    const bool continuousPreview = (m_brush && m_brush->hasActiveStroke())
+        || hasPendingStrokeFinalization() || isFillPreviewActive() || m_lassoFillPreview.active
+        || m_lassoFillViewportPreview.active || m_transformController.isActive()
+        || m_pendingTransform.active || m_autoApplyingTransform;
+    return continuousPreview ? kDisplayPyramidDeferrableBudget : 0u;
 }
 
 Vector2 OpenGLCanvasWidget::screenFromDocumentWorld(const Vector2& documentWorld) const
@@ -10719,7 +10744,7 @@ void OpenGLCanvasWidget::renderBoardLayers(const std::vector<CompositeLayerInfo>
     // that was culled. That is confined to the outermost texel of the frame and
     // heals as soon as panning composites the tile.
     DisplayPyramidPacing boardPacing;
-    boardPacing.deferrableTileBudget = kDisplayPyramidDeferrableBudget;
+    boardPacing.deferrableTileBudget = displayPyramidDeferrableBudget();
     boardPacing.focusPoint = displayPyramidFocusPoint();
     m_renderer->syncDisplayPyramid(DisplayPyramidSlot::Board, m_boardCompositionCache, m_viewport,
         static_cast<float>(m_canvas.width()), static_cast<float>(m_canvas.height()),
@@ -10795,7 +10820,7 @@ void OpenGLCanvasWidget::paintGL_renderSceneAndBlit(GLuint& outSceneTarget, GLin
     // for the length of a stroke. The budget below only ever bounds HOW MUCH is
     // refreshed per frame, never whether the pyramid is used.
     DisplayPyramidPacing documentPacing;
-    documentPacing.deferrableTileBudget = kDisplayPyramidDeferrableBudget;
+    documentPacing.deferrableTileBudget = displayPyramidDeferrableBudget();
     documentPacing.focusPoint = displayPyramidFocusPoint();
     m_renderer->syncDisplayPyramid(DisplayPyramidSlot::Document, m_canvas.compositionCache(),
         m_viewport, static_cast<float>(m_canvas.width()), static_cast<float>(m_canvas.height()),

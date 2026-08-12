@@ -619,6 +619,10 @@ private:
     /// the brush cursor when it is on the canvas, otherwise nothing (the pyramid
     /// falls back to the centre of the visible region).
     std::optional<Vector2> displayPyramidFocusPoint() const;
+    /// Rebuilds this frame may spend on display-pyramid tiles that already hold
+    /// content, or 0 for "finish the cascade". Paced only while a continuous
+    /// preview is running — see the definition.
+    uint32_t displayPyramidDeferrableBudget() const;
     void invalidateCachedLayerStacks();
     void invalidateBoardCompositionCache();
     void clearBoardCompositionCache();

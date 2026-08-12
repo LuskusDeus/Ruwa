@@ -48,6 +48,12 @@
 //       earlier, further-out zoom — has no way to learn that what it was
 //       derived from has moved.
 //
+//   Which is why a tile keeps its dirt for as long as ANYTHING it samples is
+//   unsettled, even when nothing this frame can do will settle it. Dirt is a
+//   standing request to reconsider, not a promise of work: what it costs while
+//   nothing moves is a version comparison, and what it buys is that the only way
+//   to lose track of a stale tile is to lose track of the dirt itself.
+//
 //   So neither is the source of truth. Every tile records the versions of the
 //   16 parents it was built from and carries its own, and auditLevels() walks
 //   the lattice comparing them on frames where the feed has nothing left to
@@ -116,17 +122,24 @@ public:
 
     // ---- Invalidation -----------------------------------------------------
 
-    /// The level-0 tile at `key` changed (or went away). Marks every ancestor.
+    /// The level-0 tile at `key` changed (or went away). Marks every ancestor,
+    /// unconditionally — see invalidateLevelTile.
     void invalidate(const TileKey& level0Key);
 
     /// Everything the pyramid holds is stale; the next update() re-seeds from
     /// the source grid.
     void invalidateAll();
 
-    /// Marks a level tile and every ancestor above it, unconditionally.
-    /// invalidate() may stop at the first level that is already dirty because a
-    /// level-0 change always marks a whole chain; this one is for callers that
-    /// enter the lattice partway up, where that reasoning does not hold.
+    /// Marks a level tile and every ancestor above it.
+    ///
+    /// The whole chain, always. It is tempting to stop at the first level that
+    /// is already dirty — a level-0 change marks a chain, so surely everything
+    /// above it is marked too — but a dirty mark does not only come from below
+    /// any more. A tile can hold its dirt because it is waiting on the
+    /// compositor, or because a budget deferred it, or because the audit put it
+    /// there, and in each of those cases the levels above it may well be clean.
+    /// Stopping early on one of those left the tiles above stale until the audit
+    /// happened to reach them.
     void invalidateLevelTile(int level, const TileKey& key);
 
     /// Drop all GPU storage. Also forces a re-seed.
@@ -220,6 +233,11 @@ private:
         {
             return k.x >= minX && k.x <= maxX && k.y >= minY && k.y <= maxY;
         }
+        bool operator==(const KeyRange& other) const
+        {
+            return minX == other.minX && minY == other.minY && maxX == other.maxX
+                && maxY == other.maxY;
+        }
     };
 
     void seedFrom(const TileGrid& source);
@@ -228,8 +246,24 @@ private:
     /// Versions of the 4x4 parent block, in the order buildTile binds them.
     /// Absent, or present-without-a-texture, is 0 — buildTile treats both as
     /// "no parent", so the audit has to agree.
-    std::array<uint64_t, kParentBlockSize> sampleParentVersions(
-        const TileGrid& source, int level, const TileKey& key) const;
+    ///
+    /// `outUnstampedParent`, when given, reports that some parent has content
+    /// but no version to identify it by (a cache tile with a texture that was
+    /// never stamped). Such a parent is indistinguishable from an absent one, so
+    /// every caller that compares versions has to read this as "unknown, assume
+    /// it moved" rather than trust the comparison.
+    std::array<uint64_t, kParentBlockSize> sampleParentVersions(const TileGrid& source, int level,
+        const TileKey& key, bool* outUnstampedParent = nullptr) const;
+    /// Whether a rebuild right now would put different pixels on screen than the
+    /// tile already holds, i.e. whether anything it samples has moved since it
+    /// was last built. A tile with no texture always counts as moved.
+    ///
+    /// This is what makes it safe for a tile to keep its dirt indefinitely.
+    /// Dirt is a request to reconsider, not a promise that a rebuild will
+    /// achieve something: a tile waiting on a recomposite the viewport cull may
+    /// never perform would otherwise redraw itself every frame, for ever, for no
+    /// pixel change.
+    bool sampledSourceMoved(const TileGrid& source, int level, const TileKey& key) const;
     /// Re-derives staleness for the tiles inside the request's range by
     /// comparing what each was built from against what is there now, and marks
     /// whatever disagrees. Returns how many tiles that was.
@@ -243,21 +277,56 @@ private:
     uint32_t auditLevels(const TileGrid& source, const UpdateRequest& request, int topLevel);
     /// Returns false when the tile had no content and was dropped instead.
     bool buildTile(const TileGrid& source, int level, const TileKey& key);
-    /// Whether any parent this tile samples is still dirty AND inside the parent
-    /// level's key range, i.e. whether a build right now would produce content
-    /// that this same request is going to make obsolete.
-    bool sampledParentsDirty(int level, const TileKey& key, const KeyRange& parentRange) const;
+    struct ParentDirt {
+        /// Some parent this tile samples is dirty, so whatever it builds now is
+        /// provisional and it must keep its own dirt. Range does not enter into
+        /// it: this is a statement about the pixels, not about the schedule.
+        bool any = false;
+        /// ...and at least one of those parents is inside the parent level's key
+        /// range, i.e. THIS request is going to rebuild it, so a catch-up frame
+        /// can finish the job. An out-of-range dirty parent is nobody's job until
+        /// the camera moves, so waiting on one must not claim pending work — that
+        /// would spin the catch-up repaint at the frame rate.
+        bool resolvable = false;
+    };
+    /// Whether a build right now would produce content that something is going
+    /// to make obsolete, and whether this request is what will do it.
+    ///
+    /// The range pad is one tile PER LEVEL, so range(L) reaches twice as far in
+    /// document pixels as range(L-1): a level tile near the border of the padded
+    /// region routinely has core parents outside its parent level's range. Those
+    /// used to be ignored outright, and ignoring them is what stranded coarse
+    /// tiles for good — the child built over an absent parent, dropped its dirt,
+    /// and when the camera later brought the parent into range and built it,
+    /// nothing re-marked the child, because marking only ever walks up from level
+    /// zero. That is the stage-4 trap in its most reachable form.
+    ParentDirt sampledParentsDirt(int level, const TileKey& key, const KeyRange& parentRange) const;
     /// Whether what this tile derives from is out of date for a reason THIS
     /// request cannot resolve: at level 1, a sampled position the compositor
-    /// still owes; above it, a parent that was blocked for the same reason.
+    /// still owes; above it, a parent recorded as stalled for any such reason.
     ///
-    /// Blocked is not deferred. A deferred tile is work this request chose to
+    /// Stalled is not deferred. A deferred tile is work this request chose to
     /// postpone, so it claims pending work and a catch-up frame finishes it. A
-    /// blocked tile is waiting on the compositor, which may never come back to
-    /// that position at this camera — claiming pending work for it would spin
-    /// the catch-up repaint at the frame rate. It simply keeps its dirt until
-    /// the recomposite lands and re-invalidates it for real.
-    bool sampledSourceBlocked(int level, const TileKey& key, const KeyRange& parentRange,
+    /// stalled tile is waiting on something outside the pyramid — a recomposite
+    /// the viewport cull skipped, or a parent no request will touch until the
+    /// camera moves — and claiming pending work for that would spin the catch-up
+    /// repaint at the frame rate for as long as the camera sat still. It simply
+    /// keeps its dirt until whatever it waits on lands.
+    ///
+    /// Which is why the stall has to be INHERITED rather than re-derived: a
+    /// grandchild that could see only "my parent is dirty and in range" would
+    /// conclude the dirt is finishable and ask for a frame that changes nothing.
+    ///
+    /// What a stall must NOT do is hold the rebuild back. Compositing is culled
+    /// to the viewport, so a level tile at the edge of the frame routinely
+    /// samples positions the compositor is never going to revisit at this
+    /// camera: every level tile straddling the viewport border has parents
+    /// outside it, and the outer ring of every one of them is outside it.
+    /// Refusing to rebuild those froze the visible half of the tile — showing
+    /// pre-undo content next to a level-zero tap that had already updated — for
+    /// as long as the camera sat still. The parents that DID recomposite are
+    /// real, current content; fold them in and keep the dirt for the rest.
+    bool sampledSourceStalled(int level, const TileKey& key, const KeyRange& parentRange,
         const UpdateRequest& request) const;
     void releaseTile(int level, const TileKey& key);
 
@@ -280,9 +349,10 @@ private:
     // Index 0 is unused: level 0 is the composition cache itself.
     std::array<LevelMap, kMaxLevel + 1> m_levels {};
     std::array<KeySet, kMaxLevel + 1> m_dirty {};
-    // Per-update scratch: tiles found to be waiting on the compositor, so the
-    // level above can tell that kind of dirt apart from work it can finish.
-    std::array<KeySet, kMaxLevel + 1> m_sourceBlocked {};
+    // Per-update scratch: tiles that kept their dirt for a reason this request
+    // cannot resolve, so the level above can tell that kind of dirt apart from
+    // work a catch-up frame would finish. See sampledSourceStalled.
+    std::array<KeySet, kMaxLevel + 1> m_stalled {};
 
     // Recycled 258x258 storage. GLTileTexturePool hard-rejects anything that is
     // not TILE_SIZE square, so the pyramid keeps its own free list.
@@ -290,11 +360,23 @@ private:
 
     TilePixelFormat m_format = kDefaultTileFormat;
     // Where the next audit pass resumes (level, then offset within that level's
-    // map) and whether a sweep is owed at all. Content changing arms it; a
-    // completed sweep disarms it.
+    // map) and whether a sweep is owed at all. Content changing arms it, and so
+    // does the request's range changing (see m_auditedScope); a completed sweep
+    // disarms it.
     int m_auditLevel = 1;
     size_t m_auditCursor = 0;
+    /// Tile count of m_auditLevel when the cursor was last advanced. A change
+    /// means the map may have rehashed under the cursor, so the level restarts.
+    size_t m_auditLevelTileCount = 0;
     bool m_auditPending = false;
+    // The request shape the last COMPLETED sweep answered for. A sweep consumes
+    // out-of-range tiles without checking them, so "everything agrees" only ever
+    // holds for the range it saw; a camera move brings unchecked tiles into view
+    // and has to arm it again. Content is not the only thing that can turn a
+    // tile the pyramid holds into a tile the pyramid SHOWS.
+    bool m_auditedScopeValid = false;
+    int m_auditedTopLevel = 0;
+    KeyRange m_auditedScope {};
     /// Source of LevelTile::version. Monotonic for the life of the pyramid, so
     /// a recycled texture can never look like the tile it used to hold.
     uint64_t m_nextTileVersion = 0;
