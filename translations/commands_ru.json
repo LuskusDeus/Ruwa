@@ -571,6 +571,36 @@
       "заливка-выделения"
     ]
   },
+  "selection.selectAll": {
+    "title": "Выделить всё",
+    "category": "Выделение",
+    "description": "Выделить весь документ",
+    "aliases": [
+      "select-all",
+      "выделить-всё",
+      "выделить-все"
+    ]
+  },
+  "selection.invert": {
+    "title": "Инвертировать выделение",
+    "category": "Выделение",
+    "description": "Поменять местами выделенные и невыделенные области, сохранив частичное покрытие",
+    "aliases": [
+      "invert-selection",
+      "inverse",
+      "инвертировать-выделение",
+      "обратить-выделение"
+    ]
+  },
+  "selection.reselect": {
+    "title": "Вернуть выделение",
+    "category": "Выделение",
+    "description": "Вернуть выделение, снятое последним",
+    "aliases": [
+      "reselect",
+      "вернуть-выделение"
+    ]
+  },
   "selection.selectLayerContent": {
     "title": "Выделить содержимое слоя",
     "category": "Выделение",

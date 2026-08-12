@@ -73,6 +73,98 @@ aether::MaskTileSnapshot fullCanvasSelectionMask(uint32_t width, uint32_t height
     return mask;
 }
 
+/// Coverage complement of @p mask over the document rectangle: selected becomes
+/// unselected and back, with partial coverage preserved (40% -> 60%).
+///
+/// Every tile the document covers has to be visited, not just the ones the mask
+/// allocated - an absent tile means "not selected", which inverts to fully
+/// selected. Fully covered tiles are emitted in the snapshot's uniform encoding,
+/// so inverting an empty selection on a 6000x6000 document builds a few hundred
+/// 4-byte entries instead of 576 quarter-megabyte buffers.
+aether::MaskTileSnapshot invertedSelectionMask(
+    const aether::TileGrid& mask, uint32_t width, uint32_t height)
+{
+    constexpr uint32_t TILE_SIZE = aether::TILE_SIZE;
+    constexpr uint32_t TILE_CHANNELS = aether::TILE_CHANNELS;
+    constexpr uint32_t TILE_BYTE_SIZE = aether::TILE_BYTE_SIZE;
+
+    aether::MaskTileSnapshot result;
+    const uint32_t tileColumns = (width + TILE_SIZE - 1) / TILE_SIZE;
+    const uint32_t tileRows = (height + TILE_SIZE - 1) / TILE_SIZE;
+    result.reserve(static_cast<size_t>(tileColumns) * tileRows);
+
+    for (uint32_t tileY = 0; tileY < tileRows; ++tileY) {
+        const uint32_t validHeight = std::min(TILE_SIZE, height - tileY * TILE_SIZE);
+        for (uint32_t tileX = 0; tileX < tileColumns; ++tileX) {
+            const uint32_t validWidth = std::min(TILE_SIZE, width - tileX * TILE_SIZE);
+            const aether::TileKey key { static_cast<int32_t>(tileX), static_cast<int32_t>(tileY) };
+            const bool coversWholeTile = (validWidth == TILE_SIZE && validHeight == TILE_SIZE);
+
+            const aether::TileData* srcTile = mask.getTile(key);
+
+            // A tile that is absent or uniform inverts to a single value, with no
+            // need to look at pixels. This is the common case by area: the inside
+            // and the outside of a selection are both solid.
+            uint8_t uniformCoverage = 0;
+            bool isUniform = false;
+            if (!srcTile) {
+                isUniform = true;
+            } else if (srcTile->isSolid()) {
+                uint8_t r = 0, g = 0, b = 0, a = 0;
+                srcTile->solidColor(r, g, b, a);
+                uniformCoverage = a;
+                isUniform = true;
+            }
+
+            if (isUniform) {
+                const uint8_t inverted = static_cast<uint8_t>(255 - uniformCoverage);
+                if (inverted == 0) {
+                    continue;
+                }
+                if (coversWholeTile) {
+                    result.emplace(
+                        key, aether::makeUniformMaskTile(inverted, inverted, inverted, inverted));
+                    continue;
+                }
+                // Clipped by the document edge: the part outside stays unselected.
+                std::vector<uint8_t> tile(TILE_BYTE_SIZE, 0);
+                for (uint32_t localY = 0; localY < validHeight; ++localY) {
+                    const size_t rowStart = static_cast<size_t>(localY) * TILE_SIZE * TILE_CHANNELS;
+                    std::fill_n(tile.data() + rowStart,
+                        static_cast<size_t>(validWidth) * TILE_CHANNELS, inverted);
+                }
+                result.emplace(key, std::move(tile));
+                continue;
+            }
+
+            // A solid tile reads back as zeros through pixels(), which is why the
+            // uniform case above is handled first; here the buffer is real.
+            const uint8_t* srcPixels = srcTile->pixels();
+            std::vector<uint8_t> tile(TILE_BYTE_SIZE, 0);
+            bool anyCoverage = false;
+            for (uint32_t localY = 0; localY < validHeight; ++localY) {
+                for (uint32_t localX = 0; localX < validWidth; ++localX) {
+                    const size_t idx
+                        = (static_cast<size_t>(localY) * TILE_SIZE + localX) * TILE_CHANNELS;
+                    const uint8_t inverted = static_cast<uint8_t>(255 - srcPixels[idx + 3]);
+                    if (inverted == 0) {
+                        continue;
+                    }
+                    tile[idx + 0] = inverted;
+                    tile[idx + 1] = inverted;
+                    tile[idx + 2] = inverted;
+                    tile[idx + 3] = inverted;
+                    anyCoverage = true;
+                }
+            }
+            if (anyCoverage) {
+                result.emplace(key, std::move(tile));
+            }
+        }
+    }
+    return result;
+}
+
 } // namespace
 
 namespace aether {
@@ -608,6 +700,113 @@ void CanvasSelectionController::clearSelectionMask()
     clearSelectionInternal();
     if (m_ctx.requestRender)
         m_ctx.requestRender();
+}
+
+void CanvasSelectionController::releaseMaskTileTextures()
+{
+    auto* tileRenderer = m_ctx.getTileRenderer ? m_ctx.getTileRenderer() : nullptr;
+    if (!tileRenderer) {
+        return;
+    }
+    LassoSelectionManager::MaskMutationScope scope(m_lassoSelection);
+    // Texture handles only — the pixel data and the soft-alpha flag are left to
+    // whoever replaces the mask right after this.
+    scope.disableSoftAlphaInvalidation();
+    scope.disableSnapshotInvalidation();
+    for (auto& [key, tile] : scope.grid().tiles()) {
+        (void) key;
+        if (tile.hasTexture()) {
+            tileRenderer->destroyTileTexture(tile);
+        }
+    }
+}
+
+void CanvasSelectionController::cancelPendingSelectionWork()
+{
+    auto* selectionRenderer = m_ctx.getSelectionRenderer ? m_ctx.getSelectionRenderer() : nullptr;
+    if (selectionRenderer && m_pendingSelectionReadback.active) {
+        selectionRenderer->deleteFence(m_pendingSelectionReadback.fence);
+    }
+    m_pendingSelectionReadback = {};
+    m_pendingSelectionJob = {};
+
+    m_isLassoActive = false;
+    m_isRectSelectionActive = false;
+    m_isCircleSelectionActive = false;
+    m_lassoPoints.clear();
+}
+
+void CanvasSelectionController::finishWholesaleMaskReplacement()
+{
+    // The new selection is nobody's layer silhouette, so painting must not
+    // preserve-alpha against it.
+    m_contentSelectionSourceLayerId = QUuid();
+    // Mask tiles stay dirty on purpose; consumers upload them lazily, exactly as
+    // after a lasso commit.
+    if (m_ctx.requestRender) {
+        m_ctx.requestRender();
+    }
+}
+
+bool CanvasSelectionController::selectAll()
+{
+    if (!m_ctx.getCanvas) {
+        return false;
+    }
+    const Canvas& canvas = m_ctx.getCanvas();
+    const uint32_t cw = selectionDocumentWidth(canvas);
+    const uint32_t ch = selectionDocumentHeight(canvas);
+    if (cw == 0 || ch == 0) {
+        return false;
+    }
+
+    cancelPendingSelectionWork();
+    releaseMaskTileTextures();
+    m_lassoSelection.applyRasterSelectionMask(
+        fullCanvasSelectionMask(cw, ch), LassoSelectionMode::Replace, cw, ch);
+    finishWholesaleMaskReplacement();
+    return true;
+}
+
+bool CanvasSelectionController::invertSelection()
+{
+    if (!m_ctx.getCanvas) {
+        return false;
+    }
+    const Canvas& canvas = m_ctx.getCanvas();
+    const uint32_t cw = selectionDocumentWidth(canvas);
+    const uint32_t ch = selectionDocumentHeight(canvas);
+    if (cw == 0 || ch == 0) {
+        return false;
+    }
+    if (!hasSelectionMask()) {
+        return false;
+    }
+
+    // Built before the mask is touched: the source is the live mask itself.
+    MaskTileSnapshot inverted = invertedSelectionMask(m_lassoSelection.mask(), cw, ch);
+
+    cancelPendingSelectionWork();
+    releaseMaskTileTextures();
+    m_lassoSelection.applyRasterSelectionMask(inverted, LassoSelectionMode::Replace, cw, ch);
+    finishWholesaleMaskReplacement();
+    return true;
+}
+
+bool CanvasSelectionController::applyRestoredSelectionMask(
+    std::shared_ptr<const MaskTileSnapshot> maskTiles, std::vector<LassoRegion> regions,
+    bool maskHasSoftAlpha, uint32_t canvasWidth, uint32_t canvasHeight)
+{
+    if (!maskTiles || maskTiles->empty() || regions.empty()) {
+        return false;
+    }
+
+    cancelPendingSelectionWork();
+    releaseMaskTileTextures();
+    m_lassoSelection.applyMaskSnapshot(
+        std::move(maskTiles), std::move(regions), maskHasSoftAlpha, canvasWidth, canvasHeight);
+    finishWholesaleMaskReplacement();
+    return true;
 }
 
 void CanvasSelectionController::selectActiveLayerContent()

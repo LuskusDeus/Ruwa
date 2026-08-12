@@ -259,6 +259,14 @@ public:
     /// Erase the content under the active selection. Returns false when there is
     /// no selection (or a transform is in flight).
     bool deleteSelectionContent();
+    /// Select the whole document. False on a document without finite bounds.
+    bool selectAllCanvas();
+    /// Swap selected for unselected, partial coverage preserved.
+    bool invertSelection();
+    /// Whether a deselected selection is still available to bring back.
+    bool canReselectSelection() const;
+    /// Bring back the selection that was last deselected.
+    bool reselectSelection();
     /// True while the canvas holds an active selection mask.
     bool hasActiveSelection() const;
     /// True when the layer the selection commands act on carries a mask.

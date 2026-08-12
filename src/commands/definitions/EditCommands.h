@@ -53,6 +53,30 @@ public:
     void execute(const CommandContext& ctx, const QVariantMap& args = {}) override;
 };
 
+/// Select the whole document. Routes to the focused text field when there is
+/// one, so Ctrl+A keeps meaning "select all text" while typing.
+class SelectAllCommand : public Command {
+public:
+    CommandInfo info() const override;
+    bool canExecute(const CommandContext& ctx) const override;
+    void execute(const CommandContext& ctx, const QVariantMap& args = {}) override;
+};
+
+class InvertSelectionCommand : public Command {
+public:
+    CommandInfo info() const override;
+    bool canExecute(const CommandContext& ctx) const override;
+    void execute(const CommandContext& ctx, const QVariantMap& args = {}) override;
+};
+
+/// Bring back the selection that was last deselected.
+class ReselectCommand : public Command {
+public:
+    CommandInfo info() const override;
+    bool canExecute(const CommandContext& ctx) const override;
+    void execute(const CommandContext& ctx, const QVariantMap& args = {}) override;
+};
+
 /// Replace the selection with the selected layer's content silhouette — the
 /// same thing Ctrl+click on a layer thumbnail does.
 class SelectLayerContentCommand : public Command {

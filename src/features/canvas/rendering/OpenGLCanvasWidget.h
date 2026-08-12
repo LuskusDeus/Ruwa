@@ -258,6 +258,18 @@ public:
         int worldX, int worldY, bool addSelection = false, bool subtractSelection = false);
     void translateActiveSelection(float dx, float dy);
     void clearSelectionMask();
+    /// Select the whole document (undoable). False when the document has no
+    /// finite bounds.
+    bool selectAll();
+    /// Swap selected for unselected across the document (undoable). False when
+    /// there is no selection to invert.
+    bool invertSelection();
+    /// Whether a deselected selection is still on hand for reselect(). Goes
+    /// false once the document is resized, since the remembered mask is in the
+    /// old document's coordinates.
+    bool canReselect() const;
+    /// Bring back the selection that was last deselected (undoable).
+    bool reselect();
     void selectActiveLayerContent();
     void selectActiveLayerMask();
     bool hasSelectionMask() const;
@@ -766,6 +778,10 @@ private:
     // --- Selection undo: capture before lasso/rect/circle, push on end ---
     SelectionState m_selectionAtLassoBegin;
     SelectionState m_lastSelectionState;
+    /// The selection as it stood the moment it was deselected — the target of
+    /// reselect(). Held as a snapshot, which is shared with the undo entry that
+    /// recorded the same transition, so remembering it costs a pointer.
+    LassoSelectionState m_reselectState;
     bool m_ignoreSelectionChange = false;
     quint64 m_magicWandRequestSequence = 0;
 

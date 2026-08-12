@@ -738,9 +738,13 @@ MenuItem TopBar::buildSelectionMenuItem() const
     selectionItem.text = tr("Selection");
     selectionItem.enabled = isInWorkspace();
     selectionItem.submenu = {
+        entry(tr("Select All"), QStringLiteral("selection.selectAll")),
+        entry(tr("Deselect"), QStringLiteral("selection.deselect")),
+        entry(tr("Reselect"), QStringLiteral("selection.reselect")),
+        entry(tr("Invert Selection"), QStringLiteral("selection.invert")),
+        MenuItem::Separator(),
         entry(tr("Select Layer Content"), QStringLiteral("selection.selectLayerContent")),
         entry(tr("Select Layer Mask"), QStringLiteral("selection.selectLayerMask")),
-        entry(tr("Deselect"), QStringLiteral("selection.deselect")),
         MenuItem::Separator(),
         entry(tr("Fill"), QStringLiteral("selection.fill")),
         entry(tr("Delete Content"), QStringLiteral("selection.deleteContent")),

@@ -83,6 +83,25 @@ bool routeClipboardToFocusedTextInput(QWidget* focus, ClipboardOp op)
     return widgetIsTextInput(focus);
 }
 
+/// Ctrl+A is an application shortcut, so a focused text field never sees it on
+/// its own — and inside a text field it has to keep meaning "select all text".
+bool routeSelectAllToFocusedTextInput(QWidget* focus)
+{
+    if (auto* lineEdit = qobject_cast<QLineEdit*>(focus)) {
+        lineEdit->selectAll();
+        return true;
+    }
+    if (auto* textEdit = qobject_cast<QTextEdit*>(focus)) {
+        textEdit->selectAll();
+        return true;
+    }
+    if (auto* plainTextEdit = qobject_cast<QPlainTextEdit*>(focus)) {
+        plainTextEdit->selectAll();
+        return true;
+    }
+    return widgetIsTextInput(focus);
+}
+
 } // namespace
 
 CommandInfo CopyCommand::info() const
@@ -230,6 +249,87 @@ void FillSelectionCommand::execute(const CommandContext& ctx, const QVariantMap&
 
     if (auto* canvasPanel = ctx.activeCanvasPanel()) {
         canvasPanel->fillSelectionWithCurrentColor();
+    }
+}
+
+CommandInfo SelectAllCommand::info() const
+{
+    return CommandInfo { .id = "selection.selectAll",
+        .title = "Select All",
+        .category = "Selection",
+        .description = "Select the whole document",
+        .aliases = { "select-all" },
+        .defaultShortcut = QKeySequence(Qt::CTRL | Qt::Key_A),
+        .icon = QIcon() };
+}
+
+bool SelectAllCommand::canExecute(const CommandContext& ctx) const
+{
+    return ctx.activeCanvasPanel() != nullptr;
+}
+
+void SelectAllCommand::execute(const CommandContext& ctx, const QVariantMap& args)
+{
+    Q_UNUSED(args);
+
+    if (routeSelectAllToFocusedTextInput(ctx.focusWidget())) {
+        return;
+    }
+
+    if (auto* canvasPanel = ctx.activeCanvasPanel()) {
+        canvasPanel->selectAllCanvas();
+    }
+}
+
+CommandInfo InvertSelectionCommand::info() const
+{
+    return CommandInfo { .id = "selection.invert",
+        .title = "Invert Selection",
+        .category = "Selection",
+        .description = "Swap the selected and unselected areas, keeping partial coverage",
+        .aliases = { "invert-selection", "inverse" },
+        .defaultShortcut = QKeySequence(Qt::CTRL | Qt::SHIFT | Qt::Key_I),
+        .icon = QIcon() };
+}
+
+bool InvertSelectionCommand::canExecute(const CommandContext& ctx) const
+{
+    auto* canvasPanel = ctx.activeCanvasPanel();
+    return canvasPanel && canvasPanel->hasActiveSelection();
+}
+
+void InvertSelectionCommand::execute(const CommandContext& ctx, const QVariantMap& args)
+{
+    Q_UNUSED(args);
+
+    if (auto* canvasPanel = ctx.activeCanvasPanel()) {
+        canvasPanel->invertSelection();
+    }
+}
+
+CommandInfo ReselectCommand::info() const
+{
+    return CommandInfo { .id = "selection.reselect",
+        .title = "Reselect",
+        .category = "Selection",
+        .description = "Bring back the selection that was last deselected",
+        .aliases = { "reselect" },
+        .defaultShortcut = QKeySequence(Qt::CTRL | Qt::SHIFT | Qt::Key_D),
+        .icon = QIcon() };
+}
+
+bool ReselectCommand::canExecute(const CommandContext& ctx) const
+{
+    auto* canvasPanel = ctx.activeCanvasPanel();
+    return canvasPanel && canvasPanel->canReselectSelection();
+}
+
+void ReselectCommand::execute(const CommandContext& ctx, const QVariantMap& args)
+{
+    Q_UNUSED(args);
+
+    if (auto* canvasPanel = ctx.activeCanvasPanel()) {
+        canvasPanel->reselectSelection();
     }
 }
 
@@ -443,6 +543,9 @@ void registerEditCommands(CommandRegistry& registry)
     registry.registerCommand(std::make_unique<PasteCommand>());
     registry.registerCommand(std::make_unique<DeselectCommand>());
     registry.registerCommand(std::make_unique<FillSelectionCommand>());
+    registry.registerCommand(std::make_unique<SelectAllCommand>());
+    registry.registerCommand(std::make_unique<InvertSelectionCommand>());
+    registry.registerCommand(std::make_unique<ReselectCommand>());
     registry.registerCommand(std::make_unique<SelectLayerContentCommand>());
     registry.registerCommand(std::make_unique<SelectLayerMaskCommand>());
     registry.registerCommand(std::make_unique<DeleteSelectionContentCommand>());

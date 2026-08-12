@@ -5025,6 +5025,85 @@ void OpenGLCanvasWidget::clearSelectionMask()
     }
 }
 
+bool OpenGLCanvasWidget::selectAll()
+{
+    if (!m_selectionController) {
+        return false;
+    }
+    SelectionState before;
+    before.layer = captureLayerSelection(m_layerModel ? m_layerModel->selectionManager() : nullptr);
+    before.lasso = captureLassoSelection(&m_selectionController->lassoSelection(),
+        effectiveDocumentBoundsWidth(), effectiveDocumentBoundsHeight());
+    if (!m_selectionController->selectAll()) {
+        return false;
+    }
+    SelectionState after;
+    after.layer = before.layer;
+    after.lasso = captureLassoSelection(&m_selectionController->lassoSelection(),
+        effectiveDocumentBoundsWidth(), effectiveDocumentBoundsHeight());
+    m_ignoreSelectionChange = true;
+    pushSelectionCommand(before, after);
+    m_ignoreSelectionChange = false;
+    return true;
+}
+
+bool OpenGLCanvasWidget::invertSelection()
+{
+    if (!m_selectionController) {
+        return false;
+    }
+    SelectionState before;
+    before.layer = captureLayerSelection(m_layerModel ? m_layerModel->selectionManager() : nullptr);
+    before.lasso = captureLassoSelection(&m_selectionController->lassoSelection(),
+        effectiveDocumentBoundsWidth(), effectiveDocumentBoundsHeight());
+    if (!m_selectionController->invertSelection()) {
+        return false;
+    }
+    SelectionState after;
+    after.layer = before.layer;
+    after.lasso = captureLassoSelection(&m_selectionController->lassoSelection(),
+        effectiveDocumentBoundsWidth(), effectiveDocumentBoundsHeight());
+    m_ignoreSelectionChange = true;
+    pushSelectionCommand(before, after);
+    m_ignoreSelectionChange = false;
+    return true;
+}
+
+bool OpenGLCanvasWidget::canReselect() const
+{
+    if (!m_selectionController || m_reselectState.isEmpty() || !m_reselectState.maskTiles) {
+        return false;
+    }
+    // A resize remaps the undo stack but not this snapshot, so a mask captured
+    // against different document bounds is dropped rather than pasted askew.
+    return m_reselectState.canvasWidth == effectiveDocumentBoundsWidth()
+        && m_reselectState.canvasHeight == effectiveDocumentBoundsHeight();
+}
+
+bool OpenGLCanvasWidget::reselect()
+{
+    if (!canReselect()) {
+        return false;
+    }
+    SelectionState before;
+    before.layer = captureLayerSelection(m_layerModel ? m_layerModel->selectionManager() : nullptr);
+    before.lasso = captureLassoSelection(&m_selectionController->lassoSelection(),
+        effectiveDocumentBoundsWidth(), effectiveDocumentBoundsHeight());
+    if (!m_selectionController->applyRestoredSelectionMask(m_reselectState.maskTiles,
+            m_reselectState.regions, m_reselectState.maskHasSoftAlpha, m_reselectState.canvasWidth,
+            m_reselectState.canvasHeight)) {
+        return false;
+    }
+    SelectionState after;
+    after.layer = before.layer;
+    after.lasso = captureLassoSelection(&m_selectionController->lassoSelection(),
+        effectiveDocumentBoundsWidth(), effectiveDocumentBoundsHeight());
+    m_ignoreSelectionChange = true;
+    pushSelectionCommand(before, after);
+    m_ignoreSelectionChange = false;
+    return true;
+}
+
 void OpenGLCanvasWidget::selectActiveLayerContent()
 {
     if (m_selectionController) {
@@ -8012,6 +8091,15 @@ void OpenGLCanvasWidget::pushSelectionCommand(
         && before.lasso.maskTiles == after.lasso.maskTiles) {
         return;
     }
+    // Every selection change funnels through here, so this is where Reselect
+    // learns its target: the last mask that went from something to nothing.
+    // Replacing one selection with another deliberately does not arm it —
+    // Reselect is meant to undo a Deselect, not to walk backwards through
+    // selection history.
+    if (!before.lasso.isEmpty() && before.lasso.maskTiles && after.lasso.isEmpty()) {
+        m_reselectState = before.lasso;
+    }
+
     auto* layerSel = m_layerModel ? m_layerModel->selectionManager() : nullptr;
     auto* lassoSel = m_selectionController ? &m_selectionController->lassoSelection() : nullptr;
     auto cmd = std::make_unique<SelectionCommand>(

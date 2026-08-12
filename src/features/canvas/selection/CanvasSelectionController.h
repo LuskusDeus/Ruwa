@@ -128,6 +128,19 @@ public:
 
     void translateActiveSelection(float dx, float dy);
     void clearSelectionMask();
+    /// Select the whole document. False on a document without finite bounds,
+    /// where "everything" has no edge to stop at.
+    bool selectAll();
+    /// Swap selected for unselected across the document, preserving partial
+    /// coverage (a 40%-selected pixel becomes 60% selected). False when there
+    /// is nothing to invert — Select All is the explicit way to start one.
+    bool invertSelection();
+    /// Restore a previously captured mask verbatim (Reselect, undo-style).
+    /// Takes the pieces of a LassoSelectionState so the controller stays
+    /// independent of the undo-side snapshot types.
+    bool applyRestoredSelectionMask(std::shared_ptr<const MaskTileSnapshot> maskTiles,
+        std::vector<LassoRegion> regions, bool maskHasSoftAlpha, uint32_t canvasWidth,
+        uint32_t canvasHeight);
     void selectActiveLayerContent();
     /// Loads the active layer's mask into the selection: coverage = the mask's
     /// reveal value, so partially revealed (gray) areas become partially
@@ -168,6 +181,15 @@ public:
 private:
     void commitPolygonSelection(std::vector<Vector2> clipped, LassoSelectionMode mode);
     void clearSelectionInternal();
+    /// Hand the current mask tiles' textures back to the pool. Required before
+    /// any wholesale mask replacement: the tiles are about to be dropped, and
+    /// nothing else would ever free their GPU side.
+    void releaseMaskTileTextures();
+    /// Drop an in-flight readback fence and rasterization job, so a selection
+    /// being replaced outright cannot be overwritten by the previous one.
+    void cancelPendingSelectionWork();
+    /// Shared tail of selectAll/invertSelection/applyRestoredSelectionMask.
+    void finishWholesaleMaskReplacement();
 
     CanvasSelectionContext m_ctx;
     LassoSelectionManager m_lassoSelection;

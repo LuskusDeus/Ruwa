@@ -2415,6 +2415,59 @@ void CanvasPanel::clearSelectionMask()
     updateSelectionActionPopup();
 }
 
+bool CanvasPanel::selectAllCanvas()
+{
+    if (!m_glWidget) {
+        return false;
+    }
+
+    if (m_glWidget->transformUsesSelectionMask()) {
+        commitTransformBeforeDocumentMutation();
+    }
+    if (!m_glWidget->selectAll()) {
+        return false;
+    }
+    updateSelectionActionPopup(true);
+    return true;
+}
+
+bool CanvasPanel::invertSelection()
+{
+    if (!m_glWidget) {
+        return false;
+    }
+
+    if (m_glWidget->transformUsesSelectionMask()) {
+        commitTransformBeforeDocumentMutation();
+    }
+    if (!m_glWidget->invertSelection()) {
+        return false;
+    }
+    updateSelectionActionPopup(true);
+    return true;
+}
+
+bool CanvasPanel::canReselectSelection() const
+{
+    return m_glWidget && m_glWidget->canReselect();
+}
+
+bool CanvasPanel::reselectSelection()
+{
+    if (!m_glWidget) {
+        return false;
+    }
+
+    if (m_glWidget->transformUsesSelectionMask()) {
+        commitTransformBeforeDocumentMutation();
+    }
+    if (!m_glWidget->reselect()) {
+        return false;
+    }
+    updateSelectionActionPopup(true);
+    return true;
+}
+
 bool CanvasPanel::deleteSelectionContent()
 {
     if (!m_glWidget || !m_glWidget->hasSelectionMask()) {
