@@ -4678,12 +4678,17 @@ Ruwa использует фреймворк Qt (версия %1), динами�
         <translation>Сохранить как...</translation>
     </message>
     <message>
-        <location filename="../src/shell/top-bar/TopBar.cpp" line="701"/>
-        <source>Export...</source>
-        <translation>Экспорт...</translation>
+        <location filename="../src/shell/top-bar/TopBar.cpp" line="739"/>
+        <source>Export</source>
+        <translation>Экспорт</translation>
     </message>
     <message>
-        <location filename="../src/shell/top-bar/TopBar.cpp" line="703"/>
+        <location filename="../src/shell/top-bar/TopBar.cpp" line="742"/>
+        <source>Export as...</source>
+        <translation>Экспортировать как...</translation>
+    </message>
+    <message>
+        <location filename="../src/shell/top-bar/TopBar.cpp" line="743"/>
         <source>Fast Export as PNG</source>
         <translation>Быстрый экспорт в PNG</translation>
     </message>

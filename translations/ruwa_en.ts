@@ -4600,12 +4600,17 @@ Ruwa uses the Qt framework (version %1), dynamically linked under the GNU Lesser
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location filename="../src/shell/top-bar/TopBar.cpp" line="701"/>
-        <source>Export...</source>
+        <location filename="../src/shell/top-bar/TopBar.cpp" line="739"/>
+        <source>Export</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location filename="../src/shell/top-bar/TopBar.cpp" line="703"/>
+        <location filename="../src/shell/top-bar/TopBar.cpp" line="742"/>
+        <source>Export as...</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location filename="../src/shell/top-bar/TopBar.cpp" line="743"/>
         <source>Fast Export as PNG</source>
         <translation type="unfinished"></translation>
     </message>

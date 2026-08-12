@@ -698,9 +698,9 @@ void TopBar::setupFileMenu()
     m_fileItems.append(MenuItem::Separator());
     m_fileItems.append(commandMenuItem(tr("Save"), QStringLiteral("file.save")));
     m_fileItems.append(commandMenuItem(tr("Save As..."), QStringLiteral("file.saveAs")));
-    m_fileItems.append(commandMenuItem(tr("Export..."), QStringLiteral("file.export")));
-    m_fileItems.append(
-        commandMenuItem(tr("Fast Export as PNG"), QStringLiteral("file.fastExportPng")));
+    // Placeholder: fileItemsWithEnabledState() swaps it for a freshly built one
+    // so the submenu's per-command enabled state is current on every open.
+    m_fileItems.append(buildExportMenuItem());
     m_fileItems.append({ tr("Import..."), QString(), QIcon(), true, false,
         [this]() { emit fileImportImagesRequested(); } });
     m_fileItems.append(MenuItem::Separator());
@@ -723,6 +723,25 @@ void TopBar::setupEditMenu()
     m_editItems.append(buildSelectionMenuItem());
     m_editItems.append(MenuItem::Separator());
     m_editItems.append(commandMenuItem(tr("Preferences..."), QStringLiteral("nav.settings")));
+}
+
+MenuItem TopBar::buildExportMenuItem() const
+{
+    const auto& executor = ruwa::core::CommandExecutor::instance();
+    const auto entry = [&executor](const QString& text, const QString& commandId) {
+        MenuItem item = commandMenuItem(text, commandId);
+        item.enabled = executor.canExecute(commandId);
+        return item;
+    };
+
+    MenuItem exportItem;
+    exportItem.text = tr("Export");
+    exportItem.enabled = isInWorkspace();
+    exportItem.submenu = {
+        entry(tr("Export as..."), QStringLiteral("file.export")),
+        entry(tr("Fast Export as PNG"), QStringLiteral("file.fastExportPng")),
+    };
+    return exportItem;
 }
 
 MenuItem TopBar::buildSelectionMenuItem() const
@@ -1231,19 +1250,30 @@ bool TopBar::isActiveWorkspaceInExportMode() const
 
 QList<MenuItem> TopBar::fileItemsWithEnabledState() const
 {
+    // Keyed by command id rather than by index: inserting a menu entry used to
+    // silently shift the hardcoded indices and grey out the wrong items.
+    static const QStringList kWorkspaceOnlyIds { QStringLiteral("file.save"),
+        QStringLiteral("file.saveAs") };
+
     QList<MenuItem> items = m_fileItems;
     const bool inWorkspace = isInWorkspace();
-    // Indices: 0=New, 1=Open, 2=sep, 3=Save, 4=Save As, 5=Export, 6=Import, 7=sep, 8=Close, 9=Exit
-    if (inWorkspace)
-        return items;
-    if (items.size() > 6)
-        items[6].enabled = false; // Import
-    if (items.size() > 5)
-        items[5].enabled = false; // Export
-    if (items.size() > 4)
-        items[4].enabled = false; // Save As
-    if (items.size() > 3)
-        items[3].enabled = false; // Save
+    for (MenuItem& item : items) {
+        if (item.separator) {
+            continue;
+        }
+        if (item.hasSubmenu()) {
+            item = buildExportMenuItem();
+            continue;
+        }
+        if (item.commandId.isEmpty()) {
+            // Import is the only command-less entry in this menu.
+            item.enabled = inWorkspace;
+            continue;
+        }
+        if (kWorkspaceOnlyIds.contains(item.commandId)) {
+            item.enabled = inWorkspace;
+        }
+    }
     return items;
 }
 

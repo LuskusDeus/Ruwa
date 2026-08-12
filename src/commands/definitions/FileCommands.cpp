@@ -393,7 +393,7 @@ void SaveProjectAsCommand::execute(const CommandContext& ctx, const QVariantMap&
 CommandInfo ExportProjectCommand::info() const
 {
     return CommandInfo { .id = "file.export",
-        .title = "Export",
+        .title = "Export as",
         .category = "File",
         .description = "Toggle export mode for the current project",
         .aliases = { "export", "save-for-web" },
