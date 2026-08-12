@@ -47,7 +47,7 @@ struct CommandArgument {
 struct CommandInfo {
     QString id; // Unique identifier: "file.new", "tab.close"
     QString title; // Display name: "New Project"
-    QString category; // Group: "File", "Tab", "Navigation", "View"
+    QString category; // Group: "File", "Edit", "Tabs & Navigation", "View"
     QString description; // Tooltip/help text
     QStringList aliases; // Quick search aliases: ["fnp", "newproj"]
     QKeySequence defaultShortcut; // Default hotkey

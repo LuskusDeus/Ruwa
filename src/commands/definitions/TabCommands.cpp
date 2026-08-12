@@ -24,7 +24,7 @@ CommandInfo CloseTabCommand::info() const
 {
     return CommandInfo { .id = "tab.close",
         .title = "Close Tab",
-        .category = "Tab",
+        .category = "Tabs & Navigation",
         .description = "Close the current tab",
         .aliases = { "close", "tc" },
         .defaultShortcut = QKeySequence::Close,
@@ -70,7 +70,7 @@ CommandInfo CloseAllTabsCommand::info() const
 {
     return CommandInfo { .id = "tab.closeAll",
         .title = "Close All Tabs",
-        .category = "Tab",
+        .category = "Tabs & Navigation",
         .description = "Close all open tabs",
         .aliases = { "closeall", "tca" },
         .defaultShortcut = QKeySequence(Qt::CTRL | Qt::SHIFT | Qt::Key_W),
@@ -113,7 +113,7 @@ CommandInfo CloseOtherTabsCommand::info() const
 {
     return CommandInfo { .id = "tab.closeOthers",
         .title = "Close Other Tabs",
-        .category = "Tab",
+        .category = "Tabs & Navigation",
         .description = "Close all tabs except the current one",
         .aliases = { "closeothers", "tco" },
         .defaultShortcut = QKeySequence(),
@@ -167,7 +167,7 @@ CommandInfo DuplicateTabCommand::info() const
 {
     return CommandInfo { .id = "tab.duplicate",
         .title = "Duplicate Tab",
-        .category = "Tab",
+        .category = "Tabs & Navigation",
         .description = "Create a copy of the current tab",
         .aliases = { "duplicate", "td" },
         .defaultShortcut = QKeySequence(),
@@ -206,10 +206,12 @@ void DuplicateTabCommand::execute(const CommandContext& ctx, const QVariantMap& 
 
 void registerTabCommands(CommandRegistry& registry)
 {
-    registry.registerCommand(std::make_unique<CloseTabCommand>());
-    registry.registerCommand(std::make_unique<CloseAllTabsCommand>());
-    registry.registerCommand(std::make_unique<CloseOtherTabsCommand>());
+    // Registered after the navigation commands; together they form the single
+    // "Tabs & Navigation" section, closing out with the tab lifecycle actions.
     registry.registerCommand(std::make_unique<DuplicateTabCommand>());
+    registry.registerCommand(std::make_unique<CloseTabCommand>());
+    registry.registerCommand(std::make_unique<CloseOtherTabsCommand>());
+    registry.registerCommand(std::make_unique<CloseAllTabsCommand>());
 }
 
 } // namespace ruwa::core::commands

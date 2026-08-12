@@ -35,8 +35,10 @@ inline void registerAllCommands()
 
     registerFileCommands(registry);
     registerEditCommands(registry);
-    registerTabCommands(registry);
+    // Navigation before Tab: both feed the same "Tabs & Navigation" section, and rows
+    // there follow registration order (switching, then pages, then tab lifecycle).
     registerNavigationCommands(registry);
+    registerTabCommands(registry);
     registerViewCommands(registry);
     registerToolCommands(registry);
     registerLayerCommands(registry);

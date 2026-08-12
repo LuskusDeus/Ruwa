@@ -23,7 +23,7 @@ CommandInfo NextTabCommand::info() const
 {
     return CommandInfo { .id = "nav.nextTab",
         .title = "Next Tab",
-        .category = "Navigation",
+        .category = "Tabs & Navigation",
         .description = "Switch to the next tab",
         .aliases = { "next", "nt" },
         .defaultShortcut = QKeySequence(Qt::CTRL | Qt::Key_Tab),
@@ -54,7 +54,7 @@ CommandInfo PreviousTabCommand::info() const
 {
     return CommandInfo { .id = "nav.previousTab",
         .title = "Previous Tab",
-        .category = "Navigation",
+        .category = "Tabs & Navigation",
         .description = "Switch to the previous tab",
         .aliases = { "prev", "pt" },
         .defaultShortcut = QKeySequence(Qt::CTRL | Qt::SHIFT | Qt::Key_Tab),
@@ -85,7 +85,7 @@ CommandInfo GoToTabCommand::info() const
 {
     return CommandInfo { .id = "nav.goToTab",
         .title = "Go to Tab...",
-        .category = "Navigation",
+        .category = "Tabs & Navigation",
         .description = "Switch to a specific tab by number (1-9)",
         .aliases = { "goto", "gt" },
         .defaultShortcut = QKeySequence(), // Ctrl+1-9 handled separately
@@ -126,7 +126,7 @@ CommandInfo GoToSettingsCommand::info() const
 {
     return CommandInfo { .id = "nav.settings",
         .title = "Go to Settings",
-        .category = "Navigation",
+        .category = "Tabs & Navigation",
         .description = "Open the settings page",
         .aliases = { "settings", "prefs" },
         .defaultShortcut = QKeySequence(Qt::CTRL | Qt::Key_K), // Photoshop: Preferences
@@ -149,8 +149,8 @@ void GoToSettingsCommand::execute(const CommandContext& ctx, const QVariantMap& 
 CommandInfo GoToShortcutManagerCommand::info() const
 {
     return CommandInfo { .id = "settings.shortcuts",
-        .title = "Keyboard Shortcuts",
-        .category = "Settings",
+        .title = "Go to Keyboard Shortcuts",
+        .category = "Tabs & Navigation",
         .description = "Open keyboard shortcut settings",
         .aliases = { "shortcuts", "keyboard-shortcuts", "hotkeys" },
         .defaultShortcut = QKeySequence(Qt::CTRL | Qt::ALT | Qt::SHIFT | Qt::Key_K),
@@ -184,7 +184,7 @@ CommandInfo GoToAboutCommand::info() const
 {
     return CommandInfo { .id = "nav.about",
         .title = "Go to About Ruwa",
-        .category = "Navigation",
+        .category = "Tabs & Navigation",
         .description = "Open the About section on the home page",
         .aliases = { "about", "about ruwa", "info", "help" },
         .defaultShortcut = QKeySequence(Qt::Key_F1),
@@ -208,7 +208,7 @@ CommandInfo GoToHomeCommand::info() const
 {
     return CommandInfo { .id = "nav.home",
         .title = "Go to Home",
-        .category = "Navigation",
+        .category = "Tabs & Navigation",
         .description = "Go to the home page",
         .aliases = { "home", "start" },
         .defaultShortcut = QKeySequence(Qt::ALT | Qt::Key_Home),
@@ -230,6 +230,9 @@ void GoToHomeCommand::execute(const CommandContext& ctx, const QVariantMap& args
 
 void registerNavigationCommands(CommandRegistry& registry)
 {
+    // Order matters: commands land in the "Tabs & Navigation" section in registration
+    // order, so keep tab switching first, then the go-to-page commands. Tab lifecycle
+    // (close/duplicate) is registered right after this, from registerTabCommands().
     registry.registerCommand(std::make_unique<NextTabCommand>());
     registry.registerCommand(std::make_unique<PreviousTabCommand>());
     registry.registerCommand(std::make_unique<GoToTabCommand>());

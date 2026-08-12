@@ -22,6 +22,8 @@
 #include "shared/resources/IconProvider.h"
 #include "shared/utils/FileDialogMemory.h"
 
+#include <algorithm>
+
 #include <QFile>
 #include <QFileDialog>
 #include <QFileInfo>
@@ -456,13 +458,32 @@ void ShortcutManagerTab::createCategories()
     categoryNames.removeAll(QStringLiteral("Easter Eggs"));
     categoryNames.sort(Qt::CaseInsensitive);
 
+    // Menu-bar order rather than alphabet: a shortcut list reads best when it follows
+    // the order people already know from the menus. Anything unlisted keeps sorting
+    // alphabetically after the known ones.
+    static const QStringList preferredOrder = { QStringLiteral("File"), QStringLiteral("Edit"),
+        QStringLiteral("Selection"), QStringLiteral("Layers"), QStringLiteral("Tools"),
+        QStringLiteral("View"), QStringLiteral("Tabs & Navigation") };
+    std::stable_sort(categoryNames.begin(), categoryNames.end(),
+        [](const QString& a, const QString& b) {
+            const int ia = preferredOrder.indexOf(a);
+            const int ib = preferredOrder.indexOf(b);
+            if (ia < 0 && ib < 0) {
+                return false; // both unknown: keep the alphabetical order
+            }
+            if (ia < 0 || ib < 0) {
+                return ib < 0; // known categories come first
+            }
+            return ia < ib;
+        });
+
     // Map category names to icons (only valid StandardIcon enum values)
     static const QHash<QString, IconProvider::StandardIcon> categoryIcons = {
         { "File", IconProvider::StandardIcon::FileNew },
         { "Edit", IconProvider::StandardIcon::Edit },
         { "View", IconProvider::StandardIcon::Appearance },
-        { "Navigation", IconProvider::StandardIcon::Home },
-        { "Tab", IconProvider::StandardIcon::BasicFile },
+        { "Tabs & Navigation", IconProvider::StandardIcon::Home },
+        { "Selection", IconProvider::StandardIcon::SquareSelection },
         { "Layers", IconProvider::StandardIcon::Folder },
         { "Transform", IconProvider::StandardIcon::Move },
         { "Tools", IconProvider::StandardIcon::Brush },
