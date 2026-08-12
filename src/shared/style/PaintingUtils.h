@@ -451,12 +451,17 @@ inline void drawKeycapFrame(QPainter& painter, const QRectF& rect, qreal radius,
 
     const qreal depth = qBound<qreal>(0.0, bottomDepth, rect.height() * 0.35);
     if (depth > 0.5) {
-        QColor bottomFill = detail::interpolateColor(fill, borderBottom, 0.55);
-        bottomFill.setAlpha(qMax(bottomFill.alpha(), borderBottom.alpha()));
+        // The skirt is the border's own color, shaded across its own height rather
+        // than blended into the fill: the whole borderTop..borderBottom ramp is spent
+        // inside the skirt band, so the gradient survives being only a few px tall.
+        const QRectF skirtRect(rect.left(), rect.bottom() - depth, rect.width(), depth + 1.0);
+        QLinearGradient skirtGradient(skirtRect.topLeft(), skirtRect.bottomLeft());
+        skirtGradient.setColorAt(0.0, borderTop);
+        skirtGradient.setColorAt(1.0, borderBottom);
 
         painter.save();
-        painter.setClipRect(QRectF(rect.left(), rect.bottom() - depth, rect.width(), depth + 1.0));
-        painter.setBrush(bottomFill);
+        painter.setClipRect(skirtRect);
+        painter.setBrush(skirtGradient);
         painter.drawRoundedRect(rect, radius, radius);
         painter.restore();
     }

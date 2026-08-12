@@ -135,7 +135,7 @@ private:
             const auto& theme = ruwa::ui::core::ThemeManager::instance();
             const bool compact = sizeVariant == SizeVariant::Compact;
             const int minimumWidth = theme.scaled(compact ? 21 : 28);
-            const int padding = theme.scaled(compact ? 6 : 10);
+            const int padding = theme.scaled(compact ? 5 : 8);
             width = qMax<qreal>(minimumWidth, width + padding * 2);
         }
         layout.parts.append({ text, width, keycap });
@@ -165,31 +165,18 @@ private:
                 appendPart(layout, QStringLiteral(","), false, metrics, sizeVariant);
             }
 
+            // Keys inside one chord are separated by the gap between caps alone: a "+"
+            // glyph plus its two gaps costs more width than it carries meaning.
             const QKeyCombination chord = shortcut[chordIndex];
-            bool hasPart = false;
             const Qt::KeyboardModifiers modifiers = chord.keyboardModifiers();
             for (const Qt::KeyboardModifier modifier : modifierOrder) {
                 if (!modifiers.testFlag(modifier)) {
                     continue;
                 }
-                const QString modifierText = nativeModifierText(modifier);
-                if (modifierText.isEmpty()) {
-                    continue;
-                }
-                if (hasPart) {
-                    appendPart(layout, QStringLiteral("+"), false, metrics, sizeVariant);
-                }
-                appendPart(layout, modifierText, true, metrics, sizeVariant);
-                hasPart = true;
+                appendPart(layout, nativeModifierText(modifier), true, metrics, sizeVariant);
             }
 
-            const QString keyText = nativeKeyText(chord.key());
-            if (!keyText.isEmpty()) {
-                if (hasPart) {
-                    appendPart(layout, QStringLiteral("+"), false, metrics, sizeVariant);
-                }
-                appendPart(layout, keyText, true, metrics, sizeVariant);
-            }
+            appendPart(layout, nativeKeyText(chord.key()), true, metrics, sizeVariant);
         }
 
         finishLayout(layout);
@@ -236,19 +223,31 @@ private:
             y = availableRect.center().y() - layout.size.height() / 2.0;
         }
 
-        const QColor keyFill = emphasized
-            ? ruwa::ui::core::ThemeColors::withAlpha(colors.primary, colors.isDark ? 32 : 44)
-            : ruwa::ui::core::ThemeColors::interpolate(
-                  colors.overlayBase(), colors.overlayHover(), 0.75);
+        // Opaque palette colors rather than a white overlay: the cap sits a step below
+        // the surface it is painted on. surfaceAlt is the darkest step still ABOVE the
+        // window background — anchoring lower turns the cap into a hole on presets like
+        // Obsidian, whose background is already 10/10/10.
+        using Colors = ruwa::ui::core::ThemeColors;
+        QColor keyFill = colors.isDark ? colors.surfaceAlt
+                                       : Colors::adjustBrightness(colors.surface, 0.96);
+        if (emphasized) {
+            keyFill = Colors::interpolate(keyFill, colors.primary, colors.isDark ? 0.16 : 0.12);
+        }
+        keyFill.setAlpha(255);
+
+        // Dark themes lift the top rim towards the text color instead of scaling
+        // brightness: a near-black fill scales to itself and leaves the cap edgeless.
         QColor keyBorderTop = emphasized
-            ? ruwa::ui::core::ThemeColors::withAlpha(colors.primary, 132)
-            : ruwa::ui::core::ThemeColors::interpolate(
-                  colors.borderSubtle(), colors.borderSubtleHover(), 0.25);
-        QColor keyBorderBottom = keyBorderTop;
-        keyBorderBottom.setAlpha(qRound(keyBorderBottom.alpha() * 0.5));
-        QColor separatorColor
-            = ruwa::ui::core::ThemeColors::interpolate(keyBorderBottom, keyBorderTop, 0.7);
-        separatorColor.setAlpha(qMax(separatorColor.alpha(), colors.isDark ? 128 : 112));
+            ? Colors::interpolate(keyFill, colors.primary, colors.isDark ? 0.45 : 0.35)
+            : (colors.isDark ? Colors::interpolate(keyFill, colors.text, 0.20)
+                             : Colors::adjustBrightness(keyFill, 0.86));
+        QColor keyBorderBottom = colors.isDark
+            ? Colors::interpolate(keyFill, colors.background, 0.55)
+            : Colors::adjustBrightness(keyFill, 0.86);
+        keyBorderTop.setAlpha(255);
+        keyBorderBottom.setAlpha(255);
+
+        const QColor separatorColor = Colors::withAlpha(colors.textMuted, 150);
 
         painter.save();
         painter.setFont(layout.font);
