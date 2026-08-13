@@ -40,8 +40,16 @@ public:
     QString latestReleaseDescription() const { return m_latestReleaseDescription; }
 
     void downloadUpdate();
-    bool applyUpdateAndRestart();
+    bool applyUpdateAndRestart(QString* errorMessage = nullptr);
     bool hasPendingDownloadedUpdate() const;
+
+    /// Appends one line to the shared installer log. The installer script writes into the same
+    /// file, so an attempt reads as a single story even when it never reaches the script.
+    void logInstallerEvent(const QString& message) const;
+    /// Human readable reason why hasPendingDownloadedUpdate() is false; empty when it is true.
+    QString pendingDownloadObstacle() const;
+    /// Path of the shared installer log, creating its directory; empty when it is unavailable.
+    QString installerLogPath() const;
 
     static bool isVersionNewer(const QString& currentVersion, const QString& remoteVersion);
     static void acknowledgeSuccessfulUpdateStartup();

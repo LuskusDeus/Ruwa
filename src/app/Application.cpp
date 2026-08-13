@@ -397,11 +397,21 @@ bool Application::isFactoryResetRestartInProgress()
     return s_factoryResetRestartInProgress;
 }
 
-bool Application::restartWithUpdate()
+bool Application::restartWithUpdate(QString* errorMessage)
 {
     auto* updateManager = services::UpdateManager::instance();
-    if (!updateManager->hasPendingDownloadedUpdate()) {
+    const auto fail = [updateManager, errorMessage](const QString& reason) {
+        updateManager->logInstallerEvent(QStringLiteral("Install refused: ") + reason);
+        if (errorMessage) {
+            *errorMessage = reason;
+        }
         return false;
+    };
+
+    updateManager->logInstallerEvent(QStringLiteral("Restart and install requested"));
+    if (!updateManager->hasPendingDownloadedUpdate()) {
+        return fail(QStringLiteral("there is no update package ready to install: %1")
+                        .arg(updateManager->pendingDownloadObstacle()));
     }
 
     QWidget* windowToClose = QApplication::activeWindow();
@@ -420,16 +430,27 @@ bool Application::restartWithUpdate()
     }
 
     if (windowToClose) {
+        const QString windowDescription = QStringLiteral("%1 (%2)")
+                                              .arg(QString::fromUtf8(
+                                                       windowToClose->metaObject()->className()),
+                                                  windowToClose->windowTitle());
+        updateManager->logInstallerEvent(QStringLiteral("Closing window ") + windowDescription);
         QPointer<QWidget> guard = windowToClose;
         windowToClose->close();
 
         // Closing can be rejected (e.g. unsaved projects confirmation).
         if (guard && guard->isVisible()) {
-            return false;
+            return fail(QStringLiteral("the window %1 stayed open, so the installer was not "
+                                       "started (an unsaved project confirmation was dismissed, or "
+                                       "a tab is still closing)")
+                            .arg(windowDescription));
         }
+    } else {
+        updateManager->logInstallerEvent(
+            QStringLiteral("No visible window to close before installing"));
     }
 
-    return updateManager->applyUpdateAndRestart();
+    return updateManager->applyUpdateAndRestart(errorMessage);
 }
 
 bool Application::runFactoryResetIfRequested(const QStringList& arguments)

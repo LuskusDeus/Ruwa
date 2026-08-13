@@ -36,6 +36,9 @@ constexpr qint64 kMaximumManifestBytes = 64 * 1024;
 constexpr qint64 kMaximumSignatureBytes = 64 * 1024;
 constexpr qsizetype kDownloadChunkBytes = 64 * 1024;
 constexpr qsizetype kMaximumEncodedCommandCharacters = 8000;
+// The installer log keeps every attempt of this installation. Rotating it at half a megabyte
+// keeps one previous generation around without letting the file grow without bound.
+constexpr qint64 kMaximumInstallerLogBytes = 512 * 1024;
 
 QString updateManifestUrlString()
 {
@@ -423,7 +426,11 @@ void UpdateManager::onCheckReply()
         m_downloadTargetPath.clear();
         m_downloadVerified = false;
     } else {
-        verifyExistingPendingArchive();
+        const bool packageReady = verifyExistingPendingArchive();
+        logInstallerEvent(QStringLiteral("Update check: %1 is available (running %2), already "
+                                         "downloaded package: %3")
+                              .arg(manifest->version, QCoreApplication::applicationVersion(),
+                                  packageReady ? QStringLiteral("yes") : QStringLiteral("no")));
     }
     finishUpdateCheck(true, hasUpdate, manifest->version);
 }
@@ -487,6 +494,9 @@ void UpdateManager::downloadUpdate()
     m_downloadBytes = 0;
     m_downloadFailure.clear();
     m_downloadVerified = false;
+    logInstallerEvent(
+        QStringLiteral("Downloading %1 from %2 to %3")
+            .arg(m_latestManifest.version, m_latestDownloadUrl, m_downloadTargetPath));
 
     QNetworkRequest request { QUrl(m_latestDownloadUrl) };
     request.setTransferTimeout(0);
@@ -604,6 +614,7 @@ void UpdateManager::onDownloadFinished()
     if (!error.isEmpty()) {
         m_downloadVerified = false;
         QFile::remove(m_downloadTargetPath);
+        logInstallerEvent(QStringLiteral("Download failed: ") + error);
         emit downloadFinished(false, error);
         return;
     }
@@ -611,10 +622,13 @@ void UpdateManager::onDownloadFinished()
     if (!persistPendingMetadata(&error)) {
         m_downloadVerified = false;
         QFile::remove(m_downloadTargetPath);
+        logInstallerEvent(QStringLiteral("Download failed: ") + error);
         emit downloadFinished(false, error);
         return;
     }
     m_downloadVerified = true;
+    logInstallerEvent(QStringLiteral("Download verified: %1 bytes, SHA-256 matches the manifest")
+                          .arg(m_downloadBytes));
     emit downloadProgress(100);
     emit downloadFinished(true, m_downloadTargetPath);
 }
@@ -661,16 +675,79 @@ bool UpdateManager::hasPendingDownloadedUpdate() const
         && QFileInfo::exists(pendingManifestPath()) && QFileInfo::exists(pendingSignaturePath());
 }
 
-bool UpdateManager::applyUpdateAndRestart()
+QString UpdateManager::pendingDownloadObstacle() const
 {
-    if (!builtInUpdatesEnabled() || !hasPendingDownloadedUpdate()) {
+    if (m_downloadTargetPath.isEmpty()) {
+        return QStringLiteral("no update package has been selected for this session");
+    }
+    if (!m_downloadVerified) {
+        return QStringLiteral(
+            "the downloaded package was not verified in this session (a check for updates has to "
+            "run again after a restart before the package can be applied)");
+    }
+    const QFileInfo archive(m_downloadTargetPath);
+    if (!archive.exists() || !archive.isFile()) {
+        return QStringLiteral("the downloaded package is missing: ") + m_downloadTargetPath;
+    }
+    if (archive.size() != m_latestManifest.archiveSize) {
+        return QStringLiteral("the downloaded package is %1 bytes, the manifest expects %2")
+            .arg(archive.size())
+            .arg(m_latestManifest.archiveSize);
+    }
+    if (!QFileInfo::exists(pendingManifestPath())) {
+        return QStringLiteral("the saved manifest is missing: ") + pendingManifestPath();
+    }
+    if (!QFileInfo::exists(pendingSignaturePath())) {
+        return QStringLiteral("the saved manifest signature is missing: ") + pendingSignaturePath();
+    }
+    return {};
+}
+
+void UpdateManager::logInstallerEvent(const QString& message) const
+{
+    const QString logPath = installerLogPath();
+    if (logPath.isEmpty()) {
+        return;
+    }
+    const QFileInfo existing(logPath);
+    if (existing.exists() && existing.size() > kMaximumInstallerLogBytes) {
+        const QString previousPath = logPath + QStringLiteral(".prev");
+        QFile::remove(previousPath);
+        QFile::rename(logPath, previousPath);
+    }
+    QFile file(logPath);
+    if (!file.open(QIODevice::WriteOnly | QIODevice::Append | QIODevice::Text)) {
+        return;
+    }
+    const QString line
+        = QStringLiteral("[%1] [app] %2\n")
+              .arg(QDateTime::currentDateTime().toString(QStringLiteral("yyyy-MM-dd HH:mm:ss")),
+                  message);
+    file.write(line.toUtf8());
+}
+
+bool UpdateManager::applyUpdateAndRestart(QString* errorMessage)
+{
+    const auto fail = [this, errorMessage](const QString& reason) {
+        logInstallerEvent(QStringLiteral("Install refused: ") + reason);
+        if (errorMessage) {
+            *errorMessage = reason;
+        }
         return false;
+    };
+
+    if (!builtInUpdatesEnabled()) {
+        return fail(QStringLiteral("built-in updates are disabled in this build"));
+    }
+    if (!hasPendingDownloadedUpdate()) {
+        return fail(QStringLiteral("there is no update package ready to install: %1")
+                        .arg(pendingDownloadObstacle()));
     }
 
 #if defined(Q_OS_WIN)
     QFile scriptResource(QStringLiteral(":/updates/ApplyUpdate.ps1"));
     if (!scriptResource.open(QIODevice::ReadOnly | QIODevice::Text)) {
-        return false;
+        return fail(QStringLiteral("the bundled installer script could not be read"));
     }
     QString script = QString::fromUtf8(scriptResource.readAll());
     const QString token = updateHealthToken();
@@ -681,16 +758,29 @@ bool UpdateManager::applyUpdateAndRestart()
 
     const QString installDirectory
         = QFileInfo(QCoreApplication::applicationFilePath()).absolutePath();
+    const bool requireElevation = !installParentIsWritable();
+    logInstallerEvent(QStringLiteral("Installing %1 over %2")
+                          .arg(m_latestManifest.version, QCoreApplication::applicationVersion()));
+    logInstallerEvent(QStringLiteral("Install directory: ") + installDirectory);
+    logInstallerEvent(QStringLiteral("Package: %1 (%2 bytes)")
+                          .arg(m_downloadTargetPath)
+                          .arg(m_latestManifest.archiveSize));
+    logInstallerEvent(QStringLiteral("Elevation required: %1")
+                          .arg(requireElevation ? QStringLiteral("yes (the installation directory "
+                                                                 "is not writable, Windows will "
+                                                                 "show a User Account Control "
+                                                                 "prompt)")
+                                                : QStringLiteral("no")));
     const QJsonObject configuration {
         { QStringLiteral("pid"), static_cast<double>(GetCurrentProcessId()) },
         { QStringLiteral("archivePath"), m_downloadTargetPath },
         { QStringLiteral("manifestPath"), pendingManifestPath() },
         { QStringLiteral("signaturePath"), pendingSignaturePath() },
         { QStringLiteral("installDirectory"), installDirectory },
-        { QStringLiteral("logPath"),
-            QDir(storageDirectory).absoluteFilePath(QStringLiteral("last-update.log")) },
+        { QStringLiteral("logPath"), installerLogPath() },
         { QStringLiteral("trustedCertificateSha256"), trustedSignerFingerprint().toLower() },
         { QStringLiteral("expectedVersion"), m_latestManifest.version },
+        { QStringLiteral("currentVersion"), QCoreApplication::applicationVersion() },
         { QStringLiteral("healthToken"), token },
         { QStringLiteral("healthMarkerPath"), markerPath },
     };
@@ -698,7 +788,7 @@ bool UpdateManager::applyUpdateAndRestart()
         = QJsonDocument(configuration).toJson(QJsonDocument::Compact).toBase64();
     const QString configurationMarker = QStringLiteral("__RUWA_CONFIG_BASE64__");
     if (!script.contains(configurationMarker)) {
-        return false;
+        return fail(QStringLiteral("the bundled installer script has no configuration slot"));
     }
     script.replace(configurationMarker, QString::fromLatin1(configurationBase64));
 
@@ -706,7 +796,8 @@ bool UpdateManager::applyUpdateAndRestart()
         = QDir(storageDirectory).absoluteFilePath(QStringLiteral("pending-installer.ps1"));
     const QByteArray installerScriptBytes = script.toUtf8();
     if (!writeAtomically(installerScriptPath, installerScriptBytes)) {
-        return false;
+        return fail(QStringLiteral("the installer script could not be written to ")
+            + installerScriptPath);
     }
     const QString scriptPathBase64 = QString::fromLatin1(installerScriptPath.toUtf8().toBase64());
     const QString scriptSha256 = QString::fromLatin1(
@@ -726,21 +817,26 @@ bool UpdateManager::applyUpdateAndRestart()
     const QString encodedCommand = QString::fromLatin1(utf16Bootstrap.toBase64());
     if (encodedCommand.size() > kMaximumEncodedCommandCharacters) {
         QFile::remove(installerScriptPath);
-        return false;
+        return fail(QStringLiteral("the installer command line is too long (%1 characters)")
+                        .arg(encodedCommand.size()));
     }
 
     const QStringList arguments { QStringLiteral("-NoProfile"), QStringLiteral("-NonInteractive"),
         QStringLiteral("-WindowStyle"), QStringLiteral("Hidden"), QStringLiteral("-EncodedCommand"),
         encodedCommand };
-    const bool started = startWindowsInstallerProcess(arguments, !installParentIsWritable());
-    if (started) {
-        qApp->quit();
-    } else {
+    const bool started = startWindowsInstallerProcess(arguments, requireElevation);
+    if (!started) {
         QFile::remove(installerScriptPath);
+        return fail(requireElevation
+                ? QStringLiteral("Windows did not start the elevated installer (the User Account "
+                                 "Control prompt was dismissed or blocked)")
+                : QStringLiteral("Windows did not start the installer process"));
     }
-    return started;
+    logInstallerEvent(QStringLiteral("Installer process started, quitting the application"));
+    qApp->quit();
+    return true;
 #else
-    return false;
+    return fail(QStringLiteral("automatic installation is only implemented on Windows"));
 #endif
 }
 
@@ -770,7 +866,13 @@ void UpdateManager::acknowledgeSuccessfulUpdateStartup()
     }
     const QString markerPath
         = QDir(storageDirectory).absoluteFilePath(QStringLiteral("health-%1.ok").arg(token));
-    writeAtomically(markerPath, QCoreApplication::applicationVersion().toUtf8());
+    const bool written
+        = writeAtomically(markerPath, QCoreApplication::applicationVersion().toUtf8());
+    instance()->logInstallerEvent(
+        QStringLiteral("Startup health check: this build reports version %1, marker %2")
+            .arg(QCoreApplication::applicationVersion(),
+                written ? QStringLiteral("written") : QStringLiteral("could not be written to ")
+                        + markerPath));
 }
 
 QString UpdateManager::updateStorageDirectory() const
@@ -781,6 +883,15 @@ QString UpdateManager::updateStorageDirectory() const
     }
     return basePath.isEmpty() ? QString()
                               : QDir(basePath).absoluteFilePath(QStringLiteral("updates"));
+}
+
+QString UpdateManager::installerLogPath() const
+{
+    const QString storageDirectory = updateStorageDirectory();
+    if (storageDirectory.isEmpty() || !QDir().mkpath(storageDirectory)) {
+        return {};
+    }
+    return QDir(storageDirectory).absoluteFilePath(QStringLiteral("last-update.log"));
 }
 
 QString UpdateManager::updatePathForFileName(const QString& fileName) const

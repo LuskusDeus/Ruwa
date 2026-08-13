@@ -73,6 +73,7 @@ private:
     void syncFromSettings();
     void applyUpdateCheckResult(bool hasUpdate, const QString& versionInfo);
     void finishPendingUpdateRecheck();
+    void showUpdateInstallFailure(const QString& reason);
 
 private slots:
     void onResetSettingsClicked();

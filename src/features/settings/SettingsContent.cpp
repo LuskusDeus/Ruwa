@@ -35,6 +35,10 @@
 #include <QDateTime>
 #include <QPainter>
 #include <QPainterPath>
+#include <QDesktopServices>
+#include <QFileInfo>
+#include <QPointer>
+#include <QUrl>
 
 namespace ruwa::ui::widgets {
 
@@ -507,6 +511,23 @@ void SettingsContent::applyUpdateCheckResult(bool hasUpdate, const QString& vers
             : UpdateState::UpdateAvailable);
 }
 
+void SettingsContent::showUpdateInstallFailure(const QString& reason)
+{
+    const QString detail
+        = reason.isEmpty() ? tr("The installer did not start.") : reason;
+    const QString message = tr("The update could not be installed:\n%1").arg(detail);
+
+    const QString logPath = ruwa::services::UpdateManager::instance()->installerLogPath();
+    QList<MessageButton> actions { { tr("Close"), true, []() { } } };
+    if (!logPath.isEmpty() && QFileInfo::exists(logPath)) {
+        actions.prepend({ tr("Show log"), false, [logPath]() {
+                             QDesktopServices::openUrl(
+                                 QUrl::fromLocalFile(QFileInfo(logPath).absolutePath()));
+                         } });
+    }
+    MessagePopupManager::show(this, message, actions, 460, m_updatesSettingsWidget);
+}
+
 void SettingsContent::finishPendingUpdateRecheck()
 {
     if (!m_updateRecheckInProgress || !m_updateRecheckResultReady) {
@@ -584,9 +605,14 @@ void SettingsContent::createUpdatesCategory()
                 MessagePopupManager::show(this, tr("Apply update and restart?"),
                     { { tr("Cancel"), false, []() {} },
                         { tr("Restart"), true,
-                            []() {
-                                QTimer::singleShot(220, []() {
-                                    if (!ruwa::Application::restartWithUpdate()) { }
+                            [this]() {
+                                QPointer<SettingsContent> guard(this);
+                                QTimer::singleShot(220, [guard]() {
+                                    QString error;
+                                    if (ruwa::Application::restartWithUpdate(&error) || !guard) {
+                                        return;
+                                    }
+                                    guard->showUpdateInstallFailure(error);
                                 });
                             } } },
                     360, m_updatesSettingsWidget);

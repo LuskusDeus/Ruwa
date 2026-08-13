@@ -16,10 +16,30 @@ $extractDirectory = $null
 $oldInstallMoved = $false
 $newInstallActivated = $false
 $updateSucceeded = $false
+$scriptStopwatch = [Diagnostics.Stopwatch]::StartNew()
 
+# The log is append-only and shared with the application, so one file tells the whole story of an
+# attempt: what the app did before the restart, every step here, and how it ended. Logging is a
+# diagnostic aid only - a failure to write must never break or roll back an update.
 function Write-UpdateLog([string]$Message) {
-    $timestamp = Get-Date -Format 'yyyy-MM-dd HH:mm:ss'
-    Add-Content -LiteralPath $config.logPath -Value ('[' + $timestamp + '] ' + $Message)
+    try {
+        $timestamp = Get-Date -Format 'yyyy-MM-dd HH:mm:ss'
+        $elapsed = '{0,6:0.0}s' -f $scriptStopwatch.Elapsed.TotalSeconds
+        Add-Content -LiteralPath $config.logPath `
+            -Value ('[' + $timestamp + '] [installer ' + $elapsed + '] ' + $Message)
+    } catch {
+    }
+}
+
+function Get-DirectorySummary([string]$Path) {
+    try {
+        $files = @(Get-ChildItem -LiteralPath $Path -Recurse -File -Force -ErrorAction Stop)
+        $bytes = ($files | Measure-Object -Property Length -Sum).Sum
+        if (-not $bytes) { $bytes = 0 }
+        return ('{0} files, {1:N1} MB' -f $files.Count, ($bytes / 1MB))
+    } catch {
+        return ('unreadable: ' + $_.Exception.Message)
+    }
 }
 
 function Invoke-WithRetry([scriptblock]$Action, [string]$Label) {
@@ -118,11 +138,23 @@ function Get-InstallProcessIds([string]$ExecutablePath) {
 try {
     New-Item -ItemType Directory -Path ([IO.Path]::GetDirectoryName($config.logPath)) `
         -Force | Out-Null
-    Set-Content -LiteralPath $config.logPath -Value (
-        '[' + (Get-Date -Format 'yyyy-MM-dd HH:mm:ss') + '] Starting signed update')
+    $currentVersion = 'unknown'
+    if ($config.currentVersion) {
+        $currentVersion = [string]$config.currentVersion
+    }
+    Write-UpdateLog ('Starting signed update: ' + $currentVersion + ' -> ' +
+        [string]$config.expectedVersion)
+    Write-UpdateLog ('Install directory: ' + [string]$config.installDirectory + ' (' +
+        (Get-DirectorySummary ([string]$config.installDirectory)) + ')')
+    Write-UpdateLog ('Installer host: PowerShell ' + $PSVersionTable.PSVersion.ToString() +
+        ', elevated: ' + (Test-IsElevated) + ', user: ' + [Environment]::UserName)
 
     if ($config.pid -gt 0) {
+        Write-UpdateLog ('Waiting for the application (PID ' + [int]$config.pid + ') to exit')
         Wait-Process -Id ([int]$config.pid) -ErrorAction SilentlyContinue
+        Write-UpdateLog 'The application has exited'
+    } else {
+        Write-UpdateLog 'No application process to wait for'
     }
     Start-Sleep -Milliseconds 500
 
@@ -131,6 +163,7 @@ try {
             throw ('Required update file is missing: ' + $requiredPath)
         }
     }
+    Write-UpdateLog 'Package, manifest and signature are present'
 
     try {
         Add-Type -AssemblyName System.Security.Cryptography.Pkcs -ErrorAction Stop
@@ -156,6 +189,8 @@ try {
     if ($certificateHash -ne ([string]$config.trustedCertificateSha256).ToLowerInvariant()) {
         throw 'The update was signed by an unknown publisher'
     }
+    Write-UpdateLog ('Manifest signature verified, signer ' +
+        $signedCms.SignerInfos[0].Certificate.Subject)
 
     $manifest = [Text.Encoding]::UTF8.GetString($manifestBytes) | ConvertFrom-Json
     if ($manifest.format -ne 'ruwa-patch-v1' -or $manifest.product -ne 'Ruwa' -or
@@ -168,6 +203,9 @@ try {
         (Get-Sha256 $config.archivePath) -ne ([string]$manifest.archive.sha256).ToLowerInvariant()) {
         throw 'The update archive does not match the signed manifest'
     }
+    Write-UpdateLog ('Manifest accepted: ' + [string]$manifest.version + ', ' +
+        @($manifest.files).Count + ' files to replace, ' +
+        @($manifest.delete).Count + ' to delete; archive SHA-256 matches')
 
     $installDirectory = [IO.Path]::GetFullPath([string]$config.installDirectory).TrimEnd('\')
     $parentDirectory = [IO.Path]::GetDirectoryName($installDirectory)
@@ -182,13 +220,17 @@ try {
     $failedDirectory = Join-Path $parentDirectory ('.' + $installName + '.failed-' + $suffix)
     $extractDirectory = Join-Path ([IO.Path]::GetTempPath()) ('RuwaUpdate-' + $suffix)
 
+    Write-UpdateLog ('Working directories: stage ' + $stageDirectory + ', backup ' +
+        $backupDirectory + ', extract ' + $extractDirectory)
     foreach ($path in @($stageDirectory, $backupDirectory, $failedDirectory, $extractDirectory)) {
         if (Test-Path -LiteralPath $path) {
+            Write-UpdateLog ('Removing a leftover directory from an earlier attempt: ' + $path)
             Remove-Item -LiteralPath $path -Recurse -Force
         }
     }
     New-Item -ItemType Directory -Path $extractDirectory -Force | Out-Null
     Expand-Archive -LiteralPath $config.archivePath -DestinationPath $extractDirectory -Force
+    Write-UpdateLog ('Archive extracted (' + (Get-DirectorySummary $extractDirectory) + ')')
 
     $expectedSources = [Collections.Generic.HashSet[string]]::new(
         [StringComparer]::OrdinalIgnoreCase)
@@ -214,15 +256,19 @@ try {
             throw ('Unexpected file in update archive: ' + $relative)
         }
     }
+    Write-UpdateLog ('All ' + $actualFiles.Count + ' extracted files match the signed manifest')
 
     New-Item -ItemType Directory -Path $stageDirectory -Force | Out-Null
     Get-ChildItem -LiteralPath $installDirectory -Force |
         Copy-Item -Destination $stageDirectory -Recurse -Force
+    Write-UpdateLog ('Current installation copied to the stage directory (' +
+        (Get-DirectorySummary $stageDirectory) + ')')
 
     if ($manifest.delete) {
         foreach ($deletePath in $manifest.delete) {
             $destination = Resolve-ContainedPath $stageDirectory ([string]$deletePath)
             if (Test-Path -LiteralPath $destination) {
+                Write-UpdateLog ('Deleting from the stage: ' + $deletePath)
                 Remove-Item -LiteralPath $destination -Recurse -Force
             }
         }
@@ -246,6 +292,7 @@ try {
     if (-not (Test-Path -LiteralPath $stagedExecutable -PathType Leaf)) {
         throw 'Ruwa.exe is missing from the staged installation'
     }
+    Write-UpdateLog ('Stage is ready (' + (Get-DirectorySummary $stageDirectory) + ')')
 
     $installedExecutable = Join-Path $installDirectory 'Ruwa.exe'
     $runningInstallProcessIds = @(Get-InstallProcessIds $installedExecutable)
@@ -257,62 +304,71 @@ try {
     Invoke-WithRetry { Move-Item -LiteralPath $installDirectory -Destination $backupDirectory } `
         'Failed to back up the current installation'
     $oldInstallMoved = $true
+    Write-UpdateLog 'The previous installation has been moved aside'
     Invoke-WithRetry { Move-Item -LiteralPath $stageDirectory -Destination $installDirectory } `
         'Failed to activate the staged installation'
     $newInstallActivated = $true
+    Write-UpdateLog 'The staged installation is now live'
 
     $newExecutable = Join-Path $installDirectory 'Ruwa.exe'
+    Write-UpdateLog ('Starting the updated application for the health check: ' + $newExecutable)
     Start-Ruwa $newExecutable $installDirectory ('--ruwa-update-health=' + $config.healthToken)
+    $healthStopwatch = [Diagnostics.Stopwatch]::StartNew()
     $deadline = (Get-Date).AddSeconds(60)
     while ((Get-Date) -lt $deadline -and -not (Test-Path -LiteralPath $config.healthMarkerPath)) {
         Start-Sleep -Milliseconds 250
     }
-    if (-not (Test-Path -LiteralPath $config.healthMarkerPath) -or
-        (Get-Content -LiteralPath $config.healthMarkerPath -Raw).Trim() -ne $config.expectedVersion) {
-        throw 'The updated application did not complete its startup health check'
+    if (-not (Test-Path -LiteralPath $config.healthMarkerPath)) {
+        throw ('The updated application wrote no health marker within ' +
+            ('{0:0.0}' -f $healthStopwatch.Elapsed.TotalSeconds) + 's (it did not start, or it ' +
+            'crashed before finishing startup)')
     }
+    $reportedVersion = (Get-Content -LiteralPath $config.healthMarkerPath -Raw).Trim()
+    if ($reportedVersion -ne $config.expectedVersion) {
+        throw ('The updated application reports version "' + $reportedVersion + '" but the ' +
+            'manifest promised "' + [string]$config.expectedVersion + '"')
+    }
+    Write-UpdateLog ('Health check passed after ' +
+        ('{0:0.0}' -f $healthStopwatch.Elapsed.TotalSeconds) + 's, the running build reports ' +
+        $reportedVersion)
 
     # The health check is the transaction commit point. Cleanup failures after
     # this point must not roll a healthy installation back.
     $updateSucceeded = $true
     $oldInstallMoved = $false
-    try {
-        Write-UpdateLog ('Update to ' + $config.expectedVersion + ' completed successfully')
-    } catch {
-        # Logging is not part of the committed update transaction.
-    }
+    Write-UpdateLog ('Update to ' + $config.expectedVersion + ' completed successfully (' +
+        (Get-DirectorySummary $installDirectory) + ')')
     try {
         Invoke-WithRetry {
             Remove-Item -LiteralPath $backupDirectory -Recurse -Force
         } 'Failed to remove the previous installation backup'
+        Write-UpdateLog 'The previous installation backup has been removed'
     } catch {
-        try {
-            Write-UpdateLog ('Update completed, but backup cleanup failed: ' + $_.Exception.Message)
-        } catch {
-            # Preserve the committed update even when cleanup cannot be logged.
-        }
+        Write-UpdateLog ('Update completed, but backup cleanup failed: ' + $_.Exception.Message)
     }
     Remove-Item -LiteralPath $config.archivePath, $config.manifestPath, $config.signaturePath `
         -Force -ErrorAction SilentlyContinue
 } catch {
+    $failureOrigin = 'unknown location'
+    if ($_.InvocationInfo) {
+        $failureOrigin = 'installer line ' + $_.InvocationInfo.ScriptLineNumber
+    }
     if ($updateSucceeded) {
-        try {
-            Write-UpdateLog ('Post-commit update cleanup failed: ' + $_.Exception.Message)
-        } catch {
-            # Logging must never turn a committed update into a rollback.
-        }
+        Write-UpdateLog ('Post-commit update cleanup failed at ' + $failureOrigin + ': ' +
+            $_.Exception.Message)
     } else {
-        try {
-            Write-UpdateLog ('Update failed: ' + $_.Exception.Message)
-        } catch {
-            # Continue with rollback even when the log cannot be written.
-        }
+        Write-UpdateLog ('Update failed at ' + $failureOrigin + ': ' + $_.Exception.Message)
+        Write-UpdateLog ('State when it failed: previous installation moved aside = ' +
+            $oldInstallMoved + ', new installation activated = ' + $newInstallActivated)
         if ($newInstallActivated) {
+            Write-UpdateLog 'Rolling back: stopping the health-check instance'
             Stop-HealthCheckProcess ([string]$config.healthToken)
             if (Test-Path -LiteralPath $config.installDirectory) {
                 Invoke-WithRetry {
                     Move-Item -LiteralPath $config.installDirectory -Destination $failedDirectory
                 } 'Failed to remove the unsuccessful installation'
+                Write-UpdateLog ('The unsuccessful installation was kept for inspection at ' +
+                    $failedDirectory)
             }
             $newInstallActivated = $false
         }
@@ -325,8 +381,18 @@ try {
             Write-UpdateLog 'Previous installation restored'
             $oldExecutable = Join-Path $config.installDirectory 'Ruwa.exe'
             if (Test-Path -LiteralPath $oldExecutable -PathType Leaf) {
-                Start-Ruwa $oldExecutable $config.installDirectory $null
+                # The rollback is already complete: a failed restart must not hide it.
+                try {
+                    Start-Ruwa $oldExecutable $config.installDirectory $null
+                    Write-UpdateLog 'The previous version has been restarted'
+                } catch {
+                    Write-UpdateLog ('The previous version was restored but could not be ' +
+                        'restarted: ' + $_.Exception.Message)
+                }
             }
+        } elseif (-not (Test-Path -LiteralPath $config.installDirectory)) {
+            Write-UpdateLog ('WARNING: the installation directory is missing and no backup could ' +
+                'be restored. The backup, if any, is at ' + $backupDirectory)
         }
     }
 } finally {
@@ -339,4 +405,7 @@ try {
     if ($updateSucceeded -and $failedDirectory -and (Test-Path -LiteralPath $failedDirectory)) {
         Remove-Item -LiteralPath $failedDirectory -Recurse -Force -ErrorAction SilentlyContinue
     }
+    Write-UpdateLog ('Installer finished after ' +
+        ('{0:0.0}' -f $scriptStopwatch.Elapsed.TotalSeconds) + 's, update succeeded = ' +
+        $updateSucceeded)
 }

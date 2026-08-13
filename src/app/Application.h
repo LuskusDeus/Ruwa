@@ -58,7 +58,8 @@ public:
     static bool isFactoryResetRestartInProgress();
 
     /// Restart with update: close window (unsaved check), then run update script and quit.
-    static bool restartWithUpdate();
+    /// On failure the reason lands in errorMessage and in the installer log.
+    static bool restartWithUpdate(QString* errorMessage = nullptr);
 
     /// Get the currently active tablet backend (the one running right now)
     /// 0 = WinTab (Qt), 1 = Windows Ink, 2 = WinTab (Ruwa)
