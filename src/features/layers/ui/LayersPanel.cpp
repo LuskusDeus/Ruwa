@@ -69,6 +69,15 @@ struct GroupedLayerMoveRecord {
     int newIndex = -1;
 };
 
+// One layer moved by a drag & drop reorder: where it came from, and the exact
+// index handed to moveLayer() when it landed.
+struct LayerReorderRecord {
+    LayerId layerId;
+    LayerId oldParentId;
+    int oldIndex = -1;
+    int newIndex = -1;
+};
+
 struct MergeDownCandidate {
     LayerId sourceId;
     LayerId targetId;
@@ -1085,6 +1094,99 @@ private:
     std::shared_ptr<LayerData> m_groupLayer;
     std::pair<LayerId, int> m_groupPosition;
     QList<GroupedLayerMoveRecord> m_moves;
+    RequestRenderFn m_requestRender;
+    OnContentChangedFn m_onContentChanged;
+};
+
+// Undo for a drag & drop reorder. Without it a drop into a group is invisible to
+// the undo stack, so the next undo reaches past it to whatever created the group
+// and takes the dropped layers down with the subtree.
+class ReorderLayersCommand final : public aether::IUndoCommand {
+public:
+    using RequestRenderFn = std::function<void()>;
+    using OnContentChangedFn = std::function<void()>;
+
+    ReorderLayersCommand(LayerModel* layerModel, LayerId newParentId,
+        QList<LayerReorderRecord> records, RequestRenderFn requestRender,
+        OnContentChangedFn onContentChanged)
+        : m_layerModel(layerModel)
+        , m_newParentId(std::move(newParentId))
+        , m_records(std::move(records))
+        , m_requestRender(std::move(requestRender))
+        , m_onContentChanged(std::move(onContentChanged))
+    {
+    }
+
+    void undo() override
+    {
+        if (!m_layerModel) {
+            return;
+        }
+
+        // Restoring in ascending old index makes every recorded slot correct by
+        // the time it is used: the siblings that preceded it are already back.
+        QList<LayerReorderRecord> ordered = m_records;
+        std::stable_sort(ordered.begin(), ordered.end(),
+            [](const LayerReorderRecord& a, const LayerReorderRecord& b) {
+                return a.oldIndex < b.oldIndex;
+            });
+
+        {
+            // One clipping check for the whole restore, same as the drop itself.
+            LayerModel::ClippingBatch clippingBatch(*m_layerModel);
+            for (const auto& rec : ordered) {
+                LayerData* oldParent
+                    = rec.oldParentId.isNull() ? nullptr : m_layerModel->layerById(rec.oldParentId);
+                if (!rec.oldParentId.isNull() && !oldParent) {
+                    continue; // old parent is gone — nothing to restore into
+                }
+                m_layerModel->moveLayer(rec.layerId, oldParent, rec.oldIndex);
+            }
+        }
+
+        notify();
+    }
+
+    void redo() override
+    {
+        if (!m_layerModel) {
+            return;
+        }
+
+        LayerData* newParent
+            = m_newParentId.isNull() ? nullptr : m_layerModel->layerById(m_newParentId);
+        if (!m_newParentId.isNull() && !newParent) {
+            return;
+        }
+
+        {
+            // Replaying the recorded moveLayer() calls in their original order
+            // reproduces the drop exactly, since undo() restored the pre-drop tree.
+            LayerModel::ClippingBatch clippingBatch(*m_layerModel);
+            for (const auto& rec : m_records) {
+                m_layerModel->moveLayer(rec.layerId, newParent, rec.newIndex);
+            }
+        }
+
+        notify();
+    }
+
+    QString text() const override { return QStringLiteral("Move Layer"); }
+
+    qint64 memorySize() const override { return sizeof(ReorderLayersCommand); }
+
+private:
+    void notify()
+    {
+        if (m_requestRender)
+            m_requestRender();
+        if (m_onContentChanged)
+            m_onContentChanged();
+    }
+
+    LayerModel* m_layerModel = nullptr;
+    LayerId m_newParentId;
+    QList<LayerReorderRecord> m_records;
     RequestRenderFn m_requestRender;
     OnContentChangedFn m_onContentChanged;
 };
@@ -3909,6 +4011,15 @@ void LayersPanel::onLayerDragDropped(const LayerId& id, int dropInsertIndex, int
 {
     m_listView->setDropRejected(false); // Clear stale state
 
+    auto pushReorderUndo = [this](const LayerId& newParentId, QList<LayerReorderRecord> records) {
+        if (!m_pushUndoFn || records.isEmpty()) {
+            return;
+        }
+        auto cmd = std::make_unique<ReorderLayersCommand>(&m_layerModel, newParentId,
+            std::move(records), m_requestRenderFn, m_onContentChangedFn);
+        m_pushUndoFn(std::move(cmd));
+    };
+
     auto flat = m_layerModel.flattenedLayers();
 
     // Collect all selected IDs that should be moved
@@ -3957,12 +4068,26 @@ void LayersPanel::onLayerDragDropped(const LayerId& id, int dropInsertIndex, int
         if (willMove) {
             emit aboutToPerformTransformIncompatibleEdit();
         }
+        QList<LayerReorderRecord> records;
         {
             LayerModel::ClippingBatch clippingBatch(m_layerModel);
             for (int i = 0; i < layersToMove.size(); ++i) {
-                m_layerModel.moveLayer(layersToMove[i], nullptr, i);
+                auto* sourceLayer = m_layerModel.layerById(layersToMove[i]);
+                if (!sourceLayer) {
+                    continue;
+                }
+                LayerReorderRecord rec;
+                rec.layerId = layersToMove[i];
+                rec.oldParentId = sourceLayer->parent ? sourceLayer->parent->id : LayerId();
+                rec.oldIndex = sourceLayer->parent ? sourceLayer->indexInParent()
+                                                   : rootLayerIndex(m_layerModel, sourceLayer);
+                rec.newIndex = i;
+                if (m_layerModel.moveLayer(layersToMove[i], nullptr, i)) {
+                    records.append(rec);
+                }
             }
         }
+        pushReorderUndo(LayerId(), std::move(records));
         return;
     }
 
@@ -4044,6 +4169,7 @@ void LayersPanel::onLayerDragDropped(const LayerId& id, int dropInsertIndex, int
     // a reason to drop its clip flag.
     bool anyMoved = false;
     bool transformCommitted = false;
+    QList<LayerReorderRecord> records;
     {
         LayerModel::ClippingBatch clippingBatch(m_layerModel);
         for (int i = 0; i < layersToMove.size(); ++i) {
@@ -4079,11 +4205,21 @@ void LayersPanel::onLayerDragDropped(const LayerId& id, int dropInsertIndex, int
                 emit aboutToPerformTransformIncompatibleEdit();
                 transformCommitted = true;
             }
+            LayerReorderRecord rec;
+            rec.layerId = moveId;
+            rec.oldParentId
+                = (sourceLayer && sourceLayer->parent) ? sourceLayer->parent->id : LayerId();
+            rec.oldIndex = sourceIndex;
+            rec.newIndex = liveIndex;
+
             if (m_layerModel.moveLayer(moveId, targetParent, liveIndex)) {
                 anyMoved = true;
+                records.append(rec);
             }
         }
     }
+
+    pushReorderUndo(targetParent ? targetParent->id : LayerId(), std::move(records));
 
     if (anyMoved) {
         LayerId parentId = targetParent ? targetParent->id : LayerId();
