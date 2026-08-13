@@ -219,9 +219,9 @@ bool CanvasPanel::createGLContent()
                 // Read live rather than cached on themeChanged: the provider
                 // already runs per frame, and this way the tint can never lag a
                 // theme switch behind the widget chrome painted over it.
-                regions.push_back({ QRectF(QPointF(mapped) + fractionalOffset, localRect.size()),
-                    cornerRadius, opacity,
-                    ruwa::ui::core::WidgetStyleManager::instance().colors().surface });
+                regions.push_back(
+                    { QRectF(QPointF(mapped) + fractionalOffset, localRect.size()), cornerRadius,
+                        opacity, ruwa::ui::core::WidgetStyleManager::instance().colors().surface });
             };
             const auto effectOpacity = [](const QGraphicsOpacityEffect* effect) {
                 return effect ? effect->opacity() : 1.0;
@@ -409,8 +409,8 @@ bool CanvasPanel::createGLContent()
         const float centerX = static_cast<float>(static_cast<qreal>(localPos.x()) * scaleX);
         const float centerY = static_cast<float>(static_cast<qreal>(localPos.y()) * scaleY);
         const ToolId cursorTool = toolMode();
-        m_glWidget->setToolCursorState(true, centerX, centerY,
-            aether::toolCursorStyle(cursorTool), aether::toolCursorIconResource(cursorTool));
+        m_glWidget->setToolCursorState(true, centerX, centerY, aether::toolCursorStyle(cursorTool),
+            aether::toolCursorIconResource(cursorTool));
     });
     m_cursorManager->setSuppressed(m_cursorManagerSuppressedByLoading);
     updateCursorManagerOverlay();

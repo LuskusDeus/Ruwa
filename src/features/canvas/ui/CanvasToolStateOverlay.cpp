@@ -1250,13 +1250,13 @@ QSize CanvasToolStateOverlay::animatedToolStackSize(qreal t, const QSize& stripS
     const int heightReference
         = stripSize.height() - (m_transitionTargetSize.height() - m_toolStackTargetSize.height());
 
-    return QSize(qMax(1,
-                     alignToParityOf(
-                         lerpInt(m_toolStackStartSize.width(), m_toolStackTargetSize.width(), t),
-                         widthReference,
-                         m_toolStackTargetSize.width() >= m_toolStackStartSize.width())),
+    return QSize(
         qMax(1,
-            alignToParityOf(lerpInt(m_toolStackStartSize.height(), m_toolStackTargetSize.height(), t),
+            alignToParityOf(lerpInt(m_toolStackStartSize.width(), m_toolStackTargetSize.width(), t),
+                widthReference, m_toolStackTargetSize.width() >= m_toolStackStartSize.width())),
+        qMax(1,
+            alignToParityOf(
+                lerpInt(m_toolStackStartSize.height(), m_toolStackTargetSize.height(), t),
                 heightReference, m_toolStackTargetSize.height() >= m_toolStackStartSize.height())));
 }
 

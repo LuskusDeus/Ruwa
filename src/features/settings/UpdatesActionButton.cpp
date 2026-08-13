@@ -240,7 +240,6 @@ void UpdatesActionButton::paintEvent(QPaintEvent* event)
             ruwa::ui::painting::drawGradientBorder(painter, rect, borderRadius, borderTop,
                 ruwa::ui::core::ThemeColors::withAlpha(borderTop, borderTop.alpha() / 2));
         }
-
     }
 }
 

@@ -75,11 +75,12 @@ void RadialMenuController::ensureWidget()
         menu->setBackdropSource(glWidget);
         connect(glWidget, &aether::OpenGLCanvasWidget::backdropAvailabilityChanged, menu,
             QOverload<>::of(&QWidget::update));
-        connect(glWidget, &QObject::destroyed, menu, [menu]() { menu->setBackdropSource(nullptr); });
+        connect(
+            glWidget, &QObject::destroyed, menu, [menu]() { menu->setBackdropSource(nullptr); });
     }
 
-    connect(menu, &RadialMenuWidget::slotTriggered, this,
-        &RadialMenuController::handleSlotTriggered);
+    connect(
+        menu, &RadialMenuWidget::slotTriggered, this, &RadialMenuController::handleSlotTriggered);
     connect(menu, &RadialMenuWidget::backRequested, this, &RadialMenuController::goBack);
     connect(menu, &RadialMenuWidget::dismissed, this, [this]() { m_pageStack.clear(); });
 

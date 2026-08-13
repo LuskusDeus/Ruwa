@@ -214,8 +214,8 @@ void ShortcutRowWidget::updateWarningIcon()
     }
     auto& mgr = WidgetStyleManager::instance();
     const int iconSize = mgr.scaled(18);
-    const QIcon icon = IconProvider::instance().getColoredIcon(
-        QStringLiteral("Warning"), mgr.colors().warning);
+    const QIcon icon
+        = IconProvider::instance().getColoredIcon(QStringLiteral("Warning"), mgr.colors().warning);
     m_warningIcon->setFixedSize(iconSize, iconSize);
     m_warningIcon->setPixmap(icon.pixmap(iconSize, iconSize));
 }
@@ -253,8 +253,8 @@ void ShortcutRowWidget::updateResetButtonVisibility()
 {
     if (!m_resetButton)
         return;
-    const bool canReset = m_usesChoiceInput ? (m_choice != m_defaultChoice)
-                                            : (m_shortcut != m_defaultShortcut);
+    const bool canReset
+        = m_usesChoiceInput ? (m_choice != m_defaultChoice) : (m_shortcut != m_defaultShortcut);
     m_resetButton->setVisible(canReset);
     m_resetButton->setEnabled(canReset);
 }

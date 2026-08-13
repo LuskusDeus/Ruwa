@@ -6332,9 +6332,9 @@ bool OpenGLCanvasWidget::flipActiveTransform(bool flipHorizontal, bool flipVerti
         TransformState after = before;
         after.scale = m_transformController.animatedTargetScale();
         if (!transformStatesNearlyEqual(before, after)) {
-            m_transformUndoManager->push(std::make_unique<TransformSessionCommand>(
-                &m_transformController, before, mode, after, mode,
-                [this]() { onTransformUndoStateRestored(); }));
+            m_transformUndoManager->push(
+                std::make_unique<TransformSessionCommand>(&m_transformController, before, mode,
+                    after, mode, [this]() { onTransformUndoStateRestored(); }));
         }
     }
 
@@ -12815,8 +12815,8 @@ void OpenGLCanvasWidget::paintGL()
         && m_cursorOverlayState.brushVisible && m_cursorOverlayState.brushRadius > 0.5f;
     const bool wantEyedropperCursor = !m_skipCursorOverlays && eyedropperCursorOverlay
         && m_cursorOverlayState.eyedropperVisible;
-    const bool wantToolCursor = !m_skipCursorOverlays && toolCursorOverlay
-        && m_cursorOverlayState.toolCursorVisible;
+    const bool wantToolCursor
+        = !m_skipCursorOverlays && toolCursorOverlay && m_cursorOverlayState.toolCursorVisible;
     if (wantBrushCursor) {
         ensureCursorOverlayInitialized(brushCursorOverlay, "brush cursor overlay");
     }

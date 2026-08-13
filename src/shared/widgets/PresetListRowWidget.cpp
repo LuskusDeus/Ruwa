@@ -1029,10 +1029,9 @@ void PresetListRowWidget::paintEvent(QPaintEvent* event)
             if (m_popupChromeStyle) {
                 painter.setPen(Qt::NoPen);
             } else {
-                QColor btnBorder = danger
-                    ? ThemeColors::withAlpha(c.error, qRound(96 * hp))
-                    : ThemeColors::withAlpha(
-                          c.borderSubtleHover(), qRound(c.borderSubtleHover().alpha() * hp));
+                QColor btnBorder = danger ? ThemeColors::withAlpha(c.error, qRound(96 * hp))
+                                          : ThemeColors::withAlpha(c.borderSubtleHover(),
+                                                qRound(c.borderSubtleHover().alpha() * hp));
                 painter.setPen(QPen(btnBorder, 1));
             }
             painter.setBrush(btnBg);
@@ -1069,12 +1068,12 @@ void PresetListRowWidget::paintEvent(QPaintEvent* event)
         }
 
         if (m_isRenamable) {
-            drawIconAction(m_layoutRename, m_renameHoverProgress, false,
-                IconProvider::StandardIcon::Edit);
+            drawIconAction(
+                m_layoutRename, m_renameHoverProgress, false, IconProvider::StandardIcon::Edit);
         }
         if (m_isDeletable) {
-            drawIconAction(m_layoutDelete, m_deleteHoverProgress, true,
-                IconProvider::StandardIcon::Trash);
+            drawIconAction(
+                m_layoutDelete, m_deleteHoverProgress, true, IconProvider::StandardIcon::Trash);
         }
     }
 

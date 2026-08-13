@@ -96,10 +96,10 @@ constexpr qreal kRingScaleStart = 0.82;
 QPainterPath wedgePath(
     const QPointF& center, qreal innerRadius, qreal outerRadius, qreal startDeg, qreal spanDeg)
 {
-    const QRectF outerRect(center.x() - outerRadius, center.y() - outerRadius, outerRadius * 2.0,
-        outerRadius * 2.0);
-    const QRectF innerRect(center.x() - innerRadius, center.y() - innerRadius, innerRadius * 2.0,
-        innerRadius * 2.0);
+    const QRectF outerRect(
+        center.x() - outerRadius, center.y() - outerRadius, outerRadius * 2.0, outerRadius * 2.0);
+    const QRectF innerRect(
+        center.x() - innerRadius, center.y() - innerRadius, innerRadius * 2.0, innerRadius * 2.0);
 
     QPainterPath path;
     path.arcMoveTo(outerRect, startDeg);
@@ -154,40 +154,37 @@ RadialMenuWidget::RadialMenuWidget(QWidget* parent)
     // rotation eases in and out, which is what makes the swing read as one
     // object turning rather than a value being pushed.
     m_hoverAnim->setEasingCurve(QEasingCurve::Linear);
-    connect(m_hoverAnim, &QVariantAnimation::valueChanged, this,
-        [this](const QVariant& value) {
-            static const QEasingCurve fade(QEasingCurve::OutCubic);
-            static const QEasingCurve swingFromRest(QEasingCurve::InOutCubic);
-            static const QEasingCurve swingInFlight(QEasingCurve::OutCubic);
+    connect(m_hoverAnim, &QVariantAnimation::valueChanged, this, [this](const QVariant& value) {
+        static const QEasingCurve fade(QEasingCurve::OutCubic);
+        static const QEasingCurve swingFromRest(QEasingCurve::InOutCubic);
+        static const QEasingCurve swingInFlight(QEasingCurve::OutCubic);
 
-            const qreal raw = value.toReal();
-            const qreal t = fade.valueForProgress(raw);
-            const qreal rotation = (m_wedgeSwingFromRest ? swingFromRest : swingInFlight)
-                                       .valueForProgress(raw);
+        const qreal raw = value.toReal();
+        const qreal t = fade.valueForProgress(raw);
+        const qreal rotation
+            = (m_wedgeSwingFromRest ? swingFromRest : swingInFlight).valueForProgress(raw);
 
-            for (int i = 0; i < m_slotHover.size(); ++i) {
-                const qreal target = (i == m_hoveredSlot) ? 1.0 : 0.0;
-                m_slotHover[i] = m_slotHoverFrom.value(i)
-                    + (target - m_slotHoverFrom.value(i)) * t;
-            }
-            m_hubHover = m_hubHoverFrom + ((m_hubHovered ? 1.0 : 0.0) - m_hubHoverFrom) * t;
-            m_wedgeAngle = m_wedgeAngleFrom + (m_wedgeAngleTo - m_wedgeAngleFrom) * rotation;
-            m_wedgeOpacity
-                = m_wedgeOpacityFrom + (m_wedgeOpacityTo - m_wedgeOpacityFrom) * t;
-            // Seats move and grow, so the frosted regions under them move too.
-            if (m_backdropSource) {
-                m_backdropSource->requestBackdropUpdate();
-            }
-            update();
-        });
+        for (int i = 0; i < m_slotHover.size(); ++i) {
+            const qreal target = (i == m_hoveredSlot) ? 1.0 : 0.0;
+            m_slotHover[i] = m_slotHoverFrom.value(i) + (target - m_slotHoverFrom.value(i)) * t;
+        }
+        m_hubHover = m_hubHoverFrom + ((m_hubHovered ? 1.0 : 0.0) - m_hubHoverFrom) * t;
+        m_wedgeAngle = m_wedgeAngleFrom + (m_wedgeAngleTo - m_wedgeAngleFrom) * rotation;
+        m_wedgeOpacity = m_wedgeOpacityFrom + (m_wedgeOpacityTo - m_wedgeOpacityFrom) * t;
+        // Seats move and grow, so the frosted regions under them move too.
+        if (m_backdropSource) {
+            m_backdropSource->requestBackdropUpdate();
+        }
+        update();
+    });
 
     m_transitionAnim = new QVariantAnimation(this);
     m_transitionAnim->setStartValue(0.0);
     m_transitionAnim->setEndValue(1.0);
     m_transitionAnim->setDuration(kPageTransitionMs);
     m_transitionAnim->setEasingCurve(QEasingCurve::Linear);
-    connect(m_transitionAnim, &QVariantAnimation::valueChanged, this,
-        [this](const QVariant& value) {
+    connect(
+        m_transitionAnim, &QVariantAnimation::valueChanged, this, [this](const QVariant& value) {
             m_transitionRaw = value.toReal();
             if (m_backdropSource) {
                 m_backdropSource->requestBackdropUpdate();
@@ -360,8 +357,8 @@ void RadialMenuWidget::finishTransitionSetup()
 {
     const QPointF origin = center();
     if (m_transitionForward) {
-        m_morphTo = QRectF(-m_metrics.hubRadius, -m_metrics.hubRadius,
-            m_metrics.hubRadius * 2.0, m_metrics.hubRadius * 2.0);
+        m_morphTo = QRectF(-m_metrics.hubRadius, -m_metrics.hubRadius, m_metrics.hubRadius * 2.0,
+            m_metrics.hubRadius * 2.0);
         m_morphToRadius = m_metrics.hubRadius;
     } else if (m_transitionPivot >= 0 && m_transitionPivot < m_page.items.size()) {
         m_morphTo = slotRect(m_transitionPivot, 1.0).translated(-origin);
@@ -430,9 +427,8 @@ void RadialMenuWidget::rebuildMetrics()
     // to flick at. The chord between two seats is 2*R*sin(pi/N).
     const qreal seatPitch = theme.scaled(21);
     const int slotCount = qMax(1, m_page.items.size());
-    const qreal minRing = (slotCount > 1)
-        ? (seatPitch + theme.scaled(9)) / qSin(M_PI / slotCount)
-        : metrics.hubRadius + seatPitch;
+    const qreal minRing = (slotCount > 1) ? (seatPitch + theme.scaled(9)) / qSin(M_PI / slotCount)
+                                          : metrics.hubRadius + seatPitch;
     metrics.ringRadius = qMax<qreal>(theme.scaled(77), minRing);
 
     const QFont labelFont = colors.fonts.getUIFont(theme.scaledFontSize(10));
@@ -461,8 +457,8 @@ void RadialMenuWidget::rebuildMetrics()
     }
 
     metrics.sideGutter = metrics.labelGap + widestLabel + theme.scaled(6);
-    metrics.verticalGutter = metrics.labelGap * 2.0 + metrics.pillHeight
-        + metrics.titlePillHeight + theme.scaled(14);
+    metrics.verticalGutter
+        = metrics.labelGap * 2.0 + metrics.pillHeight + metrics.titlePillHeight + theme.scaled(14);
     m_metrics = metrics;
 
     const int half = qRound(metrics.ringRadius + metrics.slotRadius);
@@ -474,10 +470,8 @@ void RadialMenuWidget::rebuildMetrics()
     // runs the widget has to be big enough for both at their furthest.
     for (const Ghost& ghost : m_ghosts) {
         const QRectF flown = ghost.rect.translated(ghost.push);
-        halfWidth = qMax(halfWidth,
-            qCeil(qMax(qAbs(flown.left()), qAbs(flown.right()))));
-        halfHeight = qMax(halfHeight,
-            qCeil(qMax(qAbs(flown.top()), qAbs(flown.bottom()))));
+        halfWidth = qMax(halfWidth, qCeil(qMax(qAbs(flown.left()), qAbs(flown.right()))));
+        halfHeight = qMax(halfHeight, qCeil(qMax(qAbs(flown.top()), qAbs(flown.bottom()))));
     }
 
     setFixedSize(QSize(2 * halfWidth, 2 * halfHeight));
@@ -514,8 +508,7 @@ qreal RadialMenuWidget::hoverAngleOffset(int index) const
     const qreal step = (2.0 * M_PI) / count;
     // The push is a distance along the ring — a third of a button's width —
     // turned into the angle that covers it at this radius.
-    const qreal maxPush
-        = (m_metrics.slotRadius * 2.0 * kNeighbourPush) / m_metrics.ringRadius;
+    const qreal maxPush = (m_metrics.slotRadius * 2.0 * kNeighbourPush) / m_metrics.ringRadius;
 
     qreal offset = 0.0;
     for (int source = 0; source < count; ++source) {
@@ -600,8 +593,7 @@ QRectF RadialMenuWidget::labelRect(int index, qreal ringScale) const
     // and the label has to start beyond it either way.
     const qreal halfSize = m_metrics.slotRadius * (1.0 + kHoverScale * hoverAmount(index));
     const qreal reach = halfSize / qMax(qAbs(direction.x()), qAbs(direction.y()));
-    const QPointF anchor
-        = slotCenter(index, ringScale) + direction * (reach + m_metrics.labelGap);
+    const QPointF anchor = slotCenter(index, ringScale) + direction * (reach + m_metrics.labelGap);
 
     // Which side of its seat a label sits on is decided on the seat's resting
     // angle, not its pushed one: a seat sitting near the threshold would
@@ -1227,8 +1219,8 @@ void RadialMenuWidget::paintGlassShape(
     // The GPU pass has already frosted and refracted the canvas under this
     // rect; without it there is nothing behind the widget, so fall back to a
     // near-opaque surface.
-    if (!painting::drawBackdropBlurTint(painter, const_cast<RadialMenuWidget*>(this),
-            m_backdropSource, glass, tint)) {
+    if (!painting::drawBackdropBlurTint(
+            painter, const_cast<RadialMenuWidget*>(this), m_backdropSource, glass, tint)) {
         QColor fallback = colors.surface;
         fallback.setAlpha(colors.isDark ? 232 : 242);
         painter.setBrush(fallback);
@@ -1275,8 +1267,7 @@ QVector<RadialMenuWidget::BackdropShape> RadialMenuWidget::backdropShapes() cons
     // sits on a full-strength patch of blur.
     if (m_transitionActive) {
         const qreal travel = transitionProgress();
-        const qreal ghostFade
-            = 1.0 - qBound<qreal>(0.0, m_transitionRaw / kGhostFadeEnd, 1.0);
+        const qreal ghostFade = 1.0 - qBound<qreal>(0.0, m_transitionRaw / kGhostFadeEnd, 1.0);
         if (ghostFade > 0.001) {
             for (const Ghost& ghost : m_ghosts) {
                 shapes.append({ ghost.rect.translated(origin + ghost.push * travel), ghost.radius,
@@ -1294,9 +1285,8 @@ QVector<RadialMenuWidget::BackdropShape> RadialMenuWidget::backdropShapes() cons
     const qreal entering = transitionEntrance();
     if (entering > 0.001) {
         if (!m_transitionActive || !m_transitionForward) {
-            const QRectF hubRect(origin.x() - m_metrics.hubRadius,
-                origin.y() - m_metrics.hubRadius, m_metrics.hubRadius * 2.0,
-                m_metrics.hubRadius * 2.0);
+            const QRectF hubRect(origin.x() - m_metrics.hubRadius, origin.y() - m_metrics.hubRadius,
+                m_metrics.hubRadius * 2.0, m_metrics.hubRadius * 2.0);
             shapes.append({ hubRect, m_metrics.hubRadius, entering });
         }
 
@@ -1335,8 +1325,7 @@ void RadialMenuWidget::paintGhosts(QPainter& painter) const
     }
 
     const qreal travel = transitionProgress();
-    const qreal fade
-        = 1.0 - qBound<qreal>(0.0, m_transitionRaw / kGhostFadeEnd, 1.0);
+    const qreal fade = 1.0 - qBound<qreal>(0.0, m_transitionRaw / kGhostFadeEnd, 1.0);
     if (fade <= 0.001) {
         return;
     }
@@ -1363,10 +1352,9 @@ void RadialMenuWidget::paintGhosts(QPainter& painter) const
             const int iconSize = qMax(1, qRound(rect.width() * 0.58));
             QPixmap pixmap = ghost.icon.pixmap(QSize(iconSize, iconSize), devicePixelRatioF());
             pixmap = ruwa::ui::painting::tintedPixmap(pixmap, textColor);
-            painter.drawPixmap(
-                QRectF(rect.center() - QPointF(iconSize / 2.0, iconSize / 2.0),
-                    QSizeF(iconSize, iconSize))
-                    .toRect(),
+            painter.drawPixmap(QRectF(rect.center() - QPointF(iconSize / 2.0, iconSize / 2.0),
+                                   QSizeF(iconSize, iconSize))
+                                   .toRect(),
                 pixmap);
         }
     }
@@ -1405,10 +1393,9 @@ void RadialMenuWidget::paintMorph(QPainter& painter) const
             QPixmap pixmap = m_morphIcon.pixmap(QSize(iconSize, iconSize), devicePixelRatioF());
             pixmap = ruwa::ui::painting::tintedPixmap(pixmap, colors.text);
             painter.setOpacity(baseOpacity * iconAlpha);
-            painter.drawPixmap(
-                QRectF(rect.center() - QPointF(iconSize / 2.0, iconSize / 2.0),
-                    QSizeF(iconSize, iconSize))
-                    .toRect(),
+            painter.drawPixmap(QRectF(rect.center() - QPointF(iconSize / 2.0, iconSize / 2.0),
+                                   QSizeF(iconSize, iconSize))
+                                   .toRect(),
                 pixmap);
         }
     }
@@ -1456,11 +1443,9 @@ void RadialMenuWidget::paintHoverWedge(QPainter& painter, qreal ringScale) const
 
     QRadialGradient gradient(center(), m_metrics.ringRadius + m_metrics.slotRadius);
     gradient.setColorAt(0.0,
-        ThemeColors::withAlpha(
-            colors.primary, qRound((colors.isDark ? 26 : 34) * m_wedgeOpacity)));
+        ThemeColors::withAlpha(colors.primary, qRound((colors.isDark ? 26 : 34) * m_wedgeOpacity)));
     gradient.setColorAt(1.0,
-        ThemeColors::withAlpha(
-            colors.primary, qRound((colors.isDark ? 62 : 78) * m_wedgeOpacity)));
+        ThemeColors::withAlpha(colors.primary, qRound((colors.isDark ? 62 : 78) * m_wedgeOpacity)));
 
     painter.save();
     painter.setPen(Qt::NoPen);
@@ -1551,8 +1536,8 @@ void RadialMenuWidget::paintSlots(QPainter& painter, qreal ringScale) const
             QPixmap pixmap = slot.icon.pixmap(QSize(iconSize, iconSize), devicePixelRatioF());
             const QColor tint = contentColor;
             pixmap = ruwa::ui::painting::tintedPixmap(pixmap, tint);
-            const QRectF target(slotPos.x() - iconSize / 2.0, slotPos.y() - iconSize / 2.0,
-                iconSize, iconSize);
+            const QRectF target(
+                slotPos.x() - iconSize / 2.0, slotPos.y() - iconSize / 2.0, iconSize, iconSize);
             painter.drawPixmap(target.toRect(), pixmap);
             continue;
         }
@@ -1602,8 +1587,8 @@ void RadialMenuWidget::paintLabelContent(QPainter& painter, const QRectF& pill,
     if (ShortcutKeycapRenderer::isRenderable(shortcut)) {
         const QSizeF keycapSize = ShortcutKeycapRenderer::contentSize(
             shortcut, ShortcutKeycapRenderer::SizeVariant::Compact);
-        const QRectF keycapRect(textRect.right() - keycapSize.width(), pill.top(),
-            keycapSize.width(), pill.height());
+        const QRectF keycapRect(
+            textRect.right() - keycapSize.width(), pill.top(), keycapSize.width(), pill.height());
         ShortcutKeycapRenderer::paint(painter, keycapRect, shortcut,
             Qt::AlignRight | Qt::AlignVCenter, ShortcutKeycapRenderer::SizeVariant::Compact,
             textColor, false);

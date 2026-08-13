@@ -254,15 +254,13 @@ bool CanvasBackdropRenderer::render(GLuint sourceFbo, GLuint defaultFbo, int sur
     m_gl->glDisable(GL_SCISSOR_TEST);
     m_gl->glColorMask(GL_TRUE, GL_TRUE, GL_TRUE, GL_TRUE);
 
-    const float deviceScale = static_cast<float>(
-        std::min<qreal>(logicalToSurfaceScaleX, logicalToSurfaceScaleY));
+    const float deviceScale
+        = static_cast<float>(std::min<qreal>(logicalToSurfaceScaleX, logicalToSurfaceScaleY));
     const float refractionWidth
         = static_cast<float>(ruwa::shared::rendering::kGlassRefractionWidthPx) * deviceScale;
-    const float refractionShift
-        = std::min(static_cast<float>(ruwa::shared::rendering::kGlassRefractionShiftPx)
-                * deviceScale,
-            static_cast<float>(
-                ruwa::shared::rendering::kGlassMaxRefractionShiftDevicePx));
+    const float refractionShift = std::min(
+        static_cast<float>(ruwa::shared::rendering::kGlassRefractionShiftPx) * deviceScale,
+        static_cast<float>(ruwa::shared::rendering::kGlassMaxRefractionShiftDevicePx));
 
     m_gl->glActiveTexture(GL_TEXTURE0);
 

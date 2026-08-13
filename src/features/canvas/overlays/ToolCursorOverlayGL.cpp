@@ -150,8 +150,7 @@ void ToolCursorOverlayGL::render(float centerX, float centerY, int viewportWidth
     int viewportHeight, GLuint sceneTextureId, ToolCursorStyle style,
     const QString& toolIconResource)
 {
-    if (!m_initialized || !sceneTextureId || !m_iconRenderer
-        || style == ToolCursorStyle::None) {
+    if (!m_initialized || !sceneTextureId || !m_iconRenderer || style == ToolCursorStyle::None) {
         return;
     }
 

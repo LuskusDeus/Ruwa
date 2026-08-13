@@ -120,8 +120,7 @@ private:
     /// The bent sample reaches kGlassMaxRefractionShiftDevicePx outside the widget
     /// rect (times the ~1.12 peak of the bevel profile), and the blur kernel
     /// then reaches further still from there.
-    static constexpr int kCapturePaddingDevicePx
-        = kKernelReachDevicePx
+    static constexpr int kCapturePaddingDevicePx = kKernelReachDevicePx
         + (ruwa::shared::rendering::kGlassMaxRefractionShiftDevicePx * 6) / 5 + 2;
 };
 

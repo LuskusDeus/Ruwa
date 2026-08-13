@@ -97,8 +97,7 @@ ShortcutManagerTab::~ShortcutManagerTab()
         &ShortcutManagerTab::onShortcutManagerChanged);
     disconnect(&sm, &ruwa::core::ShortcutManager::shortcutConflictsChanged, this,
         &ShortcutManagerTab::updateConflictIndicators);
-    auto& canvasShortcuts
-        = ruwa::features::canvas::CanvasModifierShortcutManager::instance();
+    auto& canvasShortcuts = ruwa::features::canvas::CanvasModifierShortcutManager::instance();
     disconnect(&canvasShortcuts,
         &ruwa::features::canvas::CanvasModifierShortcutManager::shortcutChanged, this,
         &ShortcutManagerTab::onCanvasModifierManagerChanged);
@@ -464,8 +463,8 @@ void ShortcutManagerTab::createCategories()
     static const QStringList preferredOrder = { QStringLiteral("File"), QStringLiteral("Edit"),
         QStringLiteral("Selection"), QStringLiteral("Layers"), QStringLiteral("Tools"),
         QStringLiteral("View"), QStringLiteral("Tabs & Navigation") };
-    std::stable_sort(categoryNames.begin(), categoryNames.end(),
-        [](const QString& a, const QString& b) {
+    std::stable_sort(
+        categoryNames.begin(), categoryNames.end(), [](const QString& a, const QString& b) {
             const int ia = preferredOrder.indexOf(a);
             const int ib = preferredOrder.indexOf(b);
             if (ia < 0 && ib < 0) {
@@ -556,9 +555,8 @@ void ShortcutManagerTab::createCategories()
         canvasModifierCategory->addSettingsWidget(
             createCanvasModifierRow(definition.id, canvasModifierCategory));
     }
-    const int canvasModifierCount
-        = static_cast<int>(
-            ruwa::features::canvas::CanvasModifierShortcutManager::definitions().size());
+    const int canvasModifierCount = static_cast<int>(
+        ruwa::features::canvas::CanvasModifierShortcutManager::definitions().size());
     m_categories.append(canvasModifierCategory);
     m_categoryDisplayNames.append(tr("Canvas modifier shortcuts"));
     m_categorySourceNames.append(CANVAS_MODIFIER_CATEGORY);
@@ -613,10 +611,9 @@ ShortcutRowWidget* ShortcutManagerTab::createCanvasModifierRow(
 
     auto* row = new ShortcutRowWidget(shortcutId, title, description,
         shortcuts.keyForId(shortcutId), shortcuts.defaultKeyForId(shortcutId), choices, parent);
-    connect(row, &ShortcutRowWidget::choiceChanged, this,
-        &ShortcutManagerTab::onCanvasModifierChanged);
-    connect(row, &ShortcutRowWidget::resetRequested, this,
-        &ShortcutManagerTab::onResetRequested);
+    connect(
+        row, &ShortcutRowWidget::choiceChanged, this, &ShortcutManagerTab::onCanvasModifierChanged);
+    connect(row, &ShortcutRowWidget::resetRequested, this, &ShortcutManagerTab::onResetRequested);
     m_rowWidgets.insert(shortcutId, row);
     return row;
 }
@@ -755,8 +752,7 @@ void ShortcutManagerTab::updateShortcutsHeaderMeta()
     auto& sm = ruwa::core::ShortcutManager::instance();
     const QStringList ids = commandIdsForItem(m_selectedItemIndex);
     int customized = 0;
-    auto& canvasShortcuts
-        = ruwa::features::canvas::CanvasModifierShortcutManager::instance();
+    auto& canvasShortcuts = ruwa::features::canvas::CanvasModifierShortcutManager::instance();
     for (const QString& id : ids) {
         const bool isCustomized = isCanvasModifierShortcut(id)
             ? canvasShortcuts.hasCustomShortcut(id)
@@ -827,11 +823,10 @@ void ShortcutManagerTab::applyPreset(const QUuid& presetId)
         sm.setShortcut(it.key(), it.value());
     }
 
-    auto& canvasShortcuts
-        = ruwa::features::canvas::CanvasModifierShortcutManager::instance();
+    auto& canvasShortcuts = ruwa::features::canvas::CanvasModifierShortcutManager::instance();
     canvasShortcuts.resetAllShortcuts();
     for (auto it = preset->canvasModifierBindings.constBegin();
-         it != preset->canvasModifierBindings.constEnd(); ++it) {
+        it != preset->canvasModifierBindings.constEnd(); ++it) {
         canvasShortcuts.setShortcut(it.key(), it.value());
     }
     sm.saveToSettings();
@@ -1121,8 +1116,7 @@ void ShortcutManagerTab::onResetSectionClicked()
         return;
     }
     auto& sm = ruwa::core::ShortcutManager::instance();
-    auto& canvasShortcuts
-        = ruwa::features::canvas::CanvasModifierShortcutManager::instance();
+    auto& canvasShortcuts = ruwa::features::canvas::CanvasModifierShortcutManager::instance();
     const QStringList ids = commandIdsForItem(m_selectedItemIndex);
     for (const QString& id : ids) {
         if (isCanvasModifierShortcut(id)) {
@@ -1139,8 +1133,7 @@ void ShortcutManagerTab::onResetSectionClicked()
 void ShortcutManagerTab::onResetRequested(const QString& commandId)
 {
     if (isCanvasModifierShortcut(commandId)) {
-        auto& canvasShortcuts
-            = ruwa::features::canvas::CanvasModifierShortcutManager::instance();
+        auto& canvasShortcuts = ruwa::features::canvas::CanvasModifierShortcutManager::instance();
         canvasShortcuts.resetShortcut(commandId);
         canvasShortcuts.saveToSettings();
     } else {
@@ -1151,8 +1144,7 @@ void ShortcutManagerTab::onResetRequested(const QString& commandId)
 
 void ShortcutManagerTab::onCanvasModifierChanged(const QString& shortcutId, int key)
 {
-    auto& canvasShortcuts
-        = ruwa::features::canvas::CanvasModifierShortcutManager::instance();
+    auto& canvasShortcuts = ruwa::features::canvas::CanvasModifierShortcutManager::instance();
     canvasShortcuts.setShortcut(shortcutId, key);
     canvasShortcuts.saveToSettings();
 }
@@ -1186,8 +1178,7 @@ void ShortcutManagerTab::onCanvasModifierManagerChanged(const QString& shortcutI
 void ShortcutManagerTab::updateConflictIndicators()
 {
     auto& shortcuts = ruwa::core::ShortcutManager::instance();
-    auto& canvasShortcuts
-        = ruwa::features::canvas::CanvasModifierShortcutManager::instance();
+    auto& canvasShortcuts = ruwa::features::canvas::CanvasModifierShortcutManager::instance();
     for (auto it = m_rowWidgets.constBegin(); it != m_rowWidgets.constEnd(); ++it) {
         const bool conflicted = isCanvasModifierShortcut(it.key())
             ? canvasShortcuts.isShortcutConflicted(it.key())

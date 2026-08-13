@@ -137,8 +137,7 @@ QPointF roundedRectNormal(const QPointF& pixelPos, const QSizeF& rectSize, qreal
 
     QPointF gradient;
     if (qMax(q.x(), q.y()) > 0.0) {
-        gradient = QPointF(qMax<qreal>(q.x(), 0.0) + 1e-6,
-            qMax<qreal>(q.y(), 0.0) + 1e-6);
+        gradient = QPointF(qMax<qreal>(q.x(), 0.0) + 1e-6, qMax<qreal>(q.y(), 0.0) + 1e-6);
         const qreal length = std::hypot(gradient.x(), gradient.y());
         gradient /= length;
     } else {
@@ -155,12 +154,9 @@ qreal bevelRefraction(qreal rim)
     const qreal sinIncident = rim;
     const qreal cosIncident = std::sqrt(qMax<qreal>(1.0 - sinIncident * sinIncident, 1e-4));
     const qreal sinRefracted = sinIncident / kGlassIndexOfRefraction;
-    const qreal cosRefracted
-        = std::sqrt(qMax<qreal>(1.0 - sinRefracted * sinRefracted, 1e-4));
-    const qreal sinDeviation
-        = sinIncident * cosRefracted - cosIncident * sinRefracted;
-    const qreal cosDeviation
-        = cosIncident * cosRefracted + sinIncident * sinRefracted;
+    const qreal cosRefracted = std::sqrt(qMax<qreal>(1.0 - sinRefracted * sinRefracted, 1e-4));
+    const qreal sinDeviation = sinIncident * cosRefracted - cosIncident * sinRefracted;
+    const qreal cosDeviation = cosIncident * cosRefracted + sinIncident * sinRefracted;
     return sinDeviation / qMax<qreal>(cosDeviation, 0.2);
 }
 
@@ -222,15 +218,13 @@ QImage refractGlassBackdrop(const QImage& source, const QRectF& plateRect, qreal
     for (int y = effectBounds.top(); y <= effectBounds.bottom(); ++y) {
         for (int x = effectBounds.left(); x <= effectBounds.right(); ++x) {
             const QPointF pixelPos(x + 0.5 - plateRect.left(), y + 0.5 - plateRect.top());
-            const qreal distance
-                = roundedRectDistance(pixelPos, plateSize, cornerRadius);
+            const qreal distance = roundedRectDistance(pixelPos, plateSize, cornerRadius);
             if (distance < -bevelWidth || distance > outerFade) {
                 continue;
             }
 
-            const qreal rim = distance <= 0.0
-                ? qBound<qreal>(0.0, 1.0 + distance / bevelWidth, 1.0)
-                : qBound<qreal>(0.0, 1.0 - distance / outerFade, 1.0);
+            const qreal rim = distance <= 0.0 ? qBound<qreal>(0.0, 1.0 + distance / bevelWidth, 1.0)
+                                              : qBound<qreal>(0.0, 1.0 - distance / outerFade, 1.0);
             const qreal shape = rim * rim * (3.0 - 2.0 * rim);
             const QPointF normal = roundedRectNormal(pixelPos, plateSize, cornerRadius);
             const qreal bend = bevelRefraction(shape) * refractionShift;
@@ -239,13 +233,12 @@ QImage refractGlassBackdrop(const QImage& source, const QRectF& plateRect, qreal
 
             const QRgb redSample
                 = sampleBilinear(source, x + offset.x() - spread.x(), y + offset.y() - spread.y());
-            const QRgb middleSample
-                = sampleBilinear(source, x + offset.x(), y + offset.y());
+            const QRgb middleSample = sampleBilinear(source, x + offset.x(), y + offset.y());
             const QRgb blueSample
                 = sampleBilinear(source, x + offset.x() + spread.x(), y + offset.y() + spread.y());
-            refracted.setPixel(
-                x, y, qRgba(qRed(redSample), qGreen(middleSample), qBlue(blueSample),
-                          qAlpha(middleSample)));
+            refracted.setPixel(x, y,
+                qRgba(qRed(redSample), qGreen(middleSample), qBlue(blueSample),
+                    qAlpha(middleSample)));
         }
     }
     return refracted;
@@ -267,8 +260,7 @@ void drawRefractedBlurredTintedPlate(QImage& target, const QWidget* targetWidget
 
     const int refractionPad = qCeil(refractionShift * 1.2) + 2;
     const int capturePad = blurPad + refractionPad;
-    const QRect sampledRect = plateRect.adjusted(
-                                           -capturePad, -capturePad, capturePad, capturePad)
+    const QRect sampledRect = plateRect.adjusted(-capturePad, -capturePad, capturePad, capturePad)
                                   .intersected(targetBounds);
     if (sampledRect.isEmpty()) {
         return;
@@ -723,16 +715,15 @@ void WelcomeBanner::paintEvent(QPaintEvent* event)
     }
 
     const int blurPad = theme.scaled(BASE_OPEN_BUTTON_BLUR_PAD);
-    const qreal refractionWidth
-        = theme.scaled(ruwa::shared::rendering::kGlassRefractionWidthPx);
+    const qreal refractionWidth = theme.scaled(ruwa::shared::rendering::kGlassRefractionWidthPx);
     const qreal refractionShift
         = qMin<qreal>(theme.scaled(ruwa::shared::rendering::kGlassRefractionShiftPx),
             ruwa::shared::rendering::kGlassMaxRefractionShiftDevicePx);
     const bool lightUi = effectiveLightBannerUi();
     const QColor tintTop = lightUi ? QColor(255, 255, 255, 25) : QColor(24, 34, 58, 70);
     const QColor tintBottom = lightUi ? QColor(255, 255, 255, 25) : QColor(8, 13, 28, 70);
-    drawRefractedBlurredTintedPlate(card, this, m_openButton, blurPad, refractionWidth,
-        refractionShift, tintTop, tintBottom);
+    drawRefractedBlurredTintedPlate(
+        card, this, m_openButton, blurPad, refractionWidth, refractionShift, tintTop, tintBottom);
 
     // Round the card with a smooth alpha mask (no clipping artifacts).
     QImage maskBuffer(card.size(), QImage::Format_ARGB32_Premultiplied);

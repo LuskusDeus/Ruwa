@@ -83,8 +83,9 @@ Result<void> GLCursorIconRenderer::initialize()
     }
 
     GLProgramBinaryCache cache(m_gl);
-    auto program = cache.loadOrCreateGraphicsProgram(QStringLiteral("GLCursorIconRenderer.iconMask"),
-        QString::fromUtf8(kVertexShader), QString::fromUtf8(kFragmentShader));
+    auto program
+        = cache.loadOrCreateGraphicsProgram(QStringLiteral("GLCursorIconRenderer.iconMask"),
+            QString::fromUtf8(kVertexShader), QString::fromUtf8(kFragmentShader));
     if (!program) {
         return { program.error().code, program.error().message };
     }
@@ -203,8 +204,8 @@ GLuint GLCursorIconRenderer::maskTexture(const QString& resourcePath, int sizePx
 // ==========================================================================
 
 void GLCursorIconRenderer::draw(const QString& resourcePath, float sizePx, float left, float top,
-    const std::array<float, 16>& mvp, float viewportW, float viewportH, float alpha,
-    float edgeLow, float edgeHigh)
+    const std::array<float, 16>& mvp, float viewportW, float viewportH, float alpha, float edgeLow,
+    float edgeHigh)
 {
     if (!m_program) {
         return;
@@ -243,8 +244,8 @@ void GLCursorIconRenderer::draw(const QString& resourcePath, float sizePx, float
 }
 
 void GLCursorIconRenderer::drawAtHotspot(const QString& resourcePath, float sizePx, float hotspotU,
-    float hotspotV, float cursorX, float cursorY, const std::array<float, 16>& mvp,
-    float viewportW, float viewportH, float alpha, float edgeLow, float edgeHigh)
+    float hotspotV, float cursorX, float cursorY, const std::array<float, 16>& mvp, float viewportW,
+    float viewportH, float alpha, float edgeLow, float edgeHigh)
 {
     draw(resourcePath, sizePx, cursorX - hotspotU * sizePx, cursorY - hotspotV * sizePx, mvp,
         viewportW, viewportH, alpha, edgeLow, edgeHigh);

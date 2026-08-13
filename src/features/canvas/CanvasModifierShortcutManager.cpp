@@ -221,7 +221,6 @@ void CanvasModifierShortcutManager::loadFromSettings()
         }
     }
     settings.endGroup();
-
 }
 
 void CanvasModifierShortcutManager::syncOrdinaryShortcutConflicts() const

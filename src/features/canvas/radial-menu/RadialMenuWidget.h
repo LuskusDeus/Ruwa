@@ -75,8 +75,8 @@ public:
     /// @p pivotIndex names the seat the transition turns on: for IntoGroup it
     /// indexes the *outgoing* page (the seat just picked), for OutOfGroup the
     /// *incoming* one (the seat the hub folds back into).
-    void setPage(const Page& page, PageTransition transition = PageTransition::None,
-        int pivotIndex = -1);
+    void setPage(
+        const Page& page, PageTransition transition = PageTransition::None, int pivotIndex = -1);
 
     /// Show centred on @p centerInParent (parent coordinates), clamped so the
     /// whole ring stays inside the parent.

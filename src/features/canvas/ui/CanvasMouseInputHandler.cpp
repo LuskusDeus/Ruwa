@@ -425,7 +425,8 @@ bool CanvasMouseInputHandler::handleMousePress(QMouseEvent* event)
                     static_cast<int>(CanvasPanel::TransformActionFlipVertical));
                 flipVerticalAction.insert(QStringLiteral("standardIcon"),
                     static_cast<int>(ruwa::ui::core::IconProvider::StandardIcon::FlipVertical));
-                flipVerticalAction.insert(QStringLiteral("tooltip"), QObject::tr("Flip vertically"));
+                flipVerticalAction.insert(
+                    QStringLiteral("tooltip"), QObject::tr("Flip vertically"));
                 flipVerticalAction.insert(QStringLiteral("enabled"), canFlip);
                 iconActions.push_back(flipVerticalAction);
 

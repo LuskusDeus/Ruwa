@@ -66,8 +66,7 @@ static bool isBrushAdjustmentCommand(const QString& commandId)
 bool CanvasKeyEventHandler::handleEvent(QObject* watched, QEvent* event)
 {
     using ruwa::features::canvas::CanvasModifierAction;
-    auto& canvasShortcuts
-        = ruwa::features::canvas::CanvasModifierShortcutManager::instance();
+    auto& canvasShortcuts = ruwa::features::canvas::CanvasModifierShortcutManager::instance();
     const int moveContentKey = canvasShortcuts.keyFor(CanvasModifierAction::MoveContent);
     const int panCanvasKey = canvasShortcuts.keyFor(CanvasModifierAction::PanCanvas);
     const bool panCanvasShortcutActive
@@ -171,8 +170,7 @@ bool CanvasKeyEventHandler::handleEvent(QObject* watched, QEvent* event)
             const bool panWithShift = panCanvasShortcutActive && panCanvasKey != Qt::Key_Shift
                 && ke->key() == panCanvasKey && ke->modifiers().testFlag(Qt::ShiftModifier);
             const bool shiftWhilePanHeld = panCanvasShortcutActive && panCanvasKey != Qt::Key_Shift
-                && ke->key() == Qt::Key_Shift
-                && m_host->temporaryToolHoldActive()
+                && ke->key() == Qt::Key_Shift && m_host->temporaryToolHoldActive()
                 && m_host->temporaryToolHeldKeyIs(panCanvasKey)
                 && !m_host->temporaryToolShiftSpaceCombo();
             if ((panWithShift || shiftWhilePanHeld) && !ke->isAutoRepeat()

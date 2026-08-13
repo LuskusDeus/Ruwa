@@ -4290,9 +4290,8 @@ bool CanvasPanel::isTemporaryToolHoldKeyPressed() const
         = [](int virtualKey) { return (GetAsyncKeyState(virtualKey) & 0x8000) != 0; };
 
     if (m_tempToolHold.shiftSpaceCombo) {
-        const int panKey
-            = ruwa::features::canvas::CanvasModifierShortcutManager::instance().keyFor(
-                ruwa::features::canvas::CanvasModifierAction::PanCanvas);
+        const int panKey = ruwa::features::canvas::CanvasModifierShortcutManager::instance().keyFor(
+            ruwa::features::canvas::CanvasModifierAction::PanCanvas);
         int panVirtualKey = 0;
         switch (panKey) {
         case Qt::Key_Control:

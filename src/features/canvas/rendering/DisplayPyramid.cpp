@@ -673,8 +673,8 @@ uint32_t DisplayPyramid::auditLevels(
     return stale;
 }
 
-bool DisplayPyramid::sampledSourceStalled(int level, const TileKey& key,
-    const KeyRange& parentRange, const UpdateRequest& request) const
+bool DisplayPyramid::sampledSourceStalled(
+    int level, const TileKey& key, const KeyRange& parentRange, const UpdateRequest& request) const
 {
     if (level == 1) {
         const auto* pending = request.pendingSourcePositions;

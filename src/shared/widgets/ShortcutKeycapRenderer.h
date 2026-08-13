@@ -43,12 +43,12 @@ public:
         return layoutFor(shortcutText, sizeVariant).size;
     }
 
-    static void paint(QPainter& painter, const QRectF& availableRect,
-        const QKeySequence& shortcut, Qt::Alignment alignment, SizeVariant sizeVariant,
-        const QColor& textColor = QColor(), bool emphasized = false)
+    static void paint(QPainter& painter, const QRectF& availableRect, const QKeySequence& shortcut,
+        Qt::Alignment alignment, SizeVariant sizeVariant, const QColor& textColor = QColor(),
+        bool emphasized = false)
     {
-        paintLayout(painter, availableRect, layoutFor(shortcut, sizeVariant), alignment,
-            textColor, emphasized);
+        paintLayout(painter, availableRect, layoutFor(shortcut, sizeVariant), alignment, textColor,
+            emphasized);
     }
 
     static void paint(QPainter& painter, const QRectF& availableRect, const QString& shortcutText,
@@ -269,8 +269,8 @@ private:
         // window background — anchoring lower turns the cap into a hole on presets like
         // Obsidian, whose background is already 10/10/10.
         using Colors = ruwa::ui::core::ThemeColors;
-        QColor keyFill = colors.isDark ? colors.surfaceAlt
-                                       : Colors::adjustBrightness(colors.surface, 0.96);
+        QColor keyFill
+            = colors.isDark ? colors.surfaceAlt : Colors::adjustBrightness(colors.surface, 0.96);
         if (emphasized) {
             keyFill = Colors::interpolate(keyFill, colors.primary, colors.isDark ? 0.16 : 0.12);
         }

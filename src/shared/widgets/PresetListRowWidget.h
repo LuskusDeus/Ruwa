@@ -129,8 +129,7 @@ private:
     bool hitDeleteAction(const QPoint& pos) const;
     bool isOverAnyAction(const QPoint& pos) const;
 
-    void drawStarToggle(
-        QPainter& painter, const QRect& btnRect, bool checked, bool hovered) const;
+    void drawStarToggle(QPainter& painter, const QRect& btnRect, bool checked, bool hovered) const;
     QSize previewSizePx() const;
     void drawPreview(QPainter& painter, const QRectF& rect, const QColor& borderColor) const;
 
