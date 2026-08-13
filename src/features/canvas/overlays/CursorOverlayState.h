@@ -16,6 +16,22 @@
 namespace aether {
 
 /**
+ * @brief Surface-pixel rectangle a GL cursor covers (origin top-left).
+ *
+ * Every cursor overlay inverts what is under it by sampling the scene texture
+ * at gl_FragCoord, so the rectangle it draws into is also the only part of the
+ * scene it reads. That lets the frame render straight to the screen and hand
+ * the cursor a copy of just this rectangle, instead of routing the whole scene
+ * through an offscreen render + full-surface blit.
+ */
+struct CursorCaptureRect {
+    float left = 0.0f;
+    float top = 0.0f;
+    float right = 0.0f;
+    float bottom = 0.0f;
+};
+
+/**
  * @brief State for brush and eyedropper cursor overlays.
  */
 struct CursorOverlayState {

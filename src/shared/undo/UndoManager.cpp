@@ -18,6 +18,15 @@ namespace {
 constexpr int kUndoPrefetchDepth = 8;
 constexpr int kUndoPrefetchPollMs = 150;
 
+// Gap between two chained undo/redo steps while the shortcut is held down.
+// Deliberately not zero: a zero-interval QTimer is delivered as a Qt posted
+// event, and on Windows posted messages are served ahead of queued mouse and
+// keyboard input. Chaining them back to back drains the queue without the
+// message loop ever going idle, so input waits until the whole burst is over.
+// One millisecond of idle is enough for the loop to pick those messages up and
+// is lost in the cost of a single step.
+constexpr int kPendingChainDelayMs = 1;
+
 } // namespace
 
 // ==========================================================================
@@ -150,6 +159,9 @@ void UndoManager::endTransaction()
 
 void UndoManager::undo()
 {
+    // Before every early return: a request that applies nothing still means the
+    // shortcut is held, and views (the GL cursor) need to know that.
+    m_lastRequestedTimer.restart();
     if (m_transaction) {
         return; // An operation is still being assembled; nothing to undo yet.
     }
@@ -177,6 +189,7 @@ void UndoManager::undo()
 
 void UndoManager::redo()
 {
+    m_lastRequestedTimer.restart(); // See undo().
     if (m_transaction) {
         return; // See undo().
     }
@@ -257,6 +270,7 @@ void UndoManager::performUndo()
     const auto tTilesEnd = Clock::now();
 
     m_undoRedoInProgress = false;
+    m_lastAppliedTimer.restart();
 
     const auto tEmitStart = Clock::now();
     if (!affectedTilePositions.isEmpty()) {
@@ -292,6 +306,7 @@ void UndoManager::performRedo()
     const QList<QPoint> affectedTilePositions = m_commands[m_index]->affectedTilePositions();
     m_index++;
     m_undoRedoInProgress = false;
+    m_lastAppliedTimer.restart();
 
     if (!affectedTilePositions.isEmpty()) {
         emit commandApplied(affectedTilePositions);
@@ -485,7 +500,7 @@ void UndoManager::scheduleNextPending()
         return;
     }
 
-    QTimer::singleShot(0, this, [this]() { processNextPending(); });
+    QTimer::singleShot(kPendingChainDelayMs, this, [this]() { processNextPending(); });
 }
 
 void UndoManager::startAsyncPreparation(PendingOperation operation, IUndoCommand* command)

@@ -449,6 +449,10 @@ public:
 
     /// When true, paintGL skips brush/eyedropper cursor overlays (for thumbnail capture).
     void setSkipCursorOverlays(bool skip) { m_skipCursorOverlays = skip; }
+    /// Pin the GL cursor to the position it is given, instead of letting each
+    /// frame re-sample the live pointer. For drags that park the cursor on an
+    /// anchor while the pointer keeps moving (brush-size adjust).
+    void setCursorPositionPinned(bool pinned) { m_cursorPositionPinned = pinned; }
 
     // Canvas resize overlay (GL-rendered)
     void setCanvasResizeOverlayState(
@@ -624,6 +628,7 @@ private:
     void paintGL_renderSceneAndBlit(GLuint& outSceneTarget, GLint defaultFbo,
         bool needSceneForOverlay, const std::vector<CompositeLayerInfo>& boardLayerStack);
     void paintGL_renderOverlays(GLuint sceneTarget);
+    void paintGL_syncCursorToLivePointer();
     void paintGL_renderCursorOverlays();
     /// Downsample, blur and composite the current visible QWidget regions.
     /// Samples the default framebuffer, so it must run after every pass that
@@ -1097,6 +1102,13 @@ private:
     // Brush and eyedropper cursor overlay state
     CursorOverlayState m_cursorOverlayState;
     bool m_skipCursorOverlays = false;
+    /// While set, each frame keeps the cursor position it was given instead of
+    /// re-sampling the pointer (the brush-size drag pins the ring to an anchor).
+    bool m_cursorPositionPinned = false;
+    /// Pointer position the last frame drew the GL cursor at, in surface pixels.
+    /// A mismatch with the live pointer is what asks for the follow-up frame.
+    float m_lastSyncedCursorX = 0.0f;
+    float m_lastSyncedCursorY = 0.0f;
 
     // Scene FBO for cursor overlay rendering (inversion needs scene texture)
     SceneFboManager m_sceneFboManager;

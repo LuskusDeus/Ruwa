@@ -9,6 +9,7 @@
 
 #include <QObject>
 #include <QFutureWatcher>
+#include <QElapsedTimer>
 #include <QList>
 #include <QPoint>
 #include <QString>
@@ -110,6 +111,25 @@ public:
     bool canUndo() const;
     bool canRedo() const;
     bool isUndoRedoInProgress() const { return m_undoRedoInProgress; }
+    /// Steps queued by a held-down undo/redo shortcut and not yet applied.
+    bool hasPendingOperations() const { return m_pendingUndoCount > 0 || m_pendingRedoCount > 0; }
+    /// Milliseconds since the last applied undo/redo, or -1 if none was applied
+    /// yet. Together with msSinceLastRequestedOperation() this tells a view that
+    /// the shortcut is being held; the pending count cannot, because each key
+    /// repeat enqueues one step that is consumed at once, leaving the queue
+    /// empty for most of the burst.
+    qint64 msSinceLastAppliedOperation() const
+    {
+        return m_lastAppliedTimer.isValid() ? m_lastAppliedTimer.elapsed() : -1;
+    }
+    /// Milliseconds since undo/redo was last *asked for*, or -1 if never. Counts
+    /// the requests that apply nothing — notably the first step of a burst,
+    /// which applies only once its command has been prepared on a worker — so a
+    /// view is not left thinking the burst is over while it is still starting.
+    qint64 msSinceLastRequestedOperation() const
+    {
+        return m_lastRequestedTimer.isValid() ? m_lastRequestedTimer.elapsed() : -1;
+    }
     QString undoText() const;
     QString redoText() const;
     int count() const;
@@ -183,6 +203,8 @@ private:
     PendingOperation m_prefetchOperation = PendingOperation::None;
     IUndoCommand* m_prefetchCommand = nullptr;
     QTimer m_prefetchTimer;
+    QElapsedTimer m_lastAppliedTimer;
+    QElapsedTimer m_lastRequestedTimer;
 
     std::atomic<int64_t>* m_dbgUndoTimestampStore = nullptr;
 };

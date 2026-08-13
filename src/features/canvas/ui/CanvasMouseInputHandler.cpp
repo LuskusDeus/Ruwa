@@ -220,6 +220,9 @@ bool CanvasMouseInputHandler::beginBrushSizeAdjust(QMouseEvent* event)
     const QPoint localPos = gl->mapFromGlobal(globalPos);
 
     m_brushSizeAdjust = true;
+    // The ring is parked on the anchor for the whole drag, so the frame must
+    // stop following the pointer with it.
+    gl->setCursorPositionPinned(true);
     m_brushSizeAnchorGlobal = globalPos;
     m_brushSizeAnchorVx = static_cast<float>(static_cast<qreal>(localPos.x()) * scaleX);
     m_brushSizeAnchorVy = static_cast<float>(static_cast<qreal>(localPos.y()) * scaleY);
@@ -290,6 +293,7 @@ void CanvasMouseInputHandler::endBrushSizeAdjust()
         }
         if (auto* gl = m_host->inputGlWidget()) {
             gl->unsetCursor();
+            gl->setCursorPositionPinned(false);
             gl->setBrushCursorState(false, 0, 0, 0);
         }
         m_panel->unsetCursor();

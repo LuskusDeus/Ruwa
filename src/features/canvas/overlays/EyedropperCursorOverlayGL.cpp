@@ -323,6 +323,15 @@ void EyedropperCursorOverlayGL::render(float centerX, float centerY, int viewpor
     m_gl->glDisable(GL_BLEND);
 }
 
+CursorCaptureRect EyedropperCursorOverlayGL::captureRect(float centerX, float centerY)
+{
+    // The inverted outline overhangs the color band by kBorderThickness on both
+    // rims; the extra pixels are the usual guard band for linear sampling.
+    constexpr float kPadPx = 3.0f;
+    const float reach = kOuterRadius + kBorderThickness + kPadPx;
+    return { centerX - reach, centerY - reach, centerX + reach, centerY + reach };
+}
+
 void EyedropperCursorOverlayGL::drawIcon(float centerX, float centerY,
     const std::array<float, 16>& mvp, float viewportW, float viewportH)
 {

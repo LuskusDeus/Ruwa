@@ -9,6 +9,7 @@
 
 #include <QOpenGLContext>
 
+#include <algorithm>
 #include <array>
 #include <iterator>
 
@@ -184,6 +185,28 @@ void ToolCursorOverlayGL::render(float centerX, float centerY, int viewportWidth
     }
 
     m_gl->glDisable(GL_BLEND);
+}
+
+CursorCaptureRect ToolCursorOverlayGL::captureRect(
+    float centerX, float centerY, ToolCursorStyle style)
+{
+    // Both glyph renderers sample with linear filtering, so keep a guard band
+    // around the drawn geometry: an edge texel must never read outside the copy.
+    constexpr float kPadPx = 3.0f;
+
+    if (style == ToolCursorStyle::Crosshair) {
+        const float reach = kCrosshairLength + kCrosshairThickness * 0.5f + kPadPx;
+        return { centerX - reach, centerY - reach, centerX + reach, centerY + reach };
+    }
+
+    // Pointer: the hotspot is inset into the arrow, so a little of it sits above
+    // and left of the cursor position; the badge hangs to the lower right and is
+    // what sets the far edge.
+    const float back = kPointerSizePx * std::max(kPointerHotspotU, kPointerHotspotV) + kPadPx;
+    const float forward
+        = std::max(kPointerSizePx, std::max(kToolIconOffsetX, kToolIconOffsetY) + kToolIconSizePx)
+        + kPadPx;
+    return { centerX - back, centerY - back, centerX + forward, centerY + forward };
 }
 
 void ToolCursorOverlayGL::drawCrosshair(

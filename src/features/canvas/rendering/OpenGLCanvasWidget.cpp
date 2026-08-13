@@ -109,7 +109,10 @@
 #include "features/canvas/rendering/LayerCompositingBuilder.h"
 #include "features/canvas/selection/CanvasSelectionController.h"
 #include "features/canvas/ui/CanvasMetricLabelOverlay.h"
+#include "services/input/StylusInputManager.h"
+
 #include <algorithm>
+#include <array>
 #include <atomic>
 #include <cmath>
 #include <cstring>
@@ -11121,6 +11124,75 @@ void OpenGLCanvasWidget::paintGL_renderOverlays(GLuint sceneTarget)
     }
 }
 
+// A GL cursor is drawn inside the canvas frame, so it needs a position that is
+// as fresh as the frame — not the one carried by the last MouseMove that made
+// it through. Runs before anything reads the cursor state this frame.
+void OpenGLCanvasWidget::paintGL_syncCursorToLivePointer()
+{
+    if (m_skipCursorOverlays || m_cursorPositionPinned) {
+        // No cursor in this frame at all (export grab), or the brush-size drag
+        // is parking the ring on its anchor while the pointer moves away.
+        return;
+    }
+    if (!m_cursorOverlayState.brushVisible && !m_cursorOverlayState.eyedropperVisible
+        && !m_cursorOverlayState.toolCursorVisible) {
+        return;
+    }
+    if (!isActiveWindow()) {
+        // The GL cursor belongs to Ruwa's own canvas interaction; while another
+        // window is in front, the pointer is not ours to follow. Same rule as
+        // CanvasCursorManager::isOverCanvas.
+        return;
+    }
+
+    // Same source of truth as CanvasCursorManager: the direct WinTab position
+    // while native routing owns the stylus, the system pointer otherwise.
+    const auto nativePos
+        = ruwa::services::input::StylusInputManager::instance().nativeCursorPosition();
+    const QPoint globalPos = nativePos.value_or(QCursor::pos());
+    const QPoint localPos = mapFromGlobal(globalPos);
+    if (!rect().contains(localPos)) {
+        // Off the canvas. Visibility is the cursor manager's call, not this
+        // frame's — leave the last position alone and let it hide the cursor.
+        return;
+    }
+
+    const qreal scaleX = width() > 0
+        ? static_cast<qreal>(m_viewport.width()) / static_cast<qreal>(width())
+        : 1.0;
+    const qreal scaleY = height() > 0
+        ? static_cast<qreal>(m_viewport.height()) / static_cast<qreal>(height())
+        : 1.0;
+    const float centerX = static_cast<float>(static_cast<qreal>(localPos.x()) * scaleX);
+    const float centerY = static_cast<float>(static_cast<qreal>(localPos.y()) * scaleY);
+
+    // A moved pointer always earns one more frame. Normally the MouseMove that
+    // carried it would have asked for that frame; when input is starved nothing
+    // does, and the cursor would sit still until some unrelated repaint came
+    // along. Self-limiting: once a frame has drawn the pointer where it now is,
+    // the positions match and no further frame is requested. Both sides are
+    // derived the same way from integer widget coordinates, so they compare
+    // exactly — a tolerance here would drop slow single-pixel movement.
+    if (centerX != m_lastSyncedCursorX || centerY != m_lastSyncedCursorY) {
+        m_lastSyncedCursorX = centerX;
+        m_lastSyncedCursorY = centerY;
+        update();
+    }
+
+    if (m_cursorOverlayState.brushVisible) {
+        m_cursorOverlayState.brushCenterX = centerX;
+        m_cursorOverlayState.brushCenterY = centerY;
+    }
+    if (m_cursorOverlayState.eyedropperVisible) {
+        m_cursorOverlayState.eyedropperCenterX = centerX;
+        m_cursorOverlayState.eyedropperCenterY = centerY;
+    }
+    if (m_cursorOverlayState.toolCursorVisible) {
+        m_cursorOverlayState.toolCursorCenterX = centerX;
+        m_cursorOverlayState.toolCursorCenterY = centerY;
+    }
+}
+
 // The cursor overlays are the topmost thing on the canvas, so they run after
 // every pass that writes canvas pixels. The lasso fill preview in particular
 // re-renders the viewport into the scene FBO and blits it over the whole
@@ -12757,6 +12829,14 @@ void OpenGLCanvasWidget::paintGL()
     if (!m_initialized || !m_renderer)
         return;
 
+    // The GL cursor is part of this frame, so it can only be as fresh as the
+    // frame is. Take the pointer position from the OS/tablet here instead of
+    // relying on a MouseMove having been delivered: mouse messages are the
+    // lowest-priority thing in the Windows queue and a busy posted-event queue
+    // (an undo/redo burst is exactly that) starves them, while timers and
+    // repaints — the navigator's animation, this very frame — keep running.
+    paintGL_syncCursorToLivePointer();
+
     if (m_smartCompositeRefreshPending) {
         // A smart object's contents changed while there was no renderer to
         // flatten them. There is one now — but a composite is its own batch and
@@ -12844,14 +12924,40 @@ void OpenGLCanvasWidget::paintGL()
         && eyedropperCursorOverlay->isInitialized();
     const bool drawToolCursor
         = wantToolCursor && toolCursorOverlay && toolCursorOverlay->isInitialized();
-    // Most overlays genuinely consume the whole scene texture. The brush
-    // cursor samples only the pixels under its small inverted contour, so it
-    // gets a local copy after the scene has rendered directly to the target.
-    // This avoids a full-surface offscreen render + blit on every cursor frame,
-    // which is especially costly at maximized-window resolutions.
-    const bool needFullSceneForOverlay = drawTransformOverlay || drawCanvasResizeOverlay
-        || drawTextEditOverlay || drawEyedropperCursor || drawToolCursor;
-    const bool captureBrushCursorRegion = drawBrushCursor && !needFullSceneForOverlay;
+    // Most overlays genuinely consume the whole scene texture. A cursor does
+    // not: it inverts what is under itself, so it only ever samples the small
+    // rectangle it draws into and can work from a local copy taken after the
+    // scene has rendered directly to the target. This avoids a full-surface
+    // offscreen render + blit on every cursor frame, which is especially costly
+    // at maximized-window resolutions. The brush ring already worked this way;
+    // the tool and eyedropper cursors used to force the full-scene path.
+    const bool needFullSceneForOverlay
+        = drawTransformOverlay || drawCanvasResizeOverlay || drawTextEditOverlay;
+    std::array<CursorCaptureRect, 3> cursorCaptureRects {};
+    int cursorCaptureRectCount = 0;
+    if (!needFullSceneForOverlay) {
+        if (drawBrushCursor) {
+            // The cursor shader uses linear sampling and its contour is two
+            // pixels wide. Keep a small guard band so edge texels never sample
+            // stale content from outside the copied rectangle.
+            constexpr float kCursorCapturePaddingPx = 3.0f;
+            const float r = m_cursorOverlayState.brushRadius + kCursorCapturePaddingPx;
+            cursorCaptureRects[cursorCaptureRectCount++]
+                = CursorCaptureRect { m_cursorOverlayState.brushCenterX - r,
+                      m_cursorOverlayState.brushCenterY - r, m_cursorOverlayState.brushCenterX + r,
+                      m_cursorOverlayState.brushCenterY + r };
+        }
+        if (drawEyedropperCursor) {
+            cursorCaptureRects[cursorCaptureRectCount++]
+                = EyedropperCursorOverlayGL::captureRect(m_cursorOverlayState.eyedropperCenterX,
+                    m_cursorOverlayState.eyedropperCenterY);
+        }
+        if (drawToolCursor) {
+            cursorCaptureRects[cursorCaptureRectCount++]
+                = ToolCursorOverlayGL::captureRect(m_cursorOverlayState.toolCursorCenterX,
+                    m_cursorOverlayState.toolCursorCenterY, m_cursorOverlayState.toolCursorStyle);
+        }
+    }
 
     GLint defaultFbo = 0;
     glGetIntegerv(GL_FRAMEBUFFER_BINDING, &defaultFbo);
@@ -12860,30 +12966,25 @@ void OpenGLCanvasWidget::paintGL()
 
     paintGL_renderFillPreviewOverlay(layerStack, sceneTarget, defaultFbo);
 
-    if (captureBrushCursorRegion) {
+    if (cursorCaptureRectCount > 0) {
         const QSize surfaceSize = currentSurfacePixelSize(this);
         const int surfaceWidth = surfaceSize.width();
         const int surfaceHeight = surfaceSize.height();
         m_sceneFboManager.ensureSceneFbo(this, surfaceWidth, surfaceHeight);
         if (m_sceneFboManager.sceneFbo() && m_sceneFboManager.sceneTexture()) {
-            // The cursor shader uses linear sampling and its contour is two
-            // pixels wide. Keep a small guard band so edge texels never sample
-            // stale content from outside the copied rectangle.
-            constexpr float kCursorCapturePaddingPx = 3.0f;
-            const float captureRadius = m_cursorOverlayState.brushRadius + kCursorCapturePaddingPx;
-            const int left = std::clamp(
-                static_cast<int>(std::floor(m_cursorOverlayState.brushCenterX - captureRadius)), 0,
-                surfaceWidth);
-            const int right = std::clamp(
-                static_cast<int>(std::ceil(m_cursorOverlayState.brushCenterX + captureRadius)), 0,
-                surfaceWidth);
-            const int top = std::clamp(
-                static_cast<int>(std::floor(m_cursorOverlayState.brushCenterY - captureRadius)), 0,
-                surfaceHeight);
-            const int bottom = std::clamp(
-                static_cast<int>(std::ceil(m_cursorOverlayState.brushCenterY + captureRadius)), 0,
-                surfaceHeight);
-            if (right > left && bottom > top) {
+            for (int i = 0; i < cursorCaptureRectCount; ++i) {
+                const CursorCaptureRect& rect = cursorCaptureRects[i];
+                const int left
+                    = std::clamp(static_cast<int>(std::floor(rect.left)), 0, surfaceWidth);
+                const int right
+                    = std::clamp(static_cast<int>(std::ceil(rect.right)), 0, surfaceWidth);
+                const int top
+                    = std::clamp(static_cast<int>(std::floor(rect.top)), 0, surfaceHeight);
+                const int bottom
+                    = std::clamp(static_cast<int>(std::ceil(rect.bottom)), 0, surfaceHeight);
+                if (right <= left || bottom <= top) {
+                    continue;
+                }
                 const int glBottom = surfaceHeight - bottom;
                 m_sceneFboManager.copyRegionFromDefaultFbo(
                     this, defaultFbo, left, glBottom, right - left, bottom - top);
@@ -12930,6 +13031,29 @@ void OpenGLCanvasWidget::paintGL()
     // A pyramid tile that missed its rebuild draws stale rather than aliased,
     // so this is a catch-up frame, not a quality fallback being undone.
     if (m_renderer->hasPendingDisplayPyramidWork())
+        update();
+    // The GL cursor exists only inside this frame, and a held-down undo/redo
+    // drains its queue through posted events, which Windows serves ahead of
+    // mouse input: no MouseMove arrives to ask for a frame. Overlays that
+    // animate (marching ants) or tools that repaint for their own reasons (the
+    // brush ring) hide this by keeping frames coming; the plain tool cursor has
+    // no such motor and was redrawn once per undo step, which reads as frozen.
+    // So keep the canvas ticking for a moment after each step — every frame
+    // re-samples the live pointer, so that is what makes the cursor move.
+    // The pending count cannot drive this: one key repeat enqueues one step and
+    // it is consumed at once, so the queue is empty most of the burst. Both
+    // clocks are needed, and the window runs from whichever is newer: requests
+    // cover the steps that apply nothing (the first one while its command is
+    // still being prepared on a worker, and every repeat after the stack runs
+    // out), applications cover a preparation that outlasts the window.
+    constexpr qint64 kUndoActivityFrameWindowMs = 250;
+    const auto& undoManager = m_canvas.undoManager();
+    const qint64 msSinceUndoRequest = undoManager.msSinceLastRequestedOperation();
+    const qint64 msSinceUndoApplied = undoManager.msSinceLastAppliedOperation();
+    const bool undoActivityRecent
+        = (msSinceUndoRequest >= 0 && msSinceUndoRequest < kUndoActivityFrameWindowMs)
+        || (msSinceUndoApplied >= 0 && msSinceUndoApplied < kUndoActivityFrameWindowMs);
+    if (undoManager.hasPendingOperations() || undoActivityRecent)
         update();
     if (m_viewport.camera().isAnimating() && !m_cameraAnimationFrameTimer.isActive()) {
         constexpr qint64 kCameraFrameIntervalNs = 1000000000LL / 120;

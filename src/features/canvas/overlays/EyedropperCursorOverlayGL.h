@@ -7,6 +7,7 @@
 #ifndef AETHER_ENGINE_QT_EYEDROPPERCURSOROVERLAYGL_H
 #define AETHER_ENGINE_QT_EYEDROPPERCURSOROVERLAYGL_H
 
+#include "features/canvas/overlays/CursorOverlayState.h"
 #include "features/canvas/overlays/GLCursorIconRenderer.h"
 #include "shared/types/Result.h"
 #include "shared/types/Types.h"
@@ -53,6 +54,10 @@ public:
         GLuint sceneTextureId, const QColor& selectedColor);
 
     bool isInitialized() const { return m_initialized; }
+
+    /// Surface-pixel bounds of the whole ring — and therefore of every scene
+    /// texel render() samples. See CursorCaptureRect.
+    static CursorCaptureRect captureRect(float centerX, float centerY);
 
 private:
     /// Builds a triangle strip for an annulus sector. Angles in degrees, measured

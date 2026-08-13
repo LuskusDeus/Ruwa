@@ -7,6 +7,7 @@
 #ifndef RUWA_FEATURES_CANVAS_OVERLAYS_TOOLCURSOROVERLAYGL_H
 #define RUWA_FEATURES_CANVAS_OVERLAYS_TOOLCURSOROVERLAYGL_H
 
+#include "features/canvas/overlays/CursorOverlayState.h"
 #include "features/canvas/overlays/GLCursorIconRenderer.h"
 #include "features/canvas/overlays/ToolCursorIcons.h"
 #include "shared/types/Result.h"
@@ -52,6 +53,10 @@ public:
         GLuint sceneTextureId, ToolCursorStyle style, const QString& toolIconResource);
 
     bool isInitialized() const { return m_initialized; }
+
+    /// Surface-pixel bounds of everything render() draws for @p style — and
+    /// therefore of every scene texel it samples. See CursorCaptureRect.
+    static CursorCaptureRect captureRect(float centerX, float centerY, ToolCursorStyle style);
 
 private:
     void drawCrosshair(
