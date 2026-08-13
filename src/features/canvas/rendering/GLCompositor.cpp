@@ -126,16 +126,14 @@ void GLCompositor::shutdown()
     for (int i = 0; i < 2; ++i) {
         deleteTexture(m_gl, m_pingPongTex[i]);
     }
-    deleteTexture(m_gl, m_groupTempTex[0]);
-    deleteTexture(m_gl, m_groupTempTex[1]);
-    deleteTexture(m_gl, m_neighborhoodCenterTex);
-    deleteTexture(m_gl, m_clipGroupTempTex[0]);
-    deleteTexture(m_gl, m_clipGroupTempTex[1]);
-    deleteTexture(m_gl, m_wholeGroupTempTex[0]);
-    deleteTexture(m_gl, m_wholeGroupTempTex[1]);
-    deleteTexture(m_gl, m_adjustmentTempTex[0]);
-    deleteTexture(m_gl, m_adjustmentTempTex[1]);
     deleteTexture(m_gl, m_programmaticBlendBaseTex);
+    for (const auto& frame : m_isolationFrames) {
+        deleteTexture(m_gl, frame->ping[0]);
+        deleteTexture(m_gl, frame->ping[1]);
+        deleteTexture(m_gl, frame->centre);
+    }
+    m_isolationFrames.clear();
+    m_isolationDepth = 0;
     for (const auto& frame : m_groupCompositeFrames) {
         deleteTexture(m_gl, frame->ping[0]);
         deleteTexture(m_gl, frame->ping[1]);
@@ -178,15 +176,6 @@ void GLCompositor::ensurePingPongTextures()
 
     for (int i = 0; i < 2; ++i)
         ensureTex(m_pingPongTex[i], kWorkingTileParams);
-    ensureTex(m_groupTempTex[0], kWorkingTileParams);
-    ensureTex(m_groupTempTex[1], kWorkingTileParams);
-    ensureTex(m_neighborhoodCenterTex, kWorkingTileParams);
-    ensureTex(m_clipGroupTempTex[0], kWorkingTileParams);
-    ensureTex(m_clipGroupTempTex[1], kWorkingTileParams);
-    ensureTex(m_wholeGroupTempTex[0], kWorkingTileParams);
-    ensureTex(m_wholeGroupTempTex[1], kWorkingTileParams);
-    ensureTex(m_adjustmentTempTex[0], kWorkingTileParams);
-    ensureTex(m_adjustmentTempTex[1], kWorkingTileParams);
     ensureTex(m_programmaticBlendBaseTex, kWorkingTileParams);
 }
 
@@ -218,6 +207,71 @@ GLCompositor::GroupCompositeFrame& GLCompositor::ensureGroupCompositeFrame(size_
     ensureTex(frame.sourceCoverage);
     ensureTex(frame.coverage);
     return frame;
+}
+
+GLCompositor::IsolationFrame& GLCompositor::ensureIsolationFrame(size_t depth)
+{
+    if (m_isolationFrames.size() <= depth) {
+        m_isolationFrames.resize(depth + 1);
+    }
+    if (!m_isolationFrames[depth]) {
+        m_isolationFrames[depth] = std::make_unique<IsolationFrame>();
+    }
+
+    const TextureParams kTileParams = tileTextureParams(kDefaultTileFormat);
+    IsolationFrame& frame = *m_isolationFrames[depth];
+    auto ensureTex = [this, &kTileParams](GLuint& texture) {
+        if (!texture) {
+            texture = createTexture2D(m_gl, TILE_SIZE, TILE_SIZE, kTileParams);
+        }
+    };
+    ensureTex(frame.ping[0]);
+    ensureTex(frame.ping[1]);
+    return frame;
+}
+
+GLuint GLCompositor::isolationCentre(IsolationFrame& frame)
+{
+    // Only the neighbourhood paths need a centre copy; a plain isolated
+    // composite (clip group, group source tile) never asks for one.
+    if (!frame.centre) {
+        frame.centre
+            = createTexture2D(m_gl, TILE_SIZE, TILE_SIZE, tileTextureParams(kDefaultTileFormat));
+    }
+    return frame.centre;
+}
+
+GLCompositor::IsolationScope::IsolationScope(GLCompositor& owner, Mode mode)
+    : m_owner(owner)
+    , m_frame(owner.ensureIsolationFrame(owner.m_isolationDepth++))
+    , m_mode(mode)
+{
+    if (m_mode != Redirect) {
+        return;
+    }
+    m_savedTex[0] = owner.m_pingPongTex[0];
+    m_savedTex[1] = owner.m_pingPongTex[1];
+    m_savedPing = owner.m_currentPing;
+    owner.m_pingPongTex[0] = m_frame.ping[0];
+    owner.m_pingPongTex[1] = m_frame.ping[1];
+    owner.m_currentPing = 0;
+    owner.m_gl->glViewport(0, 0, TILE_SIZE, TILE_SIZE);
+    owner.clearTexture(m_frame.ping[0]);
+}
+
+GLuint GLCompositor::IsolationScope::centre() const
+{
+    return m_owner.isolationCentre(m_frame);
+}
+
+GLCompositor::IsolationScope::~IsolationScope()
+{
+    if (m_mode == Redirect) {
+        m_owner.m_pingPongTex[0] = m_savedTex[0];
+        m_owner.m_pingPongTex[1] = m_savedTex[1];
+        m_owner.m_currentPing = m_savedPing;
+    }
+    --m_owner.m_isolationDepth;
 }
 
 // ==========================================================================
@@ -258,11 +312,14 @@ void GLCompositor::compositeTile(const TileKey& key, const std::vector<Composite
     dbgStackTimer.start();
     // Composite layers bottom to top
     m_groupCompositeDepth = 0;
+    m_isolationDepth = 0;
+    m_srcAtopClipBase = nullptr;
     m_activeRootLayers = &layers;
     m_activeBackdropColor = backdropColor;
     GLuint resultTex = compositeLayerStack(key, layers, tileRenderer, 1.0f, false, backdropColor);
     m_activeRootLayers = nullptr;
     m_groupCompositeDepth = 0;
+    m_isolationDepth = 0;
     const qint64 dbgStackUs = dbgStackTimer.nsecsElapsed() / 1000;
 
     QElapsedTimer dbgSwapTimer;
@@ -347,54 +404,54 @@ GLuint GLCompositor::compositeLayerStack(const TileKey& key,
         // layer in the sub-stack is already clipped and consumed as a unit.
         const bool passThroughGroupClipBase = layer.isGroup && !layer.forceIsolation;
         const bool isClipBase = !useSrcAtop && !passThroughGroupClipBase && !layer.clippedToBelow
-            && (idx + 1 < layers.size()) && layers[idx + 1].clippedToBelow;
+            && hasRenderedClippedFollower(layers, idx, parentOpacity);
 
         if (isClipBase) {
-            // Collect the full clip group: base at idx, clipped at idx+1..clipEnd-1
+            // Collect the full clip group: base at idx, clipped at idx+1..clipEnd-1.
+            // Skipped (hidden / fully transparent) clipped layers stay inside the
+            // range — the recursive pass skips them individually, and cutting the
+            // group at one of them would detach the clipped layers above it.
             size_t clipEnd = idx + 1;
             while (clipEnd < layers.size() && layers[clipEnd].clippedToBelow)
                 ++clipEnd;
 
-            // Save main ping-pong state
-            const int savedPing = m_currentPing;
-            const GLuint savedTex0 = m_pingPongTex[0];
-            const GLuint savedTex1 = m_pingPongTex[1];
-
-            // Use the dedicated clip-group temp textures for isolation.
-            // (Separate from m_groupTempTex so that an isGroup layer inside
-            // the clip base can still use m_groupTempTex without conflict.)
-            m_pingPongTex[0] = m_clipGroupTempTex[0];
-            m_pingPongTex[1] = m_clipGroupTempTex[1];
-            m_currentPing = 0;
-            clearTexture(m_pingPongTex[0]);
-
-            // 1. Composite the clip base into the isolated buffer (src-over
-            //    from transparent — blend mode has no effect here but is
-            //    preserved for the final group→canvas blend step).
+            GLuint groupResultTex = 0;
             {
-                std::vector<CompositeLayerInfo> baseVec(1, layer);
-                baseVec[0].opacity = 1.0f; // effective opacity applied at group blend
-                compositeLayerStack(key, baseVec, tileRenderer, 1.0f,
-                    /*useSrcAtop=*/false, Color::transparent());
+                // Isolated buffer for the clip group. A depth-indexed frame (not a
+                // single shared pair) so a clip group nested inside this one — a
+                // pass-through group in the clip base holding its own clip
+                // group — cannot clear the composite being accumulated here.
+                IsolationScope iso(*this);
+
+                // 1. Composite the clip base into the isolated buffer (src-over
+                //    from transparent — blend mode has no effect here but is
+                //    preserved for the final group→canvas blend step).
+                {
+                    std::vector<CompositeLayerInfo> baseVec(1, layer);
+                    baseVec[0].opacity = 1.0f; // effective opacity applied at group blend
+                    compositeLayerStack(key, baseVec, tileRenderer, 1.0f,
+                        /*useSrcAtop=*/false, Color::transparent());
+                }
+
+                // 2. Composite clipped layers with src-atop.
+                //    src-atop: ao = base.a = clip_base.a at every pixel, so the
+                //    group alpha never exceeds the clip base alpha.
+                if (clipEnd > idx + 1) {
+                    std::vector<CompositeLayerInfo> clippedVec(
+                        layers.begin() + static_cast<ptrdiff_t>(idx + 1),
+                        layers.begin() + static_cast<ptrdiff_t>(clipEnd));
+                    // A clipped ADJUSTMENT needs to know the clip base to rebuild
+                    // its own source at neighbouring tiles (bounds-expanding
+                    // chains); it is not part of the sub-stack it is composited in.
+                    const CompositeLayerInfo* savedClipBase = m_srcAtopClipBase;
+                    m_srcAtopClipBase = &layer;
+                    compositeLayerStack(key, clippedVec, tileRenderer, 1.0f,
+                        /*useSrcAtop=*/true, Color::transparent());
+                    m_srcAtopClipBase = savedClipBase;
+                }
+
+                groupResultTex = currentBase();
             }
-
-            // 2. Composite clipped layers with src-atop.
-            //    src-atop: ao = base.a = clip_base.a at every pixel, so the
-            //    group alpha never exceeds the clip base alpha.
-            if (clipEnd > idx + 1) {
-                std::vector<CompositeLayerInfo> clippedVec(
-                    layers.begin() + static_cast<ptrdiff_t>(idx + 1),
-                    layers.begin() + static_cast<ptrdiff_t>(clipEnd));
-                compositeLayerStack(key, clippedVec, tileRenderer, 1.0f,
-                    /*useSrcAtop=*/true, Color::transparent());
-            }
-
-            const GLuint groupResultTex = currentBase();
-
-            // Restore main ping-pong state
-            m_pingPongTex[0] = savedTex0;
-            m_pingPongTex[1] = savedTex1;
-            m_currentPing = savedPing;
 
             // 3. Blend the clip-group result onto the main canvas using the
             //    clip base's blend mode and effective opacity.  Any external
@@ -610,16 +667,37 @@ GLuint GLCompositor::compositeLayerStack(const TileKey& key,
                 const int pad = layerNeighborhoodPad(layer);
                 std::vector<CompositeLayerInfo> belowLayers;
                 auto ensureBelow = [&]() {
-                    if (belowLayers.empty()) {
-                        belowLayers.assign(
-                            layers.begin(), layers.begin() + static_cast<ptrdiff_t>(idx));
+                    if (!belowLayers.empty()) {
+                        return;
                     }
+                    if (useSrcAtop && m_srcAtopClipBase) {
+                        // Inside a clip group: what this adjustment sees is the
+                        // clip BASE with the clipped layers under it composited
+                        // src-atop — and the base lives one level up, outside
+                        // `layers`. Prepending it reproduces exactly the isolated
+                        // buffer's content at any tile (the recursive pass turns
+                        // [base, clipped...] back into a clip group).
+                        belowLayers.reserve(idx + 1);
+                        belowLayers.push_back(*m_srcAtopClipBase);
+                        // The base's own opacity is applied when the finished clip
+                        // group is blended onto the canvas, exactly as in the
+                        // isolated pass this mirrors.
+                        belowLayers.front().opacity = 1.0f;
+                    } else {
+                        belowLayers.reserve(idx);
+                    }
+                    belowLayers.insert(belowLayers.end(), layers.begin(),
+                        layers.begin() + static_cast<ptrdiff_t>(idx));
                 };
+                // A clipped adjustment can rebuild its own source stack (above);
+                // one whose clip base is unknown cannot, and keeps the per-tile
+                // path over currentBase().
+                const bool canRebuildBelow = !useSrcAtop || m_srcAtopClipBase != nullptr;
 
                 // Background-free effected content of the layers below.
                 GLuint effectedTex = 0;
                 bool bgFree = false; // effectedTex computed from background-free content
-                if (pad > 0 && !useSrcAtop) {
+                if (pad > 0 && canRebuildBelow) {
                     // Bounds-expanding adjustments (e.g. blur) must read across
                     // tile borders or they seam per tile: recomposite the below
                     // stack at the surrounding tiles for the padded source.
@@ -693,8 +771,8 @@ GLuint GLCompositor::compositeLayerStack(const TileKey& key,
                 }
             }
 
-            const bool usedAsClipBase = !layer.clippedToBelow && (idx + 1 < layers.size())
-                && layers[idx + 1].clippedToBelow;
+            const bool usedAsClipBase = !layer.clippedToBelow
+                && hasRenderedClippedFollower(layers, idx, parentOpacity);
             const bool groupHasEffects = m_effectRenderer
                 && m_effectRenderer->hasRenderableEffects(
                     layer.effects, ruwa::core::effects::EffectEvaluationSpace::DocumentTile, false);
@@ -734,8 +812,8 @@ GLuint GLCompositor::compositeLayerStack(const TileKey& key,
                         if (neighborKey == key) {
                             return frame.passThrough;
                         }
-                        return recomposePassThroughToGroup(neighborKey, &layer, tileRenderer,
-                            backdropColor, frame.ping[0], frame.ping[1]);
+                        return recomposePassThroughToGroup(
+                            neighborKey, &layer, tileRenderer, backdropColor);
                     };
                     effectedVisual = applyGroupNeighborhoodEffects(key, layer, tileRenderer,
                         groupPad, frame.passThrough,
@@ -847,12 +925,17 @@ GLuint GLCompositor::compositeLayerStack(const TileKey& key,
                 GLuint groupClipBaseTex = groupResult;
                 const int groupPad = layerNeighborhoodPad(layer);
                 if (groupPad > 0) {
-                    effectedGroupResult = applyGroupNeighborhoodEffects(
-                        key, layer, tileRenderer, groupPad, groupResult);
-                    if (effectedGroupResult) {
-                        // The neighbourhood path keeps a stable copy of the centre
-                        // before running its re-entrant neighbour composites.
-                        groupClipBaseTex = m_neighborhoodCenterTex;
+                    // The neighbourhood path keeps a stable copy of the centre
+                    // before running its re-entrant neighbour composites; the
+                    // un-effected group result is the clip base for the layers
+                    // above, so it has to be read from that copy.
+                    GLuint centreTex = 0;
+                    effectedGroupResult = applyGroupNeighborhoodEffects(key, layer, tileRenderer,
+                        groupPad, groupResult, /*allowCachedPaths=*/true,
+                        /*passThroughTileTexture=*/{}, GroupEffectSlot::IsolatedResult,
+                        /*liveEditSourceVariant=*/0, &centreTex);
+                    if (effectedGroupResult && centreTex) {
+                        groupClipBaseTex = centreTex;
                     }
                 }
                 if (!effectedGroupResult) {
@@ -1651,24 +1734,19 @@ bool GLCompositor::groupSubtreeContains(
 }
 
 GLuint GLCompositor::recomposePassThroughToGroup(const TileKey& key,
-    const CompositeLayerInfo* target, GLTileRenderer* tileRenderer, const Color& backdropColor,
-    GLuint scratch0, GLuint scratch1)
+    const CompositeLayerInfo* target, GLTileRenderer* tileRenderer, const Color& backdropColor)
 {
-    if (!m_activeRootLayers || !target || !tileRenderer || !scratch0 || !scratch1) {
+    if (!m_activeRootLayers || !target || !tileRenderer) {
         return 0;
     }
 
-    const int savedPing = m_currentPing;
-    const GLuint savedTex0 = m_pingPongTex[0];
-    const GLuint savedTex1 = m_pingPongTex[1];
     const CompositeLayerInfo* savedStopGroup = m_recomposeStopGroup;
     const bool savedStopReached = m_recomposeStopReached;
 
-    m_pingPongTex[0] = scratch0;
-    m_pingPongTex[1] = scratch1;
-    m_currentPing = 0;
-    m_gl->glViewport(0, 0, TILE_SIZE, TILE_SIZE);
-    clearTexture(scratch0);
+    // Own isolation frame rather than buffers borrowed from the caller's group
+    // frame: this recomposite walks the whole root stack, so it can re-enter any
+    // isolated path (including the caller's own group) at a deeper level.
+    IsolationScope iso(*this);
     m_recomposeStopGroup = target;
     m_recomposeStopReached = false;
     compositeLayerStack(key, *m_activeRootLayers, tileRenderer, 1.0f,
@@ -1677,9 +1755,6 @@ GLuint GLCompositor::recomposePassThroughToGroup(const TileKey& key,
 
     m_recomposeStopGroup = savedStopGroup;
     m_recomposeStopReached = savedStopReached;
-    m_pingPongTex[0] = savedTex0;
-    m_pingPongTex[1] = savedTex1;
-    m_currentPing = savedPing;
     return result;
 }
 
@@ -1687,7 +1762,7 @@ GLuint GLCompositor::applyGroupNeighborhoodEffects(const TileKey& key,
     const CompositeLayerInfo& layer, GLTileRenderer* tileRenderer, int padPixels,
     GLuint groupResultTexture, bool allowCachedPaths,
     const std::function<GLuint(const TileKey&)>& passThroughTileTexture, GroupEffectSlot cacheSlot,
-    quint64 liveEditSourceVariant)
+    quint64 liveEditSourceVariant, GLuint* outCentreTexture)
 {
     if (!m_effectRenderer || !tileRenderer || padPixels <= 0 || !groupResultTexture) {
         return 0;
@@ -1719,8 +1794,16 @@ GLuint GLCompositor::applyGroupNeighborhoodEffects(const TileKey& key,
 
     // The centre group result is the (0,0) padding tile / centre input for both
     // paths below, and the re-entrant per-tile composites clobber the buffer it
-    // lives in, so copy it to a stable texture first.
-    m_gl->glCopyImageSubData(groupResultTexture, GL_TEXTURE_2D, 0, 0, 0, 0, m_neighborhoodCenterTex,
+    // lives in, so copy it to a stable texture first. The frame is reserved (not
+    // redirected: the paths below still read the OUTER currentBase() as their
+    // effect backdrop) so that the neighbour composites, which take frames of
+    // their own one level deeper, cannot land on this centre.
+    IsolationScope centreScope(*this, IsolationScope::Reserve);
+    const GLuint centreTexture = centreScope.centre();
+    if (outCentreTexture) {
+        *outCentreTexture = centreTexture;
+    }
+    m_gl->glCopyImageSubData(groupResultTexture, GL_TEXTURE_2D, 0, 0, 0, 0, centreTexture,
         GL_TEXTURE_2D, 0, 0, 0, 0, static_cast<GLsizei>(TILE_SIZE), static_cast<GLsizei>(TILE_SIZE),
         1);
 
@@ -1774,22 +1857,11 @@ GLuint GLCompositor::applyGroupNeighborhoodEffects(const TileKey& key,
                     return passThroughTileTexture(nk);
                 }
                 if (nk == key) {
-                    return m_neighborhoodCenterTex;
+                    return centreTexture;
                 }
-                const int savedPing = m_currentPing;
-                const GLuint savedTex0 = m_pingPongTex[0];
-                const GLuint savedTex1 = m_pingPongTex[1];
-                m_pingPongTex[0] = m_wholeGroupTempTex[0];
-                m_pingPongTex[1] = m_wholeGroupTempTex[1];
-                m_currentPing = 0;
-                m_gl->glViewport(0, 0, TILE_SIZE, TILE_SIZE);
-                clearTexture(m_pingPongTex[0]);
+                IsolationScope iso(*this);
                 compositeLayerStack(nk, layer.children, tileRenderer, 1.0f);
-                const GLuint result = currentBase();
-                m_pingPongTex[0] = savedTex0;
-                m_pingPongTex[1] = savedTex1;
-                m_currentPing = savedPing;
-                return result;
+                return currentBase();
             };
             const GLuint wholeTile = wholeGroupEffectTile(identity, sourceRevision, minX, minY,
                 maxX, maxY, key, padPixels, layer.effects, groupCompositeTile, currentBase(),
@@ -1849,23 +1921,9 @@ GLuint GLCompositor::applyGroupNeighborhoodEffects(const TileKey& key,
 
     if (!simpleFlatGroup || !contentGrid) {
         auto composeFullGroup = [&](const TileKey& nk) -> GLuint {
-            const int savedPing = m_currentPing;
-            const GLuint savedTex0 = m_pingPongTex[0];
-            const GLuint savedTex1 = m_pingPongTex[1];
-            const size_t frameDepth = m_groupCompositeDepth++;
-            GroupCompositeFrame& frame = ensureGroupCompositeFrame(frameDepth);
-            m_pingPongTex[0] = frame.ping[0];
-            m_pingPongTex[1] = frame.ping[1];
-            m_currentPing = 0;
-            m_gl->glViewport(0, 0, TILE_SIZE, TILE_SIZE);
-            clearTexture(m_pingPongTex[0]);
+            IsolationScope iso(*this);
             compositeLayerStack(nk, layer.children, tileRenderer, 1.0f);
-            const GLuint result = currentBase();
-            m_pingPongTex[0] = savedTex0;
-            m_pingPongTex[1] = savedTex1;
-            m_currentPing = savedPing;
-            --m_groupCompositeDepth;
-            return result;
+            return currentBase();
         };
         auto fullGroupTexture = [&](const TileKey& nk) -> GLuint {
             return cachedGroupSourceTile(identity, nk, sourceRevision, composeFullGroup);
@@ -1898,7 +1956,7 @@ GLuint GLCompositor::applyGroupNeighborhoodEffects(const TileKey& key,
         if (nk == key) {
             // Centre already composited into the stable copy above (the re-entrant
             // composites below clobber the buffer it originally lived in).
-            return m_neighborhoodCenterTex;
+            return centreTexture;
         }
         bool overlayHere = false;
         for (TileGrid* overlay : overlayGrids) {
@@ -1913,21 +1971,10 @@ GLuint GLCompositor::applyGroupNeighborhoodEffects(const TileKey& key,
             return rawContentTexture(nk);
         }
         // Stroke present -> re-entrant composite of content + stroke at the
-        // neighbour key into the group temp buffers (centre saved off above).
-        const int savedPing = m_currentPing;
-        const GLuint savedTex0 = m_pingPongTex[0];
-        const GLuint savedTex1 = m_pingPongTex[1];
-        m_pingPongTex[0] = m_groupTempTex[0];
-        m_pingPongTex[1] = m_groupTempTex[1];
-        m_currentPing = 0;
-        m_gl->glViewport(0, 0, TILE_SIZE, TILE_SIZE);
-        clearTexture(m_pingPongTex[0]);
+        // neighbour key into a private isolation frame (centre saved off above).
+        IsolationScope iso(*this);
         compositeLayerStack(nk, layer.children, tileRenderer, 1.0f);
-        const GLuint result = currentBase();
-        m_pingPongTex[0] = savedTex0;
-        m_pingPongTex[1] = savedTex1;
-        m_currentPing = savedPing;
-        return result;
+        return currentBase();
     };
 
     // Block-cached fast path: one chain evaluation covers a whole block of
@@ -1954,75 +2001,34 @@ GLuint GLCompositor::applyGroupNeighborhoodEffects(const TileKey& key,
         prefixCacheVariant);
 }
 
-bool GLCompositor::adjustmentBelowStackSupported(
-    const std::vector<CompositeLayerInfo>& belowLayers) const
-{
-    // The bg-free recomposite borrows m_adjustmentTempTex as its outer ping-pong.
-    // Group isolation itself is safe at arbitrary depth because it uses the
-    // depth-indexed frame pool. Nested adjustments, clip groups and
-    // bounds-expanding group effects still need separate transient state and
-    // fall back to the regular per-tile path here.
-    auto pairBusy = [&](GLuint a, GLuint b) {
-        return m_pingPongTex[0] == a || m_pingPongTex[0] == b || m_pingPongTex[1] == a
-            || m_pingPongTex[1] == b;
-    };
-    if (pairBusy(m_adjustmentTempTex[0], m_adjustmentTempTex[1])) {
-        return false; // no nested adjustment recomposite
-    }
-    std::function<bool(const CompositeLayerInfo&)> isSupported
-        = [&](const CompositeLayerInfo& l) -> bool {
-        if (l.isAdjustment || l.clippedToBelow) {
-            return false;
-        }
-        if (!l.isGroup) {
-            return true;
-        }
-        if (layerNeighborhoodPad(l) > 0) {
-            return false;
-        }
-        for (const auto& c : l.children) {
-            if (!isSupported(c)) {
-                return false;
-            }
-        }
-        return true;
-    };
-
-    for (const auto& l : belowLayers) {
-        if (!isSupported(l)) {
-            return false;
-        }
-    }
-    return true;
-}
-
 GLuint GLCompositor::recompositeBelowBgFree(const TileKey& key,
     const std::vector<CompositeLayerInfo>& belowLayers, GLTileRenderer* tileRenderer)
 {
-    if (!tileRenderer || !adjustmentBelowStackSupported(belowLayers)) {
+    if (!tileRenderer) {
         return 0;
     }
 
-    const int savedPing = m_currentPing;
-    const GLuint savedTex0 = m_pingPongTex[0];
-    const GLuint savedTex1 = m_pingPongTex[1];
-    m_pingPongTex[0] = m_adjustmentTempTex[0];
-    m_pingPongTex[1] = m_adjustmentTempTex[1];
-    m_currentPing = 0;
-    m_gl->glViewport(0, 0, TILE_SIZE, TILE_SIZE);
-    clearTexture(m_pingPongTex[0]);
-    // Transparent backdrop → the result is the content only (no baked canvas bg).
-    compositeLayerStack(key, belowLayers, tileRenderer, 1.0f);
-    const GLuint result = currentBase();
-    // Copy to a stable texture: callers (and per-neighbour recomposites) clobber
-    // the borrowed buffer afterwards.
-    m_gl->glCopyImageSubData(result, GL_TEXTURE_2D, 0, 0, 0, 0, m_neighborhoodCenterTex,
-        GL_TEXTURE_2D, 0, 0, 0, 0, static_cast<GLsizei>(TILE_SIZE), static_cast<GLsizei>(TILE_SIZE),
-        1);
-    m_pingPongTex[0] = savedTex0;
-    m_pingPongTex[1] = savedTex1;
-    m_currentPing = savedPing;
-    return m_neighborhoodCenterTex;
+    // Any stack shape is supported: a clip group, a nested adjustment or a
+    // bounds-expanding group effect encountered below simply takes an isolation
+    // frame one level deeper than this one. This used to be refused (the
+    // isolation buffers were single shared pairs), and refusing meant the
+    // adjustment fell back to a PER-TILE effect evaluation over currentBase() —
+    // a hard tile-grid seam for every bounds-expanding effect, plus the canvas
+    // background leaking into the effect input.
+    GLuint result = 0;
+    GLuint centre = 0;
+    {
+        IsolationScope iso(*this);
+        centre = iso.centre();
+        // Transparent backdrop -> the result is the content only (no baked canvas bg).
+        compositeLayerStack(key, belowLayers, tileRenderer, 1.0f);
+        result = currentBase();
+    }
+    // Copy to the frame's stable texture: the ping-pong pair is handed to the
+    // per-neighbour recomposites that follow, which clobber it.
+    m_gl->glCopyImageSubData(result, GL_TEXTURE_2D, 0, 0, 0, 0, centre, GL_TEXTURE_2D, 0, 0, 0, 0,
+        static_cast<GLsizei>(TILE_SIZE), static_cast<GLsizei>(TILE_SIZE), 1);
+    return centre;
 }
 
 bool GLCompositor::effectsRequireBackdrop(
@@ -3057,7 +3063,6 @@ GLuint GLCompositor::applyAdjustmentNeighborhoodEffects(const TileKey& key,
         = liveEditCacheVariant(adjustment.liveEffectEditGeneration, sourceRevision);
     const uint64_t adjustmentIdentity
         = layerCacheIdentity(adjustment.id, GroupEffectSlot::AdjustmentBelow);
-    const bool canMaterializeBelow = adjustmentBelowStackSupported(belowLayers);
     auto composeBelow = [&](const TileKey& sourceKey) -> GLuint {
         return recompositeBelowBgFree(sourceKey, belowLayers, tileRenderer);
     };
@@ -3074,8 +3079,7 @@ GLuint GLCompositor::applyAdjustmentNeighborhoodEffects(const TileKey& key,
     // group-region materialisation/cache so the lower stack is composited once per
     // source tile and the effect chain is evaluated once per batch, rather than
     // gathering and evaluating the same large neighbourhood for every output tile.
-    if (chainNeedsWholeLayer(adjustment.effects) && !effectsRequireBackdrop(adjustment.effects)
-        && canMaterializeBelow) {
+    if (chainNeedsWholeLayer(adjustment.effects) && !effectsRequireBackdrop(adjustment.effects)) {
         std::unordered_set<TileKey, TileKeyHash> sourceKeys;
         collectCompositeLayerKeys(belowLayers, sourceKeys);
         if (!sourceKeys.empty()) {
@@ -3103,7 +3107,7 @@ GLuint GLCompositor::applyAdjustmentNeighborhoodEffects(const TileKey& key,
     // Bounded neighbour-reading chains (blur, ripple, etc.) use the same
     // batch-scoped block cache as raster layers and groups. This avoids rebuilding
     // overlapping padded sources and re-running the chain independently per tile.
-    if (canMaterializeBelow && !effectsRequireBackdrop(adjustment.effects)) {
+    if (!effectsRequireBackdrop(adjustment.effects)) {
         const GLuint blockTile = blockNeighborhoodEffectTile(adjustmentIdentity, key, padPixels,
             adjustment.effects, belowCompositeTexture, adjustment.liveEditedEffectId,
             prefixCacheVariant, sourceRevision);
@@ -3120,29 +3124,18 @@ GLuint GLCompositor::applyAdjustmentNeighborhoodEffects(const TileKey& key,
 
     auto neighborTexture = [&](int dx, int dy) -> GLuint {
         if (dx == 0 && dy == 0) {
-            return m_neighborhoodCenterTex;
+            return centre;
         }
         const TileKey neighborKey { key.x + dx, key.y + dy };
-        const int savedPing = m_currentPing;
-        const GLuint savedTex0 = m_pingPongTex[0];
-        const GLuint savedTex1 = m_pingPongTex[1];
-        m_pingPongTex[0] = m_adjustmentTempTex[0];
-        m_pingPongTex[1] = m_adjustmentTempTex[1];
-        m_currentPing = 0;
-        m_gl->glViewport(0, 0, TILE_SIZE, TILE_SIZE);
-        clearTexture(m_pingPongTex[0]);
+        IsolationScope iso(*this);
         compositeLayerStack(neighborKey, belowLayers, tileRenderer, 1.0f);
-        const GLuint result = currentBase();
-        m_pingPongTex[0] = savedTex0;
-        m_pingPongTex[1] = savedTex1;
-        m_currentPing = savedPing;
-        return result;
+        return currentBase();
     };
 
     return m_effectRenderer->applyEffectsNeighborhood(TILE_SIZE, padPixels, neighborTexture,
         adjustment.effects, ruwa::core::effects::EffectEvaluationSpace::DocumentTile,
-        /*realtimeOnly=*/false, m_neighborhoodCenterTex, effectRegionForTile(key),
-        adjustment.liveEditedEffectId, prefixCacheVariant);
+        /*realtimeOnly=*/false, centre, effectRegionForTile(key), adjustment.liveEditedEffectId,
+        prefixCacheVariant);
 }
 
 GLuint GLCompositor::solidClipColorTexture(GLuint& slot, const Color& color)

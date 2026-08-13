@@ -76,15 +76,12 @@ void GLViewportCompositor::shutdown()
 {
     deleteTexture(m_gl, m_pingPongTextures[0]);
     deleteTexture(m_gl, m_pingPongTextures[1]);
-    deleteTexture(m_gl, m_clipGroupTextures[0]);
-    deleteTexture(m_gl, m_clipGroupTextures[1]);
-    deleteTexture(m_gl, m_adjustmentTextures[0]);
-    deleteTexture(m_gl, m_adjustmentTextures[1]);
     deleteTexture(m_gl, m_adjustmentBackdropTexture);
     deleteTexture(m_gl, m_transparentTexture);
     deleteTexture(m_gl, m_maskRevealTexture);
     deleteTexture(m_gl, m_overscanCropTexture);
     destroyGroupCompositeFrames();
+    destroyIsolationFrames();
     m_maskRevealWidth = 0;
     m_maskRevealHeight = 0;
     m_overscanCropWidth = 0;
@@ -113,15 +110,12 @@ void GLViewportCompositor::beginFrame(uint32_t width, uint32_t height)
     if ((m_width != width || m_height != height) && m_initialized) {
         deleteTexture(m_gl, m_pingPongTextures[0]);
         deleteTexture(m_gl, m_pingPongTextures[1]);
-        deleteTexture(m_gl, m_clipGroupTextures[0]);
-        deleteTexture(m_gl, m_clipGroupTextures[1]);
-        deleteTexture(m_gl, m_adjustmentTextures[0]);
-        deleteTexture(m_gl, m_adjustmentTextures[1]);
         deleteTexture(m_gl, m_adjustmentBackdropTexture);
         deleteTexture(m_gl, m_transparentTexture);
         deleteTexture(m_gl, m_maskRevealTexture);
         deleteTexture(m_gl, m_overscanCropTexture);
         destroyGroupCompositeFrames();
+        destroyIsolationFrames();
         m_maskRevealWidth = 0;
         m_maskRevealHeight = 0;
         m_overscanCropWidth = 0;
@@ -150,10 +144,12 @@ GLuint GLViewportCompositor::compositeLayers(const std::vector<CompositeLayerInf
     m_overscanResolver = (overscanResolver && m_effectRegion.valid) ? &overscanResolver : nullptr;
     m_currentPing = 0;
     m_groupCompositeDepth = 0;
+    m_isolationDepth = 0;
     clearTexture(m_pingPongTextures[0]);
     const GLuint result = compositeLayerStack(
         layers, 1.0f, false, sourceResolver, layerMaskResolver, backdropColor);
     m_groupCompositeDepth = 0;
+    m_isolationDepth = 0;
     m_overscanResolver = nullptr;
 
     // Keep cleanup at the public operation boundary. Every blend pass binds all
@@ -356,8 +352,8 @@ GLuint GLViewportCompositor::compositeLayerStack(const std::vector<CompositeLaye
             clipBaseOrphaned = false;
         }
 
-        const bool isClipBase = !useSrcAtop && !layer.clippedToBelow && (index + 1 < layers.size())
-            && layers[index + 1].clippedToBelow;
+        const bool isClipBase = !useSrcAtop && !layer.clippedToBelow
+            && hasRenderedClippedFollower(layers, index, parentOpacity);
 
         if (layer.isAdjustment && !isClipBase) {
             // Adjustment layer: it owns no pixels. Its chain runs on the composite
@@ -437,34 +433,33 @@ GLuint GLViewportCompositor::compositeLayerStack(const std::vector<CompositeLaye
                 ++clipEnd;
             }
 
-            const GLuint savedPingPong0 = m_pingPongTextures[0];
-            const GLuint savedPingPong1 = m_pingPongTextures[1];
-            const int savedPing = m_currentPing;
-
-            m_pingPongTextures[0] = m_clipGroupTextures[0];
-            m_pingPongTextures[1] = m_clipGroupTextures[1];
-            m_currentPing = 0;
-            clearTexture(m_pingPongTextures[0]);
-
+            GLuint clipTexture = 0;
             {
-                std::vector<CompositeLayerInfo> baseGroup(1, layer);
-                baseGroup[0].opacity = 1.0f;
-                compositeLayerStack(baseGroup, 1.0f, false, sourceResolver, layerMaskResolver,
-                    Color::transparent());
+                // Depth-indexed isolation frame, so a clip group nested inside
+                // this one cannot clear the composite accumulated here.
+                IsolationScope iso(*this);
+                if (!iso.valid()) {
+                    index = clipEnd;
+                    continue;
+                }
+
+                {
+                    std::vector<CompositeLayerInfo> baseGroup(1, layer);
+                    baseGroup[0].opacity = 1.0f;
+                    compositeLayerStack(baseGroup, 1.0f, false, sourceResolver, layerMaskResolver,
+                        Color::transparent());
+                }
+
+                if (clipEnd > index + 1) {
+                    const std::vector<CompositeLayerInfo> clippedGroup(
+                        layers.begin() + static_cast<ptrdiff_t>(index + 1),
+                        layers.begin() + static_cast<ptrdiff_t>(clipEnd));
+                    compositeLayerStack(clippedGroup, 1.0f, true, sourceResolver, layerMaskResolver,
+                        Color::transparent());
+                }
+                clipTexture = m_pingPongTextures[m_currentPing];
             }
 
-            if (clipEnd > index + 1) {
-                const std::vector<CompositeLayerInfo> clippedGroup(
-                    layers.begin() + static_cast<ptrdiff_t>(index + 1),
-                    layers.begin() + static_cast<ptrdiff_t>(clipEnd));
-                compositeLayerStack(clippedGroup, 1.0f, true, sourceResolver, layerMaskResolver,
-                    Color::transparent());
-            }
-            const GLuint clipTexture = m_pingPongTextures[m_currentPing];
-
-            m_pingPongTextures[0] = savedPingPong0;
-            m_pingPongTextures[1] = savedPingPong1;
-            m_currentPing = savedPing;
             BlendPassParams clipBlend;
             clipBlend.baseTexture = m_pingPongTextures[m_currentPing];
             clipBlend.srcTexture = clipTexture;
@@ -626,12 +621,9 @@ void GLViewportCompositor::ensureRenderTargets()
         texture = createTexture2D(m_gl, m_width, m_height, linear);
     };
 
-    if (!m_pingPongTextures[0] || !m_pingPongTextures[1] || !m_clipGroupTextures[0]
-        || !m_clipGroupTextures[1] || !m_transparentTexture) {
+    if (!m_pingPongTextures[0] || !m_pingPongTextures[1] || !m_transparentTexture) {
         recreate(m_pingPongTextures[0]);
         recreate(m_pingPongTextures[1]);
-        recreate(m_clipGroupTextures[0]);
-        recreate(m_clipGroupTextures[1]);
         recreate(m_transparentTexture);
         clearTexture(m_transparentTexture);
         return;
@@ -662,6 +654,64 @@ GLViewportCompositor::GroupCompositeFrame& GLViewportCompositor::ensureGroupComp
     ensureTexture(frame.sourceCoverage);
     ensureTexture(frame.coverage);
     return frame;
+}
+
+GLViewportCompositor::IsolationFrame* GLViewportCompositor::ensureIsolationFrame(size_t depth)
+{
+    if (!m_initialized || m_width == 0 || m_height == 0) {
+        return nullptr;
+    }
+    if (m_isolationFrames.size() <= depth) {
+        m_isolationFrames.resize(depth + 1);
+    }
+    if (!m_isolationFrames[depth]) {
+        m_isolationFrames[depth] = std::make_unique<IsolationFrame>();
+    }
+
+    const TextureParams linear { GL_LINEAR, GL_LINEAR };
+    IsolationFrame& frame = *m_isolationFrames[depth];
+    for (GLuint& texture : frame.ping) {
+        if (!texture) {
+            texture = createTexture2D(m_gl, m_width, m_height, linear);
+        }
+    }
+    return (frame.ping[0] && frame.ping[1]) ? &frame : nullptr;
+}
+
+void GLViewportCompositor::destroyIsolationFrames()
+{
+    for (const auto& frame : m_isolationFrames) {
+        deleteTexture(m_gl, frame->ping[0]);
+        deleteTexture(m_gl, frame->ping[1]);
+    }
+    m_isolationFrames.clear();
+    m_isolationDepth = 0;
+}
+
+GLViewportCompositor::IsolationScope::IsolationScope(GLViewportCompositor& owner)
+    : m_owner(owner)
+    , m_frame(owner.ensureIsolationFrame(owner.m_isolationDepth++))
+{
+    if (!m_frame) {
+        return;
+    }
+    m_savedTex[0] = owner.m_pingPongTextures[0];
+    m_savedTex[1] = owner.m_pingPongTextures[1];
+    m_savedPing = owner.m_currentPing;
+    owner.m_pingPongTextures[0] = m_frame->ping[0];
+    owner.m_pingPongTextures[1] = m_frame->ping[1];
+    owner.m_currentPing = 0;
+    owner.clearTexture(m_frame->ping[0]);
+}
+
+GLViewportCompositor::IsolationScope::~IsolationScope()
+{
+    if (m_frame) {
+        m_owner.m_pingPongTextures[0] = m_savedTex[0];
+        m_owner.m_pingPongTextures[1] = m_savedTex[1];
+        m_owner.m_currentPing = m_savedPing;
+    }
+    --m_owner.m_isolationDepth;
 }
 
 void GLViewportCompositor::destroyGroupCompositeFrames()
@@ -752,85 +802,32 @@ bool GLViewportCompositor::ensureAdjustmentTargets()
         return false;
     }
 
-    const TextureParams linear { GL_LINEAR, GL_LINEAR };
-    auto ensureTexture = [&](GLuint& texture) {
-        if (!texture) {
-            texture = createTexture2D(m_gl, m_width, m_height, linear);
-        }
-    };
-    ensureTexture(m_adjustmentTextures[0]);
-    ensureTexture(m_adjustmentTextures[1]);
-    ensureTexture(m_adjustmentBackdropTexture);
-    return m_adjustmentTextures[0] && m_adjustmentTextures[1] && m_adjustmentBackdropTexture;
-}
-
-bool GLViewportCompositor::adjustmentBelowStackSupported(
-    const std::vector<CompositeLayerInfo>& belowLayers) const
-{
-    // The recomposite borrows m_adjustmentTextures as its ping-pong pair, so a
-    // second (nested) adjustment recomposite would clobber the first.
-    if (m_adjustmentTextures[0]
-        && (m_pingPongTextures[0] == m_adjustmentTextures[0]
-            || m_pingPongTextures[1] == m_adjustmentTextures[0]
-            || m_pingPongTextures[0] == m_adjustmentTextures[1]
-            || m_pingPongTextures[1] == m_adjustmentTextures[1])) {
-        return false;
+    if (!m_adjustmentBackdropTexture) {
+        const TextureParams linear { GL_LINEAR, GL_LINEAR };
+        m_adjustmentBackdropTexture = createTexture2D(m_gl, m_width, m_height, linear);
     }
-
-    // Group isolation is safe at arbitrary depth (depth-indexed frame pool), but
-    // a clip group borrows the single m_clipGroupTextures pair and a nested
-    // adjustment needs the buffers we just took, so both fall back to the
-    // current base — the same restriction GLCompositor applies.
-    std::function<bool(const CompositeLayerInfo&)> isSupported
-        = [&](const CompositeLayerInfo& l) -> bool {
-        if (l.isAdjustment || l.clippedToBelow) {
-            return false;
-        }
-        if (!l.isGroup) {
-            return true;
-        }
-        for (const auto& child : l.children) {
-            if (!isSupported(child)) {
-                return false;
-            }
-        }
-        return true;
-    };
-
-    for (const auto& l : belowLayers) {
-        if (!isSupported(l)) {
-            return false;
-        }
-    }
-    return true;
+    return m_adjustmentBackdropTexture != 0;
 }
 
 GLuint GLViewportCompositor::recompositeBelowBgFree(
     const std::vector<CompositeLayerInfo>& belowLayers, const SourceResolver& sourceResolver,
     const LayerMaskResolver& layerMaskResolver)
 {
-    if (!adjustmentBelowStackSupported(belowLayers) || !ensureAdjustmentTargets()) {
+    // Any stack shape is supported: a clip group or a nested adjustment below
+    // simply takes an isolation frame one level deeper than this one. Refusing
+    // those (the previous behaviour) left the adjustment running on a source
+    // with the canvas background baked in, so it tinted/blurred the background
+    // as well - and only in the preview, so preview and committed render
+    // disagreed as soon as the document contained a clipping layer.
+    IsolationScope iso(*this);
+    if (!iso.valid()) {
         return 0;
     }
-
-    const GLuint savedPingPong0 = m_pingPongTextures[0];
-    const GLuint savedPingPong1 = m_pingPongTextures[1];
-    const int savedPing = m_currentPing;
-
-    m_pingPongTextures[0] = m_adjustmentTextures[0];
-    m_pingPongTextures[1] = m_adjustmentTextures[1];
-    m_currentPing = 0;
-    clearTexture(m_pingPongTextures[0]);
     // Transparent backdrop -> the result is the content only, with no canvas
-    // background baked in. The result stays valid until the next adjustment
-    // recomposite, which cannot happen before this one has been consumed.
-    const GLuint result = compositeLayerStack(
+    // background baked in. The frame belongs to this depth, so the result stays
+    // valid until the caller has consumed it.
+    return compositeLayerStack(
         belowLayers, 1.0f, false, sourceResolver, layerMaskResolver, Color::transparent());
-
-    m_pingPongTextures[0] = savedPingPong0;
-    m_pingPongTextures[1] = savedPingPong1;
-    m_currentPing = savedPing;
-    return result;
 }
 
 GLuint GLViewportCompositor::compositeOverBackdrop(GLuint srcTexture, const Color& backdropColor)

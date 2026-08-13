@@ -221,20 +221,16 @@ private:
     // (document reach * zoom), clamped so the overscan texture stays within a
     // resource bound. 0 when the chain needs no reach.
     int layerReachScreenPixels(const CompositeLayerInfo& layer) const;
-    // Lazily allocates the adjustment-layer scratch targets (only documents that
-    // actually carry an adjustment pay the VRAM). False when unavailable.
+    // Lazily allocates the scratch an adjustment's effected result is put back
+    // over the canvas background in (only documents that actually carry an
+    // adjustment pay the VRAM). False when unavailable.
     bool ensureAdjustmentTargets();
-    /// True when `belowLayers` can be re-composited for an adjustment's
-    /// background-free source without conflicting with the borrowed buffers:
-    /// no nested adjustment (m_adjustmentTextures already in use) and no clipped
-    /// layer (the clip pass borrows m_clipGroupTextures). Mirrors the same guard
-    /// in GLCompositor so preview and committed render agree on the fallback.
-    bool adjustmentBelowStackSupported(const std::vector<CompositeLayerInfo>& belowLayers) const;
-    /// Re-composites `belowLayers` with a TRANSPARENT backdrop into a borrowed
-    /// ping-pong pair, so the result is the background-free content below an
+    /// Re-composites `belowLayers` with a TRANSPARENT backdrop into a private
+    /// isolation frame, so the result is the background-free content below an
     /// adjustment — never the opaque canvas background the normal pass bakes into
-    /// every pixel. Returns 0 when the below-stack is not a simple stack (caller
-    /// then falls back to the current base).
+    /// every pixel. Any stack shape is supported (clip groups and nested
+    /// adjustments take deeper frames). Returns 0 only when no target could be
+    /// allocated, in which case the caller falls back to the current base.
     GLuint recompositeBelowBgFree(const std::vector<CompositeLayerInfo>& belowLayers,
         const SourceResolver& sourceResolver, const LayerMaskResolver& layerMaskResolver);
     /// Re-applies the opaque canvas background under an adjustment's effected
@@ -251,6 +247,37 @@ private:
     GroupCompositeFrame& ensureGroupCompositeFrame(size_t depth);
     void destroyGroupCompositeFrames();
 
+    /// Ping-pong pair for one nesting level of an isolated screen-space
+    /// composite: a clip group, or an adjustment's background-free recomposite
+    /// of the stack below. Both used to borrow ONE shared pair, so they could
+    /// not nest — and the adjustment path answered that by refusing to run
+    /// whenever a clipped layer appeared anywhere below it, falling back to a
+    /// source with the canvas background baked in. Frames are handed out per
+    /// depth instead. Mirrors GLCompositor::IsolationFrame.
+    struct IsolationFrame {
+        GLuint ping[2] = { 0, 0 };
+    };
+    IsolationFrame* ensureIsolationFrame(size_t depth);
+    void destroyIsolationFrames();
+
+    /// RAII redirect of the ping-pong onto a private isolation frame.
+    /// `valid()` is false when the frame could not be allocated; the caller must
+    /// then skip the isolated path.
+    class IsolationScope {
+    public:
+        explicit IsolationScope(GLViewportCompositor& owner);
+        ~IsolationScope();
+        IsolationScope(const IsolationScope&) = delete;
+        IsolationScope& operator=(const IsolationScope&) = delete;
+        bool valid() const { return m_frame != nullptr; }
+
+    private:
+        GLViewportCompositor& m_owner;
+        IsolationFrame* m_frame = nullptr;
+        GLuint m_savedTex[2] = { 0, 0 };
+        int m_savedPing = 0;
+    };
+
 private:
     QOpenGLFunctions_4_5_Core* m_gl = nullptr;
     std::unique_ptr<GLShaderProgram> m_compositeProgram;
@@ -259,15 +286,16 @@ private:
     GLuint m_fbo = 0;
     GLuint m_emptyVao = 0;
     GLuint m_pingPongTextures[2] = { 0, 0 };
-    GLuint m_clipGroupTextures[2] = { 0, 0 };
-    // Dedicated ping-pong for an adjustment's background-free recomposite of the
-    // layers below, plus the scratch its effected result is re-composited over
-    // the canvas background in. Separate from every other transient target so a
-    // group / clip isolation buffer can never be aliased. Allocated on demand.
-    GLuint m_adjustmentTextures[2] = { 0, 0 };
+    // Scratch an adjustment's effected result is re-composited over the canvas
+    // background in. Allocated on demand: only documents that actually carry an
+    // adjustment pay the VRAM.
     GLuint m_adjustmentBackdropTexture = 0;
     std::vector<std::unique_ptr<GroupCompositeFrame>> m_groupCompositeFrames;
     size_t m_groupCompositeDepth = 0;
+    // Isolated composites (clip groups, background-free recomposites), one frame
+    // per nesting depth. Allocated on demand.
+    std::vector<std::unique_ptr<IsolationFrame>> m_isolationFrames;
+    size_t m_isolationDepth = 0;
     GLuint m_transparentTexture = 0;
     GLuint m_maskRevealTexture = 0;
     uint32_t m_maskRevealWidth = 0;

@@ -110,6 +110,42 @@ struct CompositeLayerInfo {
     std::vector<CompositeLayerInfo> children;
 };
 
+/// A layer a compositor will skip contributes nothing — no pixels, and no clip
+/// base for the layers above it.
+inline bool layerRenders(const CompositeLayerInfo& layer, float parentOpacity)
+{
+    return layer.visible && layer.opacity * parentOpacity > 0.0f;
+}
+
+/// True when the layer at `idx` actually acts as a clip base, i.e. the first
+/// layer above it that is REALLY rendered is clipped to it.
+///
+/// Testing only `idx + 1` made a hidden (or fully transparent) clipping layer
+/// force its base down the isolated clip-group path. That is not free: the base
+/// stops being composited in place (an adjustment used as a clip base is then
+/// applied to an empty isolated buffer, i.e. dropped), and it used to disqualify
+/// the stack from the re-entrant paths that bounds-expanding effects need.
+/// Skipped CLIPPED layers are looked past; a skipped non-clipped one ends the
+/// search, matching the compositing rule that it resets the active clip base to
+/// transparent (the clipped layers above it clip against nothing).
+///
+/// Shared by both compositors so the preview and the committed render cannot
+/// disagree about what a clip group is.
+inline bool hasRenderedClippedFollower(
+    const std::vector<CompositeLayerInfo>& layers, size_t idx, float parentOpacity)
+{
+    for (size_t next = idx + 1; next < layers.size(); ++next) {
+        const CompositeLayerInfo& follower = layers[next];
+        if (!follower.clippedToBelow) {
+            return false;
+        }
+        if (layerRenders(follower, parentOpacity)) {
+            return true;
+        }
+    }
+    return false;
+}
+
 /// Which of a group's several evaluated regions a cache entry belongs to. One
 /// pass-through group evaluates its chain twice per tile (the visible result and
 /// the background-free coverage), and an isolated group once, so the layer's id
@@ -374,15 +410,21 @@ private:
         const std::function<GLuint(const TileKey&)>& tileTexture, GLuint backdropTexture,
         const QUuid& liveEditedEffectId = {}, quint64 liveEditSourceVariant = 0);
     /// Same, for a group's effect chain (e.g. the stroke-preview group): the
-    /// centre is the already-composited groupResult, the surrounding padding is
-    /// the committed raw content of the group's first tile-backed child. Returns
-    /// 0 (caller falls back to per-tile) when the group has no such child.
+    /// centre is the already-composited groupResult, and the surrounding padding
+    /// is the group re-composited at the neighbouring tiles — cheaply from the
+    /// committed raw content where a flat content+overlay group has no stroke
+    /// there, recursively otherwise. Returns 0 when nothing could be evaluated
+    /// (caller falls back to the per-tile path).
+    /// `outCentreTexture` receives the stable copy of the centre group result
+    /// (the buffer `groupResultTexture` lived in is clobbered by the neighbour
+    /// composites). A caller that keeps using the un-effected group result — as
+    /// the clip base for the layers above — must read it from there.
     GLuint applyGroupNeighborhoodEffects(const TileKey& key, const CompositeLayerInfo& layer,
         GLTileRenderer* tileRenderer, int padPixels, GLuint groupResultTexture,
         bool allowCachedPaths = true,
         const std::function<GLuint(const TileKey&)>& passThroughTileTexture = {},
         GroupEffectSlot cacheSlot = GroupEffectSlot::IsolatedResult,
-        quint64 liveEditSourceVariant = 0);
+        quint64 liveEditSourceVariant = 0, GLuint* outCentreTexture = nullptr);
     /// Memoises one composited source tile of a group across batches. Producing
     /// it costs a full re-entrant composite (of the group, or of the whole stack
     /// up to it), and the padded/blocked neighbourhood paths ask for the same
@@ -400,26 +442,23 @@ private:
     bool groupSubtreeContains(
         const std::vector<CompositeLayerInfo>& layers, const CompositeLayerInfo* target) const;
     GLuint recomposePassThroughToGroup(const TileKey& key, const CompositeLayerInfo* target,
-        GLTileRenderer* tileRenderer, const Color& backdropColor, GLuint scratch0, GLuint scratch1);
-    /// True when `belowLayers` can be re-composited for an adjustment's
-    /// background-free pass without conflicting with the borrowed isolation
-    /// buffers: no nested adjustment/clip, and any group is plain-childed with no
-    /// bounds-expanding effect (the live stroke-preview group qualifies).
-    bool adjustmentBelowStackSupported(const std::vector<CompositeLayerInfo>& belowLayers) const;
+        GLTileRenderer* tileRenderer, const Color& backdropColor);
     /// Recomposite `belowLayers` at `key` with a TRANSPARENT backdrop into a
     /// stable texture (returned), so the result is the background-free content of
     /// the layers below — never the opaque canvas background that the normal
-    /// composite bakes into each tile. Returns 0 when the below-stack is not a
-    /// simple stack or the borrowed isolation buffer is busy in the current
-    /// context (caller then falls back to using currentBase()).
+    /// composite bakes into each tile. The stack below may contain anything
+    /// (clip groups, nested adjustments, bounds-expanding group effects): every
+    /// isolated composite it needs takes its own depth-indexed IsolationFrame.
+    /// Returns 0 only when the compositor cannot render at all.
     GLuint recompositeBelowBgFree(const TileKey& key,
         const std::vector<CompositeLayerInfo>& belowLayers, GLTileRenderer* tileRenderer);
     /// Adjustment-layer effect path. The source is the background-free composite
     /// of the layers BELOW the adjustment. Whole-layer distortions reuse the
     /// whole-group materialisation cache, bounded neighbour effects reuse the
-    /// block cache, and unsupported nested/backdrop-dependent stacks fall back to
-    /// a per-tile neighbourhood evaluation. Returns a TILE_SIZE background-free
-    /// effected texture, or 0 when no source can be composed.
+    /// block cache, and a backdrop-dependent chain (which neither cache can feed
+    /// a per-tile backdrop to) falls back to an uncached neighbourhood
+    /// evaluation. Returns a TILE_SIZE background-free effected texture, or 0
+    /// when no source can be composed.
     GLuint applyAdjustmentNeighborhoodEffects(const TileKey& key,
         const std::vector<CompositeLayerInfo>& belowLayers, const CompositeLayerInfo& adjustment,
         GLTileRenderer* tileRenderer, int padPixels);
@@ -470,6 +509,55 @@ private:
     };
     GroupCompositeFrame& ensureGroupCompositeFrame(size_t depth);
 
+    /// One depth level of transient storage for a re-entrant isolated composite:
+    /// a clip group, an adjustment's background-free recomposite of the stack
+    /// below, or a neighbour gather for a bounds-expanding effect.
+    ///
+    /// Each of those used to own ONE fixed texture pair, which silently broke as
+    /// soon as two of them nested — the inner composite cleared the buffer the
+    /// outer one was still accumulating into. The nesting cases were therefore
+    /// refused up front, and a refused adjustment fell back to a PER-TILE effect
+    /// evaluation: visible tile seams for every bounds-expanding effect as soon
+    /// as the document contained a clipping layer. Frames are handed out by
+    /// depth instead, so nesting is correct at any depth and nothing has to be
+    /// refused.
+    struct IsolationFrame {
+        GLuint ping[2] = { 0, 0 };
+        /// Stable copy of a neighbourhood centre. The re-entrant neighbour
+        /// composites clobber the ping-pong the centre was produced in, so it is
+        /// copied here first and stays valid for the whole evaluation at this
+        /// depth. Allocated on first use (see isolationCentre): only the
+        /// neighbourhood paths need one.
+        GLuint centre = 0;
+    };
+    IsolationFrame& ensureIsolationFrame(size_t depth);
+    GLuint isolationCentre(IsolationFrame& frame);
+
+    /// Claims the isolation frame for the current nesting depth. By default it
+    /// also redirects the compositor's ping-pong onto that frame (clearing it)
+    /// and restores the previous target on scope exit, so an isolated composite
+    /// is written with plain `compositeLayerStack` calls. `Reserve` only claims
+    /// the depth — for a caller that needs a private `centre()` while continuing
+    /// to composite into (and read `currentBase()` from) the outer target.
+    class IsolationScope {
+    public:
+        enum Mode { Redirect, Reserve };
+        explicit IsolationScope(GLCompositor& owner, Mode mode = Redirect);
+        ~IsolationScope();
+        IsolationScope(const IsolationScope&) = delete;
+        IsolationScope& operator=(const IsolationScope&) = delete;
+        /// Stable per-depth scratch texture for a neighbourhood centre copy,
+        /// allocated on first use.
+        GLuint centre() const;
+
+    private:
+        GLCompositor& m_owner;
+        IsolationFrame& m_frame;
+        Mode m_mode;
+        GLuint m_savedTex[2] = { 0, 0 };
+        int m_savedPing = 0;
+    };
+
 private:
     QOpenGLFunctions_4_5_Core* m_gl = nullptr;
 
@@ -481,30 +569,21 @@ private:
     GLuint m_pingPongTex[2] = { 0, 0 };
     int m_currentPing = 0;
 
-    // Temp textures for re-entrant neighbour compositing in group effect evaluation.
-    GLuint m_groupTempTex[2] = { 0, 0 };
-    // Stable copy of a group's centre result for the neighbourhood-effect path:
-    // the centre is copied here before neighbour evaluation and then used as the
-    // (0,0) padding tile and as the clip base. Lazily allocated.
-    GLuint m_neighborhoodCenterTex = 0;
-    // Extra temp textures for clip-group isolated compositing (separate from group to allow
-    // nesting)
-    GLuint m_clipGroupTempTex[2] = { 0, 0 };
-    // Dedicated ping-pong for the whole-group distortion path's per-tile full
-    // recomposite. It is separate from group-effect and clip-group temporaries;
-    // nested document groups use the depth-indexed frame pool.
-    GLuint m_wholeGroupTempTex[2] = { 0, 0 };
-    // Dedicated outer ping-pong for an adjustment's background-free recomposite of
-    // the layers below. Separate from the other transient targets so that isolated
-    // groups cannot alias the outer accumulation.
-    GLuint m_adjustmentTempTex[2] = { 0, 0 };
     GLuint m_programmaticBlendBaseTex = 0;
     std::vector<std::unique_ptr<GroupCompositeFrame>> m_groupCompositeFrames;
     size_t m_groupCompositeDepth = 0;
+    // Transient storage for clip groups, background-free recomposites and
+    // neighbour gathers, one frame per nesting depth (see IsolationScope).
+    std::vector<std::unique_ptr<IsolationFrame>> m_isolationFrames;
+    size_t m_isolationDepth = 0;
     const std::vector<CompositeLayerInfo>* m_activeRootLayers = nullptr;
     /// Canvas backdrop colour of the batch in flight. A pass-through group's
     /// source is composited over it, so it takes part in that source's revision.
     Color m_activeBackdropColor = Color::transparent();
+    /// Clip base of the src-atop sub-stack currently being composited, if any.
+    /// Only meaningful while `useSrcAtop` is true: a clipped ADJUSTMENT layer
+    /// needs it to rebuild the clip group's content at neighbouring tiles.
+    const CompositeLayerInfo* m_srcAtopClipBase = nullptr;
     const CompositeLayerInfo* m_recomposeStopGroup = nullptr;
     bool m_recomposeStopReached = false;
     // Cache for block-evaluated neighbourhood effects (see
