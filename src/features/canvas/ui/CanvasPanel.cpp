@@ -3901,7 +3901,7 @@ void CanvasPanel::updateCursorManagerOverlay()
         = !transformActive && CanvasToolStateController::isDrawInstrument(currentTool);
     const bool useEyedropper = !transformActive && (currentTool == ToolId::Eyedropper);
     const bool useToolCursor
-        = !transformActive && !aether::toolCursorIconResource(currentTool).isEmpty();
+        = !transformActive && aether::toolCursorStyle(currentTool) != aether::ToolCursorStyle::None;
     m_cursorManager->setUseGLBrushCursor(useBrush);
     m_cursorManager->setUseGLEyedropperCursor(useEyedropper);
     m_cursorManager->setUseGLToolCursor(useToolCursor);
@@ -3957,9 +3957,10 @@ void CanvasPanel::updateToolCursor()
         }
         return;
     }
-    // Tools with a GL pointer cursor (move, fill, magic wand, lasso) must not
-    // request a system cursor: a requested cursor suppresses the GL overlay.
-    if (!aether::toolCursorIconResource(currentTool).isEmpty()
+    // Tools with a GL cursor (move, fill, magic wand, lasso, shape selections)
+    // must not request a system cursor: a requested cursor suppresses the GL
+    // overlay.
+    if (aether::toolCursorStyle(currentTool) != aether::ToolCursorStyle::None
         && !(m_glWidget && m_glWidget->isTransformActive())) {
         if (m_cursorManager) {
             m_cursorManager->clearRequestedCursor();

@@ -3,7 +3,7 @@
 // ==========================================================================
 //   R U W A   |   T O O L   C U R S O R   I C O N S
 // ==========================================================================
-// Which tools get the pointer + badge GL cursor, and the badge they use.
+// Which tools get a GL cursor, which shape it takes, and the badge it uses.
 // ==========================================================================
 
 #ifndef RUWA_FEATURES_CANVAS_OVERLAYS_TOOLCURSORICONS_H
@@ -15,9 +15,35 @@
 
 namespace aether {
 
-/// QRC path of the badge icon for tools that use the pointer cursor.
-/// An empty string means the tool draws its own cursor (brush, eyedropper) or
-/// keeps a system cursor.
+/// Shape of the GL cursor a tool draws.
+enum class ToolCursorStyle {
+    None, ///< Tool draws its own cursor (brush, eyedropper) or keeps a system one.
+    PointerBadge, ///< Pointer arrow with the tool's icon hanging to its lower right.
+    Crosshair, ///< Plain crosshair, for tools that place a shape by its edges.
+};
+
+/// Shape-drawing selection tools aim at an exact point rather than grab
+/// something under the pointer, so they get the crosshair instead of an arrow.
+inline ToolCursorStyle toolCursorStyle(ruwa::ui::workspace::ToolId tool)
+{
+    using ruwa::ui::workspace::ToolId;
+    switch (tool) {
+    case ToolId::SquareSelection:
+    case ToolId::CircleSelection:
+        return ToolCursorStyle::Crosshair;
+    case ToolId::Fill:
+    case ToolId::ClassicFill:
+    case ToolId::Move:
+    case ToolId::MagicWand:
+    case ToolId::Lasso:
+    case ToolId::LassoFill:
+        return ToolCursorStyle::PointerBadge;
+    default:
+        return ToolCursorStyle::None;
+    }
+}
+
+/// QRC path of the badge icon. Empty for styles that draw no badge.
 inline QString toolCursorIconResource(ruwa::ui::workspace::ToolId tool)
 {
     using ruwa::ui::workspace::ToolId;

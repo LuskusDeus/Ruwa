@@ -408,8 +408,9 @@ bool CanvasPanel::createGLContent()
             : 1.0;
         const float centerX = static_cast<float>(static_cast<qreal>(localPos.x()) * scaleX);
         const float centerY = static_cast<float>(static_cast<qreal>(localPos.y()) * scaleY);
-        m_glWidget->setToolCursorState(
-            true, centerX, centerY, aether::toolCursorIconResource(toolMode()));
+        const ToolId cursorTool = toolMode();
+        m_glWidget->setToolCursorState(true, centerX, centerY,
+            aether::toolCursorStyle(cursorTool), aether::toolCursorIconResource(cursorTool));
     });
     m_cursorManager->setSuppressed(m_cursorManagerSuppressedByLoading);
     updateCursorManagerOverlay();

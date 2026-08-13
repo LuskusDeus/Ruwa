@@ -8502,12 +8502,13 @@ void OpenGLCanvasWidget::setEyedropperCursorState(
     update();
 }
 
-void OpenGLCanvasWidget::setToolCursorState(
-    bool visible, float centerX, float centerY, const QString& toolIconResource)
+void OpenGLCanvasWidget::setToolCursorState(bool visible, float centerX, float centerY,
+    ToolCursorStyle style, const QString& toolIconResource)
 {
     m_cursorOverlayState.toolCursorVisible = visible;
     m_cursorOverlayState.toolCursorCenterX = centerX;
     m_cursorOverlayState.toolCursorCenterY = centerY;
+    m_cursorOverlayState.toolCursorStyle = style;
     if (!toolIconResource.isEmpty()) {
         m_cursorOverlayState.toolCursorIcon = toolIconResource;
     }
@@ -11059,26 +11060,7 @@ void OpenGLCanvasWidget::paintGL_renderOverlays(GLuint sceneTarget)
     auto* transformOverlay = m_overlayManager ? m_overlayManager->transformOverlay() : nullptr;
     auto* canvasResizeOverlay
         = m_overlayManager ? m_overlayManager->canvasResizeOverlay() : nullptr;
-    auto* brushCursorOverlay = m_overlayManager ? m_overlayManager->brushCursorOverlay() : nullptr;
-    auto* eyedropperCursorOverlay
-        = m_overlayManager ? m_overlayManager->eyedropperCursorOverlay() : nullptr;
-    auto* toolCursorOverlay = m_overlayManager ? m_overlayManager->toolCursorOverlay() : nullptr;
     auto* textEditOverlay = m_overlayManager ? m_overlayManager->textEditOverlay() : nullptr;
-    const bool wantBrushCursor = !m_skipCursorOverlays && brushCursorOverlay
-        && m_cursorOverlayState.brushVisible && m_cursorOverlayState.brushRadius > 0.5f;
-    const bool wantEyedropperCursor = !m_skipCursorOverlays && eyedropperCursorOverlay
-        && m_cursorOverlayState.eyedropperVisible;
-    const bool wantToolCursor = !m_skipCursorOverlays && toolCursorOverlay
-        && m_cursorOverlayState.toolCursorVisible;
-    if (wantBrushCursor) {
-        ensureCursorOverlayInitialized(brushCursorOverlay, "brush cursor overlay");
-    }
-    if (wantEyedropperCursor) {
-        ensureCursorOverlayInitialized(eyedropperCursorOverlay, "eyedropper cursor overlay");
-    }
-    if (wantToolCursor) {
-        ensureCursorOverlayInitialized(toolCursorOverlay, "tool cursor overlay");
-    }
     const bool moveAxisGuideActive = m_transformController.moveAxisGuideActive();
     const auto& autoSnapGuideState = m_transformController.snapVisualState();
     const bool autoSnapGuideActive = autoSnapGuideState.active();
@@ -11092,12 +11074,6 @@ void OpenGLCanvasWidget::paintGL_renderOverlays(GLuint sceneTarget)
             && (m_canvasResizeOverlayActive || canvasResizeOverlay->isAnimating()));
     const bool drawTextEditOverlay
         = textEditOverlay && textEditOverlay->isInitialized() && textEditOverlay->isActive();
-    const bool drawBrushCursor
-        = wantBrushCursor && brushCursorOverlay && brushCursorOverlay->isInitialized();
-    const bool drawEyedropperCursor = wantEyedropperCursor && eyedropperCursorOverlay
-        && eyedropperCursorOverlay->isInitialized();
-    const bool drawToolCursor
-        = wantToolCursor && toolCursorOverlay && toolCursorOverlay->isInitialized();
     GLuint sceneTex
         = (sceneTarget == m_sceneFboManager.sceneFbo() && m_sceneFboManager.sceneTexture())
         ? m_sceneFboManager.sceneTexture()
@@ -11143,13 +11119,49 @@ void OpenGLCanvasWidget::paintGL_renderOverlays(GLuint sceneTarget)
         textEditOverlay->render(m_viewport, sceneTex, surfaceWidth, surfaceHeight, &contentVp);
         update();
     }
-    if (drawBrushCursor && brushCursorOverlay && m_sceneFboManager.sceneTexture()) {
+}
+
+// The cursor overlays are the topmost thing on the canvas, so they run after
+// every pass that writes canvas pixels. The lasso fill preview in particular
+// re-renders the viewport into the scene FBO and blits it over the whole
+// surface, which would bury a cursor drawn with the other overlays.
+void OpenGLCanvasWidget::paintGL_renderCursorOverlays()
+{
+    if (m_skipCursorOverlays || !m_overlayManager || !m_sceneFboManager.sceneTexture()) {
+        return;
+    }
+
+    const QSize surfaceSize = currentSurfacePixelSize(this);
+    const int surfaceWidth = surfaceSize.width();
+    const int surfaceHeight = surfaceSize.height();
+
+    auto* brushCursorOverlay = m_overlayManager->brushCursorOverlay();
+    auto* eyedropperCursorOverlay = m_overlayManager->eyedropperCursorOverlay();
+    auto* toolCursorOverlay = m_overlayManager->toolCursorOverlay();
+
+    const bool wantBrushCursor = brushCursorOverlay && m_cursorOverlayState.brushVisible
+        && m_cursorOverlayState.brushRadius > 0.5f;
+    const bool wantEyedropperCursor
+        = eyedropperCursorOverlay && m_cursorOverlayState.eyedropperVisible;
+    const bool wantToolCursor = toolCursorOverlay && m_cursorOverlayState.toolCursorVisible;
+
+    if (wantBrushCursor) {
+        ensureCursorOverlayInitialized(brushCursorOverlay, "brush cursor overlay");
+    }
+    if (wantEyedropperCursor) {
+        ensureCursorOverlayInitialized(eyedropperCursorOverlay, "eyedropper cursor overlay");
+    }
+    if (wantToolCursor) {
+        ensureCursorOverlayInitialized(toolCursorOverlay, "tool cursor overlay");
+    }
+
+    if (wantBrushCursor && brushCursorOverlay->isInitialized()) {
         const float cursorRotation = m_brush ? m_brush->previewDabRotationDeltaRadians() : 0.0f;
         brushCursorOverlay->render(m_cursorOverlayState.brushCenterX,
             m_cursorOverlayState.brushCenterY, m_cursorOverlayState.brushRadius, surfaceWidth,
             surfaceHeight, m_sceneFboManager.sceneTexture(), cursorRotation);
     }
-    if (drawEyedropperCursor && eyedropperCursorOverlay && m_sceneFboManager.sceneTexture()) {
+    if (wantEyedropperCursor && eyedropperCursorOverlay->isInitialized()) {
         const QColor selectedColor = QColor::fromRgbF(m_cursorOverlayState.eyedropperSelectedR,
             m_cursorOverlayState.eyedropperSelectedG, m_cursorOverlayState.eyedropperSelectedB,
             m_cursorOverlayState.eyedropperSelectedA);
@@ -11157,10 +11169,11 @@ void OpenGLCanvasWidget::paintGL_renderOverlays(GLuint sceneTarget)
             m_cursorOverlayState.eyedropperCenterY, surfaceWidth, surfaceHeight,
             m_sceneFboManager.sceneTexture(), selectedColor);
     }
-    if (drawToolCursor && toolCursorOverlay && m_sceneFboManager.sceneTexture()) {
+    if (wantToolCursor && toolCursorOverlay->isInitialized()) {
         toolCursorOverlay->render(m_cursorOverlayState.toolCursorCenterX,
             m_cursorOverlayState.toolCursorCenterY, surfaceWidth, surfaceHeight,
-            m_sceneFboManager.sceneTexture(), m_cursorOverlayState.toolCursorIcon);
+            m_sceneFboManager.sceneTexture(), m_cursorOverlayState.toolCursorStyle,
+            m_cursorOverlayState.toolCursorIcon);
     }
 }
 
@@ -12887,6 +12900,8 @@ void OpenGLCanvasWidget::paintGL()
 
     paintGL_renderLassoFillOverlay(layerStack, boardLayerStack, defaultFbo);
     paintGL_renderLassoOverlay();
+
+    paintGL_renderCursorOverlays();
 
     // Same-frame ROI blur for visible canvas widgets. It must run AFTER every
     // pass that writes canvas pixels: the screen-space previews (transform,

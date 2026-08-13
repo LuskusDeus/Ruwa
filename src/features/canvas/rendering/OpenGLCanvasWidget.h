@@ -427,10 +427,11 @@ public:
     void setEyedropperCursorState(bool visible, float centerX, float centerY,
         const QColor& selectedColor = QColor(0, 0, 0, 255));
 
-    /// Tool cursor (GL-rendered pointer arrow plus a tool badge, both inverted).
+    /// Tool cursor (GL-rendered pointer arrow plus a tool badge, or a crosshair).
     /// @param toolIconResource QRC path of the badge icon, e.g. ":/icons/Move".
-    void setToolCursorState(
-        bool visible, float centerX, float centerY, const QString& toolIconResource = QString());
+    void setToolCursorState(bool visible, float centerX, float centerY,
+        ToolCursorStyle style = ToolCursorStyle::PointerBadge,
+        const QString& toolIconResource = QString());
 
     /// Sample color from the rendered scene texture at world position (what the user sees).
     /// Returns true if sampling succeeded and out is filled; false if scene FBO unavailable.
@@ -623,6 +624,7 @@ private:
     void paintGL_renderSceneAndBlit(GLuint& outSceneTarget, GLint defaultFbo,
         bool needSceneForOverlay, const std::vector<CompositeLayerInfo>& boardLayerStack);
     void paintGL_renderOverlays(GLuint sceneTarget);
+    void paintGL_renderCursorOverlays();
     /// Downsample, blur and composite the current visible QWidget regions.
     /// Samples the default framebuffer, so it must run after every pass that
     /// writes canvas pixels (including the screen-space previews).

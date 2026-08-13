@@ -9,6 +9,8 @@
 #ifndef RUWA_FEATURES_CANVAS_OVERLAYS_CURSOROVERLAYSTATE_H
 #define RUWA_FEATURES_CANVAS_OVERLAYS_CURSOROVERLAYSTATE_H
 
+#include "features/canvas/overlays/ToolCursorIcons.h"
+
 #include <QString>
 
 namespace aether {
@@ -30,10 +32,11 @@ struct CursorOverlayState {
     float eyedropperSelectedB = 0.0f;
     float eyedropperSelectedA = 1.0f;
 
-    /// Pointer + tool badge cursor (fill, move, magic wand, lasso tools).
+    /// Pointer + badge or crosshair cursor, per tool (see ToolCursorIcons.h).
     bool toolCursorVisible = false;
     float toolCursorCenterX = 0.0f;
     float toolCursorCenterY = 0.0f;
+    ToolCursorStyle toolCursorStyle = ToolCursorStyle::PointerBadge;
     QString toolCursorIcon; ///< QRC path of the badge icon.
 };
 
