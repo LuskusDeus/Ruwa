@@ -56,6 +56,10 @@ constexpr int CardHeight = 506;
 constexpr int CardRadius = 12;
 constexpr int CardPadding = 24;
 constexpr int TextAreaPadding = 32;
+// The design size. The card grows past it when the release text needs more room
+// (see setupUI); ImageAreaWidth pairs with CardHeight at 3:4 and is recomputed
+// from the final height, so it is only the width of the text column that these
+// two constants really fix.
 constexpr int ImageAreaWidth = 380; // 3:4 for height 506 (380 = 506*3/4)
 constexpr int ImagePadding = 8;
 constexpr int GlassBlurRadius = 45;
@@ -118,6 +122,18 @@ QString changelogBadgeText(ChangelogBadge type)
     }
 
     return {};
+}
+
+// Let a container pass a height-for-width question through to its children. A
+// layout asks only when the item advertises the dependency in its size policy,
+// and the question stops at the first widget that does not. This is what makes
+// the intermediate widgets honest; the wrapped labels themselves do not rely on
+// it (see WrappedTextLabel).
+void enableHeightForWidth(QWidget* widget)
+{
+    QSizePolicy policy = widget->sizePolicy();
+    policy.setHeightForWidth(true);
+    widget->setSizePolicy(policy);
 }
 
 int releaseBadgeColumnWidth(
@@ -423,6 +439,64 @@ protected:
     }
 };
 
+// A word-wrapped QLabel answers sizeHint() with its SINGLE-LINE size: the real
+// height is only available through heightForWidth(), and a layout asks for that
+// only if every widget between the label and the layout that sizes it advertises
+// the dependency. Worse, the row places this label with Qt::AlignTop, and an
+// alignment flag makes QWidgetItem clamp the item to its sizeHint - so even a
+// correctly sized cell would be cut back to one line.
+//
+// Report the wrapped height as the size hint instead, measured at the width the
+// label actually has. Nothing else in the chain has to cooperate, and the clamp
+// becomes harmless because it now clamps to the right number. The first pass
+// still runs at the natural width; resizeEvent re-asks once the layout has
+// assigned the real one, and stops as soon as the answer stops changing.
+class WrappedTextLabel : public QLabel {
+public:
+    explicit WrappedTextLabel(QWidget* parent = nullptr)
+        : QLabel(parent)
+    {
+        setWordWrap(true);
+    }
+
+    QSize sizeHint() const override
+    {
+        const QSize base = QLabel::sizeHint();
+        if (m_lastWrappedHeight <= 0) {
+            // No width has been assigned yet; there is nothing better to say than
+            // QLabel's own answer, and guessing from the placeholder size a fresh
+            // child widget carries would ask the first pass for a wild height.
+            return base;
+        }
+        return QSize(base.width(), m_lastWrappedHeight);
+    }
+
+    QSize minimumSizeHint() const override
+    {
+        // QLabel reports one line of height here, which lets a vertical layout
+        // squeeze the label back to the size this class exists to avoid. The
+        // width stays QLabel's own answer - the longest word - rather than the
+        // single-line width the size hint carries, which as a *minimum* would
+        // push the whole card wider.
+        return QSize(QLabel::minimumSizeHint().width(), sizeHint().height());
+    }
+
+protected:
+    void resizeEvent(QResizeEvent* event) override
+    {
+        QLabel::resizeEvent(event);
+
+        const int wrapped = heightForWidth(width());
+        if (wrapped > 0 && wrapped != m_lastWrappedHeight) {
+            m_lastWrappedHeight = wrapped;
+            updateGeometry();
+        }
+    }
+
+private:
+    int m_lastWrappedHeight = -1;
+};
+
 void addReleaseHighlightRow(QWidget* parent, QVBoxLayout* layout,
     const ruwa::ui::core::ThemeColors& colors, const ruwa::ui::core::ThemeManager& theme,
     ChangelogBadge type, const QString& text)
@@ -489,17 +563,18 @@ void addReleaseHighlightRow(QWidget* parent, QVBoxLayout* layout,
     badgeLayout->addWidget(badge, 0, Qt::AlignHCenter);
     badgeLayout->addStretch();
 
-    auto* textLabel = new QLabel(row);
-    textLabel->setWordWrap(true);
+    auto* textLabel = new WrappedTextLabel(row);
     textLabel->setText(text);
     textLabel->setFont(colors.fonts.getUIFont(theme.scaledFontSize(BodyFontSize)));
     textLabel->setStyleSheet(
         QStringLiteral("QLabel { background: transparent; color: %1; }").arg(colors.text.name()));
     textLabel->setTextInteractionFlags(Qt::NoTextInteraction);
+    enableHeightForWidth(textLabel);
 
     rowLayout->addWidget(badgeBox, 0, Qt::AlignTop);
     rowLayout->addWidget(textLabel, 1, Qt::AlignTop);
 
+    enableHeightForWidth(row);
     layout->addWidget(row);
 }
 
@@ -639,8 +714,8 @@ void UpdateMessageOverlay::setupUI()
     const auto& colors = theme.colors();
 
     m_card = new UpdateMessageCard(this);
-    m_card->setFixedSize(theme.scaled(CardWidth), theme.scaled(CardHeight));
     m_card->setMouseTracking(true);
+    // Sized once the text column is built, below: its content is what decides.
 
     m_cardOpacityEffect = new QGraphicsOpacityEffect(m_card);
     m_cardOpacityEffect->setOpacity(0.0);
@@ -698,32 +773,32 @@ void UpdateMessageOverlay::setupUI()
             .arg(darkenedPrimary(colors).name()));
     heroTextLayout->addWidget(statusLabel);
 
-    auto* heroTitleLabel = new QLabel(QCoreApplication::translate("UpdateMessageOverlay",
-                                          "Editable smart objects, tabbed panels, and one quality "
-                                          "at every zoom."),
-        heroText);
+    auto* heroTitleLabel = new WrappedTextLabel(heroText);
+    heroTitleLabel->setText(QCoreApplication::translate("UpdateMessageOverlay",
+        "A radial menu, real selection commands, and cursors drawn on the canvas."));
     QFont heroTitleFont = colors.fonts.getUIFont(theme.scaledFontSize(HeroTitleFontSize));
     heroTitleFont.setWeight(QFont::DemiBold);
     heroTitleLabel->setFont(heroTitleFont);
-    heroTitleLabel->setWordWrap(true);
     heroTitleLabel->setStyleSheet(
         QStringLiteral("QLabel { background: transparent; color: %1; }").arg(colors.text.name()));
+    enableHeightForWidth(heroTitleLabel);
     heroTextLayout->addWidget(heroTitleLabel);
     heroTextLayout->addStretch();
 
+    enableHeightForWidth(heroText);
     heroLayout->addWidget(heroText, 1);
+    enableHeightForWidth(heroRow);
     leftLayout->addWidget(heroRow);
 
-    auto* descriptionLabel
-        = new QLabel(QCoreApplication::translate("UpdateMessageOverlay",
-                         "A smart object is now a document you can open and edit in its own tab, "
-                         "panels group into tabs, and the canvas keeps one quality at every "
-                         "zoom."),
-            leftWidget);
-    descriptionLabel->setWordWrap(true);
+    auto* descriptionLabel = new WrappedTextLabel(leftWidget);
+    descriptionLabel->setText(QCoreApplication::translate("UpdateMessageOverlay",
+        "Right-clicking the canvas opens a configurable radial menu, the selection operations "
+        "became commands with a home in the Edit menu, and the cursor is now drawn by the canvas "
+        "itself."));
     descriptionLabel->setFont(colors.fonts.getUIFont(theme.scaledFontSize(BodyFontSize)));
     descriptionLabel->setStyleSheet(QStringLiteral("QLabel { background: transparent; color: %1; }")
             .arg(colors.textMuted.name()));
+    enableHeightForWidth(descriptionLabel);
     leftLayout->addWidget(descriptionLabel);
 
     auto* highlightsWidget = new QWidget(leftWidget);
@@ -734,23 +809,24 @@ void UpdateMessageOverlay::setupUI()
 
     addReleaseHighlightRow(highlightsWidget, highlightsLayout, colors, theme, ChangelogBadge::New,
         QCoreApplication::translate("UpdateMessageOverlay",
-            "Smart objects open as a document of their own, and duplicates share it as "
-            "instances."));
+            "A configurable radial menu opens on canvas right-click, with pages of commands "
+            "around a hub."));
     addReleaseHighlightRow(highlightsWidget, highlightsLayout, colors, theme,
         ChangelogBadge::Updated,
         QCoreApplication::translate("UpdateMessageOverlay",
-            "Smart layers take masks and merges, and a filter can run in the object's own "
-            "space."));
+            "Select All, Invert and Reselect, and a Selection submenu in Edit for the rest."));
     addReleaseHighlightRow(highlightsWidget, highlightsLayout, colors, theme,
         ChangelogBadge::Improved,
         QCoreApplication::translate("UpdateMessageOverlay",
-            "Panels group into tabs, and zooming out no longer changes image quality."));
+            "The canvas draws its own cursors, and the overlay glass refracts what is behind "
+            "it."));
     addReleaseHighlightRow(highlightsWidget, highlightsLayout, colors, theme,
         ChangelogBadge::BugFix,
         QCoreApplication::translate("UpdateMessageOverlay",
-            "Opening a project no longer rearranges your workspace, and mixed-format projects save "
-            "and reopen correctly."));
+            "No more ghost tiles after undo, and a shortcut bound under a Cyrillic layout finally "
+            "fires."));
 
+    enableHeightForWidth(highlightsWidget);
     leftLayout->addWidget(highlightsWidget);
     leftLayout->addStretch();
 
@@ -781,10 +857,30 @@ void UpdateMessageOverlay::setupUI()
 
     mainLayout->addWidget(leftWidget, 1);
 
+    // === Card size: the text column decides the height ===
+    // CardWidth x CardHeight is the design size, not a budget the text is
+    // guaranteed to fit in. A release with a title that wraps to three lines and
+    // four two-line highlights needs more, and a QVBoxLayout short of room does
+    // not distribute the shortfall evenly - it shrinks whatever is willing to
+    // shrink, so one release loses its highlight rows and the next loses its
+    // title. Neither is a wrapping bug; both are this one.
+    //
+    // Ask the column how tall it is at the width the design gives it, and take
+    // that as the height, with the design size as the floor. The banner beside it
+    // is a 3:4 crop of the card height, so its column widens to match, and the
+    // text column keeps exactly the width its height was measured at - no
+    // feedback between the two.
+    const int leftWidth = theme.scaled(CardWidth) - theme.scaled(ImageAreaWidth);
+    const int requiredLeftHeight
+        = qMax(leftLayout->totalHeightForWidth(leftWidth), leftWidget->sizeHint().height());
+    const int cardHeight = qMax(theme.scaled(CardHeight), requiredLeftHeight);
+    const int imageAreaWidth = cardHeight * 3 / 4;
+    m_card->setFixedSize(leftWidth + imageAreaWidth, cardHeight);
+
     // === Right: image (3:4, upscaled, with padding) ===
     const int padding = theme.scaled(ImagePadding);
-    const int imgW = theme.scaled(ImageAreaWidth) - padding * 2;
-    const int imgH = theme.scaled(CardHeight) - padding * 2;
+    const int imgW = imageAreaWidth - padding * 2;
+    const int imgH = cardHeight - padding * 2;
 
     auto* imageContainer = new QWidget(m_card);
     imageContainer->setAutoFillBackground(false);

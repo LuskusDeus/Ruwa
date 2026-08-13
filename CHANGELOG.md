@@ -15,6 +15,115 @@ a release.
 
 ## [Unreleased]
 
+## [0.3.1-alpha] — 2026-08-13 — "A radial menu, real selection commands, and cursors drawn on the canvas"
+
+Right-clicking the canvas now opens a configurable radial menu: pages of seats
+around a hub, each one a command that carries its own title, icon, shortcut and
+enabled state. The selection operations that only ever existed as a floating
+popup became commands with a home in `Edit → Selection`, joined by Select All,
+Invert and Reselect, and export moved into its own `File → Export` submenu. The
+cursor is drawn by the canvas itself now — an eyedropper ring that shows the
+sampled and the current colour side by side, tool badges on the arrow, a
+crosshair for the shape selections — so it can no longer swim a frame behind
+what it points at. The on-canvas glass refracts what is behind its bevel and
+tints to the theme instead of multiplying towards black, the hold-keys on the
+canvas became bindable, and a shortcut recorded under a Cyrillic layout now
+fires.
+
+### Added
+- Right-clicking the canvas opens a radial menu. Seats sit on a ring around a
+  hub, each resolved from a command id, so its title, icon, shortcut and enabled
+  state can never drift from the command it points at. Seats open nested pages,
+  the hub doubles as the back button, and the whole thing is the on-canvas glass:
+  frosted and refracted per piece.
+- `Edit → Selection` collects what the selection can already do. Transform, both
+  flips, Select Layer Content and Select Layer Mask had no command at all and
+  were therefore missing from the command palette and unbindable; they exist now,
+  bindable but unbound. Every entry takes its enabled state from the command
+  itself, so Select Layer Mask dims on a maskless layer.
+- Select All (`Ctrl+A`), Invert Selection (`Ctrl+Shift+I`) and Reselect
+  (`Ctrl+Shift+D`). Invert visits everything the document covers, not only the
+  tiles the mask allocated, and keeps partial coverage. Reselect brings back the
+  mask that a Deselect threw away. `Ctrl+A` routes to a focused text field first,
+  the canvas text editor included.
+- Export has its own `File → Export` submenu holding "Export as..." and "Fast
+  Export as PNG".
+- The canvas hold-keys — move content, eyedropper and pan — are bindable. They
+  are held rather than pressed, so they cannot be plain shortcuts; they now have
+  their own defaults, overrides and presets, and register as taken sequences so a
+  command sharing one is reported.
+- Assigning a sequence that is already taken no longer fails silently. Both sides
+  are marked as conflicting and disabled until one of them changes.
+- Right-clicking inside an active transform offers the two mirrors under the
+  Classic/Deform modes. They play the same eased flip the selection popup uses
+  and leave the session open, so a mirror combines with further edits. Free quads
+  and deform meshes have no scale sign to negate and come through disabled.
+- The eyedropper became a ring centred on the pointer: the sampled colour above,
+  the current one below, both opaque so neither is tinted by what is behind them.
+- The pointer itself is drawn by the canvas, with the tool badge hanging off it
+  for fill, classic fill, move, magic wand and both lassos, and a crosshair for
+  square and circle selection. Windows hands the system cursor over a frame later
+  than the position the canvas renders at, so a system cursor visibly swims
+  against on-canvas chrome; drawing it here locks the two together.
+
+### Improved
+- The on-canvas overlays gained a glass bevel that bends what is behind them,
+  displacing the captured scene by what Snell gives for a quarter-round edge
+  before the frost is applied. The welcome banner's open button got it too.
+- The frost mixes towards the theme's surface colour instead of multiplying
+  towards black, so dark artwork under a panel no longer crushes and disabled
+  icons stay legible on the darker themes. Hover is one treatment for every
+  control, and the brush-pack and zoom-to-fit buttons drop their standing plate.
+- The canvas tool strip moves as one thing. Its width, height, position and the
+  tool stack's size are driven off a single transition, so a canvas-mode switch
+  is one movement instead of a stopped animation followed by a resize, and the
+  animated sizes hold a fixed parity so the content cannot jump a pixel sideways
+  mid-flight.
+- Holding a button no longer flashes a wash over it. Toolbar buttons, layer
+  toolbar and lock toggles, combo boxes and their popup rows, and preset rows all
+  answer a click with the state it produces — the toggle that settles, the arrow
+  that flips, the row that selects — which the press wash only ever sat on top of.
+- Dropdown popups open without doing first-use work at the click: the popup is
+  created lazily under the right window and warmed when the pointer reaches the
+  combo, which pays for the style polish, the first layout and the glyph
+  rasterization (the Cyrillic fallback in the language list is the visible case).
+- Keyboard Shortcuts sections follow menu order rather than the alphabet, and
+  Navigation and Tab merged into one "Tabs & Navigation". Going to the shortcuts
+  page joined the other go-to-page commands. Command ids are untouched, so
+  customised shortcuts survive.
+- One keycap renderer for every place a shortcut is drawn. The caps are tighter
+  (no `+` between the keys of a chord, less padding) and painted in opaque
+  palette colours rather than a white film, so they no longer read as a hole on
+  presets whose background is already near black.
+
+### Fixed
+- A stroke undone while zoomed in no longer leaves a frozen tile that fades back
+  in on zoom-out. The display pyramid could derive a level tile from composition
+  pixels the compositor had already been told were wrong, and dirt only ever
+  walks up from level zero, so an ancestor built at an earlier zoom had no way to
+  learn its source had moved. Tiles now carry the versions they were built from
+  and an audit re-derives staleness from them.
+- Toggling a layer's visibility, or undoing, no longer leaves ghosts at the
+  screen edges or a band of the canvas at half alpha at certain zooms. Dirt is a
+  standing request to reconsider now rather than a promise of work, so a tile
+  whose source is unsettled keeps it and rebuilds from whatever is current.
+- Holding undo no longer leaves a stroke visible in the Navigator after it is
+  gone from the canvas. Overview tiles re-dirtied mid-fade were withheld with
+  nothing scheduled to come back for them.
+- A shortcut recorded under a Cyrillic (or any non-Latin) layout is stored by
+  physical key instead of by the character the layout produces, so it can
+  actually fire — and a binding that reaches the application filter is retried
+  against the physical key, so existing ones work too.
+- The slider value label no longer washes out on thin fonts. It was painted twice
+  into the same pixels, so every partially covered pixel landed halfway between
+  the two inks — at 8px a face such as Comfortaa has no fully covered pixel at
+  all.
+- The Settings panel shows the choices made on the first-run page instead of the
+  values captured before it ran.
+
+### Removed
+- The brush quick popup, replaced by the radial menu on canvas right-click.
+
 ## [0.3.0-alpha] — 2026-08-10 — "Editable smart objects, tabbed panels, and one quality at every zoom"
 
 A smart object is now a document you can open: double-click it and its layers,

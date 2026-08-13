@@ -58,6 +58,60 @@ QVector<ReleaseNoteEntry> releaseNoteEntries()
 {
     return {
         { QCoreApplication::translate("ReleaseNotesOverlay",
+              "A radial menu, real selection commands, and cursors drawn on the canvas"),
+            QStringLiteral("0.3.1-alpha"), QStringLiteral("13.08.2026"),
+            QCoreApplication::translate("ReleaseNotesOverlay",
+                "<p><b>Right-clicking the canvas opens a configurable radial menu, the selection "
+                "operations became commands with a home in the Edit menu, and the cursor is now "
+                "drawn by the canvas itself.</b></p>"
+                "<p><b>New</b></p>"
+                "<ul>"
+                "<li>A radial menu on canvas right-click. Each seat on the ring is a command, so "
+                "its title, icon, shortcut and enabled state always match the command it points "
+                "at; seats can open nested pages, and the hub is the way back.</li>"
+                "<li>Edit &rarr; Selection collects what the selection can do. Transform, both "
+                "flips, Select Layer Content and Select Layer Mask are commands now — bindable, "
+                "and present in the command palette.</li>"
+                "<li>Select All (Ctrl+A), Invert Selection (Ctrl+Shift+I) and Reselect "
+                "(Ctrl+Shift+D).</li>"
+                "<li>Export has its own File &rarr; Export submenu.</li>"
+                "<li>The canvas hold-keys — move content, eyedropper and pan — can be rebound, and "
+                "a sequence that is already taken is now reported as a conflict instead of "
+                "silently refused.</li>"
+                "<li>Right-clicking inside an active transform offers the two mirrors, played as "
+                "an animation that leaves the session open.</li>"
+                "<li>The eyedropper is a ring around the pointer showing the sampled colour above "
+                "and the current one below, and the pointer itself is drawn on the canvas — with a "
+                "tool badge for fill, move, magic wand and the lassos, and a crosshair for the "
+                "shape selections — so it can no longer lag the canvas by a frame.</li>"
+                "</ul>"
+                "<p><b>Improved</b></p>"
+                "<ul>"
+                "<li>The on-canvas overlays refract what is behind their edge, and their frost "
+                "mixes towards the theme's own colour instead of towards black, so dark artwork "
+                "under a panel no longer crushes.</li>"
+                "<li>The canvas tool strip moves as one thing: a canvas-mode switch is a single "
+                "movement instead of a stopped animation followed by a resize.</li>"
+                "<li>Holding a button no longer flashes a wash over it — a click is answered by "
+                "the state it produces.</li>"
+                "<li>Dropdown popups open immediately instead of doing their first-use work at the "
+                "click.</li>"
+                "<li>The Keyboard Shortcuts sections follow menu order, and one renderer now draws "
+                "every keycap in the application, tighter and in the theme's own colours.</li>"
+                "</ul>"
+                "<p><b>Fixes</b></p>"
+                "<ul>"
+                "<li>Undoing while zoomed in no longer leaves a frozen tile that fades back in on "
+                "zoom-out, and toggling a layer's visibility no longer leaves ghosts at the screen "
+                "edges.</li>"
+                "<li>Holding undo no longer leaves a stroke visible in the Navigator after it is "
+                "gone from the canvas.</li>"
+                "<li>A shortcut recorded under a Cyrillic layout is stored by physical key, so it "
+                "actually fires.</li>"
+                "<li>The slider value label no longer washes out on thin fonts.</li>"
+                "<li>The Settings panel shows the choices made on the first-run page.</li>"
+                "</ul>") },
+        { QCoreApplication::translate("ReleaseNotesOverlay",
               "Editable smart objects, tabbed panels, and one quality at every zoom"),
             QStringLiteral("0.3.0-alpha"), QStringLiteral("10.08.2026"),
             QCoreApplication::translate("ReleaseNotesOverlay",
