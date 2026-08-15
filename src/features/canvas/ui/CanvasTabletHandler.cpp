@@ -157,7 +157,13 @@ void CanvasTabletHandler::handleTabletEvent(QTabletEvent* event)
 
         m_host->endTemporaryTool();
     };
-    const bool activeTabletStroke = m_host->isInputTabletActive() && m_host->isDrawingActive();
+    // A selection drag (lasso, lasso fill, rectangular/elliptical selection) owns
+    // the canvas exactly like a brush stroke does: it holds the panel's mouse grab
+    // until release. Without counting it here, dragging the pen across the brush
+    // overlay or the stylus joystick would hand those packets to the overlay and
+    // stall the selection halfway through.
+    const bool activeTabletStroke = (m_host->isInputTabletActive() && m_host->isDrawingActive())
+        || m_host->isAnySelectionInteractionActive();
 
     // When stylus is over BrushControlOverlay, let Qt synthesize mouse events for it
     if (m_host->shouldIgnoreTabletInputForOverlay(globalPosF, activeTabletStroke)) {

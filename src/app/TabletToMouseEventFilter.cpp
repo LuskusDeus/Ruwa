@@ -524,6 +524,30 @@ bool TabletToMouseEventFilter::eventFilter(QObject* watched, QEvent* event)
     }
 
     if (!widgetPressActive) {
+        // Canvas drags started from a mouse press (lasso, lasso fill, rectangular
+        // and elliptical selection, a mouse-driven stroke) hold a grab on the panel
+        // until release. CanvasPanel is the OpenGL widget's parent, not a
+        // descendant, so resolveMouseTarget() reads that grabber as ordinary UI and
+        // installs the panel's arrow as an override cursor over the canvas's
+        // BlankCursor — the second, lagging cursor Windows Ink drags around on the
+        // Qt tablet backends. The grab means the panel owns the interaction, so hand
+        // it the packet; the interaction state is tested too, so a grab that outlives
+        // its interaction cannot swallow the stylus for good.
+        auto* grabbedPanel
+            = qobject_cast<ruwa::ui::workspace::CanvasPanel*>(QWidget::mouseGrabber());
+        if (grabbedPanel
+            && (grabbedPanel->isAnySelectionInteractionActive()
+                || grabbedPanel->isDrawingActive())) {
+            m_activeMouseTarget.clear();
+            clearPendingStylusSwipe();
+            clearHoverTarget(globalPos);
+            clearTabletCursorOverride();
+            grabbedPanel->forwardTabletEvent(tabletEvent);
+            return true;
+        }
+    }
+
+    if (!widgetPressActive) {
         if (auto* panel = findActiveDrawingCanvasPanel(widget, globalPos);
             panel && shouldBlockWidgetMouseDuringCanvasDrawing(widget, globalPos)) {
             m_activeMouseTarget.clear();

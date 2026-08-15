@@ -362,6 +362,10 @@ public:
     void commitTransformBeforeDocumentMutation();
     void cancelTransform();
     bool isDrawingActive() const override;
+    /// True while a lasso, shape-selection or canvas-resize drag owns the panel's
+    /// mouse grab. Public alongside isDrawingActive() because TabletToMouseEventFilter
+    /// routes stylus packets by whether the panel is running an interaction.
+    bool isAnySelectionInteractionActive() const override;
     bool hasPendingStrokeFinalization() const;
     void flushPendingStrokeFinalization();
     bool isTransformActive() const;
@@ -571,7 +575,6 @@ private:
     bool isCursorOverCanvas() const override;
     void updateToolCursor() override;
     bool handleWheelZoom(QWheelEvent* event);
-    bool isAnySelectionInteractionActive() const override;
     bool isSpaceSelectionMoveActive() const override { return m_spaceSelectionMoveActive; }
     bool isSpaceStrokeMoveActive() const override { return m_spaceStrokeMoveActive; }
     void beginSpaceSelectionMove() override;
