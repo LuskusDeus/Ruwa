@@ -411,7 +411,13 @@ void CanvasTabletHandler::handleTabletEvent(QTabletEvent* event)
                         const aether::Vector2 wp = m_host->mapInputToViewportWorld(pkt.globalPos);
                         const float pktElapsed
                             = prevElapsed + span * (static_cast<float>(idx) / total);
-                        m_host->inputGlWidget()->continueStrokeAtElapsed(
+                        // Queued, not rasterized inline: this burst is however
+                        // many packets the driver buffered since the last Qt
+                        // move, so drawing it here would put device-rate work in
+                        // the event handler. The queue applies the frame budget;
+                        // the real sample below drains it in the same call, so
+                        // nothing is postponed.
+                        m_host->inputGlWidget()->queueStrokeAtElapsed(
                             wp.x, wp.y, pkt.pressure, pktElapsed);
                     }
                 }

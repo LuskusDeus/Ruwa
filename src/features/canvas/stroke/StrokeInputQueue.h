@@ -7,6 +7,8 @@
 #include <cmath>
 #include <cstddef>
 #include <deque>
+#include <queue>
+#include <vector>
 
 namespace aether {
 
@@ -35,6 +37,10 @@ inline constexpr float kBaseTimingToleranceSeconds = 0.0015f;
 inline constexpr float kMaxTimingToleranceSeconds = 0.004f;
 inline constexpr float kBaseRetainedIntervalSeconds = 0.008f;
 inline constexpr float kMaxRetainedIntervalSeconds = 0.016f;
+// Full 0..1 pressure error is worth 24 px of positional error.
+inline constexpr float kPressureSignificanceScreenPx = 24.0f;
+// One second of timing error is worth 240 px of positional error.
+inline constexpr float kTimingSignificanceScreenPxPerSecond = 240.0f;
 
 struct ReductionParameters {
     float spatialToleranceScreenPx = kBaseSpatialToleranceScreenPx;
@@ -142,6 +148,160 @@ inline std::size_t compact(
         }
     }
     reduced.push_back(samples.back());
+
+    const std::size_t removed = samples.size() - reduced.size();
+    samples.swap(reduced);
+    return removed;
+}
+
+// compact() is opportunistic: it only drops samples the downstream
+// distance/pressure/time interpolation can reconstruct within tolerance, so a
+// noisy driver stream may legitimately shed nothing. decimateToBudget() is
+// the hard guarantee the per-frame input pump needs instead: it computes how
+// many samples it can afford inside the frame's time budget, and the queue
+// must be brought down to that count so input latency stays bounded rather
+// than piling up a backlog. Tolerances therefore only decide the ORDER in
+// which points are dropped (top-down Douglas-Peucker: repeatedly split the
+// span whose omitted interior point would be missed the most), never whether
+// dropping is allowed.
+inline std::size_t decimateToBudget(
+    std::deque<StrokeInputSample>& samples, std::size_t maxSamples, float viewportZoom)
+{
+    if (maxSamples < 2) {
+        maxSamples = 2;
+    }
+    if (samples.size() <= maxSamples) {
+        return 0;
+    }
+
+    const float zoom = std::max(viewportZoom, 0.001f);
+
+    // How badly interior sample k would be missed if span [i, j] collapsed to
+    // its straight chord: the worst of its positional, pressure, and timing
+    // deviation, all expressed in screen pixels so they can be compared and
+    // the largest one drives which span gets split first. Assumes samples[i]
+    // and samples[j] share an inputDevice; mixed-device spans are handled
+    // separately by the caller before this is reached.
+    const auto significance
+        = [&samples, zoom](std::size_t i, std::size_t k, std::size_t j) -> float {
+        const StrokeInputSample& first = samples[i];
+        const StrokeInputSample& middle = samples[k];
+        const StrokeInputSample& last = samples[j];
+
+        const float chordX = last.worldX - first.worldX;
+        const float chordY = last.worldY - first.worldY;
+        const float chordLengthSq = chordX * chordX + chordY * chordY;
+
+        // Spatial fraction of k along the chord; also doubles as the "s" used
+        // to reconstruct an expected elapsed time below.
+        float spatialFraction = 0.5f;
+        float deviationWorld = 0.0f;
+        if (chordLengthSq > 0.000001f) {
+            const float fromFirstX = middle.worldX - first.worldX;
+            const float fromFirstY = middle.worldY - first.worldY;
+            spatialFraction = std::clamp(
+                (fromFirstX * chordX + fromFirstY * chordY) / chordLengthSq, 0.0f, 1.0f);
+            const float projectedX = first.worldX + chordX * spatialFraction;
+            const float projectedY = first.worldY + chordY * spatialFraction;
+            deviationWorld = std::hypot(middle.worldX - projectedX, middle.worldY - projectedY);
+        } else {
+            deviationWorld = std::hypot(middle.worldX - first.worldX, middle.worldY - first.worldY);
+        }
+        const float positionSignificance = deviationWorld * zoom;
+
+        const float totalTime = last.strokeElapsedSeconds - first.strokeElapsedSeconds;
+        const float timeFraction = totalTime > 0.0f
+            ? std::clamp((middle.strokeElapsedSeconds - first.strokeElapsedSeconds) / totalTime,
+                0.0f, 1.0f)
+            : 0.5f;
+        const float expectedPressure
+            = first.pressure + (last.pressure - first.pressure) * timeFraction;
+        const float pressureSignificance
+            = std::abs(middle.pressure - expectedPressure) * kPressureSignificanceScreenPx;
+
+        // Reconstructed elapsed time uses the SPATIAL fraction, so a point
+        // that sits mid-chord but arrived late (a slowdown) still registers,
+        // which is what time/speed-driven brush dynamics need preserved.
+        const float lerpedElapsed = first.strokeElapsedSeconds + totalTime * spatialFraction;
+        const float timingSignificance = std::abs(middle.strokeElapsedSeconds - lerpedElapsed)
+            * kTimingSignificanceScreenPxPerSecond;
+
+        float result = std::max({ positionSignificance, pressureSignificance, timingSignificance });
+        if (!std::isfinite(result)) {
+            result = 0.0f;
+        }
+        return result;
+    };
+
+    struct Span {
+        float significance;
+        std::size_t begin;
+        std::size_t end;
+        std::size_t split;
+    };
+    struct SpanLess {
+        bool operator()(const Span& a, const Span& b) const
+        {
+            return a.significance < b.significance;
+        }
+    };
+
+    // A span whose endpoints belong to different input devices can never be
+    // collapsed into one interpolated segment (canRemoveMiddleSample refuses
+    // this outright), so its interior is treated as maximally significant and
+    // bisected to converge on the device boundary before any ordinary,
+    // distance-driven split is considered.
+    const auto findSplit = [&samples, &significance](std::size_t begin, std::size_t end) -> Span {
+        if (samples[begin].inputDevice != samples[end].inputDevice) {
+            // Larger than any realistic screen-pixel deviation, so this span
+            // always outranks ordinary distance/pressure/timing splits.
+            constexpr float kMixedDeviceSentinelSignificance = 1.0e30f;
+            const std::size_t split = begin + (end - begin) / 2;
+            return { kMixedDeviceSentinelSignificance, begin, end, split };
+        }
+        float bestSignificance = 0.0f;
+        std::size_t bestSplit = begin + 1;
+        for (std::size_t k = begin + 1; k < end; ++k) {
+            const float candidate = significance(begin, k, end);
+            if (candidate > bestSignificance) {
+                bestSignificance = candidate;
+                bestSplit = k;
+            }
+        }
+        return { bestSignificance, begin, end, bestSplit };
+    };
+
+    std::priority_queue<Span, std::vector<Span>, SpanLess> queue;
+    const std::size_t lastIndex = samples.size() - 1;
+    queue.push(findSplit(0, lastIndex));
+
+    std::vector<char> kept(samples.size(), 0);
+    kept.front() = 1;
+    kept.back() = 1;
+    std::size_t keptCount = 2;
+
+    while (keptCount < maxSamples && !queue.empty()) {
+        const Span span = queue.top();
+        queue.pop();
+        if (!(span.significance > 0.0f)) {
+            break;
+        }
+        kept[span.split] = 1;
+        ++keptCount;
+        if (span.split > span.begin + 1) {
+            queue.push(findSplit(span.begin, span.split));
+        }
+        if (span.end > span.split + 1) {
+            queue.push(findSplit(span.split, span.end));
+        }
+    }
+
+    std::deque<StrokeInputSample> reduced;
+    for (std::size_t index = 0; index < samples.size(); ++index) {
+        if (kept[index]) {
+            reduced.push_back(samples[index]);
+        }
+    }
 
     const std::size_t removed = samples.size() - reduced.size();
     samples.swap(reduced);

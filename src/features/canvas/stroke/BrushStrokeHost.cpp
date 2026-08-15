@@ -25,8 +25,20 @@ constexpr double kRealtimePreviewSamplingEnableRateHz = 140.0;
 constexpr double kRealtimePreviewSamplingTargetHz = 90.0;
 constexpr size_t kRealtimePreviewSamplingMinDabs = 48;
 constexpr size_t kRealtimePreviewSamplingMaxDabs = 768;
-constexpr size_t kStrokeInputBatchMaxSamples = 24;
-constexpr qint64 kStrokeInputBatchBudgetMs = 4;
+// Time one BoundedLatency tick may spend before the queue is decimated to fit.
+// A fraction of a 60 Hz frame, so servicing the queue cannot eat the frame it
+// draws into. It is a target for the capacity controller, not a hard cut: a
+// tick always empties the queue, it only decides beforehand how many samples
+// that queue is allowed to contain.
+constexpr double kStrokeInputTickBudgetMs = 6.0;
+// A tick must always make real progress, no matter how expensive a single
+// sample turns out to be. Below this the stroke would be reconstructed from so
+// few points that its shape would visibly change.
+constexpr size_t kStrokeInputMinTickCapacity = 12;
+constexpr size_t kStrokeInputMaxTickCapacity = 8192;
+// Below this a tick carries no information about throughput: it drained a queue
+// that was never full, so its duration measures one sample plus fixed overhead.
+constexpr size_t kStrokeInputCapacityMeasureMinSamples = 4;
 constexpr size_t kStrokeInputCompactionCadenceSamples = 8;
 // Ordering-only nudge for recovered samples that share a timestamp. This keeps
 // their geometry without pretending each point consumed a full input-frame.
@@ -165,8 +177,15 @@ BrushStrokeHost::BrushStrokeHost(QObject* parent, Callbacks callbacks)
     m_finalizeTimer.setTimerType(Qt::PreciseTimer);
     connect(&m_finalizeTimer, &QTimer::timeout, this, &BrushStrokeHost::finalizeStroke);
 
+    // Fallback service point only. The queue is normally drained by
+    // drainStrokeInputForFrame at the top of each frame; this timer covers the
+    // stretches where no frame is coming (nothing else requested a repaint yet,
+    // or the widget is not visible). A zero interval used to be the primary
+    // mechanism and was a poor one: Qt fires zero timers only once the window
+    // system queue has drained, so a device streaming 200-266 Hz of packets
+    // starved exactly the timer meant to consume them.
     m_strokeInputTimer.setSingleShot(true);
-    m_strokeInputTimer.setInterval(0);
+    m_strokeInputTimer.setInterval(8);
     m_strokeInputTimer.setTimerType(Qt::PreciseTimer);
     connect(
         &m_strokeInputTimer, &QTimer::timeout, this, &BrushStrokeHost::processQueuedStrokeInput);
@@ -678,21 +697,73 @@ void BrushStrokeHost::scheduleQueuedStrokeInput()
 
 void BrushStrokeHost::processQueuedStrokeInput()
 {
-    processQueuedStrokeInputImpl(false);
+    drainQueuedStrokeInput(StrokeInputDrainMode::BoundedLatency, true);
+    // A drain returns early when the queue is already empty, so a completion
+    // deferred by a frame-tick drain would never run if it relied on the drain
+    // to notice. This slot is the one service point that always owns its GL
+    // context, so the deferred completion is finished here.
+    if (m_endStrokeRequested && m_isDrawing && m_queuedStrokeSamples.empty()
+        && !m_processingQueuedStrokeInput) {
+        completeEndStrokeAfterQueueDrain();
+    }
 }
 
-void BrushStrokeHost::processQueuedStrokeInputImpl(bool drainAll)
+void BrushStrokeHost::drainStrokeInputForFrame()
+{
+    if (!m_isDrawing || m_queuedStrokeSamples.empty()) {
+        return;
+    }
+    // The queue is serviced before the frame's layer stack is built, so the
+    // pixels this frame shows already include everything the pen produced since
+    // the previous one. The GL context is current here, which also spares the
+    // makeCurrent/doneCurrent pair a timer-driven drain needs.
+    //
+    // The drain still asks for a render afterwards, and must: nothing else keeps
+    // the canvas repainting during a stroke, so suppressing it here would end the
+    // frame loop and leave the fallback timer as the only service point. One
+    // request per drain is not the old problem — that was one per 24-sample
+    // batch, which made the queue's service rate equal to the frame rate.
+    const bool wasDrainingInsideFrame = m_drainingInsideFrame;
+    m_drainingInsideFrame = true;
+    drainQueuedStrokeInput(StrokeInputDrainMode::BoundedLatency, true);
+    // Restored rather than cleared: a nested frame would otherwise hand the
+    // outer one permission to finalize the stroke mid-paint.
+    m_drainingInsideFrame = wasDrainingInsideFrame;
+}
+
+void BrushStrokeHost::drainQueuedStrokeInput(
+    StrokeInputDrainMode mode, bool requestRenderAfterDrain)
 {
     if (!m_isDrawing || m_processingQueuedStrokeInput || m_queuedStrokeSamples.empty()) {
         return;
     }
 
+    const bool boundedLatency = (mode == StrokeInputDrainMode::BoundedLatency);
+    if (boundedLatency && m_queuedStrokeSamples.size() > m_strokeInputTickCapacity) {
+        // Two stages, in order of how much they cost the stroke. The first is
+        // lossless within the downstream interpolation's own tolerances but is
+        // allowed to remove nothing (a driver with noisy pressure defeats it
+        // completely), so it cannot be the mechanism that bounds latency. The
+        // second one always meets the target: tolerances there decide the ORDER
+        // points are dropped in, not whether dropping is permitted.
+        //
+        // Dropping input samples does not thin the stroke: dabs are placed along
+        // arc length by the interpolator, so a point removed from a near-straight
+        // span produces the same dabs. What it removes is the per-sample overhead
+        // that scales with the DEVICE's packet rate rather than with the path.
+        const float queuedAge = stroke_input_queue::queuedAgeSeconds(m_queuedStrokeSamples);
+        stroke_input_queue::compact(m_queuedStrokeSamples, viewportZoom(), queuedAge);
+        if (m_queuedStrokeSamples.size() > m_strokeInputTickCapacity) {
+            stroke_input_queue::decimateToBudget(
+                m_queuedStrokeSamples, m_strokeInputTickCapacity, viewportZoom());
+        }
+        m_queuedSamplesSinceCompaction = 0;
+    }
+
     m_processingQueuedStrokeInput = true;
     size_t processedSamples = 0;
     QElapsedTimer budgetTimer;
-    if (!drainAll) {
-        budgetTimer.start();
-    }
+    budgetTimer.start();
 
     bool ownsGpuContext = false;
     if (m_useGPUBrush && m_callbacks.makeCurrent) {
@@ -704,6 +775,11 @@ void BrushStrokeHost::processQueuedStrokeInputImpl(bool drainAll)
         }
     }
 
+    // Consume to empty. A partial drain is what let the backlog — and with it the
+    // drawing lag — grow without bound: the queue was refilled by the device at
+    // its own rate while the consumer was capped at a fixed slice per tick, and
+    // that slice was itself paced by the repaint each tick asked for. The work
+    // per tick is bounded by the decimation above instead.
     while (m_isDrawing && !m_queuedStrokeSamples.empty()) {
         const StrokeInputSample sample = m_queuedStrokeSamples.front();
         m_queuedStrokeSamples.pop_front();
@@ -711,23 +787,24 @@ void BrushStrokeHost::processQueuedStrokeInputImpl(bool drainAll)
         continueStrokeImmediate(
             sample.worldX, sample.worldY, sample.pressure, sample.strokeElapsedSeconds, false);
         ++processedSamples;
-
-        if (!drainAll
-            && (processedSamples >= kStrokeInputBatchMaxSamples
-                || budgetTimer.elapsed() >= kStrokeInputBatchBudgetMs)) {
-            break;
-        }
     }
 
+    const double elapsedMs = static_cast<double>(budgetTimer.nsecsElapsed()) / 1000000.0;
     if (ownsGpuContext && m_callbacks.doneCurrent) {
         m_callbacks.doneCurrent();
     }
     m_processingQueuedStrokeInput = false;
+    if (boundedLatency) {
+        updateStrokeInputTickCapacity(processedSamples, elapsedMs);
+    }
 
-    if (m_isDrawing && processedSamples > 0 && m_callbacks.requestRender) {
+    if (m_isDrawing && processedSamples > 0 && requestRenderAfterDrain
+        && m_callbacks.requestRender) {
         m_callbacks.requestRender();
     }
-    if (!drainAll && m_isDrawing && !m_queuedStrokeSamples.empty()) {
+    if (m_isDrawing && !m_queuedStrokeSamples.empty()) {
+        // Only reachable if the stroke was interrupted mid-drain; the queue is
+        // empty on every normal path.
         scheduleQueuedStrokeInput();
     } else if (m_queuedStrokeSamples.empty()) {
         m_queuedSamplesSinceCompaction = 0;
@@ -736,7 +813,51 @@ void BrushStrokeHost::processQueuedStrokeInputImpl(bool drainAll)
     // completion once the queue has drained. This is the async tail of the
     // "fast huge brush" flow — UI stays responsive while the backlog catches up.
     if (m_endStrokeRequested && m_isDrawing && m_queuedStrokeSamples.empty()) {
-        completeEndStrokeAfterQueueDrain();
+        if (m_drainingInsideFrame) {
+            // Completion flattens the stroke, commits it and toggles the GL
+            // context around that work. Running it from inside paintGL would
+            // leave the rest of the frame drawing without a current context, so
+            // it is handed to the fallback timer, which owns its context.
+            if (!m_strokeInputTimer.isActive()) {
+                m_strokeInputTimer.start();
+            }
+        } else {
+            completeEndStrokeAfterQueueDrain();
+        }
+    }
+}
+
+void BrushStrokeHost::updateStrokeInputTickCapacity(size_t processedSamples, double elapsedMs)
+{
+    if (processedSamples < kStrokeInputCapacityMeasureMinSamples || !(elapsedMs >= 0.0)) {
+        // A tick that found one or two samples is the healthy interactive case:
+        // the queue never filled, so its duration says nothing about how much
+        // this machine can afford. Measuring it anyway would let a single
+        // expensive sample — a huge brush on a slow GPU, drawn with a mouse that
+        // reports once per frame — pin the capacity at its floor and leave it
+        // there for the tablet stroke that follows.
+        return;
+    }
+
+    if (elapsedMs > kStrokeInputTickBudgetMs) {
+        // Multiplicative decrease. Fast, because the cost of being wrong in this
+        // direction is a stalled frame the user feels immediately.
+        const size_t reduced = static_cast<size_t>(static_cast<double>(processedSamples) * 0.6);
+        m_strokeInputTickCapacity
+            = std::clamp(reduced, kStrokeInputMinTickCapacity, kStrokeInputMaxTickCapacity);
+        return;
+    }
+
+    // Only grow when the tick actually ran into its capacity — otherwise the
+    // number would drift upwards on idle ticks and stop describing anything.
+    // Growth is additive-then-proportional so a device that briefly bursts does
+    // not permanently cap a machine that can keep up.
+    if (elapsedMs < kStrokeInputTickBudgetMs * 0.5
+        && processedSamples * 10 >= m_strokeInputTickCapacity * 8) {
+        const size_t grown
+            = static_cast<size_t>(static_cast<double>(m_strokeInputTickCapacity) * 1.5) + 8;
+        m_strokeInputTickCapacity
+            = std::clamp(grown, kStrokeInputMinTickCapacity, kStrokeInputMaxTickCapacity);
     }
 }
 
@@ -745,9 +866,10 @@ void BrushStrokeHost::flushQueuedStrokeInput()
     if (m_strokeInputTimer.isActive()) {
         m_strokeInputTimer.stop();
     }
-    while (m_isDrawing && !m_queuedStrokeSamples.empty()) {
-        processQueuedStrokeInputImpl(true);
-    }
+    // Deliberately not a loop. A re-entrant call finds m_processingQueuedStrokeInput
+    // already set and returns without consuming anything, which turned the old
+    // "drain until empty" loop into a spin with no exit.
+    drainQueuedStrokeInput(StrokeInputDrainMode::Complete, true);
 }
 
 double BrushStrokeHost::stepStabilizerClock(double realMs, bool isRealPenSample)
@@ -1337,10 +1459,11 @@ void BrushStrokeHost::endStroke()
     // could change it before we finalize.
     m_endStrokeQuickShapeWasActive = quickShapeMorph() && quickShapeMorph()->isActive();
 
-    // If samples are still queued (typical for huge brushes moved fast — input
-    // arrives faster than the per-tick budget can rasterize), defer the heavy
-    // catch-up work. Let m_strokeInputTimer continue draining in time-budgeted
-    // chunks so the UI stays responsive. processQueuedStrokeInputImpl will
+    // Samples may still be queued if the release lands between two drains. That
+    // is at most one tick's worth now that every drain empties the queue, but the
+    // deferral is kept: with a huge brush a single tick's worth of samples is
+    // still enough work to be worth spreading, and this path also covers a drain
+    // that was interrupted. drainQueuedStrokeInput / processQueuedStrokeInput
     // re-enter completeEndStrokeAfterQueueDrain once the queue empties.
     if (!m_queuedStrokeSamples.empty()) {
         m_endStrokeRequested = true;
@@ -2315,7 +2438,12 @@ void BrushStrokeHost::updateStabilizerCatchupTimer()
 void BrushStrokeHost::processStabilizerCatchup()
 {
     if (!m_queuedStrokeSamples.empty()) {
-        flushQueuedStrokeInput();
+        // Real input is still pending. It drives the geometry on its own tick,
+        // and this timer must not double as a queue-service policy: while it did,
+        // input scheduling silently depended on the stabilization slider — at
+        // exactly 0% no catch-up timer exists, so the queue lost its only
+        // aggressive drain and a fast device accumulated seconds of lag, while at
+        // 1% the same queue was flushed synchronously 125 times a second.
         return;
     }
     if (!hasPendingStabilizerCatchup()) {
@@ -2453,10 +2581,16 @@ void BrushStrokeHost::flushPendingFinalization()
     // force-finish it synchronously here so a freshly-starting stroke sees
     // a consistent committed state.
     if (m_endStrokeRequested && m_isDrawing) {
-        if (!m_queuedStrokeSamples.empty()) {
+        if (!m_queuedStrokeSamples.empty() && !m_processingQueuedStrokeInput) {
             flushQueuedStrokeInput();
         }
         if (m_endStrokeRequested && m_isDrawing) {
+            // Completion clears whatever is still queued. That is deliberate and
+            // only reachable if the flush above was skipped because a drain is
+            // already on the stack: the previous stroke has to be committed
+            // before the new one starts, so a truncated tail beats an
+            // inconsistent document. The guard is what keeps that from turning
+            // into a re-entrant drain instead.
             completeEndStrokeAfterQueueDrain();
         }
     }

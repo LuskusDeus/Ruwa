@@ -514,8 +514,6 @@ constexpr double kRealtimePreviewSamplingEnableRateHz = 140.0;
 constexpr double kRealtimePreviewSamplingTargetHz = 90.0;
 constexpr size_t kRealtimePreviewSamplingMinDabs = 48;
 constexpr size_t kRealtimePreviewSamplingMaxDabs = 768;
-constexpr size_t kStrokeInputBatchMaxSamples = 24;
-constexpr qint64 kStrokeInputBatchBudgetMs = 4;
 constexpr qint64 kCanvasCornerIdleDelayMs = 1000;
 constexpr qint64 kCanvasCornerInteractionCooldownMs = 160;
 constexpr qint64 kCanvasCornerFrameDelayMs = 16;
@@ -12836,6 +12834,17 @@ void OpenGLCanvasWidget::paintGL()
     // (an undo/redo burst is exactly that) starves them, while timers and
     // repaints — the navigator's animation, this very frame — keep running.
     paintGL_syncCursorToLivePointer();
+
+    // Service the stroke input queue before anything reads the document. A frame
+    // is the deadline the queue is scheduled against: everything the pen has
+    // produced since the previous frame is rasterized now, so the layer stack
+    // built below already contains it and the oldest unconsumed sample can never
+    // be older than one frame. Doing this from a timer instead made the queue's
+    // service rate depend on the repaint it asked for, which is how a fast
+    // tablet accumulated a second of drawing lag.
+    if (m_strokeHost) {
+        m_strokeHost->drainStrokeInputForFrame();
+    }
 
     if (m_smartCompositeRefreshPending) {
         // A smart object's contents changed while there was no renderer to

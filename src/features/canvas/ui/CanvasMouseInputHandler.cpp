@@ -1173,7 +1173,14 @@ bool CanvasMouseInputHandler::handleMouseMove(QMouseEvent* event)
                                 / static_cast<float>(recoveredCount + 1);
                         const float recoveredPressure
                             = prevPressure + (pointerSample.pressure - prevPressure) * t;
-                        m_panel->m_glWidget->continueStrokeAtElapsed(wp.x, wp.y, recoveredPressure,
+                        // Queued rather than rasterized on the spot: one
+                        // GetMouseMovePointsEx batch can carry dozens of points,
+                        // and rasterizing a burst inline puts work proportional
+                        // to the DEVICE's report rate straight into the event
+                        // handler. The queue applies the same frame budget the
+                        // native path gets, and the real sample below drains it
+                        // immediately, so nothing is deferred by doing this.
+                        m_panel->m_glWidget->queueStrokeAtElapsed(wp.x, wp.y, recoveredPressure,
                             recoveredElapsedSec, strokeInputDeviceForSample(pointerSample));
                     }
                 }

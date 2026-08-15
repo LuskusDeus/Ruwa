@@ -117,6 +117,12 @@ public:
     void queueStrokeAtElapsed(float worldX, float worldY, float pressure,
         float strokeElapsedSeconds, StrokeInputDevice inputDevice = StrokeInputDevice::Stylus);
     void translateActiveStroke(float dx, float dy);
+    /// Frame tick for the input pump. Called once per rendered frame, before the
+    /// layer stack is built, so everything the pen produced since the previous
+    /// frame is rasterized into the frame that is about to be drawn. This is the
+    /// primary service point for the queue; the fallback timer only covers the
+    /// case where frames are not being produced at all.
+    void drainStrokeInputForFrame();
     void endStroke();
     bool isEndStrokeDraining() const { return m_endStrokeRequested; }
     void flushPendingFinalization();
@@ -152,8 +158,34 @@ private:
     std::shared_ptr<ruwa::core::brushes::IEditableBrushStrokeReplayData>
     activeStrokeReplayData() const;
 
+    // Starting point for the adaptive per-tick capacity. High enough that a
+    // healthy device never notices the pump exists, low enough that the first
+    // oversized burst of a session cannot stall a frame outright.
+    static constexpr std::size_t kStrokeInputInitialTickCapacity = 128;
+
+    // How a drain treats the samples it finds queued.
+    enum class StrokeInputDrainMode {
+        // Bound LATENCY, not work: the queue is emptied on every tick, and if the
+        // tick cannot afford the samples in it they are decimated down to what it
+        // can. Anything else lets a device that produces faster than the brush
+        // rasterizes accumulate an unbounded backlog — the drawing lag is then
+        // proportional to how long the user has been drawing, not to how much
+        // work one sample costs.
+        BoundedLatency,
+        // Consume every queued sample verbatim. Used for stroke completion, where
+        // correctness outranks the frame budget and there is no next frame to
+        // spread the work over.
+        Complete,
+    };
+
     void scheduleQueuedStrokeInput();
-    void processQueuedStrokeInputImpl(bool drainAll);
+    void drainQueuedStrokeInput(StrokeInputDrainMode mode, bool requestRenderAfterDrain);
+    // AIMD controller for the per-tick sample capacity. Cost per sample is not a
+    // usable divisor on its own: decimating makes each surviving sample span more
+    // arc length, so its cost RISES while total work stays flat — a straight
+    // "budget / cost" would spiral downwards. Reacting to the measured tick
+    // duration instead is stable, because total work is bounded by path length.
+    void updateStrokeInputTickCapacity(std::size_t processedSamples, double elapsedMs);
     void flushQueuedStrokeInput();
     void addStrokeSampleAtElapsed(float worldX, float worldY, float pressure,
         float strokeElapsedSeconds, StrokeInputDevice inputDevice, bool processImmediately);
@@ -272,6 +304,17 @@ private:
     QTimer m_strokeInputTimer;
     bool m_processingQueuedStrokeInput = false;
     std::size_t m_queuedSamplesSinceCompaction = 0;
+    // Samples one tick is currently believed to afford. Adapted by
+    // updateStrokeInputTickCapacity and deliberately NOT reset per stroke: it is
+    // a property of this machine (GPU, canvas size, device packet rate), so
+    // carrying it across strokes means only the very first burst of a session
+    // can overshoot the budget.
+    std::size_t m_strokeInputTickCapacity = kStrokeInputInitialTickCapacity;
+    // True while a drain runs from inside paintGL. Stroke completion toggles the
+    // GL context around its flatten/commit work, which would leave the rest of
+    // the frame drawing without one, so a completion that comes due during such
+    // a drain is handed to the fallback timer instead.
+    bool m_drainingInsideFrame = false;
     std::vector<LiveStrokePoint> m_liveStrokePoints;
     // The vertex emitted just before the current anchor (m_lastStroke*). Gives
     // the incoming tangent for the Catmull-Rom curve emission so the silhouette
