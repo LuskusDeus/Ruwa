@@ -11,6 +11,7 @@
 #include "shell/main-window/WindowSetupCoordinator.h"
 
 #include <QApplication>
+#include <QElapsedTimer>
 #include <QFontDatabase>
 #include <QFontMetricsF>
 #include <QGuiApplication>
@@ -167,6 +168,14 @@ void SplashScreen::animateAppearance(int durationMs)
         m_contentOpacity = 1.0;
         m_animatedRect = m_contentRect;
         emit appearanceFinished();
+
+        // Replay an expand request that arrived while we were still appearing. Clear the
+        // flag first so this call can't loop back into itself.
+        if (m_expandDeferred) {
+            const int deferredDurationMs = m_deferredExpandDurationMs;
+            m_expandDeferred = false;
+            expandToMainWindow(deferredDurationMs);
+        }
     });
 
     group->start(QAbstractAnimation::DeleteWhenStopped);
@@ -183,16 +192,26 @@ void SplashScreen::startRectExpansion(int durationMs)
 
     const int fps = 60;
     const int frameTime = 1000 / fps;
-    const int totalFrames = qMax(1, durationMs / frameTime);
-
-    int* currentFrame = new int(0);
+    // Progress is driven by ELAPSED TIME, not by a frame count. Counting ticks
+    // ties the animation's length to how often the GUI thread gets around to
+    // this timer: under load it stretches without limit, and the signal this
+    // animation ends with is the only thing that ever closes the splash. On
+    // time it simply drops frames and still finishes when it should.
+    const int totalDurationMs = qMax(1, durationMs);
+    // Captured by value, not heap-allocated: QElapsedTimer is a trivially copyable
+    // value type and elapsed() is const, so the lambda's own copy stays valid for
+    // its whole life. A heap pointer here would leak if the widget (and its child
+    // `timer`) were destroyed before progress reached 1.0 — e.g. the splash being
+    // force-closed by the startup watchdog while this animation is still running.
+    QElapsedTimer clock;
+    clock.start();
 
     auto* timer = new QTimer(this);
     timer->setInterval(frameTime);
 
-    connect(timer, &QTimer::timeout, this, [this, timer, currentFrame, totalFrames]() {
-        (*currentFrame)++;
-        qreal progress = qMin(1.0, static_cast<qreal>(*currentFrame) / totalFrames);
+    connect(timer, &QTimer::timeout, this, [this, timer, clock, totalDurationMs]() {
+        qreal progress
+            = qMin(1.0, static_cast<qreal>(clock.elapsed()) / static_cast<qreal>(totalDurationMs));
 
         qreal easedProgress;
         if (progress < 0.5) {
@@ -216,7 +235,6 @@ void SplashScreen::startRectExpansion(int durationMs)
         if (progress >= 1.0) {
             timer->stop();
             timer->deleteLater();
-            delete currentFrame;
 
             m_animatedRect = m_targetLocalRect;
             m_hasExpanded = true;
@@ -234,6 +252,11 @@ void SplashScreen::expandToMainWindow(int durationMs)
         return;
     }
     if (m_isAppearing) {
+        // Can't start the fade/expand chain over the appearance animation's own timers.
+        // Remember this request instead of dropping it; it is replayed once appearance
+        // finishes (see the QParallelAnimationGroup::finished handler above).
+        m_expandDeferred = true;
+        m_deferredExpandDurationMs = durationMs;
         return;
     }
 

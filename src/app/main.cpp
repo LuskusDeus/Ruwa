@@ -32,6 +32,47 @@ constexpr auto kFactoryResetArgument = "--factory-reset";
 constexpr auto kSkipElevationRestartArgument = "--skip-elevation-restart";
 
 #ifdef Q_OS_WIN
+constexpr auto kWaitForPidArgument = "--wait-for-pid";
+constexpr DWORD kWaitForPreviousProcessTimeoutMs = 10000;
+
+// A restart briefly overlaps two processes, and both would open a WinTab
+// context with CXO_SYSTEM (driving the OS cursor); two live system contexts
+// fighting over the pointer is what hangs it. Waiting here — before
+// QApplication or any window exists — is what keeps the successor from
+// racing the predecessor for the tablet driver.
+void waitForPreviousProcessToExit(int argc, char* argv[])
+{
+    const QString prefixedForm = QLatin1String(kWaitForPidArgument) + QLatin1Char('=');
+    DWORD pid = 0;
+
+    for (int i = 1; i < argc; ++i) {
+        const QString argument = QString::fromLocal8Bit(argv[i]);
+        if (argument.compare(QLatin1String(kWaitForPidArgument), Qt::CaseInsensitive) == 0) {
+            if (i + 1 < argc) {
+                pid = QString::fromLocal8Bit(argv[i + 1]).toULong();
+            }
+            break;
+        }
+        if (argument.startsWith(prefixedForm, Qt::CaseInsensitive)) {
+            pid = argument.mid(prefixedForm.size()).toULong();
+            break;
+        }
+    }
+
+    if (pid == 0) {
+        return;
+    }
+
+    HANDLE handle = OpenProcess(SYNCHRONIZE, FALSE, pid);
+    if (!handle) {
+        return; // Process already gone; nothing to wait for.
+    }
+
+    // A timeout must not abort startup: starting late beats not starting.
+    WaitForSingleObject(handle, kWaitForPreviousProcessTimeoutMs);
+    CloseHandle(handle);
+}
+
 bool hasCommandLineArgument(int argc, char* argv[], const char* argument)
 {
     for (int i = 1; i < argc; ++i) {
@@ -213,6 +254,8 @@ int main(int argc, char* argv[])
 {
 
 #ifdef Q_OS_WIN
+    waitForPreviousProcessToExit(argc, argv);
+
     if (isCurrentProcessElevated()
         && !hasCommandLineArgument(argc, argv, kSkipElevationRestartArgument)
         && relaunchUnelevatedFromShellToken(argc, argv)) {

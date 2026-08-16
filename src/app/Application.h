@@ -57,6 +57,10 @@ public:
     /// True while the current process is shutting down in favor of a factory-reset restart.
     static bool isFactoryResetRestartInProgress();
 
+    /// True once this process has detached its tablet backend to hand off to a
+    /// successor process. Guards against re-opening a WinTab context while dying.
+    static bool isRestarting();
+
     /// Restart with update: close window (unsaved check), then run update script and quit.
     /// On failure the reason lands in errorMessage and in the installer log.
     static bool restartWithUpdate(QString* errorMessage = nullptr);

@@ -15,6 +15,7 @@
 #include <QAbstractAnimation>
 #include <QCoreApplication>
 #include <QGuiApplication>
+#include <QPointer>
 #include <QPropertyAnimation>
 #include <QTimer>
 #include <QWindow>
@@ -119,131 +120,161 @@ void StartupAnimationController::expandSplashToWindow(ruwa::ui::windows::SplashS
 
     // === 5. W H E N   E X P A N S I O N   F I N I S H E S ===
 
-    connect(splash, &ruwa::ui::windows::SplashScreen::expansionFinished, this,
-        [this, splash, mainWindow, platform]() {
-            const bool shouldActivateMainWindow
-                = QGuiApplication::applicationState() == Qt::ApplicationActive;
+    m_splashTornDown = false;
+    QPointer<ruwa::ui::windows::SplashScreen> splashGuard(splash);
 
-            QWidget* topBar = mainWindow->topBar();
-            QWidget* topBarClip = mainWindow->topBarClip();
-            auto* sidebar = mainWindow->findChild<ruwa::ui::widgets::HomePageSidebar*>();
-            auto* welcomeContent = mainWindow->findChild<ruwa::ui::widgets::WelcomeContent*>();
-            QWidget* sidebarClip = sidebar ? sidebar->parentWidget() : nullptr;
-            QPropertyAnimation* topBarAnim = nullptr;
-            QPropertyAnimation* sidebarAnim = nullptr;
-            int startupSettleDelay = 100;
+    // Backstop watchdog: the entire close path above depends on SplashScreen's own animation
+    // timers (a 400ms fade, then a 16ms-tick rect-expansion timer) actually ticking. If the GUI
+    // thread is starved badly enough that those timers never accumulate progress (e.g. a
+    // runaway input loop), expansionFinished never fires and the user is left staring at an
+    // undismissable full-screen splash with no recourse but Task Manager. Armed here, at the
+    // moment expansion starts, as a hard 8s ceiling on that wait.
+    auto* watchdog = new QTimer(this);
+    watchdog->setSingleShot(true);
+    watchdog->setInterval(8000);
 
-            if (topBar && topBarClip) {
-                mainWindow->relayoutTopBarInset();
-                const int barH
-                    = topBar->height() > 0 ? topBar->height() : topBar->sizeHint().height();
-                if (barH > 0) {
-                    const QPoint endPos = topBar->pos();
-                    const QPoint startPos(endPos.x(), endPos.y() - barH);
-                    topBar->move(startPos);
-                    topBar->show();
-                    topBarAnim = new QPropertyAnimation(topBar, "pos", this);
-                    topBarAnim->setDuration(420);
-                    topBarAnim->setStartValue(startPos);
-                    topBarAnim->setEndValue(endPos);
-                    topBarAnim->setEasingCurve(QEasingCurve::OutCubic);
-                    startupSettleDelay = 470;
+    // Shared by the normal expansionFinished path and the watchdog above so neither can drift
+    // from the other. m_splashTornDown makes it idempotent no matter which one runs first.
+    auto revealMainWindowAndCloseSplash = [this, splashGuard, mainWindow, platform, watchdog]() {
+        if (m_splashTornDown) {
+            return;
+        }
+        m_splashTornDown = true;
+        watchdog->stop();
+
+        const bool shouldActivateMainWindow
+            = QGuiApplication::applicationState() == Qt::ApplicationActive;
+
+        QWidget* topBar = mainWindow->topBar();
+        QWidget* topBarClip = mainWindow->topBarClip();
+        auto* sidebar = mainWindow->findChild<ruwa::ui::widgets::HomePageSidebar*>();
+        auto* welcomeContent = mainWindow->findChild<ruwa::ui::widgets::WelcomeContent*>();
+        QWidget* sidebarClip = sidebar ? sidebar->parentWidget() : nullptr;
+        QPropertyAnimation* topBarAnim = nullptr;
+        QPropertyAnimation* sidebarAnim = nullptr;
+        int startupSettleDelay = 100;
+
+        if (topBar && topBarClip) {
+            mainWindow->relayoutTopBarInset();
+            const int barH
+                = topBar->height() > 0 ? topBar->height() : topBar->sizeHint().height();
+            if (barH > 0) {
+                const QPoint endPos = topBar->pos();
+                const QPoint startPos(endPos.x(), endPos.y() - barH);
+                topBar->move(startPos);
+                topBar->show();
+                topBarAnim = new QPropertyAnimation(topBar, "pos", this);
+                topBarAnim->setDuration(420);
+                topBarAnim->setStartValue(startPos);
+                topBarAnim->setEndValue(endPos);
+                topBarAnim->setEasingCurve(QEasingCurve::OutCubic);
+                startupSettleDelay = 470;
+            }
+        }
+
+        if (sidebar && sidebarClip) {
+            const int sidebarWidth = sidebarClip->width() > 0
+                ? sidebarClip->width()
+                : (sidebar->width() > 0 ? sidebar->width() : sidebar->sizeHint().width());
+            if (sidebarWidth > 0) {
+                sidebar->show();
+                sidebarAnim = new QPropertyAnimation(sidebar, "pos", this);
+                sidebarAnim->setDuration(420);
+                sidebarAnim->setStartValue(QPoint(-sidebarWidth, 0));
+                sidebarAnim->setEndValue(QPoint(0, 0));
+                sidebarAnim->setEasingCurve(QEasingCurve::OutCubic);
+                startupSettleDelay = qMax(startupSettleDelay, 470);
+            }
+        }
+
+        if (welcomeContent) {
+            const QList<QWidget*> sections = welcomeContent->startupSections();
+            const int sectionDuration = 420;
+            const int sectionDelayStep = 105;
+
+            for (int i = 0; i < sections.size(); ++i) {
+                QWidget* sectionClip = sections[i];
+                if (!sectionClip) {
+                    continue;
                 }
-            }
 
-            if (sidebar && sidebarClip) {
-                const int sidebarWidth = sidebarClip->width() > 0
-                    ? sidebarClip->width()
-                    : (sidebar->width() > 0 ? sidebar->width() : sidebar->sizeHint().width());
-                if (sidebarWidth > 0) {
-                    sidebar->show();
-                    sidebarAnim = new QPropertyAnimation(sidebar, "pos", this);
-                    sidebarAnim->setDuration(420);
-                    sidebarAnim->setStartValue(QPoint(-sidebarWidth, 0));
-                    sidebarAnim->setEndValue(QPoint(0, 0));
-                    sidebarAnim->setEasingCurve(QEasingCurve::OutCubic);
-                    startupSettleDelay = qMax(startupSettleDelay, 470);
+                auto directChildren
+                    = sectionClip->findChildren<QWidget*>(QString(), Qt::FindDirectChildrenOnly);
+                QWidget* sectionContent
+                    = directChildren.isEmpty() ? nullptr : directChildren.first();
+                if (!sectionContent) {
+                    continue;
                 }
+
+                const int sectionWidth = sectionClip->width() > 0
+                    ? sectionClip->width()
+                    : sectionContent->sizeHint().width();
+                const int sectionHeight = sectionClip->height() > 0
+                    ? sectionClip->height()
+                    : sectionContent->sizeHint().height();
+                const int delay = i * sectionDelayStep;
+
+                auto* sectionAnim = new QPropertyAnimation(sectionContent, "pos", this);
+                sectionAnim->setDuration(sectionDuration);
+                sectionAnim->setStartValue(QPoint(0, -sectionHeight));
+                sectionAnim->setEndValue(QPoint(0, 0));
+                sectionAnim->setEasingCurve(QEasingCurve::OutCubic);
+
+                QTimer::singleShot(delay, this, [sectionAnim, sectionContent]() {
+                    sectionContent->show();
+                    sectionAnim->start(QAbstractAnimation::DeleteWhenStopped);
+                });
+
+                startupSettleDelay = qMax(startupSettleDelay, delay + sectionDuration + 50);
             }
+        }
 
-            if (welcomeContent) {
-                const QList<QWidget*> sections = welcomeContent->startupSections();
-                const int sectionDuration = 420;
-                const int sectionDelayStep = 105;
+        // Paint the complete initial state while MainWindow is still transparent, then
+        // reveal that existing native surface behind the transient splash. No second show
+        // operation or uninitialized backing-store frame is involved in the handoff.
+        mainWindow->repaint();
+        mainWindow->setWindowOpacity(1.0);
+        platform->synchronizeWindowPresentation(mainWindow);
 
-                for (int i = 0; i < sections.size(); ++i) {
-                    QWidget* sectionClip = sections[i];
-                    if (!sectionClip) {
-                        continue;
-                    }
+        // NOW safe to hide splash - the main window is visible and fully painted behind it.
+        if (splashGuard) {
+            splashGuard->hide();
+        }
 
-                    auto directChildren = sectionClip->findChildren<QWidget*>(
-                        QString(), Qt::FindDirectChildrenOnly);
-                    QWidget* sectionContent
-                        = directChildren.isEmpty() ? nullptr : directChildren.first();
-                    if (!sectionContent) {
-                        continue;
-                    }
+        // Preserve the user's application switch during startup instead of pulling Ruwa
+        // back to the foreground when the animation finishes.
+        if (shouldActivateMainWindow) {
+            mainWindow->raise();
+            mainWindow->activateWindow();
+        }
 
-                    const int sectionWidth = sectionClip->width() > 0
-                        ? sectionClip->width()
-                        : sectionContent->sizeHint().width();
-                    const int sectionHeight = sectionClip->height() > 0
-                        ? sectionClip->height()
-                        : sectionContent->sizeHint().height();
-                    const int delay = i * sectionDelayStep;
+        if (topBarAnim) {
+            topBarAnim->start(QAbstractAnimation::DeleteWhenStopped);
+        }
+        if (sidebarAnim) {
+            sidebarAnim->start(QAbstractAnimation::DeleteWhenStopped);
+        }
 
-                    auto* sectionAnim = new QPropertyAnimation(sectionContent, "pos", this);
-                    sectionAnim->setDuration(sectionDuration);
-                    sectionAnim->setStartValue(QPoint(0, -sectionHeight));
-                    sectionAnim->setEndValue(QPoint(0, 0));
-                    sectionAnim->setEasingCurve(QEasingCurve::OutCubic);
-
-                    QTimer::singleShot(delay, this, [sectionAnim, sectionContent]() {
-                        sectionContent->show();
-                        sectionAnim->start(QAbstractAnimation::DeleteWhenStopped);
-                    });
-
-                    startupSettleDelay = qMax(startupSettleDelay, delay + sectionDuration + 50);
-                }
-            }
-
-            // Paint the complete initial state while MainWindow is still transparent, then
-            // reveal that existing native surface behind the transient splash. No second show
-            // operation or uninitialized backing-store frame is involved in the handoff.
-            mainWindow->repaint();
-            mainWindow->setWindowOpacity(1.0);
-            platform->synchronizeWindowPresentation(mainWindow);
-
-            // NOW safe to hide splash - the main window is visible and fully painted behind it.
-            splash->hide();
-
-            // Preserve the user's application switch during startup instead of pulling Ruwa
-            // back to the foreground when the animation finishes.
-            if (shouldActivateMainWindow) {
-                mainWindow->raise();
-                mainWindow->activateWindow();
-            }
-
-            if (topBarAnim) {
-                topBarAnim->start(QAbstractAnimation::DeleteWhenStopped);
-            }
-            if (sidebarAnim) {
-                sidebarAnim->start(QAbstractAnimation::DeleteWhenStopped);
-            }
-
-            // Re-enable platform animations after window is shown
-            QTimer::singleShot(100, [platform, mainWindow]() {
-                platform->enableWindowAnimations(mainWindow);
-                delete platform; // Cleanup
-            });
-
-            // Delete splash
-            splash->close();
-
-            // Emit completion signal after the window reveal settles.
-            QTimer::singleShot(startupSettleDelay, this, [this]() { emit animationsCompleted(); });
+        // Re-enable platform animations after window is shown
+        QTimer::singleShot(100, [platform, mainWindow]() {
+            platform->enableWindowAnimations(mainWindow);
+            delete platform; // Cleanup
         });
+
+        // Delete splash
+        if (splashGuard) {
+            splashGuard->close();
+        }
+
+        // Emit completion signal after the window reveal settles.
+        QTimer::singleShot(startupSettleDelay, this, [this]() { emit animationsCompleted(); });
+    };
+
+    connect(splash, &ruwa::ui::windows::SplashScreen::expansionFinished, this,
+        revealMainWindowAndCloseSplash);
+    connect(watchdog, &QTimer::timeout, this, revealMainWindowAndCloseSplash);
+
+    watchdog->start();
 }
 
 } // namespace ruwa::core

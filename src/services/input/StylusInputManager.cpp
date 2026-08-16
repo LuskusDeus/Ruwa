@@ -2,6 +2,7 @@
 
 #include "services/input/StylusInputManager.h"
 #include "services/input/StylusDebugService.h"
+#include "services/input/StylusInputTrace.h"
 #include "features/canvas/rendering/OpenGLCanvasWidget.h"
 #include "features/layers/ui/LayerListView.h"
 #include "features/layers/ui/LayerRowWidget.h"
@@ -63,8 +64,33 @@ struct StylusInputManager::State {
     QPoint lastGlobalPos;
     bool nativePointerIsActive = false;
     bool nativePointerWasInProximity = false;
+    // Evidence that the pen is being used again, gathered while the mouse owns the
+    // shared system pointer. A pen left lying inside the tablet's hover range keeps
+    // reporting forever, so ownership has to be won by movement rather than by the
+    // arrival of a packet. See kPenReclaimDistancePx.
+    QPoint penReclaimBaseline;
+    bool hasPenReclaimBaseline = false;
+    QPoint penReclaimCandidate;
+    int penReclaimCandidateCount = 0;
     QElapsedTimer cursorWarpClock;
     std::vector<PendingNativeCursorWarp> pendingNativeCursorWarps;
+    // Oscillation guard for the system-cursor warp. Warping to a position the
+    // cursor is already at is a no-op that returns early, so REPEATING a warp to
+    // the same position can only mean something outside this process keeps
+    // pulling the cursor back off it. Left unchecked that is a feedback loop at
+    // tablet report rate — the cursor ping-pongs between two points and no
+    // physical input can escape it.
+    QPoint lastCursorWarpTarget;
+    int repeatedCursorWarpCount = 0;
+    QElapsedTimer cursorWarpBackoffClock;
+    bool cursorWarpBackoffActive = false;
+    int cursorWarpLoopCount = 0;
+    // Set once the loop has been confirmed repeatedly. Giving up entirely is the
+    // safe degradation: the WinTab context is opened with CXO_SYSTEM, so the
+    // driver moves the system cursor anyway — all that is lost is our own
+    // sub-pixel alignment of it, which is worth far less than a machine whose
+    // pointer cannot be moved.
+    bool cursorWarpDisabled = false;
     QPointer<QWidget> hoverTarget;
     QPointer<QWidget> activeMouseTarget;
     QPointer<QWidget> activeCanvasTarget;
@@ -121,6 +147,55 @@ bool useRuwaWinTabBackend()
 constexpr qint64 kUiMoveThrottleMs = 25; // ~40 Hz
 constexpr qint64 kUiDragMoveThrottleMs = 16; // ~60 Hz
 constexpr qint64 kCursorWarpLifetimeMs = 1000;
+// Consecutive warps to one position before the cursor is declared contested.
+// Healthy input never reaches 2: the first warp lands and every later packet
+// for the same position returns early.
+constexpr int kMaxRepeatedCursorWarps = 6;
+// How long to leave the system cursor alone once a loop is detected. Long
+// enough that the user regains control of the machine, short enough that a
+// one-off collision costs nothing noticeable.
+constexpr qint64 kCursorWarpBackoffMs = 750;
+// Backoffs before the warp is abandoned for the rest of the session.
+constexpr int kMaxCursorWarpLoops = 3;
+
+// How far the pen must travel, while the mouse owns the shared system pointer,
+// before it is read as deliberate input rather than as the noise of a pen left
+// lying on the tablet. Deliberate hover movement crosses this within a packet or
+// two; a resting digitiser's jitter never does.
+constexpr int kPenReclaimDistancePx = 12;
+// Consecutive coherent packets required on top of that distance. At 200-266 Hz
+// this is under 20 ms, so it cannot be felt — but a driver that alternates a real
+// position with a bogus one clears the distance test on every other packet and
+// would otherwise reclaim the pointer on the strength of the bogus one alone.
+constexpr int kPenReclaimSampleCount = 3;
+// How far apart two consecutive packets may be and still belong to the same
+// continuous movement. Generous enough for a fast hover sweep, far short of the
+// distance to a screen corner.
+constexpr int kPenReclaimCoherencePx = 96;
+
+// Whether this process owns the window the user is currently working in.
+//
+// A WinTab system context keeps delivering packets while the app sits in the
+// background, so without this test a background Ruwa still drags the system
+// cursor around — and two live instances (an old one that has not exited while
+// its replacement starts up) fight over it forever, each undoing the other's
+// warp. Qt's applicationState is checked as well because it is the portable
+// half of the answer, but the foreground-window test is what is authoritative
+// during startup, when a window can exist before Qt reports it active.
+bool applicationOwnsForegroundWindow()
+{
+#ifdef Q_OS_WIN
+    const HWND foreground = GetForegroundWindow();
+    if (!foreground) {
+        return false;
+    }
+    DWORD foregroundProcessId = 0;
+    GetWindowThreadProcessId(foreground, &foregroundProcessId);
+    return foregroundProcessId == GetCurrentProcessId();
+#else
+    return QApplication::applicationState() == Qt::ApplicationActive;
+#endif
+}
 
 bool isCanvasWidget(QWidget* widget)
 {
@@ -337,8 +412,15 @@ void StylusInputManager::initialize(QApplication* application)
     m_state->lastButtons = Qt::NoButton;
     m_state->nativePointerIsActive = false;
     m_state->nativePointerWasInProximity = false;
+    m_state->hasPenReclaimBaseline = false;
+    m_state->penReclaimCandidateCount = 0;
     m_state->cursorWarpClock.start();
     m_state->pendingNativeCursorWarps.clear();
+    m_state->lastCursorWarpTarget = QPoint();
+    m_state->repeatedCursorWarpCount = 0;
+    m_state->cursorWarpBackoffActive = false;
+    m_state->cursorWarpLoopCount = 0;
+    m_state->cursorWarpDisabled = false;
     m_state->hoverTarget.clear();
     m_state->activeMouseTarget.clear();
     m_state->activeCanvasTarget.clear();
@@ -402,7 +484,25 @@ bool StylusInputManager::handleNativeEvent(void* message)
         = snapshot.winTabInProximity && !m_state->nativePointerWasInProximity;
     m_state->nativePointerWasInProximity = snapshot.winTabInProximity;
 
+    if (proximityGained) {
+        // The pen physically came back. Measure its movement from wherever it
+        // re-enters, not from the stale position it was left at.
+        m_state->hasPenReclaimBaseline = false;
+        m_state->penReclaimCandidateCount = 0;
+    }
+
     const Qt::KeyboardModifiers modifiers = QApplication::keyboardModifiers();
+
+    auto grantPenOwnership = [&](const QString& reason, const QPoint& pos) {
+        m_state->nativePointerIsActive = true;
+        m_state->hasPenReclaimBaseline = false;
+        m_state->penReclaimCandidateCount = 0;
+        if (trace::enabled()) {
+            trace::write(QStringLiteral("OWNERSHIP -> pen (") + reason + QStringLiteral(") at (")
+                + QString::number(pos.x()) + QStringLiteral(",") + QString::number(pos.y())
+                + QStringLiteral(")"));
+        }
+    };
 
     // ---- UI move coalescing ----
     // Non-canvas mouse-move events are throttled to ~40 Hz normally and
@@ -479,19 +579,47 @@ bool StylusInputManager::handleNativeEvent(void* message)
         }
 
         const Qt::MouseButtons previousButtons = m_state->lastButtons;
-        if (!proximityLost
-            && (m_state->nativePointerIsActive || globalPos != m_state->lastGlobalPos
-                || currentButtons != previousButtons || proximityGained)) {
-            // Stationary hover packets are not user intent and must not steal
-            // ownership back immediately after a mouse move or wheel event.
-            // Pen movement and button transitions are authoritative WinTab input.
-            m_state->nativePointerIsActive = true;
+        if (!proximityLost && !m_state->nativePointerIsActive) {
+            // The mouse owns the shared system pointer, so the pen has to earn it
+            // back. None of the events that merely prove the tablet is alive count:
+            // a packet arriving, proximity being regained, or a position that
+            // differs from wherever the last stroke ended are all things a pen left
+            // lying inside hover range produces on its own, and any of them
+            // granting ownership lets the driver yank the cursor out from under the
+            // mouse the user is actually holding.
+            if (currentButtons != previousButtons) {
+                // A button transition is unambiguous intent whatever the position,
+                // and it must stay immediate: it is the first packet of a stroke.
+                grantPenOwnership(QStringLiteral("button"), globalPos);
+            } else if (!m_state->hasPenReclaimBaseline) {
+                // First packet since the mouse took over. Remember where the pen is
+                // resting; it has to travel away from here to be believed.
+                m_state->penReclaimBaseline = globalPos;
+                m_state->penReclaimCandidateCount = 0;
+                m_state->hasPenReclaimBaseline = true;
+            } else if ((globalPos - m_state->penReclaimBaseline).manhattanLength()
+                < kPenReclaimDistancePx) {
+                // Still resting. Jitter around the baseline restarts the streak so
+                // that noise cannot accumulate its way into ownership.
+                m_state->penReclaimCandidateCount = 0;
+            } else if (m_state->penReclaimCandidateCount > 0
+                && (globalPos - m_state->penReclaimCandidate).manhattanLength()
+                    <= kPenReclaimCoherencePx) {
+                ++m_state->penReclaimCandidateCount;
+                m_state->penReclaimCandidate = globalPos;
+            } else {
+                m_state->penReclaimCandidateCount = 1;
+                m_state->penReclaimCandidate = globalPos;
+            }
+
+            if (m_state->penReclaimCandidateCount >= kPenReclaimSampleCount) {
+                grantPenOwnership(QStringLiteral("movement"), globalPos);
+            }
         }
 
         if (!m_state->nativePointerIsActive) {
-            // The mouse currently owns the pointer. WinTab may continue reporting
-            // identical hover samples at tablet report rate; forwarding them would
-            // immediately revive the stale canvas cursor after mouse-wheel input.
+            // The mouse still owns the pointer. Forwarding this packet would revive
+            // the stale canvas cursor and route UI hover to a pen nobody is holding.
             continue;
         }
 
@@ -857,9 +985,17 @@ void StylusInputManager::activateMousePointer()
         return;
     }
 
+    if (trace::enabled() && m_state->nativePointerIsActive) {
+        trace::write(QStringLiteral("OWNERSHIP -> mouse"));
+    }
+
     m_state->nativePointerIsActive = false;
     m_state->hasCoalescedUiMove = false;
     m_state->coalescedUiMoveTarget.clear();
+    // The pen must re-earn the pointer from wherever it sits now, not from the
+    // position it held when the mouse took over.
+    m_state->hasPenReclaimBaseline = false;
+    m_state->penReclaimCandidateCount = 0;
 }
 
 bool StylusInputManager::consumeNativeCursorWarpAt(const QPoint& globalPos)
@@ -889,7 +1025,59 @@ bool StylusInputManager::consumeNativeCursorWarpAt(const QPoint& globalPos)
 
 void StylusInputManager::syncSystemCursorFromNative(const QPoint& globalPos)
 {
-    if (!m_state || QCursor::pos() == globalPos) {
+    if (!m_state || m_state->cursorWarpDisabled) {
+        return;
+    }
+
+    // Never move the pointer on behalf of a background process. The user is
+    // working somewhere else, and a WinTab system context goes on delivering
+    // packets regardless of focus — so this is also what stops two instances of
+    // Ruwa (an exiting one and its replacement) from tearing the cursor between
+    // them during a restart.
+    if (!applicationOwnsForegroundWindow()) {
+        m_state->repeatedCursorWarpCount = 0;
+        m_state->cursorWarpBackoffActive = false;
+        return;
+    }
+
+    if (QCursor::pos() == globalPos) {
+        // The warp landed (or was never needed). Whatever ran before was not a
+        // loop, so let the guard forget it.
+        m_state->repeatedCursorWarpCount = 0;
+        m_state->cursorWarpBackoffActive = false;
+        return;
+    }
+
+    if (m_state->cursorWarpBackoffActive) {
+        if (m_state->cursorWarpBackoffClock.isValid()
+            && m_state->cursorWarpBackoffClock.elapsed() < kCursorWarpBackoffMs) {
+            return;
+        }
+        // Try again from a clean slate. If the contention is still there the
+        // count rebuilds in a few packets and the cursor is released once more,
+        // so the machine stays usable either way.
+        m_state->cursorWarpBackoffActive = false;
+        m_state->repeatedCursorWarpCount = 0;
+    }
+
+    if (globalPos == m_state->lastCursorWarpTarget) {
+        ++m_state->repeatedCursorWarpCount;
+    } else {
+        m_state->lastCursorWarpTarget = globalPos;
+        m_state->repeatedCursorWarpCount = 0;
+    }
+    if (m_state->repeatedCursorWarpCount >= kMaxRepeatedCursorWarps) {
+        // The pen is not moving (same target every time) yet the cursor keeps
+        // leaving that position. Something else owns the pointer; stop pulling.
+        m_state->cursorWarpBackoffActive = true;
+        m_state->cursorWarpBackoffClock.start();
+        m_state->pendingNativeCursorWarps.clear();
+        if (++m_state->cursorWarpLoopCount >= kMaxCursorWarpLoops) {
+            // Backing off repeatedly means the contention is not transient. Stop
+            // for good rather than handing the pointer back for 22 ms out of
+            // every second — that reads as a machine-wide fault to the user.
+            m_state->cursorWarpDisabled = true;
+        }
         return;
     }
 
@@ -898,6 +1086,13 @@ void StylusInputManager::syncSystemCursorFromNative(const QPoint& globalPos)
     constexpr size_t kMaxPendingCursorWarps = 64;
     if (warps.size() > kMaxPendingCursorWarps) {
         warps.erase(warps.begin(), warps.begin() + kMaxPendingCursorWarps / 2);
+    }
+    if (trace::enabled()) {
+        const QPoint from = QCursor::pos();
+        trace::write(QStringLiteral("SETPOS (") + QString::number(from.x()) + QStringLiteral(",")
+            + QString::number(from.y()) + QStringLiteral(") -> (")
+            + QString::number(globalPos.x()) + QStringLiteral(",")
+            + QString::number(globalPos.y()) + QStringLiteral(")"));
     }
     QCursor::setPos(globalPos);
 }

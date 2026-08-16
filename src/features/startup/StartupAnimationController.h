@@ -52,6 +52,11 @@ signals:
      * @brief Emitted when all startup animations complete
      */
     void animationsCompleted();
+
+private:
+    // Guards the shared reveal/teardown lambda in expandSplashToWindow() so it can only run
+    // once, whether it is reached via SplashScreen::expansionFinished or the watchdog timeout.
+    bool m_splashTornDown = false;
 };
 
 } // namespace ruwa::core

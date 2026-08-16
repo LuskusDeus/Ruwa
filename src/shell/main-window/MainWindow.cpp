@@ -286,10 +286,16 @@ QString projectNameFromImageLayerName(const QString& layerName)
     return name.isEmpty() ? QCoreApplication::translate("FileCommands", "Untitled Project") : name;
 }
 
+// The backend this process actually BOOTED with, not whatever is on disk right
+// now. Changing it requires a restart — the settings UI says so and offers one —
+// so a running process reading the live value can only end up disagreeing with
+// the state it initialised itself into. It used to be re-read from disk on every
+// native message: thousands of QSettings constructions a second on the input
+// path, and the instant the setting was saved the OLD process (mid-restart,
+// still alive) began acting like a WinTab process it had never set itself up as.
 bool useRuwaWinTabBackend()
 {
-    QSettings settings(QApplication::organizationName(), QApplication::applicationName());
-    return settings.value("Performance/tabletBackend", 2).toInt() == 2;
+    return ruwa::Application::currentTabletBackend() == 2;
 }
 
 // WinTab packet capture as a *pure data source*, independent of native UI
@@ -305,8 +311,7 @@ bool useRuwaWinTabBackend()
 // pressure path, which DOES coexist (Ink and WinTab are separate subsystems).
 bool useWinTabCapture()
 {
-    QSettings settings(QApplication::organizationName(), QApplication::applicationName());
-    return settings.value("Performance/tabletBackend", 2).toInt() == 2;
+    return ruwa::Application::currentTabletBackend() == 2;
 }
 
 } // namespace
@@ -386,15 +391,20 @@ bool MainWindow::nativeEvent(const QByteArray& eventType, void* message, qintptr
     // Purely observational: keeps the window's restore rectangle on the display the
     // window is currently on, so minimize/restore stays where the user put it.
     aether::platform::trackWindowRestoreMonitor(message);
-    if (useWinTabCapture()) {
-        // Feed the direct backend with full-resolution WinTab packets. In Ruwa mode
-        // StylusInputManager routes this stream and the application filter suppresses
-        // the parallel Windows Ink QTabletEvents.
-        ruwa::services::input::StylusDebugService::instance()->handleNativeEvent(message);
-    }
-    if (useRuwaWinTabBackend()) {
-        // Native synthetic-mouse UI routing — only in explicit Ruwa mode.
-        ruwa::services::input::StylusInputManager::instance().handleNativeEvent(message);
+    // A restarting process already detached its tablet backend to hand off to
+    // its successor; feeding it more native packets here would reopen the
+    // exact race the restart handoff exists to avoid.
+    if (!ruwa::Application::isRestarting()) {
+        if (useWinTabCapture()) {
+            // Feed the direct backend with full-resolution WinTab packets. In Ruwa mode
+            // StylusInputManager routes this stream and the application filter suppresses
+            // the parallel Windows Ink QTabletEvents.
+            ruwa::services::input::StylusDebugService::instance()->handleNativeEvent(message);
+        }
+        if (useRuwaWinTabBackend()) {
+            // Native synthetic-mouse UI routing — only in explicit Ruwa mode.
+            ruwa::services::input::StylusInputManager::instance().handleNativeEvent(message);
+        }
     }
     if (aether::platform::handleWindowsInkNativeEvent(message, result)) {
         return true;
@@ -409,6 +419,13 @@ void MainWindow::configureWindowsInkFeedback()
 
 void MainWindow::attachStylusDebugBackend()
 {
+    // A restarting process is about to hand its WinTab context to the successor
+    // it just launched; reopening one here (e.g. from showEvent) would leave two
+    // system-cursor contexts alive at once and race the successor for the pointer.
+    if (ruwa::Application::isRestarting()) {
+        return;
+    }
+
     auto* stylusDebugService = ruwa::services::input::StylusDebugService::instance();
     if (useWinTabCapture()) {
         stylusDebugService->attachToWindow(reinterpret_cast<void*>(winId()));

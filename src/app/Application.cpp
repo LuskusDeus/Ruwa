@@ -6,6 +6,7 @@
 
 #include "app/Application.h"
 #include "app/TabletToMouseEventFilter.h"
+#include "services/input/StylusDebugService.h"
 #include "services/input/StylusInputManager.h"
 #include "features/theme/manager/ThemeManager.h"
 #include "shared/resources/FontManager.h"
@@ -43,8 +44,10 @@ void pumpStartupUi()
 }
 
 bool s_factoryResetRestartInProgress = false;
+bool s_restarting = false;
 int s_currentTabletBackend = 0; // Currently active tablet backend
 constexpr auto kFactoryResetArgument = "--factory-reset";
+constexpr auto kWaitForPidArgument = "--wait-for-pid";
 
 void clearSettingsStore(
     QSettings::Format format, const QString& organization, const QString& application)
@@ -58,9 +61,23 @@ QStringList sanitizedRestartArguments(bool includeFactoryReset)
 {
     QStringList arguments;
     const QStringList currentArguments = QCoreApplication::arguments().mid(1);
+    const QString waitForPidPrefix = QLatin1String(kWaitForPidArgument) + QLatin1Char('=');
 
-    for (const QString& argument : currentArguments) {
+    for (int i = 0; i < currentArguments.size(); ++i) {
+        const QString& argument = currentArguments.at(i);
         if (argument.compare(QLatin1String(kFactoryResetArgument), Qt::CaseInsensitive) == 0) {
+            continue;
+        }
+        // Drop any pid a previous restart chain left behind, in both the
+        // "--wait-for-pid 123" and "--wait-for-pid=123" spellings, so a chain
+        // of restarts never accumulates stale --wait-for-pid arguments.
+        if (argument.compare(QLatin1String(kWaitForPidArgument), Qt::CaseInsensitive) == 0) {
+            if (i + 1 < currentArguments.size()) {
+                ++i; // also skip its value
+            }
+            continue;
+        }
+        if (argument.startsWith(waitForPidPrefix, Qt::CaseInsensitive)) {
             continue;
         }
         arguments.append(argument);
@@ -312,7 +329,7 @@ QOpenGLContext* Application::sharedGLContext()
 bool Application::restart()
 {
     const QString program = QCoreApplication::applicationFilePath();
-    const QStringList arguments = sanitizedRestartArguments(false);
+    QStringList arguments = sanitizedRestartArguments(false);
     const QString workingDirectory = QDir::currentPath();
 
     QWidget* windowToClose = QApplication::activeWindow();
@@ -340,19 +357,36 @@ bool Application::restart()
         }
     }
 
-    const bool started = QProcess::startDetached(program, arguments, workingDirectory);
+    // Hand the successor our pid so it can wait for this process to fully exit
+    // before touching the tablet driver. A restart briefly runs two processes
+    // at once, and both would otherwise open a WinTab context with CXO_SYSTEM
+    // (which drives the OS cursor) — overlapping contexts fight over the
+    // pointer and can hang it. The successor waiting is what avoids that.
+    arguments << QLatin1String(kWaitForPidArgument)
+              << QString::number(QCoreApplication::applicationPid());
 
-    if (started) {
-        QCoreApplication::quit();
+    const bool started = QProcess::startDetached(program, arguments, workingDirectory);
+    if (!started) {
+        // Nothing has been given up yet, so a failed launch leaves this process
+        // exactly as it was — still holding a working tablet context.
+        return false;
     }
 
-    return started;
+    // Safe to release the tablet context only now: the successor exists and is
+    // blocked on our pid, so it cannot open its own context before we are gone.
+    // s_restarting keeps this process from reopening one (showEvent does) while
+    // it tears down.
+    s_restarting = true;
+    services::input::StylusDebugService::instance()->detachFromWindow();
+
+    QCoreApplication::quit();
+    return true;
 }
 
 bool Application::restartWithFactoryReset()
 {
     const QString program = QCoreApplication::applicationFilePath();
-    const QStringList arguments = sanitizedRestartArguments(true);
+    QStringList arguments = sanitizedRestartArguments(true);
     const QString workingDirectory = QDir::currentPath();
     s_factoryResetRestartInProgress = true;
 
@@ -381,20 +415,34 @@ bool Application::restartWithFactoryReset()
         }
     }
 
-    const bool started = QProcess::startDetached(program, arguments, workingDirectory);
+    // See Application::restart(): the successor waits on our pid so the two
+    // processes' system-cursor WinTab contexts never overlap.
+    arguments << QLatin1String(kWaitForPidArgument)
+              << QString::number(QCoreApplication::applicationPid());
 
-    if (started) {
-        QCoreApplication::quit();
-    } else {
+    const bool started = QProcess::startDetached(program, arguments, workingDirectory);
+    if (!started) {
         s_factoryResetRestartInProgress = false;
+        return false;
     }
 
-    return started;
+    // Released only after the successor exists and is waiting on our pid — see
+    // Application::restart() for why the order matters.
+    s_restarting = true;
+    services::input::StylusDebugService::instance()->detachFromWindow();
+
+    QCoreApplication::quit();
+    return true;
 }
 
 bool Application::isFactoryResetRestartInProgress()
 {
     return s_factoryResetRestartInProgress;
+}
+
+bool Application::isRestarting()
+{
+    return s_restarting;
 }
 
 bool Application::restartWithUpdate(QString* errorMessage)

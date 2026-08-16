@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: MPL-2.0
 
 #include "services/input/WinTabBackend.h"
+#include "services/input/StylusInputTrace.h"
 
 #include <QtCore/qglobal.h>
 #include <QPoint>
@@ -41,7 +42,11 @@ constexpr UINT WT_PROXIMITY = WT_DEFBASE + 5;
 constexpr UINT WTI_DEFSYSCTX = 4;
 constexpr UINT WTI_INTERFACE = 1;
 constexpr UINT WTI_DEVICES = 100;
+constexpr UINT IFC_WINTABID = 1;
+constexpr UINT IFC_SPECVERSION = 2;
+constexpr UINT IFC_IMPLVERSION = 3;
 constexpr UINT IFC_NDEVICES = 4;
+constexpr UINT DVC_NAME = 1;
 constexpr UINT DVC_NCSRTYPES = 3;
 constexpr UINT DVC_FIRSTCSR = 4;
 constexpr UINT DVC_NPRESSURE = 15;
@@ -180,8 +185,13 @@ struct WinTabBackend::Data {
     bool inProximity = false;
     quint64 packetSerial = 0;
     quint64 queueOverflowCount = 0;
+    quint64 rejectedOriginPackets = 0;
     QString details = QStringLiteral("WinTab32.dll not loaded");
     std::vector<WinTabBackend::PenSample> pendingPackets;
+    // Diagnostics only, and only populated under RUWA_WINTAB_TRACE=1.
+    QPointF tracePreviousPos;
+    bool traceHasPreviousPos = false;
+    quint64 tracePacketCount = 0;
 };
 
 WinTabBackend::WinTabBackend()
@@ -400,6 +410,81 @@ bool WinTabBackend::attach(void* hwnd)
         m_data->fallbackPressure = { 0, 1023 };
     }
 
+    if (trace::enabled()) {
+        // WTOpen writes the *granted* specification back over the structure it was
+        // given, so everything logged here is what the driver actually agreed to —
+        // which is the only version that explains the packets that follow.
+        // WTInfoA reports the size it needs when handed a null buffer. Trusting a
+        // fixed buffer instead would make an over-long driver name a stack
+        // overflow, in code whose whole purpose is to be safe to hand a tester.
+        const auto readInfoString = [this](UINT category, UINT index) -> QString {
+            const UINT size = m_data->wtInfoA(category, index, nullptr);
+            if (size == 0 || size > 1024) {
+                return QString();
+            }
+            std::vector<char> buffer(size + 1, '\0');
+            m_data->wtInfoA(category, index, buffer.data());
+            buffer.back() = '\0';
+            return QString::fromLatin1(buffer.data());
+        };
+
+        const QString wintabId = readInfoString(WTI_INTERFACE, IFC_WINTABID);
+        WORD specVersion = 0;
+        WORD implVersion = 0;
+        m_data->wtInfoA(WTI_INTERFACE, IFC_SPECVERSION, &specVersion);
+        m_data->wtInfoA(WTI_INTERFACE, IFC_IMPLVERSION, &implVersion);
+        UINT deviceCount = 0;
+        m_data->wtInfoA(WTI_INTERFACE, IFC_NDEVICES, &deviceCount);
+
+        trace::write(QStringLiteral("ATTACH driver=\"") + wintabId
+            + QStringLiteral("\" spec=0x") + QString::number(specVersion, 16)
+            + QStringLiteral(" impl=0x") + QString::number(implVersion, 16)
+            + QStringLiteral(" devices=") + QString::number(deviceCount)
+            + QStringLiteral(" extendedLayout=")
+            + QString::number(m_data->extendedPacketData ? 1 : 0));
+
+        trace::write(QStringLiteral("CONTEXT granted lcOptions=0x")
+            + QString::number(context.lcOptions, 16) + QStringLiteral(" lcPktData=0x")
+            + QString::number(context.lcPktData, 16) + QStringLiteral(" requestedPktData=0x")
+            + QString::number(m_data->extendedPacketData ? kExtendedPacketData : kBasicPacketData,
+                16)
+            + QStringLiteral(" lcMoveMask=0x") + QString::number(context.lcMoveMask, 16)
+            + QStringLiteral(" lcDevice=") + QString::number(context.lcDevice));
+
+        trace::write(QStringLiteral("CONTEXT in  org=(") + QString::number(context.lcInOrgX)
+            + QStringLiteral(",") + QString::number(context.lcInOrgY) + QStringLiteral(") ext=(")
+            + QString::number(context.lcInExtX) + QStringLiteral(",")
+            + QString::number(context.lcInExtY) + QStringLiteral(")"));
+
+        trace::write(QStringLiteral("CONTEXT out org=(") + QString::number(context.lcOutOrgX)
+            + QStringLiteral(",") + QString::number(context.lcOutOrgY) + QStringLiteral(") ext=(")
+            + QString::number(context.lcOutExtX) + QStringLiteral(",")
+            + QString::number(context.lcOutExtY) + QStringLiteral(")  [scale=")
+            + QString::number(kScreenCoordinateScale) + QStringLiteral("]"));
+
+        trace::write(QStringLiteral("CONTEXT sys org=(") + QString::number(context.lcSysOrgX)
+            + QStringLiteral(",") + QString::number(context.lcSysOrgY) + QStringLiteral(") ext=(")
+            + QString::number(context.lcSysExtX) + QStringLiteral(",")
+            + QString::number(context.lcSysExtY) + QStringLiteral(")"));
+
+        trace::write(QStringLiteral("VIRTUALSCREEN org=(")
+            + QString::number(GetSystemMetrics(SM_XVIRTUALSCREEN)) + QStringLiteral(",")
+            + QString::number(GetSystemMetrics(SM_YVIRTUALSCREEN)) + QStringLiteral(") size=(")
+            + QString::number(GetSystemMetrics(SM_CXVIRTUALSCREEN)) + QStringLiteral(",")
+            + QString::number(GetSystemMetrics(SM_CYVIRTUALSCREEN)) + QStringLiteral(") monitors=")
+            + QString::number(GetSystemMetrics(SM_CMONITORS)));
+
+        for (UINT device = 0; device < deviceCount; ++device) {
+            AXIS pressureAxis {};
+            m_data->wtInfoA(WTI_DEVICES + device, DVC_NPRESSURE, &pressureAxis);
+            trace::write(QStringLiteral("DEVICE ") + QString::number(device)
+                + QStringLiteral(" \"") + readInfoString(WTI_DEVICES + device, DVC_NAME)
+                + QStringLiteral("\" pressure=[") + QString::number(pressureAxis.axMin)
+                + QStringLiteral("..") + QString::number(pressureAxis.axMax)
+                + QStringLiteral("]"));
+        }
+    }
+
     m_data->hwnd = window;
     setDetails(QStringLiteral("Context attached"));
     return true;
@@ -424,9 +509,13 @@ void WinTabBackend::detach()
     m_data->buttons = Qt::NoButton;
     m_data->inProximity = false;
     m_data->queueOverflowCount = 0;
+    m_data->rejectedOriginPackets = 0;
     m_data->pressureByCursor.clear();
     m_data->fallbackPressure = {};
     m_data->pendingPackets.clear();
+    // A position carried across a detach would make the first packet of the next
+    // context look like a jump in the trace.
+    m_data->traceHasPreviousPos = false;
 }
 
 bool WinTabBackend::handleNativeEvent(void* message)
@@ -447,6 +536,24 @@ bool WinTabBackend::handleNativeEvent(void* message)
         constexpr int kDrainChunkSize = 64;
 
         const auto processPacket = [this](const Packet& packet, bool hasMetadata) {
+            // A packet sitting on the exact origin of the mapped output area while
+            // reporting no contact and no buttons is not a position a user can aim
+            // at. It is what some drivers emit for a cursor they have stopped
+            // tracking — a pen inside hover range but outside the mapped area — and
+            // because mouse and pen share one system pointer, acting on it drags
+            // that pointer into the corner of the display. Drop it here, before it
+            // can reach the routing layer or become the backend's current position.
+            // Being wrong about this costs one pixel of hover in the very corner.
+            if (packet.pkX == 0 && packet.pkY == 0 && packet.pkNormalPressure == 0
+                && LOWORD(packet.pkButtons) == 0) {
+                ++m_data->rejectedOriginPackets;
+                if (trace::enabled()) {
+                    trace::write(QStringLiteral("PKT rejected: origin packet, total=")
+                        + QString::number(m_data->rejectedOriginPackets));
+                }
+                return;
+            }
+
             const auto rangeIt = hasMetadata ? m_data->pressureByCursor.find(packet.pkCursor)
                                              : m_data->pressureByCursor.end();
             const PressureRange& pressureRange = rangeIt != m_data->pressureByCursor.end()
@@ -504,7 +611,48 @@ bool WinTabBackend::handleNativeEvent(void* message)
             sample.buttons = buttons;
             sample.packetTimeMs = static_cast<quint32>(packet.pkTime);
             sample.hasPacketTime = hasMetadata;
+            // Bounded. Nothing guarantees a consumer: whoever drains this list
+            // depends on which backend the user selected and on whether a stroke
+            // is in progress, so an unconsumed list would grow for as long as the
+            // pen stays in proximity — hundreds of samples a second. Dropping the
+            // OLDEST keeps the newest position, which is the only one a late
+            // consumer can still act on.
+            constexpr size_t kMaxPendingPackets = 4096;
+            if (m_data->pendingPackets.size() >= kMaxPendingPackets) {
+                const size_t drop = kMaxPendingPackets / 2;
+                m_data->pendingPackets.erase(
+                    m_data->pendingPackets.begin(), m_data->pendingPackets.begin() + drop);
+            }
             m_data->pendingPackets.push_back(sample);
+
+            if (trace::enabled()) {
+                const bool jumped = m_data->traceHasPreviousPos
+                    && (sample.globalPos - m_data->tracePreviousPos).manhattanLength() > 200.0;
+                // m_data->buttons still holds the previous packet's state here.
+                const bool buttonsChanged = buttons != m_data->buttons;
+                // Writing all of a 200-266 Hz stream buries the evidence in it. Keep
+                // what can explain a pointer jump — large position deltas and button
+                // transitions — plus a periodic sample so quiet stretches still show
+                // their timing.
+                if (jumped || buttonsChanged || m_data->tracePacketCount % 64 == 0) {
+                    trace::write(QStringLiteral("PKT#") + QString::number(m_data->tracePacketCount)
+                        + QStringLiteral(" raw=(") + QString::number(packet.pkX)
+                        + QStringLiteral(",") + QString::number(packet.pkY)
+                        + QStringLiteral(") screen=(")
+                        + QString::number(sample.globalPos.x(), 'f', 2) + QStringLiteral(",")
+                        + QString::number(sample.globalPos.y(), 'f', 2)
+                        + QStringLiteral(") rawPress=") + QString::number(rawPressure)
+                        + QStringLiteral(" btn=0x") + QString::number(packet.pkButtons, 16)
+                        + QStringLiteral(" status=0x")
+                        + QString::number(hasMetadata ? packet.pkStatus : 0u, 16)
+                        + QStringLiteral(" csr=")
+                        + QString::number(hasMetadata ? packet.pkCursor : 0u)
+                        + (jumped ? QStringLiteral("  <== JUMP") : QString()));
+                }
+                m_data->tracePreviousPos = sample.globalPos;
+                m_data->traceHasPreviousPos = true;
+                ++m_data->tracePacketCount;
+            }
 
             m_data->rawPressure = rawPressure;
             m_data->pressure = pressure;
@@ -524,9 +672,16 @@ bool WinTabBackend::handleNativeEvent(void* message)
             processPacket(packet, false);
         };
 
+        // The drain loop repeats while the driver keeps handing back full chunks,
+        // which assumes WTPacketsGet removes what it returns. A driver that does
+        // not would spin this loop on the GUI thread forever, with the window
+        // frozen and the pointer stuck. Cap the work one message may do; anything
+        // beyond it is a broken driver, not a real burst.
+        constexpr int kMaxDrainedPacketsPerMessage = 4096;
         if (m_data->wtPacketsGet) {
             bool receivedPackets = false;
             int count = 0;
+            int drained = 0;
             if (m_data->extendedPacketData) {
                 do {
                     Packet packets[kDrainChunkSize];
@@ -536,10 +691,11 @@ bool WinTabBackend::handleNativeEvent(void* message)
                     }
 
                     receivedPackets = true;
+                    drained += count;
                     for (int i = 0; i < count; ++i) {
                         processPacket(packets[i], true);
                     }
-                } while (count == kDrainChunkSize);
+                } while (count == kDrainChunkSize && drained < kMaxDrainedPacketsPerMessage);
             } else {
                 do {
                     BasicPacket packets[kDrainChunkSize];
@@ -549,10 +705,11 @@ bool WinTabBackend::handleNativeEvent(void* message)
                     }
 
                     receivedPackets = true;
+                    drained += count;
                     for (int i = 0; i < count; ++i) {
                         processBasicPacket(packets[i]);
                     }
-                } while (count == kDrainChunkSize);
+                } while (count == kDrainChunkSize && drained < kMaxDrainedPacketsPerMessage);
             }
 
             if (receivedPackets) {
@@ -600,6 +757,16 @@ bool WinTabBackend::handleNativeEvent(void* message)
         // stayed on the tablet.
         const bool enteringContext = LOWORD(msg->lParam) != 0;
         const bool hardwareTransition = HIWORD(msg->lParam) != 0;
+
+        if (trace::enabled()) {
+            trace::write(QStringLiteral("PROXIMITY ")
+                + (enteringContext ? QStringLiteral("enter") : QStringLiteral("leave"))
+                + (hardwareTransition ? QStringLiteral(" hardware") : QStringLiteral(" context"))
+                + QStringLiteral(" penEngaged=") + QString::number(m_data->penEngaged ? 1 : 0)
+                + QStringLiteral(" lastScreen=(")
+                + QString::number(m_data->globalPos.x(), 'f', 2) + QStringLiteral(",")
+                + QString::number(m_data->globalPos.y(), 'f', 2) + QStringLiteral(")"));
+        }
 
         if (enteringContext) {
             if (!hardwareTransition && m_data->penEngaged) {

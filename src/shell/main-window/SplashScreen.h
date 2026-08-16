@@ -93,6 +93,12 @@ private:
     int m_pendingExpandDurationMs = 500;
     bool m_expandRequested = false;
 
+    // expandToMainWindow() arriving mid-appearance is remembered here and replayed once
+    // appearanceFinished fires, instead of being silently dropped (a dropped request meant
+    // expansionFinished would never come and the splash would never close).
+    bool m_expandDeferred = false;
+    int m_deferredExpandDurationMs = 500;
+
     static constexpr int SPLASH_WIDTH = 520;
     static constexpr int SPLASH_HEIGHT = 320;
     static constexpr qreal APPEAR_START_SCALE = 0.92;
