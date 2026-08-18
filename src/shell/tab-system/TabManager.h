@@ -101,6 +101,10 @@ public:
     /// Get tab at display index (for UI convenience)
     BaseTab* tabAtIndex(int index) const;
 
+    /// Replace the display/navigation order without changing tab ownership or activation.
+    /// The supplied list must contain every open tab exactly once.
+    bool reorderTabs(const QList<QUuid>& orderedTabIds);
+
     // === Tab Factory System ===
     using TabFactory = std::function<BaseTab*(const QVariantMap&)>;
     void registerTabFactory(BaseTab::TabType type, TabFactory factory);
@@ -123,6 +127,9 @@ signals:
 
     /// Active tab changed
     void activeTabChanged(BaseTab* newTab, BaseTab* oldTab);
+
+    /// Display/navigation order changed while the tab set stayed the same.
+    void tabOrderChanged();
 
 private:
     BaseTab* findNextTabAfterClose(BaseTab* closingTab) const;

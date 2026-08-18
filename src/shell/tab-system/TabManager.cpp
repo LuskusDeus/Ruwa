@@ -1,6 +1,9 @@
 // SPDX-License-Identifier: MPL-2.0
 
 #include "shell/tab-system/TabManager.h"
+
+#include <QSet>
+
 namespace ruwa::core {
 
 TabManager::TabManager(QObject* parent)
@@ -388,6 +391,33 @@ BaseTab* TabManager::tabAtIndex(int index) const
         return m_tabOrder[index];
     }
     return nullptr;
+}
+
+bool TabManager::reorderTabs(const QList<QUuid>& orderedTabIds)
+{
+    if (orderedTabIds.size() != m_tabOrder.size()) {
+        return false;
+    }
+
+    QList<BaseTab*> reordered;
+    reordered.reserve(orderedTabIds.size());
+    QSet<QUuid> seen;
+    for (const QUuid& tabId : orderedTabIds) {
+        BaseTab* resolved = tab(tabId);
+        if (!resolved || seen.contains(tabId)) {
+            return false;
+        }
+        seen.insert(tabId);
+        reordered.append(resolved);
+    }
+
+    if (reordered == m_tabOrder) {
+        return true;
+    }
+
+    m_tabOrder = reordered;
+    emit tabOrderChanged();
+    return true;
 }
 
 void TabManager::registerTabFactory(BaseTab::TabType type, TabFactory factory)

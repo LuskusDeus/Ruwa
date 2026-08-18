@@ -9,6 +9,7 @@
 #include <QList>
 #include <QHash>
 #include <QIcon>
+#include <QPointer>
 #include <QString>
 #include <QUuid>
 #include <QVariantAnimation>
@@ -18,6 +19,10 @@ namespace ruwa::core {
 class TabManager;
 class BaseTab;
 } // namespace ruwa::core
+
+namespace ruwa::ui::widgets {
+class DragGhostWidget;
+} // namespace ruwa::ui::widgets
 
 namespace ruwa::ui::tabs {
 
@@ -71,9 +76,11 @@ protected:
     void resizeEvent(QResizeEvent* event) override;
     void showEvent(QShowEvent* event) override;
     void mousePressEvent(QMouseEvent* event) override;
+    void mouseReleaseEvent(QMouseEvent* event) override;
     void mouseDoubleClickEvent(QMouseEvent* event) override;
     void mouseMoveEvent(QMouseEvent* event) override;
     void leaveEvent(QEvent* event) override;
+    bool eventFilter(QObject* watched, QEvent* event) override;
 
 private slots:
     void onTabAdded(ruwa::core::BaseTab* tab);
@@ -81,6 +88,7 @@ private slots:
     void onTabClosing(ruwa::core::BaseTab* tab, int direction);
     void onTabRemoved(const QUuid& tabId);
     void onActiveTabChanged(ruwa::core::BaseTab* newTab, ruwa::core::BaseTab* oldTab);
+    void onTabOrderChanged();
 
 private:
     struct TabItem {
@@ -96,6 +104,7 @@ private:
         QRectF closeRect;
         bool closeHovered = false;
         bool isClosing = false; ///< True when fade-out started (prevents double-close)
+        bool isDragSource = false; ///< Dimmed in-place while its shared drag ghost is visible.
         bool contentOwnsCloseConfirmation = false;
         qreal hoverProgress = 0.0;
         qreal opacity = 1.0;
@@ -137,7 +146,21 @@ private:
     bool isCloseButtonAt(int index, const QPointF& pos) const;
     void drawTab(QPainter& painter, const TabItem& item, bool isActive, bool isHovered);
     void drawSeparator(
-        QPainter& painter, qreal x, qreal y, const TabItem& anim, const QString& glyph);
+        QPainter& painter, qreal x, qreal y, const TabItem& anim, const QString& glyph,
+        qreal opacityFactor = 1.0);
+    QUuid rootTabIdForItem(int index) const;
+    QList<QUuid> visibleRootOrder() const;
+    QList<QUuid> managerOrderForVisibleRoots() const;
+    QRectF visualGroupBounds(const QUuid& rootTabId, bool includeVisualOffsets) const;
+    int tabInsertIndexAt(const QPoint& localPos) const;
+    void applyVisibleRootOrder(const QList<QUuid>& rootOrder, bool animated);
+    void moveDraggedGroupTo(int insertIndex);
+    void startTabDrag(const QUuid& rootTabId, const QPoint& globalPos);
+    void updateTabDrag(const QPoint& globalPos);
+    void finishTabDrag(bool accepted, const QPoint& globalPos);
+    void cancelTabDragCandidate();
+    void resetTabDragState();
+    QPoint ghostTargetPosition(const QPoint& globalPos) const;
     void startHoverAnimation(int index, bool hovering);
     void startCloseRevealAnimation(int index, bool reveal);
     void startFadeInAnimation(int index);
@@ -170,6 +193,16 @@ private:
     qreal m_stripAlignOffset = 0.0;
     QVariantAnimation* m_stripAlignAnim = nullptr;
     bool m_initialAlignDone = false;
+
+    QUuid m_dragCandidateRootId;
+    QUuid m_draggedRootId;
+    QList<QUuid> m_dragStartRootOrder;
+    QPointer<ruwa::ui::widgets::DragGhostWidget> m_dragGhost;
+    QPoint m_dragPressGlobalPosition;
+    QPoint m_dragOffset;
+    bool m_dragActive = false;
+    bool m_dragSettling = false;
+    bool m_dragCursorOverride = false;
 };
 
 } // namespace ruwa::ui::tabs

@@ -8,18 +8,25 @@
 #include "features/settings/SettingsManager.h"
 #include "shared/resources/IconProvider.h"
 #include "shared/style/PaintingUtils.h"
+#include "shared/widgets/reorderlist/ListDragDrop.h"
 #include "shell/top-bar/TopBar.h"
 #include "shell/top-bar/UnsavedChangesHelper.h"
 
 #include <QEvent>
+#include <QApplication>
+#include <QKeyEvent>
 #include <QPainter>
 #include <QPainterPath>
+#include <QPixmap>
 #include <QMouseEvent>
 #include <QFontMetrics>
 #include <QWindow>
 #include <QCursor>
 #include <QResizeEvent>
+#include <QSet>
 #include <QShowEvent>
+
+#include <utility>
 
 namespace {
 
@@ -104,6 +111,7 @@ CustomTabBar::CustomTabBar(QWidget* parent)
 
 CustomTabBar::~CustomTabBar()
 {
+    resetTabDragState();
     if (m_layoutSlideAnim) {
         m_layoutSlideAnim->stop();
         delete m_layoutSlideAnim;
@@ -241,6 +249,7 @@ void CustomTabBar::refreshStripAlignment(bool animated)
 
 void CustomTabBar::setTabManager(ruwa::core::TabManager* manager)
 {
+    resetTabDragState();
     if (m_tabManager) {
         disconnect(m_tabManager, nullptr, this, nullptr);
     }
@@ -257,6 +266,8 @@ void CustomTabBar::setTabManager(ruwa::core::TabManager* manager)
             m_tabManager, &ruwa::core::TabManager::tabRemoved, this, &CustomTabBar::onTabRemoved);
         connect(m_tabManager, &ruwa::core::TabManager::activeTabChanged, this,
             &CustomTabBar::onActiveTabChanged);
+        connect(m_tabManager, &ruwa::core::TabManager::tabOrderChanged, this,
+            &CustomTabBar::onTabOrderChanged);
 
         rebuildFromManager();
     }
@@ -600,6 +611,10 @@ void CustomTabBar::onTabClosing(ruwa::core::BaseTab* tab, int direction)
     if (!tab)
         return;
 
+    if (m_dragActive) {
+        finishTabDrag(false, QCursor::pos());
+    }
+
     QUuid tabId = tab->id();
 
     if (!m_indexById.contains(tabId)) {
@@ -672,6 +687,15 @@ void CustomTabBar::onActiveTabChanged(ruwa::core::BaseTab* newTab, ruwa::core::B
     update();
 }
 
+void CustomTabBar::onTabOrderChanged()
+{
+    // During our own settle the visual list already has this exact order. Rebuilding
+    // would replace the animated items under the ghost and create a visible snap.
+    if (!m_dragActive && !m_dragSettling) {
+        rebuildFromManager();
+    }
+}
+
 void CustomTabBar::updateLayout()
 {
     const auto& theme = ruwa::ui::core::ThemeManager::instance();
@@ -742,7 +766,9 @@ void CustomTabBar::paintEvent(QPaintEvent* event)
             // breadcrumb arrow rather than a sibling slash.
             const QString glyph
                 = rightTab.isSmartObject ? QStringLiteral(">") : QStringLiteral("/");
-            drawSeparator(p, sepX, height() / 2.0, sepAnim, glyph);
+            const qreal dragOpacity
+                = item.isDragSource && rightTab.isDragSource ? 0.25 : 1.0;
+            drawSeparator(p, sepX, height() / 2.0, sepAnim, glyph, dragOpacity);
         }
     }
 }
@@ -750,7 +776,7 @@ void CustomTabBar::paintEvent(QPaintEvent* event)
 void CustomTabBar::drawTab(QPainter& painter, const TabItem& item, bool isActive, bool isHovered)
 {
     painter.save();
-    painter.setOpacity(item.opacity);
+    painter.setOpacity(item.opacity * (item.isDragSource ? 0.25 : 1.0));
     painter.translate(item.slideOffsetX + item.enterOffsetX, item.verticalOffset);
 
     const auto& theme = ruwa::ui::core::ThemeManager::instance();
@@ -845,10 +871,11 @@ void CustomTabBar::drawTab(QPainter& painter, const TabItem& item, bool isActive
 }
 
 void CustomTabBar::drawSeparator(
-    QPainter& painter, qreal x, qreal y, const TabItem& anim, const QString& glyph)
+    QPainter& painter, qreal x, qreal y, const TabItem& anim, const QString& glyph,
+    qreal opacityFactor)
 {
     painter.save();
-    painter.setOpacity(anim.opacity);
+    painter.setOpacity(anim.opacity * opacityFactor);
     painter.translate(0, anim.verticalOffset);
 
     const auto& colors = ruwa::ui::core::ThemeManager::instance().colors();
@@ -858,6 +885,374 @@ void CustomTabBar::drawSeparator(
     painter.setPen(colors.textMuted);
     painter.drawText(QPointF(x - 6, y + 4), glyph);
     painter.restore();
+}
+
+QUuid CustomTabBar::rootTabIdForItem(int index) const
+{
+    if (index < 0 || index >= m_items.size()) {
+        return {};
+    }
+    const TabItem& item = m_items[index];
+    return item.isSmartObject ? item.parentTabId : item.id;
+}
+
+QList<QUuid> CustomTabBar::visibleRootOrder() const
+{
+    QList<QUuid> order;
+    order.reserve(m_items.size());
+    for (const TabItem& item : m_items) {
+        if (!item.isSmartObject) {
+            order.append(item.id);
+        }
+    }
+    return order;
+}
+
+QList<QUuid> CustomTabBar::managerOrderForVisibleRoots() const
+{
+    QList<QUuid> order;
+    if (!m_tabManager) {
+        return order;
+    }
+
+    QSet<QUuid> appended;
+    for (const QUuid& rootId : visibleRootOrder()) {
+        if (m_tabManager->hasTab(rootId)) {
+            order.append(rootId);
+            appended.insert(rootId);
+        }
+        // Every open contents editor belonging to the document moves with it,
+        // including nested/hidden editors that share the one breadcrumb slot.
+        for (const QUuid& smartId : smartObjectTabsForParent(rootId)) {
+            if (!appended.contains(smartId)) {
+                order.append(smartId);
+                appended.insert(smartId);
+            }
+        }
+    }
+
+    // Preserve any future non-visual tab kind until it gets an explicit grouping
+    // rule instead of silently dropping it from the manager order.
+    for (ruwa::core::BaseTab* tab : m_tabManager->tabs()) {
+        if (tab && !appended.contains(tab->id())) {
+            order.append(tab->id());
+            appended.insert(tab->id());
+        }
+    }
+    return order;
+}
+
+QRectF CustomTabBar::visualGroupBounds(
+    const QUuid& rootTabId, bool includeVisualOffsets) const
+{
+    QRectF bounds;
+    for (const TabItem& item : m_items) {
+        if (item.id != rootTabId
+            && !(item.isSmartObject && item.parentTabId == rootTabId)) {
+            continue;
+        }
+
+        QRectF itemRect = item.rect;
+        if (includeVisualOffsets) {
+            itemRect.translate(
+                item.slideOffsetX + item.enterOffsetX, item.verticalOffset);
+        }
+        bounds = bounds.isNull() ? itemRect : bounds.united(itemRect);
+    }
+    return bounds;
+}
+
+int CustomTabBar::tabInsertIndexAt(const QPoint& localPos) const
+{
+    struct Placement {
+        int stationaryIndex = 0;
+        QRectF rect;
+    };
+
+    QList<Placement> placements;
+    int stationaryIndex = 0;
+    for (const QUuid& rootId : visibleRootOrder()) {
+        if (rootId == m_draggedRootId) {
+            continue;
+        }
+        const QRectF targetRect = visualGroupBounds(rootId, false);
+        if (targetRect.isValid()) {
+            placements.append({ stationaryIndex, targetRect });
+        }
+        ++stationaryIndex;
+    }
+
+    if (placements.isEmpty()) {
+        return 0;
+    }
+    for (const Placement& placement : placements) {
+        if (localPos.x() < placement.rect.center().x()) {
+            return placement.stationaryIndex;
+        }
+    }
+    return placements.constLast().stationaryIndex + 1;
+}
+
+void CustomTabBar::applyVisibleRootOrder(const QList<QUuid>& rootOrder, bool animated)
+{
+    const QList<QUuid> currentOrder = visibleRootOrder();
+    if (rootOrder == currentOrder || rootOrder.size() != currentOrder.size()) {
+        return;
+    }
+
+    QSet<QUuid> expected;
+    QSet<QUuid> requested;
+    for (const QUuid& rootId : currentOrder) {
+        expected.insert(rootId);
+    }
+    for (const QUuid& rootId : rootOrder) {
+        requested.insert(rootId);
+    }
+    if (requested != expected) {
+        return;
+    }
+
+    QHash<QUuid, qreal> visualLeftBefore;
+    for (const TabItem& item : m_items) {
+        visualLeftBefore.insert(
+            item.id, item.rect.x() + item.slideOffsetX + item.enterOffsetX);
+    }
+
+    if (m_layoutSlideAnim) {
+        m_layoutSlideAnim->stop();
+    }
+
+    QList<TabItem> reordered;
+    reordered.reserve(m_items.size());
+    for (const QUuid& rootId : rootOrder) {
+        const int rootIndex = m_indexById.value(rootId, -1);
+        if (rootIndex < 0 || rootIndex >= m_items.size() || m_items[rootIndex].isSmartObject) {
+            return;
+        }
+        reordered.append(m_items[rootIndex]);
+        for (const TabItem& item : m_items) {
+            if (item.isSmartObject && item.parentTabId == rootId) {
+                reordered.append(item);
+            }
+        }
+    }
+
+    if (reordered.size() != m_items.size()) {
+        return;
+    }
+
+    m_items = reordered;
+    reindexItems();
+    for (TabItem& item : m_items) {
+        item.slideOffsetX = 0.0;
+    }
+    updateLayout();
+
+    m_layoutSlideStartById.clear();
+    bool anyShift = false;
+    if (animated) {
+        for (TabItem& item : m_items) {
+            const qreal delta
+                = visualLeftBefore.value(item.id, item.rect.x()) - item.rect.x() - item.enterOffsetX;
+            item.slideOffsetX = delta;
+            m_layoutSlideStartById.insert(item.id, delta);
+            anyShift = anyShift || !qFuzzyIsNull(delta);
+        }
+    }
+
+    m_hoveredIndex = -1;
+    if (animated && anyShift && m_layoutSlideAnim) {
+        m_layoutSlideAnim->setStartValue(1.0);
+        m_layoutSlideAnim->setEndValue(0.0);
+        m_layoutSlideAnim->setDuration(240);
+        m_layoutSlideAnim->setEasingCurve(QEasingCurve::OutCubic);
+        m_layoutSlideAnim->start();
+    } else {
+        for (TabItem& item : m_items) {
+            item.slideOffsetX = 0.0;
+        }
+        m_layoutSlideStartById.clear();
+        update();
+    }
+}
+
+void CustomTabBar::moveDraggedGroupTo(int insertIndex)
+{
+    QList<QUuid> reordered = visibleRootOrder();
+    if (!reordered.removeOne(m_draggedRootId)) {
+        return;
+    }
+    reordered.insert(qBound(0, insertIndex, static_cast<int>(reordered.size())), m_draggedRootId);
+    applyVisibleRootOrder(reordered, true);
+}
+
+void CustomTabBar::startTabDrag(const QUuid& rootTabId, const QPoint& globalPos)
+{
+    if (rootTabId.isNull() || m_dragActive || m_dragSettling
+        || visibleRootOrder().size() < 2) {
+        cancelTabDragCandidate();
+        return;
+    }
+
+    for (const TabItem& item : m_items) {
+        // A closing tab is already absent from TabManager's order while it is
+        // still fading in this view, so no complete reorder can be committed yet.
+        if (item.isClosing) {
+            cancelTabDragCandidate();
+            return;
+        }
+    }
+
+    const QRect snapshotRect
+        = visualGroupBounds(rootTabId, true).toAlignedRect().intersected(rect());
+    if (!snapshotRect.isValid()) {
+        cancelTabDragCandidate();
+        return;
+    }
+    const QPixmap snapshot = grab(snapshotRect);
+    if (snapshot.isNull()) {
+        cancelTabDragCandidate();
+        return;
+    }
+
+    m_dragActive = true;
+    m_draggedRootId = rootTabId;
+    m_dragStartRootOrder = visibleRootOrder();
+    m_dragOffset = mapToGlobal(snapshotRect.topLeft()) - globalPos;
+    cancelTabDragCandidate();
+
+    for (TabItem& item : m_items) {
+        item.isDragSource = item.id == rootTabId
+            || (item.isSmartObject && item.parentTabId == rootTabId);
+        if (item.isDragSource) {
+            item.closeHovered = false;
+        }
+    }
+
+    QWidget* topLevel = window();
+    m_dragGhost = new ruwa::ui::widgets::DragGhostWidget(topLevel);
+    m_dragGhost->setSnapshot(snapshot);
+    const QPoint sourcePosition = topLevel->mapFromGlobal(mapToGlobal(snapshotRect.topLeft()))
+        - m_dragGhost->contentTopLeft();
+    m_dragGhost->startFollowing(sourcePosition);
+    m_dragGhost->captureBackdrop(topLevel);
+    m_dragGhost->show();
+    m_dragGhost->raise();
+    m_dragGhost->setFollowTarget(ghostTargetPosition(globalPos));
+
+    qApp->installEventFilter(this);
+    if (!m_dragCursorOverride) {
+        QApplication::setOverrideCursor(Qt::ClosedHandCursor);
+        m_dragCursorOverride = true;
+    }
+    update();
+}
+
+void CustomTabBar::updateTabDrag(const QPoint& globalPos)
+{
+    if (!m_dragActive || !m_dragGhost) {
+        return;
+    }
+    m_dragGhost->setFollowTarget(ghostTargetPosition(globalPos));
+    const QPoint localPos = mapFromGlobal(globalPos);
+    const QPoint clampedPos(
+        qBound(0, localPos.x(), qMax(0, width() - 1)), height() / 2);
+    moveDraggedGroupTo(tabInsertIndexAt(clampedPos));
+}
+
+void CustomTabBar::finishTabDrag(bool accepted, const QPoint& globalPos)
+{
+    if (!m_dragActive) {
+        return;
+    }
+    updateTabDrag(globalPos);
+
+    qApp->removeEventFilter(this);
+    if (m_dragCursorOverride) {
+        QApplication::restoreOverrideCursor();
+        m_dragCursorOverride = false;
+    }
+    m_dragActive = false;
+    m_dragSettling = true;
+
+    if (!accepted) {
+        applyVisibleRootOrder(m_dragStartRootOrder, true);
+    } else if (!m_tabManager || !m_tabManager->reorderTabs(managerOrderForVisibleRoots())) {
+        accepted = false;
+        applyVisibleRootOrder(m_dragStartRootOrder, true);
+    }
+
+    const QRectF targetBounds = visualGroupBounds(m_draggedRootId, false);
+    QPoint targetPosition;
+    if (m_dragGhost && targetBounds.isValid()) {
+        targetPosition = window()->mapFromGlobal(mapToGlobal(targetBounds.topLeft().toPoint()))
+            - m_dragGhost->contentTopLeft();
+    }
+
+    QPointer<CustomTabBar> guard(this);
+    auto finish = [guard]() {
+        if (!guard) {
+            return;
+        }
+        for (TabItem& item : guard->m_items) {
+            item.isDragSource = false;
+        }
+        if (guard->m_dragGhost) {
+            guard->m_dragGhost->deleteLater();
+            guard->m_dragGhost = nullptr;
+        }
+        guard->m_draggedRootId = QUuid();
+        guard->m_dragStartRootOrder.clear();
+        guard->m_dragSettling = false;
+        guard->cancelTabDragCandidate();
+        guard->update();
+    };
+
+    if (!m_dragGhost || !targetBounds.isValid()) {
+        finish();
+        return;
+    }
+    m_dragGhost->animateTo(targetPosition,
+        accepted ? ruwa::ui::widgets::DragGhostWidget::Transition::Settle
+                 : ruwa::ui::widgets::DragGhostWidget::Transition::Return,
+        std::move(finish));
+}
+
+void CustomTabBar::cancelTabDragCandidate()
+{
+    m_dragCandidateRootId = QUuid();
+    m_dragPressGlobalPosition = {};
+}
+
+void CustomTabBar::resetTabDragState()
+{
+    if (m_dragActive) {
+        qApp->removeEventFilter(this);
+    }
+    if (m_dragCursorOverride) {
+        QApplication::restoreOverrideCursor();
+        m_dragCursorOverride = false;
+    }
+    if (m_dragGhost) {
+        delete m_dragGhost.data();
+        m_dragGhost = nullptr;
+    }
+    for (TabItem& item : m_items) {
+        item.isDragSource = false;
+    }
+    m_dragActive = false;
+    m_dragSettling = false;
+    m_draggedRootId = QUuid();
+    m_dragStartRootOrder.clear();
+    cancelTabDragCandidate();
+}
+
+QPoint CustomTabBar::ghostTargetPosition(const QPoint& globalPos) const
+{
+    if (!m_dragGhost) {
+        return {};
+    }
+    return window()->mapFromGlobal(globalPos + m_dragOffset) - m_dragGhost->contentTopLeft();
 }
 
 void CustomTabBar::mousePressEvent(QMouseEvent* event)
@@ -895,6 +1290,7 @@ void CustomTabBar::mousePressEvent(QMouseEvent* event)
     const TabItem& item = m_items[idx];
 
     if (isCloseButtonAt(idx, event->pos())) {
+        cancelTabDragCandidate();
         ruwa::core::BaseTab* tab = m_tabManager->tab(item.id);
         auto* wsTab = qobject_cast<ruwa::ui::tabs::WorkspaceTab*>(tab);
         QWidget* context = window();
@@ -903,8 +1299,18 @@ void CustomTabBar::mousePressEvent(QMouseEvent* event)
         }
         m_tabManager->requestCloseTab(item.id);
     } else {
+        m_dragCandidateRootId = rootTabIdForItem(idx);
+        m_dragPressGlobalPosition = event->globalPosition().toPoint();
         m_tabManager->activateTab(item.id);
     }
+}
+
+void CustomTabBar::mouseReleaseEvent(QMouseEvent* event)
+{
+    if (event->button() == Qt::LeftButton) {
+        cancelTabDragCandidate();
+    }
+    QWidget::mouseReleaseEvent(event);
 }
 
 void CustomTabBar::mouseDoubleClickEvent(QMouseEvent* event)
@@ -934,6 +1340,14 @@ void CustomTabBar::mouseDoubleClickEvent(QMouseEvent* event)
 
 void CustomTabBar::mouseMoveEvent(QMouseEvent* event)
 {
+    if (!m_dragCandidateRootId.isNull() && !m_dragActive
+        && (event->buttons() & Qt::LeftButton)
+        && (event->globalPosition().toPoint() - m_dragPressGlobalPosition).manhattanLength()
+            >= QApplication::startDragDistance()) {
+        startTabDrag(m_dragCandidateRootId, event->globalPosition().toPoint());
+        return;
+    }
+
     int oldHovered = m_hoveredIndex;
     m_hoveredIndex = tabIndexAt(event->pos());
 
@@ -976,6 +1390,42 @@ void CustomTabBar::mouseMoveEvent(QMouseEvent* event)
     }
 
     QWidget::mouseMoveEvent(event);
+}
+
+bool CustomTabBar::eventFilter(QObject* watched, QEvent* event)
+{
+    Q_UNUSED(watched);
+    if (m_dragActive && m_dragGhost) {
+        switch (event->type()) {
+        case QEvent::MouseMove: {
+            auto* mouseEvent = static_cast<QMouseEvent*>(event);
+            updateTabDrag(mouseEvent->globalPosition().toPoint());
+            return true;
+        }
+        case QEvent::MouseButtonRelease: {
+            auto* mouseEvent = static_cast<QMouseEvent*>(event);
+            if (mouseEvent->button() == Qt::LeftButton) {
+                finishTabDrag(true, mouseEvent->globalPosition().toPoint());
+                return true;
+            }
+            break;
+        }
+        case QEvent::KeyPress: {
+            auto* keyEvent = static_cast<QKeyEvent*>(event);
+            if (keyEvent->key() == Qt::Key_Escape) {
+                finishTabDrag(false, QCursor::pos());
+                return true;
+            }
+            break;
+        }
+        case QEvent::ApplicationDeactivate:
+            finishTabDrag(false, QCursor::pos());
+            break;
+        default:
+            break;
+        }
+    }
+    return QWidget::eventFilter(watched, event);
 }
 
 void CustomTabBar::leaveEvent(QEvent* event)
