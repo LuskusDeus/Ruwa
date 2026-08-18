@@ -85,28 +85,24 @@ void GLLayerEffectRenderer::shutdown()
     m_scratchWidth = 0;
     m_scratchHeight = 0;
 
-    deleteTexture(m_gl, m_padScratchTextures[0]);
-    deleteTexture(m_gl, m_padScratchTextures[1]);
-    deleteTexture(m_gl, m_padSourceTexture);
-    for (GLuint& texture : m_padExtraTextures) {
-        deleteTexture(m_gl, texture);
+    for (auto& frame : m_padFrames) {
+        destroyPadFrame(*frame);
     }
-    m_padExtraTextures.clear();
-    m_padExtraCursor = 0;
-    for (GLuint& texture : m_padExtraTexturesF16) {
-        deleteTexture(m_gl, texture);
-    }
-    m_padExtraTexturesF16.clear();
-    m_padExtraCursorF16 = 0;
-    m_padScratchSize = 0;
+    m_padFrames.clear();
+    m_activePadFrame = nullptr;
     for (auto& [size, texture] : m_neighborhoodOutputs) {
         deleteTexture(m_gl, texture);
     }
     m_neighborhoodOutputs.clear();
-    m_usingPadScratch = false;
 
-    destroyWholeRegionPool(m_wholePool);
-    destroyWholeRegionPool(m_groupPool);
+    for (auto& pool : m_wholeRegionPools) {
+        destroyWholeRegionPool(*pool);
+    }
+    m_wholeRegionPools.clear();
+    for (auto& pool : m_groupRegionPools) {
+        destroyWholeRegionPool(*pool);
+    }
+    m_groupRegionPools.clear();
     m_activeWholePool = nullptr;
 
     m_blitProgram.reset();
@@ -134,15 +130,26 @@ GLuint GLLayerEffectRenderer::applyEffects(const EffectChainRequest& request)
         return sourceTexture;
     }
 
-    m_usingPadScratch = false;
+    // This chain runs on the shared tile-size scratch, so the padded/whole-region
+    // frames are out of scope for it — but only for its own duration. The call
+    // can arrive from a neighbourhood assembly callback (a layer below with a
+    // plain chain), and clearing the outer frame permanently would send the
+    // enclosing evaluation's extra buffers to the wrong (tile-sized) pool.
+    PadFrame* const savedPadFrame = m_activePadFrame;
+    WholeRegionPool* const savedWholePool = m_activeWholePool;
+    m_activePadFrame = nullptr;
     m_activeWholePool = nullptr;
     m_extraScratchCursor = 0;
     m_extraScratchCursorF16 = 0;
-    return runEffectChain(sourceTexture, request.width, request.height, m_scratchTextures[0],
-        m_scratchTextures[1], *request.effects, request.space, request.realtimeOnly,
-        request.backdropTexture, request.finalTargetTexture, request.spaceScale, request.region,
-        /*finalRoi=*/QRect(), request.wholeLayerSource, request.liveEditedEffectId,
-        request.liveEditSourceVariant);
+    const GLuint effected
+        = runEffectChain(sourceTexture, request.width, request.height, m_scratchTextures[0],
+            m_scratchTextures[1], *request.effects, request.space, request.realtimeOnly,
+            request.backdropTexture, request.finalTargetTexture, request.spaceScale, request.region,
+            /*finalRoi=*/QRect(), request.wholeLayerSource, request.liveEditedEffectId,
+            request.liveEditSourceVariant);
+    m_activePadFrame = savedPadFrame;
+    m_activeWholePool = savedWholePool;
+    return effected;
 }
 
 GLuint GLLayerEffectRenderer::runEffectChain(GLuint sourceTexture, uint32_t width, uint32_t height,
@@ -396,9 +403,17 @@ GLuint GLLayerEffectRenderer::applyEffectsNeighborhoodBlock(uint32_t tileSize, u
     const uint32_t blockPx = tileSize * blockTiles;
     const uint32_t paddedSize = blockPx + 2u * pad;
     const GLuint outputTexture = ensureNeighborhoodOutput(blockPx);
-    if (!ensurePadScratch(paddedSize) || !outputTexture) {
+    // Claimed for the whole evaluation: the stamping loop below hands control to
+    // a callback that can start another padded evaluation, and that one must not
+    // get this frame.
+    PadFrame* const frame = acquirePadFrame(paddedSize);
+    if (!frame || !outputTexture) {
+        if (frame) {
+            releasePadFrame(*frame);
+        }
         return 0;
     }
+    const GLuint padSourceTexture = frame->source;
 
     // Number of tile rings the padding reaches into.
     const int ring = static_cast<int>((pad + tileSize - 1u) / tileSize);
@@ -416,7 +431,7 @@ GLuint GLLayerEffectRenderer::applyEffectsNeighborhoodBlock(uint32_t tileSize, u
     //    than resolving all textures up front.
     m_gl->glBindFramebuffer(GL_FRAMEBUFFER, m_fbo);
     m_gl->glFramebufferTexture2D(
-        GL_FRAMEBUFFER, GL_COLOR_ATTACHMENT0, GL_TEXTURE_2D, m_padSourceTexture, 0);
+        GL_FRAMEBUFFER, GL_COLOR_ATTACHMENT0, GL_TEXTURE_2D, padSourceTexture, 0);
     m_gl->glViewport(0, 0, static_cast<GLsizei>(paddedSize), static_cast<GLsizei>(paddedSize));
     m_gl->glDisable(GL_BLEND);
     m_gl->glClearColor(0.0f, 0.0f, 0.0f, 0.0f);
@@ -431,7 +446,7 @@ GLuint GLLayerEffectRenderer::applyEffectsNeighborhoodBlock(uint32_t tileSize, u
             }
             m_gl->glBindFramebuffer(GL_FRAMEBUFFER, m_fbo);
             m_gl->glFramebufferTexture2D(
-                GL_FRAMEBUFFER, GL_COLOR_ATTACHMENT0, GL_TEXTURE_2D, m_padSourceTexture, 0);
+                GL_FRAMEBUFFER, GL_COLOR_ATTACHMENT0, GL_TEXTURE_2D, padSourceTexture, 0);
             m_gl->glViewport(padI + dx * tile, padI + dy * tile, tile, tile);
             m_gl->glDisable(GL_BLEND);
             m_blitProgram->use();
@@ -447,6 +462,7 @@ GLuint GLLayerEffectRenderer::applyEffectsNeighborhoodBlock(uint32_t tileSize, u
     m_gl->glBindVertexArray(0);
     m_gl->glBindTextureUnit(0, 0);
     if (!anyStamped) {
+        releasePadFrame(*frame);
         return 0;
     }
 
@@ -458,17 +474,21 @@ GLuint GLLayerEffectRenderer::applyEffectsNeighborhoodBlock(uint32_t tileSize, u
         paddedRegion.originX -= static_cast<float>(pad) * paddedRegion.documentPxPerTexel;
         paddedRegion.originY -= static_cast<float>(pad) * paddedRegion.documentPxPerTexel;
     }
-    m_usingPadScratch = true;
-    m_padExtraCursor = 0;
-    m_padExtraCursorF16 = 0;
+    PadFrame* const savedPadFrame = m_activePadFrame;
+    WholeRegionPool* const savedWholePool = m_activeWholePool;
+    m_activePadFrame = frame;
+    m_activeWholePool = nullptr;
+    frame->extraCursor = 0;
+    frame->extraCursorF16 = 0;
     const GLuint effected
-        = runEffectChain(m_padSourceTexture, paddedSize, paddedSize, m_padScratchTextures[0],
-            m_padScratchTextures[1], effects, space, realtimeOnly, backdropTexture,
+        = runEffectChain(padSourceTexture, paddedSize, paddedSize, frame->scratch[0],
+            frame->scratch[1], effects, space, realtimeOnly, backdropTexture,
             /*finalTargetTexture=*/0,
             /*spaceScale=*/1.0f, paddedRegion,
             /*finalRoi=*/QRect(padI, padI, static_cast<int>(blockPx), static_cast<int>(blockPx)),
             /*wholeLayerSource=*/false, liveEditedEffectId, liveEditSourceVariant);
-    m_usingPadScratch = false;
+    m_activePadFrame = savedPadFrame;
+    m_activeWholePool = savedWholePool;
 
     // 3. Crop the centre block region into the owned output texture.
     const float scale = static_cast<float>(blockPx) / static_cast<float>(paddedSize);
@@ -476,6 +496,7 @@ GLuint GLLayerEffectRenderer::applyEffectsNeighborhoodBlock(uint32_t tileSize, u
     blitTexture(effected, outputTexture, blockPx, blockPx, 0, 0, static_cast<int>(blockPx),
         static_cast<int>(blockPx), scale, scale, offset, offset);
     m_gl->glBindFramebuffer(GL_FRAMEBUFFER, 0);
+    releasePadFrame(*frame);
     return outputTexture;
 }
 
@@ -532,11 +553,14 @@ GLuint GLLayerEffectRenderer::assembleWholeRegion(uint32_t tileSize, uint32_t ti
 
     const uint32_t width = tileSize * tilesW;
     const uint32_t height = tileSize * tilesH;
-    WholeRegionPool& pool = useGroupPool ? m_groupPool : m_wholePool;
-    if (!ensureWholeRegionPool(pool, width, height)) {
+    // The claim is held past this function: the assembled source stays valid
+    // until runWholeRegionChain consumes it (and releases the pool), so nothing
+    // in between can hand the same textures to another evaluation.
+    WholeRegionPool* const pool = acquireWholeRegionPool(useGroupPool, width, height);
+    if (!pool) {
         return 0;
     }
-    const GLuint sourceTexture = pool.source;
+    const GLuint sourceTexture = pool->source;
     const int tile = static_cast<int>(tileSize);
 
     // 1. Assemble the region: clear once, then stamp each populated tile at its
@@ -552,9 +576,10 @@ GLuint GLLayerEffectRenderer::assembleWholeRegion(uint32_t tileSize, uint32_t ti
     m_gl->glClear(GL_COLOR_BUFFER_BIT);
 
     // The callback may run a RE-ENTRANT whole-region evaluation (a group child
-    // that is itself a raster distortion) which draws into the OTHER pool's
-    // source — never `sourceTexture` here — so stamping straight into
-    // `sourceTexture` immediately after each callback stays correct.
+    // that is itself a distortion, a nested group, an adjustment recompositing
+    // the stack below it). That one takes a pool of its own — this one is
+    // claimed — so it can never draw into, free or resize `sourceTexture`, and
+    // stamping straight into it after each callback stays correct.
     bool anyStamped = false;
     for (int dy = 0; dy < static_cast<int>(tilesH); ++dy) {
         for (int dx = 0; dx < static_cast<int>(tilesW); ++dx) {
@@ -581,6 +606,7 @@ GLuint GLLayerEffectRenderer::assembleWholeRegion(uint32_t tileSize, uint32_t ti
     m_gl->glBindTextureUnit(0, 0);
     m_gl->glBindFramebuffer(GL_FRAMEBUFFER, 0);
     if (!anyStamped) {
+        releaseWholeRegionPool(*pool);
         return 0;
     }
     return sourceTexture;
@@ -592,13 +618,30 @@ GLuint GLLayerEffectRenderer::runWholeRegionChain(GLuint sourceTexture, uint32_t
     ruwa::core::effects::EffectRegionFrame region, bool useGroupPool,
     const QUuid& liveEditedEffectId, quint64 liveEditSourceVariant)
 {
+    // This call ends the span assembleWholeRegion opened: when `sourceTexture` is
+    // a pool's own source, that pool is the one to run on AND the one to release
+    // — on every exit path, or a failed chain would strand it forever. A
+    // caller-owned source (the baked-source path) has no claim to inherit and
+    // just needs scratch of the right size.
+    WholeRegionPool* pool = claimedPoolForSource(sourceTexture);
     if (!m_initialized || !sourceTexture || width == 0 || height == 0
         || !hasRenderableEffects(effects, space, realtimeOnly)) {
+        if (pool) {
+            releaseWholeRegionPool(*pool);
+        }
         return 0;
     }
-    WholeRegionPool& pool = useGroupPool ? m_groupPool : m_wholePool;
-    if (!ensureWholeRegionPool(pool, width, height)) {
+    if (pool && (pool->width != width || pool->height != height)) {
+        // The assembly sized the pool; a caller asking for other dimensions here
+        // would read the source with the wrong scale.
+        releaseWholeRegionPool(*pool);
         return 0;
+    }
+    if (!pool) {
+        pool = acquireWholeRegionPool(useGroupPool, width, height);
+        if (!pool) {
+            return 0;
+        }
     }
 
     // Run the whole chain on the materialised region with wholeLayerSource=true
@@ -607,17 +650,21 @@ GLuint GLLayerEffectRenderer::runWholeRegionChain(GLuint sourceTexture, uint32_t
     // tile callbacks, so no re-entrancy happens here — but save/restore the
     // active pool anyway to stay correct if that ever changes.
     WholeRegionPool* const savedActivePool = m_activeWholePool;
-    m_activeWholePool = &pool;
-    pool.extraCursor = 0;
-    pool.extraCursorF16 = 0;
-    const GLuint effected = runEffectChain(sourceTexture, width, height, pool.scratch[0],
-        pool.scratch[1], effects, space, realtimeOnly, backdropTexture,
+    PadFrame* const savedPadFrame = m_activePadFrame;
+    m_activeWholePool = pool;
+    m_activePadFrame = nullptr;
+    pool->extraCursor = 0;
+    pool->extraCursorF16 = 0;
+    const GLuint effected = runEffectChain(sourceTexture, width, height, pool->scratch[0],
+        pool->scratch[1], effects, space, realtimeOnly, backdropTexture,
         /*finalTargetTexture=*/0,
         /*spaceScale=*/1.0f, region,
         /*finalRoi=*/QRect(),
         /*wholeLayerSource=*/true, liveEditedEffectId, liveEditSourceVariant);
     m_activeWholePool = savedActivePool;
+    m_activePadFrame = savedPadFrame;
     m_gl->glBindFramebuffer(GL_FRAMEBUFFER, 0);
+    releaseWholeRegionPool(*pool);
     return effected;
 }
 
@@ -707,52 +754,132 @@ bool GLLayerEffectRenderer::ensureScratch(uint32_t width, uint32_t height)
     return m_scratchTextures[0] && m_scratchTextures[1];
 }
 
-bool GLLayerEffectRenderer::ensurePadScratch(uint32_t paddedSize)
+GLLayerEffectRenderer::PadFrame* GLLayerEffectRenderer::acquirePadFrame(uint32_t paddedSize)
 {
-    if (m_padScratchTextures[0] && m_padScratchTextures[1] && m_padSourceTexture
-        && m_padScratchSize == paddedSize) {
-        return true;
+    if (paddedSize == 0) {
+        return nullptr;
     }
 
-    deleteTexture(m_gl, m_padScratchTextures[0]);
-    deleteTexture(m_gl, m_padScratchTextures[1]);
-    deleteTexture(m_gl, m_padSourceTexture);
-    for (GLuint& texture : m_padExtraTextures) {
-        deleteTexture(m_gl, texture);
+    // Prefer a free frame that already has the right size; only when none does
+    // is a free one resized (which frees its textures — safe, because a claimed
+    // frame is never a candidate). Frames are heap-allocated so that appending
+    // one from a nested acquire cannot move the frame its caller is holding.
+    PadFrame* reusable = nullptr;
+    for (auto& framePtr : m_padFrames) {
+        PadFrame& frame = *framePtr;
+        if (frame.claimed) {
+            continue;
+        }
+        if (frame.size == paddedSize && frame.source && frame.scratch[0] && frame.scratch[1]) {
+            frame.claimed = true;
+            return &frame;
+        }
+        if (!reusable) {
+            reusable = &frame;
+        }
     }
-    m_padExtraTextures.clear();
-    m_padExtraCursor = 0;
-    for (GLuint& texture : m_padExtraTexturesF16) {
-        deleteTexture(m_gl, texture);
-    }
-    m_padExtraTexturesF16.clear();
-    m_padExtraCursorF16 = 0;
-    m_padScratchSize = paddedSize;
 
+    if (!reusable) {
+        m_padFrames.push_back(std::make_unique<PadFrame>());
+        reusable = m_padFrames.back().get();
+    }
+
+    destroyPadFrame(*reusable);
     const TextureParams linear { GL_LINEAR, GL_LINEAR };
-    m_padScratchTextures[0] = createTexture2D(m_gl, paddedSize, paddedSize, linear);
-    m_padScratchTextures[1] = createTexture2D(m_gl, paddedSize, paddedSize, linear);
-    m_padSourceTexture = createTexture2D(m_gl, paddedSize, paddedSize, linear);
-    return m_padScratchTextures[0] && m_padScratchTextures[1] && m_padSourceTexture;
+    reusable->size = paddedSize;
+    reusable->source = createTexture2D(m_gl, paddedSize, paddedSize, linear);
+    reusable->scratch[0] = createTexture2D(m_gl, paddedSize, paddedSize, linear);
+    reusable->scratch[1] = createTexture2D(m_gl, paddedSize, paddedSize, linear);
+    if (!reusable->source || !reusable->scratch[0] || !reusable->scratch[1]) {
+        destroyPadFrame(*reusable);
+        return nullptr;
+    }
+    reusable->claimed = true;
+    return reusable;
 }
 
-bool GLLayerEffectRenderer::ensureWholeRegionPool(
-    WholeRegionPool& pool, uint32_t width, uint32_t height)
+void GLLayerEffectRenderer::destroyPadFrame(PadFrame& frame)
 {
-    if (pool.source && pool.scratch[0] && pool.scratch[1] && pool.width == width
-        && pool.height == height) {
-        return true;
+    deleteTexture(m_gl, frame.source);
+    deleteTexture(m_gl, frame.scratch[0]);
+    deleteTexture(m_gl, frame.scratch[1]);
+    frame.source = 0;
+    frame.scratch[0] = 0;
+    frame.scratch[1] = 0;
+    for (GLuint& texture : frame.extra) {
+        deleteTexture(m_gl, texture);
+    }
+    frame.extra.clear();
+    frame.extraCursor = 0;
+    for (GLuint& texture : frame.extraF16) {
+        deleteTexture(m_gl, texture);
+    }
+    frame.extraF16.clear();
+    frame.extraCursorF16 = 0;
+    frame.size = 0;
+}
+
+GLLayerEffectRenderer::WholeRegionPool* GLLayerEffectRenderer::acquireWholeRegionPool(
+    bool groupFamily, uint32_t width, uint32_t height)
+{
+    if (width == 0 || height == 0) {
+        return nullptr;
     }
 
-    destroyWholeRegionPool(pool);
-    pool.width = width;
-    pool.height = height;
+    // Same rule as acquirePadFrame: a claimed pool is off limits, so nothing a
+    // nested evaluation does can free or resize the source an outer assembly is
+    // still stamping into.
+    auto& family = groupFamily ? m_groupRegionPools : m_wholeRegionPools;
+    WholeRegionPool* reusable = nullptr;
+    for (auto& poolPtr : family) {
+        WholeRegionPool& pool = *poolPtr;
+        if (pool.claimed) {
+            continue;
+        }
+        if (pool.width == width && pool.height == height && pool.source && pool.scratch[0]
+            && pool.scratch[1]) {
+            pool.claimed = true;
+            return &pool;
+        }
+        if (!reusable) {
+            reusable = &pool;
+        }
+    }
 
+    if (!reusable) {
+        family.push_back(std::make_unique<WholeRegionPool>());
+        reusable = family.back().get();
+    }
+
+    destroyWholeRegionPool(*reusable);
     const TextureParams linear { GL_LINEAR, GL_LINEAR };
-    pool.source = createTexture2D(m_gl, width, height, linear);
-    pool.scratch[0] = createTexture2D(m_gl, width, height, linear);
-    pool.scratch[1] = createTexture2D(m_gl, width, height, linear);
-    return pool.source && pool.scratch[0] && pool.scratch[1];
+    reusable->width = width;
+    reusable->height = height;
+    reusable->source = createTexture2D(m_gl, width, height, linear);
+    reusable->scratch[0] = createTexture2D(m_gl, width, height, linear);
+    reusable->scratch[1] = createTexture2D(m_gl, width, height, linear);
+    if (!reusable->source || !reusable->scratch[0] || !reusable->scratch[1]) {
+        destroyWholeRegionPool(*reusable);
+        return nullptr;
+    }
+    reusable->claimed = true;
+    return reusable;
+}
+
+GLLayerEffectRenderer::WholeRegionPool* GLLayerEffectRenderer::claimedPoolForSource(
+    GLuint sourceTexture)
+{
+    if (!sourceTexture) {
+        return nullptr;
+    }
+    for (auto* family : { &m_wholeRegionPools, &m_groupRegionPools }) {
+        for (auto& poolPtr : *family) {
+            if (poolPtr->claimed && poolPtr->source == sourceTexture) {
+                return poolPtr.get();
+            }
+        }
+    }
+    return nullptr;
 }
 
 void GLLayerEffectRenderer::destroyWholeRegionPool(WholeRegionPool& pool)
@@ -810,12 +937,13 @@ GLuint GLLayerEffectRenderer::allocateScratchTexture(bool highPrecision)
         return extra.at(index);
     }
 
-    if (m_usingPadScratch) {
-        std::vector<GLuint>& pool = highPrecision ? m_padExtraTexturesF16 : m_padExtraTextures;
-        uint32_t& cursor = highPrecision ? m_padExtraCursorF16 : m_padExtraCursor;
+    if (m_activePadFrame) {
+        PadFrame& frame = *m_activePadFrame;
+        std::vector<GLuint>& pool = highPrecision ? frame.extraF16 : frame.extra;
+        uint32_t& cursor = highPrecision ? frame.extraCursorF16 : frame.extraCursor;
         const size_t index = static_cast<size_t>(cursor++);
         if (index >= pool.size()) {
-            pool.push_back(createTexture2D(m_gl, m_padScratchSize, m_padScratchSize, params));
+            pool.push_back(createTexture2D(m_gl, frame.size, frame.size, params));
         }
         return pool.at(index);
     }

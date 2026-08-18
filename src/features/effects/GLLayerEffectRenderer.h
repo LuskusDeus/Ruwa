@@ -84,13 +84,13 @@ public:
         const QList<ruwa::core::effects::LayerEffectState>& effects,
         ruwa::core::effects::EffectEvaluationSpace space, bool realtimeOnly,
         GLuint backdropTexture = 0, ruwa::core::effects::EffectRegionFrame region = {},
-        /// Use the SECOND whole-region pool (source + scratch) instead of the
-        /// default one. The compositor's whole-GROUP distortion path sets this so
-        /// its region assembly does not share textures with a nested raster
-        /// whole-layer distortion (a child layer) that runs re-entrantly while
-        /// this region is still being assembled — the two would otherwise clobber
-        /// each other's single shared source texture. Recursion is bounded to
-        /// these two levels (a group cannot contain another whole-region group).
+        /// Take the pool from the group FAMILY instead of the raster one. The
+        /// compositor's whole-GROUP / adjustment / retained paths set this so a
+        /// nested raster whole-layer distortion never lands in the same family.
+        /// Nesting WITHIN a family is safe on its own: each family hands out one
+        /// pool per depth (see acquireWholeRegionPool), so a group inside a
+        /// group, or an adjustment recompositing a stack that holds either, gets
+        /// its own source and scratch.
         bool useGroupPool = false, const QUuid& liveEditedEffectId = {},
         quint64 liveEditSourceVariant = 0);
 
@@ -129,11 +129,33 @@ public:
     bool isInitialized() const { return m_initialized; }
 
 private:
+    // Square padded source + ping-pong scratch (+ extra RGBA8/RGBA16F pools) for
+    // ONE neighbourhood/block evaluation. Handed out per nesting depth by
+    // acquirePadFrame rather than shared: the neighbour callback that assembles
+    // the padded source runs a re-entrant composite, and any layer below with a
+    // bounds-expanding chain of its own starts another neighbourhood evaluation
+    // from inside that callback. Sharing one set let the nested run clear the
+    // half-assembled source and — when its padding differed — free and resize it,
+    // after which the outer chain read the new texture with its own stale
+    // paddedSize (the whole assembled block rescaled into the region origin).
+    struct PadFrame {
+        GLuint source = 0;
+        GLuint scratch[2] = { 0, 0 };
+        std::vector<GLuint> extra;
+        uint32_t extraCursor = 0;
+        std::vector<GLuint> extraF16;
+        uint32_t extraCursorF16 = 0;
+        uint32_t size = 0;
+        bool claimed = false; ///< in use by an evaluation on the stack
+    };
     // Rectangular source + ping-pong scratch (+ extra RGBA8/RGBA16F pools) for
-    // one whole-region distortion evaluation. Two independent instances exist so
-    // a group's whole-region assembly and a nested raster layer's whole-layer
-    // materialisation (running re-entrantly during that assembly) never share a
-    // source texture. Sized on demand to the region's WxH.
+    // ONE whole-region distortion evaluation, handed out per nesting depth for
+    // the same reason as PadFrame above. Two FAMILIES exist so a raster
+    // whole-layer materialisation and the group/adjustment/retained whole-region
+    // path keep their (very differently sized) textures apart; each family grows
+    // to the depth actually reached. `claimed` spans assembly through the end of
+    // the chain that consumes the assembled source, so a nested evaluation can
+    // never resize or overwrite it. Sized on demand to the region's WxH.
     struct WholeRegionPool {
         GLuint source = 0;
         GLuint scratch[2] = { 0, 0 };
@@ -143,10 +165,23 @@ private:
         uint32_t extraCursorF16 = 0;
         uint32_t width = 0;
         uint32_t height = 0;
+        bool claimed = false; ///< in use by an evaluation on the stack
     };
     bool ensureScratch(uint32_t width, uint32_t height);
-    bool ensurePadScratch(uint32_t paddedSize);
-    bool ensureWholeRegionPool(WholeRegionPool& pool, uint32_t width, uint32_t height);
+    /// Claims a free pad frame sized `paddedSize` (allocating or resizing one
+    /// only when no free frame already has that size). Returns nullptr when the
+    /// textures could not be created; release it with releasePadFrame.
+    PadFrame* acquirePadFrame(uint32_t paddedSize);
+    static void releasePadFrame(PadFrame& frame) { frame.claimed = false; }
+    void destroyPadFrame(PadFrame& frame);
+    /// Claims a free pool of the requested family, sized WxH. Released by
+    /// runWholeRegionChain once the chain that consumes the source is done.
+    WholeRegionPool* acquireWholeRegionPool(bool groupFamily, uint32_t width, uint32_t height);
+    /// The claimed pool whose source texture is `sourceTexture` — i.e. the pool
+    /// an assembleWholeRegion call is still holding — or nullptr when the source
+    /// is caller-owned (the baked-source path).
+    WholeRegionPool* claimedPoolForSource(GLuint sourceTexture);
+    static void releaseWholeRegionPool(WholeRegionPool& pool) { pool.claimed = false; }
     void destroyWholeRegionPool(WholeRegionPool& pool);
     GLuint ensureNeighborhoodOutput(uint32_t sizePx);
     GLuint allocateScratchTexture(bool highPrecision);
@@ -181,27 +216,25 @@ private:
     uint32_t m_scratchHeight = 0;
     // Dedicated padded-source scratch for the neighbourhood path, kept separate
     // from the tile-size scratch above so mixing padded and non-padded effects
-    // within one composite does not thrash texture reallocation.
-    GLuint m_padScratchTextures[2] = { 0, 0 };
-    GLuint m_padSourceTexture = 0;
-    std::vector<GLuint> m_padExtraTextures;
-    uint32_t m_padExtraCursor = 0;
-    std::vector<GLuint> m_padExtraTexturesF16;
-    uint32_t m_padExtraCursorF16 = 0;
-    uint32_t m_padScratchSize = 0;
+    // within one composite does not thrash texture reallocation. One frame per
+    // nesting depth (see PadFrame).
+    std::vector<std::unique_ptr<PadFrame>> m_padFrames;
     // Owned output textures for the neighbourhood paths, keyed by pixel size:
     // block results (blockTiles*tileSize) and per-tile crops (tileSize) coexist
     // within one frame, so a single sized slot would thrash reallocation.
     std::unordered_map<uint32_t, GLuint> m_neighborhoodOutputs;
     // Rectangular scratch/source for the whole-layer distortion path. Separate
     // from the square tile/pad pools because a materialised layer is an arbitrary
-    // WxH region, resized on demand. m_wholePool serves the raster whole-layer
-    // path; m_groupPool serves the whole-GROUP path so the two can be live
-    // simultaneously (group assembly compositing a child that is itself a raster
-    // distortion) without aliasing.
-    WholeRegionPool m_wholePool;
-    WholeRegionPool m_groupPool;
-    bool m_usingPadScratch = false;
+    // WxH region, resized on demand. m_wholeRegionPools serves the raster
+    // whole-layer path; m_groupRegionPools serves the whole-GROUP / adjustment /
+    // retained path. Each family holds one pool per nesting depth reached, so an
+    // evaluation started from another one's assembly callback never aliases it.
+    std::vector<std::unique_ptr<WholeRegionPool>> m_wholeRegionPools;
+    std::vector<std::unique_ptr<WholeRegionPool>> m_groupRegionPools;
+    // The pad frame an in-flight neighbourhood chain is drawing into, so
+    // allocateScratchTexture hands out extra buffers from that frame
+    // (nullptr == not inside a padded evaluation).
+    PadFrame* m_activePadFrame = nullptr;
     // The whole-region pool an in-flight whole-region chain is drawing into, so
     // allocateScratchTexture hands out extra buffers from the matching pool
     // (nullptr == not inside a whole-region evaluation).

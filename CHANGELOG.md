@@ -15,6 +15,18 @@ a release.
 
 ## [Unreleased]
 
+### Fixed
+- An adjustment layer with a blur, glow or shadow above other effect-carrying
+  layers no longer paints a shrunken copy of the whole picture into the corner
+  of the canvas. Building its padded source recomposites everything below, and
+  any effect encountered down there started a second evaluation that shared the
+  same padded scratch textures — clearing the half-assembled source and, when
+  its own padding differed, resizing it, after which the chain read the result
+  back at the wrong scale. Each evaluation now takes its own scratch, so nesting
+  is safe however deep it goes. The corruption only surfaced once the nested
+  effect actually re-ran instead of answering from its cache, which is why
+  expanding or collapsing a group — a full recomposite — appeared to trigger it.
+
 ## [0.3.1-alpha] — 2026-08-13 — "A radial menu, real selection commands, and cursors drawn on the canvas"
 
 Right-clicking the canvas now opens a configurable radial menu: pages of seats
