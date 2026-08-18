@@ -669,6 +669,12 @@ void ProjectSerializer::writeLayerEntry(
         out << layer.textColorRgba;
         out << static_cast<qint32>(layer.textAlignment);
         out << layer.textLineHeight;
+        // v33
+        out << static_cast<quint8>(layer.textStrikethrough ? 1 : 0);
+        out << layer.textTracking;
+        out << static_cast<qint32>(layer.textCaps);
+        out << layer.textSpaceBefore;
+        out << layer.textSpaceAfter;
         out << static_cast<quint32>(layer.textStyleRuns.size());
         for (const auto& run : layer.textStyleRuns) {
             out << static_cast<qint32>(run.start);
@@ -679,6 +685,10 @@ void ProjectSerializer::writeLayerEntry(
             out << static_cast<quint8>(run.bold ? 1 : 0);
             out << static_cast<quint8>(run.italic ? 1 : 0);
             out << static_cast<quint8>(run.underline ? 1 : 0);
+            // v33
+            out << static_cast<quint8>(run.strikethrough ? 1 : 0);
+            out << run.tracking;
+            out << static_cast<qint32>(run.caps);
         }
     }
 
@@ -1251,6 +1261,17 @@ LayerEntry ProjectSerializer::readLayerEntry(QDataStream& in, quint32 version, q
             in >> alignment;
             in >> layer.textLineHeight;
             layer.textAlignment = static_cast<int>(alignment);
+            if (version >= 33) {
+                quint8 strikethrough = 0;
+                qint32 caps = 0;
+                in >> strikethrough;
+                in >> layer.textTracking;
+                in >> caps;
+                in >> layer.textSpaceBefore;
+                in >> layer.textSpaceAfter;
+                layer.textStrikethrough = (strikethrough != 0);
+                layer.textCaps = static_cast<int>(caps);
+            }
             in >> textStyleRunCount;
             if (!countFitsInStream(in, textStyleRunCount, kMinTextStyleRunBytes)) {
                 m_lastError = QStringLiteral("Corrupted text style-run count");
@@ -1265,6 +1286,8 @@ LayerEntry ProjectSerializer::readLayerEntry(QDataStream& in, quint32 version, q
                 quint8 bold = 0;
                 quint8 italic = 0;
                 quint8 underline = 0;
+                quint8 strikethrough = 0;
+                qint32 caps = 0;
                 in >> start;
                 in >> length;
                 in >> run.fontFamily;
@@ -1275,11 +1298,18 @@ LayerEntry ProjectSerializer::readLayerEntry(QDataStream& in, quint32 version, q
                     in >> italic;
                     in >> underline;
                 }
+                if (version >= 33) {
+                    in >> strikethrough;
+                    in >> run.tracking;
+                    in >> caps;
+                }
                 run.start = static_cast<int>(start);
                 run.length = static_cast<int>(length);
                 run.bold = (bold != 0);
                 run.italic = (italic != 0);
                 run.underline = (underline != 0);
+                run.strikethrough = (strikethrough != 0);
+                run.caps = static_cast<int>(caps);
                 layer.textStyleRuns.append(run);
             }
         }

@@ -29,6 +29,20 @@ const int BASE_BOX_PAD_V = 10;
 const int BASE_BOX_PAD_V_NUMBER = 7; ///< Tighter box for compact numeric fields (New Project, etc.)
 const int BASE_BOX_PAD_H = 14;
 const int BASE_BORDER_RADIUS = 8;
+// Compact density: the box hugs the text rather than framing it, for fields that
+// live in a toolbar or panel header instead of a form.
+const int BASE_COMPACT_PAD_V = 3;
+const int BASE_COMPACT_PAD_H = 8;
+const int BASE_COMPACT_BORDER_RADIUS = 6;
+/// Extra height added to the font's own line box, per density.
+const int BASE_ROW_EXTRA = 8;
+const int BASE_COMPACT_ROW_EXTRA = 2;
+/// Floor under the editable row, per density.
+const int BASE_ROW_MIN = 22;
+const int BASE_COMPACT_ROW_MIN = 16;
+// Leading glyph inside the box (see setLeadingIcon).
+const int BASE_LEADING_ICON = 14;
+const int BASE_LEADING_GAP = 6;
 // Base sizes follow ThemeManager::scaledFontSize "UI steps" (same ballpark as other panels).
 const int BASE_LABEL_FONT = 9;
 const int BASE_BOX_INPUT_FONT = 10;
@@ -281,6 +295,111 @@ void StyledInputField::setupUI(FieldType type)
     updateScaledSizes();
 }
 
+// ============================================================================
+// Density / leading icon
+// ============================================================================
+
+int StyledInputField::boxPaddingV() const
+{
+    const auto& theme = ruwa::ui::core::ThemeManager::instance();
+    if (m_density == Density::Compact) {
+        return theme.scaled(BASE_COMPACT_PAD_V);
+    }
+    return (m_type == FieldType::Number || m_type == FieldType::Text)
+        ? theme.scaled(BASE_BOX_PAD_V_NUMBER)
+        : theme.scaled(BASE_BOX_PAD_V);
+}
+
+int StyledInputField::boxPaddingH() const
+{
+    const auto& theme = ruwa::ui::core::ThemeManager::instance();
+    return theme.scaled(m_density == Density::Compact ? BASE_COMPACT_PAD_H : BASE_BOX_PAD_H);
+}
+
+int StyledInputField::boxBorderRadius() const
+{
+    const auto& theme = ruwa::ui::core::ThemeManager::instance();
+    return theme.scaled(
+        m_density == Density::Compact ? BASE_COMPACT_BORDER_RADIUS : BASE_BORDER_RADIUS);
+}
+
+int StyledInputField::leadingSlotWidth() const
+{
+    // A glyph that did not resolve (icon file not shipped yet) reserves nothing:
+    // an empty slot would only push the text off-centre.
+    if (!m_hasLeadingIcon || m_leadingPixmap.isNull()) {
+        return 0;
+    }
+    const auto& theme = ruwa::ui::core::ThemeManager::instance();
+    return theme.scaled(BASE_LEADING_ICON) + theme.scaled(BASE_LEADING_GAP);
+}
+
+void StyledInputField::setDensity(Density density)
+{
+    if (m_density == density) {
+        return;
+    }
+    m_density = density;
+    updateScaledSizes();
+    update();
+}
+
+void StyledInputField::setLeadingIcon(ruwa::ui::core::IconProvider::StandardIcon icon)
+{
+    if (m_hasLeadingIcon && m_leadingIconType == icon) {
+        return;
+    }
+    // Only the appearance or disappearance of the slot moves the text; swapping
+    // one resolved glyph for another leaves the geometry alone.
+    const int slotBefore = leadingSlotWidth();
+    m_hasLeadingIcon = true;
+    m_leadingIconType = icon;
+    rebuildLeadingPixmap();
+    if (leadingSlotWidth() != slotBefore) {
+        updateScaledSizes();
+    }
+    update();
+}
+
+void StyledInputField::clearLeadingIcon()
+{
+    if (!m_hasLeadingIcon) {
+        return;
+    }
+    const int slotBefore = leadingSlotWidth();
+    m_hasLeadingIcon = false;
+    m_leadingPixmap = QPixmap();
+    if (slotBefore != 0) {
+        updateScaledSizes();
+    }
+    update();
+}
+
+void StyledInputField::rebuildLeadingPixmap()
+{
+    m_leadingPixmap = QPixmap();
+    if (!m_hasLeadingIcon) {
+        return;
+    }
+
+    const auto& theme = ruwa::ui::core::ThemeManager::instance();
+    const int size = theme.scaled(BASE_LEADING_ICON);
+    const QPixmap source
+        = ruwa::ui::core::IconProvider::instance().getPixmap(m_leadingIconType, QSize(size, size));
+    if (source.isNull()) {
+        return;
+    }
+
+    QPixmap tinted(source.size());
+    tinted.fill(Qt::transparent);
+    QPainter p(&tinted);
+    p.drawPixmap(0, 0, source);
+    p.setCompositionMode(QPainter::CompositionMode_SourceIn);
+    p.fillRect(tinted.rect(), theme.colors().textMuted);
+    p.end();
+    m_leadingPixmap = tinted;
+}
+
 void StyledInputField::updateScaledSizes()
 {
     const auto& theme = ruwa::ui::core::ThemeManager::instance();
@@ -298,10 +417,10 @@ void StyledInputField::updateScaledSizes()
         if (QVBoxLayout* outer = qobject_cast<QVBoxLayout*>(layout()))
             outer->setSpacing(theme.scaled(BASE_LABEL_GAP));
 
-        const int padV = (m_type == FieldType::Number || m_type == FieldType::Text)
-            ? theme.scaled(BASE_BOX_PAD_V_NUMBER)
-            : theme.scaled(BASE_BOX_PAD_V);
-        const int padH = theme.scaled(BASE_BOX_PAD_H);
+        const int padV = boxPaddingV();
+        const int padH = boxPaddingH();
+        // The glyph is carved out of the left padding, so the text starts after it.
+        const int leftPad = padH + leadingSlotWidth();
         const int rightPad
             = m_comboBox ? padH + theme.scaled(BASE_ARROW_OFFSET + BASE_ARROW_SIZE + 2) : padH;
 
@@ -315,20 +434,27 @@ void StyledInputField::updateScaledSizes()
 
         QVBoxLayout* cl = qobject_cast<QVBoxLayout*>(m_inputContainer->layout());
         if (cl)
-            cl->setContentsMargins(padH, padV, rightPad, padV);
+            cl->setContentsMargins(leftPad, padV, rightPad, padV);
 
+        const bool compact = (m_density == Density::Compact);
         int innerRow = theme.scaled(28);
         if ((m_type == FieldType::Number || m_type == FieldType::Text) && m_lineEdit) {
             const QFontMetrics fm(m_lineEdit->font());
             // Metrics-based height avoids clipping. QLineEdit::sizeHint() is often inflated on
             // Windows (huge “empty” box) — only trust it when close to font metrics.
-            const int fromMetrics = fm.height() + theme.scaled(8);
-            innerRow = qMax(theme.scaled(22), fromMetrics);
-            innerRow = qMax(innerRow, fm.lineSpacing() + theme.scaled(5));
-            const int hint = m_lineEdit->sizeHint().height();
-            const int hintCeil = fromMetrics + theme.scaled(8);
-            if (hint <= hintCeil)
-                innerRow = qMax(innerRow, hint);
+            const int fromMetrics
+                = fm.height() + theme.scaled(compact ? BASE_COMPACT_ROW_EXTRA : BASE_ROW_EXTRA);
+            innerRow
+                = qMax(theme.scaled(compact ? BASE_COMPACT_ROW_MIN : BASE_ROW_MIN), fromMetrics);
+            innerRow = qMax(innerRow, fm.lineSpacing() + theme.scaled(compact ? 1 : 5));
+            // The inflated sizeHint is exactly what a compact field must not
+            // inherit — at this density font metrics are the whole budget.
+            if (!compact) {
+                const int hint = m_lineEdit->sizeHint().height();
+                const int hintCeil = fromMetrics + theme.scaled(8);
+                if (hint <= hintCeil)
+                    innerRow = qMax(innerRow, hint);
+            }
             m_lineEdit->setFixedHeight(innerRow);
         } else if (m_comboBox) {
             const QFontMetrics fm(m_comboBox->font());
@@ -511,7 +637,7 @@ void StyledInputField::paintEvent(QPaintEvent* event)
 
     const auto& theme = ruwa::ui::core::ThemeManager::instance();
     const auto& colors = theme.colors();
-    const int borderRadius = theme.scaled(BASE_BORDER_RADIUS);
+    const int borderRadius = boxBorderRadius();
     const bool fieldEnabled = isEnabled();
 
     QRectF rect = QRectF(m_inputContainer->geometry()).adjusted(0.5, 0.5, -0.5, -0.5);
@@ -553,6 +679,17 @@ void StyledInputField::paintEvent(QPaintEvent* event)
     painter.setPen(borderPen);
     painter.setBrush(Qt::NoBrush);
     painter.drawPath(borderPath);
+
+    if (m_hasLeadingIcon && !m_leadingPixmap.isNull()) {
+        // Sits in the slot carved out of the left padding by updateScaledSizes().
+        const int slot = theme.scaled(BASE_LEADING_ICON);
+        const QRectF iconRect(
+            rect.left() + boxPaddingH(), rect.center().y() - slot / 2.0, slot, slot);
+        painter.save();
+        painter.setOpacity(fieldEnabled ? 1.0 : 0.45);
+        painter.drawPixmap(iconRect.toRect(), m_leadingPixmap);
+        painter.restore();
+    }
 
     if (m_comboBox) {
         painter.save();
@@ -792,6 +929,7 @@ void StyledInputField::updateThemeColors()
 void StyledInputField::onThemeChanged()
 {
     updateThemeColors();
+    rebuildLeadingPixmap(); // tint and scale both follow the theme
     updateScaledSizes();
 }
 

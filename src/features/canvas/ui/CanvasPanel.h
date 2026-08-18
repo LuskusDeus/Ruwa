@@ -17,6 +17,7 @@
 #include "features/canvas/scene/Canvas.h"
 #include "features/canvas/scene/Viewport.h"
 #include "features/layers/model/LayerData.h"
+#include "features/layers/model/TextLayerEdit.h"
 #include "shared/types/CanvasWidgets.h"
 
 #include <QColor>
@@ -31,6 +32,7 @@
 #include <QVBoxLayout>
 #include <QElapsedTimer>
 #include <QList>
+#include <QPointer>
 
 #include <functional>
 #include <optional>
@@ -235,6 +237,30 @@ public:
     /// Load a layer's mask into the pixel selection (grays stay partially selected).
     void selectLayerMaskContent(const ruwa::core::layers::LayerId& id);
     bool startTextLayerEditing(const ruwa::core::layers::LayerId& id);
+    /// True while a text layer is open for editing on the canvas.
+    bool isTextEditingActive() const;
+    /// Layer the open editing session belongs to, null when none is open.
+    ruwa::core::layers::LayerId textEditingLayerId() const;
+    /// Character range selected in the open editing session, as [from, to).
+    /// Empty (from == to) for a bare caret, nullopt when nothing is open — the
+    /// difference matters: a caret edits the defaults, no session edits the
+    /// whole layer.
+    std::optional<std::pair<int, int>> textEditingSelection() const;
+    /// Perform one Character / Paragraph panel edit on @p id as a single undo
+    /// step. Honours the open editing session's selection when there is one.
+    bool applyTextLayerEdit(
+        const ruwa::core::layers::LayerId& id, const ruwa::core::layers::TextLayerEdit& edit);
+    /// Widgets that may take focus without ending an open text session — the
+    /// Layer Properties panel's Character and Paragraph controls, which stand
+    /// in for the formatting popup that used to live on the canvas.
+    /// Ends any open live text interaction, landing it as one undo step. Called
+    /// when the run closes, and whenever something else is about to take over
+    /// the document.
+    void flushTextEditInteraction();
+    /// Abandons an open live run on @p id, restoring the state it began at.
+    bool cancelTextEditInteraction(const ruwa::core::layers::LayerId& id);
+    void addTextEditingFocusExclusion(QWidget* widget);
+    bool isTextEditingFocusExclusion(const QWidget* widget) const;
     /// Clear raster layer pixels (GL). No-op if GL not ready or layer not editable.
     bool clearLayerPixelContent(const ruwa::core::layers::LayerId& id);
     bool rasterizeSmartLayer(const ruwa::core::layers::LayerId& id);
@@ -357,6 +383,10 @@ public:
     // Transform mode
     void enterTransformMode();
     void confirmTransform();
+    /// Translate the selected layers' content by @p delta document pixels as a
+    /// single undoable step (the Move tool's path, driven programmatically).
+    /// Returns false when nothing could move right now.
+    bool moveSelectedContentBy(const QPointF& delta);
     /// Commit transform and synchronously finish deferred GPU readback before
     /// an operation mutates layer content, structure, selection, or canvas geometry.
     void commitTransformBeforeDocumentMutation();
@@ -472,6 +502,9 @@ signals:
     void stylusJoystickPositionChanged(const QPoint& pos);
     /// Joystick / brush HUD / tool bar visibility changed (sync View → Canvas widgets menu).
     void canvasWidgetsVisibilityChanged();
+    /// A text editing session opened, closed, or moved its caret / selection.
+    /// The Layer Properties panel re-reads the character attributes off it.
+    void textEditingStateChanged();
 
 protected:
     QWidget* createContent() override;
@@ -866,6 +899,24 @@ private:
     CanvasOverlayLayoutManager* m_overlayLayoutManager = nullptr;
     CanvasViewController* m_viewController = nullptr;
     TextEditingController* m_textEditingController = nullptr;
+    QList<QPointer<QWidget>> m_textEditingFocusExclusions;
+    /// Open live run from the Character / Paragraph groups: the state it began
+    /// at, so the whole drag or typed value collapses into one undo step.
+    struct TextEditInteraction {
+        bool active = false;
+        ruwa::core::layers::LayerId layerId;
+        ruwa::core::layers::TextLayerEdit::Property property
+            = ruwa::core::layers::TextLayerEdit::Property::FontSize;
+        /// False while the layer is open for editing on the canvas: that
+        /// session pushes its own step on commit, and a second one from the run
+        /// would split one edit in two.
+        bool pushUndo = true;
+        QString oldText;
+        QList<ruwa::core::layers::TextStyleRun> oldRuns;
+        ruwa::core::layers::TextLayerTypography oldTypography;
+        aether::TransformState oldTransform;
+    };
+    TextEditInteraction m_textEditInteraction;
     bool m_spaceSelectionMoveActive = false;
     QPoint m_spaceSelectionMoveLastGlobalPos;
     bool m_spaceStrokeMoveActive = false;

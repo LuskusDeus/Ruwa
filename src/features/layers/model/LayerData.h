@@ -13,6 +13,7 @@
 #include <QtGlobal>
 #include <algorithm>
 #include <memory>
+#include <optional>
 
 #include "shared/tiles/TileGrid.h"
 #include "features/canvas/rendering/RetainedRenderPayload.h"
@@ -87,6 +88,11 @@ enum class LayerType {
 
 enum class TextAlignment { Left = 0, Center = 1, Right = 2, Justify = 3 };
 
+/// Photoshop's All Caps / Small Caps toggles, which are exclusive: turning one
+/// on turns the other off, so one enum expresses the pair better than two
+/// booleans that could disagree.
+enum class TextCaps { None = 0, AllCaps = 1, SmallCaps = 2 };
+
 struct TextStyleRun {
     int start = 0;
     int length = 0;
@@ -96,18 +102,25 @@ struct TextStyleRun {
     bool bold = false;
     bool italic = false;
     bool underline = false;
+    bool strikethrough = false;
+    /// Tracking in Photoshop units: thousandths of an em, so the same number
+    /// means the same visual spacing at any font size.
+    qreal tracking = 0.0;
+    TextCaps caps = TextCaps::None;
 
     bool operator==(const TextStyleRun& other) const
     {
         return start == other.start && length == other.length && fontFamily == other.fontFamily
             && qFuzzyCompare(fontSize, other.fontSize) && color.rgba() == other.color.rgba()
-            && bold == other.bold && italic == other.italic && underline == other.underline;
+            && bold == other.bold && italic == other.italic && underline == other.underline
+            && strikethrough == other.strikethrough && qFuzzyCompare(tracking, other.tracking)
+            && caps == other.caps;
     }
 
     bool operator!=(const TextStyleRun& other) const { return !(*this == other); }
 };
 
-enum class TextStyleEffect { Bold, Italic, Underline };
+enum class TextStyleEffect { Bold, Italic, Underline, Strikethrough };
 
 struct TextCharStyle {
     QString fontFamily;
@@ -116,12 +129,16 @@ struct TextCharStyle {
     bool bold = false;
     bool italic = false;
     bool underline = false;
+    bool strikethrough = false;
+    qreal tracking = 0.0;
+    TextCaps caps = TextCaps::None;
 
     bool operator==(const TextCharStyle& other) const
     {
         return fontFamily == other.fontFamily && qFuzzyCompare(fontSize, other.fontSize)
             && color.rgba() == other.color.rgba() && bold == other.bold && italic == other.italic
-            && underline == other.underline;
+            && underline == other.underline && strikethrough == other.strikethrough
+            && qFuzzyCompare(tracking, other.tracking) && caps == other.caps;
     }
 
     bool operator!=(const TextCharStyle& other) const { return !(*this == other); }
@@ -133,15 +150,87 @@ struct TextLayerData {
     qreal fontSize = 48.0;
     QColor color = QColor(0, 0, 0);
     TextAlignment alignment = TextAlignment::Left;
+    /// Leading as a multiple of the font's natural line height. Photoshop's
+    /// "Auto" leading is this same idea expressed as a percentage, which is how
+    /// the Character group presents it.
     qreal lineHeight = 1.2;
+    bool strikethrough = false;
+    qreal tracking = 0.0;
+    TextCaps caps = TextCaps::None;
+    /// Paragraph spacing in document pixels at the layer's unscaled size. Every
+    /// text line is its own paragraph here — the layout does not wrap, so a
+    /// newline is the only paragraph break there is.
+    qreal spaceBefore = 0.0;
+    qreal spaceAfter = 0.0;
     QList<TextStyleRun> styleRuns;
     aether::TransformState transform;
 };
 
+/**
+ * @brief Everything about a text layer other than its characters and their
+ * per-character overrides: the layer-wide defaults plus the paragraph
+ * settings.
+ *
+ * Snapshotted as one value because that is what an undo step of a Character or
+ * Paragraph edit has to restore — the run list alone cannot describe a change
+ * to the defaults a newly typed character would inherit.
+ */
+struct TextLayerTypography {
+    QString fontFamily = QStringLiteral("Arial");
+    qreal fontSize = 48.0;
+    QColor color = QColor(0, 0, 0);
+    TextAlignment alignment = TextAlignment::Left;
+    qreal lineHeight = 1.2;
+    bool strikethrough = false;
+    qreal tracking = 0.0;
+    TextCaps caps = TextCaps::None;
+    qreal spaceBefore = 0.0;
+    qreal spaceAfter = 0.0;
+
+    bool operator==(const TextLayerTypography& other) const
+    {
+        return fontFamily == other.fontFamily && qFuzzyCompare(fontSize, other.fontSize)
+            && color.rgba() == other.color.rgba() && alignment == other.alignment
+            && qFuzzyCompare(lineHeight, other.lineHeight)
+            && strikethrough == other.strikethrough && qFuzzyCompare(tracking, other.tracking)
+            && caps == other.caps && qFuzzyCompare(spaceBefore, other.spaceBefore)
+            && qFuzzyCompare(spaceAfter, other.spaceAfter);
+    }
+
+    bool operator!=(const TextLayerTypography& other) const { return !(*this == other); }
+};
+
+inline TextLayerTypography captureTextTypography(const TextLayerData& textData)
+{
+    return { textData.fontFamily, textData.fontSize, textData.color, textData.alignment,
+        textData.lineHeight, textData.strikethrough, textData.tracking, textData.caps,
+        textData.spaceBefore, textData.spaceAfter };
+}
+
+inline void applyTextTypography(TextLayerData& textData, const TextLayerTypography& typography)
+{
+    textData.fontFamily = typography.fontFamily;
+    textData.fontSize = typography.fontSize;
+    textData.color = typography.color;
+    textData.alignment = typography.alignment;
+    textData.lineHeight = typography.lineHeight;
+    textData.strikethrough = typography.strikethrough;
+    textData.tracking = typography.tracking;
+    textData.caps = typography.caps;
+    textData.spaceBefore = typography.spaceBefore;
+    textData.spaceAfter = typography.spaceAfter;
+}
+
 inline TextCharStyle defaultTextCharStyle(const TextLayerData& textData)
 {
-    return { textData.fontFamily, qMax<qreal>(1.0, textData.fontSize), textData.color, false, false,
-        false };
+    TextCharStyle style;
+    style.fontFamily = textData.fontFamily;
+    style.fontSize = qMax<qreal>(1.0, textData.fontSize);
+    style.color = textData.color;
+    style.strikethrough = textData.strikethrough;
+    style.tracking = textData.tracking;
+    style.caps = textData.caps;
+    return style;
 }
 
 inline TextCharStyle textCharStyleAt(const TextLayerData& textData, int index)
@@ -159,6 +248,9 @@ inline TextCharStyle textCharStyleAt(const TextLayerData& textData, int index)
             style.bold = run.bold;
             style.italic = run.italic;
             style.underline = run.underline;
+            style.strikethrough = run.strikethrough;
+            style.tracking = run.tracking;
+            style.caps = run.caps;
         }
     }
     return style;
@@ -173,6 +265,8 @@ inline bool textStyleEffectValue(const TextCharStyle& style, TextStyleEffect eff
         return style.italic;
     case TextStyleEffect::Underline:
         return style.underline;
+    case TextStyleEffect::Strikethrough:
+        return style.strikethrough;
     }
     return false;
 }
@@ -188,6 +282,9 @@ inline void setTextStyleEffectValue(TextCharStyle& style, TextStyleEffect effect
         return;
     case TextStyleEffect::Underline:
         style.underline = value;
+        return;
+    case TextStyleEffect::Strikethrough:
+        style.strikethrough = value;
         return;
     }
 }
@@ -216,7 +313,8 @@ inline void rebuildTextStyleRuns(TextLayerData& textData, const QVector<TextChar
         }
         if (style != base) {
             textData.styleRuns.append({ i, end - i, style.fontFamily, style.fontSize, style.color,
-                style.bold, style.italic, style.underline });
+                style.bold, style.italic, style.underline, style.strikethrough, style.tracking,
+                style.caps });
         }
         i = end;
     }
@@ -327,6 +425,90 @@ inline void applyTextColorToRange(
         styles[i].color = color;
     }
     rebuildTextStyleRuns(textData, styles);
+}
+
+inline void applyTextFontSizeToRange(
+    TextLayerData& textData, int selectionStart, int selectionEnd, qreal fontSize)
+{
+    const int from = qBound(0, std::min(selectionStart, selectionEnd), textData.text.size());
+    const int to = qBound(0, std::max(selectionStart, selectionEnd), textData.text.size());
+    if (from >= to) {
+        return;
+    }
+
+    QVector<TextCharStyle> styles = textCharacterStyles(textData);
+    for (int i = from; i < to && i < styles.size(); ++i) {
+        styles[i].fontSize = qMax<qreal>(1.0, fontSize);
+    }
+    rebuildTextStyleRuns(textData, styles);
+}
+
+inline void applyTextTrackingToRange(
+    TextLayerData& textData, int selectionStart, int selectionEnd, qreal tracking)
+{
+    const int from = qBound(0, std::min(selectionStart, selectionEnd), textData.text.size());
+    const int to = qBound(0, std::max(selectionStart, selectionEnd), textData.text.size());
+    if (from >= to) {
+        return;
+    }
+
+    QVector<TextCharStyle> styles = textCharacterStyles(textData);
+    for (int i = from; i < to && i < styles.size(); ++i) {
+        styles[i].tracking = tracking;
+    }
+    rebuildTextStyleRuns(textData, styles);
+}
+
+inline void applyTextCapsToRange(
+    TextLayerData& textData, int selectionStart, int selectionEnd, TextCaps caps)
+{
+    const int from = qBound(0, std::min(selectionStart, selectionEnd), textData.text.size());
+    const int to = qBound(0, std::max(selectionStart, selectionEnd), textData.text.size());
+    if (from >= to) {
+        return;
+    }
+
+    QVector<TextCharStyle> styles = textCharacterStyles(textData);
+    for (int i = from; i < to && i < styles.size(); ++i) {
+        styles[i].caps = caps;
+    }
+    rebuildTextStyleRuns(textData, styles);
+}
+
+/**
+ * @brief The value @p reader returns for every character in the range, or
+ * nullopt when they disagree.
+ *
+ * The Character group needs this for every numeric field it shows: a mixed
+ * selection must read as blank rather than as whichever value happened to be
+ * first, which is the same rule Photoshop's character panel follows.
+ */
+template <typename Reader>
+inline auto uniformTextStyleValue(
+    const TextLayerData& textData, int selectionStart, int selectionEnd, Reader reader)
+    -> std::optional<decltype(reader(TextCharStyle {}))>
+{
+    using Value = decltype(reader(TextCharStyle {}));
+    const int size = static_cast<int>(textData.text.size());
+    int from = qBound(0, std::min(selectionStart, selectionEnd), size);
+    int to = qBound(0, std::max(selectionStart, selectionEnd), size);
+    if (from >= to) {
+        // No selection: the layer's own defaults are what a new character would
+        // get, so that is the honest answer rather than "mixed".
+        if (size == 0) {
+            return reader(defaultTextCharStyle(textData));
+        }
+        from = 0;
+        to = size;
+    }
+
+    const Value first = reader(textCharStyleAt(textData, from));
+    for (int i = from + 1; i < to; ++i) {
+        if (!(reader(textCharStyleAt(textData, i)) == first)) {
+            return std::nullopt;
+        }
+    }
+    return first;
 }
 
 /**

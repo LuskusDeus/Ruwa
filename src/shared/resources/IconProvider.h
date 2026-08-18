@@ -51,6 +51,13 @@ public:
         Bold,
         Italic,
         Underline,
+        Strikethrough,
+        AllCaps,
+        SmallCaps,
+        AlignTextLeft,
+        AlignTextCenter,
+        AlignTextRight,
+        AlignTextJustify,
         Eyedropper,
         Move,
         Lasso,
@@ -95,6 +102,14 @@ public:
         EyeDeactivated,
         LayerMask,
         AdjustmentLayer,
+        // Per-type layer glyphs. Group / Adjustment / Mask / Text deliberately
+        // reuse Folder / AdjustmentLayer / LayerMask / Text — the layer rows and
+        // context menus already stand for those types with them.
+        LayerRaster,
+        LayerSmart,
+        LayerBoard,
+        LayerBackground,
+        LayerVector,
 
         // Panels
         ColorPanel,

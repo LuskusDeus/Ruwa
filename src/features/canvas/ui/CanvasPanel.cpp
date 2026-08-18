@@ -32,6 +32,7 @@
 #include "features/canvas/rendering/OpenGLCanvasWidget.h"
 #include "shared/undo/UndoManager.h"
 #include "shared/undo/LayerAddCommand.h"
+#include "shared/undo/TextLayerContentCommand.h"
 #include "features/layers/model/LayerModel.h"
 #include "features/layers/model/LayerData.h"
 #include "features/layers/model/SmartContentSource.h"
@@ -1041,6 +1042,30 @@ void CanvasPanel::confirmTransform()
     emit transformModeChanged(false);
     syncToolStateOverlayContent();
     updateSelectionActionPopup();
+}
+
+bool CanvasPanel::moveSelectedContentBy(const QPointF& delta)
+{
+    if (!m_glWidget) {
+        return false;
+    }
+
+    const bool wasTransformActive = m_glWidget->isTransformActive();
+    if (!m_glWidget->moveSelectedContentBy(
+            aether::Vector2 { static_cast<float>(delta.x()), static_cast<float>(delta.y()) })) {
+        return false;
+    }
+
+    // A move that opened and closed its own transform session leaves that mode
+    // again; the chrome has to follow, exactly as confirmTransform() does.
+    if (!wasTransformActive) {
+        updateCursorManagerOverlay();
+        emit transformModeChanged(false);
+        syncToolStateOverlayContent();
+        updateSelectionActionPopup();
+    }
+    emit canvasContentChanged();
+    return true;
 }
 
 void CanvasPanel::commitTransformBeforeDocumentMutation()
@@ -2197,11 +2222,214 @@ bool CanvasPanel::startTextLayerEditing(const ruwa::core::layers::LayerId& id)
         return false;
     }
 
+    // A pending live run from the panel has to land before the session takes
+    // the layer over, or its undo step would span the session's own edits.
+    flushTextEditInteraction();
     commitTransformBeforeDocumentMutation();
     if (toolMode() != ToolId::Text) {
         setToolMode(ToolId::Text);
     }
     return m_textEditingController->startExistingLayer(id);
+}
+
+bool CanvasPanel::isTextEditingActive() const
+{
+    return m_textEditingController && m_textEditingController->isEditing();
+}
+
+ruwa::core::layers::LayerId CanvasPanel::textEditingLayerId() const
+{
+    return isTextEditingActive() ? m_textEditingController->activeLayerId()
+                                 : ruwa::core::layers::LayerId();
+}
+
+std::optional<std::pair<int, int>> CanvasPanel::textEditingSelection() const
+{
+    if (!isTextEditingActive()) {
+        return std::nullopt;
+    }
+    return m_textEditingController->selectionRange();
+}
+
+bool CanvasPanel::applyTextLayerEdit(
+    const ruwa::core::layers::LayerId& id, const ruwa::core::layers::TextLayerEdit& edit)
+{
+    auto* layer = m_layerModel ? m_layerModel->layerById(id) : nullptr;
+    if (!layer || !layer->isText() || !layer->textData) {
+        return false;
+    }
+
+    if (edit.phase == ruwa::core::layers::TextLayerEdit::Phase::Cancel) {
+        return cancelTextEditInteraction(id);
+    }
+
+    // A selection scopes the edit to itself. Anything else — no session, or a
+    // session with a bare caret — means the whole layer: with nothing picked
+    // out there is nothing to single out, and restyling only what gets typed
+    // next reads as the control doing nothing.
+    const bool editingThisLayer = isTextEditingActive() && textEditingLayerId() == id;
+    std::pair<int, int> range { 0, static_cast<int>(layer->textData->text.size()) };
+    if (editingThisLayer) {
+        if (const auto selection = textEditingSelection();
+            selection && selection->first != selection->second) {
+            range = *selection;
+        }
+    }
+
+    const bool live = edit.phase == ruwa::core::layers::TextLayerEdit::Phase::Live;
+    // A live run belongs to one interaction, so the state it will be undone to
+    // is the one it started from — snapshotted once, at the first live value,
+    // not at every value that streams past. It is taken even inside an editing
+    // session, which does not want the undo step but does need the run to stay
+    // cancellable.
+    if (m_textEditInteraction.active
+        && (m_textEditInteraction.layerId != id
+            || m_textEditInteraction.property != edit.property)) {
+        flushTextEditInteraction();
+    }
+    if (live && !m_textEditInteraction.active) {
+        m_textEditInteraction.active = true;
+        m_textEditInteraction.layerId = id;
+        m_textEditInteraction.property = edit.property;
+        m_textEditInteraction.pushUndo = !editingThisLayer;
+        m_textEditInteraction.oldText = layer->textData->text;
+        m_textEditInteraction.oldRuns = layer->textData->styleRuns;
+        m_textEditInteraction.oldTypography
+            = ruwa::core::layers::captureTextTypography(*layer->textData);
+        m_textEditInteraction.oldTransform = layer->textData->transform;
+    }
+
+    const QString oldText = layer->textData->text;
+    const QList<ruwa::core::layers::TextStyleRun> oldRuns = layer->textData->styleRuns;
+    const auto oldTypography = ruwa::core::layers::captureTextTypography(*layer->textData);
+
+    ruwa::core::layers::applyTextLayerEdit(*layer->textData, edit, range.first, range.second);
+
+    const auto newTypography = ruwa::core::layers::captureTextTypography(*layer->textData);
+    const bool changed
+        = oldRuns != layer->textData->styleRuns || oldTypography != newTypography;
+    const bool closesRun = !live && m_textEditInteraction.active;
+    if (!changed && !closesRun) {
+        return false; // the value was already what the user asked for
+    }
+
+    // An open session owns the undo step for everything it did, and pushes it
+    // on commit; a second step from here would split one edit in two and let an
+    // undo land the layer in a state the live editor is not showing.
+    if (closesRun) {
+        // Close the run: one step from where the interaction began to wherever
+        // the user let go.
+        flushTextEditInteraction();
+    } else if (!live && !editingThisLayer) {
+        if (auto* undo = undoManagerOrNull()) {
+            auto command = std::make_unique<aether::TextLayerContentCommand>(m_layerModel, id,
+                oldText, layer->textData->text, oldRuns, layer->textData->styleRuns,
+                layer->textData->transform, layer->textData->transform,
+                [this]() { requestRender(); }, [this]() { notifyContentChanged(); });
+            command->setTypography(oldTypography, newTypography);
+            command->setLabel(ruwa::core::layers::textLayerEditLabel(edit.property));
+            undo->push(std::move(command));
+        }
+    }
+
+    if (!changed) {
+        return false;
+    }
+
+    layer->runtimeRetainedPayload.reset();
+    layer->runtimeRetainedPayloadKey.clear();
+    m_layerModel->notifyLayerDataChanged(id);
+    requestRender();
+    notifyContentChanged();
+    if (editingThisLayer) {
+        m_textEditingController->notifyFormattingStateChanged();
+    }
+    return true;
+}
+
+void CanvasPanel::flushTextEditInteraction()
+{
+    if (!m_textEditInteraction.active) {
+        return;
+    }
+    const auto interaction = m_textEditInteraction;
+    m_textEditInteraction = TextEditInteraction {};
+
+    auto* layer = m_layerModel ? m_layerModel->layerById(interaction.layerId) : nullptr;
+    if (!layer || !layer->isText() || !layer->textData) {
+        return;
+    }
+    const auto newTypography = ruwa::core::layers::captureTextTypography(*layer->textData);
+    if (interaction.oldRuns == layer->textData->styleRuns
+        && interaction.oldTypography == newTypography) {
+        return; // the interaction ended where it started
+    }
+    auto* undo = interaction.pushUndo ? undoManagerOrNull() : nullptr;
+    if (!undo) {
+        return;
+    }
+    auto command = std::make_unique<aether::TextLayerContentCommand>(m_layerModel,
+        interaction.layerId, interaction.oldText, layer->textData->text, interaction.oldRuns,
+        layer->textData->styleRuns, interaction.oldTransform, layer->textData->transform,
+        [this]() { requestRender(); }, [this]() { notifyContentChanged(); });
+    command->setTypography(interaction.oldTypography, newTypography);
+    command->setLabel(ruwa::core::layers::textLayerEditLabel(interaction.property));
+    undo->push(std::move(command));
+}
+
+bool CanvasPanel::cancelTextEditInteraction(const ruwa::core::layers::LayerId& id)
+{
+    if (!m_textEditInteraction.active || m_textEditInteraction.layerId != id) {
+        return false;
+    }
+    const auto interaction = m_textEditInteraction;
+    m_textEditInteraction = TextEditInteraction {};
+
+    auto* layer = m_layerModel ? m_layerModel->layerById(id) : nullptr;
+    if (!layer || !layer->isText() || !layer->textData) {
+        return false;
+    }
+    if (interaction.oldRuns == layer->textData->styleRuns
+        && interaction.oldTypography
+            == ruwa::core::layers::captureTextTypography(*layer->textData)) {
+        return false;
+    }
+
+    // Only the styling goes back. The characters are not something these edits
+    // touch, and restoring them would throw away anything typed while the
+    // preview was up.
+    layer->textData->styleRuns = interaction.oldRuns;
+    ruwa::core::layers::applyTextTypography(*layer->textData, interaction.oldTypography);
+    layer->runtimeRetainedPayload.reset();
+    layer->runtimeRetainedPayloadKey.clear();
+    m_layerModel->notifyLayerDataChanged(id);
+    requestRender();
+    notifyContentChanged();
+    if (isTextEditingActive() && textEditingLayerId() == id) {
+        m_textEditingController->notifyFormattingStateChanged();
+    }
+    return true;
+}
+
+void CanvasPanel::addTextEditingFocusExclusion(QWidget* widget)
+{
+    if (!widget || m_textEditingFocusExclusions.contains(widget)) {
+        return;
+    }
+    m_textEditingFocusExclusions.append(widget);
+}
+
+bool CanvasPanel::isTextEditingFocusExclusion(const QWidget* widget) const
+{
+    if (!widget) {
+        return false;
+    }
+    for (const auto& excluded : m_textEditingFocusExclusions) {
+        if (excluded && (excluded == widget || excluded->isAncestorOf(widget))) {
+            return true;
+        }
+    }
+    return false;
 }
 
 bool CanvasPanel::clearLayerPixelContent(const ruwa::core::layers::LayerId& id)
@@ -3106,7 +3334,7 @@ void CanvasPanel::mouseReleaseEvent(QMouseEvent* event)
     }
     updateSelectionActionPopup();
     if (m_textEditingController && m_textEditingController->isEditing()) {
-        m_textEditingController->refreshFormattingPopup();
+        m_textEditingController->notifyFormattingStateChanged();
     }
 }
 
@@ -3336,9 +3564,6 @@ bool CanvasPanel::eventFilter(QObject* watched, QEvent* event)
         }
         if (m_exportAreaController && m_exportAreaController->isActive()) {
             m_exportAreaController->updateOverlay();
-        }
-        if (m_textEditingController && m_textEditingController->isEditing()) {
-            m_textEditingController->refreshFormattingPopup();
         }
     } else if (m_textEditingController && m_textEditingController->isEditing()
         && m_textEditingController->isEditorEventTarget(watched)
@@ -3679,9 +3904,6 @@ void CanvasPanel::onSurfaceResized(uint32_t width, uint32_t height)
         m_canvasResizeController->updateOverlay();
     }
     updateSelectionActionPopup();
-    if (m_textEditingController && m_textEditingController->isEditing()) {
-        m_textEditingController->refreshFormattingPopup();
-    }
 }
 
 void CanvasPanel::positionBrushOverlayDefault()

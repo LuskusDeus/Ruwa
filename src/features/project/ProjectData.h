@@ -68,6 +68,9 @@ struct LayerEntry {
         bool bold = false;
         bool italic = false;
         bool underline = false;
+        bool strikethrough = false;
+        qreal tracking = 0.0;
+        int caps = 0;
     };
 
     QUuid id;
@@ -163,6 +166,11 @@ struct LayerEntry {
     quint32 textColorRgba = 0xFF000000u;
     int textAlignment = 0;
     qreal textLineHeight = 1.2;
+    bool textStrikethrough = false;
+    qreal textTracking = 0.0;
+    int textCaps = 0;
+    qreal textSpaceBefore = 0.0;
+    qreal textSpaceAfter = 0.0;
     QList<SerializedTextStyleRun> textStyleRuns;
     QList<LayerEntry> children;
 };
@@ -194,7 +202,8 @@ struct ProjectData {
         bool valid = false;
     };
 
-    static constexpr quint32 CURRENT_VERSION = 32; // Per-content-grid pixel format
+    static constexpr quint32 CURRENT_VERSION = 33; // Text: strikethrough, tracking,
+                                                   // caps, paragraph spacing
 
     quint32 version = CURRENT_VERSION;
 

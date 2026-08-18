@@ -20,6 +20,7 @@ class QResizeEvent;
 
 namespace ruwa::ui::widgets {
 class AnimatedFlowWidget;
+class SectionHeaderButton;
 }
 
 namespace ruwa::ui::workspace {
@@ -102,7 +103,7 @@ private:
     bool m_expanded = false;
     int m_contentHeight = 0;
 
-    QWidget* m_headerButton = nullptr;
+    ruwa::ui::widgets::SectionHeaderButton* m_headerButton = nullptr;
     ruwa::ui::widgets::AnimatedFlowWidget* m_contentContainer = nullptr;
     QLabel* m_emptyLabel = nullptr;
     QHash<QString, QWidget*> m_brushRows;

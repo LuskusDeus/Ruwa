@@ -275,6 +275,19 @@ public:
         });
         connect(
             m_searchBar, &SearchBar::searchRequested, this, [this]() { activateCurrentOrFirst(); });
+        // Hovering a row previews the font without choosing it, so the list
+        // needs per-item enter events — which the viewport, not the view, is
+        // what Qt tracks them on.
+        m_listView->viewport()->setMouseTracking(true);
+        connect(m_listView, &QListView::entered, this, [this](const QModelIndex& index) {
+            if (!index.isValid() || !m_onFamilyHovered) {
+                return;
+            }
+            const QString family = index.data(FamilyRole).toString();
+            if (!family.isEmpty()) {
+                m_onFamilyHovered(family);
+            }
+        });
         connect(m_listView, &QListView::clicked, this,
             [this](const QModelIndex& index) { activateIndex(index); });
         connect(m_listView, &QListView::activated, this,
@@ -312,6 +325,11 @@ public:
     }
 
     void setOnPopupHidden(std::function<void()> cb) { m_onPopupHidden = std::move(cb); }
+
+    void setOnFamilyHovered(std::function<void(QString)> cb)
+    {
+        m_onFamilyHovered = std::move(cb);
+    }
 
     int preferredHeight() const
     {
@@ -567,6 +585,7 @@ private:
     bool m_isHiding = false;
     qreal m_popupOpacity = 0.0;
     std::function<void(QString)> m_onFamilyActivated;
+    std::function<void(QString)> m_onFamilyHovered;
     std::function<void()> m_onPopupHidden;
 };
 
@@ -583,6 +602,9 @@ FontDropdownSelector::FontDropdownSelector(QWidget* parent)
     m_popup->setProperty("ruwa_owner_combo", QVariant::fromValue(static_cast<QWidget*>(this)));
     m_popup->setOnFamilyActivated([this](QString family) {
         const bool changed = (m_currentFamily != family);
+        // Recorded before the popup starts closing: the hidden callback arrives
+        // after the fade and has to tell a chosen font from an abandoned one.
+        m_popupFamilyChosen = true;
         setCurrentFamily(family);
         closePopup();
         emit activated(family);
@@ -590,7 +612,23 @@ FontDropdownSelector::FontDropdownSelector(QWidget* parent)
             emit currentFamilyChanged(family);
         }
     });
-    m_popup->setOnPopupHidden([this]() { emit popupHidden(); });
+    m_popup->setOnFamilyHovered([this](QString family) {
+        if (family.isEmpty() || family == m_previewFamily) {
+            return;
+        }
+        m_previewFamily = family;
+        emit familyPreviewed(family);
+    });
+    m_popup->setOnPopupHidden([this]() {
+        // Closed without choosing anything: whatever was previewed on the way
+        // through is not what the user asked for.
+        const bool abandonedPreview = !m_popupFamilyChosen && !m_previewFamily.isEmpty();
+        m_previewFamily.clear();
+        if (abandonedPreview) {
+            emit previewCancelled();
+        }
+        emit popupHidden();
+    });
 
     m_hoverAnim = new QPropertyAnimation(this, "hoverProgress", this);
     m_hoverAnim->setDuration(170);
@@ -610,6 +648,11 @@ FontDropdownSelector::~FontDropdownSelector()
         m_popup->deleteLater();
         m_popup = nullptr;
     }
+}
+
+bool FontDropdownSelector::isPopupOpen() const
+{
+    return isPopupActive();
 }
 
 void FontDropdownSelector::setCurrentFamily(const QString& family)
@@ -913,6 +956,8 @@ void FontDropdownSelector::openPopup()
         m_popup->setParent(window());
     }
 
+    m_popupFamilyChosen = false;
+    m_previewFamily.clear();
     syncPopupState();
     updatePopupPosition();
     m_popup->showAnimated(m_popup->pos());

@@ -428,9 +428,6 @@ bool CanvasViewController::handleWheelZoom(QWheelEvent* event)
         && m_panel->m_canvasResizeController->isInteractionActive()) {
         m_panel->m_canvasResizeController->updateOverlay();
     }
-    if (m_panel->m_textEditingController && m_panel->m_textEditingController->isEditing()) {
-        m_panel->m_textEditingController->refreshFormattingPopup();
-    }
 
     event->accept();
     return true;

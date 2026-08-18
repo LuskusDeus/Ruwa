@@ -30,18 +30,33 @@ TextLayerContentCommand::TextLayerContentCommand(ruwa::core::layers::LayerModel*
 {
 }
 
+void TextLayerContentCommand::setTypography(
+    const ruwa::core::layers::TextLayerTypography& oldTypography,
+    const ruwa::core::layers::TextLayerTypography& newTypography)
+{
+    m_oldTypography = oldTypography;
+    m_newTypography = newTypography;
+    m_hasTypography = true;
+}
+
+void TextLayerContentCommand::setLabel(const QString& label)
+{
+    m_label = label;
+}
+
 void TextLayerContentCommand::undo()
 {
-    applyTextState(m_oldText, m_oldStyleRuns, m_oldTransform);
+    applyTextState(m_oldText, m_oldStyleRuns, m_oldTransform, m_oldTypography);
 }
 
 void TextLayerContentCommand::redo()
 {
-    applyTextState(m_newText, m_newStyleRuns, m_newTransform);
+    applyTextState(m_newText, m_newStyleRuns, m_newTransform, m_newTypography);
 }
 
 void TextLayerContentCommand::applyTextState(const QString& textValue,
-    const QList<ruwa::core::layers::TextStyleRun>& styleRuns, const TransformState& transform)
+    const QList<ruwa::core::layers::TextStyleRun>& styleRuns, const TransformState& transform,
+    const ruwa::core::layers::TextLayerTypography& typography)
 {
     if (!m_layerModel) {
         return;
@@ -55,6 +70,11 @@ void TextLayerContentCommand::applyTextState(const QString& textValue,
     layer->textData->text = textValue;
     layer->textData->styleRuns = styleRuns;
     layer->textData->transform = transform;
+    // Commands built before typography was tracked leave the defaults alone
+    // rather than stamping a default-constructed snapshot over them.
+    if (m_hasTypography) {
+        ruwa::core::layers::applyTextTypography(*layer->textData, typography);
+    }
     layer->runtimeRetainedPayload.reset();
     layer->runtimeRetainedPayloadKey.clear();
     m_layerModel->refreshTextLayerAutoName(m_layerId);
@@ -70,7 +90,7 @@ void TextLayerContentCommand::applyTextState(const QString& textValue,
 
 QString TextLayerContentCommand::text() const
 {
-    return QStringLiteral("Edit Text");
+    return m_label.isEmpty() ? QStringLiteral("Edit Text") : m_label;
 }
 
 qint64 TextLayerContentCommand::memorySize() const

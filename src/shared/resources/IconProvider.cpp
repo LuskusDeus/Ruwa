@@ -174,6 +174,20 @@ QString IconProvider::getStandardIconName(StandardIcon icon) const
         return "Italic";
     case StandardIcon::Underline:
         return "Underline";
+    case StandardIcon::Strikethrough:
+        return "Strikethrough";
+    case StandardIcon::AllCaps:
+        return "AllCaps";
+    case StandardIcon::SmallCaps:
+        return "SmallCaps";
+    case StandardIcon::AlignTextLeft:
+        return "AlignTextLeft";
+    case StandardIcon::AlignTextCenter:
+        return "AlignTextCenter";
+    case StandardIcon::AlignTextRight:
+        return "AlignTextRight";
+    case StandardIcon::AlignTextJustify:
+        return "AlignTextJustify";
     case StandardIcon::Eyedropper:
         return "Eyedropper";
     case StandardIcon::Move:
@@ -254,6 +268,16 @@ QString IconProvider::getStandardIconName(StandardIcon icon) const
         return "LayerMask";
     case StandardIcon::AdjustmentLayer:
         return "AdjustmentLayer";
+    case StandardIcon::LayerRaster:
+        return "LayerRaster";
+    case StandardIcon::LayerSmart:
+        return "LayerSmart";
+    case StandardIcon::LayerBoard:
+        return "LayerBoard";
+    case StandardIcon::LayerBackground:
+        return "LayerBackground";
+    case StandardIcon::LayerVector:
+        return "LayerVector";
 
     // Panels
     case StandardIcon::ColorPanel:

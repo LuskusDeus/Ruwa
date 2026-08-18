@@ -7,9 +7,6 @@
 #include "features/canvas/overlays/TextEditOverlayGL.h"
 #include "features/canvas/ui/CanvasPanel.h"
 #include "features/canvas/ui/CanvasCursorManager.h"
-#include "features/canvas/ui/TextFormattingPopup.h"
-#include "features/color/ColorPicker.h"
-#include "features/color/ColorPickerOverlay.h"
 #include "features/layers/model/LayerModel.h"
 #include "commands/ShortcutManager.h"
 #include "shared/undo/LayerAddCommand.h"
@@ -180,19 +177,6 @@ bool TextEditingController::isEditorEventTarget(QObject* watched) const
     return watched == m_editor || (m_editor && watched == m_editor->viewport());
 }
 
-bool TextEditingController::isFormattingPopupWidget(const QWidget* widget) const
-{
-    if (!widget) {
-        return false;
-    }
-    if (m_formattingPopup
-        && (widget == m_formattingPopup || m_formattingPopup->isAncestorOf(widget))) {
-        return true;
-    }
-    auto* picker = m_textColorPickerOverlay ? m_textColorPickerOverlay->picker() : nullptr;
-    return picker && (widget == picker || picker->isAncestorOf(widget));
-}
-
 void TextEditingController::ensureEditor()
 {
     if (m_editor || !m_panel) {
@@ -335,6 +319,7 @@ void TextEditingController::beginSession(const ruwa::core::layers::LayerId& laye
     m_layerId = layerId;
     m_oldText = oldText;
     m_oldStyleRuns = layer->textData->styleRuns;
+    m_oldTypography = ruwa::core::layers::captureTextTypography(*layer->textData);
     m_oldTransform = layer->textData->transform;
     m_caretVisible = true;
     blockShortcuts();
@@ -408,9 +393,20 @@ void TextEditingController::ensureEditorHasFocus()
     showCaret();
 }
 
-void TextEditingController::refreshFormattingPopup()
+void TextEditingController::notifyFormattingStateChanged()
 {
-    updateFormattingPopup(false);
+    if (m_panel) {
+        emit m_panel->textEditingStateChanged();
+    }
+}
+
+std::pair<int, int> TextEditingController::selectionRange() const
+{
+    if (!m_active || !m_editor) {
+        return { 0, 0 };
+    }
+    const QTextCursor cursor = m_editor->textCursor();
+    return { cursor.selectionStart(), cursor.selectionEnd() };
 }
 
 void TextEditingController::toggleSelectedEffect(ruwa::core::layers::TextStyleEffect effect)
@@ -626,7 +622,7 @@ void TextEditingController::commit()
     m_active = false;
     m_provisional = false;
     releaseShortcuts();
-    clearOverlay(true);
+    clearOverlay();
 
     auto* layer
         = m_panel && m_panel->m_layerModel ? m_panel->m_layerModel->layerById(layerId) : nullptr;
@@ -639,9 +635,13 @@ void TextEditingController::commit()
 
     const bool styleRunsChanged
         = layer && layer->textData && m_oldStyleRuns != layer->textData->styleRuns;
+    // The Character and Paragraph groups can move the layer-wide defaults while
+    // the session is open, and that alone is a change worth an undo step.
+    const bool typographyChanged = layer && layer->textData
+        && m_oldTypography != ruwa::core::layers::captureTextTypography(*layer->textData);
     if (wasProvisional) {
         pushNewLayerCommand(layer);
-    } else if (m_oldText != newText || styleRunsChanged) {
+    } else if (m_oldText != newText || styleRunsChanged || typographyChanged) {
         pushExistingTextCommand(newText);
     } else if (layer && layer->textData) {
         layer->textData->transform = m_oldTransform;
@@ -654,6 +654,7 @@ void TextEditingController::commit()
 
     m_oldText.clear();
     m_oldStyleRuns.clear();
+    m_oldTypography = {};
     m_oldTransform = {};
     m_layerId = QUuid();
     m_parentId = QUuid();
@@ -684,11 +685,12 @@ void TextEditingController::cancel()
     releaseShortcuts();
     m_oldText.clear();
     m_oldStyleRuns.clear();
+    m_oldTypography = {};
     m_oldTransform = {};
     m_layerId = QUuid();
     m_parentId = QUuid();
     m_insertIndex = -1;
-    clearOverlay(true);
+    clearOverlay();
     m_finishing = false;
 }
 
@@ -702,11 +704,14 @@ void TextEditingController::pushExistingTextCommand(const QString& newText)
         return;
     }
     if (auto* undo = m_panel->undoManagerOrNull()) {
-        undo->push(std::make_unique<aether::TextLayerContentCommand>(
-            m_panel->m_layerModel, m_layerId, m_oldText, newText, m_oldStyleRuns,
-            layer->textData->styleRuns, m_oldTransform, layer->textData->transform,
+        auto command = std::make_unique<aether::TextLayerContentCommand>(m_panel->m_layerModel,
+            m_layerId, m_oldText, newText, m_oldStyleRuns, layer->textData->styleRuns,
+            m_oldTransform, layer->textData->transform,
             [panel = m_panel]() { panel->requestRender(); },
-            [panel = m_panel]() { panel->notifyContentChanged(); }));
+            [panel = m_panel]() { panel->notifyContentChanged(); });
+        command->setTypography(
+            m_oldTypography, ruwa::core::layers::captureTextTypography(*layer->textData));
+        undo->push(std::move(command));
     }
 }
 
@@ -750,6 +755,7 @@ void TextEditingController::restoreOldTextState()
 
     layer->textData->text = m_oldText;
     layer->textData->styleRuns = m_oldStyleRuns;
+    ruwa::core::layers::applyTextTypography(*layer->textData, m_oldTypography);
     layer->textData->transform = m_oldTransform;
     layer->runtimeRetainedPayload.reset();
     layer->runtimeRetainedPayloadKey.clear();
@@ -777,82 +783,8 @@ bool TextEditingController::selectedEffectEnabled(ruwa::core::layers::TextStyleE
         *layer->textData, cursor.selectionStart(), cursor.selectionEnd(), effect);
 }
 
-QString TextEditingController::selectedUniformFontFamily() const
-{
-    if (!m_active || !m_panel || !m_panel->m_layerModel || !m_editor) {
-        return {};
-    }
-    auto* layer = m_panel->m_layerModel->layerById(m_layerId);
-    if (!layer || !layer->textData) {
-        return {};
-    }
 
-    const QTextCursor cursor = m_editor->textCursor();
-    if (!cursor.hasSelection()) {
-        return {};
-    }
 
-    const int from = qBound(0, cursor.selectionStart(), layer->textData->text.size());
-    const int to = qBound(0, cursor.selectionEnd(), layer->textData->text.size());
-    if (from >= to) {
-        return {};
-    }
-
-    QString family = ruwa::core::layers::textCharStyleAt(*layer->textData, from).fontFamily;
-    for (int i = from + 1; i < to; ++i) {
-        if (ruwa::core::layers::textCharStyleAt(*layer->textData, i).fontFamily != family) {
-            return {};
-        }
-    }
-    return family;
-}
-
-QColor TextEditingController::selectedTextDisplayColor() const
-{
-    if (!m_active || !m_panel || !m_panel->m_layerModel || !m_editor) {
-        return m_panel ? m_panel->currentBrushColor() : QColor(0, 0, 0, 255);
-    }
-    auto* layer = m_panel->m_layerModel->layerById(m_layerId);
-    if (!layer || !layer->textData) {
-        return m_panel->currentBrushColor();
-    }
-
-    const QTextCursor cursor = m_editor->textCursor();
-    if (!cursor.hasSelection()) {
-        return layer->textData->color;
-    }
-
-    const int from = qBound(0, cursor.selectionStart(), layer->textData->text.size());
-    const int to = qBound(0, cursor.selectionEnd(), layer->textData->text.size());
-    if (from >= to) {
-        return layer->textData->color;
-    }
-    return ruwa::core::layers::textCharStyleAt(*layer->textData, from).color;
-}
-
-void TextEditingController::applySelectedTextColor(const QColor& color)
-{
-    if (!m_active || !color.isValid() || !m_panel || !m_panel->m_layerModel || !m_editor) {
-        return;
-    }
-    auto* layer = m_panel->m_layerModel->layerById(m_layerId);
-    if (!layer || !layer->textData) {
-        return;
-    }
-
-    const QTextCursor cursor = m_editor->textCursor();
-    if (!cursor.hasSelection()) {
-        return;
-    }
-
-    ruwa::core::layers::applyTextColorToRange(
-        *layer->textData, cursor.selectionStart(), cursor.selectionEnd(), color);
-    if (m_formattingPopup) {
-        m_formattingPopup->setTextColor(color);
-    }
-    invalidateActiveTextLayer();
-    showCaret();
-}
 
 void TextEditingController::invalidateActiveTextLayer()
 {
@@ -902,9 +834,8 @@ void TextEditingController::showCaret()
     updateOverlayState();
 }
 
-void TextEditingController::clearOverlay(bool animateFormattingPopup)
+void TextEditingController::clearOverlay()
 {
-    hideFormattingPopup(animateFormattingPopup);
     if (!m_panel || !m_panel->m_glWidget) {
         return;
     }
@@ -912,146 +843,9 @@ void TextEditingController::clearOverlay(bool animateFormattingPopup)
     m_panel->m_glWidget->setTextEditOverlayState(state);
 }
 
-void TextEditingController::ensureFormattingPopup()
-{
-    if (m_formattingPopup || !m_panel || !m_panel->m_contentWidget) {
-        return;
-    }
 
-    m_formattingPopup = new ruwa::ui::widgets::TextFormattingPopup(m_panel->m_contentWidget);
-    m_formattingPopup->hide();
-    m_formattingPopup->adjustSize();
-    m_formattingPopup->raise();
-    connect(m_formattingPopup, &ruwa::ui::widgets::TextFormattingPopup::fontFamilyActivated, this,
-        &TextEditingController::applySelectedFontFamily);
-    connect(m_formattingPopup, &ruwa::ui::widgets::TextFormattingPopup::boldClicked, this,
-        [this]() { toggleSelectedEffect(ruwa::core::layers::TextStyleEffect::Bold); });
-    connect(m_formattingPopup, &ruwa::ui::widgets::TextFormattingPopup::italicClicked, this,
-        [this]() { toggleSelectedEffect(ruwa::core::layers::TextStyleEffect::Italic); });
-    connect(m_formattingPopup, &ruwa::ui::widgets::TextFormattingPopup::underlineClicked, this,
-        [this]() { toggleSelectedEffect(ruwa::core::layers::TextStyleEffect::Underline); });
-    connect(m_formattingPopup, &ruwa::ui::widgets::TextFormattingPopup::textColorClicked, this,
-        [this](QWidget* anchor) {
-            if (!m_textColorPickerOverlay || !anchor) {
-                return;
-            }
-            if (m_textColorPickerOverlay->isActive()
-                && m_textColorPickerOverlay->sourceButton() == anchor) {
-                m_textColorPickerOverlay->hidePicker();
-                return;
-            }
-            m_textColorPickerOverlay->showPicker(selectedTextDisplayColor(), anchor);
-        });
-    if (m_panel->m_cursorManager) {
-        m_panel->m_cursorManager->addCursorExclusionWidget(m_formattingPopup);
-    }
 
-    if (!m_textColorPickerOverlay) {
-        m_textColorPickerOverlay
-            = new ruwa::ui::widgets::ColorPickerOverlay(m_panel->m_contentWidget);
-        if (m_panel->m_cursorManager && m_textColorPickerOverlay->picker()) {
-            m_panel->m_cursorManager->addCursorExclusionWidget(m_textColorPickerOverlay->picker());
-        }
-        connect(m_textColorPickerOverlay, &ruwa::ui::widgets::ColorPickerOverlay::colorSelected,
-            this, &TextEditingController::applySelectedTextColor);
-    }
-}
 
-void TextEditingController::updateFormattingPopup(bool animateShow)
-{
-    if (!m_active || !m_panel || !m_panel->m_contentWidget || !m_panel->m_glWidget || !m_editor) {
-        hideFormattingPopup(true);
-        return;
-    }
-
-    const QTextCursor cursor = m_editor->textCursor();
-    if (!cursor.hasSelection() || m_panel->toolMode() != ToolId::Text) {
-        hideFormattingPopup(true);
-        return;
-    }
-
-    auto* layer = m_panel->m_layerModel ? m_panel->m_layerModel->layerById(m_layerId) : nullptr;
-    if (!layer || !layer->textData) {
-        hideFormattingPopup(true);
-        return;
-    }
-
-    const QRectF textRect = activeTextRectInPanel(normalizedTextTransform(layer));
-    if (textRect.isEmpty()) {
-        hideFormattingPopup(true);
-        return;
-    }
-
-    ensureFormattingPopup();
-    if (!m_formattingPopup) {
-        return;
-    }
-    m_formattingPopup->setEffectStates(
-        selectedEffectEnabled(ruwa::core::layers::TextStyleEffect::Bold),
-        selectedEffectEnabled(ruwa::core::layers::TextStyleEffect::Italic),
-        selectedEffectEnabled(ruwa::core::layers::TextStyleEffect::Underline));
-    m_formattingPopup->setCurrentFontFamily(selectedUniformFontFamily());
-    m_formattingPopup->setTextColor(selectedTextDisplayColor());
-
-    constexpr int kVerticalOffset = 10;
-    const int popupWidth = qMax(m_formattingPopup->width(), m_formattingPopup->sizeHint().width());
-    const int popupHeight
-        = qMax(m_formattingPopup->height(), m_formattingPopup->sizeHint().height());
-    const int targetX = static_cast<int>(std::round(textRect.center().x() - popupWidth * 0.5));
-    const int targetY
-        = static_cast<int>(std::round(textRect.top() - popupHeight - kVerticalOffset));
-    const int clampedX
-        = qBound(8, targetX, qMax(8, m_panel->m_contentWidget->width() - popupWidth - 8));
-    const int clampedY
-        = qBound(8, targetY, qMax(8, m_panel->m_contentWidget->height() - popupHeight - 8));
-
-    const auto& camera = m_panel->m_glWidget->viewport().camera();
-    const bool cameraNavigating = m_panel->m_isPanning || m_panel->m_isZoomDragging
-        || m_panel->m_isRotatingView || camera.isAnimating() || camera.isFitToViewAnimating();
-    const bool showAnimation
-        = animateShow && !m_formattingPopup->isPopupVisible() && !cameraNavigating;
-    const bool hasTargetDelta = qAbs(clampedX - m_formattingPopup->x()) > 1
-        || qAbs(clampedY - m_formattingPopup->y()) > 1;
-    const bool clampedByBounds = (targetX != clampedX) || (targetY != clampedY);
-    const bool animateMove
-        = !showAnimation && !cameraNavigating && !clampedByBounds && hasTargetDelta;
-
-    m_formattingPopup->showAt(QPoint(clampedX, clampedY), showAnimation, animateMove);
-}
-
-void TextEditingController::hideFormattingPopup(bool animated)
-{
-    if (m_textColorPickerOverlay && m_textColorPickerOverlay->isActive()) {
-        m_textColorPickerOverlay->hidePicker();
-    }
-    if (!m_formattingPopup) {
-        return;
-    }
-    if (animated) {
-        m_formattingPopup->hideAnimated();
-    } else {
-        m_formattingPopup->hideImmediate();
-    }
-}
-
-QRectF TextEditingController::activeTextRectInPanel(const aether::TransformState& transform) const
-{
-    if (!m_panel) {
-        return QRectF();
-    }
-
-    const auto corners = transformedRectCorners(transform, transform.contentBounds);
-    const QPointF p1 = m_panel->mapWorldToPanel(corners[0]);
-    const QPointF p2 = m_panel->mapWorldToPanel(corners[1]);
-    const QPointF p3 = m_panel->mapWorldToPanel(corners[2]);
-    const QPointF p4 = m_panel->mapWorldToPanel(corners[3]);
-
-    const qreal minX = qMin(qMin(p1.x(), p2.x()), qMin(p3.x(), p4.x()));
-    const qreal maxX = qMax(qMax(p1.x(), p2.x()), qMax(p3.x(), p4.x()));
-    const qreal minY = qMin(qMin(p1.y(), p2.y()), qMin(p3.y(), p4.y()));
-    const qreal maxY = qMax(qMax(p1.y(), p2.y()), qMax(p3.y(), p4.y()));
-    return QRectF(QPointF(minX, minY), QPointF(maxX, maxY)).normalized();
-}
 
 aether::TransformState TextEditingController::normalizedTextTransform(
     const ruwa::core::layers::LayerData* layer) const
@@ -1088,7 +882,7 @@ void TextEditingController::updateOverlayState()
             *layer->textData, cursor.selectionStart(), cursor.selectionEnd());
     }
     m_panel->m_glWidget->setTextEditOverlayState(state);
-    updateFormattingPopup();
+    notifyFormattingStateChanged();
 }
 
 ruwa::core::layers::LayerData* TextEditingController::hitTextLayerAt(
@@ -1130,7 +924,7 @@ bool TextEditingController::eventFilter(QObject* watched, QEvent* event)
         QWidget* focusWidget = QApplication::focusWidget();
         if (m_panel
             && (focusWidget == m_panel || focusWidget == m_panel->m_contentWidget
-                || focusWidget == m_panel->m_glWidget || isFormattingPopupWidget(focusWidget))) {
+                || focusWidget == m_panel->m_glWidget || m_panel->isTextEditingFocusExclusion(focusWidget))) {
             return QObject::eventFilter(watched, event);
         }
         commit();

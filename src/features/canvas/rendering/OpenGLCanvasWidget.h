@@ -394,6 +394,12 @@ public:
     /// Topmost move-tool content rectangle at world position. Locked/unsupported hits block lower
     /// layers.
     QUuid moveToolContentLayerAt(const Vector2& worldPos) const;
+    /// Translate the selected layers' content by @p delta document pixels, as
+    /// one undoable step. Drives the same move-only transform the Move tool
+    /// uses, so raster, smart, text and group selections all move by the one
+    /// path. Returns false when nothing could move (no eligible selection, or a
+    /// stroke/transform readback owns the pixels right now).
+    bool moveSelectedContentBy(const Vector2& delta);
     void confirmTransform();
     /// @param moveOnlyStateForOverlay When set (e.g. confirmTransform after clearing the flag),
     /// used for overlay exit animation.

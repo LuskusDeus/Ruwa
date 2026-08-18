@@ -25,10 +25,16 @@ namespace aether {
 
 namespace {
 
-constexpr qreal kTextLayoutWrapWidth = 4096.0;
+// Effectively "never wrap": the layout has no text frame, so a line ends only
+// where the text says it does. It used to be 4096, which a single line can now
+// exceed on its own — the Character group tops out at a 2000px font, and a
+// wrapped line would silently change both the line count and the box the
+// alignment measures against.
+constexpr qreal kTextLayoutWrapWidth = 1000000.0;
 constexpr float kBoundsPadding = 4.0f;
 
 using ruwa::core::layers::TextAlignment;
+using ruwa::core::layers::TextCaps;
 using ruwa::core::layers::TextLayerData;
 using ruwa::core::layers::TextStyleRun;
 
@@ -39,14 +45,38 @@ struct EffectiveStyle {
     bool bold = false;
     bool italic = false;
     bool underline = false;
+    bool strikethrough = false;
+    qreal tracking = 0.0;
+    TextCaps caps = TextCaps::None;
 
     bool operator==(const EffectiveStyle& other) const
     {
         return fontFamily == other.fontFamily && qFuzzyCompare(fontSize, other.fontSize)
             && color.rgba() == other.color.rgba() && bold == other.bold && italic == other.italic
-            && underline == other.underline;
+            && underline == other.underline && strikethrough == other.strikethrough
+            && qFuzzyCompare(tracking, other.tracking) && caps == other.caps;
     }
 };
+
+/// Tracking is stored in Photoshop units (thousandths of an em); Qt wants an
+/// absolute pixel amount, which is what makes it scale with the font size.
+qreal letterSpacingPixels(qreal fontSize, qreal tracking)
+{
+    return qMax<qreal>(1.0, fontSize) * tracking / 1000.0;
+}
+
+QFont::Capitalization toQtCapitalization(TextCaps caps)
+{
+    switch (caps) {
+    case TextCaps::AllCaps:
+        return QFont::AllUppercase;
+    case TextCaps::SmallCaps:
+        return QFont::SmallCaps;
+    case TextCaps::None:
+        break;
+    }
+    return QFont::MixedCase;
+}
 
 Color toRetainedColor(const QColor& color)
 {
@@ -99,10 +129,13 @@ QString styleRunsKey(const QList<TextStyleRun>& runs)
                    .arg(run.fontFamily)
                    .arg(QString::number(run.fontSize, 'f', 3))
                    .arg(QString::number(run.color.rgba(), 16));
-        key += QStringLiteral(",%1,%2,%3")
+        key += QStringLiteral(",%1,%2,%3,%4,%5,%6")
                    .arg(run.bold ? 1 : 0)
                    .arg(run.italic ? 1 : 0)
-                   .arg(run.underline ? 1 : 0);
+                   .arg(run.underline ? 1 : 0)
+                   .arg(run.strikethrough ? 1 : 0)
+                   .arg(QString::number(run.tracking, 'f', 3))
+                   .arg(static_cast<int>(run.caps));
     }
     return key;
 }
@@ -152,8 +185,14 @@ uint64_t revisionFromKey(const QString& key)
 
 EffectiveStyle defaultStyle(const TextLayerData& textData)
 {
-    return { textData.fontFamily, qMax<qreal>(1.0, textData.fontSize), textData.color, false, false,
-        false };
+    EffectiveStyle style;
+    style.fontFamily = textData.fontFamily;
+    style.fontSize = qMax<qreal>(1.0, textData.fontSize);
+    style.color = textData.color;
+    style.strikethrough = textData.strikethrough;
+    style.tracking = textData.tracking;
+    style.caps = textData.caps;
+    return style;
 }
 
 EffectiveStyle styleAt(const TextLayerData& textData, int index)
@@ -171,6 +210,9 @@ EffectiveStyle styleAt(const TextLayerData& textData, int index)
             style.bold = run.bold;
             style.italic = run.italic;
             style.underline = run.underline;
+            style.strikethrough = run.strikethrough;
+            style.tracking = run.tracking;
+            style.caps = run.caps;
         }
     }
     return style;
@@ -184,6 +226,12 @@ std::unique_ptr<QTextLayout> createTextLayout(const TextLayerData& textData, con
     baseFont.setBold(base.bold);
     baseFont.setItalic(base.italic);
     baseFont.setUnderline(base.underline);
+    baseFont.setStrikeOut(base.strikethrough);
+    baseFont.setCapitalization(toQtCapitalization(base.caps));
+    if (!qFuzzyIsNull(base.tracking)) {
+        baseFont.setLetterSpacing(
+            QFont::AbsoluteSpacing, letterSpacingPixels(base.fontSize, base.tracking));
+    }
 
     QString layoutText = text;
     layoutText.replace(QStringLiteral("\r\n"), QStringLiteral("\n"));
@@ -214,6 +262,13 @@ std::unique_ptr<QTextLayout> createTextLayout(const TextLayerData& textData, con
         format.setFontWeight(run.bold ? QFont::Bold : QFont::Normal);
         format.setFontItalic(run.italic);
         format.setFontUnderline(run.underline);
+        // The strike-out line is drawn as its own primitive (the glyph path
+        // renderer only ever sees glyphs), but the format still carries it so
+        // any metric Qt derives from it stays consistent.
+        format.setFontStrikeOut(run.strikethrough);
+        format.setFontCapitalization(toQtCapitalization(run.caps));
+        format.setFontLetterSpacingType(QFont::AbsoluteSpacing);
+        format.setFontLetterSpacing(letterSpacingPixels(run.fontSize, run.tracking));
         format.setForeground(run.color);
 
         QTextLayout::FormatRange range;
@@ -300,28 +355,52 @@ Rect lineVisualRect(const QTextLine& line)
 Rect layoutText(QTextLayout& layout, const TextLayerData& textData)
 {
     const qreal lineHeightScale = qMax<qreal>(0.1, textData.lineHeight);
-    qreal y = 0.0;
-    qreal maxWidth = 1.0;
+    const qreal spaceBefore = qMax<qreal>(0.0, textData.spaceBefore);
+    const qreal spaceAfter = qMax<qreal>(0.0, textData.spaceAfter);
+    const bool justify = textData.alignment == TextAlignment::Justify;
 
-    layout.beginLayout();
-    while (true) {
-        QTextLine line = layout.createLine();
-        if (!line.isValid()) {
-            break;
+    // There is no text frame: the box every line is aligned inside is the
+    // widest line, so the widths have to be measured before anything can be
+    // placed.
+    const auto runLayout = [&layout](qreal wrapWidth, bool justified) {
+        QTextOption option = layout.textOption();
+        option.setAlignment(justified ? Qt::AlignJustify : Qt::AlignLeft);
+        layout.setTextOption(option);
+
+        qreal widest = 1.0;
+        layout.beginLayout();
+        while (true) {
+            QTextLine line = layout.createLine();
+            if (!line.isValid()) {
+                break;
+            }
+            line.setLineWidth(wrapWidth);
+            widest = qMax(widest, line.naturalTextWidth());
         }
-        line.setLineWidth(kTextLayoutWrapWidth);
-        maxWidth = qMax(maxWidth, line.naturalTextWidth());
-        line.setPosition(QPointF(0.0, y));
-        y += line.height() * lineHeightScale;
+        layout.endLayout();
+        return widest;
+    };
+
+    const qreal boxWidth = runLayout(kTextLayoutWrapWidth, /*justified=*/false);
+    if (justify) {
+        // Justification is Qt's to distribute, and it only does it once the
+        // line knows the width it has to fill. The last line of the layout
+        // stays flush left, which is Photoshop's "justify last left".
+        layout.clearLayout();
+        runLayout(boxWidth, /*justified=*/true);
     }
-    layout.endLayout();
 
     Rect bounds {};
+    qreal y = 0.0;
     for (int i = 0; i < layout.lineCount(); ++i) {
         QTextLine line = layout.lineAt(i);
-        const qreal lineWidth = line.naturalTextWidth();
-        line.setPosition(
-            QPointF(alignedLineX(textData.alignment, lineWidth, maxWidth), line.position().y()));
+        y += spaceBefore;
+        // Justified lines were already spread to the box by Qt; re-placing them
+        // by their natural width would undo exactly that.
+        const qreal x = justify ? 0.0 : alignedLineX(textData.alignment, line.naturalTextWidth(),
+                            boxWidth);
+        line.setPosition(QPointF(x, y));
+        y += line.height() * lineHeightScale + spaceAfter;
         expandRect(bounds, lineVisualRect(line));
     }
     return paddedRect(bounds);
@@ -359,22 +438,44 @@ Rect transformRectAABB(const TransformState& transform, const Rect& source)
     return bounds;
 }
 
-RetainedPrimitive underlinePrimitiveForRange(const QTextLine& line, const TransformState& transform,
-    int start, int end, const EffectiveStyle& style)
+/**
+ * @brief The underline or strike-out bar under/through [@p start, @p end).
+ *
+ * Both rules are drawn rather than left to the font because the glyph renderer
+ * only ever walks glyph paths; the only difference between them is where the
+ * bar sits, so they share one builder.
+ */
+RetainedPrimitive textRulePrimitiveForRange(const QTextLine& line, const TransformState& transform,
+    int start, int end, const EffectiveStyle& style, bool strikeOut)
 {
     RetainedPrimitive primitive;
     primitive.type = RetainedPrimitiveType::FilledPolygon;
-    if (!style.underline || end <= start) {
+    if (!(strikeOut ? style.strikethrough : style.underline) || end <= start) {
         return primitive;
     }
 
+    // cursorToX() is already in layout space: it starts from the line's own x
+    // and the alignment offset Qt derives from the text option. Adding
+    // line.position().x() on top counts the alignment twice, which is invisible
+    // while the text is left aligned and slides the bar right the moment it is
+    // not.
     const qreal x1 = line.cursorToX(start);
     const qreal x2 = line.cursorToX(end);
-    const float left = static_cast<float>(std::min(x1, x2) + line.position().x());
-    const float right = static_cast<float>(std::max(x1, x2) + line.position().x());
-    const float width = std::max(1.0f, right - left);
+    const float left = static_cast<float>(std::min(x1, x2));
+    const float right = static_cast<float>(std::max(x1, x2));
+    if (right - left < 0.5f) {
+        // The range advances nothing — an empty line, or a bare line separator.
+        // Widening it to a minimum would put a stub of a rule under a line that
+        // has no text, which centred alignment then parks in mid air.
+        return primitive;
+    }
+    const float width = right - left;
     const float thickness = std::max(1.0f, static_cast<float>(style.fontSize * 0.055));
-    const float y = static_cast<float>(line.position().y() + line.ascent() + thickness);
+    // Underline sits just below the baseline; the strike-out rides a bit above
+    // the middle of the x-height, the same place the font's own would.
+    const float y = strikeOut
+        ? static_cast<float>(line.position().y() + line.ascent() - line.ascent() * 0.28)
+        : static_cast<float>(line.position().y() + line.ascent() + thickness);
     const Rect sourceRect { left, y, width, thickness };
 
     const Vector2 p1 = transform.transformPoint({ sourceRect.left(), sourceRect.top() });
@@ -423,12 +524,22 @@ QString textRetainedPayloadKey(
         return {};
     }
 
-    return QStringLiteral("text-v2|%1|%2|%3|%4|%5|%6%7|%8")
+    // Every field the layout reads has to be in the key: the payload cache is
+    // keyed on it alone, so a value missing here shows as stale glyphs.
+    const QString paragraphKey
+        = QStringLiteral("|p:%1,%2|c:%3,%4,%5")
+              .arg(QString::number(textData->spaceBefore, 'f', 3),
+                  QString::number(textData->spaceAfter, 'f', 3),
+                  QString::number(textData->strikethrough ? 1 : 0),
+                  QString::number(textData->tracking, 'f', 3),
+                  QString::number(static_cast<int>(textData->caps)));
+
+    return QStringLiteral("text-v3|%1|%2|%3|%4|%5|%6%7%8|%9")
         .arg(textData->text, textData->fontFamily, QString::number(textData->fontSize, 'f', 3),
             QString::number(textData->color.rgba(), 16),
             QString::number(static_cast<int>(textData->alignment)),
-            QString::number(textData->lineHeight, 'f', 3), styleRunsKey(textData->styleRuns),
-            transformKey(transformOverride));
+            QString::number(textData->lineHeight, 'f', 3), paragraphKey,
+            styleRunsKey(textData->styleRuns), transformKey(transformOverride));
 }
 
 Rect computeTextLayoutSourceBounds(const TextLayerData& textData)
@@ -469,10 +580,11 @@ std::vector<Rect> computeTextSelectionSourceRects(
             continue;
         }
 
+        // Layout space already — see textRulePrimitiveForRange.
         const qreal x1 = line.cursorToX(rangeStart);
         const qreal x2 = line.cursorToX(rangeEnd);
-        const qreal left = std::min(x1, x2) + line.position().x();
-        const qreal right = std::max(x1, x2) + line.position().x();
+        const qreal left = std::min(x1, x2);
+        const qreal right = std::max(x1, x2);
         rects.push_back({ static_cast<float>(left), static_cast<float>(line.position().y()),
             static_cast<float>(std::max<qreal>(1.0, right - left)),
             static_cast<float>(line.height()) });
@@ -501,7 +613,7 @@ Rect computeTextCaretSourceRect(const TextLayerData& textData, int cursorPositio
         }
 
         const qreal x = line.cursorToX(std::clamp(pos, lineStart, lineEnd));
-        return { static_cast<float>(line.position().x() + x),
+        return { static_cast<float>(x),
             static_cast<float>(line.position().y()), 1.5f, static_cast<float>(line.height()) };
     }
     return {};
@@ -527,9 +639,10 @@ int textCursorPositionAtSourcePoint(const TextLayerData& textData, const Vector2
             continue;
         }
 
-        const qreal localX = sourcePoint.x - line.position().x();
-        const int textCursor
-            = std::clamp(line.xToCursor(localX), 0, static_cast<int>(textData.text.size()));
+        // xToCursor() is the inverse of cursorToX() and takes the same layout
+        // space, so the line's own x must not be subtracted first.
+        const int textCursor = std::clamp(
+            line.xToCursor(sourcePoint.x), 0, static_cast<int>(textData.text.size()));
         bestPosition = textCursor;
         bestDistance = dy;
     }
@@ -636,10 +749,13 @@ std::shared_ptr<RetainedRenderPayload> buildTextRetainedPayload(
                     primitive.glyphRuns.push_back(std::move(run));
                 }
             }
-            auto underlinePrimitive = underlinePrimitiveForRange(line, transform, pos, end, style);
-            if (!underlinePrimitive.isEmpty()) {
-                expandRect(payload->worldBounds, underlinePrimitive.worldBounds);
-                payload->primitives.push_back(std::move(underlinePrimitive));
+            for (const bool strikeOut : { false, true }) {
+                auto rulePrimitive
+                    = textRulePrimitiveForRange(line, transform, pos, end, style, strikeOut);
+                if (!rulePrimitive.isEmpty()) {
+                    expandRect(payload->worldBounds, rulePrimitive.worldBounds);
+                    payload->primitives.push_back(std::move(rulePrimitive));
+                }
             }
             pos = end;
         }

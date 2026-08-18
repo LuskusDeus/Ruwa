@@ -9772,6 +9772,53 @@ bool OpenGLCanvasWidget::enterMoveOnlyTransformMode()
     return enterSelectedTransformMode(true);
 }
 
+bool OpenGLCanvasWidget::moveSelectedContentBy(const Vector2& delta)
+{
+    if (qAbs(delta.x) < 1e-4f && qAbs(delta.y) < 1e-4f) {
+        return false;
+    }
+    // The transform renderer owns a single atlas and a single readback PBO, so
+    // it must not be re-entered while an apply is still in flight.
+    if (m_autoApplyingTransform || m_pendingTransform.active) {
+        return false;
+    }
+    if (m_strokeHost && m_strokeHost->isDrawing()) {
+        return false;
+    }
+
+    const auto applyDelta = [this, &delta]() {
+        m_transformController.state().translation.x += delta.x;
+        m_transformController.state().translation.y += delta.y;
+    };
+
+    // A transform the user already has open is nudged in place and recorded as
+    // its own step, the way a mode switch or a flip is — closing their session
+    // out from under them would lose the rest of their edit.
+    if (m_transformController.isActive()) {
+        if (m_transformController.isDragging()) {
+            return false;
+        }
+        beginTransformUndoStep();
+        applyDelta();
+        commitTransformUndoStep();
+
+        m_prevTransformDirtyValid = false;
+        invalidateTransformViewportPreviewTransform();
+        m_canvas.dirtyManager().onStructureChanged();
+        requestRender();
+        return true;
+    }
+
+    if (!enterMoveOnlyTransformMode()) {
+        return false;
+    }
+    applyDelta();
+    // Bakes the pixels and pushes the ordinary transform undo command, so the
+    // move lands in history looking like any other move.
+    confirmTransform();
+    return true;
+}
+
 QUuid OpenGLCanvasWidget::moveToolContentLayerAt(const Vector2& worldPos) const
 {
     if (!m_layerModel) {

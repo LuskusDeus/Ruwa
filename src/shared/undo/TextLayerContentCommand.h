@@ -30,6 +30,14 @@ public:
         TransformState newTransform, RequestRenderFn requestRender,
         OnContentChangedFn onContentChanged);
 
+    /// Layer-wide typography carried alongside the runs. A Character or
+    /// Paragraph edit changes the defaults a future character inherits, not
+    /// only the existing runs, so both halves have to travel in one step.
+    void setTypography(const ruwa::core::layers::TextLayerTypography& oldTypography,
+        const ruwa::core::layers::TextLayerTypography& newTypography);
+    /// Undo-stack label; defaults to "Edit Text".
+    void setLabel(const QString& label);
+
     void undo() override;
     void redo() override;
     QString text() const override;
@@ -38,7 +46,8 @@ public:
 
 private:
     void applyTextState(const QString& textValue,
-        const QList<ruwa::core::layers::TextStyleRun>& styleRuns, const TransformState& transform);
+        const QList<ruwa::core::layers::TextStyleRun>& styleRuns, const TransformState& transform,
+        const ruwa::core::layers::TextLayerTypography& typography);
 
     ruwa::core::layers::LayerModel* m_layerModel = nullptr;
     ruwa::core::layers::LayerId m_layerId;
@@ -48,6 +57,10 @@ private:
     QList<ruwa::core::layers::TextStyleRun> m_newStyleRuns;
     TransformState m_oldTransform;
     TransformState m_newTransform;
+    ruwa::core::layers::TextLayerTypography m_oldTypography;
+    ruwa::core::layers::TextLayerTypography m_newTypography;
+    bool m_hasTypography = false;
+    QString m_label;
     RequestRenderFn m_requestRender;
     OnContentChangedFn m_onContentChanged;
 };

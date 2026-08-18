@@ -8,6 +8,7 @@
 #include <QDoubleValidator>
 #include <QEnterEvent>
 #include <QFontMetrics>
+#include <QFocusEvent>
 #include <QKeyEvent>
 #include <QPainter>
 #include <QPainterPath>
@@ -85,6 +86,16 @@ void NumericInputField::setSuffix(const QString& suffix)
     update();
 }
 
+void NumericInputField::setPrefix(const QString& prefix)
+{
+    if (m_prefix == prefix) {
+        return;
+    }
+    m_prefix = prefix;
+    updateMargins();
+    update();
+}
+
 void NumericInputField::setHoverProgress(qreal p)
 {
     m_hoverProgress = qBound(0.0, p, 1.0);
@@ -133,6 +144,20 @@ void NumericInputField::onTextEdited(const QString& text)
 void NumericInputField::nudge(double delta)
 {
     applyValue(m_value + delta, /*reformatText=*/true);
+}
+
+void NumericInputField::focusOutEvent(QFocusEvent* event)
+{
+    // Whether QLineEdit emitted editingFinished on the way out depends on the
+    // validator: an empty or half-typed field ("", "-", "1.") is not acceptable
+    // input, so it emits nothing and the field is left showing the fragment.
+    const bool wasReported = hasAcceptableInput();
+    QLineEdit::focusOutEvent(event);
+    if (wasReported) {
+        return;
+    }
+    applyValue(m_value, /*reformatText=*/true);
+    emit editingFinished();
 }
 
 void NumericInputField::onEditingFinished()
@@ -209,11 +234,21 @@ int NumericInputField::suffixSlotWidth() const
         + ruwa::ui::core::ThemeManager::instance().scaled(BaseSuffixGap);
 }
 
+int NumericInputField::prefixSlotWidth() const
+{
+    if (m_prefix.isEmpty()) {
+        return 0;
+    }
+    const QFontMetrics fm(font());
+    return fm.horizontalAdvance(m_prefix)
+        + ruwa::ui::core::ThemeManager::instance().scaled(BaseSuffixGap);
+}
+
 void NumericInputField::updateMargins()
 {
     auto& theme = ruwa::ui::core::ThemeManager::instance();
     const int side = theme.scaled(BaseSidePad);
-    setTextMargins(side, 0, side + suffixSlotWidth(), 0);
+    setTextMargins(side + prefixSlotWidth(), 0, side + suffixSlotWidth(), 0);
 }
 
 void NumericInputField::applyPalette()
@@ -266,13 +301,23 @@ void NumericInputField::paintEvent(QPaintEvent* event)
     // Let QLineEdit paint the text/cursor on top.
     QLineEdit::paintEvent(event);
 
+    if (m_prefix.isEmpty() && m_suffix.isEmpty()) {
+        return;
+    }
+
+    // Both glyphs sit outside the editable text, so they are drawn over the
+    // line edit rather than being part of its content.
+    QPainter overlay(this);
+    overlay.setRenderHint(QPainter::Antialiasing);
+    overlay.setPen(TC::interpolate(colors.textMuted, colors.text, accent));
+    overlay.setFont(font());
+    const int side = ruwa::ui::core::ThemeManager::instance().scaled(BaseSidePad);
+
+    if (!m_prefix.isEmpty()) {
+        const QRect prefixRect(side, 0, prefixSlotWidth(), height());
+        overlay.drawText(prefixRect, Qt::AlignVCenter | Qt::AlignLeft, m_prefix);
+    }
     if (!m_suffix.isEmpty()) {
-        QPainter overlay(this);
-        overlay.setRenderHint(QPainter::Antialiasing);
-        const QColor suffixColor = TC::interpolate(colors.textMuted, colors.text, accent);
-        overlay.setPen(suffixColor);
-        overlay.setFont(font());
-        const int side = ruwa::ui::core::ThemeManager::instance().scaled(BaseSidePad);
         const QRect suffixRect(width() - side - suffixSlotWidth(), 0, suffixSlotWidth(), height());
         overlay.drawText(suffixRect, Qt::AlignVCenter | Qt::AlignRight, m_suffix);
     }

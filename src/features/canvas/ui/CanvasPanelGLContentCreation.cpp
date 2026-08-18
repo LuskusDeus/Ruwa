@@ -429,9 +429,6 @@ bool CanvasPanel::createGLContent()
             m_exportAreaController->updateOverlay();
         }
         updateSelectionActionPopup();
-        if (m_textEditingController && m_textEditingController->isEditing()) {
-            m_textEditingController->refreshFormattingPopup();
-        }
     });
     connect(m_glWidget, &QOpenGLWidget::frameSwapped, this, [this]() {
         if (!m_loadingAppearanceAnimationActive || !m_loadingAppearanceAnimationRunning
@@ -451,9 +448,6 @@ bool CanvasPanel::createGLContent()
             m_exportAreaController->updateOverlay();
         }
         updateSelectionActionPopup();
-        if (m_textEditingController && m_textEditingController->isEditing()) {
-            m_textEditingController->refreshFormattingPopup();
-        }
     });
 
     // Connect brush control signals

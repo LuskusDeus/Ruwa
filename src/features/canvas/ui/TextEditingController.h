@@ -8,20 +8,16 @@
 
 #include <QObject>
 #include <QColor>
-#include <QPointer>
 #include <QRectF>
 #include <QString>
+
+#include <utility>
 
 class QEvent;
 class QKeyEvent;
 class QPlainTextEdit;
 class QTimer;
 class QWidget;
-
-namespace ruwa::ui::widgets {
-class ColorPickerOverlay;
-class TextFormattingPopup;
-} // namespace ruwa::ui::widgets
 
 namespace ruwa::ui::workspace {
 
@@ -44,12 +40,16 @@ public:
     void extendSelectionToWorld(const aether::Vector2& worldPos);
     void ensureEditorHasFocus();
     bool handleRedirectedKeyPress(QKeyEvent* event);
-    void refreshFormattingPopup();
+    /// The caret, the selection or the session itself moved: tells the panel to
+    /// re-read the character attributes it is showing.
+    void notifyFormattingStateChanged();
+    /// Selected characters as [from, to). Equal values mean a bare caret.
+    std::pair<int, int> selectionRange() const;
     void toggleSelectedEffect(ruwa::core::layers::TextStyleEffect effect);
     void applySelectedFontFamily(const QString& family);
     void commit();
     void cancel();
-    void clearOverlay(bool animateFormattingPopup = false);
+    void clearOverlay();
 
     ruwa::core::layers::LayerData* hitTextLayerAt(const aether::Vector2& worldPos) const;
 
@@ -68,25 +68,15 @@ private:
     void removeProvisionalLayer();
     void restoreOldTextState();
     bool selectedEffectEnabled(ruwa::core::layers::TextStyleEffect effect) const;
-    QString selectedUniformFontFamily() const;
-    QColor selectedTextDisplayColor() const;
-    void applySelectedTextColor(const QColor& color);
     void invalidateActiveTextLayer();
     void blockShortcuts();
     void releaseShortcuts();
     void showCaret();
-    bool isFormattingPopupWidget(const QWidget* widget) const;
-    void ensureFormattingPopup();
-    void updateFormattingPopup(bool animateShow = true);
-    void hideFormattingPopup(bool animated);
-    QRectF activeTextRectInPanel(const aether::TransformState& transform) const;
     aether::TransformState normalizedTextTransform(
         const ruwa::core::layers::LayerData* layer) const;
 
     CanvasPanel* m_panel = nullptr;
     QPlainTextEdit* m_editor = nullptr;
-    QPointer<ruwa::ui::widgets::TextFormattingPopup> m_formattingPopup;
-    QPointer<ruwa::ui::widgets::ColorPickerOverlay> m_textColorPickerOverlay;
     QTimer* m_caretBlinkTimer = nullptr;
     bool m_active = false;
     bool m_provisional = false;
@@ -99,6 +89,7 @@ private:
     int m_insertIndex = -1;
     QString m_oldText;
     QList<ruwa::core::layers::TextStyleRun> m_oldStyleRuns;
+    ruwa::core::layers::TextLayerTypography m_oldTypography;
     aether::TransformState m_oldTransform;
 };
 

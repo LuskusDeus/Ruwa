@@ -56,6 +56,12 @@ TextAlignment textAlignmentFromValue(int value)
     return static_cast<TextAlignment>(qBound(0, value, static_cast<int>(TextAlignment::Justify)));
 }
 
+ruwa::core::layers::TextCaps textCapsFromValue(int value)
+{
+    return static_cast<ruwa::core::layers::TextCaps>(
+        qBound(0, value, static_cast<int>(ruwa::core::layers::TextCaps::SmallCaps)));
+}
+
 GroupCompositingMode groupCompositingModeFromValue(int value)
 {
     return value == static_cast<int>(GroupCompositingMode::PassThrough)
@@ -2366,10 +2372,16 @@ LayerEntry LayerModel::layerDataToEntry(const LayerData* data)
         entry.textColorRgba = data->textData->color.rgba();
         entry.textAlignment = static_cast<int>(data->textData->alignment);
         entry.textLineHeight = data->textData->lineHeight;
+        entry.textStrikethrough = data->textData->strikethrough;
+        entry.textTracking = data->textData->tracking;
+        entry.textCaps = static_cast<int>(data->textData->caps);
+        entry.textSpaceBefore = data->textData->spaceBefore;
+        entry.textSpaceAfter = data->textData->spaceAfter;
         entry.textStyleRuns.reserve(data->textData->styleRuns.size());
         for (const auto& run : data->textData->styleRuns) {
             entry.textStyleRuns.append({ run.start, run.length, run.fontFamily, run.fontSize,
-                run.color.rgba(), run.bold, run.italic, run.underline });
+                run.color.rgba(), run.bold, run.italic, run.underline, run.strikethrough,
+                run.tracking, static_cast<int>(run.caps) });
         }
     }
 
@@ -2472,11 +2484,17 @@ std::shared_ptr<LayerData> LayerModel::entryToLayerData(const LayerEntry& entry,
             data->textData->color = QColor::fromRgba(entry.textColorRgba);
             data->textData->alignment = textAlignmentFromValue(entry.textAlignment);
             data->textData->lineHeight = entry.textLineHeight;
+            data->textData->strikethrough = entry.textStrikethrough;
+            data->textData->tracking = entry.textTracking;
+            data->textData->caps = textCapsFromValue(entry.textCaps);
+            data->textData->spaceBefore = entry.textSpaceBefore;
+            data->textData->spaceAfter = entry.textSpaceAfter;
             data->textData->styleRuns.reserve(entry.textStyleRuns.size());
             for (const auto& run : entry.textStyleRuns) {
                 data->textData->styleRuns.append(
                     { run.start, run.length, run.fontFamily, run.fontSize,
-                        QColor::fromRgba(run.colorRgba), run.bold, run.italic, run.underline });
+                        QColor::fromRgba(run.colorRgba), run.bold, run.italic, run.underline,
+                        run.strikethrough, run.tracking, textCapsFromValue(run.caps) });
             }
         }
     }

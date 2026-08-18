@@ -49,6 +49,13 @@
         <file alias="Bold">resources/icons/Bold.png</file>
         <file alias="Italic">resources/icons/Italic.png</file>
         <file alias="Underline">resources/icons/Underline.png</file>
+        <file alias="Strikethrough">resources/icons/Strikethrough.png</file>
+        <file alias="AllCaps">resources/icons/AllCaps.png</file>
+        <file alias="SmallCaps">resources/icons/SmallCaps.png</file>
+        <file alias="AlignTextLeft">resources/icons/AlignTextLeft.png</file>
+        <file alias="AlignTextCenter">resources/icons/AlignTextCenter.png</file>
+        <file alias="AlignTextRight">resources/icons/AlignTextRight.png</file>
+        <file alias="AlignTextJustify">resources/icons/AlignTextJustify.png</file>
         <file alias="Zoom">resources/icons/Zoom.png</file>
         <file alias="TransformLeft">resources/icons/TransformLeft.png</file>
         <file alias="TransformDown">resources/icons/TransformDown.png</file>
@@ -124,6 +131,10 @@
         <file alias="LiquifyShrink">resources/icons/LiquifyShrink.png</file>
         <file alias="LayerMask">resources/icons/LayerMask.png</file>
         <file alias="AdjustmentLayer">resources/icons/AdjustmentLayer.png</file>
+        <file alias="LayerRaster">resources/icons/LayerRaster.png</file>
+        <file alias="LayerSmart">resources/icons/LayerSmart.png</file>
+        <file alias="LayerBoard">resources/icons/LayerBoard.png</file>
+        <file alias="LayerBackground">resources/icons/LayerBackground.png</file>
         <file alias="ColorPanel">resources/icons/ColorPanel.png</file>
         <file alias="HSV">resources/icons/HSV.png</file>
         <file alias="RGB">resources/icons/RGB.png</file>

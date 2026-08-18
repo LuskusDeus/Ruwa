@@ -994,7 +994,7 @@ bool CanvasMouseInputHandler::handleMouseMove(QMouseEvent* event)
             m_panel->m_canvasResizeController->updateOverlay();
         }
         if (m_panel->m_textEditingController && m_panel->m_textEditingController->isEditing()) {
-            m_panel->m_textEditingController->refreshFormattingPopup();
+            m_panel->m_textEditingController->notifyFormattingStateChanged();
         }
         event->accept();
         return true;
@@ -1026,7 +1026,7 @@ bool CanvasMouseInputHandler::handleMouseMove(QMouseEvent* event)
                 m_panel->m_canvasResizeController->updateOverlay();
             }
             if (m_panel->m_textEditingController && m_panel->m_textEditingController->isEditing()) {
-                m_panel->m_textEditingController->refreshFormattingPopup();
+                m_panel->m_textEditingController->notifyFormattingStateChanged();
             }
         }
         event->accept();
@@ -1233,7 +1233,7 @@ bool CanvasMouseInputHandler::handleMouseMove(QMouseEvent* event)
             m_panel->m_canvasResizeController->updateOverlay();
         }
         if (m_panel->m_textEditingController && m_panel->m_textEditingController->isEditing()) {
-            m_panel->m_textEditingController->refreshFormattingPopup();
+            m_panel->m_textEditingController->notifyFormattingStateChanged();
         }
         event->accept();
         return true;

@@ -4,10 +4,13 @@
 #ifndef RUWA_SHARED_WIDGETS_INPUTS_STYLEDINPUTFIELD_H
 #define RUWA_SHARED_WIDGETS_INPUTS_STYLEDINPUTFIELD_H
 
-#include <QWidget>
+#include "shared/resources/IconProvider.h"
+
 #include <QLocale>
+#include <QPixmap>
 #include <QString>
 #include <QVariant>
+#include <QWidget>
 
 class QLineEdit;
 class QComboBox;
@@ -31,8 +34,32 @@ class StyledInputField : public QWidget {
 public:
     enum class FieldType { Text, Number, Dropdown };
 
+    /**
+     * @brief How much air the box puts around its text.
+     *
+     * Comfortable is the form-field default (New Project, brush editor).
+     * Compact hugs the text instead, for fields that sit in a toolbar or a
+     * panel header where a full-size form field would dominate the strip.
+     */
+    enum class Density { Comfortable, Compact };
+
     explicit StyledInputField(const QString& label, FieldType type, QWidget* parent = nullptr);
     ~StyledInputField() override;
+
+    void setDensity(Density density);
+    Density density() const { return m_density; }
+
+    /**
+     * @brief Show a glyph inside the box, ahead of the text.
+     *
+     * The slot is reserved in the box's left padding, so the icon is part of the
+     * field rather than a neighbour of it — same arrangement as HexColorInput's
+     * "#" prefix. It is decorative: never selectable, never part of the text.
+     * Re-tinted automatically on a theme change.
+     */
+    void setLeadingIcon(ruwa::ui::core::IconProvider::StandardIcon icon);
+    void clearLeadingIcon();
+    bool hasLeadingIcon() const { return m_hasLeadingIcon; }
 
     void setText(const QString& text);
     QString text() const;
@@ -99,12 +126,26 @@ private:
     /// value when focus leaves, so what is shown is always what value() returns.
     void commitNumericFixup();
 
+    // Box metrics, density-dependent and already theme-scaled.
+    int boxPaddingV() const;
+    int boxPaddingH() const;
+    int boxBorderRadius() const;
+    /// Width the leading glyph claims inside the box's left padding, gap
+    /// included. Zero when there is no leading icon.
+    int leadingSlotWidth() const;
+    void rebuildLeadingPixmap();
+
 private slots:
     void onThemeChanged();
 
 private:
     QString m_labelText;
     FieldType m_type;
+    Density m_density { Density::Comfortable };
+
+    bool m_hasLeadingIcon { false };
+    ruwa::ui::core::IconProvider::StandardIcon m_leadingIconType {};
+    QPixmap m_leadingPixmap;
 
     QLineEdit* m_lineEdit { nullptr };
     QComboBox* m_comboBox { nullptr };

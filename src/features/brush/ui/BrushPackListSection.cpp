@@ -14,6 +14,7 @@
 #include "shared/style/DisplayColorPalette.h"
 #include "shared/style/WidgetStyleManager.h"
 #include "shared/widgets/BaseAnimatedButton.h"
+#include "shared/widgets/SectionHeaderButton.h"
 #include "shared/widgets/layout/AnimatedFlowWidget.h"
 #include "shell/context-menu/IContextMenuProvider.h"
 
@@ -27,7 +28,6 @@
 #include <QPainterPath>
 #include <QResizeEvent>
 #include <QTimer>
-#include <QVariantAnimation>
 #include <QVariantList>
 #include <QVBoxLayout>
 #include <functional>
@@ -76,132 +76,6 @@ QString translatedBrushText(const QString& text)
     }
     return QCoreApplication::translate("QObject", text.toUtf8().constData());
 }
-
-class PackHeaderButton final : public ruwa::ui::widgets::BaseAnimatedButton {
-public:
-    explicit PackHeaderButton(QWidget* parent = nullptr)
-        : BaseAnimatedButton(parent)
-    {
-        setCursor(Qt::PointingHandCursor);
-        setFocusPolicy(Qt::NoFocus);
-        setFixedHeight(ThemeManager::instance().scaled(28));
-        setHoverDuration(150);
-        setActiveDuration(190);
-
-        m_expandAnimation = new QVariantAnimation(this);
-        m_expandAnimation->setDuration(220);
-        m_expandAnimation->setEasingCurve(QEasingCurve::OutCubic);
-        connect(m_expandAnimation, &QVariantAnimation::valueChanged, this,
-            [this](const QVariant& value) {
-                m_expandProgress = value.toReal();
-                update();
-            });
-    }
-
-    void setTitle(const QString& title)
-    {
-        m_title = title;
-        update();
-    }
-
-    void setExpanded(bool expanded, bool animated)
-    {
-        const qreal target = expanded ? 1.0 : 0.0;
-        if (!animated) {
-            m_expandAnimation->stop();
-            m_expandProgress = target;
-            update();
-            return;
-        }
-
-        m_expandAnimation->setDuration(190);
-        m_expandAnimation->setEasingCurve(QEasingCurve::InOutCubic);
-        m_expandAnimation->stop();
-        m_expandAnimation->setStartValue(m_expandProgress);
-        m_expandAnimation->setEndValue(target);
-        m_expandAnimation->start();
-    }
-
-protected:
-    void paintEvent(QPaintEvent* event) override
-    {
-        Q_UNUSED(event);
-
-        QPainter painter(this);
-        painter.setRenderHint(QPainter::Antialiasing);
-
-        const auto& colors = WidgetStyleManager::instance().colors();
-        const QRectF outerRect = rect().adjusted(0.5, 0.5, -0.5, -0.5);
-        const qreal radius = ThemeManager::instance().scaled(7);
-
-        QColor fillColor = ThemeColors::withAlpha(colors.surfaceAlt, 0);
-        fillColor
-            = ThemeColors::interpolate(fillColor, colors.surfaceHover(), hoverProgress() * 0.18);
-        fillColor = ThemeColors::interpolate(fillColor, colors.primary, activeProgress() * 0.04);
-        painter.setPen(Qt::NoPen);
-        painter.setBrush(fillColor);
-        painter.drawRoundedRect(outerRect, radius, radius);
-
-        const int leftPadding = ThemeManager::instance().scaled(10);
-        const int rightPadding = ThemeManager::instance().scaled(10);
-        const int arrowSize = ThemeManager::instance().scaled(10);
-        const int arrowAreaWidth = arrowSize + ThemeManager::instance().scaled(4);
-        const int gapWidth = ThemeManager::instance().scaled(8);
-
-        QFont titleFont = painter.font();
-        titleFont.setPixelSize(ThemeManager::instance().scaled(11));
-        titleFont.setWeight(activeProgress() > 0.5 ? QFont::Medium : QFont::Normal);
-        painter.setFont(titleFont);
-
-        const QString titleText = translatedBrushText(m_title);
-        const int textWidth
-            = qMin(painter.fontMetrics().horizontalAdvance(titleText), qMax(0, width() / 2));
-
-        QRect textRect(leftPadding, 0,
-            qMax(0, width() - leftPadding - rightPadding - arrowAreaWidth - gapWidth * 2),
-            height());
-        textRect.setWidth(qMin(textRect.width(), textWidth + ThemeManager::instance().scaled(6)));
-
-        painter.setPen(ThemeColors::interpolate(colors.textMuted, colors.text,
-            0.38 + activeProgress() * 0.34 + hoverProgress() * 0.18));
-        painter.drawText(textRect, Qt::AlignVCenter | Qt::AlignLeft,
-            painter.fontMetrics().elidedText(titleText, Qt::ElideRight, textRect.width()));
-
-        const int lineStartX = textRect.right() + gapWidth;
-        const int lineEndX = width() - rightPadding - arrowAreaWidth - gapWidth;
-        if (lineEndX > lineStartX) {
-            QColor lineColor = ThemeColors::interpolate(colors.borderSubtle(),
-                colors.borderSubtleHover(), hoverProgress() * 0.45 + activeProgress() * 0.2);
-            lineColor.setAlphaF(lineColor.alphaF() * (0.55 + hoverProgress() * 0.2));
-            painter.setPen(QPen(lineColor, 1.0));
-            painter.drawLine(
-                QPointF(lineStartX, height() * 0.5), QPointF(lineEndX, height() * 0.5));
-        }
-
-        const QPointF arrowCenter(width() - rightPadding - arrowSize * 0.5, height() * 0.5);
-        painter.save();
-        painter.translate(arrowCenter);
-        painter.rotate(90.0 * m_expandProgress);
-        painter.translate(-arrowCenter);
-        QPen arrowPen(ThemeColors::interpolate(colors.textMuted, colors.text,
-                          0.28 + activeProgress() * 0.48 + hoverProgress() * 0.16),
-            ThemeManager::instance().scaled(1.4));
-        arrowPen.setCapStyle(Qt::RoundCap);
-        arrowPen.setJoinStyle(Qt::RoundJoin);
-        painter.setPen(arrowPen);
-        painter.drawLine(
-            QPointF(arrowCenter.x() - arrowSize * 0.35, arrowCenter.y() - arrowSize * 0.35),
-            QPointF(arrowCenter.x() + arrowSize * 0.05, arrowCenter.y()));
-        painter.drawLine(QPointF(arrowCenter.x() + arrowSize * 0.05, arrowCenter.y()),
-            QPointF(arrowCenter.x() - arrowSize * 0.35, arrowCenter.y() + arrowSize * 0.35));
-        painter.restore();
-    }
-
-private:
-    QString m_title;
-    qreal m_expandProgress = 0.0;
-    QVariantAnimation* m_expandAnimation = nullptr;
-};
 
 class PackBrushRowButton final : public ruwa::ui::widgets::BaseAnimatedButton,
                                  public ruwa::ui::widgets::IContextMenuProvider {
@@ -757,8 +631,7 @@ BrushPackListSection::BrushPackListSection(QWidget* parent)
     rootLayout->setContentsMargins(0, 0, 0, 0);
     rootLayout->setSpacing(2);
 
-    auto* headerButton = new PackHeaderButton(this);
-    m_headerButton = headerButton;
+    m_headerButton = new ruwa::ui::widgets::SectionHeaderButton(this);
     rootLayout->addWidget(m_headerButton);
 
     m_contentContainer = new ruwa::ui::widgets::AnimatedFlowWidget(
@@ -786,7 +659,7 @@ BrushPackListSection::BrushPackListSection(QWidget* parent)
 
     connect(m_expandAnimation, &QPropertyAnimation::valueChanged, this,
         [this](const QVariant&) { emit contentGeometryChanged(); });
-    connect(headerButton, &QAbstractButton::clicked, this,
+    connect(m_headerButton, &QAbstractButton::clicked, this,
         [this]() { setExpanded(!m_expanded, true); });
 }
 
@@ -824,8 +697,7 @@ void BrushPackListSection::setPackData(const BrushListPackData& pack)
 {
     m_pack = pack;
 
-    auto* headerButton = static_cast<PackHeaderButton*>(m_headerButton);
-    headerButton->setTitle(m_pack.name);
+    m_headerButton->setTitle(translatedBrushText(m_pack.name));
     rebuildBrushRows();
     updateSelectionState();
     setContentHeight(m_expanded ? expandedContentHeight() : 0);
@@ -834,7 +706,7 @@ void BrushPackListSection::setPackData(const BrushListPackData& pack)
 void BrushPackListSection::updatePackName(const QString& newName)
 {
     m_pack.name = newName;
-    static_cast<PackHeaderButton*>(m_headerButton)->setTitle(newName);
+    m_headerButton->setTitle(translatedBrushText(newName));
 }
 
 void BrushPackListSection::setExpanded(bool expanded, bool animated)
@@ -1012,8 +884,7 @@ void BrushPackListSection::rebuildBrushRows()
 
 void BrushPackListSection::updateExpandedVisualState(bool animated)
 {
-    auto* headerButton = static_cast<PackHeaderButton*>(m_headerButton);
-    headerButton->setExpanded(m_expanded, animated);
+    m_headerButton->setExpanded(m_expanded, animated);
 
     // Only an expanded section glides its rows on resize; a collapsed one is
     // clipped to zero height, so snapping its hidden rows is cheaper.
@@ -1032,7 +903,7 @@ void BrushPackListSection::updateExpandedVisualState(bool animated)
 void BrushPackListSection::updateSelectionState()
 {
     const bool hasSelectedBrush = m_brushRows.contains(m_selectedBrushId);
-    static_cast<PackHeaderButton*>(m_headerButton)->setActive(hasSelectedBrush);
+    m_headerButton->setActive(hasSelectedBrush);
 
     for (auto it = m_brushRows.begin(); it != m_brushRows.end(); ++it) {
         auto* rowButton = static_cast<PackBrushRowButton*>(it.value());

@@ -10,6 +10,7 @@
 class QPropertyAnimation;
 class QWheelEvent;
 class QKeyEvent;
+class QFocusEvent;
 class QResizeEvent;
 class QDoubleValidator;
 
@@ -56,6 +57,12 @@ public:
     void setSuffix(const QString& suffix);
     QString suffix() const { return m_suffix; }
 
+    /// Optional label drawn before the number (e.g. "X"). Like the suffix it
+    /// sits inside the capsule and outside the editable text, which is what
+    /// makes a row of fields read without a separate column of labels.
+    void setPrefix(const QString& prefix);
+    QString prefix() const { return m_prefix; }
+
     qreal hoverProgress() const { return m_hoverProgress; }
     void setHoverProgress(qreal p);
 
@@ -74,6 +81,10 @@ protected:
     void leaveEvent(QEvent* event) override;
     void wheelEvent(QWheelEvent* event) override;
     void keyPressEvent(QKeyEvent* event) override;
+    /// QLineEdit only emits editingFinished on focus-out when its validator
+    /// accepts the text, so an emptied field would otherwise be left blank and
+    /// never reported as finished. This restores the canonical value first.
+    void focusOutEvent(QFocusEvent* event) override;
     void resizeEvent(QResizeEvent* event) override;
 
 private slots:
@@ -92,6 +103,7 @@ private:
     void applyValue(double value, bool reformatText);
     QString formatValue(double value) const;
     int suffixSlotWidth() const;
+    int prefixSlotWidth() const;
 
     double m_minimum = 0.0;
     double m_maximum = 100.0;
@@ -99,6 +111,7 @@ private:
     double m_value = 0.0;
     int m_decimals = 0;
     QString m_suffix;
+    QString m_prefix;
 
     qreal m_hoverProgress { 0.0 };
     QPropertyAnimation* m_hoverAnimation { nullptr };

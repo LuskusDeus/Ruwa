@@ -360,10 +360,16 @@ void writeTextLayerFields(ruwa::core::serialization::LayerEntry& entry, const La
     entry.textColorRgba = layer->textData->color.rgba();
     entry.textAlignment = static_cast<int>(layer->textData->alignment);
     entry.textLineHeight = layer->textData->lineHeight;
+    entry.textStrikethrough = layer->textData->strikethrough;
+    entry.textTracking = layer->textData->tracking;
+    entry.textCaps = static_cast<int>(layer->textData->caps);
+    entry.textSpaceBefore = layer->textData->spaceBefore;
+    entry.textSpaceAfter = layer->textData->spaceAfter;
     entry.textStyleRuns.reserve(layer->textData->styleRuns.size());
     for (const auto& run : layer->textData->styleRuns) {
         entry.textStyleRuns.append({ run.start, run.length, run.fontFamily, run.fontSize,
-            run.color.rgba(), run.bold, run.italic, run.underline });
+            run.color.rgba(), run.bold, run.italic, run.underline, run.strikethrough, run.tracking,
+            static_cast<int>(run.caps) });
     }
 }
 
@@ -2002,6 +2008,27 @@ void WorkspaceTab::setupPanels()
     m_layersPanel->setDisplayFrame(layerPreviewFrame());
     m_layerPropertiesPanel = new workspace::LayerPropertiesPanel();
     m_layerPropertiesPanel->setLayerModel(m_layersPanel->layerModel());
+    m_layerPropertiesPanel->setCanvasSizeProvider([this]() -> std::optional<QSize> {
+        if (!m_canvasPanel
+            || ruwa::core::canvas::isInfiniteCanvas(m_canvasPanel->canvasBoundsMode())) {
+            return std::nullopt;
+        }
+        return QSize(static_cast<int>(m_canvasPanel->canvas().width()),
+            static_cast<int>(m_canvasPanel->canvas().height()));
+    });
+    // The Character group follows the caret when text is open for editing, and
+    // describes the whole layer when it is not.
+    m_layerPropertiesPanel->setTextSelectionProvider(
+        [this]() -> std::optional<std::pair<int, int>> {
+            if (!m_canvasPanel || !m_layersPanel) {
+                return std::nullopt;
+            }
+            if (m_canvasPanel->textEditingLayerId()
+                != m_layersPanel->layerModel()->selectedLayerId()) {
+                return std::nullopt;
+            }
+            return m_canvasPanel->textEditingSelection();
+        });
     m_layerEffectsPanel = new workspace::LayerEffectsPanel();
     m_layerEffectsPanel->setLayerModel(m_layersPanel->layerModel());
     m_layerEffectsPanel->setCanvasSizeProvider([this]() -> std::optional<QSize> {
@@ -2714,6 +2741,20 @@ void WorkspaceTab::connectPanelSignals()
         }
         m_layersPanel->scheduleThumbnailRefresh();
     });
+    connect(m_canvasPanel, &workspace::CanvasPanel::canvasContentChanged, this, [this]() {
+        if (!m_layerPropertiesPanel) {
+            return;
+        }
+        // A layer's position is read off its content bounds, so it has to be
+        // re-read whenever the content moves. Deferred past an interactive
+        // stroke or transform for the same reason thumbnails are: the read
+        // walks the layer's tiles, and mid-drag the number would be noise.
+        if (m_canvasPanel
+            && (m_canvasPanel->isDrawingActive() || m_canvasPanel->isTransformActive())) {
+            return;
+        }
+        m_layerPropertiesPanel->refreshPositionFromContent();
+    });
     connect(m_canvasPanel, &workspace::CanvasPanel::fillProcessingLayerChanged, m_layersPanel,
         &workspace::LayersPanel::setFillProcessingLayer);
     connect(m_canvasPanel, &workspace::CanvasPanel::canvasContentChanged, this,
@@ -2824,6 +2865,39 @@ void WorkspaceTab::connectPanelSignals()
         [this](const QColor& color, QWidget* sourceButton) {
             emit colorPickerRequested(color, sourceButton);
         });
+    // Typing coordinates or clicking an anchor moves real pixels, so it takes
+    // the Move tool's path through the canvas rather than touching the model.
+    connect(m_layerPropertiesPanel, &workspace::LayerPropertiesPanel::moveContentRequested, this,
+        [this](const QPointF& delta) {
+            if (m_canvasPanel) {
+                m_canvasPanel->moveSelectedContentBy(delta);
+            }
+        });
+    // The Character and Paragraph groups replace the on-canvas formatting popup,
+    // so the canvas performs their edits and owns the undo step for them.
+    connect(m_layerPropertiesPanel, &workspace::LayerPropertiesPanel::textLayerEditRequested, this,
+        [this](const ruwa::core::layers::TextLayerEdit& edit) {
+            if (!m_canvasPanel || !m_layersPanel) {
+                return;
+            }
+            m_canvasPanel->applyTextLayerEdit(m_layersPanel->layerModel()->selectedLayerId(), edit);
+        });
+    connect(m_canvasPanel, &workspace::CanvasPanel::textEditingStateChanged, m_layerPropertiesPanel,
+        [this, wasEditing = false]() mutable {
+            const bool editing = m_canvasPanel && m_canvasPanel->isTextEditingActive();
+            // Opening a text layer for editing has to put the formatting
+            // controls in front of the user, the way the on-canvas popup used
+            // to. Only on the transition, so closing the panel mid-session
+            // stays closed.
+            if (editing && !wasEditing && !isLayerPropertiesPanelVisible()) {
+                setLayerPropertiesPanelVisible(true);
+            }
+            wasEditing = editing;
+            m_layerPropertiesPanel->refreshTextGroups();
+        });
+    // Clicking one of those controls must not read as focus leaving the text,
+    // which would commit the session out from under the caret.
+    m_canvasPanel->addTextEditingFocusExclusion(m_layerPropertiesPanel);
     connect(m_layerEffectsPanel, &workspace::LayerEffectsPanel::colorPickerRequested, this,
         [this](const QColor& color, QWidget* sourceButton) {
             emit colorPickerRequested(color, sourceButton);

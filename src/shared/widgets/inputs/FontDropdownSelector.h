@@ -50,6 +50,11 @@ public:
 
     void setOpacityProvider(QWidget* provider);
 
+    /// True while the font list is open. Callers that push a family in from the
+    /// document use it to leave the open list alone — a live preview writing the
+    /// hovered family back would move the list's selection under the cursor.
+    bool isPopupOpen() const;
+
     qreal hoverProgress() const { return m_hoverProgress; }
     void setHoverProgress(qreal progress);
 
@@ -59,6 +64,13 @@ public:
 signals:
     void currentFamilyChanged(const QString& family);
     void activated(const QString& family);
+    /// A row is under the cursor. The font is not chosen — this is for callers
+    /// that can show it live; it is followed either by activated() for the same
+    /// family or by previewCancelled().
+    void familyPreviewed(const QString& family);
+    /// The popup closed with nothing chosen after something had been previewed:
+    /// put back whatever was there before.
+    void previewCancelled();
     void popupShown();
     void popupHidden();
 
@@ -92,6 +104,11 @@ private:
     QStringList m_families;
     QString m_currentFamily;
     QString m_placeholderText = QStringLiteral("Font");
+    /// Family last reported by familyPreviewed(), and whether this popup session
+    /// ended in a choice. Together they decide whether closing the popup has to
+    /// undo a preview.
+    QString m_previewFamily;
+    bool m_popupFamilyChosen = false;
     int m_popupMinWidth = 280;
     int m_popupMaxHeight = 360;
     bool m_fontsLoaded = false;
