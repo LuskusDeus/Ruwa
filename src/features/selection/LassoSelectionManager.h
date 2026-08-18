@@ -225,10 +225,16 @@ public:
     void setMaskHasSoftAlpha(bool hasSoftAlpha) const;
     void markMaskSoftAlphaUnknown() const;
     const std::vector<LassoEdgeSegment>& edges() const { return m_edges; }
+    /// Monotonic invalidation token for renderer-side edge geometry caches.
+    uint64_t edgesRevision() const { return m_edgesRevision; }
 
     void addRegion(const std::vector<Vector2>& polygon, LassoSelectionMode mode);
     void rebuildEdgesFromMask(uint32_t canvasWidth, uint32_t canvasHeight);
-    void clearEdges() { m_edges.clear(); }
+    void clearEdges()
+    {
+        m_edges.clear();
+        ++m_edgesRevision;
+    }
 
     /**
      * @brief Restore selection from saved state (for undo/redo).
@@ -249,6 +255,7 @@ private:
     std::vector<LassoRegion> m_regions;
     TileGrid m_mask;
     std::vector<LassoEdgeSegment> m_edges;
+    uint64_t m_edgesRevision = 1;
     mutable bool m_maskSoftAlphaKnown = true;
     mutable bool m_maskHasSoftAlpha = false;
     mutable std::shared_ptr<const MaskTileSnapshot> m_cachedMaskSnapshot;

@@ -16,7 +16,8 @@
 
 #include <array>
 #include <chrono>
-#include <functional>
+#include <cstdint>
+#include <limits>
 #include <vector>
 
 namespace aether {
@@ -32,15 +33,13 @@ public:
     Result<void> initialize();
     void shutdown();
 
-    /// documentWorldFromScreen must match viewProjectionContent so off-screen edge culling
-    /// remains correct when the document view is mirrored.
     void render(const Viewport& viewport, const std::vector<Vector2>& activePath, bool activeClosed,
-        const std::vector<LassoEdgeSegment>& edges, float edgesAlpha = 0.9f,
+        const std::vector<LassoEdgeSegment>& edges, uint64_t edgesRevision,
+        float edgesAlpha = 0.9f,
         GLuint addPathMaskTexture = 0, float maskAtlasOriginX = 0.0f, float maskAtlasOriginY = 0.0f,
         float maskAtlasWidth = 0.0f, float maskAtlasHeight = 0.0f, float pathAlphaInsideMask = 0.2f,
         float pathAlphaOutsideMask = 1.0f,
-        const std::array<float, 16>* viewProjectionContent = nullptr,
-        const std::function<Vector2(const Vector2&)>* documentWorldFromScreen = nullptr);
+        const std::array<float, 16>* viewProjectionContent = nullptr);
 
     bool isInitialized() const { return m_initialized; }
     bool isAnimating() const { return m_animating; }
@@ -50,11 +49,6 @@ private:
     void batchPath(const std::vector<Vector2>& points, bool closed, float zoom, float timeSec,
         float baseAlpha, std::vector<float>* outVertices = nullptr);
 
-    void batchSegments(const std::vector<LassoEdgeSegment>& edges, float zoom, float timeSec,
-        float baseAlpha, float viewMinX, float viewMinY, float viewMaxX, float viewMaxY);
-
-    void appendQuad(
-        const Vector2& p0, const Vector2& p1, float thickness, float r, float g, float b, float a);
     void appendQuadTo(const Vector2& p0, const Vector2& p1, float thickness, float r, float g,
         float b, float a, std::vector<float>& target);
 
@@ -63,6 +57,11 @@ private:
     void flushBatchWithMask(const std::array<float, 16>& vpMatrix, GLuint maskTexture,
         float maskOriginX, float maskOriginY, float maskWidth, float maskHeight, float alphaInside,
         float alphaOutside);
+    void updateEdgeInstances(
+        const std::vector<LassoEdgeSegment>& edges, uint64_t edgesRevision, float zoom);
+    void drawEdgeInstances(const std::array<float, 16>& vpMatrix, float zoom, float timeSec,
+        float baseAlpha);
+    static int edgeLodForZoom(float zoom);
 
     float elapsedSeconds() const;
 
@@ -70,8 +69,11 @@ private:
 
     GLuint m_shaderProgram = 0;
     GLuint m_shaderProgramWithMask = 0;
+    GLuint m_edgeShaderProgram = 0;
     GLuint m_vao = 0;
     GLuint m_vbo = 0;
+    GLuint m_edgeVao = 0;
+    GLuint m_edgeVbo = 0;
 
     GLint m_locMVP = -1;
     GLint m_locMaskMVP = -1;
@@ -80,6 +82,10 @@ private:
     GLint m_locMaskSize = -1;
     GLint m_locAlphaInside = -1;
     GLint m_locAlphaOutside = -1;
+    GLint m_locEdgeMVP = -1;
+    GLint m_locEdgeThickness = -1;
+    GLint m_locEdgeTime = -1;
+    GLint m_locEdgeAlpha = -1;
 
     bool m_initialized = false;
     bool m_animating = false;
@@ -89,6 +95,10 @@ private:
     // CPU-side vertex batch: interleaved [x, y, r, g, b, a] per vertex
     std::vector<float> m_batchVertices;
     std::vector<float> m_pathBatchVertices;
+    std::vector<float> m_edgeInstances;
+    uint64_t m_cachedEdgesRevision = 0;
+    int m_cachedEdgeLod = std::numeric_limits<int>::min();
+    GLsizei m_edgeInstanceCount = 0;
 };
 
 } // namespace aether

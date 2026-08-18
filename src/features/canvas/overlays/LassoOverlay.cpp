@@ -36,6 +36,53 @@ void main() {
 }
 )";
 
+// Existing-selection edges are immutable between selection mutations. Keep one
+// compact instance per merged edge on the GPU and calculate both the two-pixel
+// quad and the animated intensity in shaders. The old path rebuilt and uploaded
+// 36 floats for every six document pixels on every animation frame.
+static const char* kEdgeVertexShader = R"(
+#version 450 core
+layout(location = 0) in vec4 aSegment;
+layout(location = 1) in float aDistanceStart;
+uniform mat4 uMVP;
+uniform float uThicknessWorld;
+out float vDistance;
+
+const vec2 kCorners[6] = vec2[](
+    vec2(0.0,  1.0), vec2(0.0, -1.0), vec2(1.0, -1.0),
+    vec2(0.0,  1.0), vec2(1.0, -1.0), vec2(1.0,  1.0)
+);
+
+void main() {
+    vec2 p0 = aSegment.xy;
+    vec2 p1 = aSegment.zw;
+    vec2 delta = p1 - p0;
+    float lengthWorld = length(delta);
+    vec2 normal = vec2(-delta.y, delta.x) / lengthWorld;
+    vec2 corner = kCorners[gl_VertexID];
+    vec2 position = mix(p0, p1, corner.x)
+        + normal * corner.y * uThicknessWorld * 0.5;
+    gl_Position = uMVP * vec4(position, 0.0, 1.0);
+    vDistance = aDistanceStart + corner.x * lengthWorld;
+}
+)";
+
+static const char* kEdgeFragmentShader = R"(
+#version 450 core
+uniform float uTime;
+uniform float uBaseAlpha;
+in float vDistance;
+out vec4 fragColor;
+
+void main() {
+    const float tau = 6.28318530718;
+    float phase = (vDistance / 28.0) * tau + uTime * 2.0 * tau;
+    float wave = 0.5 + 0.5 * sin(phase);
+    float intensity = uBaseAlpha * mix(0.35, 1.0, wave);
+    fragColor = vec4(intensity, intensity, intensity, 1.0);
+}
+)";
+
 // Shader with mask sampling: modulates alpha where path overlaps existing selection
 static const char* kVertexShaderWithMask = R"(
 #version 450 core
@@ -129,6 +176,22 @@ Result<void> LassoOverlay::initialize()
     m_locAlphaInside = m_gl->glGetUniformLocation(m_shaderProgramWithMask, "uAlphaInside");
     m_locAlphaOutside = m_gl->glGetUniformLocation(m_shaderProgramWithMask, "uAlphaOutside");
 
+    auto edgeProgram = cache.loadOrCreateGraphicsProgram(QStringLiteral("LassoOverlay.edges"),
+        QString::fromUtf8(kEdgeVertexShader), QString::fromUtf8(kEdgeFragmentShader));
+    if (!edgeProgram) {
+        m_gl->glDeleteProgram(m_shaderProgramWithMask);
+        m_gl->glDeleteProgram(m_shaderProgram);
+        m_shaderProgramWithMask = 0;
+        m_shaderProgram = 0;
+        return { edgeProgram.error().code, edgeProgram.error().message };
+    }
+
+    m_edgeShaderProgram = edgeProgram.value();
+    m_locEdgeMVP = m_gl->glGetUniformLocation(m_edgeShaderProgram, "uMVP");
+    m_locEdgeThickness = m_gl->glGetUniformLocation(m_edgeShaderProgram, "uThicknessWorld");
+    m_locEdgeTime = m_gl->glGetUniformLocation(m_edgeShaderProgram, "uTime");
+    m_locEdgeAlpha = m_gl->glGetUniformLocation(m_edgeShaderProgram, "uBaseAlpha");
+
     m_gl->glGenVertexArrays(1, &m_vao);
     m_gl->glGenBuffers(1, &m_vbo);
 
@@ -143,6 +206,22 @@ Result<void> LassoOverlay::initialize()
         1, 4, GL_FLOAT, GL_FALSE, 6 * sizeof(float), reinterpret_cast<void*>(2 * sizeof(float)));
     m_gl->glEnableVertexAttribArray(1);
 
+    m_gl->glBindVertexArray(0);
+
+    m_gl->glGenVertexArrays(1, &m_edgeVao);
+    m_gl->glGenBuffers(1, &m_edgeVbo);
+    m_gl->glBindVertexArray(m_edgeVao);
+    m_gl->glBindBuffer(GL_ARRAY_BUFFER, m_edgeVbo);
+    m_gl->glBufferData(GL_ARRAY_BUFFER, 0, nullptr, GL_DYNAMIC_DRAW);
+
+    // One compact instance per merged edge: [x0, y0, x1, y1, cumulativeDistance].
+    m_gl->glVertexAttribPointer(0, 4, GL_FLOAT, GL_FALSE, 5 * sizeof(float), nullptr);
+    m_gl->glEnableVertexAttribArray(0);
+    m_gl->glVertexAttribDivisor(0, 1);
+    m_gl->glVertexAttribPointer(
+        1, 1, GL_FLOAT, GL_FALSE, 5 * sizeof(float), reinterpret_cast<void*>(4 * sizeof(float)));
+    m_gl->glEnableVertexAttribArray(1);
+    m_gl->glVertexAttribDivisor(1, 1);
     m_gl->glBindVertexArray(0);
 
     m_initialized = true;
@@ -162,6 +241,14 @@ void LassoOverlay::shutdown()
         m_gl->glDeleteVertexArrays(1, &m_vao);
         m_vao = 0;
     }
+    if (m_edgeVbo) {
+        m_gl->glDeleteBuffers(1, &m_edgeVbo);
+        m_edgeVbo = 0;
+    }
+    if (m_edgeVao) {
+        m_gl->glDeleteVertexArrays(1, &m_edgeVao);
+        m_edgeVao = 0;
+    }
     if (m_shaderProgram) {
         m_gl->glDeleteProgram(m_shaderProgram);
         m_shaderProgram = 0;
@@ -170,6 +257,15 @@ void LassoOverlay::shutdown()
         m_gl->glDeleteProgram(m_shaderProgramWithMask);
         m_shaderProgramWithMask = 0;
     }
+    if (m_edgeShaderProgram) {
+        m_gl->glDeleteProgram(m_edgeShaderProgram);
+        m_edgeShaderProgram = 0;
+    }
+
+    m_edgeInstances.clear();
+    m_cachedEdgesRevision = 0;
+    m_cachedEdgeLod = std::numeric_limits<int>::min();
+    m_edgeInstanceCount = 0;
 
     m_initialized = false;
 }
@@ -179,53 +275,36 @@ void LassoOverlay::shutdown()
 // ==========================================================================
 
 void LassoOverlay::render(const Viewport& viewport, const std::vector<Vector2>& activePath,
-    bool activeClosed, const std::vector<LassoEdgeSegment>& edges, float edgesAlpha,
-    GLuint addPathMaskTexture, float maskAtlasOriginX, float maskAtlasOriginY, float maskAtlasWidth,
-    float maskAtlasHeight, float pathAlphaInsideMask, float pathAlphaOutsideMask,
-    const std::array<float, 16>* viewProjectionContent,
-    const std::function<Vector2(const Vector2&)>* documentWorldFromScreen)
+    bool activeClosed, const std::vector<LassoEdgeSegment>& edges, uint64_t edgesRevision,
+    float edgesAlpha, GLuint addPathMaskTexture, float maskAtlasOriginX, float maskAtlasOriginY,
+    float maskAtlasWidth, float maskAtlasHeight, float pathAlphaInsideMask,
+    float pathAlphaOutsideMask, const std::array<float, 16>* viewProjectionContent)
 {
     if (!m_initialized)
         return;
 
+    const float zoom = viewport.camera().zoom();
+    updateEdgeInstances(edges, edgesRevision, zoom);
+
     const bool hasActive = activePath.size() >= 2;
-    const bool hasEdges = !edges.empty();
+    const bool hasEdges = m_edgeInstanceCount > 0;
     m_animating = hasActive || hasEdges;
     if (!m_animating)
         return;
 
     const float timeSec = elapsedSeconds();
-    const float zoom = viewport.camera().zoom();
     const auto vpMatrix
         = viewProjectionContent ? *viewProjectionContent : viewport.viewProjectionMatrix();
-    const auto& cam = viewport.camera();
-    Vector2 vpSize = viewport.size();
-    auto toDocumentWorld = [&](const Vector2& screen) {
-        return documentWorldFromScreen ? (*documentWorldFromScreen)(screen)
-                                       : cam.screenToWorld(screen, vpSize);
-    };
-    // Use all 4 screen corners for correct AABB when view is rotated
-    Vector2 w0 = toDocumentWorld({ 0.0f, 0.0f });
-    Vector2 w1 = toDocumentWorld({ vpSize.x, 0.0f });
-    Vector2 w2 = toDocumentWorld({ vpSize.x, vpSize.y });
-    Vector2 w3 = toDocumentWorld({ 0.0f, vpSize.y });
-    float viewMinX = std::min({ w0.x, w1.x, w2.x, w3.x });
-    float viewMinY = std::min({ w0.y, w1.y, w2.y, w3.y });
-    float viewMaxX = std::max({ w0.x, w1.x, w2.x, w3.x });
-    float viewMaxY = std::max({ w0.y, w1.y, w2.y, w3.y });
 
     const bool usePathMask
         = (addPathMaskTexture != 0) && hasActive && maskAtlasWidth > 0.0f && maskAtlasHeight > 0.0f;
 
     m_batchVertices.clear();
     m_pathBatchVertices.clear();
-    m_batchVertices.reserve((edges.size() + (usePathMask ? 0 : activePath.size())) * 36);
+    if (!usePathMask)
+        m_batchVertices.reserve(activePath.size() * 36);
     if (usePathMask)
         m_pathBatchVertices.reserve(activePath.size() * 36);
-
-    if (hasEdges) {
-        batchSegments(edges, zoom, timeSec, edgesAlpha, viewMinX, viewMinY, viewMaxX, viewMaxY);
-    }
 
     if (hasActive) {
         if (usePathMask) {
@@ -239,6 +318,9 @@ void LassoOverlay::render(const Viewport& viewport, const std::vector<Vector2>& 
     m_gl->glBlendFuncSeparate(GL_ONE_MINUS_DST_COLOR, GL_ONE_MINUS_SRC_COLOR, GL_ZERO, GL_ONE);
     m_gl->glDisable(GL_DEPTH_TEST);
 
+    if (hasEdges) {
+        drawEdgeInstances(vpMatrix, zoom, timeSec, edgesAlpha);
+    }
     if (!m_batchVertices.empty()) {
         flushBatch(vpMatrix);
     }
@@ -309,70 +391,93 @@ void LassoOverlay::batchPath(const std::vector<Vector2>& points, bool closed, fl
     }
 }
 
-void LassoOverlay::batchSegments(const std::vector<LassoEdgeSegment>& edges, float zoom,
-    float timeSec, float baseAlpha, float viewMinX, float viewMinY, float viewMaxX, float viewMaxY)
+int LassoOverlay::edgeLodForZoom(float zoom)
 {
-    if (edges.empty())
+    if (zoom <= 0.0f)
+        return 30;
+
+    // A segment shorter than roughly one screen pixel cannot form a stable
+    // contour after minification. Quantizing the cutoff to powers of two keeps
+    // the cached GPU instance buffer valid throughout most zoom gestures.
+    constexpr float kMinimumVisibleLengthPx = 0.9f;
+    const float minimumLengthWorld = kMinimumVisibleLengthPx / zoom;
+    if (minimumLengthWorld <= 1.0f)
+        return 0;
+    return std::clamp(static_cast<int>(std::ceil(std::log2(minimumLengthWorld))), 0, 30);
+}
+
+void LassoOverlay::updateEdgeInstances(
+    const std::vector<LassoEdgeSegment>& edges, uint64_t edgesRevision, float zoom)
+{
+    const int lod = edgeLodForZoom(zoom);
+    if (edgesRevision != 0 && m_cachedEdgesRevision == edgesRevision && m_cachedEdgeLod == lod) {
         return;
+    }
 
-    const float thicknessWorld = 2.0f / zoom;
-    const float stepWorld = 6.0f;
-    const float periodWorld = 28.0f;
-    const float speed = 2.0f;
+    m_edgeInstances.clear();
+    if (lod == 0) {
+        m_edgeInstances.reserve(edges.size() * 5);
+    } else {
+        // At a distant zoom most micro-edges are rejected. Do not reserve for
+        // the unfiltered count or a pathological selection would still pay the
+        // full CPU-memory cost before producing a tiny (often empty) batch.
+        constexpr size_t kInitialLodEdgeCapacity = 4096;
+        m_edgeInstances.reserve(std::min(edges.size(), kInitialLodEdgeCapacity) * 5);
+    }
 
-    auto lerp = [](float a, float b, float t) { return a + (b - a) * t; };
-
+    const float minimumLength = lod > 0 ? std::ldexp(1.0f, lod) : 0.0f;
     float accumulated = 0.0f;
     for (const auto& seg : edges) {
-        float dx = seg.b.x - seg.a.x;
-        float dy = seg.b.y - seg.a.y;
-        float segLen = std::sqrt(dx * dx + dy * dy);
+        const float dx = seg.b.x - seg.a.x;
+        const float dy = seg.b.y - seg.a.y;
+        const float length = std::sqrt(dx * dx + dy * dy);
 
-        // Frustum cull (always update accumulated for phase continuity)
-        float segMinX = std::min(seg.a.x, seg.b.x);
-        float segMaxX = std::max(seg.a.x, seg.b.x);
-        float segMinY = std::min(seg.a.y, seg.b.y);
-        float segMaxY = std::max(seg.a.y, seg.b.y);
-        if (segMaxX < viewMinX || segMinX > viewMaxX || segMaxY < viewMinY || segMinY > viewMaxY) {
-            accumulated += segLen;
-            continue;
+        if (length >= std::max(0.0001f, minimumLength)) {
+            m_edgeInstances.push_back(seg.a.x);
+            m_edgeInstances.push_back(seg.a.y);
+            m_edgeInstances.push_back(seg.b.x);
+            m_edgeInstances.push_back(seg.b.y);
+            m_edgeInstances.push_back(accumulated);
         }
-
-        if (segLen < 0.0001f) {
-            accumulated += segLen;
-            continue;
-        }
-
-        float invLen = 1.0f / segLen;
-        float dirX = dx * invLen;
-        float dirY = dy * invLen;
-
-        for (float d = 0.0f; d < segLen; d += stepWorld) {
-            float d2 = std::min(segLen, d + stepWorld);
-            float mid = accumulated + (d + d2) * 0.5f;
-
-            float phase = (mid / periodWorld) * 6.2831853f + timeSec * speed * 6.2831853f;
-            float t = 0.5f + 0.5f * std::sin(phase);
-
-            float intensity = baseAlpha * lerp(0.35f, 1.0f, t);
-
-            Vector2 s = { seg.a.x + dirX * d, seg.a.y + dirY * d };
-            Vector2 e = { seg.a.x + dirX * d2, seg.a.y + dirY * d2 };
-            appendQuad(s, e, thicknessWorld, intensity, intensity, intensity, 1.0f);
-        }
-        accumulated += segLen;
+        // Keep the animation phase stable when a short segment disappears at a
+        // coarser LOD; longer surviving contours do not jump along their path.
+        accumulated += length;
     }
+
+    const size_t instanceCount = m_edgeInstances.size() / 5;
+    m_edgeInstanceCount = static_cast<GLsizei>(
+        std::min(instanceCount, static_cast<size_t>(std::numeric_limits<GLsizei>::max())));
+
+    m_gl->glBindBuffer(GL_ARRAY_BUFFER, m_edgeVbo);
+    m_gl->glBufferData(GL_ARRAY_BUFFER,
+        static_cast<GLsizeiptr>(m_edgeInstances.size() * sizeof(float)),
+        m_edgeInstances.empty() ? nullptr : m_edgeInstances.data(), GL_DYNAMIC_DRAW);
+    m_gl->glBindBuffer(GL_ARRAY_BUFFER, 0);
+
+    m_cachedEdgesRevision = edgesRevision;
+    m_cachedEdgeLod = lod;
+}
+
+void LassoOverlay::drawEdgeInstances(const std::array<float, 16>& vpMatrix, float zoom,
+    float timeSec, float baseAlpha)
+{
+    if (m_edgeInstanceCount <= 0)
+        return;
+
+    m_gl->glUseProgram(m_edgeShaderProgram);
+    m_gl->glUniformMatrix4fv(m_locEdgeMVP, 1, GL_FALSE, vpMatrix.data());
+    m_gl->glUniform1f(m_locEdgeThickness, 2.0f / std::max(zoom, 0.0001f));
+    m_gl->glUniform1f(m_locEdgeTime, timeSec);
+    m_gl->glUniform1f(m_locEdgeAlpha, baseAlpha);
+
+    m_gl->glBindVertexArray(m_edgeVao);
+    m_gl->glDrawArraysInstanced(GL_TRIANGLES, 0, 6, m_edgeInstanceCount);
+    m_gl->glBindVertexArray(0);
 }
 
 // ==========================================================================
 //   Q U A D   G E N E R A T I O N
 // ==========================================================================
-
-void LassoOverlay::appendQuad(
-    const Vector2& p0, const Vector2& p1, float thickness, float r, float g, float b, float a)
-{
-    appendQuadTo(p0, p1, thickness, r, g, b, a, m_batchVertices);
-}
 
 void LassoOverlay::appendQuadTo(const Vector2& p0, const Vector2& p1, float thickness, float r,
     float g, float b, float a, std::vector<float>& target)

@@ -210,7 +210,7 @@ void LassoSelectionManager::clear()
 {
     m_regions.clear();
     m_mask.clear();
-    m_edges.clear();
+    clearEdges();
     setMaskHasSoftAlpha(false);
     invalidateMaskSnapshotCache();
 }
@@ -281,7 +281,7 @@ void LassoSelectionManager::applyMaskSnapshot(std::shared_ptr<const MaskTileSnap
         = maskTiles ? std::move(maskTiles) : std::make_shared<const MaskTileSnapshot>();
 
     if (m_mask.empty()) {
-        m_edges.clear();
+        clearEdges();
     } else {
         rebuildEdges(canvasWidth, canvasHeight);
     }
@@ -294,7 +294,7 @@ void LassoSelectionManager::applyRasterSelectionMask(const MaskTileSnapshot& mas
     if (mode == LassoSelectionMode::Replace) {
         m_regions.clear();
         m_mask.clear();
-        m_edges.clear();
+        clearEdges();
         setMaskHasSoftAlpha(false);
     } else if (mode == LassoSelectionMode::Subtract && m_mask.empty()) {
         return;
@@ -391,7 +391,7 @@ void LassoSelectionManager::applyRasterSelectionMask(const MaskTileSnapshot& mas
 
     if (m_mask.empty()) {
         m_regions.clear();
-        m_edges.clear();
+        clearEdges();
         setMaskHasSoftAlpha(false);
         return;
     }
@@ -420,7 +420,7 @@ void LassoSelectionManager::addRegion(const std::vector<Vector2>& polygon, Lasso
         return;
     if (mode == LassoSelectionMode::Replace) {
         m_regions.clear();
-        m_edges.clear();
+        clearEdges();
         mode = LassoSelectionMode::Add;
     }
     m_regions.push_back({ polygon, mode });
@@ -507,7 +507,7 @@ void LassoSelectionManager::applySelection(const std::vector<Vector2>& polygon,
     if (mode == LassoSelectionMode::Replace) {
         m_regions.clear();
         m_mask.clear();
-        m_edges.clear();
+        clearEdges();
         setMaskHasSoftAlpha(false);
         mode = LassoSelectionMode::Add;
     }
@@ -657,6 +657,7 @@ void LassoSelectionManager::applySelection(const std::vector<Vector2>& polygon,
 void LassoSelectionManager::rebuildEdges(uint32_t canvasWidth, uint32_t canvasHeight)
 {
     m_edges.clear();
+    ++m_edgesRevision;
     if (m_mask.empty())
         return;
     constexpr uint32_t TS = TILE_SIZE;

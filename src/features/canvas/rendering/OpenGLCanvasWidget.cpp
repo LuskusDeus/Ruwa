@@ -12799,9 +12799,11 @@ void OpenGLCanvasWidget::paintGL_renderLassoOverlay()
     auto* lassoOverlay = m_overlayManager ? m_overlayManager->lassoOverlay() : nullptr;
     if (!lassoOverlay || !lassoOverlay->isInitialized() || !m_selectionController)
         return;
-    const auto& edges = m_selectionController->lassoSelection().edges();
+    const auto& lassoSelection = m_selectionController->lassoSelection();
+    const auto& edges = lassoSelection.edges();
     const std::vector<LassoEdgeSegment>* edgesToRender = &edges;
     std::vector<LassoEdgeSegment> transformedEdges;
+    uint64_t edgesRevision = lassoSelection.edgesRevision();
     if (const TransformState* displayState = selectionDisplayTransformState();
         displayState && !edges.empty()) {
         transformedEdges.reserve(edges.size());
@@ -12810,6 +12812,10 @@ void OpenGLCanvasWidget::paintGL_renderLassoOverlay()
                 { displayState->transformPoint(seg.a), displayState->transformPoint(seg.b) });
         }
         edgesToRender = &transformedEdges;
+        // The transform preview changes without rebuilding the selection mask.
+        // Revision zero tells the overlay that these transient endpoints must
+        // be uploaded again for this frame.
+        edgesRevision = 0;
     }
     const auto& lassoPoints = m_selectionController->lassoPoints();
     bool activeClosed = (m_selectionController->isRectSelectionActive() && lassoPoints.size() >= 4)
@@ -12860,11 +12866,9 @@ void OpenGLCanvasWidget::paintGL_renderLassoOverlay()
     }
 
     const auto contentVp = canvasContentViewProjectionMatrix();
-    const std::function<Vector2(const Vector2&)> documentWorldFromScreenFn
-        = [this](const Vector2& screen) { return documentWorldFromScreen(screen); };
-    lassoOverlay->render(m_viewport, lassoPoints, activeClosed, *edgesToRender, edgesAlpha,
-        addPathMaskTexture, maskOriginX, maskOriginY, maskWidth, maskHeight, pathAlphaInside,
-        pathAlphaOutside, &contentVp, &documentWorldFromScreenFn);
+    lassoOverlay->render(m_viewport, lassoPoints, activeClosed, *edgesToRender, edgesRevision,
+        edgesAlpha, addPathMaskTexture, maskOriginX, maskOriginY, maskWidth, maskHeight,
+        pathAlphaInside, pathAlphaOutside, &contentVp);
     if (lassoOverlay->isAnimating())
         update();
 }
