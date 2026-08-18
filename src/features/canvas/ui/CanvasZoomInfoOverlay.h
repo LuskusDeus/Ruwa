@@ -7,11 +7,14 @@
 #ifndef RUWA_UI_WIDGETS_CANVASZOOMINFOOVERLAY_H
 #define RUWA_UI_WIDGETS_CANVASZOOMINFOOVERLAY_H
 
+#include "shared/rendering/CanvasBackdropSource.h"
+
 #include <QString>
 #include <QWidget>
 
 class QGraphicsOpacityEffect;
 class QLabel;
+class QMoveEvent;
 class QPaintEvent;
 class QPropertyAnimation;
 class QTimer;
@@ -26,11 +29,16 @@ public:
     void showZoom(qreal zoom);
     void setZoom(qreal zoom);
     bool isPresentationActive() const;
+    qreal presentationOpacity() const;
     void updateAnchorPosition();
     void hideImmediately();
 
+    /// Source coordinating this widget's same-frame GPU blur region.
+    void setBackdropSource(ruwa::shared::rendering::ICanvasBackdropSource* source);
+
 protected:
     void paintEvent(QPaintEvent* event) override;
+    void moveEvent(QMoveEvent* event) override;
 
 private:
     void applyTheme();
@@ -45,6 +53,9 @@ private:
     QGraphicsOpacityEffect* m_opacityEffect = nullptr;
     QPropertyAnimation* m_fadeAnimation = nullptr;
     QTimer* m_hideTimer = nullptr;
+
+    // Backdrop-blur source (non-owning; nulled on source destruction).
+    ruwa::shared::rendering::ICanvasBackdropSource* m_backdropSource = nullptr;
 };
 
 } // namespace ruwa::ui::widgets

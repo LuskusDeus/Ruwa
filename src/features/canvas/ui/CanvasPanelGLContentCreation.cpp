@@ -236,6 +236,11 @@ bool CanvasPanel::createGLContent()
                 appendRegion(m_toolStateOverlay, QRectF(m_toolStateOverlay->rect()),
                     m_toolStateOverlay->height() / 2.0, effectOpacity(m_toolStateOverlayOpacity));
             }
+            if (m_zoomInfoOverlay) {
+                appendRegion(m_zoomInfoOverlay, QRectF(m_zoomInfoOverlay->rect()),
+                    m_zoomInfoOverlay->height() / 2.0,
+                    m_zoomInfoOverlay->presentationOpacity());
+            }
             if (m_stylusJoystick) {
                 const qreal opacity = effectOpacity(m_stylusJoystickOpacity);
                 if (auto* joystick = m_stylusJoystick->joystickWidget()) {
@@ -301,6 +306,16 @@ bool CanvasPanel::createGLContent()
             connect(m_glWidget, &QObject::destroyed, m_toolStateOverlay, [this]() {
                 if (m_toolStateOverlay) {
                     m_toolStateOverlay->setBackdropSource(nullptr);
+                }
+            });
+        }
+        if (m_zoomInfoOverlay) {
+            m_zoomInfoOverlay->setBackdropSource(m_glWidget);
+            connect(m_glWidget, &aether::OpenGLCanvasWidget::backdropAvailabilityChanged,
+                m_zoomInfoOverlay, QOverload<>::of(&QWidget::update));
+            connect(m_glWidget, &QObject::destroyed, m_zoomInfoOverlay, [this]() {
+                if (m_zoomInfoOverlay) {
+                    m_zoomInfoOverlay->setBackdropSource(nullptr);
                 }
             });
         }

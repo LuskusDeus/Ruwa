@@ -16,7 +16,9 @@
 #include <QFont>
 #include <QHBoxLayout>
 #include <QLabel>
+#include <QMoveEvent>
 #include <QPainter>
+#include <QPainterPath>
 #include <QPaintEvent>
 #include <QPropertyAnimation>
 #include <QSizePolicy>
@@ -55,12 +57,20 @@ CanvasZoomInfoOverlay::CanvasZoomInfoOverlay(QWidget* parent)
     m_opacityEffect = new QGraphicsOpacityEffect(this);
     m_opacityEffect->setOpacity(0.0);
     setGraphicsEffect(m_opacityEffect);
+    connect(m_opacityEffect, &QGraphicsOpacityEffect::opacityChanged, this, [this]() {
+        if (m_backdropSource) {
+            m_backdropSource->requestBackdropUpdate();
+        }
+    });
 
     m_fadeAnimation = new QPropertyAnimation(m_opacityEffect, "opacity", this);
     m_fadeAnimation->setEasingCurve(QEasingCurve::OutCubic);
     connect(m_fadeAnimation, &QPropertyAnimation::finished, this, [this]() {
         if (m_opacityEffect && m_opacityEffect->opacity() <= 0.0) {
             hide();
+            if (m_backdropSource) {
+                m_backdropSource->requestBackdropUpdate();
+            }
         }
     });
 
@@ -112,6 +122,11 @@ bool CanvasZoomInfoOverlay::isPresentationActive() const
         || (m_opacityEffect && m_opacityEffect->opacity() > 0.0);
 }
 
+qreal CanvasZoomInfoOverlay::presentationOpacity() const
+{
+    return m_opacityEffect ? qBound<qreal>(0.0, m_opacityEffect->opacity(), 1.0) : 1.0;
+}
+
 void CanvasZoomInfoOverlay::updateAnchorPosition()
 {
     QWidget* parent = parentWidget();
@@ -138,6 +153,22 @@ void CanvasZoomInfoOverlay::hideImmediately()
         m_opacityEffect->setOpacity(0.0);
     }
     hide();
+    if (m_backdropSource) {
+        m_backdropSource->requestBackdropUpdate();
+    }
+}
+
+void CanvasZoomInfoOverlay::setBackdropSource(
+    ruwa::shared::rendering::ICanvasBackdropSource* source)
+{
+    if (m_backdropSource == source) {
+        return;
+    }
+    m_backdropSource = source;
+    if (m_backdropSource) {
+        m_backdropSource->requestBackdropUpdate();
+    }
+    update();
 }
 
 void CanvasZoomInfoOverlay::paintEvent(QPaintEvent* event)
@@ -146,29 +177,44 @@ void CanvasZoomInfoOverlay::paintEvent(QPaintEvent* event)
 
     auto& style = ruwa::ui::core::WidgetStyleManager::instance();
 
-    QColor bgColor = style.colors().surface;
-    bgColor.setAlpha(215);
-    QColor borderTopColor = style.colors().borderLight();
-    borderTopColor.setAlpha(95);
-    QColor borderBottomColor = style.colors().borderDark();
-    borderBottomColor.setAlpha(95);
+    QColor borderColor = style.colors().border;
+    borderColor.setAlphaF(borderColor.alphaF() * 0.5);
 
     QPainter painter(this);
     painter.setRenderHint(QPainter::Antialiasing);
 
-    // Capsule (pill) shape: radius tracks half the height so the ends are fully
-    // rounded, matching HexColorInput / CapsuleButton across the app.
-    const QRectF r(rect());
-    const qreal pillR = qMax(0.0, r.height() * 0.5 - 0.5);
-    const QRectF fillRect = r.adjusted(1.0, 1.0, -1.0, -1.0);
-    const qreal fillR = qMax(0.0, pillR - 1.0);
+    const QRectF bounds(rect());
+    const qreal radius = bounds.height() * 0.5;
+    QPainterPath backgroundPath;
+    backgroundPath.addRoundedRect(ruwa::ui::painting::glassSilhouetteRect(bounds),
+        ruwa::ui::painting::glassSilhouetteRadius(radius),
+        ruwa::ui::painting::glassSilhouetteRadius(radius));
 
     painter.setPen(Qt::NoPen);
-    painter.setBrush(bgColor);
-    painter.drawRoundedRect(fillRect, fillR, fillR);
+    QColor tint = style.colors().surface;
+    tint.setAlpha(ruwa::ui::painting::kBackdropTintAlpha);
+    if (!ruwa::ui::painting::drawBackdropBlurTint(
+            painter, this, m_backdropSource, backgroundPath, tint)) {
+        QColor background = style.colors().surface;
+        background.setAlpha(200);
+        painter.setBrush(background);
+        painter.drawPath(backgroundPath);
+    }
 
     ruwa::ui::painting::drawGradientBorder(
-        painter, r.adjusted(0.5, 0.5, -0.5, -0.5), pillR, borderTopColor, borderBottomColor);
+        painter, bounds, radius, borderColor, borderColor);
+    ruwa::ui::painting::drawLiquidGlass(painter, bounds, radius, style.colors().primary,
+        qMin<qreal>(style.scaled(ruwa::ui::painting::kLiquidGlassShadowDepth),
+            bounds.height() * 0.25));
+}
+
+void CanvasZoomInfoOverlay::moveEvent(QMoveEvent* event)
+{
+    QWidget::moveEvent(event);
+    if (m_backdropSource) {
+        m_backdropSource->requestBackdropUpdate();
+        update();
+    }
 }
 
 void CanvasZoomInfoOverlay::applyTheme()
@@ -198,6 +244,9 @@ void CanvasZoomInfoOverlay::applyTheme()
     adjustSize();
     updateAnchorPosition();
     update();
+    if (m_backdropSource) {
+        m_backdropSource->requestBackdropUpdate();
+    }
 }
 
 void CanvasZoomInfoOverlay::fadeTo(qreal opacity, int durationMs)
