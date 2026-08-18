@@ -108,6 +108,15 @@ public:
     void setScrollBarTransparentTrack(bool transparent);
     bool scrollBarTransparentTrack() const { return m_scrollBarTransparentTrack; }
 
+    /// Tuning of the continuous damping engine. \a lambda is the exponential
+    /// decay rate in 1/s: the position covers 1-e^(-lambda*dt) of the remaining
+    /// distance each frame, so higher is snappier and lower is more floaty.
+    /// Defaults suit panel-sized content; override per area if needed.
+    void setWheelDamping(qreal lambda);
+    qreal wheelDamping() const { return m_wheelLambda; }
+    void setFlingDamping(qreal lambda);
+    qreal flingDamping() const { return m_flingLambda; }
+
     /// Stylus swipe scrolling API used by the global tablet filter.
     void beginStylusSwipe(const QPoint& globalPos);
     void updateStylusSwipe(const QPoint& globalPos);
@@ -141,6 +150,21 @@ private:
     void syncContentPosition(int previousScrollValue, bool updateHoverImmediately);
     void scheduleHoverStateUpdate();
 
+    // --- Continuous damping engine -------------------------------------------------
+    // One frame-driven loop that eases the sub-pixel position toward an
+    // accumulating target instead of restarting a fixed-duration tween per
+    // input event. Because the step is exp(-lambda*dt), the motion is
+    // frame-rate independent and velocity stays continuous when new input
+    // lands mid-flight.
+    void startDamping(qreal lambda);
+    void stopDamping();
+    void tickDamping();
+    void applyScrollPosition(qreal position);
+    void syncDampingStateToCurrentValue();
+    qreal dampingBase() const;
+    qreal takeWheelBoost(int direction, bool highResolutionDelta);
+    int damperIntervalMs() const;
+
 private:
     QWidget* m_viewport { nullptr };
     QWidget* m_contentWidget { nullptr };
@@ -166,12 +190,30 @@ private:
     QPropertyAnimation* m_reserveAnimation { nullptr };
     qreal m_scrollBarReserveExtent { 0.0 };
     bool m_stylusSwipeActive { false };
+    bool m_stylusSwipeAnchorPending { false };
     QPoint m_stylusSwipeStartGlobalPos;
     QPoint m_stylusSwipeLastGlobalPos;
-    int m_stylusSwipeStartScrollValue { 0 };
+    qreal m_stylusSwipeStartPosition { 0.0 };
     qreal m_stylusSwipeVelocity { 0.0 };
     QElapsedTimer m_stylusSwipeTimer;
     qint64 m_stylusSwipeLastSampleMs { 0 };
+
+    // Damping engine state.
+    QTimer* m_damperTimer { nullptr };
+    QElapsedTimer m_damperClock;
+    qint64 m_damperLastTickNs { 0 };
+    qreal m_scrollPosition { 0.0 };
+    qreal m_scrollTarget { 0.0 };
+    qreal m_damperLambda { 12.0 };
+    qreal m_wheelLambda { 12.0 };
+    qreal m_flingLambda { 5.0 };
+    bool m_applyingDamperTick { false };
+
+    // Wheel acceleration (fast repeated notches in one direction travel further).
+    QElapsedTimer m_wheelClock;
+    qint64 m_lastWheelMs { -100000 };
+    int m_lastWheelDirection { 0 };
+    qreal m_wheelBoost { 1.0 };
     QPointer<QWidget> m_hoveredWidget;
     QTimer* m_layoutRefreshTimer { nullptr };
     QTimer* m_hoverUpdateTimer { nullptr };

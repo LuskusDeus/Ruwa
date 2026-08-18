@@ -13,20 +13,40 @@
 #include <QCursor>
 #include <QApplication>
 #include <QEnterEvent>
+#include <QScreen>
 #include <QtMath>
+#include <cmath>
 
 namespace ruwa::ui::widgets {
 
 namespace {
-constexpr int kStylusSwipeInertiaDurationMs = 180;
-constexpr qreal kStylusSwipeVelocityBlend = 0.35;
-constexpr qreal kStylusSwipeVelocityDeadzone = 120.0;
-constexpr qreal kStylusSwipeInertiaFactor = 0.18;
+// --- Continuous damping engine ---------------------------------------------------
+// Decay rates in 1/s. Each frame the position closes 1-e^(-lambda*dt) of the
+// distance that is left, so the motion is frame-rate independent and a new
+// impulse arriving mid-flight only raises the velocity instead of restarting
+// an easing curve from zero.
+constexpr qreal kWheelLambda = 12.0; // Notched wheel: glides, still lands fast.
+constexpr qreal kPixelWheelLambda = 26.0; // Trackpad/precision wheel: near 1:1.
+constexpr qreal kStepLambda = 13.0; // Scrollbar step buttons.
+constexpr qreal kBarFollowLambda = 18.0; // Track click / external bar value change.
+constexpr qreal kFlingLambda = 5.0; // Stylus release: long, decaying glide.
+// Below this the remaining distance is invisible — snap and stop the timer.
+constexpr qreal kDampingSettleEpsilon = 0.06;
+constexpr qreal kMaxDampingStepSeconds = 0.05; // Survive a stalled event loop.
+
+// Repeated notches in the same direction accelerate, like a native wheel.
+constexpr qint64 kWheelBoostWindowMs = 110;
+constexpr qreal kWheelBoostStep = 0.22;
+constexpr qreal kWheelBoostMax = 1.9;
+
+constexpr qreal kStylusSwipeVelocityTauSeconds = 0.045;
+constexpr qreal kStylusSwipeVelocityDeadzone = 90.0;
+// A pen that rested before lifting must not fling — drop a stale velocity.
+constexpr qint64 kStylusSwipeStaleSampleMs = 90;
 constexpr int kHoverUpdateIntervalMs = 40;
 constexpr qreal kScrollBarWidth = 12.0; // Must match SmoothScrollBar::setFixedWidth(12).
 constexpr int kReserveAnimationMs = 220;
 constexpr int kDefaultScrollDurationMs = 200;
-constexpr int kStepScrollDurationMs = 120;
 } // namespace
 
 SmoothScrollArea::SmoothScrollArea(QWidget* parent)
@@ -60,6 +80,18 @@ SmoothScrollArea::SmoothScrollArea(QWidget* parent)
         updateScrollRange();
     });
 
+    m_wheelLambda = kWheelLambda;
+    m_flingLambda = kFlingLambda;
+
+    // Drives the damping engine. Unlike QPropertyAnimation (locked to Qt's 16 ms
+    // unified animation clock) this ticks at the display refresh rate, so the
+    // motion is genuinely smoother on 120/144 Hz panels. It only runs while
+    // scrolling is in flight.
+    m_damperTimer = new QTimer(this);
+    m_damperTimer->setTimerType(Qt::PreciseTimer);
+    connect(m_damperTimer, &QTimer::timeout, this, &SmoothScrollArea::tickDamping);
+    m_wheelClock.start();
+
     m_layoutRefreshTimer = new QTimer(this);
     m_layoutRefreshTimer->setSingleShot(true);
     connect(m_layoutRefreshTimer, &QTimer::timeout, this, &SmoothScrollArea::refreshContentLayout);
@@ -77,6 +109,7 @@ SmoothScrollArea::SmoothScrollArea(QWidget* parent)
 SmoothScrollArea::~SmoothScrollArea()
 {
     cancelStylusSwipe();
+    stopDamping();
 
     if (m_layoutRefreshTimer && m_layoutRefreshTimer->isActive()) {
         m_layoutRefreshTimer->stop();
@@ -167,11 +200,13 @@ void SmoothScrollArea::setOrientation(Qt::Orientation orientation)
     }
 
     m_scrollAnimation->stop();
+    stopDamping();
     cancelStylusSwipe();
     m_orientation = orientation;
     m_currentScrollValue = 0;
     m_targetScrollValue = 0;
     m_maxScroll = 0;
+    syncDampingStateToCurrentValue();
 
     if (m_orientation == Qt::Horizontal) {
         m_contentWidthFixedToViewport = false;
@@ -218,6 +253,7 @@ void SmoothScrollArea::scrollTo(int value, bool animated)
     }
 
     m_scrollAnimation->stop();
+    stopDamping();
     m_targetScrollValue = qBound(0, value, m_maxScroll);
     setScrollValue(m_targetScrollValue);
 }
@@ -226,6 +262,7 @@ void SmoothScrollArea::scrollTo(int value, int durationMs, QEasingCurve::Type ea
 {
     m_targetScrollValue = qBound(0, value, m_maxScroll);
     m_scrollAnimation->stop();
+    stopDamping();
 
     if (durationMs > 0 && m_targetScrollValue != m_currentScrollValue) {
         m_scrollAnimation->setDuration(durationMs);
@@ -250,7 +287,9 @@ void SmoothScrollArea::setUserScrollingEnabled(bool enabled)
 
     if (!enabled) {
         m_scrollAnimation->stop();
+        stopDamping();
         m_targetScrollValue = m_currentScrollValue;
+        syncDampingStateToCurrentValue();
         cancelStylusSwipe();
     }
 }
@@ -259,6 +298,14 @@ void SmoothScrollArea::setScrollValue(int value)
 {
     const int previousScrollValue = m_currentScrollValue;
     m_currentScrollValue = qBound(0, value, m_maxScroll);
+
+    // Any write that is not the damper's own tick (a direct call, or the
+    // duration-based scrollTo animation driving this property) takes ownership
+    // of the position: cancel the damping flight and re-seed its state.
+    if (!m_applyingDamperTick) {
+        stopDamping();
+        syncDampingStateToCurrentValue();
+    }
 
     m_verticalScrollBar->blockSignals(true);
     m_verticalScrollBar->setValue(m_currentScrollValue);
@@ -303,6 +350,139 @@ void SmoothScrollArea::setContentWidthFixedToViewport(bool fixed)
     }
 }
 
+int SmoothScrollArea::damperIntervalMs() const
+{
+    qreal refreshRate = 60.0;
+    if (const QScreen* widgetScreen = screen()) {
+        const qreal rate = widgetScreen->refreshRate();
+        if (rate > 1.0) {
+            refreshRate = rate;
+        }
+    }
+    // Floor, not round: at 60 Hz this gives 16 ms rather than 17 ms.
+    return qBound(4, static_cast<int>(1000.0 / refreshRate), 32);
+}
+
+void SmoothScrollArea::startDamping(qreal lambda)
+{
+    m_damperLambda = qMax(0.5, lambda);
+
+    // The damper and the explicit-duration scrollTo() animation are mutually
+    // exclusive owners of the position.
+    if (m_scrollAnimation->state() == QAbstractAnimation::Running) {
+        m_scrollAnimation->stop();
+    }
+
+    if (qAbs(m_scrollTarget - m_scrollPosition) < kDampingSettleEpsilon) {
+        applyScrollPosition(m_scrollTarget);
+        stopDamping();
+        return;
+    }
+
+    if (!m_damperTimer->isActive()) {
+        m_damperClock.start();
+        m_damperLastTickNs = 0;
+        m_damperTimer->start(damperIntervalMs());
+    }
+}
+
+void SmoothScrollArea::stopDamping()
+{
+    if (m_damperTimer && m_damperTimer->isActive()) {
+        m_damperTimer->stop();
+        // Ranges that changed mid-flight may have moved widgets under the pointer.
+        scheduleHoverStateUpdate();
+    }
+}
+
+void SmoothScrollArea::tickDamping()
+{
+    const qint64 nowNs = m_damperClock.nsecsElapsed();
+    const qreal dt = qBound(
+        0.001, static_cast<qreal>(nowNs - m_damperLastTickNs) / 1.0e9, kMaxDampingStepSeconds);
+    m_damperLastTickNs = nowNs;
+
+    m_scrollTarget = qBound(0.0, m_scrollTarget, static_cast<qreal>(m_maxScroll));
+
+    const qreal distance = m_scrollTarget - m_scrollPosition;
+    if (qAbs(distance) < kDampingSettleEpsilon) {
+        applyScrollPosition(m_scrollTarget);
+        stopDamping();
+        return;
+    }
+
+    // Lenis' core step: close a fixed *fraction* of the remaining distance per
+    // unit of time. Expressed as an exponential it is exact for any dt.
+    const qreal factor = 1.0 - std::exp(-m_damperLambda * dt);
+    applyScrollPosition(m_scrollPosition + (distance * factor));
+
+    // Clamped against a range edge — no distance left to travel, so stop
+    // rather than spin the timer against the boundary.
+    if (qAbs(m_scrollTarget - m_scrollPosition) < kDampingSettleEpsilon) {
+        stopDamping();
+    }
+}
+
+void SmoothScrollArea::applyScrollPosition(qreal position)
+{
+    m_scrollPosition = qBound(0.0, position, static_cast<qreal>(m_maxScroll));
+    m_targetScrollValue = qRound(qBound(0.0, m_scrollTarget, static_cast<qreal>(m_maxScroll)));
+
+    const int rounded = qRound(m_scrollPosition);
+    if (rounded == m_currentScrollValue) {
+        // Sub-pixel progress: the widget cannot move yet, but the fractional
+        // position is kept so slow scrolling paces evenly instead of stuttering.
+        return;
+    }
+
+    m_applyingDamperTick = true;
+    setScrollValue(rounded);
+    m_applyingDamperTick = false;
+}
+
+void SmoothScrollArea::syncDampingStateToCurrentValue()
+{
+    m_scrollPosition = m_currentScrollValue;
+    m_scrollTarget = m_currentScrollValue;
+}
+
+qreal SmoothScrollArea::dampingBase() const
+{
+    // Chain onto the in-flight target so successive impulses add up instead of
+    // each one restarting from where the content happens to be right now.
+    return m_damperTimer && m_damperTimer->isActive() ? m_scrollTarget : m_scrollPosition;
+}
+
+qreal SmoothScrollArea::takeWheelBoost(int direction, bool highResolutionDelta)
+{
+    // Precision devices already send continuous, physically-scaled deltas.
+    if (highResolutionDelta) {
+        m_wheelBoost = 1.0;
+        m_lastWheelDirection = 0;
+        return 1.0;
+    }
+
+    const qint64 nowMs = m_wheelClock.elapsed();
+    const bool continuesFlick
+        = direction == m_lastWheelDirection && (nowMs - m_lastWheelMs) <= kWheelBoostWindowMs;
+
+    m_wheelBoost = continuesFlick ? qMin(kWheelBoostMax, m_wheelBoost + kWheelBoostStep) : 1.0;
+    m_lastWheelMs = nowMs;
+    m_lastWheelDirection = direction;
+
+    return m_wheelBoost;
+}
+
+void SmoothScrollArea::setWheelDamping(qreal lambda)
+{
+    m_wheelLambda = qMax(0.5, lambda);
+}
+
+void SmoothScrollArea::setFlingDamping(qreal lambda)
+{
+    m_flingLambda = qMax(0.5, lambda);
+}
+
 void SmoothScrollArea::paintEvent(QPaintEvent* event)
 {
     Q_UNUSED(event);
@@ -327,10 +507,16 @@ void SmoothScrollArea::beginStylusSwipe(const QPoint& globalPos)
     }
 
     m_scrollAnimation->stop();
+    stopDamping();
+    syncDampingStateToCurrentValue();
     m_stylusSwipeActive = true;
+    // The filter begins the swipe at the press point once the drag threshold is
+    // crossed, so the pen is already ~10 px away. Re-anchor on the first move
+    // sample instead of snapping the content by that slop.
+    m_stylusSwipeAnchorPending = true;
     m_stylusSwipeStartGlobalPos = globalPos;
     m_stylusSwipeLastGlobalPos = globalPos;
-    m_stylusSwipeStartScrollValue = m_currentScrollValue;
+    m_stylusSwipeStartPosition = m_scrollPosition;
     m_stylusSwipeVelocity = 0.0;
     m_stylusSwipeTimer.start();
     m_stylusSwipeLastSampleMs = 0;
@@ -345,19 +531,37 @@ void SmoothScrollArea::updateStylusSwipe(const QPoint& globalPos)
         return;
     }
 
+    if (m_stylusSwipeAnchorPending) {
+        m_stylusSwipeAnchorPending = false;
+        m_stylusSwipeStartGlobalPos = globalPos;
+        m_stylusSwipeLastGlobalPos = globalPos;
+        m_stylusSwipeLastSampleMs = m_stylusSwipeTimer.elapsed();
+        if (m_orientation == Qt::Vertical) {
+            m_verticalScrollBar->showAnimated();
+        }
+        return;
+    }
+
     const int dragDelta = m_orientation == Qt::Horizontal
         ? globalPos.x() - m_stylusSwipeStartGlobalPos.x()
         : globalPos.y() - m_stylusSwipeStartGlobalPos.y();
-    setScrollValue(m_stylusSwipeStartScrollValue - dragDelta);
+    // Direct manipulation: the content stays pinned to the pen, no damping.
+    m_scrollTarget
+        = qBound(0.0, m_stylusSwipeStartPosition - dragDelta, static_cast<qreal>(m_maxScroll));
+    m_applyingDamperTick = true;
+    applyScrollPosition(m_scrollTarget);
+    m_applyingDamperTick = false;
 
     const qint64 nowMs = m_stylusSwipeTimer.elapsed();
-    const qint64 dtMs = qMax<qint64>(1, nowMs - m_stylusSwipeLastSampleMs);
+    const qreal dtSeconds = qMax<qint64>(1, nowMs - m_stylusSwipeLastSampleMs) / 1000.0;
     const int stepDelta = m_orientation == Qt::Horizontal
         ? globalPos.x() - m_stylusSwipeLastGlobalPos.x()
         : globalPos.y() - m_stylusSwipeLastGlobalPos.y();
-    const qreal instantVelocity = (-stepDelta * 1000.0) / dtMs;
-    m_stylusSwipeVelocity = (m_stylusSwipeVelocity * (1.0 - kStylusSwipeVelocityBlend))
-        + (instantVelocity * kStylusSwipeVelocityBlend);
+    const qreal instantVelocity = -stepDelta / dtSeconds;
+    // Time-constant EWMA — a fixed per-sample blend would make the tracked
+    // velocity depend on the tablet's report rate.
+    const qreal blend = 1.0 - std::exp(-dtSeconds / kStylusSwipeVelocityTauSeconds);
+    m_stylusSwipeVelocity += (instantVelocity - m_stylusSwipeVelocity) * blend;
 
     m_stylusSwipeLastGlobalPos = globalPos;
     m_stylusSwipeLastSampleMs = nowMs;
@@ -372,28 +576,28 @@ void SmoothScrollArea::endStylusSwipe(const QPoint& globalPos)
         return;
     }
 
+    const qint64 lastSampleMs = m_stylusSwipeLastSampleMs;
     updateStylusSwipe(globalPos);
     m_stylusSwipeActive = false;
 
-    if (qAbs(m_stylusSwipeVelocity) < kStylusSwipeVelocityDeadzone) {
+    // A pen that hovered in place before lifting reports no fresh movement, so
+    // the last tracked velocity is stale — releasing must simply stop there.
+    const bool velocityIsStale
+        = (m_stylusSwipeTimer.elapsed() - lastSampleMs) > kStylusSwipeStaleSampleMs;
+    if (velocityIsStale || qAbs(m_stylusSwipeVelocity) < kStylusSwipeVelocityDeadzone) {
         return;
     }
 
-    const int inertiaTarget = qBound(0,
-        qRound(m_currentScrollValue + (m_stylusSwipeVelocity * kStylusSwipeInertiaFactor)),
-        m_maxScroll);
-
-    if (inertiaTarget == m_currentScrollValue) {
-        return;
-    }
-
-    m_targetScrollValue = inertiaTarget;
+    // Hand the release velocity to the damper. Damping toward a target starts
+    // out at lambda*(target-position), so projecting the target that far ahead
+    // makes the glide continue at exactly the speed the pen was moving and then
+    // decay away — no seam between the drag and the inertia.
     m_scrollAnimation->stop();
-    m_scrollAnimation->setDuration(kStylusSwipeInertiaDurationMs);
-    m_scrollAnimation->setEasingCurve(QEasingCurve::OutCubic);
-    m_scrollAnimation->setStartValue(m_currentScrollValue);
-    m_scrollAnimation->setEndValue(m_targetScrollValue);
-    m_scrollAnimation->start();
+    m_scrollTarget = qBound(0.0, m_scrollPosition + (m_stylusSwipeVelocity / m_flingLambda),
+        static_cast<qreal>(m_maxScroll));
+    m_targetScrollValue = qRound(m_scrollTarget);
+
+    startDamping(m_flingLambda);
     if (m_orientation == Qt::Vertical) {
         m_verticalScrollBar->showAnimated();
     }
@@ -402,6 +606,7 @@ void SmoothScrollArea::endStylusSwipe(const QPoint& globalPos)
 void SmoothScrollArea::cancelStylusSwipe()
 {
     m_stylusSwipeActive = false;
+    m_stylusSwipeAnchorPending = false;
     m_stylusSwipeVelocity = 0.0;
 }
 
@@ -517,12 +722,14 @@ void SmoothScrollArea::wheelEvent(QWheelEvent* event)
     }
 
     int delta = 0;
+    bool highResolutionDelta = false;
     if (!event->pixelDelta().isNull()) {
         delta
             = m_orientation == Qt::Horizontal ? -event->pixelDelta().x() : -event->pixelDelta().y();
         if (delta == 0 && m_orientation == Qt::Horizontal) {
             delta = -event->pixelDelta().y();
         }
+        highResolutionDelta = delta != 0;
     }
     if (delta == 0) {
         delta
@@ -536,19 +743,19 @@ void SmoothScrollArea::wheelEvent(QWheelEvent* event)
         return;
     }
 
-    const int baseValue = (m_scrollAnimation->state() == QAbstractAnimation::Running)
-        ? m_targetScrollValue
-        : m_currentScrollValue;
+    // A scroll that is still in flight keeps its target: the new notch is added
+    // on top, so the velocity rises smoothly instead of the motion restarting.
+    const qreal baseValue = (m_scrollAnimation->state() == QAbstractAnimation::Running)
+        ? static_cast<qreal>(m_targetScrollValue)
+        : dampingBase();
 
     m_scrollAnimation->stop();
 
-    m_targetScrollValue = qBound(0, baseValue + delta, m_maxScroll);
+    const qreal boost = takeWheelBoost(delta > 0 ? 1 : -1, highResolutionDelta);
+    m_scrollTarget = qBound(0.0, baseValue + (delta * boost), static_cast<qreal>(m_maxScroll));
+    m_targetScrollValue = qRound(m_scrollTarget);
 
-    m_scrollAnimation->setDuration(kStepScrollDurationMs);
-    m_scrollAnimation->setEasingCurve(QEasingCurve::OutCubic);
-    m_scrollAnimation->setStartValue(m_currentScrollValue);
-    m_scrollAnimation->setEndValue(m_targetScrollValue);
-    m_scrollAnimation->start();
+    startDamping(highResolutionDelta ? kPixelWheelLambda : m_wheelLambda);
 
     if (m_orientation == Qt::Vertical) {
         m_verticalScrollBar->showAnimated();
@@ -562,6 +769,8 @@ void SmoothScrollArea::updateScrollRange()
         m_maxScroll = 0;
         m_currentScrollValue = 0;
         m_targetScrollValue = 0;
+        stopDamping();
+        syncDampingStateToCurrentValue();
         m_verticalScrollBar->setRange(0, 0);
         updateScrollBarVisibility();
         return;
@@ -665,6 +874,9 @@ void SmoothScrollArea::updateScrollRange()
             m_scrollAnimation->stop();
         }
     }
+    // The damper reads the float target every tick; keep it inside the new range.
+    m_scrollTarget = qBound(0.0, m_scrollTarget, static_cast<qreal>(m_maxScroll));
+    m_scrollPosition = qBound(0.0, m_scrollPosition, static_cast<qreal>(m_maxScroll));
 
     if (m_currentScrollValue > m_maxScroll) {
         setScrollValue(m_maxScroll);
@@ -678,9 +890,12 @@ void SmoothScrollArea::updateScrollRange()
 void SmoothScrollArea::onScrollBarValueChanged(int value)
 {
     if (m_verticalScrollBar->isDragging()) {
+        // Dragging the handle is direct manipulation — track it 1:1.
         m_scrollAnimation->stop();
+        stopDamping();
         const int previousScrollValue = m_currentScrollValue;
         m_currentScrollValue = qBound(0, value, m_maxScroll);
+        syncDampingStateToCurrentValue();
         syncContentPosition(previousScrollValue, true);
         emit scrolled(m_currentScrollValue);
         return;
@@ -688,11 +903,9 @@ void SmoothScrollArea::onScrollBarValueChanged(int value)
 
     if (qAbs(value - m_currentScrollValue) > 2) {
         m_scrollAnimation->stop();
-        m_scrollAnimation->setDuration(kDefaultScrollDurationMs);
-        m_scrollAnimation->setEasingCurve(QEasingCurve::OutCubic);
-        m_scrollAnimation->setStartValue(m_currentScrollValue);
-        m_scrollAnimation->setEndValue(value);
-        m_scrollAnimation->start();
+        m_scrollTarget = qBound(0.0, static_cast<qreal>(value), static_cast<qreal>(m_maxScroll));
+        m_targetScrollValue = qRound(m_scrollTarget);
+        startDamping(kBarFollowLambda);
     } else {
         setScrollValue(value);
     }
@@ -705,18 +918,16 @@ void SmoothScrollArea::onStepScrollRequested(int delta)
     }
 
     // Accumulate target so held button smoothly chains steps
-    int baseValue = (m_scrollAnimation->state() == QAbstractAnimation::Running)
-        ? m_targetScrollValue
-        : m_currentScrollValue;
-
-    m_targetScrollValue = qBound(0, baseValue + delta, m_maxScroll);
+    const qreal baseValue = (m_scrollAnimation->state() == QAbstractAnimation::Running)
+        ? static_cast<qreal>(m_targetScrollValue)
+        : dampingBase();
 
     m_scrollAnimation->stop();
-    m_scrollAnimation->setDuration(kStepScrollDurationMs);
-    m_scrollAnimation->setEasingCurve(QEasingCurve::OutCubic);
-    m_scrollAnimation->setStartValue(m_currentScrollValue);
-    m_scrollAnimation->setEndValue(m_targetScrollValue);
-    m_scrollAnimation->start();
+
+    m_scrollTarget = qBound(0.0, baseValue + delta, static_cast<qreal>(m_maxScroll));
+    m_targetScrollValue = qRound(m_scrollTarget);
+
+    startDamping(kStepLambda);
 
     if (m_orientation == Qt::Vertical) {
         m_verticalScrollBar->showAnimated();
