@@ -50,7 +50,7 @@ enum class DropZone {
     InnerTop = 0x0040,
     InnerBottom = 0x0080,
 
-    // Center: drop into the hovered panel, forming (or joining) a tab group
+    // Explicit center compass button: form (or join) a tab group
     InnerCenter = 0x0100,
 
     // Group header strip: explicit tab insertion at a known index
@@ -257,7 +257,7 @@ constexpr int kDefaultGroupHeaderHeight = 22;
 struct DockDropTarget {
     DropZone zone = DropZone::None;
     /// Panel under the cursor. For a group, the member whose tab was hit
-    /// (GroupHeader) or the group's current member (InnerCenter).
+    /// (GroupHeader) or the center compass button's target (InnerCenter).
     DockPanel* panel = nullptr;
     /// Insertion index within the target group, or -1 for "next to panel".
     int groupInsertIndex = -1;

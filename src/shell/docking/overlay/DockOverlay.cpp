@@ -189,9 +189,9 @@ void DockOverlay::updateDropZone(const QPoint& globalPos)
         }
     }
 
-    // Any zone but GroupHeader means the caret belongs to nobody. InnerCenter
-    // leaves the index at -1, which addPanelToGroup reads as "right after the
-    // panel we were dropped on".
+    // Any zone but GroupHeader means the caret belongs to nobody. The center
+    // compass button leaves the index at -1, which addPanelToGroup reads as
+    // "right after the panel we were dropped on".
     if (newZone != DropZone::GroupHeader) {
         m_groupInsertIndex = -1;
         m_groupInsertSide = GroupInsertSide::After;
@@ -790,6 +790,7 @@ void DockOverlay::updateCompassForTargetPanel()
     int compassW = m_compass->width();
     int compassH = m_compass->height();
 
+    m_compass->setGroupZoneEnabled(canGroupWith(m_targetPanel.data()));
     m_compass->move(localCenter.x() - compassW / 2, localCenter.y() - compassH / 2);
     m_compass->showAnimated();
     m_compass->raise();
@@ -852,19 +853,8 @@ DropZone DockOverlay::zoneAtPanelPosition(const QPoint& globalPos) const
     if (nearBottom)
         return DropZone::InnerBottom;
 
-    // Center region: form (or join) a tab group. Deliberately smaller than
-    // "everything the edge margins didn't claim" — the ring left between them
-    // keeps the old escape hatch, where dropping over a panel simply floats.
-    constexpr qreal kCenterFraction = 0.5;
-    const QRect centerRect(qRound(w * (1.0 - kCenterFraction) / 2.0),
-        qRound(h * (1.0 - kCenterFraction) / 2.0), qRound(w * kCenterFraction),
-        qRound(h * kCenterFraction));
-
-    if (centerRect.contains(localPos) && canGroupWith(m_targetPanel.data())) {
-        return DropZone::InnerCenter;
-    }
-
-    // Not near any edge, not in the center - no zone (allows floating)
+    // The panel center is intentionally not an implicit drop zone. Forming or
+    // joining a group requires the explicit center button on the compass.
     return DropZone::None;
 }
 

@@ -571,7 +571,7 @@ void DockManager::endDrag(const QPoint& globalPos)
         m_inDragOperation = false; // Allow nested dock operation
 
         if (dropTarget.isGroupDrop() && targetPanel) {
-            // Center of a panel, or its group's header: share the cell as tabs.
+            // Center compass button, or a group's header: share the cell as tabs.
             // Must be tested before isInnerZone(), which is also true here.
             m_container->dockPanelIntoGroup(panel, dropTarget);
         } else if (isInnerZone(zone) && targetPanel) {

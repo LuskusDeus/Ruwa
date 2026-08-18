@@ -10,25 +10,27 @@
 #include <QWidget>
 #include <QVariantAnimation>
 #include <QMap>
+#include <QPixmap>
 
 namespace ruwa::ui::docking {
 
 /**
  * @brief Compass-style widget for selecting drop zones
  *
- * Displays a central "+" pattern with 4 directional arrows:
+ * Displays a central "+" pattern with 4 directional arrows and an explicit
+ * group button in the middle:
  *
  *        ┌───┐
  *        │ ▲ │
  *    ┌───┼───┼───┐
- *    │ ◄ │   │ ► │
+ *    │ ◄ │ + │ ► │
  *    └───┼───┼───┘
  *        │ ▼ │
  *        └───┘
  *
  * Features:
  * - Black semi-transparent background (30%)
- * - White arrows that scale up on hover
+ * - Theme-colored symbols that scale up on hover
  * - Smooth hover animations
  * - No border
  */
@@ -61,6 +63,10 @@ public:
 
     /// Get zone at local position
     DropZone zoneAt(const QPoint& localPos) const;
+
+    /// Enable the center button that forms or joins a panel group.
+    void setGroupZoneEnabled(bool enabled);
+    bool isGroupZoneEnabled() const { return m_groupZoneEnabled; }
 
     /// Check if position is inside compass
     bool containsPoint(const QPoint& localPos) const;
@@ -103,7 +109,8 @@ private:
 
     QRect zoneRect(DropZone zone) const;
     void drawZone(QPainter& painter, DropZone zone);
-    void drawArrow(QPainter& painter, const QRect& rect, DropZone zone, qreal scale);
+    void drawZoneSymbol(QPainter& painter, const QRect& rect, DropZone zone, qreal scale);
+    void updateGroupIcon();
     void startHoverAnimation(DropZone zone, bool hovering);
     void ensureAnimation(DropZone zone);
     void startOpacityAnimation(qreal targetOpacity);
@@ -117,9 +124,11 @@ private:
 
     DropZone m_highlightedZone = DropZone::None;
 
-    // Per-zone animation state. All four entries are created eagerly in the
+    // Per-zone animation state. All five entries are created eagerly in the
     // constructor so hover events never allocate.
     QMap<DropZone, ZoneState> m_zoneStates;
+    bool m_groupZoneEnabled = false;
+    QPixmap m_groupIcon;
 
     // Colors
     QColor m_bgNormalColor; // Black with 30% opacity

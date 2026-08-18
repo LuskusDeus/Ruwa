@@ -2,6 +2,7 @@
 
 // DockCompassWidget.cpp
 #include "DockCompassWidget.h"
+#include "shared/resources/IconProvider.h"
 
 #include <QPainter>
 #include <QPainterPath>
@@ -28,8 +29,8 @@ DockCompassWidget::DockCompassWidget(QWidget* parent)
     // Initialize zone states and eagerly create the per-zone hover animations
     // up front. Lazy allocation on first hover used to incur a heap alloc and
     // a connect() call on the user's first interaction with each direction.
-    constexpr DropZone zones[]
-        = { DropZone::InnerTop, DropZone::InnerBottom, DropZone::InnerLeft, DropZone::InnerRight };
+    constexpr DropZone zones[] = { DropZone::InnerTop, DropZone::InnerBottom,
+        DropZone::InnerLeft, DropZone::InnerRight, DropZone::InnerCenter };
     for (DropZone z : zones) {
         ZoneState& state = m_zoneStates[z];
         auto* anim = new QVariantAnimation(this);
@@ -44,6 +45,7 @@ DockCompassWidget::DockCompassWidget(QWidget* parent)
         });
         state.animation = anim;
     }
+    updateGroupIcon();
 
     // Setup widget opacity animation
     m_opacityAnimation = new QVariantAnimation(this);
@@ -156,6 +158,8 @@ void DockCompassWidget::setHighlightedZone(DropZone zone)
 DropZone DockCompassWidget::zoneAt(const QPoint& localPos) const
 {
     // Check each zone
+    if (m_groupZoneEnabled && zoneRect(DropZone::InnerCenter).contains(localPos))
+        return DropZone::InnerCenter;
     if (zoneRect(DropZone::InnerTop).contains(localPos))
         return DropZone::InnerTop;
     if (zoneRect(DropZone::InnerBottom).contains(localPos))
@@ -166,6 +170,19 @@ DropZone DockCompassWidget::zoneAt(const QPoint& localPos) const
         return DropZone::InnerRight;
 
     return DropZone::None;
+}
+
+void DockCompassWidget::setGroupZoneEnabled(bool enabled)
+{
+    if (m_groupZoneEnabled == enabled) {
+        return;
+    }
+
+    m_groupZoneEnabled = enabled;
+    if (!enabled && m_highlightedZone == DropZone::InnerCenter) {
+        setHighlightedZone(DropZone::None);
+    }
+    update();
 }
 
 bool DockCompassWidget::containsPoint(const QPoint& localPos) const
@@ -188,6 +205,7 @@ void DockCompassWidget::setCompassSize(int size)
 void DockCompassWidget::setZoneSize(int size)
 {
     m_zoneSize = size;
+    updateGroupIcon();
     update();
 }
 
@@ -199,6 +217,7 @@ void DockCompassWidget::applyTheme(const ruwa::ui::core::ThemeColors& colors)
 
     // Arrow color from theme text
     m_arrowColor = colors.text;
+    updateGroupIcon();
 
     update();
 }
@@ -225,6 +244,7 @@ void DockCompassWidget::paintEvent(QPaintEvent* /*event*/)
     drawZone(painter, DropZone::InnerBottom);
     drawZone(painter, DropZone::InnerLeft);
     drawZone(painter, DropZone::InnerRight);
+    drawZone(painter, DropZone::InnerCenter);
 }
 
 void DockCompassWidget::mouseMoveEvent(QMouseEvent* event)
@@ -263,6 +283,9 @@ QRect DockCompassWidget::zoneRect(DropZone zone) const
     int offset = halfZone + m_spacing;
 
     switch (zone) {
+    case DropZone::InnerCenter:
+        return QRect(centerX - halfZone, centerY - halfZone, m_zoneSize, m_zoneSize);
+
     case DropZone::InnerTop:
         return QRect(centerX - halfZone, centerY - offset - m_zoneSize, m_zoneSize, m_zoneSize);
 
@@ -285,6 +308,11 @@ void DockCompassWidget::drawZone(QPainter& painter, DropZone zone)
     QRect r = zoneRect(zone);
     if (r.isEmpty())
         return;
+
+    painter.save();
+    if (zone == DropZone::InnerCenter && !m_groupZoneEnabled) {
+        painter.setOpacity(painter.opacity() * 0.35);
+    }
 
     // Get animation progress for this zone
     qreal progress = 0.0;
@@ -311,13 +339,24 @@ void DockCompassWidget::drawZone(QPainter& painter, DropZone zone)
     // Calculate arrow scale (1.0 -> 1.2 on hover)
     qreal arrowScale = 1.0 + (0.2 * progress);
 
-    // Draw arrow
-    drawArrow(painter, r, zone, arrowScale);
+    // Draw the direction arrow or the explicit grouping icon.
+    drawZoneSymbol(painter, r, zone, arrowScale);
+    painter.restore();
 }
 
-void DockCompassWidget::drawArrow(QPainter& painter, const QRect& rect, DropZone zone, qreal scale)
+void DockCompassWidget::drawZoneSymbol(
+    QPainter& painter, const QRect& rect, DropZone zone, qreal scale)
 {
     painter.save();
+
+    if (zone == DropZone::InnerCenter) {
+        const int iconSize = qRound(qMin(rect.width(), rect.height()) * 0.62 * scale);
+        const QRect iconRect(rect.center().x() - iconSize / 2,
+            rect.center().y() - iconSize / 2, iconSize, iconSize);
+        painter.drawPixmap(iconRect, m_groupIcon);
+        painter.restore();
+        return;
+    }
 
     // Set arrow color
     painter.setPen(Qt::NoPen);
@@ -372,6 +411,14 @@ void DockCompassWidget::drawArrow(QPainter& painter, const QRect& rect, DropZone
 
     painter.drawPath(path);
     painter.restore();
+}
+
+void DockCompassWidget::updateGroupIcon()
+{
+    const int iconSize = qMax(1, qRound(m_zoneSize * 0.62));
+    m_groupIcon = ruwa::ui::core::IconProvider::instance()
+                      .getColoredIcon(QStringLiteral("AddTab"), m_arrowColor)
+                      .pixmap(iconSize, iconSize);
 }
 
 void DockCompassWidget::ensureAnimation(DropZone /*zone*/)
