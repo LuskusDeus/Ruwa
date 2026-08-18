@@ -2008,37 +2008,31 @@ void WorkspaceTab::setupPanels()
     m_layersPanel->setDisplayFrame(layerPreviewFrame());
     m_layerPropertiesPanel = new workspace::LayerPropertiesPanel();
     m_layerPropertiesPanel->setLayerModel(m_layersPanel->layerModel());
-    m_layerPropertiesPanel->setCanvasSizeProvider([this]() -> std::optional<QSize> {
-        if (!m_canvasPanel
-            || ruwa::core::canvas::isInfiniteCanvas(m_canvasPanel->canvasBoundsMode())) {
+    const QPointer<workspace::CanvasPanel> canvasPanel = m_canvasPanel;
+    const QPointer<ruwa::core::layers::LayerModel> layerModel = m_layersPanel->layerModel();
+    const auto canvasSizeProvider = [canvasPanel]() -> std::optional<QSize> {
+        if (!canvasPanel || canvasPanel->isInfiniteCanvas()) {
             return std::nullopt;
         }
-        return QSize(static_cast<int>(m_canvasPanel->canvas().width()),
-            static_cast<int>(m_canvasPanel->canvas().height()));
-    });
+        return canvasPanel->canvasSize();
+    };
+    m_layerPropertiesPanel->setCanvasSizeProvider(canvasSizeProvider);
     // The Character group follows the caret when text is open for editing, and
     // describes the whole layer when it is not.
     m_layerPropertiesPanel->setTextSelectionProvider(
-        [this]() -> std::optional<std::pair<int, int>> {
-            if (!m_canvasPanel || !m_layersPanel) {
+        [canvasPanel, layerModel]() -> std::optional<std::pair<int, int>> {
+            if (!canvasPanel || !layerModel) {
                 return std::nullopt;
             }
-            if (m_canvasPanel->textEditingLayerId()
-                != m_layersPanel->layerModel()->selectedLayerId()) {
+            if (canvasPanel->textEditingLayerId()
+                != layerModel->selectedLayerId()) {
                 return std::nullopt;
             }
-            return m_canvasPanel->textEditingSelection();
+            return canvasPanel->textEditingSelection();
         });
     m_layerEffectsPanel = new workspace::LayerEffectsPanel();
     m_layerEffectsPanel->setLayerModel(m_layersPanel->layerModel());
-    m_layerEffectsPanel->setCanvasSizeProvider([this]() -> std::optional<QSize> {
-        if (!m_canvasPanel
-            || ruwa::core::canvas::isInfiniteCanvas(m_canvasPanel->canvasBoundsMode())) {
-            return std::nullopt;
-        }
-        return QSize(static_cast<int>(m_canvasPanel->canvas().width()),
-            static_cast<int>(m_canvasPanel->canvas().height()));
-    });
+    m_layerEffectsPanel->setCanvasSizeProvider(canvasSizeProvider);
     m_toolsPanel->setRelatedPanels(m_canvasPanel, m_layersPanel);
 
     m_layersPanel->setPushUndoFn([this](std::unique_ptr<aether::IUndoCommand> cmd) {
