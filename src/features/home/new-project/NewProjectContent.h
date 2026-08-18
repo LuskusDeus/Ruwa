@@ -29,6 +29,7 @@ class CapsuleButton;
 class AnimatedStackedWidget;
 class SegmentedOptionSelector;
 class ColorInputButton;
+class FlowLayout;
 
 /**
  * @brief New Project content panel
@@ -90,6 +91,10 @@ private:
     void updateLockedAspectRatio();
     void clearSelectedPreset();
     void setActivePresetCategory(int index);
+    void rebuildRecentPresets();
+    void applyRecentPreset(const QString& id);
+    void updateRecentPresetVisibility();
+    void clearSelectedRecentPreset();
     QString formatRatio(const QSize& size) const;
     void syncDimensionFieldsEnabledState();
 
@@ -111,12 +116,17 @@ private:
 
     QMap<QString, ProjectPresetCard*> m_presetCards;
     QMap<QString, int> m_presetCategoryIndices;
+    QMap<QString, ProjectPresetCard*> m_recentPresetCards;
     QString m_selectedPreset;
+    QString m_selectedRecentPresetId;
     QVector<CapsuleButton*> m_categoryButtons;
 
     QLabel* m_titleLabel { nullptr };
     QWidget* m_presetsPanel { nullptr };
     AnimatedStackedWidget* m_presetsStack { nullptr };
+    CapsuleButton* m_recentPresetsTabButton { nullptr };
+    QWidget* m_recentPresetsPage { nullptr };
+    FlowLayout* m_recentPresetsLayout { nullptr };
     CapsuleButton* m_createButton { nullptr };
     AspectRatioLockButton* m_aspectLockButton { nullptr };
     QWidget* m_lockColumn { nullptr };

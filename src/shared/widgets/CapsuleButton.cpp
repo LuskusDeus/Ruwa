@@ -18,6 +18,8 @@ namespace ruwa::ui::widgets {
 namespace {
 const int BASE_TAB_PAD_H = 14;
 const int BASE_TAB_PAD_V = 6;
+const int BASE_TAB_ICON_SIZE = 16;
+const int BASE_TAB_ICON_GAP = 6;
 const int BASE_ACTION_PAD_H = 24;
 const int BASE_ACTION_PAD_V = 13;
 const int BASE_HINT_SPACING = 8; // px between main text and hint text
@@ -307,6 +309,20 @@ QSize CapsuleButton::sizeHint() const
     const int padH = theme.scaled(m_variant == Variant::Tab ? BASE_TAB_PAD_H : BASE_ACTION_PAD_H);
     const int padV = theme.scaled(m_variant == Variant::Tab ? BASE_TAB_PAD_V : BASE_ACTION_PAD_V);
 
+    if (m_variant == Variant::Tab && !icon().isNull()) {
+        const QSize requestedIconSize = iconSize();
+        const int iconW = requestedIconSize.width() > 0 ? requestedIconSize.width()
+                                                        : theme.scaled(BASE_TAB_ICON_SIZE);
+        const int iconH = requestedIconSize.height() > 0 ? requestedIconSize.height()
+                                                         : theme.scaled(BASE_TAB_ICON_SIZE);
+        if (text().isEmpty()) {
+            const int side = qMax(iconW, iconH) + padV * 2;
+            return QSize(side, side);
+        }
+        const int gap = theme.scaled(BASE_TAB_ICON_GAP);
+        return QSize(iconW + gap + textW + padH * 2, qMax(iconH, fm.height()) + padV * 2);
+    }
+
     return QSize(textW + hintW + padH * 2, fm.height() + padV * 2);
 }
 
@@ -568,7 +584,35 @@ void CapsuleButton::paintEvent(QPaintEvent*)
         p.setPen(textColor);
         QFont f = font();
         p.setFont(f);
-        p.drawText(r, Qt::AlignCenter, text());
+
+        if (!icon().isNull()) {
+            const QSize requestedIconSize = iconSize();
+            const int iconW = requestedIconSize.width() > 0 ? requestedIconSize.width()
+                                                            : theme.scaled(BASE_TAB_ICON_SIZE);
+            const int iconH = requestedIconSize.height() > 0 ? requestedIconSize.height()
+                                                             : theme.scaled(BASE_TAB_ICON_SIZE);
+            const int textW = QFontMetrics(f).horizontalAdvance(text());
+            const int gap = text().isEmpty() ? 0 : theme.scaled(BASE_TAB_ICON_GAP);
+            const int contentW = iconW + gap + textW;
+            int contentX = qRound(r.left() + (r.width() - contentW) * 0.5);
+
+            QPixmap iconPixmap = icon().pixmap(QSize(iconW, iconH));
+            if (!iconPixmap.isNull()) {
+                QPainter iconPainter(&iconPixmap);
+                iconPainter.setCompositionMode(QPainter::CompositionMode_SourceIn);
+                iconPainter.fillRect(iconPixmap.rect(), textColor);
+                iconPainter.end();
+                p.drawPixmap(contentX, qRound(r.center().y() - iconH * 0.5), iconPixmap);
+                contentX += iconW + gap;
+            }
+
+            if (!text().isEmpty()) {
+                p.drawText(QRectF(contentX, r.top(), textW, r.height()),
+                    Qt::AlignLeft | Qt::AlignVCenter, text());
+            }
+        } else {
+            p.drawText(r, Qt::AlignCenter, text());
+        }
 
     } else { // Action
         // Primary theme accent (not preset.accent — vivid secondary reserved for other UI)

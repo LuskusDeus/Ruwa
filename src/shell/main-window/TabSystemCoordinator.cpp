@@ -9,6 +9,7 @@
 #include "shell/tab-system/BaseTab.h"
 #include "shell/tab-system/CustomTabBar.h"
 #include "features/home/HomePageTab.h"
+#include "features/project/RecentProjectPresetsManager.h"
 #include "shell/tab-system/EmptyStateTab.h"
 #include "shell/tab-system/WorkspaceTab.h"
 #include "features/layers/smart/SmartEditSession.h"
@@ -437,7 +438,13 @@ void TabSystemCoordinator::connectHomeTabSignals(tabs::HomePageTab* homeTab)
             settings.templateType = colorMode;
             settings.backgroundColor = backgroundColor;
             settings.tileFormat = tileFormat;
-            m_tabManager->addTab(new tabs::WorkspaceTab(settings));
+            auto* workspaceTab = new tabs::WorkspaceTab(settings);
+            if (m_tabManager->addTab(workspaceTab)) {
+                ruwa::core::serialization::RecentProjectPresetsManager::instance().addEntry(
+                    name, size, infiniteCanvasEnabled, colorMode, backgroundColor, tileFormat);
+            } else {
+                workspaceTab->deleteLater();
+            }
         });
 
     connect(homeTab, &tabs::HomePageTab::colorPickerRequested, this,

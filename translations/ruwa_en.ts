@@ -3792,6 +3792,22 @@ Ruwa uses the Qt framework (version %1), dynamically linked under the GNU Lesser
         <source>Height</source>
         <translation type="unfinished"></translation>
     </message>
+    <message>
+        <location filename="../src/features/home/new-project/NewProjectContent.cpp" line="523"/>
+        <location filename="../src/features/home/new-project/NewProjectContent.cpp" line="646"/>
+        <source>Recent Projects</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location filename="../src/features/home/new-project/NewProjectContent.cpp" line="98"/>
+        <source>Clear Recent Projects</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location filename="../src/features/home/new-project/ProjectPresetCard.cpp" line="82"/>
+        <source>Delete</source>
+        <translation type="unfinished"></translation>
+    </message>
 </context>
 <context>
     <name>ruwa::ui::widgets::NoActionsContextMenu</name>

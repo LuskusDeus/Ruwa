@@ -112,6 +112,7 @@
         <file alias="DockLayout">resources/icons/Dock-layout.png</file>
         <file alias="LayoutSwitch">resources/icons/LayoutSwitch.png</file>
         <file alias="DetachPanel">resources/icons/DetachPanel.png</file>
+        <file alias="RecentProjectPresets">resources/icons/RecentProjectPresets.png</file>
         <file alias="Resize">resources/icons/Resize.png</file>
         <file alias="RotationCorner">resources/icons/RotationCorner.png</file>
         <file alias="Blur">resources/icons/Blur.png</file>

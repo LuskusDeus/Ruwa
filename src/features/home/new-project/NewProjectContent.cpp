@@ -6,7 +6,9 @@
 #include "ProjectPresetCard.h"
 #include "CanvasThumbnail.h"
 #include "AspectRatioLockButton.h"
+#include "features/project/RecentProjectPresetsManager.h"
 #include "features/theme/manager/ThemeManager.h"
+#include "shared/resources/IconProvider.h"
 #include "shared/i18n/TranslationManager.h"
 #include "shared/widgets/inputs/ColorInputButton.h"
 #include "shared/widgets/layout/SmoothScrollArea.h"
@@ -20,6 +22,8 @@
 #include <QCoreApplication>
 #include <QEvent>
 #include <QHBoxLayout>
+#include <QIcon>
+#include <QLayoutItem>
 #include <QSpacerItem>
 #include <QVBoxLayout>
 #include <QLabel>
@@ -29,7 +33,10 @@
 #include <QSignalBlocker>
 #include <QTimer>
 #include <QtMath>
+#include <algorithm>
+#include <functional>
 #include <numeric>
+#include <utility>
 
 #include <QMargins>
 
@@ -38,6 +45,9 @@ namespace ruwa::ui::widgets {
 namespace {
 constexpr int kDefaultProjectWidth = 2048;
 constexpr int kDefaultProjectHeight = 2048;
+constexpr int kRecentPresetsCategoryIndex = 0;
+constexpr int kFirstBuiltInCategoryIndex = 1;
+constexpr int kClearRecentPresetsAction = -1;
 
 /// Bounds a new canvas dimension must land in. The width/height fields validate
 /// against the same numbers, but the clamp below is what the document is built
@@ -71,6 +81,41 @@ const int MAX_PROJECT_NAME_CHARS = 64;
 /// Добавка к внешней высоте превью 16:9 (New Project). Масштабируется через ThemeManager::scaled —
 /// правь только это число.
 const int BASE_PREVIEW_16X9_OUTER_HEIGHT_EXTRA = 10;
+const int BASE_RECENT_TAB_ICON_SIZE = 16;
+
+class RecentPresetsTabButton final : public CapsuleButton, public IContextMenuProvider {
+public:
+    explicit RecentPresetsTabButton(std::function<void()> clearCallback, QWidget* parent)
+        : CapsuleButton(QString(), CapsuleButton::Variant::Tab, parent)
+        , m_clearCallback(std::move(clearCallback))
+    {
+    }
+
+    ContextMenuType contextMenuType() const override { return ContextMenuType::SimpleActions; }
+
+    QVariantMap contextMenuContext() const override
+    {
+        QVariantMap clearAction;
+        clearAction.insert(QStringLiteral("id"), kClearRecentPresetsAction);
+        clearAction.insert(QStringLiteral("text"),
+            QCoreApplication::translate(
+                "ruwa::ui::widgets::NewProjectContent", "Clear Recent Projects"));
+        clearAction.insert(QStringLiteral("standardIcon"),
+            static_cast<int>(ruwa::ui::core::IconProvider::StandardIcon::Trash));
+        clearAction.insert(QStringLiteral("danger"), true);
+        return { { QStringLiteral("simpleActions"), QVariantList { clearAction } } };
+    }
+
+    void handleContextMenuAction(int actionId) override
+    {
+        if (actionId == kClearRecentPresetsAction && m_clearCallback) {
+            m_clearCallback();
+        }
+    }
+
+private:
+    std::function<void()> m_clearCallback;
+};
 
 QString settingsSectionLabel(const QString& raw)
 {
@@ -183,6 +228,9 @@ NewProjectContent::NewProjectContent(QWidget* parent)
         this, &NewProjectContent::onThemeChanged);
     connect(&ruwa::ui::core::TranslationManager::instance(),
         &ruwa::ui::core::TranslationManager::languageChanged, this, [this]() { retranslateUi(); });
+    connect(&ruwa::core::serialization::RecentProjectPresetsManager::instance(),
+        &ruwa::core::serialization::RecentProjectPresetsManager::entriesChanged, this,
+        &NewProjectContent::rebuildRecentPresets);
 }
 
 void NewProjectContent::setupContent()
@@ -298,8 +346,10 @@ void NewProjectContent::setupContent()
     m_bitDepthSelector->setSizePolicy(QSizePolicy::Expanding, QSizePolicy::Fixed);
     // enum order RGBA8=0 / RGBA16F=1 / RGBA32F=2 maps 1:1 to the option index.
     m_bitDepthSelector->setCurrentIndex(static_cast<int>(aether::kDefaultTileFormat), false);
-    connect(m_bitDepthSelector, &SegmentedOptionSelector::selectionChanged, this,
-        [this](int) { updateMemoryLabel(); });
+    connect(m_bitDepthSelector, &SegmentedOptionSelector::selectionChanged, this, [this](int) {
+        clearSelectedRecentPreset();
+        updateMemoryLabel();
+    });
     bitDepthLayout->addWidget(m_bitDepthSelector);
 
     leftLayout->addWidget(m_bitDepthSection);
@@ -351,8 +401,11 @@ void NewProjectContent::setupContent()
     m_backgroundColorInput = new ColorInputButton(
         QString(), m_backgroundColor, backgroundOptions, m_backgroundColorSection);
     m_backgroundColorInput->setSizePolicy(QSizePolicy::Expanding, QSizePolicy::Fixed);
-    connect(m_backgroundColorInput, &ColorInputButton::colorChanged, this,
-        [this](const QColor& color) { m_backgroundColor = color; });
+    connect(
+        m_backgroundColorInput, &ColorInputButton::colorChanged, this, [this](const QColor& color) {
+            m_backgroundColor = color;
+            clearSelectedRecentPreset();
+        });
     connect(m_backgroundColorInput, &ColorInputButton::colorPickerRequested, this,
         [this](const QColor& color) { emit colorPickerRequested(color, m_backgroundColorInput); });
     backgroundColorLayout->addWidget(m_backgroundColorInput);
@@ -466,11 +519,15 @@ void NewProjectContent::retranslateUi()
     }
     if (m_createButton)
         m_createButton->setText(tr("Create Project"));
+    if (m_recentPresetsTabButton)
+        m_recentPresetsTabButton->setToolTip(tr("Recent Projects"));
 
     const QStringList categories = { tr("Basics"), tr("Screen"), tr("Illustration"),
         tr("Comics & Manga"), tr("Print"), tr("Covers & Posters"), tr("Pixel Art") };
-    for (int i = 0; i < m_categoryButtons.size() && i < categories.size(); ++i)
-        m_categoryButtons[i]->setText(categories[i]);
+    for (int i = 0;
+        i < categories.size() && i + kFirstBuiltInCategoryIndex < m_categoryButtons.size(); ++i) {
+        m_categoryButtons[i + kFirstBuiltInCategoryIndex]->setText(categories[i]);
+    }
 
     const QList<ProjectPresetCard*> presetCardList = m_presetCards.values();
     for (ProjectPresetCard* card : presetCardList) {
@@ -533,6 +590,7 @@ void NewProjectContent::createSettingsPanel(QWidget* fieldParent)
     m_projectNameField->setPlaceholder(tr("Untitled Project"));
     m_projectNameField->setText(tr("Untitled Project"));
     connect(m_projectNameField, &ProjectSettingsField::textChanged, this, [this]() {
+        clearSelectedRecentPreset();
         if (m_canvasThumbnail)
             m_canvasThumbnail->setProjectName(projectName());
     });
@@ -574,6 +632,23 @@ void NewProjectContent::createPresets()
     tabsWidget->setLayout(tabsLayout);
     layout->addWidget(tabsWidget);
 
+    m_categoryButtons.clear();
+    m_presetCards.clear();
+    m_presetCategoryIndices.clear();
+    m_recentPresetCards.clear();
+
+    m_recentPresetsTabButton = new RecentPresetsTabButton(
+        []() { ruwa::core::serialization::RecentProjectPresetsManager::instance().clear(); },
+        tabsWidget);
+    m_recentPresetsTabButton->setIcon(QIcon(QStringLiteral(":/icons/RecentProjectPresets")));
+    m_recentPresetsTabButton->setIconSize(
+        QSize(theme.scaled(BASE_RECENT_TAB_ICON_SIZE), theme.scaled(BASE_RECENT_TAB_ICON_SIZE)));
+    m_recentPresetsTabButton->setToolTip(tr("Recent Projects"));
+    connect(m_recentPresetsTabButton, &QPushButton::clicked, this,
+        [this]() { setActivePresetCategory(kRecentPresetsCategoryIndex); });
+    tabsLayout->addWidget(m_recentPresetsTabButton);
+    m_categoryButtons.append(m_recentPresetsTabButton);
+
     SmoothScrollArea* scrollArea = new SmoothScrollArea(m_presetsPanel);
     scrollArea->setVerticalScrollBarPolicy(Qt::ScrollBarAsNeeded);
 
@@ -588,6 +663,18 @@ void NewProjectContent::createPresets()
     m_presetsStack->setAnimationEasing(QEasingCurve::OutCubic);
     m_presetsStack->setSizePolicy(QSizePolicy::Expanding, QSizePolicy::Preferred);
     scrollLayout->addWidget(m_presetsStack);
+
+    m_recentPresetsPage = new QWidget(m_presetsStack);
+    QVBoxLayout* recentPageLayout = new QVBoxLayout(m_recentPresetsPage);
+    recentPageLayout->setContentsMargins(0, 0, 0, 0);
+    recentPageLayout->setSpacing(0);
+    m_recentPresetsLayout
+        = new FlowLayout(-1, theme.scaled(BASE_FLOW_SPACING_H), theme.scaled(BASE_FLOW_SPACING_V));
+    m_recentPresetsLayout->setContentsMargins(0, 0, 0, 0);
+    m_recentPresetsLayout->setMaxColumns(2);
+    recentPageLayout->addLayout(m_recentPresetsLayout);
+    recentPageLayout->addStretch();
+    m_presetsStack->addWidget(m_recentPresetsPage);
 
     // English keys only — UI strings come from QCoreApplication::translate (same context as tr()).
     struct Preset {
@@ -659,14 +746,11 @@ void NewProjectContent::createPresets()
             } },
     };
 
-    m_categoryButtons.clear();
-    m_presetCards.clear();
-    m_presetCategoryIndices.clear();
-
     const char* presetCtx = metaObject()->className();
 
-    for (int categoryIndex = 0; categoryIndex < categories.size(); ++categoryIndex) {
-        const auto& category = categories[categoryIndex];
+    for (int builtInIndex = 0; builtInIndex < categories.size(); ++builtInIndex) {
+        const int categoryIndex = builtInIndex + kFirstBuiltInCategoryIndex;
+        const auto& category = categories[builtInIndex];
 
         QString categoryTitle;
         {
@@ -708,7 +792,119 @@ void NewProjectContent::createPresets()
     scrollArea->setWidget(scrollContent);
     layout->addWidget(scrollArea, 1);
 
-    setActivePresetCategory(0);
+    rebuildRecentPresets();
+    setActivePresetCategory(kFirstBuiltInCategoryIndex);
+}
+
+void NewProjectContent::rebuildRecentPresets()
+{
+    if (!m_recentPresetsLayout) {
+        return;
+    }
+
+    while (QLayoutItem* item = m_recentPresetsLayout->takeAt(0)) {
+        if (QWidget* widget = item->widget()) {
+            widget->hide();
+            widget->deleteLater();
+        }
+        delete item;
+    }
+    m_recentPresetCards.clear();
+
+    const auto& entries
+        = ruwa::core::serialization::RecentProjectPresetsManager::instance().entries();
+    bool selectedEntryStillExists = false;
+    for (const auto& entry : entries) {
+        auto* card = new ProjectPresetCard(
+            entry.projectName, entry.canvasSize, m_recentPresetsPage, false);
+        card->setDeletable(true);
+        connect(card, &ProjectPresetCard::clicked, this,
+            [this, id = entry.id]() { applyRecentPreset(id); });
+        connect(card, &ProjectPresetCard::deleteRequested, this, [id = entry.id]() {
+            ruwa::core::serialization::RecentProjectPresetsManager::instance().removeEntry(id);
+        });
+
+        if (entry.id == m_selectedRecentPresetId) {
+            card->setSelected(true);
+            selectedEntryStillExists = true;
+        }
+        m_recentPresetCards.insert(entry.id, card);
+        m_recentPresetsLayout->addWidget(card);
+    }
+
+    if (!selectedEntryStillExists) {
+        m_selectedRecentPresetId.clear();
+    }
+
+    updateRecentPresetVisibility();
+    if (m_recentPresetsPage) {
+        m_recentPresetsPage->updateGeometry();
+    }
+}
+
+void NewProjectContent::applyRecentPreset(const QString& id)
+{
+    const auto& entries
+        = ruwa::core::serialization::RecentProjectPresetsManager::instance().entries();
+    const auto entryIt = std::find_if(
+        entries.cbegin(), entries.cend(), [&id](const auto& entry) { return entry.id == id; });
+    if (entryIt == entries.cend()) {
+        return;
+    }
+    const auto& entry = *entryIt;
+
+    clearAllInputFocus();
+    if (!m_selectedPreset.isEmpty() && m_presetCards.contains(m_selectedPreset)) {
+        m_presetCards[m_selectedPreset]->setSelected(false);
+    }
+    m_selectedPreset.clear();
+    clearSelectedRecentPreset();
+
+    m_selectedRecentPresetId = id;
+    if (ProjectPresetCard* card = m_recentPresetCards.value(id)) {
+        card->setSelected(true);
+    }
+
+    {
+        const QSignalBlocker nameBlocker(m_projectNameField);
+        const QSignalBlocker canvasBlocker(m_canvasBoundsSelector);
+        const QSignalBlocker bitDepthBlocker(m_bitDepthSelector);
+        const QSignalBlocker backgroundBlocker(m_backgroundColorInput);
+
+        m_projectNameField->setText(entry.projectName);
+        updateDimensionsFromPreset(entry.canvasSize);
+        m_canvasBoundsSelector->setCurrentIndex(entry.infiniteCanvasEnabled ? 1 : 0, false);
+        m_bitDepthSelector->setCurrentIndex(static_cast<int>(entry.tileFormat), false);
+        m_backgroundColorInput->setColor(entry.backgroundColor);
+        m_backgroundColor = entry.backgroundColor;
+    }
+
+    syncDimensionFieldsEnabledState();
+    if (m_canvasThumbnail) {
+        m_canvasThumbnail->setDimensions(entry.canvasSize);
+        m_canvasThumbnail->setProjectName(entry.projectName);
+        m_canvasThumbnail->setInfiniteCanvasEnabled(entry.infiniteCanvasEnabled);
+    }
+    if (m_aspectLockButton && m_aspectLockButton->isLocked()) {
+        updateLockedAspectRatio();
+    }
+    updateMemoryLabel();
+    setActivePresetCategory(kRecentPresetsCategoryIndex);
+    QTimer::singleShot(0, this, [this]() { syncLockColumnLayout(); });
+}
+
+void NewProjectContent::updateRecentPresetVisibility()
+{
+    if (!m_recentPresetsTabButton || !m_presetsStack) {
+        return;
+    }
+
+    const bool hasRecentProjects
+        = !ruwa::core::serialization::RecentProjectPresetsManager::instance().isEmpty();
+    if (!hasRecentProjects && m_presetsStack->activeIndex() == kRecentPresetsCategoryIndex) {
+        setActivePresetCategory(kFirstBuiltInCategoryIndex);
+    }
+    m_recentPresetsTabButton->setVisible(hasRecentProjects);
 }
 
 void NewProjectContent::mousePressEvent(QMouseEvent* event)
@@ -730,6 +926,7 @@ void NewProjectContent::clearAllInputFocus()
 void NewProjectContent::onPresetSelected(const QString& presetName)
 {
     clearAllInputFocus();
+    clearSelectedRecentPreset();
 
     if (m_canvasBoundsSelector && m_canvasBoundsSelector->currentIndex() != 0) {
         QSignalBlocker blocker(m_canvasBoundsSelector);
@@ -791,6 +988,7 @@ void NewProjectContent::onAspectLockToggled(bool locked)
 
 void NewProjectContent::onCanvasBoundsSelectionChanged(int)
 {
+    clearSelectedRecentPreset();
     syncDimensionFieldsEnabledState();
     if (m_canvasThumbnail) {
         m_canvasThumbnail->setInfiniteCanvasEnabled(infiniteCanvasEnabled());
@@ -912,11 +1110,19 @@ void NewProjectContent::updateLockedAspectRatio()
 
 void NewProjectContent::clearSelectedPreset()
 {
-    if (m_selectedPreset.isEmpty())
-        return;
-    if (m_presetCards.contains(m_selectedPreset))
+    if (!m_selectedPreset.isEmpty() && m_presetCards.contains(m_selectedPreset))
         m_presetCards[m_selectedPreset]->setSelected(false);
     m_selectedPreset.clear();
+    clearSelectedRecentPreset();
+}
+
+void NewProjectContent::clearSelectedRecentPreset()
+{
+    if (!m_selectedRecentPresetId.isEmpty()
+        && m_recentPresetCards.contains(m_selectedRecentPresetId)) {
+        m_recentPresetCards[m_selectedRecentPresetId]->setSelected(false);
+    }
+    m_selectedRecentPresetId.clear();
 }
 
 void NewProjectContent::setActivePresetCategory(int index)
@@ -977,6 +1183,11 @@ void NewProjectContent::updateScaledSizes()
         btnFont.setBold(true);
         m_createButton->setFont(btnFont);
         m_createButton->updateGeometry();
+    }
+    if (m_recentPresetsTabButton) {
+        m_recentPresetsTabButton->setIconSize(QSize(
+            theme.scaled(BASE_RECENT_TAB_ICON_SIZE), theme.scaled(BASE_RECENT_TAB_ICON_SIZE)));
+        m_recentPresetsTabButton->updateGeometry();
     }
     if (m_canvasBoundsTitleLabel) {
         QFont labelFont

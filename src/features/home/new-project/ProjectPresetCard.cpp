@@ -2,6 +2,7 @@
 
 // ProjectPresetCard.cpp
 #include "ProjectPresetCard.h"
+#include "shared/resources/IconProvider.h"
 #include "shared/style/WidgetStyleManager.h"
 
 #include <QCoreApplication>
@@ -28,6 +29,7 @@ const int BASE_DIM_FONT_SIZE = 9;
 const int BASE_MIN_TEXT_WIDTH = 72;
 const int BASE_FALLBACK_WIDTH = 200;
 const char kNewProjectPresetCtx[] = "ruwa::ui::widgets::NewProjectContent";
+constexpr int kContextActionDelete = -1;
 } // namespace
 
 void ProjectPresetCard::changeEvent(QEvent* event)
@@ -39,10 +41,11 @@ void ProjectPresetCard::changeEvent(QEvent* event)
 }
 
 ProjectPresetCard::ProjectPresetCard(
-    const QString& nameKey, const QSize& dimensions, QWidget* parent)
+    const QString& nameKey, const QSize& dimensions, QWidget* parent, bool translateName)
     : BaseStyledWidget("PresetCard", parent)
     , m_nameKey(nameKey)
     , m_dimensions(dimensions)
+    , m_translateName(translateName)
 {
     setFlat(true);
     // Width comes from FlowLayout (2 columns); PresetCard inherits Card metrics (would fix 210px).
@@ -56,6 +59,35 @@ ProjectPresetCard::ProjectPresetCard(
 
     setSizePolicy(QSizePolicy::Expanding, QSizePolicy::Fixed);
     updateGeometry();
+}
+
+ContextMenuType ProjectPresetCard::contextMenuType() const
+{
+    return m_deletable ? ContextMenuType::SimpleActions : ContextMenuType::None;
+}
+
+QVariantMap ProjectPresetCard::contextMenuContext() const
+{
+    if (!m_deletable) {
+        return {};
+    }
+
+    QVariantMap deleteAction;
+    deleteAction.insert(QStringLiteral("id"), kContextActionDelete);
+    deleteAction.insert(
+        QStringLiteral("text"), QCoreApplication::translate(kNewProjectPresetCtx, "Delete"));
+    deleteAction.insert(
+        QStringLiteral("standardIcon"), static_cast<int>(IconProvider::StandardIcon::Trash));
+    deleteAction.insert(QStringLiteral("danger"), true);
+
+    return { { QStringLiteral("simpleActions"), QVariantList { deleteAction } } };
+}
+
+void ProjectPresetCard::handleContextMenuAction(int actionId)
+{
+    if (m_deletable && actionId == kContextActionDelete) {
+        emit deleteRequested();
+    }
 }
 
 void ProjectPresetCard::drawAspectRatioPreview(QPainter& painter, const QRectF& previewRect)
@@ -197,8 +229,8 @@ void ProjectPresetCard::drawContentLayer(QPainter& painter, const QRectF& rect)
     nameFont.setBold(true);
     painter.setFont(nameFont);
 
-    QString displayName;
-    {
+    QString displayName = m_nameKey;
+    if (m_translateName) {
         const QByteArray k = m_nameKey.toUtf8();
         displayName = QCoreApplication::translate(kNewProjectPresetCtx, k.constData());
     }

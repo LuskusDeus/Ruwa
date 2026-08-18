@@ -12,6 +12,7 @@
 #include "shell/tab-system/BaseTab.h"
 #include "features/project/ProjectSerializer.h"
 #include "features/project/ProjectData.h"
+#include "features/project/RecentProjectPresetsManager.h"
 #include "shell/tab-system/WorkspaceTab.h"
 #include "shell/main-window/MainWindow.h"
 #include "shell/top-bar/MessagePopupManager.h"
@@ -515,7 +516,16 @@ void QuickNewProjectCommand::execute(const CommandContext& ctx, const QVariantMa
         = ruwa::core::serialization::ProjectData::ExportFrame { true, QRect(0, 0, width, height) };
     settings.templateType = QCoreApplication::translate("FileCommands", "RGB Color");
 
-    tabManager->addTab(new ruwa::ui::tabs::WorkspaceTab(settings));
+    auto* workspaceTab = new ruwa::ui::tabs::WorkspaceTab(settings);
+    if (tabManager->addTab(workspaceTab)) {
+        const bool infiniteCanvasEnabled
+            = settings.canvasBoundsMode == ruwa::core::canvas::CanvasBoundsMode::Infinite;
+        ruwa::core::serialization::RecentProjectPresetsManager::instance().addEntry(settings.name,
+            settings.canvasSize, infiniteCanvasEnabled, settings.templateType,
+            settings.backgroundColor, settings.tileFormat);
+    } else {
+        workspaceTab->deleteLater();
+    }
 }
 
 // ======================================================================================

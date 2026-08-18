@@ -3812,6 +3812,22 @@ Ruwa использует фреймворк Qt (версия %1), динами�
         <source>Name</source>
         <translation>Название</translation>
     </message>
+    <message>
+        <location filename="../src/features/home/new-project/NewProjectContent.cpp" line="523"/>
+        <location filename="../src/features/home/new-project/NewProjectContent.cpp" line="646"/>
+        <source>Recent Projects</source>
+        <translation>Недавние проекты</translation>
+    </message>
+    <message>
+        <location filename="../src/features/home/new-project/NewProjectContent.cpp" line="98"/>
+        <source>Clear Recent Projects</source>
+        <translation>Очистить недавние проекты</translation>
+    </message>
+    <message>
+        <location filename="../src/features/home/new-project/ProjectPresetCard.cpp" line="82"/>
+        <source>Delete</source>
+        <translation>Удалить</translation>
+    </message>
 </context>
 <context>
     <name>ruwa::ui::widgets::NoActionsContextMenu</name>

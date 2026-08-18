@@ -5,6 +5,7 @@
 #define RUWA_UI_WIDGETS_HOMEPAGE_CONTENT_NEWPROJECT_PROJECTPRESETCARD_H
 
 #include "shared/widgets/BaseStyledWidget.h"
+#include "shell/context-menu/IContextMenuProvider.h"
 #include <QSize>
 
 class QEvent;
@@ -19,12 +20,12 @@ namespace ruwa::ui::widgets {
  * - Name + dimensions on the left, aspect preview on the right
  * - Selection state with smooth transitions
  */
-class ProjectPresetCard : public BaseStyledWidget {
+class ProjectPresetCard : public BaseStyledWidget, public IContextMenuProvider {
     Q_OBJECT
 
 public:
-    explicit ProjectPresetCard(
-        const QString& nameKey, const QSize& dimensions, QWidget* parent = nullptr);
+    explicit ProjectPresetCard(const QString& nameKey, const QSize& dimensions,
+        QWidget* parent = nullptr, bool translateName = true);
     ~ProjectPresetCard() override = default;
 
     /// Set whether this preset is selected
@@ -34,6 +35,14 @@ public:
     /// Get preset info (stable English key used for maps and translation lookup)
     QString presetName() const { return m_nameKey; }
     QSize dimensions() const { return m_dimensions; }
+
+    void setDeletable(bool deletable) { m_deletable = deletable; }
+    ContextMenuType contextMenuType() const override;
+    QVariantMap contextMenuContext() const override;
+    void handleContextMenuAction(int actionId) override;
+
+signals:
+    void deleteRequested();
 
 protected:
     void changeEvent(QEvent* event) override;
@@ -53,6 +62,8 @@ private:
 private:
     QString m_nameKey;
     QSize m_dimensions;
+    bool m_translateName = true;
+    bool m_deletable = false;
 };
 
 } // namespace ruwa::ui::widgets
