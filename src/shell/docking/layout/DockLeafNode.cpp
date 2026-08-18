@@ -71,6 +71,24 @@ void DockLeafNode::insertPanel(int index, DockPanel* panel)
     }
 }
 
+bool DockLeafNode::movePanel(DockPanel* panel, int index)
+{
+    const int from = indexOfPanel(panel);
+    if (from < 0 || m_panels.size() < 2) {
+        return false;
+    }
+
+    index = qBound(0, index, static_cast<int>(m_panels.size()) - 1);
+    if (from == index) {
+        return false;
+    }
+
+    DockPanel* current = currentPanel();
+    m_panels.move(from, index);
+    m_currentIndex = static_cast<int>(m_panels.indexOf(current));
+    return true;
+}
+
 bool DockLeafNode::removePanel(DockPanel* panel)
 {
     const int index = indexOfPanel(panel);

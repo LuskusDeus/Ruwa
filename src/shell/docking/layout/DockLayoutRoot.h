@@ -330,11 +330,8 @@ signals:
     void groupHostAboutToBeDestroyed(DockGroupHost* host);
 
     /// Forwarded from a group header. Acted on by DockContainerWidget /
-    /// DockManager, which own panel lifetime and dragging.
+    /// DockManager, which own panel lifetime.
     void groupPanelCloseRequested(DockPanel* panel);
-    void groupPanelDragStarted(DockPanel* panel, const QPoint& globalPos);
-    void groupPanelDragMoved(DockPanel* panel, const QPoint& globalPos);
-    void groupPanelDragFinished(DockPanel* panel, const QPoint& globalPos);
 
 private slots:
     void onHandleDragStarted(DockSplitNode* node, int handleIndex);

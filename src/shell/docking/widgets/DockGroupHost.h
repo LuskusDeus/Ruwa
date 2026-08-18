@@ -202,10 +202,8 @@ signals:
     void panelActivationRequested(DockPanel* panel);
     /// User clicked a tab's ×.
     void panelCloseRequested(DockPanel* panel);
-    /// User dragged a tab out of the strip; the panel should leave the group.
-    void panelDragStarted(DockPanel* panel, const QPoint& globalPos);
-    void panelDragMoved(DockPanel* panel, const QPoint& globalPos);
-    void panelDragFinished(DockPanel* panel, const QPoint& globalPos);
+    /// User moved a tab to another position in this group's tab order.
+    void panelReorderRequested(DockPanel* panel, int index);
 
 protected:
     void resizeEvent(QResizeEvent* event) override;

@@ -86,16 +86,6 @@ public:
     /// Animate between docked title row and floating layout (drag strip + title row).
     void syncFloatingLayout(bool floating);
 
-    /**
-     * @brief Continue a drag that was started on another widget
-     *
-     * A group header tab starts the drag, but that header is destroyed with its
-     * group frame as soon as the group drops back to a single panel — and the
-     * implicit mouse grab goes with it. This takes an explicit grab so the rest
-     * of the drag is delivered here, to a widget that travels with the panel.
-     */
-    void takeOverDrag(const QPoint& globalPos);
-
     qreal floatingLayoutProgress() const { return m_floatingLayoutProgress; }
     void setFloatingLayoutProgress(qreal progress);
 

@@ -69,16 +69,10 @@ void DockManager::setContainer(DockContainerWidget* container)
             }
         });
 
-        // A group tab is a second handle on a panel: closing or dragging one
-        // means exactly what the panel's own title bar would mean.
+        // A group tab can close its panel. Dragging the tab itself is handled
+        // inside the group as reordering; undocking remains on the title bar.
         connect(m_container, &DockContainerWidget::groupPanelCloseRequested, this,
             &DockManager::closePanel);
-        connect(m_container, &DockContainerWidget::groupPanelDragStarted, this,
-            &DockManager::onGroupTabDragStarted);
-        connect(m_container, &DockContainerWidget::groupPanelDragMoved, this,
-            [this](DockPanel*, const QPoint& globalPos) { updateDrag(globalPos); });
-        connect(m_container, &DockContainerWidget::groupPanelDragFinished, this,
-            [this](DockPanel*, const QPoint& globalPos) { endDrag(globalPos); });
     }
 }
 
@@ -785,25 +779,6 @@ void DockManager::onPanelUngroupRequested()
     if (ungrouped && !m_inLayoutChange) {
         OperationGuard layoutGuard(m_inLayoutChange);
         emit layoutChanged();
-    }
-}
-
-void DockManager::onGroupTabDragStarted(DockPanel* panel, const QPoint& globalPos)
-{
-    if (!panel) {
-        return;
-    }
-
-    startDrag(panel, globalPos);
-
-    // The tab that started this drag lives in the group's header, and that
-    // header dies with its frame the moment the group drops back to a single
-    // panel — taking the implicit mouse grab with it, mid-drag. Move the grab
-    // onto the panel's own title bar, which travels with the panel.
-    if (m_dragState.active) {
-        if (auto* titleBar = panel->titleBar()) {
-            titleBar->takeOverDrag(globalPos);
-        }
     }
 }
 

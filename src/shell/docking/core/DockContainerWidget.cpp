@@ -1095,16 +1095,10 @@ void DockContainerWidget::setupUI()
         m_layoutRoot.get(), &DockLayoutRoot::groupHostAboutToBeDestroyed, this,
         [this](DockGroupHost*) { raiseFloatingContainers(); }, Qt::QueuedConnection);
 
-    // Group header interactions: the container owns neither panel lifetime nor
-    // drag state, so these travel on to DockManager unchanged.
+    // The container owns no panel lifetime, so a close from the group header
+    // travels on to DockManager unchanged. Tab reordering stays in the layout.
     connect(m_layoutRoot.get(), &DockLayoutRoot::groupPanelCloseRequested, this,
         &DockContainerWidget::groupPanelCloseRequested);
-    connect(m_layoutRoot.get(), &DockLayoutRoot::groupPanelDragStarted, this,
-        &DockContainerWidget::groupPanelDragStarted);
-    connect(m_layoutRoot.get(), &DockLayoutRoot::groupPanelDragMoved, this,
-        &DockContainerWidget::groupPanelDragMoved);
-    connect(m_layoutRoot.get(), &DockLayoutRoot::groupPanelDragFinished, this,
-        &DockContainerWidget::groupPanelDragFinished);
 
     createOverlay();
 }

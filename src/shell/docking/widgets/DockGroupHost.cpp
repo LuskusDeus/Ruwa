@@ -81,9 +81,8 @@ DockGroupHost::DockGroupHost(DockLeafNode* leaf, QWidget* parent)
         m_header, &DockGroupHeader::panelCloseStarted, this, &DockGroupHost::onPanelCloseStarted);
     connect(m_header, &DockGroupHeader::panelFarewellFinished, this,
         &DockGroupHost::onPanelFarewellFinished);
-    connect(m_header, &DockGroupHeader::panelDragStarted, this, &DockGroupHost::panelDragStarted);
-    connect(m_header, &DockGroupHeader::panelDragMoved, this, &DockGroupHost::panelDragMoved);
-    connect(m_header, &DockGroupHeader::panelDragFinished, this, &DockGroupHost::panelDragFinished);
+    connect(m_header, &DockGroupHeader::panelReorderRequested, this,
+        &DockGroupHost::panelReorderRequested);
 
     setupShortcuts();
     layoutChildren();

@@ -693,9 +693,15 @@ void DockLayoutRoot::connectGroupHost(DockGroupHost* host)
 
     connect(
         host, &DockGroupHost::panelCloseRequested, this, &DockLayoutRoot::groupPanelCloseRequested);
-    connect(host, &DockGroupHost::panelDragStarted, this, &DockLayoutRoot::groupPanelDragStarted);
-    connect(host, &DockGroupHost::panelDragMoved, this, &DockLayoutRoot::groupPanelDragMoved);
-    connect(host, &DockGroupHost::panelDragFinished, this, &DockLayoutRoot::groupPanelDragFinished);
+    connect(host, &DockGroupHost::panelReorderRequested, this,
+        [this, host](DockPanel* panel, int index) {
+            DockLeafNode* leaf = host->leaf();
+            if (!leaf || !leaf->movePanel(panel, index)) {
+                return;
+            }
+            host->syncFromLeaf();
+            emit layoutChanged();
+        });
 }
 
 void DockLayoutRoot::destroyGroupHost(DockLeafNode* leaf)

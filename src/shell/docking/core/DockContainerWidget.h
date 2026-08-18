@@ -156,11 +156,8 @@ signals:
     void layoutChanged();
 
     /// Forwarded from a group header (via DockLayoutRoot) for DockManager,
-    /// which owns panel lifetime and drag state.
+    /// which owns panel lifetime.
     void groupPanelCloseRequested(DockPanel* panel);
-    void groupPanelDragStarted(DockPanel* panel, const QPoint& globalPos);
-    void groupPanelDragMoved(DockPanel* panel, const QPoint& globalPos);
-    void groupPanelDragFinished(DockPanel* panel, const QPoint& globalPos);
 
     void panelEntranceAnimationFinished();
     void panelEntranceAnimationCancelled();

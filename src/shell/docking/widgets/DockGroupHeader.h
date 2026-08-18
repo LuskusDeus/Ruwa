@@ -114,10 +114,8 @@ signals:
     /// The tab's farewell has landed. The host reports the close for real once
     /// the content transition it started has landed too.
     void panelFarewellFinished(DockPanel* panel);
-    /// A tab was dragged past the threshold: the panel should leave the group.
-    void panelDragStarted(DockPanel* panel, const QPoint& globalPos);
-    void panelDragMoved(DockPanel* panel, const QPoint& globalPos);
-    void panelDragFinished(DockPanel* panel, const QPoint& globalPos);
+    /// A horizontal tab drag finished at a new tab-order index.
+    void panelReorderRequested(DockPanel* panel, int index);
 
 protected:
     void paintEvent(QPaintEvent* event) override;
@@ -148,6 +146,8 @@ private:
         /// rect.x() + slideOffsetX), interpolated from slideStartOffsetX to 0.
         qreal slideOffsetX = 0.0;
         qreal slideStartOffsetX = 0.0;
+        /// Direct horizontal offset of the tab currently following the pointer.
+        qreal dragOffsetX = 0.0;
         QVariantAnimation* hoverAnim = nullptr;
         QVariantAnimation* closeRevealAnim = nullptr;
         QVariantAnimation* fadeAnim = nullptr;
@@ -165,8 +165,12 @@ private:
     /// @p matchHandover stretches it to the length of the content transition
     /// the close started, so both land together.
     void startCloseAnimation(int index, bool matchHandover = false);
-    /// Slide the surviving tabs from where they were drawn into their new slots.
-    void runPostRemoveSlide(const QHash<DockPanel*, qreal>& visualLeftBeforeRemove);
+    /// Slide tabs from their previous visual positions into their current slots.
+    void runLayoutSlide(const QHash<DockPanel*, qreal>& visualLeftBeforeLayout,
+        DockPanel* stationaryPanel, int duration);
+    void updateDraggedTab(const QPoint& globalPos);
+    QHash<DockPanel*, qreal> visualTabLefts() const;
+    void finishTabDrag();
     void destroyItemAnimations(TabItem& item);
     void updateHoverState(const QPointF& pos);
     void updateScaledSizes();
@@ -181,10 +185,12 @@ private:
     int m_hoveredIndex = -1;
     int m_dropInsertIndex = -1;
 
-    // Drag-out detection: a press on a tab arms it, crossing the threshold
-    // promotes it to a panel drag (same threshold as DockPanelTitleBar).
-    int m_pressedIndex = -1;
+    // Horizontal tab reorder. The panel title bar remains the separate handle
+    // for undocking the panel from its group.
+    int m_dragStartIndex = -1;
+    QPointer<DockPanel> m_pressedPanel;
     QPoint m_pressStartGlobal;
+    qreal m_dragGrabOffsetX = 0.0;
     bool m_dragging = false;
     static constexpr int kDragThreshold = 5;
 

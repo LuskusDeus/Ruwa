@@ -43,6 +43,7 @@ constexpr int kWheelNotch = 120;
 /// timing and the drop distance of the app tab strip (CustomTabBar).
 constexpr int kCloseFadeMs = 240;
 constexpr int kLayoutSlideMs = 240;
+constexpr int kTabReorderSlideMs = 140;
 constexpr int kTabPopDistance = 10;
 
 /// A tab whose close hands the stage to another member fades for exactly as
@@ -126,7 +127,8 @@ void DockGroupHeader::setPanels(const QList<DockPanel*>& panels)
     QHash<DockPanel*, qreal> visualLeft;
     for (const TabItem& item : m_items) {
         if (!item.panel.isNull()) {
-            visualLeft.insert(item.panel.data(), item.rect.x() + item.slideOffsetX);
+            visualLeft.insert(
+                item.panel.data(), item.rect.x() + item.slideOffsetX + item.dragOffsetX);
         }
     }
 
@@ -170,12 +172,16 @@ void DockGroupHeader::setPanels(const QList<DockPanel*>& panels)
         m_currentPanel = nullptr;
     }
     m_hoveredIndex = -1;
-    m_pressedIndex = -1;
+    if (indexOfPanel(m_pressedPanel.data()) < 0) {
+        m_pressedPanel = nullptr;
+        m_dragStartIndex = -1;
+        m_dragging = false;
+    }
 
     updateLayout();
 
     if (removedAny && !m_items.isEmpty()) {
-        runPostRemoveSlide(visualLeft);
+        runLayoutSlide(visualLeft, m_pressedPanel.data(), kLayoutSlideMs);
     }
 }
 
@@ -448,8 +454,19 @@ void DockGroupHeader::paintEvent(QPaintEvent* /*event*/)
     painter.setBrush(m_colors.surfaceAlt);
     painter.drawPath(filled);
 
+    const DockPanel* draggedPanel = m_dragging ? m_pressedPanel.data() : nullptr;
     for (int i = 0; i < m_items.size(); ++i) {
+        if (m_items[i].panel.data() == draggedPanel) {
+            continue;
+        }
         drawTab(painter, m_items[i], m_items[i].panel.data() == m_currentPanel.data());
+    }
+    // The tab under the pointer stays above neighbours while crossing them.
+    if (draggedPanel) {
+        const int draggedIndex = indexOfPanel(m_pressedPanel.data());
+        if (draggedIndex >= 0) {
+            drawTab(painter, m_items[draggedIndex], draggedPanel == m_currentPanel.data());
+        }
     }
 
     // Insertion caret for an in-flight drop.
@@ -488,7 +505,7 @@ void DockGroupHeader::drawTab(QPainter& painter, const TabItem& item, bool isAct
     // Everything below is drawn in the tab's own frame: the farewell drops it
     // and fades it out, and a survivor of a removal slides in from where the
     // strip used to have it.
-    painter.translate(item.slideOffsetX, item.verticalOffset);
+    painter.translate(item.slideOffsetX + item.dragOffsetX, item.verticalOffset);
     if (item.opacity < 1.0) {
         painter.setOpacity(qBound(0.0, item.opacity, 1.0));
     }
@@ -600,7 +617,10 @@ int DockGroupHeader::tabIndexAt(const QPointF& pos) const
         if (m_items[i].isClosing) {
             continue;
         }
-        if (m_items[i].rect.contains(pos)) {
+        const TabItem& item = m_items[i];
+        if (item.rect
+                .translated(item.slideOffsetX + item.dragOffsetX, item.verticalOffset)
+                .contains(pos)) {
             return i;
         }
     }
@@ -623,7 +643,10 @@ bool DockGroupHeader::isCloseButtonAt(int index, const QPointF& pos) const
     if (!panel || !panel->isClosable()) {
         return false;
     }
-    return m_items[index].closeRect.adjusted(-2, -2, 2, 2).contains(pos);
+    const TabItem& item = m_items[index];
+    return item.closeRect.adjusted(-2, -2, 2, 2)
+        .translated(item.slideOffsetX + item.dragOffsetX, item.verticalOffset)
+        .contains(pos);
 }
 
 void DockGroupHeader::mousePressEvent(QMouseEvent* event)
@@ -656,13 +679,17 @@ void DockGroupHeader::mousePressEvent(QMouseEvent* event)
     }
 
     // Activate on press (not release): selecting a tab should feel immediate,
-    // and a drag out of the group starts from the tab you just selected.
+    // and reordering starts from the tab the user just selected.
     if (DockPanel* panel = m_items[index].panel.data()) {
         emit panelActivationRequested(panel);
     }
 
-    m_pressedIndex = index;
+    m_dragStartIndex = index;
+    m_pressedPanel = m_items[index].panel.data();
     m_pressStartGlobal = event->globalPosition().toPoint();
+    m_dragGrabOffsetX = event->position().x()
+        - (m_items[index].rect.left() + m_items[index].slideOffsetX
+            + m_items[index].dragOffsetX);
     m_dragging = false;
 }
 
@@ -670,22 +697,12 @@ void DockGroupHeader::mouseMoveEvent(QMouseEvent* event)
 {
     const QPoint globalPos = event->globalPosition().toPoint();
 
-    if (m_pressedIndex >= 0 && (event->buttons() & Qt::LeftButton)) {
-        DockPanel* panel
-            = (m_pressedIndex < m_items.size()) ? m_items[m_pressedIndex].panel.data() : nullptr;
-
+    if (!m_pressedPanel.isNull() && (event->buttons() & Qt::LeftButton)) {
         if (!m_dragging && (globalPos - m_pressStartGlobal).manhattanLength() >= kDragThreshold) {
             m_dragging = true;
-            if (panel) {
-                // From here the drag usually belongs to the panel's own title
-                // bar: DockManager moves the mouse grab there, because this
-                // header is destroyed along with its frame as soon as the group
-                // drops back to a single panel. The Moved/Finished signals below
-                // remain the path for any handover that does not happen.
-                emit panelDragStarted(panel, globalPos);
-            }
-        } else if (m_dragging && panel) {
-            emit panelDragMoved(panel, globalPos);
+        }
+        if (m_dragging) {
+            updateDraggedTab(globalPos);
         }
         return;
     }
@@ -695,15 +712,104 @@ void DockGroupHeader::mouseMoveEvent(QMouseEvent* event)
 
 void DockGroupHeader::mouseReleaseEvent(QMouseEvent* event)
 {
-    if (m_dragging && m_pressedIndex >= 0 && m_pressedIndex < m_items.size()) {
-        if (DockPanel* panel = m_items[m_pressedIndex].panel.data()) {
-            emit panelDragFinished(panel, event->globalPosition().toPoint());
+    if (event->button() == Qt::LeftButton && m_dragging) {
+        updateDraggedTab(event->globalPosition().toPoint());
+        finishTabDrag();
+    } else if (event->button() == Qt::LeftButton) {
+        m_pressedPanel = nullptr;
+        m_dragStartIndex = -1;
+    }
+
+    m_dragging = false;
+    QWidget::mouseReleaseEvent(event);
+}
+
+QHash<DockPanel*, qreal> DockGroupHeader::visualTabLefts() const
+{
+    QHash<DockPanel*, qreal> result;
+    result.reserve(m_items.size());
+    for (const TabItem& item : m_items) {
+        if (!item.panel.isNull()) {
+            result.insert(
+                item.panel.data(), item.rect.x() + item.slideOffsetX + item.dragOffsetX);
+        }
+    }
+    return result;
+}
+
+void DockGroupHeader::updateDraggedTab(const QPoint& globalPos)
+{
+    DockPanel* panel = m_pressedPanel.data();
+    int index = indexOfPanel(panel);
+    if (!panel || index < 0) {
+        return;
+    }
+
+    const QPointF localPos = mapFromGlobal(globalPos);
+    const qreal tabWidth = m_items[index].rect.width();
+    const qreal minLeft = m_tabPadding;
+    const qreal maxLeft = qMax(minLeft, width() - m_tabPadding - tabWidth);
+    const qreal visualLeft
+        = qBound(minLeft, localPos.x() - m_dragGrabOffsetX, maxLeft);
+    const qreal visualRight = visualLeft + tabWidth;
+    const qreal visualCenter = visualLeft + tabWidth * 0.5;
+
+    int targetIndex = index;
+    const qreal slotCenter = m_items[index].rect.center().x();
+    if (visualCenter < slotCenter) {
+        // For differently sized tabs, comparing centers is asymmetric: a wide
+        // dragged tab may never get its center left of a narrow neighbour's
+        // center. Its leading edge crossing the neighbour's center is the stable
+        // insertion threshold used by movable tab bars.
+        while (targetIndex > 0
+            && visualLeft < m_items[targetIndex - 1].rect.center().x()) {
+            --targetIndex;
+        }
+    } else if (visualCenter > slotCenter) {
+        while (targetIndex + 1 < m_items.size()
+            && visualRight > m_items[targetIndex + 1].rect.center().x()) {
+            ++targetIndex;
         }
     }
 
-    m_pressedIndex = -1;
+    if (targetIndex != index) {
+        const QHash<DockPanel*, qreal> previousVisualLefts = visualTabLefts();
+        m_items.move(index, targetIndex);
+        updateLayout();
+        runLayoutSlide(previousVisualLefts, panel, kTabReorderSlideMs);
+        index = targetIndex;
+    }
+
+    m_items[index].dragOffsetX = visualLeft - m_items[index].rect.x();
+    update();
+}
+
+void DockGroupHeader::finishTabDrag()
+{
+    DockPanel* panel = m_pressedPanel.data();
+    const int finalIndex = indexOfPanel(panel);
+    if (!panel || finalIndex < 0) {
+        m_pressedPanel = nullptr;
+        m_dragStartIndex = -1;
+        m_dragging = false;
+        return;
+    }
+
+    const QHash<DockPanel*, qreal> previousVisualLefts = visualTabLefts();
+    m_items[finalIndex].dragOffsetX = 0.0;
+
+    const bool orderChanged = finalIndex != m_dragStartIndex;
+    m_pressedPanel = nullptr;
+    m_dragStartIndex = -1;
     m_dragging = false;
-    QWidget::mouseReleaseEvent(event);
+
+    if (orderChanged) {
+        emit panelReorderRequested(panel, finalIndex);
+    }
+
+    // Land the dragged tab in its final slot; neighbours may still be finishing
+    // the short crossing animation, so all current visual positions are kept.
+    runLayoutSlide(previousVisualLefts, nullptr, kTabReorderSlideMs);
 }
 
 void DockGroupHeader::wheelEvent(QWheelEvent* event)
@@ -875,7 +981,8 @@ void DockGroupHeader::startCloseAnimation(int index, bool matchHandover)
     item.fadeAnim->start();
 }
 
-void DockGroupHeader::runPostRemoveSlide(const QHash<DockPanel*, qreal>& visualLeftBeforeRemove)
+void DockGroupHeader::runLayoutSlide(const QHash<DockPanel*, qreal>& visualLeftBeforeLayout,
+    DockPanel* stationaryPanel, int duration)
 {
     if (!m_layoutSlideAnim) {
         m_layoutSlideAnim = new QVariantAnimation(this);
@@ -895,9 +1002,14 @@ void DockGroupHeader::runPostRemoveSlide(const QHash<DockPanel*, qreal>& visualL
     bool anyShift = false;
     for (TabItem& item : m_items) {
         DockPanel* panel = item.panel.data();
+        if (panel == stationaryPanel) {
+            item.slideStartOffsetX = 0.0;
+            item.slideOffsetX = 0.0;
+            continue;
+        }
         // A tab that was not on screen before has nothing to slide from.
-        const qreal previous = (panel && visualLeftBeforeRemove.contains(panel))
-            ? visualLeftBeforeRemove[panel]
+        const qreal previous = (panel && visualLeftBeforeLayout.contains(panel))
+            ? visualLeftBeforeLayout[panel]
             : item.rect.x();
         item.slideStartOffsetX = previous - item.rect.x();
         item.slideOffsetX = item.slideStartOffsetX;
@@ -913,7 +1025,7 @@ void DockGroupHeader::runPostRemoveSlide(const QHash<DockPanel*, qreal>& visualL
 
     m_layoutSlideAnim->setStartValue(1.0);
     m_layoutSlideAnim->setEndValue(0.0);
-    m_layoutSlideAnim->setDuration(kLayoutSlideMs);
+    m_layoutSlideAnim->setDuration(qMax(0, duration));
     m_layoutSlideAnim->start();
 }
 

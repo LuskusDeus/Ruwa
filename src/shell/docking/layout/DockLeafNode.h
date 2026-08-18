@@ -128,6 +128,16 @@ public:
     void insertPanel(int index, DockPanel* panel);
 
     /**
+     * @brief Move an existing member to @p index in the tab order
+     *
+     * @p index is the final index after the move and is clamped to the current
+     * member range. Keeps the same panel selected.
+     *
+     * @return true if the order actually changed
+     */
+    bool movePanel(DockPanel* panel, int index);
+
+    /**
      * @brief Remove a panel from the group
      *
      * If it was the current member, the selection moves to the previous
