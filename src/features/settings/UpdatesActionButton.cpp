@@ -22,7 +22,6 @@ const int BASE_MIN_WIDTH = 196;
 const int BASE_HEIGHT = 48;
 const int BASE_PAD_H = 22;
 const int BASE_BORDER_RADIUS = 24;
-const int BASE_FONT_SIZE = 10;
 const int BASE_ICON_SIZE = 16;
 const int BASE_LOADING_SIZE = 20;
 const int BASE_ICON_TEXT_SPACING = 8;
@@ -157,10 +156,8 @@ void UpdatesActionButton::updateScaledSizes()
 {
     const auto& theme = ruwa::ui::core::ThemeManager::instance();
 
-    QFont font = m_textLabel->font();
-    font.setPointSize(theme.scaledFontSize(BASE_FONT_SIZE));
-    font.setBold(true);
-    m_textLabel->setFont(font);
+    const QFont textFont = theme.font(ruwa::ui::core::ThemeFontRole::Label, QFont::Bold);
+    m_textLabel->setFont(textFont);
 
     const int loadingSize = theme.scaled(BASE_LOADING_SIZE);
     const int iconSize = theme.scaled(BASE_ICON_SIZE);
@@ -176,7 +173,7 @@ void UpdatesActionButton::updateScaledSizes()
     m_contentLayout->setSpacing(iconSpacing);
 
     const int iconBlockWidth = loadingSize;
-    const int textWidth = QFontMetrics(font).horizontalAdvance(m_textLabel->text());
+    const int textWidth = QFontMetrics(textFont).horizontalAdvance(m_textLabel->text());
     const int layoutSpacingCount = 3;
     const int buttonWidth = qMax(minWidth,
         contentPadding * 2 + iconBlockWidth + textWidth + iconSpacing * layoutSpacingCount);

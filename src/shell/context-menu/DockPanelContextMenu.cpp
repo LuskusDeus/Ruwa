@@ -76,8 +76,7 @@ void DockPanelContextMenu::applyChrome()
     for (QLabel* sectionLabel :
         { m_sectionLabel, m_toolsSectionLabel, m_layerButtonsSectionLabel }) {
         if (sectionLabel) {
-            QFont f = colors.fonts.getUIFont(theme.scaledFontSize(10));
-            f.setWeight(QFont::DemiBold);
+            QFont f = theme.font(ruwa::ui::core::ThemeFontRole::Label, QFont::DemiBold);
             f.setCapitalization(QFont::AllUppercase);
             f.setLetterSpacing(QFont::AbsoluteSpacing, theme.scaled(1.8));
             sectionLabel->setFont(f);
@@ -149,8 +148,8 @@ QWidget* DockPanelContextMenu::createToggleRow(QWidget* parent,
     iconLabel->setAttribute(Qt::WA_TransparentForMouseEvents);
 
     auto* label = new QLabel(text, row);
-    // Match StandardContextMenuAction: defaultButtonStyle baseFontSize 9, regular weight
-    QFont lf = colors.fonts.getUIFont(theme.scaledFontSize(9));
+    // Match StandardContextMenuAction: defaultButtonStyle Body role, regular weight.
+    QFont lf = theme.font(ruwa::ui::core::ThemeFontRole::Body);
     label->setFont(lf);
     label->setAttribute(Qt::WA_TransparentForMouseEvents);
 

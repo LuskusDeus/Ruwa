@@ -48,7 +48,6 @@ const int BASE_RESET_BTN_HEIGHT = 40;
 const int BASE_RESET_BTN_WIDTH = 130;
 const int BASE_RESET_ICON_SIZE = 16;
 const int BASE_RESET_SPACING = 8;
-const int BASE_RESET_FONT_SIZE = 9;
 
 /**
  * @brief Reset settings button (BaseAnimatedButton with UndoArrow icon)
@@ -76,9 +75,7 @@ public:
         setFixedHeight(theme.scaled(BASE_RESET_BTN_HEIGHT));
         setFixedWidth(theme.scaled(BASE_RESET_BTN_WIDTH));
 
-        QFont font = this->font();
-        font.setPointSize(theme.scaledFontSize(BASE_RESET_FONT_SIZE));
-        setFont(font);
+        setFont(theme.font(ruwa::ui::core::ThemeFontRole::Body));
     }
 
 protected:
@@ -163,7 +160,6 @@ const int BASE_MAIN_MARGIN_H = 40;
 const int BASE_MAIN_MARGIN_V = 30;
 const int BASE_MAIN_SPACING = 16;
 const int BASE_HEADER_SPACING = 16;
-const int BASE_TITLE_FONT_SIZE = 26;
 const int BASE_SEARCH_BAR_WIDTH = 250;
 const int BASE_SCROLL_SPACING = 24;
 const int BASE_SCROLL_OFFSET = 20;
@@ -206,8 +202,7 @@ void SettingsContent::setupContent()
     m_headerLayout = new QHBoxLayout();
     m_headerLayout->setContentsMargins(0, 0, 0, 0);
     m_titleLabel = new QLabel(tr("Settings"), this);
-    QFont titleFont = colors.fonts.getTitleFont(theme.scaledFontSize(BASE_TITLE_FONT_SIZE));
-    m_titleLabel->setFont(titleFont);
+    m_titleLabel->setFont(theme.font(ruwa::ui::core::ThemeFontRole::H1, QFont::Bold));
     m_titleLabel->setStyleSheet(QString("QLabel { color: %1; }").arg(colors.text.name()));
     m_headerLayout->addWidget(m_titleLabel);
     m_headerLayout->addStretch();
@@ -273,9 +268,7 @@ void SettingsContent::updateScaledSizes()
     }
 
     if (m_titleLabel) {
-        QFont titleFont
-            = theme.colors().fonts.getTitleFont(theme.scaledFontSize(BASE_TITLE_FONT_SIZE));
-        m_titleLabel->setFont(titleFont);
+        m_titleLabel->setFont(theme.font(ruwa::ui::core::ThemeFontRole::H1, QFont::Bold));
     }
 
     if (m_searchBar) {
@@ -513,8 +506,7 @@ void SettingsContent::applyUpdateCheckResult(bool hasUpdate, const QString& vers
 
 void SettingsContent::showUpdateInstallFailure(const QString& reason)
 {
-    const QString detail
-        = reason.isEmpty() ? tr("The installer did not start.") : reason;
+    const QString detail = reason.isEmpty() ? tr("The installer did not start.") : reason;
     const QString message = tr("The update could not be installed:\n%1").arg(detail);
 
     const QString logPath = ruwa::services::UpdateManager::instance()->installerLogPath();

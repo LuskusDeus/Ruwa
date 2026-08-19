@@ -443,8 +443,7 @@ private:
         auto& theme = core::ThemeManager::instance();
         const auto& colors = core::WidgetStyleManager::instance().colors();
 
-        QFont axisFont = font();
-        axisFont.setPixelSize(theme.scaled(9));
+        QFont axisFont = theme.font(ruwa::ui::core::ThemeFontRole::Body);
         painter.setFont(axisFont);
         const QFontMetrics axisMetrics(axisFont);
         painter.setPen(colors.textMuted);

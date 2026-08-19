@@ -444,10 +444,7 @@ void BrushEditorParameterOverlay::updateStyles()
     auto& theme = ThemeManager::instance();
     const auto& colors = WidgetStyleManager::instance().colors();
 
-    QFont titleFont = font();
-    titleFont.setPixelSize(theme.scaled(13));
-    titleFont.setBold(true);
-    m_titleLabel->setFont(titleFont);
+    m_titleLabel->setFont(theme.font(ThemeFontRole::H6, QFont::Bold));
 
     const QString panelStyle
         = QStringLiteral("QWidget#brush_editor_parameter_overlay_panel { background: %1; border: "

@@ -59,11 +59,10 @@ void ThemeEditorTab::onInitialize()
     setSizePolicy(QSizePolicy::Expanding, QSizePolicy::Expanding);
     setupUi();
 
-    connect(&ruwa::ui::core::ThemeManager::instance(),
-        &ruwa::ui::core::ThemeManager::themeChanged, this, &ThemeEditorTab::updateThemeColors);
+    connect(&ruwa::ui::core::ThemeManager::instance(), &ruwa::ui::core::ThemeManager::themeChanged,
+        this, &ThemeEditorTab::updateThemeColors);
     connect(&ruwa::ui::core::TranslationManager::instance(),
-        &ruwa::ui::core::TranslationManager::languageChanged, this,
-        &ThemeEditorTab::retranslateUi);
+        &ruwa::ui::core::TranslationManager::languageChanged, this, &ThemeEditorTab::retranslateUi);
 
     updateContentSideMargins();
     updateScaledSizes();
@@ -189,17 +188,15 @@ QWidget* ThemeEditorTab::createPreviewPlaceholder(QWidget* parent)
     auto* previewPanel = new ruwa::ui::widgets::BaseStyledPanel(previewStyle, page);
     previewPanel->setHoverEnabled(false);
     auto* contentLayout = new QVBoxLayout(previewPanel);
-    contentLayout->setContentsMargins(theme.scaled(24), theme.scaled(24), theme.scaled(24),
-        theme.scaled(24));
+    contentLayout->setContentsMargins(
+        theme.scaled(24), theme.scaled(24), theme.scaled(24), theme.scaled(24));
     contentLayout->setSpacing(theme.scaled(8));
     contentLayout->addStretch();
 
     const int index = m_previewStack->count();
     auto* title = new QLabel(previewPanel);
     title->setAlignment(Qt::AlignCenter);
-    QFont titleFont = title->font();
-    titleFont.setPointSize(theme.scaledFontSize(16));
-    titleFont.setBold(true);
+    QFont titleFont = theme.font(ruwa::ui::core::ThemeFontRole::H4, QFont::Bold);
     title->setFont(titleFont);
     m_previewTitles[static_cast<std::size_t>(index)] = title;
     contentLayout->addWidget(title);
@@ -207,8 +204,7 @@ QWidget* ThemeEditorTab::createPreviewPlaceholder(QWidget* parent)
     auto* description = new QLabel(previewPanel);
     description->setAlignment(Qt::AlignCenter);
     description->setWordWrap(true);
-    QFont descriptionFont = description->font();
-    descriptionFont.setPointSize(theme.scaledFontSize(9));
+    QFont descriptionFont = theme.font(ruwa::ui::core::ThemeFontRole::Body);
     description->setFont(descriptionFont);
     m_previewDescriptions[static_cast<std::size_t>(index)] = description;
     contentLayout->addWidget(description);
@@ -218,8 +214,8 @@ QWidget* ThemeEditorTab::createPreviewPlaceholder(QWidget* parent)
     return page;
 }
 
-QWidget* ThemeEditorTab::createSettingsSection(const SettingsSectionDefinition& definition,
-    std::size_t sectionIndex, QWidget* parent)
+QWidget* ThemeEditorTab::createSettingsSection(
+    const SettingsSectionDefinition& definition, std::size_t sectionIndex, QWidget* parent)
 {
     Q_ASSERT(sectionIndex < SectionCount);
     Q_ASSERT(!definition.pages.isEmpty());
@@ -250,8 +246,8 @@ QWidget* ThemeEditorTab::createSettingsSection(const SettingsSectionDefinition& 
         sectionUi.tabGroup->setExclusive(true);
 
         for (int index = 0; index < definition.pages.size(); ++index) {
-            auto* tabButton = new ruwa::ui::widgets::CapsuleButton(QString(),
-                ruwa::ui::widgets::CapsuleButton::Variant::Tab, sectionUi.tabsBar);
+            auto* tabButton = new ruwa::ui::widgets::CapsuleButton(
+                QString(), ruwa::ui::widgets::CapsuleButton::Variant::Tab, sectionUi.tabsBar);
             tabButton->setFocusPolicy(Qt::NoFocus);
             tabButton->setSizePolicy(QSizePolicy::Fixed, QSizePolicy::Fixed);
             sectionUi.tabGroup->addButton(tabButton, index);
@@ -263,12 +259,12 @@ QWidget* ThemeEditorTab::createSettingsSection(const SettingsSectionDefinition& 
             sectionUi.tabButtons.first()->setChecked(true);
         }
 
-        sectionUi.applyButton = new ruwa::ui::widgets::CapsuleButton(tr("Apply"),
-            ruwa::ui::widgets::CapsuleButton::Variant::Secondary, sectionUi.headerRow);
+        sectionUi.applyButton = new ruwa::ui::widgets::CapsuleButton(
+            tr("Apply"), ruwa::ui::widgets::CapsuleButton::Variant::Secondary, sectionUi.headerRow);
         sectionUi.applyButton->setBaseMinimumWidth(84);
         sectionUi.applyButton->setBannerBaseHeight(36);
-        connect(sectionUi.applyButton, &QPushButton::clicked, this,
-            &ThemeEditorTab::applyEditingTheme);
+        connect(
+            sectionUi.applyButton, &QPushButton::clicked, this, &ThemeEditorTab::applyEditingTheme);
 
         sectionUi.saveButton = new ruwa::ui::widgets::CapsuleButton(saveButtonText(),
             ruwa::ui::widgets::CapsuleButton::Variant::Primary, sectionUi.headerRow);
@@ -277,8 +273,8 @@ QWidget* ThemeEditorTab::createSettingsSection(const SettingsSectionDefinition& 
         sectionUi.saveButton->setDisabledTextTone(
             ruwa::ui::widgets::CapsuleButton::DisabledTextTone::Dark);
         sectionUi.saveButton->setEnabled(false);
-        connect(sectionUi.saveButton, &QPushButton::clicked, this,
-            &ThemeEditorTab::saveEditingTheme);
+        connect(
+            sectionUi.saveButton, &QPushButton::clicked, this, &ThemeEditorTab::saveEditingTheme);
 
         headerLayout->addWidget(sectionUi.tabsBar, 1);
         headerLayout->addWidget(sectionUi.applyButton);
@@ -302,19 +298,18 @@ QWidget* ThemeEditorTab::createSettingsSection(const SettingsSectionDefinition& 
     sectionLayout->addWidget(sectionUi.contentStack, 1);
 
     if (sectionUi.tabGroup) {
-        connect(sectionUi.tabGroup, &QButtonGroup::idClicked, this,
-            [this, sectionIndex](int index) {
+        connect(
+            sectionUi.tabGroup, &QButtonGroup::idClicked, this, [this, sectionIndex](int index) {
                 auto& selectedSection = m_settingsSections[sectionIndex];
                 if (index >= 0 && index < selectedSection.contentStack->count()) {
                     selectedSection.contentStack->setCurrentIndex(index);
                 }
             });
-        connect(sectionUi.contentStack,
-            &ruwa::ui::widgets::AnimatedStackedWidget::currentChanged, this,
-            [this, sectionIndex](int index) {
+        connect(sectionUi.contentStack, &ruwa::ui::widgets::AnimatedStackedWidget::currentChanged,
+            this, [this, sectionIndex](int index) {
                 auto& selectedSection = m_settingsSections[sectionIndex];
                 for (int buttonIndex = 0; buttonIndex < selectedSection.tabButtons.size();
-                     ++buttonIndex) {
+                    ++buttonIndex) {
                     auto* button = selectedSection.tabButtons[buttonIndex];
                     if (button && button->isChecked() != (buttonIndex == index)) {
                         button->setChecked(buttonIndex == index);
@@ -344,9 +339,7 @@ QWidget* ThemeEditorTab::createSettingsPlaceholder(SettingsPage settingsPage, QW
     const auto index = static_cast<std::size_t>(settingsPage);
     auto* title = new QLabel(content);
     title->setAlignment(Qt::AlignCenter);
-    QFont titleFont = title->font();
-    titleFont.setPointSize(theme.scaledFontSize(18));
-    titleFont.setBold(true);
+    QFont titleFont = theme.font(ruwa::ui::core::ThemeFontRole::H3, QFont::Bold);
     title->setFont(titleFont);
     m_settingsTitles[index] = title;
     layout->addWidget(title);
@@ -354,8 +347,7 @@ QWidget* ThemeEditorTab::createSettingsPlaceholder(SettingsPage settingsPage, QW
     auto* description = new QLabel(content);
     description->setAlignment(Qt::AlignCenter);
     description->setWordWrap(true);
-    QFont descriptionFont = description->font();
-    descriptionFont.setPointSize(theme.scaledFontSize(10));
+    QFont descriptionFont = theme.font(ruwa::ui::core::ThemeFontRole::Label);
     description->setFont(descriptionFont);
     m_settingsDescriptions[index] = description;
     layout->addWidget(description);
@@ -370,8 +362,7 @@ QWidget* ThemeEditorTab::createColorsSettingsPage(QWidget* parent)
     auto* scrollArea = new ruwa::ui::widgets::SmoothScrollArea(parent);
     scrollArea->setFillBackground(false);
     scrollArea->setScrollBarTransparentTrack(true);
-    scrollArea->setScrollBarMargin(
-        ruwa::ui::core::ThemeManager::instance().scaled(4));
+    scrollArea->setScrollBarMargin(ruwa::ui::core::ThemeManager::instance().scaled(4));
 
     auto* content = new QWidget();
     content->setAttribute(Qt::WA_TranslucentBackground);
@@ -381,10 +372,8 @@ QWidget* ThemeEditorTab::createColorsSettingsPage(QWidget* parent)
 
     const std::array<QVector<ColorField>, ColorCategoryCount> categories {
         QVector<ColorField> { ColorField::Primary, ColorField::Accent, ColorField::Background,
-            ColorField::Surface, ColorField::SurfaceAlt, ColorField::Border,
-            ColorField::Overlay },
-        QVector<ColorField> {
-            ColorField::Text, ColorField::TextMuted, ColorField::TextOnPrimary },
+            ColorField::Surface, ColorField::SurfaceAlt, ColorField::Border, ColorField::Overlay },
+        QVector<ColorField> { ColorField::Text, ColorField::TextMuted, ColorField::TextOnPrimary },
         QVector<ColorField> {
             ColorField::Success, ColorField::Warning, ColorField::Error, ColorField::Info }
     };
@@ -409,9 +398,7 @@ QWidget* ThemeEditorTab::createColorCategory(
     layout->setSpacing(theme.scaled(8));
 
     auto* title = new QLabel(category);
-    QFont titleFont = title->font();
-    titleFont.setPointSize(theme.scaledFontSize(11));
-    titleFont.setBold(true);
+    QFont titleFont = theme.font(ruwa::ui::core::ThemeFontRole::BodyLarge, QFont::Bold);
     title->setFont(titleFont);
     m_colorCategoryTitles[categoryIndex] = title;
     layout->addWidget(title);
@@ -426,8 +413,7 @@ QWidget* ThemeEditorTab::createColorCategory(
 ruwa::ui::widgets::ColorInputButton* ThemeEditorTab::createColorInput(
     ColorField field, QWidget* parent)
 {
-    auto* input = new ruwa::ui::widgets::ColorInputButton(
-        QString(), editingColor(field), parent);
+    auto* input = new ruwa::ui::widgets::ColorInputButton(QString(), editingColor(field), parent);
     input->setSizePolicy(QSizePolicy::Expanding, QSizePolicy::Fixed);
 
     connect(input, &ruwa::ui::widgets::ColorInputButton::colorPickerRequested, this,
@@ -659,9 +645,8 @@ void ThemeEditorTab::saveEditingTheme()
 
 void ThemeEditorTab::retranslateUi()
 {
-    const std::array<QString, SectionCount> previewTitles {
-        tr("Theme Preview"), tr("Interface Preview"), tr("Canvas Preview")
-    };
+    const std::array<QString, SectionCount> previewTitles { tr("Theme Preview"),
+        tr("Interface Preview"), tr("Canvas Preview") };
 
     for (std::size_t index = 0; index < SectionCount; ++index) {
         if (m_previewTitles[index]) {
@@ -682,9 +667,8 @@ void ThemeEditorTab::retranslateUi()
         }
     }
 
-    const std::array<QString, ColorCategoryCount> categoryTitles {
-        tr("Core Colors"), tr("Text Colors"), tr("Semantic Colors")
-    };
+    const std::array<QString, ColorCategoryCount> categoryTitles { tr("Core Colors"),
+        tr("Text Colors"), tr("Semantic Colors") };
     for (std::size_t index = 0; index < ColorCategoryCount; ++index) {
         if (m_colorCategoryTitles[index]) {
             m_colorCategoryTitles[index]->setText(categoryTitles[index]);
@@ -737,8 +721,7 @@ void ThemeEditorTab::updateThemeColors()
     }
     for (QLabel* description : m_previewDescriptions) {
         if (description) {
-            description->setStyleSheet(
-                QStringLiteral("color: %1;").arg(colors.textMuted.name()));
+            description->setStyleSheet(QStringLiteral("color: %1;").arg(colors.textMuted.name()));
         }
     }
     for (QLabel* title : m_settingsTitles) {
@@ -748,8 +731,7 @@ void ThemeEditorTab::updateThemeColors()
     }
     for (QLabel* description : m_settingsDescriptions) {
         if (description) {
-            description->setStyleSheet(
-                QStringLiteral("color: %1;").arg(colors.textMuted.name()));
+            description->setStyleSheet(QStringLiteral("color: %1;").arg(colors.textMuted.name()));
         }
     }
     for (QLabel* title : m_colorCategoryTitles) {
@@ -767,8 +749,8 @@ void ThemeEditorTab::updateThemeColors()
 void ThemeEditorTab::updateScaledSizes()
 {
     const auto& theme = ruwa::ui::core::ThemeManager::instance();
-    const auto* sidebarButtonStyle = ruwa::ui::core::WidgetStyleManager::instance().style(
-        QStringLiteral("SidebarButton"));
+    const auto* sidebarButtonStyle
+        = ruwa::ui::core::WidgetStyleManager::instance().style(QStringLiteral("SidebarButton"));
     Q_ASSERT(sidebarButtonStyle);
     const int settingsTabHeight
         = sidebarButtonStyle ? theme.scaled(sidebarButtonStyle->metrics.baseHeight) : 0;
@@ -788,8 +770,8 @@ void ThemeEditorTab::updateScaledSizes()
         }
 
         if (QWidget* panel = title->parentWidget(); panel && panel->layout()) {
-            panel->layout()->setContentsMargins(theme.scaled(24), theme.scaled(24),
-                theme.scaled(24), theme.scaled(24));
+            panel->layout()->setContentsMargins(
+                theme.scaled(24), theme.scaled(24), theme.scaled(24), theme.scaled(24));
             panel->layout()->setSpacing(theme.scaled(8));
             if (QWidget* page = panel->parentWidget(); page && page->layout()) {
                 page->layout()->setContentsMargins(
@@ -797,13 +779,10 @@ void ThemeEditorTab::updateScaledSizes()
             }
         }
 
-        QFont titleFont = title->font();
-        titleFont.setPointSize(theme.scaledFontSize(16));
-        titleFont.setBold(true);
+        QFont titleFont = theme.font(ruwa::ui::core::ThemeFontRole::H4, QFont::Bold);
         title->setFont(titleFont);
 
-        QFont descriptionFont = description->font();
-        descriptionFont.setPointSize(theme.scaledFontSize(9));
+        QFont descriptionFont = theme.font(ruwa::ui::core::ThemeFontRole::Body);
         description->setFont(descriptionFont);
     }
 
@@ -811,9 +790,7 @@ void ThemeEditorTab::updateScaledSizes()
         if (!title) {
             continue;
         }
-        QFont font = title->font();
-        font.setPointSize(theme.scaledFontSize(11));
-        font.setBold(true);
+        QFont font = theme.font(ruwa::ui::core::ThemeFontRole::BodyLarge, QFont::Bold);
         title->setFont(font);
 
         if (QWidget* category = title->parentWidget(); category && category->layout()) {
@@ -839,8 +816,7 @@ void ThemeEditorTab::updateScaledSizes()
         }
 
         for (auto* button : section.tabButtons) {
-            QFont font = button->font();
-            font.setPointSize(theme.scaledFontSize(10));
+            QFont font = theme.font(ruwa::ui::core::ThemeFontRole::Label);
             button->setFont(font);
 
             const QSize naturalSize = button->sizeHint();
@@ -874,13 +850,10 @@ void ThemeEditorTab::updateScaledSizes()
             page->layout()->setSpacing(theme.scaled(10));
         }
 
-        QFont titleFont = title->font();
-        titleFont.setPointSize(theme.scaledFontSize(18));
-        titleFont.setBold(true);
+        QFont titleFont = theme.font(ruwa::ui::core::ThemeFontRole::H3, QFont::Bold);
         title->setFont(titleFont);
 
-        QFont descriptionFont = description->font();
-        descriptionFont.setPointSize(theme.scaledFontSize(10));
+        QFont descriptionFont = theme.font(ruwa::ui::core::ThemeFontRole::Label);
         description->setFont(descriptionFont);
     }
 }

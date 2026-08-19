@@ -284,10 +284,7 @@ public:
         m_nameEditor->setPlaceholderText(QObject::tr("Pack name"));
         m_nameEditor->setFocusPolicy(Qt::StrongFocus);
 
-        QFont editorFont = m_nameEditor->font();
-        editorFont.setPixelSize(theme.scaled(10));
-        editorFont.setBold(true);
-        m_nameEditor->setFont(editorFont);
+        m_nameEditor->setFont(theme.font(ThemeFontRole::Label, QFont::Bold));
         m_nameEditor->setStyleSheet(QStringLiteral(
             "QLineEdit { background: transparent; border: none; color: %1; padding: 0 2px; }")
                 .arg(colors.text.name(QColor::HexArgb)));
@@ -299,6 +296,10 @@ public:
             update();
         });
         connect(m_nameEditor, &QLineEdit::editingFinished, this, [this]() { finishRename(); });
+        connect(&ThemeManager::instance(), &ThemeManager::themeChanged, this, [this]() {
+            m_nameEditor->setFont(ThemeManager::instance().font(ThemeFontRole::Label, QFont::Bold));
+            update();
+        });
     }
 
     void setExpanded(bool expanded)
@@ -374,9 +375,7 @@ protected:
         const int arrowY = (height() - arrowSize) / 2;
         QColor arrowColor = m_selected ? colors.text : colors.textMuted;
         painter.setPen(arrowColor);
-        QFont arrowFont = painter.font();
-        arrowFont.setPixelSize(theme.scaled(8));
-        painter.setFont(arrowFont);
+        painter.setFont(theme.font(ThemeFontRole::Small));
         painter.drawText(QRect(arrowX, arrowY, arrowSize, arrowSize), Qt::AlignCenter,
             m_expanded ? QStringLiteral("\u25BE") : QStringLiteral("\u25B8"));
 
@@ -385,10 +384,7 @@ protected:
             QColor textColor
                 = m_selected ? colors.text : (m_hovered ? colors.text : colors.textMuted);
             painter.setPen(textColor);
-            QFont textFont = painter.font();
-            textFont.setPixelSize(theme.scaled(10));
-            textFont.setBold(true);
-            painter.setFont(textFont);
+            painter.setFont(theme.font(ThemeFontRole::Label, QFont::Bold));
             const QString displayName = m_name.isEmpty()
                 ? m_name
                 : QCoreApplication::translate("QObject", m_name.toUtf8().constData());
@@ -522,9 +518,7 @@ public:
         m_nameEditor->setPlaceholderText(QObject::tr("Brush name"));
         m_nameEditor->setFocusPolicy(Qt::StrongFocus);
 
-        QFont editorFont = m_nameEditor->font();
-        editorFont.setPixelSize(theme.scaled(10));
-        m_nameEditor->setFont(editorFont);
+        m_nameEditor->setFont(theme.font(ThemeFontRole::Label));
         m_nameEditor->setStyleSheet(QStringLiteral(
             "QLineEdit { background: transparent; border: none; color: %1; padding: 0 2px; }")
                 .arg(colors.text.name(QColor::HexArgb)));
@@ -536,6 +530,10 @@ public:
             update();
         });
         connect(m_nameEditor, &QLineEdit::editingFinished, this, [this]() { finishRename(); });
+        connect(&ThemeManager::instance(), &ThemeManager::themeChanged, this, [this]() {
+            m_nameEditor->setFont(ThemeManager::instance().font(ThemeFontRole::Label));
+            update();
+        });
     }
 
     void setSelected(bool selected)
@@ -604,10 +602,7 @@ protected:
             QColor textColor
                 = m_selected ? colors.text : (m_hovered ? colors.text : colors.textMuted);
             painter.setPen(textColor);
-            QFont textFont = painter.font();
-            textFont.setPixelSize(theme.scaled(10));
-            textFont.setBold(false);
-            painter.setFont(textFont);
+            painter.setFont(theme.font(ThemeFontRole::Label));
             const QString displayName = m_name.isEmpty()
                 ? m_name
                 : QCoreApplication::translate("QObject", m_name.toUtf8().constData());
@@ -709,16 +704,14 @@ private:
     QLineEdit* m_nameEditor = nullptr;
 };
 
-inline void applyScaledFont(QWidget* widget, int pixelSize, bool bold = false)
+inline void applyThemeFont(
+    QWidget* widget, ThemeFontRole role, QFont::Weight weight = QFont::Normal)
 {
     if (!widget) {
         return;
     }
 
-    QFont font = widget->font();
-    font.setPixelSize(pixelSize);
-    font.setBold(bold);
-    widget->setFont(font);
+    widget->setFont(ThemeManager::instance().font(role, weight));
 }
 
 } // namespace ruwa::ui::windows::layout_internal

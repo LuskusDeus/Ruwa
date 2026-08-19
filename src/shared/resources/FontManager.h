@@ -7,7 +7,6 @@
 #include "FontFamilyNames.h"
 
 #include <QObject>
-#include <QFont>
 #include <QString>
 #include <QMap>
 
@@ -18,55 +17,17 @@ namespace ruwa::ui::core {
  *
  * Features:
  * - Load custom fonts from resources
- * - Provide semantic font types (UI, Code, Title, etc.)
  * - Font fallback system
- * - Weight and size variants
+ * - Apply the active theme's default UI font to QApplication
  */
 class FontManager : public QObject {
     Q_OBJECT
 
 public:
-    /// Semantic font types
-    enum class FontType {
-        UI, ///< Standard UI text
-        UIBold, ///< Bold UI text
-        Title, ///< Large titles (Instrument Serif for Obsidian/Graphite)
-        Subtitle, ///< Subtitles
-        Code, ///< Monospace code font
-        Small, ///< Small UI text
-        Caption ///< Very small text
-    };
-
-    /// Font weight
-    enum class FontWeight {
-        Light = QFont::Light,
-        Normal = QFont::Normal,
-        Medium = QFont::Medium,
-        SemiBold = QFont::DemiBold,
-        Bold = QFont::Bold,
-        ExtraBold = QFont::ExtraBold
-    };
-
     static FontManager& instance();
 
     /// Initialize and load custom fonts
     void initialize();
-
-    /// Get font by semantic type
-    QFont getFont(FontType type) const;
-
-    /// Get custom font with specific size
-    QFont getFont(FontType type, int pointSize) const;
-
-    /// Get custom font with size and weight
-    QFont getFont(FontType type, int pointSize, FontWeight weight) const;
-
-    /// Get code font with italic option (for comments, emphasis)
-    QFont getCodeFont(
-        int pointSize = 9, FontWeight weight = FontWeight::Normal, bool italic = false) const;
-
-    /// Get title font with custom size and weight
-    QFont getTitleFont(int pointSize = 16, FontWeight weight = FontWeight::Bold) const;
 
     /// Get UI font family name
     QString getUIFontFamily() const { return m_uiFontFamily; }
@@ -87,7 +48,7 @@ public:
     void setTitleFontFamily(const QString& family);
 
     /// Apply fonts to application (sets default application font)
-    void applyToApplication();
+    void applyToApplication(int pointSize);
 
 signals:
     void fontsChanged();

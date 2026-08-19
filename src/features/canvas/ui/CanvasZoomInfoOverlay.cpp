@@ -201,11 +201,10 @@ void CanvasZoomInfoOverlay::paintEvent(QPaintEvent* event)
         painter.drawPath(backgroundPath);
     }
 
-    ruwa::ui::painting::drawGradientBorder(
-        painter, bounds, radius, borderColor, borderColor);
+    ruwa::ui::painting::drawGradientBorder(painter, bounds, radius, borderColor, borderColor);
     ruwa::ui::painting::drawLiquidGlass(painter, bounds, radius, style.colors().primary,
-        qMin<qreal>(style.scaled(ruwa::ui::painting::kLiquidGlassShadowDepth),
-            bounds.height() * 0.25));
+        qMin<qreal>(
+            style.scaled(ruwa::ui::painting::kLiquidGlassShadowDepth), bounds.height() * 0.25));
 }
 
 void CanvasZoomInfoOverlay::moveEvent(QMoveEvent* event)
@@ -230,9 +229,7 @@ void CanvasZoomInfoOverlay::applyTheme()
     }
 
     if (m_label) {
-        QFont font = colors.fonts.getUIFont(theme.scaledFontSize(10));
-        font.setWeight(QFont::DemiBold);
-        m_label->setFont(font);
+        m_label->setFont(theme.font(ruwa::ui::core::ThemeFontRole::Label, QFont::DemiBold));
         m_label->setMinimumWidth(theme.scaled(kMinimumWidthBase));
         m_label->setStyleSheet(QStringLiteral(
             "QLabel#canvasZoomInfoLabel { background: transparent; color: rgb(%1, %2, %3); }")

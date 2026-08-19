@@ -73,8 +73,7 @@ void SidebarButton::drawContentLayer(QPainter& painter, const QRectF& rect)
     if (content.iconPosition != ruwa::ui::core::IconPosition::Center && !text().isEmpty()) {
         painter.setPen(textColor);
 
-        QFont font = this->font();
-        font.setPointSize(mgr.scaledFontSize(content.baseFontSize));
+        QFont font = mgr.font(content.fontRole);
         if (content.boldWhenActive && activeProgress() > 0.5) {
             font.setBold(true);
         }

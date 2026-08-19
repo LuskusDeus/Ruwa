@@ -78,6 +78,10 @@ QWidget* CanvasPanel::createContent()
     m_loadingStatusLabel->setAlignment(Qt::AlignCenter);
     m_loadingStatusLabel->setObjectName(QStringLiteral("canvasLoadingStatus"));
 
+    const auto& theme = ruwa::ui::core::ThemeManager::instance();
+    m_loadingTitleLabel->setFont(theme.font(ruwa::ui::core::ThemeFontRole::H3, QFont::DemiBold));
+    m_loadingStatusLabel->setFont(theme.font(ruwa::ui::core::ThemeFontRole::H6));
+
     loadingLayout->addWidget(m_loadingIndicator, 0, Qt::AlignCenter);
     loadingLayout->addWidget(m_loadingTitleLabel, 0, Qt::AlignCenter);
     loadingLayout->addWidget(m_loadingStatusLabel, 0, Qt::AlignCenter);
@@ -87,20 +91,17 @@ QWidget* CanvasPanel::createContent()
     m_loadingStatusLabel->setVisible(m_loadingOverlayDecorationsVisible);
 
     {
-        const auto& colors = ruwa::ui::core::ThemeManager::instance().colors();
+        const auto& colors = theme.colors();
         m_loadingOverlay->setStyleSheet(QString(R"(
             QWidget {
                 background-color: %1;
             }
             QLabel#canvasLoadingTitle {
                 color: %2;
-                font-size: 18px;
-                font-weight: 600;
                 background: transparent;
             }
             QLabel#canvasLoadingStatus {
                 color: %3;
-                font-size: 12px;
                 background: transparent;
             }
         )")

@@ -21,7 +21,6 @@ using namespace ruwa::ui::widgets;
 namespace {
 const int BASE_GROUP_INDICATOR_SIZE = 7;
 const int BASE_GROUP_INDICATOR_MARGIN = 4;
-const int BASE_LABEL_FONT_SIZE = 9;
 const int BASE_ICON_LABEL_SPACING = 7;
 
 /// Hover fill: the accent colour at a tenth, for every chrome style.
@@ -221,9 +220,7 @@ void ToolButton::updateScaledSize()
     auto& mgr = WidgetStyleManager::instance();
     m_iconSize = mgr.scaled(m_baseIconSize);
 
-    QFont labelFont = font();
-    labelFont.setPointSize(ThemeManager::instance().scaledFontSize(BASE_LABEL_FONT_SIZE));
-    labelFont.setWeight(QFont::Medium);
+    QFont labelFont = ThemeManager::instance().font(ThemeFontRole::Body, QFont::Medium);
     setFont(labelFont);
 
     setFixedSize(mgr.scaled(m_baseWidth), mgr.scaled(m_baseHeight));

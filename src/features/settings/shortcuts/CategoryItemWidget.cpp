@@ -25,9 +25,6 @@ constexpr int BASE_PADDING_H = 12;
 constexpr int BASE_PADDING_V = 8;
 constexpr int BASE_ICON_SIZE = 22;
 constexpr int BASE_ICON_TEXT_GAP = 12;
-constexpr int BASE_TITLE_FONT = 13;
-constexpr int BASE_SUBTITLE_FONT = 10;
-constexpr int BASE_COUNT_FONT = 11;
 constexpr int BASE_RADIUS = 10;
 constexpr int HOVER_ANIM_MS = 140;
 constexpr int SELECTION_ANIM_MS = 220;
@@ -215,8 +212,7 @@ void CategoryItemWidget::paintEvent(QPaintEvent* /*event*/)
     }
 
     // === Count text on the right ===
-    QFont countFont = font();
-    countFont.setPixelSize(theme.scaled(BASE_COUNT_FONT));
+    const QFont countFont = theme.font(ruwa::ui::core::ThemeFontRole::Small);
     painter.setFont(countFont);
     const QFontMetrics countFm(countFont);
     const QString countText = m_count > 0 ? QString::number(m_count) : QString();
@@ -234,13 +230,10 @@ void CategoryItemWidget::paintEvent(QPaintEvent* /*event*/)
         = width() - paddingH - (countText.isEmpty() ? 0 : (countW + theme.scaled(8)));
     const int textWidth = qMax(0, textRight - textLeft);
 
-    QFont titleFont = font();
-    titleFont.setPixelSize(theme.scaled(BASE_TITLE_FONT));
-    titleFont.setWeight(QFont::DemiBold);
+    const QFont titleFont = theme.font(ruwa::ui::core::ThemeFontRole::Label, QFont::DemiBold);
     QFontMetrics titleFm(titleFont);
 
-    QFont subtitleFont = font();
-    subtitleFont.setPixelSize(theme.scaled(BASE_SUBTITLE_FONT));
+    const QFont subtitleFont = theme.font(ruwa::ui::core::ThemeFontRole::Small);
     QFontMetrics subtitleFm(subtitleFont);
 
     const bool hasSubtitle = !m_subtitle.trimmed().isEmpty();

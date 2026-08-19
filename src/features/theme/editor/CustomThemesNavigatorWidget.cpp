@@ -75,8 +75,7 @@ QSize CustomThemesNavigatorWidget::previewSizeHint() const
     const int cellSize = mgr.scaled(BASE_CELL_SIZE);
     const int cellSpacing = mgr.scaled(BASE_CELL_SPACING);
 
-    QFont nameFont = font();
-    nameFont.setPointSize(mgr.scaledFontSize(8));
+    QFont nameFont = mgr.font(ruwa::ui::core::ThemeFontRole::Small);
     const QFontMetrics nameMetrics(nameFont);
     const int nameHeight = qMax(mgr.scaled(BASE_NAME_HEIGHT), nameMetrics.height());
     const int nameMarginBottom = mgr.scaled(BASE_NAME_MARGIN_BOTTOM);
@@ -101,8 +100,7 @@ void CustomThemesNavigatorWidget::drawContentLayer(QPainter& painter, const QRec
     const int contentRadius = mgr.scaled(BASE_CONTENT_RADIUS);
     const int nameRightPadding = mgr.scaled(BASE_NAME_RIGHT_PADDING);
 
-    QFont nameFont = font();
-    nameFont.setPointSize(mgr.scaledFontSize(8));
+    QFont nameFont = mgr.font(ruwa::ui::core::ThemeFontRole::Small);
     const QFontMetrics nameMetrics(nameFont);
     const int nameHeight = qMax(mgr.scaled(BASE_NAME_HEIGHT), nameMetrics.height());
     const int nameMarginBottom = mgr.scaled(BASE_NAME_MARGIN_BOTTOM);

@@ -4,6 +4,7 @@
 #include "FontManager.h"
 #include "FontFamilyNames.h"
 
+#include <QFont>
 #include <QFontDatabase>
 #include <QFile>
 #include <QApplication>
@@ -35,64 +36,6 @@ void FontManager::initialize()
     m_initialized = true;
 }
 
-QFont FontManager::getFont(FontType type) const
-{
-    switch (type) {
-    case FontType::UI:
-        return QFont(m_uiFontFamily, 9, QFont::Normal);
-
-    case FontType::UIBold:
-        return QFont(m_uiFontFamily, 9, QFont::Bold);
-
-    case FontType::Title:
-        return QFont(m_titleFontFamily, 16, QFont::Bold);
-
-    case FontType::Subtitle:
-        return QFont(m_uiFontFamily, 12, QFont::Medium);
-
-    case FontType::Code:
-        return QFont(m_codeFontFamily, 9, QFont::Normal);
-
-    case FontType::Small:
-        return QFont(m_uiFontFamily, 8, QFont::Normal);
-
-    case FontType::Caption:
-        return QFont(m_uiFontFamily, 7, QFont::Normal);
-
-    default:
-        return QFont(m_uiFontFamily, 9, QFont::Normal);
-    }
-}
-
-QFont FontManager::getFont(FontType type, int pointSize) const
-{
-    QFont font = getFont(type);
-    font.setPointSize(pointSize);
-    return font;
-}
-
-QFont FontManager::getFont(FontType type, int pointSize, FontWeight weight) const
-{
-    QFont font = getFont(type, pointSize);
-    font.setWeight(static_cast<QFont::Weight>(weight));
-    return font;
-}
-
-QFont FontManager::getCodeFont(int pointSize, FontWeight weight, bool italic) const
-{
-    QFont font(m_codeFontFamily, pointSize);
-    font.setWeight(static_cast<QFont::Weight>(weight));
-    font.setItalic(italic);
-    return font;
-}
-
-QFont FontManager::getTitleFont(int pointSize, FontWeight weight) const
-{
-    QFont font(m_titleFontFamily, pointSize);
-    font.setWeight(static_cast<QFont::Weight>(weight));
-    return font;
-}
-
 void FontManager::setUIFontFamily(const QString& family)
 {
     if (m_uiFontFamily != family) {
@@ -117,11 +60,9 @@ void FontManager::setTitleFontFamily(const QString& family)
     }
 }
 
-void FontManager::applyToApplication()
+void FontManager::applyToApplication(int pointSize)
 {
-    // Set default application font
-    QFont appFont = getFont(FontType::UI);
-    QApplication::setFont(appFont);
+    QApplication::setFont(QFont(m_uiFontFamily, pointSize));
 }
 
 bool FontManager::loadFont(const QString& resourcePath, QString& outFamily)

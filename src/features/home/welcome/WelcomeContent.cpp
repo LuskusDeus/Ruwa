@@ -32,7 +32,6 @@ namespace {
 const int BASE_MAIN_MARGIN_H = 40;
 const int BASE_MAIN_MARGIN_V = 24;
 const int BASE_MAIN_SPACING = 24;
-const int BASE_TITLE_FONT_SIZE = 26;
 
 QString fallbackRecentProjectName(const QString& filePath)
 {
@@ -203,8 +202,7 @@ void WelcomeContent::setupContent()
 
     m_titleLabel = new QLabel(tr("Welcome to Ruwa"), headerContent);
     const auto& theme = ruwa::ui::core::ThemeManager::instance();
-    m_titleLabel->setFont(
-        theme.colors().fonts.getTitleFont(theme.scaledFontSize(BASE_TITLE_FONT_SIZE)));
+    m_titleLabel->setFont(theme.font(ruwa::ui::core::ThemeFontRole::H1, QFont::Bold));
     m_titleLabel->setStyleSheet(QString("QLabel { color: %1; }").arg(colors.text.name()));
     headerLayout->addWidget(m_titleLabel);
     headerLayout->addStretch();
@@ -425,8 +423,7 @@ void WelcomeContent::updateScaledSizes()
 
     // Title font
     if (m_titleLabel) {
-        m_titleLabel->setFont(
-            theme.colors().fonts.getTitleFont(theme.scaledFontSize(BASE_TITLE_FONT_SIZE)));
+        m_titleLabel->setFont(theme.font(ruwa::ui::core::ThemeFontRole::H1, QFont::Bold));
     }
 }
 

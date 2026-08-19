@@ -2,7 +2,6 @@
 
 #include "EmptyStateTab.h"
 #include "features/theme/manager/ThemeManager.h"
-#include "shared/resources/FontFamilyNames.h"
 
 #include <QPainter>
 #include <QPaintEvent>
@@ -23,14 +22,22 @@ public:
     explicit AsciiArtWidget(QWidget* parent = nullptr)
         : QWidget(parent)
     {
-        QFont f(ruwa::ui::core::FontFamilyNames::Consolas);
+        applyThemeFont(ruwa::ui::core::ThemeManager::instance());
+
+        setSizePolicy(QSizePolicy::Fixed, QSizePolicy::Fixed);
+    }
+
+    void applyThemeFont(const ruwa::ui::core::ThemeManager& theme)
+    {
+        QFont f = theme.colors().fonts.getCodeFont(
+            theme.fontSize(ruwa::ui::core::ThemeFontRole::Caption));
         f.setStyleHint(QFont::Monospace);
-        f.setPointSize(7);
         f.setFixedPitch(true);
         f.setStyleStrategy(QFont::NoSubpixelAntialias);
         setFont(f);
-
-        setSizePolicy(QSizePolicy::Fixed, QSizePolicy::Fixed);
+        m_cachedSize = {};
+        updateGeometry();
+        update();
     }
 
     void setTextColor(const QColor& color)
@@ -116,7 +123,8 @@ EmptyStateTab::EmptyStateTab(QWidget* parent)
 
 void EmptyStateTab::onInitialize()
 {
-    const auto& colors = ruwa::ui::core::ThemeManager::instance().colors();
+    const auto& theme = ruwa::ui::core::ThemeManager::instance();
+    const auto& colors = theme.colors();
 
     auto* mainLayout = new QVBoxLayout(this);
     mainLayout->setContentsMargins(24, 24, 24, 24);
@@ -133,18 +141,22 @@ void EmptyStateTab::onInitialize()
     m_hintLabel->setMaximumWidth(600);
     m_hintLabel->setText(tr("Meow-meow, it seems you closed all tabs. "
                             "Click on the Ruwa logo in the corner to open the home tab."));
-    m_hintLabel->setStyleSheet(QString("color: %1; font-size: 13px;").arg(colors.textMuted.name()));
+    m_hintLabel->setFont(theme.font(ruwa::ui::core::ThemeFontRole::H6));
+    m_hintLabel->setStyleSheet(QString("color: %1;").arg(colors.textMuted.name()));
     mainLayout->addWidget(m_hintLabel, 0, Qt::AlignHCenter);
 
     connect(&ruwa::ui::core::ThemeManager::instance(), &ruwa::ui::core::ThemeManager::themeChanged,
         this, [this]() {
-            const auto& c = ruwa::ui::core::ThemeManager::instance().colors();
+            const auto& theme = ruwa::ui::core::ThemeManager::instance();
+            const auto& c = theme.colors();
             if (m_asciiWidget) {
-                static_cast<AsciiArtWidget*>(m_asciiWidget)->setTextColor(c.text);
+                auto* asciiArt = static_cast<AsciiArtWidget*>(m_asciiWidget);
+                asciiArt->applyThemeFont(theme);
+                asciiArt->setTextColor(c.text);
             }
             if (m_hintLabel) {
-                m_hintLabel->setStyleSheet(
-                    QString("color: %1; font-size: 13px;").arg(c.textMuted.name()));
+                m_hintLabel->setFont(theme.font(ruwa::ui::core::ThemeFontRole::H6));
+                m_hintLabel->setStyleSheet(QString("color: %1;").arg(c.textMuted.name()));
             }
             update();
         });

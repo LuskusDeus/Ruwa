@@ -30,6 +30,7 @@ using ruwa::core::layers::BlendMode;
 using ruwa::core::layers::LayerData;
 using ruwa::core::layers::LayerType;
 using ruwa::ui::core::ThemeColors;
+using ruwa::ui::core::ThemeFontRole;
 using ruwa::ui::core::ThemeManager;
 
 namespace {
@@ -536,10 +537,9 @@ QPixmap LayerPreviewPopup::buildContentPixmap(
     const int labelValueGap = theme.scaled(kLabelValueGap);
 
     // --- Text ---
-    QFont titleFont = colors.fonts.getUIFont(theme.scaledFontSize(10));
-    titleFont.setBold(true);
-    QFont subtitleFont = colors.fonts.getUIFont(theme.scaledFontSize(7));
-    const QFont rowFont = colors.fonts.getUIFont(theme.scaledFontSize(8));
+    const QFont titleFont = theme.font(ThemeFontRole::Label, QFont::Bold);
+    const QFont subtitleFont = theme.font(ThemeFontRole::Caption);
+    const QFont rowFont = theme.font(ThemeFontRole::Small);
 
     const QString title = maskTarget ? tr("%1 — Mask").arg(data->name)
                                      : (data->name.isEmpty() ? tr("Layer") : data->name);

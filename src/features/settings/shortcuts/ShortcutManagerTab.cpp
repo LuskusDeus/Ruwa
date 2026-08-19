@@ -52,11 +52,7 @@ const int BASE_MAIN_SPACING = 16;
 const int BASE_HEADER_SPACING = 16;
 const int BASE_SEARCH_BAR_WIDTH = 250;
 const int BASE_SCROLL_SPACING = 24;
-const int BASE_TITLE_FONT_SIZE = 18;
-const int BASE_SECTION_HEADER_FONT_SIZE = 12;
 const int BASE_SECTION_HEADER_SPACING = 8;
-const int BASE_SHORTCUTS_TITLE_FONT_SIZE = 22;
-const int BASE_SHORTCUTS_META_FONT_SIZE = 10;
 const int BASE_SHORTCUTS_HEADER_GAP = 10;
 const int BASE_DIVIDER_VSPACE_TOP = 6;
 const int BASE_DIVIDER_VSPACE_BOTTOM = 8;
@@ -164,7 +160,7 @@ void ShortcutManagerTab::createLayout()
     m_headerLayout = new QHBoxLayout();
 
     m_titleLabel = new QLabel(tr("Keyboard Shortcuts"), this);
-    m_titleLabel->setFont(colors.fonts.getTitleFont(theme.scaledFontSize(BASE_TITLE_FONT_SIZE)));
+    m_titleLabel->setFont(theme.font(ThemeFontRole::H3, QFont::Bold));
     m_titleLabel->setStyleSheet(QString("QLabel { color: %1; }").arg(colors.text.name()));
     m_headerLayout->addWidget(m_titleLabel);
 
@@ -288,9 +284,7 @@ void ShortcutManagerTab::createLayout()
 
     auto makeSectionHeader = [&](const QString& text) {
         auto* label = new QLabel(text, this);
-        QFont f = colors.fonts.getUIFont(theme.scaledFontSize(BASE_SECTION_HEADER_FONT_SIZE));
-        f.setWeight(QFont::DemiBold);
-        label->setFont(f);
+        label->setFont(theme.font(ThemeFontRole::H6, QFont::DemiBold));
         label->setStyleSheet(QString("QLabel { color: %1; }").arg(colors.text.name()));
         return label;
     };
@@ -370,15 +364,12 @@ void ShortcutManagerTab::createLayout()
 
     m_shortcutsHeaderLabel = new QLabel(m_shortcutsPanel);
     {
-        QFont f = colors.fonts.getUIFont(theme.scaledFontSize(BASE_SHORTCUTS_TITLE_FONT_SIZE));
-        f.setWeight(QFont::DemiBold);
-        m_shortcutsHeaderLabel->setFont(f);
+        m_shortcutsHeaderLabel->setFont(theme.font(ThemeFontRole::H2, QFont::DemiBold));
     }
     m_shortcutsHeaderLabel->setStyleSheet(QString("QLabel { color: %1; }").arg(colors.text.name()));
 
     m_shortcutsMetaLabel = new QLabel(m_shortcutsPanel);
-    QFont metaFont = colors.fonts.getUIFont(theme.scaledFontSize(BASE_SHORTCUTS_META_FONT_SIZE));
-    m_shortcutsMetaLabel->setFont(metaFont);
+    m_shortcutsMetaLabel->setFont(theme.font(ThemeFontRole::Label));
     m_shortcutsMetaLabel->setStyleSheet(
         QString("QLabel { color: %1; }").arg(colors.textMuted.name()));
 
@@ -1204,28 +1195,21 @@ void ShortcutManagerTab::updateScaledSizes()
         m_headerLayout->setSpacing(theme.scaled(BASE_HEADER_SPACING));
     }
 
-    const auto& colors = theme.colors();
-
     if (m_titleLabel) {
-        m_titleLabel->setFont(
-            colors.fonts.getTitleFont(theme.scaledFontSize(BASE_TITLE_FONT_SIZE)));
+        m_titleLabel->setFont(theme.font(ThemeFontRole::H3, QFont::Bold));
     }
 
-    QFont sectionFont = colors.fonts.getUIFont(theme.scaledFontSize(BASE_SECTION_HEADER_FONT_SIZE));
-    sectionFont.setWeight(QFont::DemiBold);
+    const QFont sectionFont = theme.font(ThemeFontRole::H6, QFont::DemiBold);
     for (QLabel* l : { m_presetsHeaderLabel, m_categoriesHeaderLabel }) {
         if (l)
             l->setFont(sectionFont);
     }
 
     if (m_shortcutsHeaderLabel) {
-        QFont f = colors.fonts.getUIFont(theme.scaledFontSize(BASE_SHORTCUTS_TITLE_FONT_SIZE));
-        f.setWeight(QFont::DemiBold);
-        m_shortcutsHeaderLabel->setFont(f);
+        m_shortcutsHeaderLabel->setFont(theme.font(ThemeFontRole::H2, QFont::DemiBold));
     }
     if (m_shortcutsMetaLabel) {
-        m_shortcutsMetaLabel->setFont(
-            colors.fonts.getUIFont(theme.scaledFontSize(BASE_SHORTCUTS_META_FONT_SIZE)));
+        m_shortcutsMetaLabel->setFont(theme.font(ThemeFontRole::Label));
     }
 
     if (m_searchBar) {

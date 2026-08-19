@@ -104,8 +104,7 @@ void SmartObjectTabContextMenu::applyStyle()
     const auto& colors = theme.colors();
 
     if (m_sectionLabel) {
-        QFont sf = colors.fonts.getUIFont(theme.scaledFontSize(10));
-        sf.setWeight(QFont::DemiBold);
+        QFont sf = theme.font(ruwa::ui::core::ThemeFontRole::Label, QFont::DemiBold);
         sf.setCapitalization(QFont::AllUppercase);
         sf.setLetterSpacing(QFont::AbsoluteSpacing, theme.scaled(1.8));
         m_sectionLabel->setFont(sf);

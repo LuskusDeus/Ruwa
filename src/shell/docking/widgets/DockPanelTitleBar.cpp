@@ -193,7 +193,8 @@ void DockPanelTitleBar::applyTheme(const ruwa::ui::core::ThemeColors& c)
     m_textColor = c.text;
     m_backgroundColor = c.surfaceAlt;
     m_borderColor = c.border;
-    m_titleFont = QFont(c.fonts.uiFont, 9, QFont::Normal);
+    m_titleFont
+        = ruwa::ui::core::ThemeManager::instance().font(ruwa::ui::core::ThemeFontRole::Body);
 
     m_scaledSlideExtra = ruwa::ui::core::ThemeManager::instance().scaled(10);
     if (m_closeButton) {

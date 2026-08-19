@@ -152,7 +152,10 @@ private:
         const bool compact = sizeVariant == SizeVariant::Compact;
 
         Layout layout;
-        layout.font = colors.fonts.getCodeFont(theme.scaledFontSize(compact ? 8 : 10));
+        const auto sizeRole
+            = compact ? ruwa::ui::core::ThemeFontRole::Small : ruwa::ui::core::ThemeFontRole::Label;
+        layout.font
+            = colors.fonts.getFont(ruwa::ui::core::ThemeFontRole::Code, theme.fontSize(sizeRole));
         layout.font.setWeight(QFont::DemiBold);
         layout.spacing = theme.scaled(compact ? 3 : 5);
         layout.keycapHeight = theme.scaled(compact ? 21 : 28);

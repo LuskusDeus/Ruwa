@@ -867,8 +867,7 @@ void BrushSettingsWidget::applyStyles()
     const auto& colors = WidgetStyleManager::instance().colors();
     auto& theme = ThemeManager::instance();
 
-    QFont rowFont = font();
-    rowFont.setPixelSize(theme.scaled(10));
+    const QFont rowFont = theme.font(ThemeFontRole::Label);
 
     const QString labelStyle = QStringLiteral("QLabel { color: %1; background: transparent; }")
                                    .arg(colors.textMuted.name(QColor::HexArgb));
@@ -883,8 +882,7 @@ void BrushSettingsWidget::applyStyles()
     // at the row font size without wasting the space needed by segmented inputs.
     const int nameColumnWidth = theme.scaled(88);
 
-    QFont starFont = font();
-    starFont.setPixelSize(theme.scaled(12));
+    const QFont starFont = theme.font(ThemeFontRole::H6);
 
     auto applyStarStyle = [&](QPushButton* btn) {
         if (!btn) {
@@ -1066,9 +1064,7 @@ void BrushSettingsWidget::applyDynamicsButtonStyle(QPushButton* button)
                                .pixmap(iconSize, iconSize),
         QIcon::Selected, QIcon::Off);
 
-    QFont dynamicsFont = font();
-    dynamicsFont.setPixelSize(theme.scaled(8));
-    dynamicsFont.setBold(true);
+    const QFont dynamicsFont = theme.font(ThemeFontRole::Small, QFont::Bold);
 
     button->setFont(dynamicsFont);
     button->setFixedSize(theme.scaled(18), theme.scaled(18));

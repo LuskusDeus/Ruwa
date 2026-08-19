@@ -304,8 +304,7 @@ void CategoryListItem::paintEvent(QPaintEvent* event)
     }
     painter.setPen(textColor);
 
-    QFont textFont = font();
-    textFont.setPointSize(theme.scaledFontSize(10));
+    QFont textFont = theme.font(ruwa::ui::core::ThemeFontRole::Label);
     painter.setFont(textFont);
 
     // Calculate text rect (leave space for delete button if deletable and active indicator)

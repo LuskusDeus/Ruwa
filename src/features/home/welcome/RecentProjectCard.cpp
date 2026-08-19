@@ -40,10 +40,7 @@ const int BASE_LAYOUT_SPACING = 8;
 const int BASE_THUMBNAIL_WIDTH = 160;
 const int BASE_THUMBNAIL_HEIGHT = 120;
 const int BASE_THUMB_BORDER_RADIUS = 6;
-const int BASE_NAME_FONT_SIZE = 9;
-const int BASE_DATE_FONT_SIZE = 8;
 const int BASE_NAME_MAX_HEIGHT = 36;
-const int BASE_PLACEHOLDER_FONT_SIZE = 32;
 } // namespace
 
 RecentProjectCard::RecentProjectCard(const QString& projectName, const QString& filePath,
@@ -140,7 +137,7 @@ void RecentProjectCard::updateScaledSizes()
     } else {
         m_thumbnailLabel->setPixmap(QPixmap());
         QFont thumbFont = m_thumbnailLabel->font();
-        thumbFont.setPointSize(theme.scaledFontSize(BASE_PLACEHOLDER_FONT_SIZE));
+        thumbFont.setPointSize(theme.fontSize(ruwa::ui::core::ThemeFontRole::H0));
         m_thumbnailLabel->setFont(thumbFont);
         m_thumbnailLabel->setText(QStringLiteral("\xF0\x9F\x93\x84"));
     }
@@ -158,14 +155,11 @@ void RecentProjectCard::updateScaledSizes()
                 .arg(colors.textMuted.name()));
     }
 
-    QFont nameFont = m_nameLabel->font();
-    nameFont.setPointSize(theme.scaledFontSize(BASE_NAME_FONT_SIZE));
-    nameFont.setBold(true);
+    QFont nameFont = theme.font(ruwa::ui::core::ThemeFontRole::Body, QFont::Bold);
     m_nameLabel->setFont(nameFont);
     m_nameLabel->setMaximumHeight(theme.scaled(BASE_NAME_MAX_HEIGHT));
 
-    QFont dateFont = m_dateLabel->font();
-    dateFont.setPointSize(theme.scaledFontSize(BASE_DATE_FONT_SIZE));
+    QFont dateFont = theme.font(ruwa::ui::core::ThemeFontRole::Small);
     m_dateLabel->setFont(dateFont);
 }
 

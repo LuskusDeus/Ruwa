@@ -884,9 +884,7 @@ private:
         const auto& theme = ruwa::ui::core::ThemeManager::instance();
         const auto& colors = theme.colors();
 
-        QFont font = colors.fonts.getUIFont(theme.scaledFontSize(9));
-        font.setWeight(QFont::Medium);
-        m_label->setFont(font);
+        m_label->setFont(theme.font(ruwa::ui::core::ThemeFontRole::Body, QFont::Medium));
         m_label->setStyleSheet(
             QString("QLabel { background: transparent; color: %1; }").arg(colors.text.name()));
 
@@ -11202,9 +11200,8 @@ void OpenGLCanvasWidget::paintGL_syncCursorToLivePointer()
         return;
     }
 
-    const qreal scaleX = width() > 0
-        ? static_cast<qreal>(m_viewport.width()) / static_cast<qreal>(width())
-        : 1.0;
+    const qreal scaleX
+        = width() > 0 ? static_cast<qreal>(m_viewport.width()) / static_cast<qreal>(width()) : 1.0;
     const qreal scaleY = height() > 0
         ? static_cast<qreal>(m_viewport.height()) / static_cast<qreal>(height())
         : 1.0;
@@ -13008,9 +13005,8 @@ void OpenGLCanvasWidget::paintGL()
                       m_cursorOverlayState.brushCenterY + r };
         }
         if (drawEyedropperCursor) {
-            cursorCaptureRects[cursorCaptureRectCount++]
-                = EyedropperCursorOverlayGL::captureRect(m_cursorOverlayState.eyedropperCenterX,
-                    m_cursorOverlayState.eyedropperCenterY);
+            cursorCaptureRects[cursorCaptureRectCount++] = EyedropperCursorOverlayGL::captureRect(
+                m_cursorOverlayState.eyedropperCenterX, m_cursorOverlayState.eyedropperCenterY);
         }
         if (drawToolCursor) {
             cursorCaptureRects[cursorCaptureRectCount++]

@@ -36,8 +36,6 @@ constexpr qreal MaxDimOpacity = 0.55;
 constexpr int CardRadius = 12;
 constexpr int CardMargin = 22;
 constexpr int CardSpacing = 16;
-constexpr int TitleFontSize = 13;
-constexpr int HintFontSize = 9;
 constexpr int ButtonSpacing = 12;
 
 // Used only when no live WelcomeBanner can be measured (settings opened standalone).
@@ -509,9 +507,7 @@ void WelcomeBannerCropOverlay::setupUI()
     layout->setSpacing(theme.scaled(CardSpacing));
 
     auto* title = new QLabel(tr("Choose the area to show on the banner"), m_card);
-    QFont titleFont = colors.fonts.getUIFont(theme.scaledFontSize(TitleFontSize));
-    titleFont.setWeight(QFont::DemiBold);
-    title->setFont(titleFont);
+    title->setFont(theme.font(ruwa::ui::core::ThemeFontRole::H6, QFont::DemiBold));
     title->setStyleSheet(
         QStringLiteral("QLabel { background: transparent; color: %1; }").arg(colors.text.name()));
     layout->addWidget(title);
@@ -520,7 +516,7 @@ void WelcomeBannerCropOverlay::setupUI()
         tr("Drag to move, drag the corners to resize. The frame keeps the banner's shape."),
         m_card);
     hint->setWordWrap(true);
-    hint->setFont(colors.fonts.getUIFont(theme.scaledFontSize(HintFontSize)));
+    hint->setFont(theme.font(ruwa::ui::core::ThemeFontRole::Body));
     hint->setStyleSheet(QStringLiteral("QLabel { background: transparent; color: %1; }")
             .arg(colors.textMuted.name()));
     layout->addWidget(hint);

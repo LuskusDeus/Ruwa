@@ -103,17 +103,17 @@ public:
         auto* bottomActions = new QHBoxLayout();
         bottomActions->setContentsMargins(0, 0, 0, 0);
         bottomActions->setSpacing(0);
-        m_deleteButton = createIconButton(
-            ruwa::ui::core::IconProvider::StandardIcon::Trash, m_actionsPanel);
-        m_saveAsButton = createIconButton(
-            ruwa::ui::core::IconProvider::StandardIcon::Save, m_actionsPanel);
+        m_deleteButton
+            = createIconButton(ruwa::ui::core::IconProvider::StandardIcon::Trash, m_actionsPanel);
+        m_saveAsButton
+            = createIconButton(ruwa::ui::core::IconProvider::StandardIcon::Save, m_actionsPanel);
         bottomActions->addWidget(m_deleteButton);
         bottomActions->addStretch();
         bottomActions->addWidget(m_saveAsButton);
         m_actionsLayout->addLayout(bottomActions);
 
-        connect(m_themeList, &PresetMenuListWidget::itemClicked, this,
-            [this](const QVariant& data) {
+        connect(
+            m_themeList, &PresetMenuListWidget::itemClicked, this, [this](const QVariant& data) {
                 if (m_owner) {
                     m_owner->setEditingThemeById(QUuid(data.toString()));
                     hidePopup();
@@ -163,8 +163,7 @@ public:
             });
 
         connect(&ruwa::ui::core::ThemeManager::instance(),
-            &ruwa::ui::core::ThemeManager::themeChanged, this,
-            [this]() { updateTheme(); });
+            &ruwa::ui::core::ThemeManager::themeChanged, this, [this]() { updateTheme(); });
         connect(&ruwa::ui::core::TranslationManager::instance(),
             &ruwa::ui::core::TranslationManager::languageChanged, this,
             [this]() { retranslateUi(); });
@@ -193,22 +192,21 @@ public:
         items.reserve(presets.size());
 
         for (const auto& preset : presets) {
-            const auto& displayPreset = m_owner && m_owner->hasEditingTheme()
-                    && m_owner->editingTheme().id == preset.id
+            const auto& displayPreset
+                = m_owner && m_owner->hasEditingTheme() && m_owner->editingTheme().id == preset.id
                 ? m_owner->editingTheme()
                 : preset;
 
             PresetMenuItem item;
             item.title = ruwa::ui::core::ThemePreset::translatedDisplayName(displayPreset);
             item.subtitle = displayPreset.description;
-            item.badgeText = displayPreset.isBuiltIn
-                ? ThemeEditorThemeDropdown::tr("Built-in")
-                : ThemeEditorThemeDropdown::tr("Custom");
+            item.badgeText = displayPreset.isBuiltIn ? ThemeEditorThemeDropdown::tr("Built-in")
+                                                     : ThemeEditorThemeDropdown::tr("Custom");
             item.badgeTint = displayPreset.isBuiltIn ? QColor() : displayPreset.primary;
             item.previewColors = previewColors(displayPreset);
             item.previewIcon = ruwa::ui::core::IconProvider::StandardIcon::Appearance;
-            item.searchText = QStringLiteral("%1 %2 %3")
-                                  .arg(item.title, item.subtitle, item.badgeText);
+            item.searchText
+                = QStringLiteral("%1 %2 %3").arg(item.title, item.subtitle, item.badgeText);
             item.userData = displayPreset.id.toString();
             item.deletable = false;
             item.renamable = false;
@@ -293,8 +291,7 @@ public:
         m_opacityAnimation->setStartValue(m_opacity);
         m_opacityAnimation->setEndValue(0.0);
         disconnect(m_opacityAnimation, &QVariantAnimation::finished, this, nullptr);
-        connect(m_opacityAnimation, &QVariantAnimation::finished, this,
-            [this]() { finishHide(); });
+        connect(m_opacityAnimation, &QVariantAnimation::finished, this, [this]() { finishHide(); });
         m_opacityAnimation->start();
     }
 
@@ -319,8 +316,7 @@ public:
     void updateTheme()
     {
         const auto& colors = ruwa::ui::core::ThemeManager::instance().colors();
-        m_actionsTitle->setStyleSheet(
-            QStringLiteral("color: %1;").arg(colors.text.name()));
+        m_actionsTitle->setStyleSheet(QStringLiteral("color: %1;").arg(colors.text.name()));
         refreshThemes();
         if (m_visible) {
             updateScaledSizes();
@@ -341,9 +337,7 @@ public:
         m_actionsLayout->setSpacing(theme.scaled(8));
         m_actionsLayout->setContentsMargins(theme.scaled(12), 0, 0, 0);
 
-        QFont titleFont = m_actionsTitle->font();
-        titleFont.setPointSize(theme.scaledFontSize(10));
-        titleFont.setBold(true);
+        QFont titleFont = theme.font(ruwa::ui::core::ThemeFontRole::Label, QFont::Bold);
         m_actionsTitle->setFont(titleFont);
         m_actionsTitle->setFixedHeight(theme.scaled(28));
     }
@@ -357,8 +351,8 @@ protected:
             const auto* mouseEvent = static_cast<QMouseEvent*>(event);
             const QPoint globalPosition = mouseEvent->globalPosition().toPoint();
             const int shadow = ruwa::ui::core::ThemeManager::instance().scaled(kPopupShadow);
-            const QRect popupRect(mapToGlobal(QPoint(shadow, shadow)),
-                size() - QSize(shadow * 2, shadow * 2));
+            const QRect popupRect(
+                mapToGlobal(QPoint(shadow, shadow)), size() - QSize(shadow * 2, shadow * 2));
             const bool onAnchor = m_anchor
                 && QRect(m_anchor->mapToGlobal(QPoint(0, 0)), m_anchor->size())
                        .contains(globalPosition);
@@ -371,11 +365,11 @@ protected:
                 hidePopup();
                 return true;
             }
-        } else if (m_visible && (event->type() == QEvent::ApplicationDeactivate
-                       || event->type() == QEvent::WindowDeactivate)) {
+        } else if (m_visible
+            && (event->type() == QEvent::ApplicationDeactivate
+                || event->type() == QEvent::WindowDeactivate)) {
             hidePopup(false);
-        } else if (m_visible && watched == m_overlay.data()
-            && event->type() == QEvent::Resize) {
+        } else if (m_visible && watched == m_overlay.data() && event->type() == QEvent::Resize) {
             updatePopupGeometry();
             m_overlay->refreshGenericPopups();
         }
@@ -461,8 +455,7 @@ private:
             qMax(available.left(), available.right() - width() + 1)));
 
         if (position.y() + height() > available.bottom()) {
-            const int anchorTop = m_overlay->mapFromGlobal(
-                m_anchor->mapToGlobal(QPoint(0, 0))).y();
+            const int anchorTop = m_overlay->mapFromGlobal(m_anchor->mapToGlobal(QPoint(0, 0))).y();
             position.setY(anchorTop - height() + theme.scaled(kPopupShadow - 4));
             m_placedAbove = true;
         }
@@ -484,8 +477,7 @@ private:
         m_targetPosition = calculatePosition();
         move(m_targetPosition);
         const int shadow = theme.scaled(kPopupShadow);
-        setProperty("ruwaOverlayMaskRect",
-            rect().adjusted(shadow, shadow, -shadow, -shadow));
+        setProperty("ruwaOverlayMaskRect", rect().adjusted(shadow, shadow, -shadow, -shadow));
     }
 
     void finishHide()
@@ -541,9 +533,8 @@ ThemeEditorThemeDropdown::ThemeEditorThemeDropdown(QWidget* parent)
     connect(&ruwa::ui::core::ThemeManager::instance(),
         &ruwa::ui::core::ThemeManager::presetsChanged, this,
         &ThemeEditorThemeDropdown::onPresetsChanged);
-    connect(&ruwa::ui::core::ThemeManager::instance(),
-        &ruwa::ui::core::ThemeManager::themeChanged, this,
-        &ThemeEditorThemeDropdown::onThemeChanged);
+    connect(&ruwa::ui::core::ThemeManager::instance(), &ruwa::ui::core::ThemeManager::themeChanged,
+        this, &ThemeEditorThemeDropdown::onThemeChanged);
 
     const QUuid currentId = ruwa::ui::core::ThemeManager::instance().currentPresetId();
     if (!setEditingThemeById(currentId)) {
@@ -637,12 +628,11 @@ void ThemeEditorThemeDropdown::paintEvent(QPaintEvent* event)
         painter.drawRoundedRect(box, radius, radius);
     }
 
-    QColor topBorder = ruwa::ui::core::ThemeColors::interpolate(colors.borderSubtle(),
-        colors.borderSubtleHover(), qMax(hoverProgress(), activeProgress()));
+    QColor topBorder = ruwa::ui::core::ThemeColors::interpolate(
+        colors.borderSubtle(), colors.borderSubtleHover(), qMax(hoverProgress(), activeProgress()));
     QColor bottomBorder = colors.borderSubtle();
     bottomBorder.setAlpha(bottomBorder.alpha() / 2);
-    ruwa::ui::painting::drawGradientBorder(
-        painter, box, radius, topBorder, bottomBorder);
+    ruwa::ui::painting::drawGradientBorder(painter, box, radius, topBorder, bottomBorder);
 
     const int previewSize = theme.scaled(22);
     const QRectF swatch(theme.scaled(8), (height() - previewSize) / 2.0, previewSize, previewSize);
@@ -659,22 +649,20 @@ void ThemeEditorThemeDropdown::paintEvent(QPaintEvent* event)
             QRectF(swatch.left() + halfWidth, swatch.top(), halfWidth, halfHeight), swatches[1]);
         painter.fillRect(
             QRectF(swatch.left(), swatch.top() + halfHeight, halfWidth, halfHeight), swatches[2]);
-        painter.fillRect(QRectF(swatch.left() + halfWidth, swatch.top() + halfHeight, halfWidth,
-                             halfHeight),
+        painter.fillRect(
+            QRectF(swatch.left() + halfWidth, swatch.top() + halfHeight, halfWidth, halfHeight),
             swatches[3]);
         painter.restore();
         painter.setPen(QPen(colors.borderSubtle(), 1));
         painter.setBrush(Qt::NoBrush);
-        painter.drawRoundedRect(swatch.adjusted(0.5, 0.5, -0.5, -0.5), theme.scaled(4.0),
-            theme.scaled(4.0));
+        painter.drawRoundedRect(
+            swatch.adjusted(0.5, 0.5, -0.5, -0.5), theme.scaled(4.0), theme.scaled(4.0));
     }
 
     const int textLeft = qRound(swatch.right()) + theme.scaled(10);
     const int arrowSpace = theme.scaled(28);
     const QRect textRect(textLeft, 0, qMax(0, width() - textLeft - arrowSpace), height());
-    QFont textFont = font();
-    textFont.setPointSize(theme.scaledFontSize(9));
-    textFont.setWeight(QFont::Medium);
+    QFont textFont = theme.font(ruwa::ui::core::ThemeFontRole::Body, QFont::Medium);
     painter.setFont(textFont);
     painter.setPen(m_hasEditingTheme ? colors.text : colors.textMuted);
     const QString name = m_hasEditingTheme
@@ -686,12 +674,12 @@ void ThemeEditorThemeDropdown::paintEvent(QPaintEvent* event)
     painter.save();
     painter.translate(width() - theme.scaled(13), height() * 0.5);
     painter.rotate(180.0 * activeProgress());
-    painter.setPen(QPen(colors.textMuted, theme.scaled(1.6), Qt::SolidLine, Qt::RoundCap,
-        Qt::RoundJoin));
-    painter.drawLine(QPointF(theme.scaled(-3.5), theme.scaled(-1.0)),
-        QPointF(0.0, theme.scaled(2.2)));
-    painter.drawLine(QPointF(0.0, theme.scaled(2.2)),
-        QPointF(theme.scaled(3.5), theme.scaled(-1.0)));
+    painter.setPen(
+        QPen(colors.textMuted, theme.scaled(1.6), Qt::SolidLine, Qt::RoundCap, Qt::RoundJoin));
+    painter.drawLine(
+        QPointF(theme.scaled(-3.5), theme.scaled(-1.0)), QPointF(0.0, theme.scaled(2.2)));
+    painter.drawLine(
+        QPointF(0.0, theme.scaled(2.2)), QPointF(theme.scaled(3.5), theme.scaled(-1.0)));
     painter.restore();
 }
 
@@ -855,8 +843,7 @@ void ThemeEditorThemeDropdown::deleteTheme()
 
     const QString prompt = tr("Delete Theme") + QStringLiteral("\n")
         + tr("Are you sure you want to delete '%1'?").arg(m_editingTheme.name);
-    if (!MessagePopupManager::showBlocking(
-            this, prompt, tr("Delete"), tr("Cancel"), 360, false)) {
+    if (!MessagePopupManager::showBlocking(this, prompt, tr("Delete"), tr("Cancel"), 360, false)) {
         return;
     }
 
@@ -900,8 +887,8 @@ ruwa::ui::core::ThemePreset ThemeEditorThemeDropdown::createThemeCopy(
 {
     auto copy = preset;
     copy.id = QUuid::createUuid();
-    copy.name = uniqueThemeName(tr("%1 Copy").arg(
-        ruwa::ui::core::ThemePreset::translatedDisplayName(preset)));
+    copy.name = uniqueThemeName(
+        tr("%1 Copy").arg(ruwa::ui::core::ThemePreset::translatedDisplayName(preset)));
     copy.isBuiltIn = false;
     copy.isFavorite = false;
     return copy;
@@ -909,8 +896,8 @@ ruwa::ui::core::ThemePreset ThemeEditorThemeDropdown::createThemeCopy(
 
 QString ThemeEditorThemeDropdown::uniqueThemeName(const QString& requestedName) const
 {
-    const QString baseName = requestedName.trimmed().isEmpty() ? tr("Theme")
-                                                               : requestedName.trimmed();
+    const QString baseName
+        = requestedName.trimmed().isEmpty() ? tr("Theme") : requestedName.trimmed();
     QSet<QString> existingNames;
     for (const auto& preset : ruwa::ui::core::ThemeManager::instance().allPresets()) {
         existingNames.insert(preset.name.trimmed().toCaseFolded());
@@ -930,8 +917,7 @@ QString ThemeEditorThemeDropdown::uniqueThemeName(const QString& requestedName) 
 void ThemeEditorThemeDropdown::showInfo(const QString& title, const QString& message)
 {
     const QString text = title.isEmpty() ? message : QStringLiteral("%1\n%2").arg(title, message);
-    MessagePopupManager::show(
-        this, text, { { tr("OK"), true, []() { } } }, 360);
+    MessagePopupManager::show(this, text, { { tr("OK"), true, []() { } } }, 360);
 }
 
 void ThemeEditorThemeDropdown::updateScaledSize()

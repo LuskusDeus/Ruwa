@@ -17,6 +17,191 @@ namespace ruwa::ui::core {
 struct ThemePreset;
 
 /**
+ * @brief Semantic typography roles used by the application UI.
+ *
+ * Widget code must request a role instead of embedding a numeric font size.
+ * Display is reserved for oversized hero text. H0 is the largest regular
+ * heading; H6 is the smallest heading. Body roles use the UI family, while
+ * Code uses the code family.
+ */
+enum class ThemeFontRole {
+    Display,
+    H0,
+    H1,
+    H2,
+    H3,
+    H4,
+    H5,
+    H6,
+    BodyLarge,
+    Label,
+    Body,
+    Small,
+    Caption,
+    Code
+};
+
+/**
+ * @brief Theme-owned typography scale.
+ *
+ * The defaults preserve the existing visual scale anchored at the legacy
+ * 16pt title, 9pt UI and 9pt code sizes.
+ */
+struct ThemeFontSizes {
+    int display { 54 };
+    int h0 { 32 };
+    int h1 { 26 };
+    int h2 { 22 };
+    int h3 { 18 };
+    int h4 { 16 };
+    int h5 { 14 };
+    int h6 { 12 };
+    int bodyLarge { 11 };
+    int label { 10 };
+    int body { 9 };
+    int small { 8 };
+    int caption { 7 };
+    int code { 9 };
+
+    static ThemeFontSizes fromLegacy(int uiSize, int codeSize, int titleSize)
+    {
+        ThemeFontSizes sizes;
+        sizes.display = titleSize + 38;
+        sizes.h0 = titleSize + 16;
+        sizes.h1 = titleSize + 10;
+        sizes.h2 = titleSize + 6;
+        sizes.h3 = titleSize + 2;
+        sizes.h4 = titleSize;
+        sizes.h5 = titleSize - 2;
+        sizes.h6 = titleSize - 4;
+        sizes.bodyLarge = uiSize + 2;
+        sizes.label = uiSize + 1;
+        sizes.body = uiSize;
+        sizes.small = uiSize - 1;
+        sizes.caption = uiSize - 2;
+        sizes.code = codeSize;
+        sizes.normalize();
+        return sizes;
+    }
+
+    int value(ThemeFontRole role) const
+    {
+        switch (role) {
+        case ThemeFontRole::Display:
+            return display;
+        case ThemeFontRole::H0:
+            return h0;
+        case ThemeFontRole::H1:
+            return h1;
+        case ThemeFontRole::H2:
+            return h2;
+        case ThemeFontRole::H3:
+            return h3;
+        case ThemeFontRole::H4:
+            return h4;
+        case ThemeFontRole::H5:
+            return h5;
+        case ThemeFontRole::H6:
+            return h6;
+        case ThemeFontRole::BodyLarge:
+            return bodyLarge;
+        case ThemeFontRole::Label:
+            return label;
+        case ThemeFontRole::Body:
+            return body;
+        case ThemeFontRole::Small:
+            return small;
+        case ThemeFontRole::Caption:
+            return caption;
+        case ThemeFontRole::Code:
+            return code;
+        }
+        return body;
+    }
+
+    void setValue(ThemeFontRole role, int size)
+    {
+        size = std::clamp(size, MinimumSize, MaximumSize);
+        switch (role) {
+        case ThemeFontRole::Display:
+            display = size;
+            break;
+        case ThemeFontRole::H0:
+            h0 = size;
+            break;
+        case ThemeFontRole::H1:
+            h1 = size;
+            break;
+        case ThemeFontRole::H2:
+            h2 = size;
+            break;
+        case ThemeFontRole::H3:
+            h3 = size;
+            break;
+        case ThemeFontRole::H4:
+            h4 = size;
+            break;
+        case ThemeFontRole::H5:
+            h5 = size;
+            break;
+        case ThemeFontRole::H6:
+            h6 = size;
+            break;
+        case ThemeFontRole::BodyLarge:
+            bodyLarge = size;
+            break;
+        case ThemeFontRole::Label:
+            label = size;
+            break;
+        case ThemeFontRole::Body:
+            body = size;
+            break;
+        case ThemeFontRole::Small:
+            small = size;
+            break;
+        case ThemeFontRole::Caption:
+            caption = size;
+            break;
+        case ThemeFontRole::Code:
+            code = size;
+            break;
+        }
+    }
+
+    void normalize()
+    {
+        display = std::clamp(display, MinimumSize, MaximumSize);
+        h0 = std::clamp(h0, MinimumSize, MaximumSize);
+        h1 = std::clamp(h1, MinimumSize, MaximumSize);
+        h2 = std::clamp(h2, MinimumSize, MaximumSize);
+        h3 = std::clamp(h3, MinimumSize, MaximumSize);
+        h4 = std::clamp(h4, MinimumSize, MaximumSize);
+        h5 = std::clamp(h5, MinimumSize, MaximumSize);
+        h6 = std::clamp(h6, MinimumSize, MaximumSize);
+        bodyLarge = std::clamp(bodyLarge, MinimumSize, MaximumSize);
+        label = std::clamp(label, MinimumSize, MaximumSize);
+        body = std::clamp(body, MinimumSize, MaximumSize);
+        small = std::clamp(small, MinimumSize, MaximumSize);
+        caption = std::clamp(caption, MinimumSize, MaximumSize);
+        code = std::clamp(code, MinimumSize, MaximumSize);
+    }
+
+    bool operator==(const ThemeFontSizes& other) const
+    {
+        return display == other.display && h0 == other.h0 && h1 == other.h1 && h2 == other.h2
+            && h3 == other.h3 && h4 == other.h4 && h5 == other.h5 && h6 == other.h6
+            && bodyLarge == other.bodyLarge && label == other.label && body == other.body
+            && small == other.small && caption == other.caption && code == other.code;
+    }
+
+    bool operator!=(const ThemeFontSizes& other) const { return !(*this == other); }
+
+private:
+    static constexpr int MinimumSize = 6;
+    static constexpr int MaximumSize = 96;
+};
+
+/**
  * @brief Font configuration for a theme
  */
 struct ThemeFonts {
@@ -24,18 +209,40 @@ struct ThemeFonts {
     QString codeFont { FontFamilyNames::JetBrainsMono }; ///< Monospace code font
     QString titleFont { FontFamilyNames::IBMPlexSansCondensed }; ///< Large titles font
 
-    int uiSize { 9 }; ///< Default UI font size
-    int codeSize { 9 }; ///< Default code font size
-    int titleSize { 16 }; ///< Default title font size
+    ThemeFontSizes sizes;
+
+    QString family(ThemeFontRole role) const
+    {
+        switch (role) {
+        case ThemeFontRole::Display:
+        case ThemeFontRole::H0:
+        case ThemeFontRole::H1:
+        case ThemeFontRole::H2:
+        case ThemeFontRole::H3:
+        case ThemeFontRole::H4:
+        case ThemeFontRole::H5:
+        case ThemeFontRole::H6:
+            return titleFont;
+        case ThemeFontRole::Code:
+            return codeFont;
+        default:
+            return uiFont;
+        }
+    }
+
+    QFont getFont(ThemeFontRole role, int size = -1) const
+    {
+        return QFont(family(role), size > 0 ? size : sizes.value(role));
+    }
 
     // Helper to create font instances
-    QFont getUIFont(int size = -1) const { return QFont(uiFont, size > 0 ? size : uiSize); }
+    QFont getUIFont(int size = -1) const { return QFont(uiFont, size > 0 ? size : sizes.body); }
 
-    QFont getCodeFont(int size = -1) const { return QFont(codeFont, size > 0 ? size : codeSize); }
+    QFont getCodeFont(int size = -1) const { return QFont(codeFont, size > 0 ? size : sizes.code); }
 
     QFont getTitleFont(int size = -1) const
     {
-        QFont f(titleFont, size > 0 ? size : titleSize);
+        QFont f(titleFont, size > 0 ? size : sizes.h4);
         f.setWeight(QFont::Bold);
         return f;
     }

@@ -14,7 +14,6 @@ namespace {
 const int BASE_MIN_WIDTH = 80;
 const int BASE_HEIGHT = 36;
 const int BASE_BORDER_RADIUS = 6;
-const int BASE_FONT_SIZE = 9;
 } // namespace
 
 AnimatedButton::AnimatedButton(const QString& text, QWidget* parent)
@@ -37,9 +36,7 @@ void AnimatedButton::updateScaledSizes()
     setMinimumWidth(theme.scaled(BASE_MIN_WIDTH));
     setFixedHeight(theme.scaled(BASE_HEIGHT));
 
-    QFont font = this->font();
-    font.setPointSize(theme.scaledFontSize(BASE_FONT_SIZE));
-    font.setWeight(QFont::Medium);
+    QFont font = theme.font(ruwa::ui::core::ThemeFontRole::Body, QFont::Medium);
     setFont(font);
 }
 

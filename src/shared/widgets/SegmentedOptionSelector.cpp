@@ -27,7 +27,6 @@ constexpr int BASE_ITEM_MIN_WIDTH = 32;
 constexpr int BASE_ITEM_PADDING_X = 10;
 constexpr int BASE_ICON_SIZE = 16;
 constexpr int BASE_ICON_TEXT_GAP = 6;
-constexpr int BASE_TEXT_SIZE = 9;
 constexpr int BASE_ANIMATION_DURATION = 240;
 
 ruwa::ui::core::WidgetStyle createTrackStyle()
@@ -246,8 +245,7 @@ private:
     void updateScaledSizes()
     {
         const auto& theme = ruwa::ui::core::ThemeManager::instance();
-        QFont f = font();
-        f.setPointSize(theme.scaledFontSize(BASE_TEXT_SIZE));
+        QFont f = theme.font(ruwa::ui::core::ThemeFontRole::Body);
         setFont(f);
 
         m_iconSize = theme.scaled(BASE_ICON_SIZE);

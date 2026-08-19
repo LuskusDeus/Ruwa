@@ -60,9 +60,7 @@ void BaseSettingsWidget::setupUI()
     // Label
     m_labelWidget = new QLabel(m_label, m_textContainer);
     m_labelWidget->setAttribute(Qt::WA_TranslucentBackground);
-    QFont labelFont = m_labelWidget->font();
-    labelFont.setBold(true);
-    labelFont.setPointSize(mgr.scaledFontSize(style().content.baseFontSize));
+    QFont labelFont = mgr.font(style().content.fontRole, QFont::Bold);
     m_labelWidget->setFont(labelFont);
     m_labelWidget->setStyleSheet(
         QString("QLabel { color: %1; background: transparent; }").arg(colors.text.name()));
@@ -73,8 +71,7 @@ void BaseSettingsWidget::setupUI()
         m_descriptionWidget = new QLabel(m_description, m_textContainer);
         m_descriptionWidget->setAttribute(Qt::WA_TranslucentBackground);
         m_descriptionWidget->setWordWrap(true);
-        QFont descFont = m_descriptionWidget->font();
-        descFont.setPointSize(mgr.scaledFontSize(8));
+        QFont descFont = mgr.font(ruwa::ui::core::ThemeFontRole::Small);
         m_descriptionWidget->setFont(descFont);
         m_descriptionWidget->setStyleSheet(
             QString("QLabel { color: %1; background: transparent; }").arg(colors.textMuted.name()));
@@ -114,14 +111,12 @@ void BaseSettingsWidget::updateScaledSizes()
 
     // Update font sizes
     if (m_labelWidget) {
-        QFont labelFont = m_labelWidget->font();
-        labelFont.setPointSize(mgr.scaledFontSize(style().content.baseFontSize));
+        QFont labelFont = mgr.font(style().content.fontRole, QFont::Bold);
         m_labelWidget->setFont(labelFont);
     }
 
     if (m_descriptionWidget) {
-        QFont descFont = m_descriptionWidget->font();
-        descFont.setPointSize(mgr.scaledFontSize(8));
+        QFont descFont = mgr.font(ruwa::ui::core::ThemeFontRole::Small);
         m_descriptionWidget->setFont(descFont);
     }
 
@@ -197,8 +192,7 @@ void BaseSettingsWidget::setDescription(const QString& description)
         m_descriptionWidget = new QLabel(description, m_textContainer);
         m_descriptionWidget->setAttribute(Qt::WA_TranslucentBackground);
         m_descriptionWidget->setWordWrap(true);
-        QFont descFont = m_descriptionWidget->font();
-        descFont.setPointSize(mgr.scaledFontSize(8));
+        QFont descFont = mgr.font(ruwa::ui::core::ThemeFontRole::Small);
         m_descriptionWidget->setFont(descFont);
         m_descriptionWidget->setStyleSheet(
             QStringLiteral("QLabel { color: %1; background: transparent; }")

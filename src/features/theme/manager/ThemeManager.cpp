@@ -24,12 +24,64 @@ thread_local const ThemeColors* ThemeManager::s_colorOverride = nullptr;
 // (e.g. dragging a color slider in theme editor).
 static constexpr int kCoalesceDelayMs = 30;
 
-static ThemeFonts migratedThemeFonts(ThemeFonts fonts)
+static ThemeFonts normalizedThemeFonts(ThemeFonts fonts)
 {
     fonts.uiFont = FontFamilyNames::migrateLegacyFamilyName(fonts.uiFont);
     fonts.codeFont = FontFamilyNames::migrateLegacyFamilyName(fonts.codeFont);
     fonts.titleFont = FontFamilyNames::migrateLegacyFamilyName(fonts.titleFont);
+    fonts.sizes.normalize();
     return fonts;
+}
+
+static ThemeFontSizes loadThemeFontSizes(QSettings& settings)
+{
+    const int legacyUiSize = settings.value(QStringLiteral("fonts/uiSize"), 9).toInt();
+    const int legacyCodeSize = settings.value(QStringLiteral("fonts/codeSize"), 9).toInt();
+    const int legacyTitleSize = settings.value(QStringLiteral("fonts/titleSize"), 16).toInt();
+    const ThemeFontSizes fallback
+        = ThemeFontSizes::fromLegacy(legacyUiSize, legacyCodeSize, legacyTitleSize);
+
+    ThemeFontSizes sizes;
+    sizes.display = settings.value(QStringLiteral("fonts/sizes/display"), fallback.display).toInt();
+    sizes.h0 = settings.value(QStringLiteral("fonts/sizes/h0"), fallback.h0).toInt();
+    sizes.h1 = settings.value(QStringLiteral("fonts/sizes/h1"), fallback.h1).toInt();
+    sizes.h2 = settings.value(QStringLiteral("fonts/sizes/h2"), fallback.h2).toInt();
+    sizes.h3 = settings.value(QStringLiteral("fonts/sizes/h3"), fallback.h3).toInt();
+    sizes.h4 = settings.value(QStringLiteral("fonts/sizes/h4"), fallback.h4).toInt();
+    sizes.h5 = settings.value(QStringLiteral("fonts/sizes/h5"), fallback.h5).toInt();
+    sizes.h6 = settings.value(QStringLiteral("fonts/sizes/h6"), fallback.h6).toInt();
+    sizes.bodyLarge
+        = settings.value(QStringLiteral("fonts/sizes/bodyLarge"), fallback.bodyLarge).toInt();
+    sizes.label = settings.value(QStringLiteral("fonts/sizes/label"), fallback.label).toInt();
+    sizes.body = settings.value(QStringLiteral("fonts/sizes/body"), fallback.body).toInt();
+    sizes.small = settings.value(QStringLiteral("fonts/sizes/small"), fallback.small).toInt();
+    sizes.caption = settings.value(QStringLiteral("fonts/sizes/caption"), fallback.caption).toInt();
+    sizes.code = settings.value(QStringLiteral("fonts/sizes/code"), fallback.code).toInt();
+    sizes.normalize();
+    return sizes;
+}
+
+static void saveThemeFontSizes(QSettings& settings, const ThemeFontSizes& sizes)
+{
+    settings.setValue(QStringLiteral("fonts/sizes/display"), sizes.display);
+    settings.setValue(QStringLiteral("fonts/sizes/h0"), sizes.h0);
+    settings.setValue(QStringLiteral("fonts/sizes/h1"), sizes.h1);
+    settings.setValue(QStringLiteral("fonts/sizes/h2"), sizes.h2);
+    settings.setValue(QStringLiteral("fonts/sizes/h3"), sizes.h3);
+    settings.setValue(QStringLiteral("fonts/sizes/h4"), sizes.h4);
+    settings.setValue(QStringLiteral("fonts/sizes/h5"), sizes.h5);
+    settings.setValue(QStringLiteral("fonts/sizes/h6"), sizes.h6);
+    settings.setValue(QStringLiteral("fonts/sizes/bodyLarge"), sizes.bodyLarge);
+    settings.setValue(QStringLiteral("fonts/sizes/label"), sizes.label);
+    settings.setValue(QStringLiteral("fonts/sizes/body"), sizes.body);
+    settings.setValue(QStringLiteral("fonts/sizes/small"), sizes.small);
+    settings.setValue(QStringLiteral("fonts/sizes/caption"), sizes.caption);
+    settings.setValue(QStringLiteral("fonts/sizes/code"), sizes.code);
+
+    // Keep legacy anchors so older Ruwa versions can still open a saved theme.
+    settings.setValue(QStringLiteral("fonts/uiSize"), sizes.body);
+    settings.setValue(QStringLiteral("fonts/codeSize"), sizes.code);
+    settings.setValue(QStringLiteral("fonts/titleSize"), sizes.h4);
 }
 
 ThemeManager::ThemeManager()
@@ -66,8 +118,6 @@ void ThemeManager::initialize()
     // Initialize resource managers
     ResourceManager::instance().initialize();
     FontManager::instance().initialize();
-    FontManager::instance().applyToApplication();
-
     // Load presets
     loadBuiltInPresets();
     loadCustomPresets();
@@ -175,10 +225,8 @@ void ThemeManager::loadCustomPresets()
             = settings.value("fonts/code", FontFamilyNames::JetBrainsMono).toString();
         preset.fonts.titleFont
             = settings.value("fonts/title", FontFamilyNames::IBMPlexSansCondensed).toString();
-        preset.fonts.uiSize = settings.value("fonts/uiSize", 9).toInt();
-        preset.fonts.codeSize = settings.value("fonts/codeSize", 9).toInt();
-        preset.fonts.titleSize = settings.value("fonts/titleSize", 16).toInt();
-        preset.fonts = migratedThemeFonts(preset.fonts);
+        preset.fonts.sizes = loadThemeFontSizes(settings);
+        preset.fonts = normalizedThemeFonts(preset.fonts);
 
         settings.endGroup();
 
@@ -245,9 +293,7 @@ void ThemeManager::saveCustomPresets()
         settings.setValue("fonts/ui", preset.fonts.uiFont);
         settings.setValue("fonts/code", preset.fonts.codeFont);
         settings.setValue("fonts/title", preset.fonts.titleFont);
-        settings.setValue("fonts/uiSize", preset.fonts.uiSize);
-        settings.setValue("fonts/codeSize", preset.fonts.codeSize);
-        settings.setValue("fonts/titleSize", preset.fonts.titleSize);
+        saveThemeFontSizes(settings, preset.fonts.sizes);
 
         settings.endGroup();
     }
@@ -406,7 +452,8 @@ void ThemeManager::applyColorsFromPreset(const ThemePreset& preset)
     FontManager::instance().setUIFontFamily(m_colors.fonts.uiFont);
     FontManager::instance().setCodeFontFamily(m_colors.fonts.codeFont);
     FontManager::instance().setTitleFontFamily(m_colors.fonts.titleFont);
-    FontManager::instance().applyToApplication();
+    FontManager::instance().applyToApplication(
+        scaledFontSize(m_colors.fonts.sizes.value(ThemeFontRole::Body)));
 }
 
 ThemeColors ThemeManager::colorsForPreset(const ThemePreset& preset)
@@ -427,12 +474,11 @@ ThemeColors ThemeManager::colorsForPreset(const ThemePreset& preset)
     colors.info = preset.info;
     colors.accent = preset.accent.isValid() ? preset.accent : QColor(124, 92, 252);
     colors.isDark = preset.isDark;
-    colors.fonts = migratedThemeFonts(preset.fonts);
+    colors.fonts = normalizedThemeFonts(preset.fonts);
     return colors;
 }
 
-void ThemeManager::withColorOverride(
-    const ThemeColors& colors, const std::function<void()>& render)
+void ThemeManager::withColorOverride(const ThemeColors& colors, const std::function<void()>& render)
 {
     if (!render) {
         return;
@@ -489,6 +535,7 @@ void ThemeManager::setScaleIndex(int index)
 
     static const qreal scaleFactors[] = { 0.85, 1.0, 1.15 };
     m_scaleFactor = scaleFactors[index];
+    FontManager::instance().applyToApplication(fontSize(ThemeFontRole::Body));
 
     // Scale affects per-tab layout/sizing too; route through the same per-tab
     // refresh path so background tabs defer + flush on activation.
@@ -527,7 +574,7 @@ void ThemeManager::addCustomPreset(const ThemePreset& preset)
 
     ThemePreset newPreset = preset;
     newPreset.isBuiltIn = false;
-    newPreset.fonts = migratedThemeFonts(newPreset.fonts);
+    newPreset.fonts = normalizedThemeFonts(newPreset.fonts);
 
     m_presets.append(newPreset);
     saveCustomPresets();
@@ -540,7 +587,7 @@ void ThemeManager::updateCustomPreset(const ThemePreset& preset)
     for (int i = 0; i < m_presets.size(); ++i) {
         if (m_presets[i].id == preset.id && !m_presets[i].isBuiltIn) {
             ThemePreset updatedPreset = preset;
-            updatedPreset.fonts = migratedThemeFonts(updatedPreset.fonts);
+            updatedPreset.fonts = normalizedThemeFonts(updatedPreset.fonts);
             m_presets[i] = updatedPreset;
             m_presets[i].isBuiltIn = false;
 

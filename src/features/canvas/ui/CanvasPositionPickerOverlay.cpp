@@ -118,9 +118,7 @@ void CanvasPositionPickerOverlay::applyTheme()
     }
 
     if (m_label) {
-        QFont font = colors.fonts.getUIFont(theme.scaledFontSize(10));
-        font.setWeight(QFont::DemiBold);
-        m_label->setFont(font);
+        m_label->setFont(theme.font(ruwa::ui::core::ThemeFontRole::Label, QFont::DemiBold));
         m_label->setStyleSheet(QStringLiteral(
             "QLabel#canvasPositionPickerLabel { background: transparent; color: rgb(%1, %2, %3); }")
                 .arg(colors.text.red())

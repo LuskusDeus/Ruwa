@@ -179,15 +179,15 @@ void AnimatedTabWidget::updateThemeLoadingOverlayColors()
         return;
     }
 
-    const auto& colors = ruwa::ui::core::ThemeManager::instance().colors();
+    const auto& theme = ruwa::ui::core::ThemeManager::instance();
+    const auto& colors = theme.colors();
+    m_themeLoadingLabel->setFont(theme.font(ruwa::ui::core::ThemeFontRole::H5, QFont::Medium));
     m_themeLoadingOverlay->setStyleSheet(QString(R"(
         QWidget {
             background-color: %1;
         }
         QLabel {
             color: %2;
-            font-size: 14px;
-            font-weight: 500;
         }
     )")
             .arg(colors.background.name(), colors.text.name()));

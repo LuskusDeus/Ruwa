@@ -46,9 +46,6 @@ constexpr int kBaseEmptyTextSpacing = 2;
 constexpr int kBaseActionSpacing = 6;
 constexpr int kBasePreviewWidth = 84;
 constexpr int kBaseIconSize = 24;
-constexpr int kBaseTitlePixelSize = 12;
-constexpr int kBaseBodyPixelSize = 11;
-constexpr int kBaseMetaPixelSize = 10;
 constexpr int kBaseButtonHeight = 24;
 
 QString defaultDialogFilter()
@@ -668,9 +665,7 @@ void ImageUploadCardWidget::updateScaledSizes()
         if (!button) {
             continue;
         }
-        QFont buttonFont = button->font();
-        buttonFont.setPixelSize(theme.scaled(kBaseMetaPixelSize));
-        buttonFont.setWeight(QFont::Medium);
+        QFont buttonFont = theme.font(ThemeFontRole::Label, QFont::Medium);
         button->setFont(buttonFont);
         button->setBannerBaseHeight(kBaseButtonHeight);
         button->setBaseMinimumWidth(72);
@@ -678,18 +673,14 @@ void ImageUploadCardWidget::updateScaledSizes()
         button->setFixedHeight(buttonHeight);
     }
 
-    QFont titleFont = m_emptyTitleLabel->font();
-    titleFont.setPixelSize(theme.scaled(kBaseTitlePixelSize));
-    titleFont.setWeight(QFont::DemiBold);
+    QFont titleFont = theme.font(ThemeFontRole::H6, QFont::DemiBold);
     m_emptyTitleLabel->setFont(titleFont);
     m_nameLabel->setFont(titleFont);
 
-    QFont bodyFont = m_emptyDescriptionLabel->font();
-    bodyFont.setPixelSize(theme.scaled(kBaseBodyPixelSize));
+    QFont bodyFont = theme.font(ThemeFontRole::BodyLarge);
     m_emptyDescriptionLabel->setFont(bodyFont);
 
-    QFont metaFont = m_metaLabel->font();
-    metaFont.setPixelSize(theme.scaled(kBaseMetaPixelSize));
+    QFont metaFont = theme.font(ThemeFontRole::Label);
     m_metaLabel->setFont(metaFont);
 
     const int iconSize = theme.scaled(kBaseIconSize);

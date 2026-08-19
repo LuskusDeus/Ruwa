@@ -2306,8 +2306,7 @@ bool CanvasPanel::applyTextLayerEdit(
     ruwa::core::layers::applyTextLayerEdit(*layer->textData, edit, range.first, range.second);
 
     const auto newTypography = ruwa::core::layers::captureTextTypography(*layer->textData);
-    const bool changed
-        = oldRuns != layer->textData->styleRuns || oldTypography != newTypography;
+    const bool changed = oldRuns != layer->textData->styleRuns || oldTypography != newTypography;
     const bool closesRun = !live && m_textEditInteraction.active;
     if (!changed && !closesRun) {
         return false; // the value was already what the user asked for
@@ -2322,9 +2321,9 @@ bool CanvasPanel::applyTextLayerEdit(
         flushTextEditInteraction();
     } else if (!live && !editingThisLayer) {
         if (auto* undo = undoManagerOrNull()) {
-            auto command = std::make_unique<aether::TextLayerContentCommand>(m_layerModel, id,
-                oldText, layer->textData->text, oldRuns, layer->textData->styleRuns,
-                layer->textData->transform, layer->textData->transform,
+            auto command = std::make_unique<aether::TextLayerContentCommand>(
+                m_layerModel, id, oldText, layer->textData->text, oldRuns,
+                layer->textData->styleRuns, layer->textData->transform, layer->textData->transform,
                 [this]() { requestRender(); }, [this]() { notifyContentChanged(); });
             command->setTypography(oldTypography, newTypography);
             command->setLabel(ruwa::core::layers::textLayerEditLabel(edit.property));
@@ -2368,10 +2367,11 @@ void CanvasPanel::flushTextEditInteraction()
     if (!undo) {
         return;
     }
-    auto command = std::make_unique<aether::TextLayerContentCommand>(m_layerModel,
-        interaction.layerId, interaction.oldText, layer->textData->text, interaction.oldRuns,
-        layer->textData->styleRuns, interaction.oldTransform, layer->textData->transform,
-        [this]() { requestRender(); }, [this]() { notifyContentChanged(); });
+    auto command = std::make_unique<aether::TextLayerContentCommand>(
+        m_layerModel, interaction.layerId, interaction.oldText, layer->textData->text,
+        interaction.oldRuns, layer->textData->styleRuns, interaction.oldTransform,
+        layer->textData->transform, [this]() { requestRender(); },
+        [this]() { notifyContentChanged(); });
     command->setTypography(interaction.oldTypography, newTypography);
     command->setLabel(ruwa::core::layers::textLayerEditLabel(interaction.property));
     undo->push(std::move(command));
@@ -2964,21 +2964,27 @@ bool CanvasPanel::isGLContentReady() const
 
 void CanvasPanel::onThemeChanged()
 {
+    const auto& theme = ruwa::ui::core::ThemeManager::instance();
+    if (m_loadingTitleLabel) {
+        m_loadingTitleLabel->setFont(
+            theme.font(ruwa::ui::core::ThemeFontRole::H3, QFont::DemiBold));
+    }
+    if (m_loadingStatusLabel) {
+        m_loadingStatusLabel->setFont(theme.font(ruwa::ui::core::ThemeFontRole::H6));
+    }
+
     if (m_loadingOverlay && m_loadingOverlay->isVisible()) {
-        const auto& colors = ruwa::ui::core::ThemeManager::instance().colors();
+        const auto& colors = theme.colors();
         m_loadingOverlay->setStyleSheet(QString(R"(
             QWidget {
                 background-color: %1;
             }
             QLabel#canvasLoadingTitle {
                 color: %2;
-                font-size: 18px;
-                font-weight: 600;
                 background: transparent;
             }
             QLabel#canvasLoadingStatus {
                 color: %3;
-                font-size: 12px;
                 background: transparent;
             }
         )")

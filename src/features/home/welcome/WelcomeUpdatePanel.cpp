@@ -25,9 +25,6 @@ namespace {
 const int BASE_LAYOUT_PADDING = 24;
 const int BASE_LAYOUT_SPACING = 8;
 const int BASE_BUTTON_SPACING = 8;
-const int BASE_EYEBROW_FONT_SIZE = 10;
-const int BASE_TITLE_FONT_SIZE = 19;
-const int BASE_DESC_FONT_SIZE = 12;
 const int BASE_BORDER_RADIUS = 12;
 const int BACKDROP_BLUR_RADIUS = 25;
 constexpr qreal BUTTON_SIZE_SCALE = 0.85;
@@ -109,9 +106,7 @@ void WelcomeUpdatePanel::setupUI()
 
     m_eyebrowLabel = new QLabel(tr("UPDATE AVAILABLE"), this);
     m_eyebrowLabel->setAttribute(Qt::WA_TranslucentBackground);
-    QFont eyebrowFont
-        = theme.colors().fonts.getUIFont(theme.scaledFontSize(BASE_EYEBROW_FONT_SIZE));
-    eyebrowFont.setWeight(QFont::DemiBold);
+    QFont eyebrowFont = theme.font(ruwa::ui::core::ThemeFontRole::Label, QFont::DemiBold);
     eyebrowFont.setLetterSpacing(QFont::AbsoluteSpacing, theme.scaled(1));
     m_eyebrowLabel->setFont(eyebrowFont);
     m_mainLayout->addWidget(m_eyebrowLabel);
@@ -119,15 +114,13 @@ void WelcomeUpdatePanel::setupUI()
     m_titleLabel = new QLabel(this);
     m_titleLabel->setAttribute(Qt::WA_TranslucentBackground);
     m_titleLabel->setWordWrap(true);
-    QFont titleFont = theme.colors().fonts.getTitleFont(theme.scaledFontSize(BASE_TITLE_FONT_SIZE));
-    m_titleLabel->setFont(titleFont);
+    m_titleLabel->setFont(theme.font(ruwa::ui::core::ThemeFontRole::H3, QFont::Bold));
     m_mainLayout->addWidget(m_titleLabel);
 
     m_descriptionLabel = new QLabel(this);
     m_descriptionLabel->setAttribute(Qt::WA_TranslucentBackground);
     m_descriptionLabel->setWordWrap(true);
-    m_descriptionLabel->setFont(
-        theme.colors().fonts.getUIFont(theme.scaledFontSize(BASE_DESC_FONT_SIZE)));
+    m_descriptionLabel->setFont(theme.font(ruwa::ui::core::ThemeFontRole::H6));
     m_mainLayout->addWidget(m_descriptionLabel);
 
     m_mainLayout->addStretch();
@@ -256,19 +249,15 @@ void WelcomeUpdatePanel::updateScaledSizes()
     }
 
     if (m_eyebrowLabel) {
-        QFont eyebrowFont
-            = theme.colors().fonts.getUIFont(theme.scaledFontSize(BASE_EYEBROW_FONT_SIZE));
-        eyebrowFont.setWeight(QFont::DemiBold);
+        QFont eyebrowFont = theme.font(ruwa::ui::core::ThemeFontRole::Label, QFont::DemiBold);
         eyebrowFont.setLetterSpacing(QFont::AbsoluteSpacing, theme.scaled(1));
         m_eyebrowLabel->setFont(eyebrowFont);
     }
     if (m_titleLabel) {
-        m_titleLabel->setFont(
-            theme.colors().fonts.getTitleFont(theme.scaledFontSize(BASE_TITLE_FONT_SIZE)));
+        m_titleLabel->setFont(theme.font(ruwa::ui::core::ThemeFontRole::H3, QFont::Bold));
     }
     if (m_descriptionLabel) {
-        m_descriptionLabel->setFont(
-            theme.colors().fonts.getUIFont(theme.scaledFontSize(BASE_DESC_FONT_SIZE)));
+        m_descriptionLabel->setFont(theme.font(ruwa::ui::core::ThemeFontRole::H6));
     }
 }
 

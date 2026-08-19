@@ -95,7 +95,7 @@ struct WidgetStyle {
         // Content
         style.content.iconPosition = IconPosition::None;
         style.content.textAlignment = ContentAlignment::Center;
-        style.content.baseFontSize = 9;
+        style.content.fontRole = ThemeFontRole::Body;
         style.content.textColor = ColorSource::TextMuted;
         style.content.textHoverColor = ColorSource::Text;
         style.content.textActiveColor = ColorSource::TextOnPrimary;
@@ -255,7 +255,7 @@ struct WidgetStyle {
 
         // Content padding
         style.content.basePadding = { 16, 12, 16, 12 };
-        style.content.baseFontSize = 10;
+        style.content.fontRole = ThemeFontRole::Label;
 
         return style;
     }

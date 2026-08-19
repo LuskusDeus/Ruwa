@@ -205,8 +205,7 @@ QSize ThemePreviewWidget::previewSizeHint() const
     const int contentBarSpacing = mgr.scaled(BASE_CONTENT_BAR_SPACING);
     const int contentBar2Height = mgr.scaled(BASE_CONTENT_BAR2_HEIGHT);
 
-    QFont nameFont = font();
-    nameFont.setPointSize(mgr.scaledFontSize(8));
+    QFont nameFont = mgr.font(ruwa::ui::core::ThemeFontRole::Small);
     nameFont.setBold(true);
     const QFontMetrics nameMetrics(nameFont);
     const int nameHeight = qMax(mgr.scaled(BASE_NAME_HEIGHT), nameMetrics.height());
@@ -235,8 +234,7 @@ void ThemePreviewWidget::drawContentLayer(QPainter& painter, const QRectF& rect)
     const int padding = mgr.scaled(BASE_PADDING);
     const int nameRightPadding = mgr.scaled(BASE_NAME_RIGHT_PADDING);
 
-    QFont nameFont = font();
-    nameFont.setPointSize(mgr.scaledFontSize(8));
+    QFont nameFont = mgr.font(ruwa::ui::core::ThemeFontRole::Small);
     nameFont.setBold(activeProgress() > 0.5);
     const QFontMetrics nameMetrics(nameFont);
     const int nameHeight = qMax(mgr.scaled(BASE_NAME_HEIGHT), nameMetrics.height());

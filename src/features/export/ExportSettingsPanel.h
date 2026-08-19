@@ -67,6 +67,7 @@ private:
 
     QLabel* m_titleIconLabel = nullptr;
     QLabel* m_titleLabel = nullptr;
+    QList<QLabel*> m_sectionLabels;
     QList<QLabel*> m_sizeLabels;
     QLabel* m_estimatedSizeTitleLabel = nullptr;
     QLabel* m_estimatedSizeLabel = nullptr;

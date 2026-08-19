@@ -40,8 +40,6 @@ const int BASE_MIN_WIDTH = 400;
 const int BASE_LAYOUT_PADDING = 40;
 const int BASE_LAYOUT_SPACING = 16;
 const int BASE_BUTTON_SPACING = 12;
-const int BASE_TITLE_FONT_SIZE = 32;
-const int BASE_SUBTITLE_FONT_SIZE = 14;
 const int BASE_BORDER_RADIUS = 12;
 const int BASE_OPEN_BUTTON_BLUR_PAD = 10;
 const int OPEN_BUTTON_BLUR_DOWNSCALE = 4;
@@ -431,14 +429,12 @@ void WelcomeBanner::setupUI()
 
     m_titleLabel = new QLabel(tr("Digital Painting Reimagined"), this);
     m_titleLabel->setAttribute(Qt::WA_TranslucentBackground);
-    m_titleLabel->setFont(
-        theme.colors().fonts.getTitleFont(theme.scaledFontSize(BASE_TITLE_FONT_SIZE)));
+    m_titleLabel->setFont(theme.font(ruwa::ui::core::ThemeFontRole::H0, QFont::Bold));
     m_mainLayout->addWidget(m_titleLabel);
 
     m_subtitleLabel = new QLabel(tr("Free, open-source, and limitless."), this);
     m_subtitleLabel->setAttribute(Qt::WA_TranslucentBackground);
-    m_subtitleLabel->setFont(
-        theme.colors().fonts.getUIFont(theme.scaledFontSize(BASE_SUBTITLE_FONT_SIZE)));
+    m_subtitleLabel->setFont(theme.font(ruwa::ui::core::ThemeFontRole::H5));
     m_mainLayout->addWidget(m_subtitleLabel);
 
     m_mainLayout->addStretch();
@@ -525,13 +521,11 @@ void WelcomeBanner::updateScaledSizes()
     }
 
     if (m_titleLabel) {
-        m_titleLabel->setFont(
-            theme.colors().fonts.getTitleFont(theme.scaledFontSize(BASE_TITLE_FONT_SIZE)));
+        m_titleLabel->setFont(theme.font(ruwa::ui::core::ThemeFontRole::H0, QFont::Bold));
     }
 
     if (m_subtitleLabel) {
-        m_subtitleLabel->setFont(
-            theme.colors().fonts.getUIFont(theme.scaledFontSize(BASE_SUBTITLE_FONT_SIZE)));
+        m_subtitleLabel->setFont(theme.font(ruwa::ui::core::ThemeFontRole::H5));
     }
 
     updateSplitLayout();

@@ -130,8 +130,7 @@ void CategoryHeader::paintEvent(QPaintEvent* event)
     painter.restore();
 
     // Title text
-    QFont titleFont = font();
-    titleFont.setPointSize(theme.scaledFontSize(9));
+    QFont titleFont = theme.font(ruwa::ui::core::ThemeFontRole::Body);
     titleFont.setBold(true);
     titleFont.setCapitalization(QFont::AllUppercase);
     painter.setFont(titleFont);

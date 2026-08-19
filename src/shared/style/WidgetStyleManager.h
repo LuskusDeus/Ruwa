@@ -148,6 +148,11 @@ public:
     {
         return ThemeManager::instance().scaledFontSize(baseSize);
     }
+    int fontSize(ThemeFontRole role) const { return ThemeManager::instance().fontSize(role); }
+    QFont font(ThemeFontRole role, QFont::Weight weight = QFont::Normal) const
+    {
+        return ThemeManager::instance().font(role, weight);
+    }
 
 signals:
     /// Emitted when global settings change (widgets should update)

@@ -305,10 +305,7 @@ void BrushDynamicsPopup::updateStyles()
                 QString::number(theme.scaled(14))));
 
     if (m_titleLabel) {
-        QFont titleFont = font();
-        titleFont.setPixelSize(theme.scaled(11));
-        titleFont.setBold(true);
-        m_titleLabel->setFont(titleFont);
+        m_titleLabel->setFont(theme.font(ThemeFontRole::BodyLarge, QFont::Bold));
         m_titleLabel->setStyleSheet(QStringLiteral("QLabel { background: transparent; color: %1; }")
                 .arg(colors.text.name(QColor::HexArgb)));
     }

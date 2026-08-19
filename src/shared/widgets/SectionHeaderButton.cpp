@@ -13,6 +13,7 @@
 namespace ruwa::ui::widgets {
 
 using ruwa::ui::core::ThemeColors;
+using ruwa::ui::core::ThemeFontRole;
 using ruwa::ui::core::ThemeManager;
 using ruwa::ui::core::WidgetStyleManager;
 
@@ -33,8 +34,8 @@ SectionHeaderButton::SectionHeaderButton(QWidget* parent)
     m_expandAnimation = new QVariantAnimation(this);
     m_expandAnimation->setDuration(kExpandAnimationMs);
     m_expandAnimation->setEasingCurve(QEasingCurve::InOutCubic);
-    connect(m_expandAnimation, &QVariantAnimation::valueChanged, this,
-        [this](const QVariant& value) {
+    connect(
+        m_expandAnimation, &QVariantAnimation::valueChanged, this, [this](const QVariant& value) {
             m_expandProgress = value.toReal();
             update();
         });
@@ -102,9 +103,8 @@ void SectionHeaderButton::paintEvent(QPaintEvent* event)
     const int arrowAreaWidth = arrowSize + ThemeManager::instance().scaled(4);
     const int gapWidth = ThemeManager::instance().scaled(8);
 
-    QFont titleFont = painter.font();
-    titleFont.setPixelSize(ThemeManager::instance().scaled(11));
-    titleFont.setWeight(activeProgress() > 0.5 ? QFont::Medium : QFont::Normal);
+    QFont titleFont = ThemeManager::instance().font(
+        ThemeFontRole::BodyLarge, activeProgress() > 0.5 ? QFont::Medium : QFont::Normal);
     painter.setFont(titleFont);
 
     const int textWidth
@@ -114,8 +114,8 @@ void SectionHeaderButton::paintEvent(QPaintEvent* event)
         qMax(0, width() - leftPadding - rightPadding - arrowAreaWidth - gapWidth * 2), height());
     textRect.setWidth(qMin(textRect.width(), textWidth + ThemeManager::instance().scaled(6)));
 
-    painter.setPen(ThemeColors::interpolate(colors.textMuted, colors.text,
-        0.38 + activeProgress() * 0.34 + hoverProgress() * 0.18));
+    painter.setPen(ThemeColors::interpolate(
+        colors.textMuted, colors.text, 0.38 + activeProgress() * 0.34 + hoverProgress() * 0.18));
     painter.drawText(textRect, Qt::AlignVCenter | Qt::AlignLeft,
         painter.fontMetrics().elidedText(m_title, Qt::ElideRight, textRect.width()));
 

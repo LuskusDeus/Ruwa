@@ -4,7 +4,6 @@
 #include "RecentProjectsWidget.h"
 #include "RecentProjectItem.h"
 #include "RecentProjectCard.h"
-#include "shared/resources/FontFamilyNames.h"
 #include "shared/widgets/SegmentedOptionSelector.h"
 #include "shared/widgets/inputs/SearchBar.h"
 #include "shared/widgets/layout/SmoothScrollArea.h"
@@ -18,7 +17,6 @@
 #include <QCoreApplication>
 #include <QEvent>
 #include <QFileInfo>
-#include <QFontDatabase>
 #include <QLocale>
 #include <QVBoxLayout>
 #include <QHBoxLayout>
@@ -31,18 +29,16 @@
 
 namespace ruwa::ui::widgets {
 
+using ruwa::ui::core::ThemeFontRole;
+
 namespace {
 const int BASE_MAIN_SPACING = 16;
 constexpr const char* kRecentProjectsViewModeKey = "RecentProjects/ViewMode";
 const int BASE_HEADER_HEIGHT = 32;
 const int BASE_HEADER_SPACING = 16;
-const int BASE_TITLE_FONT_SIZE = 16;
 const int BASE_LIST_SPACING = 8;
 const int BASE_GRID_H_SPACING = 16;
 const int BASE_GRID_V_SPACING = 16;
-const int BASE_NO_RESULTS_FONT_SIZE = 10;
-const int BASE_EMPTY_STATE_FONT_SIZE = 12;
-const int BASE_ASCII_ART_FONT_SIZE = 9;
 
 constexpr const char* kNoRecentProjectsMessage = QT_TRANSLATE_NOOP(
     "ruwa::ui::widgets::RecentProjectsWidget", "It seems you haven't opened any projects recently");
@@ -87,29 +83,6 @@ QString formatRelativeDate(const QDateTime& dateTime, const char* context)
 QString formatFileSize(qint64 bytes)
 {
     return QLocale().formattedDataSize(bytes);
-}
-
-QFont getAsciiArtFont(int pointSize)
-{
-    // Prefer known monospace fonts for consistent ASCII art rendering
-    const QStringList monoFonts = {
-        ruwa::ui::core::FontFamilyNames::Consolas,
-        ruwa::ui::core::FontFamilyNames::Monaco,
-        ruwa::ui::core::FontFamilyNames::CourierNew,
-        QStringLiteral("Liberation Mono"),
-        QStringLiteral("DejaVu Sans Mono"),
-    };
-    for (const QString& name : monoFonts) {
-        if (QFontDatabase().hasFamily(name)) {
-            QFont f(name);
-            f.setPointSize(pointSize);
-            f.setStyleHint(QFont::TypeWriter);
-            return f;
-        }
-    }
-    QFont f = QFontDatabase::systemFont(QFontDatabase::FixedFont);
-    f.setPointSize(pointSize);
-    return f;
 }
 
 QPixmap loadRecentProjectIcon(
@@ -214,8 +187,7 @@ void RecentProjectsWidget::setupUI()
     // Title
     m_titleLabel = new QLabel(tr("Recent Projects"), m_headerWidget);
     const auto& theme = ruwa::ui::core::ThemeManager::instance();
-    m_titleLabel->setFont(
-        theme.colors().fonts.getTitleFont(theme.scaledFontSize(BASE_TITLE_FONT_SIZE)));
+    m_titleLabel->setFont(theme.font(ThemeFontRole::H4, QFont::Bold));
     m_titleLabel->setStyleSheet(QString("QLabel { color: %1; }").arg(colors.text.name()));
     headerLayout->addWidget(m_titleLabel);
 
@@ -334,8 +306,7 @@ void RecentProjectsWidget::updateScaledSizes()
 
     // Title font
     if (m_titleLabel) {
-        m_titleLabel->setFont(
-            theme.colors().fonts.getTitleFont(theme.scaledFontSize(BASE_TITLE_FONT_SIZE)));
+        m_titleLabel->setFont(theme.font(ThemeFontRole::H4, QFont::Bold));
     }
 
     // List layout spacing
@@ -407,7 +378,7 @@ void RecentProjectsWidget::rebuildListView()
 
             QLabel* asciiLabel
                 = new QLabel(QString::fromUtf8(kNoRecentProjectsAsciiArt), emptyStateContainer);
-            asciiLabel->setFont(getAsciiArtFont(theme.scaledFontSize(BASE_ASCII_ART_FONT_SIZE)));
+            asciiLabel->setFont(theme.font(ThemeFontRole::Code));
             asciiLabel->setStyleSheet(
                 QString("QLabel { color: %1; }").arg(colors.textMuted.name()));
             asciiLabel->setAlignment(Qt::AlignCenter);
@@ -417,8 +388,7 @@ void RecentProjectsWidget::rebuildListView()
 
             QLabel* msgLabel = new QLabel(
                 QCoreApplication::translate(ctx, kNoRecentProjectsMessage), emptyStateContainer);
-            QFont msgFont = msgLabel->font();
-            msgFont.setPointSize(theme.scaledFontSize(BASE_EMPTY_STATE_FONT_SIZE));
+            QFont msgFont = theme.font(ThemeFontRole::H6);
             msgLabel->setFont(msgFont);
             msgLabel->setStyleSheet(QString("QLabel { color: %1; }").arg(colors.textMuted.name()));
             msgLabel->setAlignment(Qt::AlignCenter);
@@ -434,8 +404,7 @@ void RecentProjectsWidget::rebuildListView()
         } else {
             // Search returned no results
             QLabel* noResultsLabel = new QLabel(tr("No projects found"), m_listContent);
-            QFont font = noResultsLabel->font();
-            font.setPointSize(theme.scaledFontSize(BASE_NO_RESULTS_FONT_SIZE));
+            QFont font = theme.font(ThemeFontRole::Label);
             noResultsLabel->setFont(font);
             noResultsLabel->setStyleSheet(
                 QString("QLabel { color: %1; }").arg(colors.textMuted.name()));
@@ -514,7 +483,7 @@ void RecentProjectsWidget::rebuildGridView()
 
             QLabel* asciiLabel
                 = new QLabel(QString::fromUtf8(kNoRecentProjectsAsciiArt), emptyStateContainer);
-            asciiLabel->setFont(getAsciiArtFont(theme.scaledFontSize(BASE_ASCII_ART_FONT_SIZE)));
+            asciiLabel->setFont(theme.font(ThemeFontRole::Code));
             asciiLabel->setStyleSheet(
                 QString("QLabel { color: %1; }").arg(colors.textMuted.name()));
             asciiLabel->setAlignment(Qt::AlignCenter);
@@ -524,8 +493,7 @@ void RecentProjectsWidget::rebuildGridView()
 
             QLabel* msgLabel = new QLabel(
                 QCoreApplication::translate(ctx, kNoRecentProjectsMessage), emptyStateContainer);
-            QFont msgFont = msgLabel->font();
-            msgFont.setPointSize(theme.scaledFontSize(BASE_EMPTY_STATE_FONT_SIZE));
+            QFont msgFont = theme.font(ThemeFontRole::H6);
             msgLabel->setFont(msgFont);
             msgLabel->setStyleSheet(QString("QLabel { color: %1; }").arg(colors.textMuted.name()));
             msgLabel->setAlignment(Qt::AlignCenter);
@@ -542,8 +510,7 @@ void RecentProjectsWidget::rebuildGridView()
         } else {
             // Search returned no results
             QLabel* noResultsLabel = new QLabel(tr("No projects found"), m_gridContent);
-            QFont font = noResultsLabel->font();
-            font.setPointSize(theme.scaledFontSize(BASE_NO_RESULTS_FONT_SIZE));
+            QFont font = theme.font(ThemeFontRole::Label);
             noResultsLabel->setFont(font);
             noResultsLabel->setStyleSheet(
                 QString("QLabel { color: %1; }").arg(colors.textMuted.name()));

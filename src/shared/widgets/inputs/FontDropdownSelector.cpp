@@ -184,13 +184,15 @@ public:
         painter->drawRoundedRect(QRectF(previewRect), 5, 5);
 
         QFont previewFont(family);
-        previewFont.setPointSize(12);
+        previewFont.setPointSize(
+            ruwa::ui::core::ThemeManager::instance().fontSize(ruwa::ui::core::ThemeFontRole::H6));
         painter->setFont(previewFont);
         painter->setPen(colors.text);
         painter->drawText(previewRect, Qt::AlignCenter, QStringLiteral("Aa"));
 
         QFont nameFont(family);
-        nameFont.setPointSize(9);
+        nameFont.setPointSize(
+            ruwa::ui::core::ThemeManager::instance().fontSize(ruwa::ui::core::ThemeFontRole::Body));
         painter->setFont(nameFont);
         painter->setPen(colors.text);
         const QRect nameRect(option.rect.left() + 74, option.rect.top(), option.rect.width() - 104,
@@ -362,10 +364,7 @@ public:
 
     void setOnPopupHidden(std::function<void()> cb) { m_onPopupHidden = std::move(cb); }
 
-    void setOnFamilyHovered(std::function<void(QString)> cb)
-    {
-        m_onFamilyHovered = std::move(cb);
-    }
+    void setOnFamilyHovered(std::function<void(QString)> cb) { m_onFamilyHovered = std::move(cb); }
 
     int preferredHeight() const
     {
@@ -874,7 +873,8 @@ void FontDropdownSelector::paintEvent(QPaintEvent* event)
         = ruwa::ui::core::ThemeColors::interpolate(textBase, textTarget, m_hoverProgress);
 
     QFont textFont = hasValue ? QFont(m_currentFamily) : font();
-    textFont.setPointSize(9);
+    textFont.setPointSize(
+        ruwa::ui::core::ThemeManager::instance().fontSize(ruwa::ui::core::ThemeFontRole::Body));
     p.setFont(textFont);
     p.setPen(textColor);
     p.drawText(QRect(10, 0, width() - 32, height()),

@@ -111,8 +111,8 @@ int menuItemPreferredWidthPx(const MenuItem& item, const QFont& baseFont)
     if (item.separator) {
         return 0;
     }
-    QFont textFont = baseFont;
-    textFont.setPointSize(9);
+    const QFont textFont
+        = ruwa::ui::core::ThemeManager::instance().font(ruwa::ui::core::ThemeFontRole::Body);
     const int textLeft = item.isToggle ? 32 : 16;
     const int textW = QFontMetrics(textFont).horizontalAdvance(item.text);
     return textLeft + textW + menuItemReservedRightPx(item, baseFont);
@@ -196,9 +196,8 @@ void MenuItemWidget::paintEvent(QPaintEvent* event)
     QColor textColor = m_item.enabled ? colors.text : colors.textDisabled();
     painter.setPen(textColor);
 
-    QFont textFont = font();
-    textFont.setPointSize(9);
-    painter.setFont(textFont);
+    painter.setFont(
+        ruwa::ui::core::ThemeManager::instance().font(ruwa::ui::core::ThemeFontRole::Body));
 
     const int reservedRight = menuItemReservedRightPx(m_item, font());
     const int textW = qMax(1, width() - textLeft - reservedRight);

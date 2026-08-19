@@ -30,8 +30,6 @@ const int BASE_MIN_WIDTH = 400;
 const int BASE_LAYOUT_PADDING = 32;
 const int BASE_LAYOUT_SPACING = 8;
 const int BASE_BUTTON_SPACING = 12;
-const int BASE_TITLE_FONT_SIZE = 26;
-const int BASE_SUBTITLE_FONT_SIZE = 13;
 const int BASE_BORDER_RADIUS = 8;
 const int BASE_TEXT_RIGHT_INSET = 88;
 const int BASE_SUBTITLE_MAX_WIDTH = 470;
@@ -40,7 +38,6 @@ const int BASE_TEXT_BLOCK_HEIGHT = 86;
 const int BASE_ACTION_BLOCK_HEIGHT = 48;
 const int BASE_PROGRESS_WIDTH_DIVISOR = 2;
 const int BASE_PROGRESS_LABEL_GAP = 12;
-const int BASE_PROGRESS_VALUE_FONT_SIZE = 11;
 const int BASE_SECONDARY_DEFAULT_MIN_WIDTH = 168;
 const int BASE_RECHECK_MIN_WIDTH = 0;
 constexpr qreal BACKGROUND_FADE_START = 1.0 / 3.0;
@@ -421,8 +418,7 @@ void UpdatesSettingsWidget::updateScaledSizes()
         m_buttonContainer->setFixedHeight(theme.scaled(BASE_ACTION_BLOCK_HEIGHT));
     }
     if (m_progressValueLabel) {
-        m_progressValueLabel->setFont(
-            theme.colors().fonts.getUIFont(theme.scaledFontSize(BASE_PROGRESS_VALUE_FONT_SIZE)));
+        m_progressValueLabel->setFont(theme.font(ruwa::ui::core::ThemeFontRole::BodyLarge));
         m_progressValueLabel->adjustSize();
     }
 
@@ -554,7 +550,7 @@ void UpdatesSettingsWidget::rebuildBackgroundCache()
     const int subtitleWidth = qMin(textWidth, theme.scaled(BASE_SUBTITLE_MAX_WIDTH));
     const QRect textBlockRect(padding, padding, textWidth, textBlockHeight);
 
-    QFont titleFont = colors.fonts.getTitleFont(theme.scaledFontSize(BASE_TITLE_FONT_SIZE));
+    const QFont titleFont = theme.font(ruwa::ui::core::ThemeFontRole::H1, QFont::Bold);
     painter.setFont(titleFont);
     painter.setPen(colors.text);
     QFontMetrics titleFm(titleFont);
@@ -566,7 +562,7 @@ void UpdatesSettingsWidget::rebuildBackgroundCache()
     painter.drawText(
         titleMeasureRect, Qt::AlignLeft | Qt::AlignTop | Qt::TextWordWrap, m_titleText);
 
-    QFont subtitleFont = colors.fonts.getUIFont(theme.scaledFontSize(BASE_SUBTITLE_FONT_SIZE));
+    const QFont subtitleFont = theme.font(ruwa::ui::core::ThemeFontRole::H6);
     painter.setFont(subtitleFont);
     painter.setPen(colors.textMuted);
     QFontMetrics subtitleFm(subtitleFont);

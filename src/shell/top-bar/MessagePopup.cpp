@@ -364,9 +364,7 @@ void MessagePopup::rebuildContent()
     QLabel* label = new QLabel(m_message, this);
     label->setWordWrap(true);
     label->setAlignment(Qt::AlignLeft | Qt::AlignTop);
-    QFont textFont = label->font();
-    textFont.setPointSize(theme.scaledFontSize(9));
-    label->setFont(textFont);
+    label->setFont(theme.font(ruwa::ui::core::ThemeFontRole::Body));
     label->setStyleSheet(QString("color: %1;").arg(colors.text.name()));
     label->setTextInteractionFlags(Qt::NoTextInteraction);
     m_layout->addWidget(label);

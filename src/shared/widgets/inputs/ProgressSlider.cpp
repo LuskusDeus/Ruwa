@@ -12,7 +12,6 @@ namespace ruwa::ui::widgets {
 namespace {
 const int BASE_TRACK_HEIGHT = 8;
 const int BASE_RADIUS = 4;
-const int BASE_FONT_SIZE = 9;
 const int BASE_TEXT_TRACK_GAP = 2;
 const int BASE_PROGRESS_ANIMATION_DURATION = 250;
 const int TRACK_DARKEN_FACTOR = 140;
@@ -94,7 +93,7 @@ void ProgressSlider::paintEvent(QPaintEvent* event)
 
     const qreal ratio = m_displayedRatio;
 
-    const int textH = m_showText ? (theme.scaledFontSize(BASE_FONT_SIZE) + 4) : 0;
+    const int textH = m_showText ? (theme.fontSize(ruwa::ui::core::ThemeFontRole::Body) + 4) : 0;
     const int trackY = textH + gap;
     QRectF trackRect(0, trackY, width(), trackH);
 
@@ -115,8 +114,7 @@ void ProgressSlider::paintEvent(QPaintEvent* event)
         const int pct = qRound(ratio * 100);
         const QString text = QString::number(pct) + QStringLiteral("%");
 
-        QFont font = painter.font();
-        font.setPointSize(theme.scaledFontSize(BASE_FONT_SIZE));
+        QFont font = theme.font(ruwa::ui::core::ThemeFontRole::Body);
         painter.setFont(font);
 
         painter.setPen(colors.textMuted);
@@ -130,7 +128,7 @@ void ProgressSlider::updateScaledSizes()
     const auto& theme = ruwa::ui::core::ThemeManager::instance();
     const int trackH = theme.scaled(BASE_TRACK_HEIGHT);
     const int gap = theme.scaled(BASE_TEXT_TRACK_GAP);
-    const int textH = m_showText ? (theme.scaledFontSize(BASE_FONT_SIZE) + 4) : 0;
+    const int textH = m_showText ? (theme.fontSize(ruwa::ui::core::ThemeFontRole::Body) + 4) : 0;
     setFixedHeight(textH + gap + trackH);
 }
 

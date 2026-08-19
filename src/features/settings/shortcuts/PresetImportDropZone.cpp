@@ -32,7 +32,6 @@ using ruwa::ui::core::ThemeManager;
 namespace {
 constexpr int BASE_HEIGHT = 56;
 constexpr int BASE_RADIUS = 10;
-constexpr int BASE_FONT = 12;
 constexpr int BASE_ICON = 16;
 constexpr int BASE_ICON_GAP = 8;
 constexpr int ANIM_MS = 140;
@@ -203,13 +202,10 @@ void PresetImportDropZone::paintEvent(QPaintEvent* /*event*/)
     const QString label = tr("Import preset…");
     const QString hint = tr("or drop a .json file here");
 
-    QFont titleFont = font();
-    titleFont.setPixelSize(theme.scaled(BASE_FONT));
-    titleFont.setWeight(QFont::DemiBold);
+    const QFont titleFont = theme.font(ruwa::ui::core::ThemeFontRole::Body, QFont::DemiBold);
     QFontMetrics titleFm(titleFont);
 
-    QFont hintFont = font();
-    hintFont.setPixelSize(theme.scaled(BASE_FONT - 2));
+    const QFont hintFont = theme.font(ruwa::ui::core::ThemeFontRole::Small);
     QFontMetrics hintFm(hintFont);
 
     const int iconPx = theme.scaled(BASE_ICON);

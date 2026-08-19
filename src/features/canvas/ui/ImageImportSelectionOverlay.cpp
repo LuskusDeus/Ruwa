@@ -147,7 +147,8 @@ protected:
         QPainter painter(this);
         painter.setRenderHint(QPainter::Antialiasing);
 
-        const auto& colors = ruwa::ui::core::ThemeManager::instance().colors();
+        const auto& theme = ruwa::ui::core::ThemeManager::instance();
+        const auto& colors = theme.colors();
         const QRectF outerRect = rect().adjusted(0.5, 0.5, -0.5, -0.5);
         const QRectF fillRect = outerRect.adjusted(1.0, 1.0, -1.0, -1.0);
         const QRectF imageRect = fillRect.adjusted(
@@ -214,10 +215,7 @@ protected:
             painter.save();
             painter.setOpacity(m_selectionProgress);
 
-            QFont pillFont = painter.font();
-            pillFont.setPointSize(std::max(8, pillFont.pointSize()));
-            pillFont.setWeight(QFont::DemiBold);
-            painter.setFont(pillFont);
+            painter.setFont(theme.font(ruwa::ui::core::ThemeFontRole::Small, QFont::DemiBold));
 
             const QString label = QCoreApplication::translate("ImageImportPreviewTile", "Selected");
             const int iconSize = 12;
@@ -669,7 +667,12 @@ QStringList ImageImportSelectionOverlay::selectedFilePaths() const
 
 void ImageImportSelectionOverlay::updateStyles()
 {
-    const auto& colors = ruwa::ui::core::ThemeManager::instance().colors();
+    const auto& theme = ruwa::ui::core::ThemeManager::instance();
+    const auto& colors = theme.colors();
+
+    if (m_titleLabel) {
+        m_titleLabel->setFont(theme.font(ruwa::ui::core::ThemeFontRole::H4, QFont::DemiBold));
+    }
 
     m_panel->setStyleSheet(QString(R"(
         QFrame#imageImportSelectionPanel {
@@ -679,8 +682,6 @@ void ImageImportSelectionOverlay::updateStyles()
         }
         QLabel#imageImportSelectionTitle {
             color: %4;
-            font-size: 16px;
-            font-weight: 600;
             background: transparent;
         }
         QWidget#imageImportSelectionScrollArea,

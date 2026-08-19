@@ -92,10 +92,8 @@ protected:
         QColor textColor = colors.textMuted;
         textColor.setAlpha(180);
         painter.setPen(textColor);
-        QFont categoryFont = font();
-        categoryFont.setFamily(colors.fonts.uiFont);
-        categoryFont.setPointSize(8);
-        categoryFont.setBold(true);
+        QFont categoryFont = ruwa::ui::core::ThemeManager::instance().font(
+            ruwa::ui::core::ThemeFontRole::Small, QFont::Bold);
         painter.setFont(categoryFont);
         painter.drawText(
             rect().adjusted(10, 0, -10, 0), Qt::AlignLeft | Qt::AlignVCenter, m_text.toUpper());
@@ -213,9 +211,8 @@ protected:
             x += 18;
         }
 
-        QFont f = font();
-        f.setFamily(colors.fonts.uiFont);
-        f.setPointSize(9);
+        QFont f
+            = ruwa::ui::core::ThemeManager::instance().font(ruwa::ui::core::ThemeFontRole::Body);
         p.setFont(f);
         p.setPen(textColor);
         p.drawText(
@@ -314,19 +311,17 @@ protected:
                 scaled);
         }
 
-        QFont titleFont = font();
-        titleFont.setFamily(colors.fonts.uiFont);
-        titleFont.setPixelSize(qMax(10, titleFont.pixelSize()));
-        titleFont.setWeight(activeProgress() > 0.5 ? QFont::DemiBold : QFont::Medium);
+        QFont titleFont
+            = ruwa::ui::core::ThemeManager::instance().font(ruwa::ui::core::ThemeFontRole::Label,
+                activeProgress() > 0.5 ? QFont::DemiBold : QFont::Medium);
         painter.setFont(titleFont);
         painter.setPen(isEnabled() ? colors.text : colors.textDisabled());
         painter.drawText(
             labelRect.toRect(), Qt::AlignLeft | Qt::AlignTop | Qt::TextSingleLine, m_item.text);
 
         if (!m_item.subtitle.isEmpty()) {
-            QFont subtitleFont = titleFont;
-            subtitleFont.setPixelSize(qMax(9, titleFont.pixelSize() - 1));
-            subtitleFont.setWeight(QFont::Normal);
+            QFont subtitleFont = ruwa::ui::core::ThemeManager::instance().font(
+                ruwa::ui::core::ThemeFontRole::Body);
             painter.setFont(subtitleFont);
             painter.setPen(colors.textMuted);
             painter.drawText(labelRect.adjusted(0, 14, 0, 0).toRect(),
@@ -1184,9 +1179,7 @@ void AnimatedComboBox::paintEvent(QPaintEvent* event)
     }
 
     p.setPen(textColor);
-    QFont f = font();
-    f.setFamily(colors.fonts.uiFont);
-    f.setPointSize(9);
+    QFont f = ruwa::ui::core::ThemeManager::instance().font(ruwa::ui::core::ThemeFontRole::Body);
     p.setFont(f);
     p.drawText(QRect(textLeft, 0, width() - textLeft - 22, height()),
         Qt::AlignVCenter | Qt::AlignLeft, text);

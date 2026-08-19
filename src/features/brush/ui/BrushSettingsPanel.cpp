@@ -36,6 +36,7 @@ using ruwa::core::brushes::BrushEngineRegistry;
 using ruwa::core::brushes::BrushManager;
 using ruwa::core::brushes::BrushSettingDef;
 using ruwa::ui::core::IconProvider;
+using ruwa::ui::core::ThemeFontRole;
 using ruwa::ui::core::ThemeManager;
 using ruwa::ui::core::WidgetStyleManager;
 using ruwa::ui::widgets::BaseStyledPanel;
@@ -417,9 +418,7 @@ void BrushSettingsPanel::rebuildSettings()
         categoryLabel->setStyleSheet(
             QStringLiteral("color: %1; background: transparent; font-weight: 600;")
                 .arg(WidgetStyleManager::instance().colors().textMuted.name(QColor::HexArgb)));
-        QFont sectionFont = categoryLabel->font();
-        sectionFont.setPixelSize(theme.scaled(10));
-        categoryLabel->setFont(sectionFont);
+        categoryLabel->setFont(theme.font(ThemeFontRole::Label, QFont::DemiBold));
 
         categoryLayout->addWidget(categoryIconLabel);
         categoryLayout->addWidget(categoryLabel, 1);
@@ -603,17 +602,11 @@ void BrushSettingsPanel::updateHeader()
 
     updateDabPreview(brushSettings ? &*brushSettings : nullptr);
 
-    QFont captionFont = m_headerCaptionLabel->font();
-    captionFont.setPixelSize(theme.scaled(9));
-    captionFont.setWeight(QFont::Medium);
-    m_headerCaptionLabel->setFont(captionFont);
+    m_headerCaptionLabel->setFont(theme.font(ThemeFontRole::Body, QFont::Medium));
     m_headerCaptionLabel->setStyleSheet(QStringLiteral("color: %1; background: transparent;")
             .arg(colors.textMuted.name(QColor::HexArgb)));
 
-    QFont nameFont = m_brushNameLabel->font();
-    nameFont.setPixelSize(theme.scaled(11));
-    nameFont.setWeight(QFont::DemiBold);
-    m_brushNameLabel->setFont(nameFont);
+    m_brushNameLabel->setFont(theme.font(ThemeFontRole::BodyLarge, QFont::DemiBold));
     m_brushNameLabel->setStyleSheet(QStringLiteral("color: %1; background: transparent;")
             .arg((hasBrush ? colors.text : colors.textMuted).name(QColor::HexArgb)));
 }

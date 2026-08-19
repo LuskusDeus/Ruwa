@@ -42,6 +42,8 @@
 
 namespace ruwa::ui::widgets {
 
+using ruwa::ui::core::ThemeFontRole;
+
 namespace {
 constexpr int kDefaultProjectWidth = 2048;
 constexpr int kDefaultProjectHeight = 2048;
@@ -60,7 +62,6 @@ const int BASE_MAIN_MARGIN_H = 36;
 const int BASE_MAIN_MARGIN_V = 28;
 const int BASE_MAIN_SPACING = 26;
 const int BASE_HEADER_SPACING = 14;
-const int BASE_TITLE_FONT_SIZE = 22;
 const int BASE_CONTENT_SPACING = 32;
 const int BASE_LEFT_COLUMN_SPACING = 12;
 /// Доп. зазор над «Create Project» (к инпутам размеров), поверх BASE_LEFT_COLUMN_SPACING.
@@ -74,9 +75,6 @@ const int BASE_FLOW_SPACING_V = 8;
 const int BASE_TAB_SPACING_H = 6;
 const int BASE_TAB_SPACING_V = 6;
 const int BASE_BUTTON_HEIGHT = 52;
-const int BASE_BUTTON_FONT_SIZE = 11;
-/// Same step as StyledInputField label (BASE_LABEL_FONT).
-const int BASE_SETTINGS_FIELD_LABEL_FONT = 9;
 const int MAX_PROJECT_NAME_CHARS = 64;
 /// Добавка к внешней высоте превью 16:9 (New Project). Масштабируется через ThemeManager::scaled —
 /// правь только это число.
@@ -1163,7 +1161,6 @@ QString NewProjectContent::formatRatio(const QSize& size) const
 void NewProjectContent::updateScaledSizes()
 {
     const auto& theme = ruwa::ui::core::ThemeManager::instance();
-    const auto& colors = theme.colors();
 
     if (QVBoxLayout* mainLayout = qobject_cast<QVBoxLayout*>(layout())) {
         const int marginH = theme.scaled(BASE_MAIN_MARGIN_H);
@@ -1173,14 +1170,12 @@ void NewProjectContent::updateScaledSizes()
     }
 
     if (m_titleLabel) {
-        m_titleLabel->setFont(
-            colors.fonts.getTitleFont(theme.scaledFontSize(BASE_TITLE_FONT_SIZE)));
+        m_titleLabel->setFont(theme.font(ThemeFontRole::H2, QFont::Bold));
     }
 
     if (m_createButton) {
         m_createButton->setFixedHeight(theme.scaled(BASE_BUTTON_HEIGHT));
-        QFont btnFont = colors.fonts.getUIFont(theme.scaledFontSize(BASE_BUTTON_FONT_SIZE));
-        btnFont.setBold(true);
+        QFont btnFont = theme.font(ThemeFontRole::BodyLarge, QFont::Bold);
         m_createButton->setFont(btnFont);
         m_createButton->updateGeometry();
     }
@@ -1190,8 +1185,7 @@ void NewProjectContent::updateScaledSizes()
         m_recentPresetsTabButton->updateGeometry();
     }
     if (m_canvasBoundsTitleLabel) {
-        QFont labelFont
-            = colors.fonts.getUIFont(theme.scaledFontSize(BASE_SETTINGS_FIELD_LABEL_FONT));
+        QFont labelFont = theme.font(ThemeFontRole::Body);
         labelFont.setWeight(QFont::Normal);
         labelFont.setLetterSpacing(QFont::AbsoluteSpacing, theme.scaled(1.5));
         m_canvasBoundsTitleLabel->setFont(labelFont);
@@ -1200,8 +1194,7 @@ void NewProjectContent::updateScaledSizes()
         if (m_backgroundColorTitleLabel)
             m_backgroundColorTitleLabel->setFont(labelFont);
     } else if (m_backgroundColorTitleLabel) {
-        QFont labelFont
-            = colors.fonts.getUIFont(theme.scaledFontSize(BASE_SETTINGS_FIELD_LABEL_FONT));
+        QFont labelFont = theme.font(ThemeFontRole::Body);
         labelFont.setWeight(QFont::Normal);
         labelFont.setLetterSpacing(QFont::AbsoluteSpacing, theme.scaled(1.5));
         m_backgroundColorTitleLabel->setFont(labelFont);

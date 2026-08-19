@@ -24,8 +24,6 @@ const int BASE_NAME_DIM_GAP = 4;
 const int BASE_NAME_LINE_HEIGHT = 20;
 const int BASE_DIM_LINE_HEIGHT = 16;
 const int BASE_PREVIEW_RADIUS = 6;
-const int BASE_NAME_FONT_SIZE = 10;
-const int BASE_DIM_FONT_SIZE = 9;
 const int BASE_MIN_TEXT_WIDTH = 72;
 const int BASE_FALLBACK_WIDTH = 200;
 const char kNewProjectPresetCtx[] = "ruwa::ui::widgets::NewProjectContent";
@@ -224,9 +222,7 @@ void ProjectPresetCard::drawContentLayer(QPainter& painter, const QRectF& rect)
 
     // Name (left)
     painter.setPen(textPrimary);
-    QFont nameFont = painter.font();
-    nameFont.setPointSize(mgr.scaledFontSize(BASE_NAME_FONT_SIZE));
-    nameFont.setBold(true);
+    QFont nameFont = mgr.font(ThemeFontRole::Label, QFont::Bold);
     painter.setFont(nameFont);
 
     QString displayName = m_nameKey;
@@ -240,9 +236,7 @@ void ProjectPresetCard::drawContentLayer(QPainter& painter, const QRectF& rect)
 
     // Dimensions (left)
     painter.setPen(textSecondary);
-    QFont dimFont = painter.font();
-    dimFont.setPointSize(mgr.scaledFontSize(BASE_DIM_FONT_SIZE));
-    dimFont.setBold(false);
+    QFont dimFont = mgr.font(ThemeFontRole::Body);
     painter.setFont(dimFont);
 
     QString dimensionsText

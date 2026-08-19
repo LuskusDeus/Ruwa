@@ -987,10 +987,7 @@ void CommandPalette::drawItem(QPainter& painter, int index, const QRectF& rect)
     }
 
     // Title
-    QFont titleFont = font();
-    titleFont.setPointSize(theme.scaledFontSize(10));
-    titleFont.setBold(true);
-    painter.setFont(titleFont);
+    painter.setFont(theme.font(ThemeFontRole::Label, QFont::Bold));
     painter.setPen(titleColor);
 
     QRectF titleRect = contentRect;
@@ -998,9 +995,7 @@ void CommandPalette::drawItem(QPainter& painter, int index, const QRectF& rect)
     painter.drawText(titleRect, Qt::AlignLeft | Qt::AlignBottom, item.title);
 
     // Category or argument hint
-    QFont categoryFont = font();
-    categoryFont.setPointSize(theme.scaledFontSize(8));
-    painter.setFont(categoryFont);
+    painter.setFont(theme.font(ThemeFontRole::Small));
     painter.setPen(categoryColor);
 
     QRectF categoryRect = contentRect;

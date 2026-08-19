@@ -114,9 +114,7 @@ void SettingsCategory::updateScaledSizes()
     }
 
     if (m_titleLabel) {
-        QFont titleFont = m_titleLabel->font();
-        titleFont.setPointSize(theme.scaledFontSize(12));
-        m_titleLabel->setFont(titleFont);
+        m_titleLabel->setFont(theme.font(ruwa::ui::core::ThemeFontRole::H6, QFont::DemiBold));
     }
 
     if (m_contentLayout) {

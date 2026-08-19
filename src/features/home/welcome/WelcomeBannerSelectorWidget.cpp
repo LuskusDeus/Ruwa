@@ -31,7 +31,6 @@ namespace {
 const int BASE_PREVIEW_MARGIN_TOP = 4;
 const int BASE_PREVIEW_SPACING = 8;
 const int BASE_SEPARATOR_MARGIN_H = 12;
-const int BASE_SEPARATOR_FONT_SIZE = 9;
 const int BASE_DIVIDER_MARGIN_TOP = 8;
 const int BASE_DIVIDER_MARGIN_BOTTOM = 6;
 // Match ShortcutsNavigatorWidget::ShortcutsSeparatorLine
@@ -840,8 +839,7 @@ void WelcomeBannerSelectorWidget::updateScaledSizes()
         const int marginH = theme.scaled(BASE_SEPARATOR_MARGIN_H);
         m_separatorLabel->setContentsMargins(marginH, 0, marginH, 0);
 
-        QFont separatorFont = m_separatorLabel->font();
-        separatorFont.setPointSize(theme.scaledFontSize(BASE_SEPARATOR_FONT_SIZE));
+        QFont separatorFont = theme.font(ruwa::ui::core::ThemeFontRole::Body);
         m_separatorLabel->setFont(separatorFont);
 
         const auto& colors = theme.colors();
@@ -880,9 +878,7 @@ void WelcomeBannerSelectorWidget::updateScaledSizes()
     }
 
     if (m_modeLabel) {
-        QFont f = m_modeLabel->font();
-        f.setBold(true);
-        f.setPointSize(theme.scaledFontSize(style().content.baseFontSize));
+        QFont f = theme.font(style().content.fontRole, QFont::Bold);
         m_modeLabel->setFont(f);
         const auto& colors = theme.colors();
         m_modeLabel->setStyleSheet(QStringLiteral("QLabel { color: %1; background: transparent; }")
@@ -890,9 +886,7 @@ void WelcomeBannerSelectorWidget::updateScaledSizes()
     }
 
     if (m_textColorLabel) {
-        QFont tf = m_textColorLabel->font();
-        tf.setBold(true);
-        tf.setPointSize(theme.scaledFontSize(style().content.baseFontSize));
+        QFont tf = theme.font(style().content.fontRole, QFont::Bold);
         m_textColorLabel->setFont(tf);
         const auto& colors = theme.colors();
         m_textColorLabel->setStyleSheet(

@@ -20,8 +20,6 @@ namespace {
 const int BASE_CONTENT_INSET = 12; // padding from widget edges to content area
 const int BASE_GHOST_RADIUS = 5; // corner radius of the dashed ghost rect
 const int BASE_ROW_GAP = 4; // gap between text rows
-const int BASE_PRESET_FONT_SIZE = 8;
-const int BASE_DIM_FONT_SIZE = 12;
 const int BASE_MARK_LEN = 10; // arm length of rounded corner mark
 const int BASE_MARK_RADIUS = 4; // inner curve radius of corner mark
 const int BASE_MARK_GAP = 4; // gap between mark anchor and ghost rect edge
@@ -406,8 +404,8 @@ void CanvasThumbnail::drawCenteredText(QPainter& painter, const QRectF& ghostRec
     const auto& colors = mgr.colors();
 
     const int rowGap = mgr.scaled(BASE_ROW_GAP);
-    const int dimFontSz = mgr.scaledFontSize(BASE_DIM_FONT_SIZE);
-    const int smallFontSz = mgr.scaledFontSize(BASE_PRESET_FONT_SIZE);
+    const int dimFontSz = mgr.fontSize(ThemeFontRole::H6);
+    const int smallFontSz = mgr.fontSize(ThemeFontRole::Small);
     const int dimH = dimFontSz + 4;
     const int smallH = smallFontSz + 2;
     const qreal metadataProgress = qBound<qreal>(0.0, m_metadataProgress, 1.0);
@@ -431,8 +429,7 @@ void CanvasThumbnail::drawCenteredText(QPainter& painter, const QRectF& ghostRec
     QColor metadataMuted = textMuted;
     metadataMuted.setAlphaF(textMuted.alphaF() * metadataProgress);
 
-    QFont smallFont = painter.font();
-    smallFont.setPointSize(smallFontSz);
+    QFont smallFont = mgr.font(ThemeFontRole::Small);
     smallFont.setBold(false);
 
     auto drawScaledText = [&](const QRectF& textRect, const QFont& font, const QColor& color,
@@ -461,9 +458,7 @@ void CanvasThumbnail::drawCenteredText(QPainter& painter, const QRectF& ghostRec
     }
 
     // Row 2: dimensions
-    QFont dimFont = smallFont;
-    dimFont.setPointSize(dimFontSz);
-    dimFont.setBold(true);
+    QFont dimFont = mgr.font(ThemeFontRole::H6, QFont::Bold);
     const qreal detailsScale = 0.84 + 0.16 * metadataProgress;
     drawScaledText(QRectF(ghostRect.left(), curY, ghostRect.width(), dimH), dimFont, textMain,
         QString("%1 \u00d7 %2").arg(dispW).arg(dispH), detailsScale);

@@ -737,7 +737,8 @@ void FirstRunIntegrationWidget::stopAppearanceAnimationRetry()
 
 void FirstRunIntegrationWidget::updateTheme()
 {
-    const auto& colors = ruwa::ui::core::ThemeManager::instance().colors();
+    const auto& theme = ruwa::ui::core::ThemeManager::instance();
+    const auto& colors = theme.colors();
     const QString style
         = QStringLiteral("FirstRunIntegrationWidget, "
                          "QWidget#FirstRunScrollArea, "
@@ -771,24 +772,19 @@ void FirstRunIntegrationWidget::updateTheme()
     m_heroGlassPanel->update();
     m_finishSection->update();
 
-    const QPixmap logo = ruwa::ui::core::ThemeManager::instance().icons().getApplicationLogoPixmap(
-        QSize(kHeroLogoSize, kHeroLogoSize));
+    const QPixmap logo
+        = theme.icons().getApplicationLogoPixmap(QSize(kHeroLogoSize, kHeroLogoSize));
     m_heroLogo->setPixmap(logo);
 
-    QFont heroFont = colors.fonts.getTitleFont();
-    heroFont.setPixelSize(48);
-    m_heroTitle->setFont(heroFont);
+    m_heroTitle->setFont(theme.font(ruwa::ui::core::ThemeFontRole::Display, QFont::Bold));
 
-    QFont heroDescriptionFont = colors.fonts.getUIFont();
-    heroDescriptionFont.setPixelSize(17);
+    const QFont heroDescriptionFont
+        = colors.fonts.getUIFont(theme.fontSize(ruwa::ui::core::ThemeFontRole::H5));
     m_heroDescription->setFont(heroDescriptionFont);
 
-    QFont finishDescriptionFont = colors.fonts.getUIFont();
-    finishDescriptionFont.setPixelSize(14);
-    m_finishDescription->setFont(finishDescriptionFont);
+    m_finishDescription->setFont(theme.font(ruwa::ui::core::ThemeFontRole::BodyLarge));
 
-    QFont sectionFont = colors.fonts.getTitleFont();
-    sectionFont.setPixelSize(22);
+    const QFont sectionFont = theme.font(ruwa::ui::core::ThemeFontRole::H2, QFont::Bold);
     for (QLabel* label : { m_appearanceTitle, m_editorTitle, m_performanceTitle }) {
         label->setFont(sectionFont);
     }

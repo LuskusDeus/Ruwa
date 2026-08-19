@@ -31,8 +31,6 @@ namespace {
 constexpr int BASE_ROW_HEIGHT = 62;
 constexpr int BASE_PADDING_H = 14;
 constexpr int BASE_PADDING_V = 10;
-constexpr int BASE_TITLE_FONT = 13;
-constexpr int BASE_META_FONT = 10;
 constexpr int BASE_TITLE_META_GAP = 4;
 constexpr int BASE_RADIUS = 10;
 constexpr int BASE_ACTION_BTN = 26; ///< circular hit area for inline buttons
@@ -317,10 +315,7 @@ void PresetItemWidget::startRenameEditing()
     }
     const auto& theme = ThemeManager::instance();
     const auto& colors = theme.colors();
-    QFont f = m_editor->font();
-    f.setPixelSize(theme.scaled(BASE_TITLE_FONT));
-    f.setWeight(QFont::DemiBold);
-    m_editor->setFont(f);
+    m_editor->setFont(theme.font(ruwa::ui::core::ThemeFontRole::Label, QFont::DemiBold));
     m_editor->setStyleSheet(
         QStringLiteral("QLineEdit { color: %1; background: %2; border: 1px solid %3; "
                        "border-radius: 4px; padding: 1px 4px; }")
@@ -346,8 +341,7 @@ void PresetItemWidget::positionEditor()
     QFontMetrics fm(f);
     const int titleH = fm.height();
 
-    QFont metaFont = font();
-    metaFont.setPixelSize(theme.scaled(BASE_META_FONT));
+    const QFont metaFont = theme.font(ruwa::ui::core::ThemeFontRole::Small);
     const int metaH = QFontMetrics(metaFont).height();
     const int gap = theme.scaled(BASE_TITLE_META_GAP);
     const int totalH = titleH + gap + metaH;
@@ -435,13 +429,10 @@ void PresetItemWidget::paintEvent(QPaintEvent* /*event*/)
     // === Text layout ===
     const int paddingH = theme.scaled(BASE_PADDING_H);
 
-    QFont titleFont = font();
-    titleFont.setPixelSize(theme.scaled(BASE_TITLE_FONT));
-    titleFont.setWeight(QFont::DemiBold);
+    const QFont titleFont = theme.font(ruwa::ui::core::ThemeFontRole::Label, QFont::DemiBold);
     QFontMetrics titleFm(titleFont);
 
-    QFont metaFont = font();
-    metaFont.setPixelSize(theme.scaled(BASE_META_FONT));
+    const QFont metaFont = theme.font(ruwa::ui::core::ThemeFontRole::Small);
     QFontMetrics metaFm(metaFont);
 
     const int titleH = titleFm.height();

@@ -126,7 +126,7 @@ public:
         m_verticalPadding = theme.scaled(kVerticalPadding);
         m_shadowMargin = theme.scaled(kShadowMargin);
 
-        QFont font = colors.fonts.getUIFont(theme.scaledFontSize(9));
+        QFont font = theme.font(ruwa::ui::core::ThemeFontRole::Body);
         m_document.setDefaultFont(font);
         m_document.setDefaultStyleSheet(
             QStringLiteral("body { color: %1; } a { color: %2; text-decoration: none; }")

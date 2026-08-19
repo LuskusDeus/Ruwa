@@ -1114,7 +1114,8 @@ void WorkspaceTab::onInitialize()
 
 void WorkspaceTab::updateThemeColors()
 {
-    const auto& colors = ruwa::ui::core::ThemeManager::instance().colors();
+    const auto& theme = ruwa::ui::core::ThemeManager::instance();
+    const auto& colors = theme.colors();
 
     setAutoFillBackground(true);
     QPalette pal = palette();
@@ -1128,15 +1129,19 @@ void WorkspaceTab::updateThemeColors()
             }
             QLabel#workspaceLoadingTitle {
                 color: %2;
-                font-size: 18px;
-                font-weight: 600;
             }
             QLabel#workspaceLoadingStatus {
                 color: %3;
-                font-size: 12px;
             }
         )")
                 .arg(colors.background.name(), colors.text.name(), colors.textMuted.name()));
+    }
+    if (m_loadingTitleLabel) {
+        m_loadingTitleLabel->setFont(
+            theme.font(ruwa::ui::core::ThemeFontRole::H3, QFont::DemiBold));
+    }
+    if (m_loadingStatusLabel) {
+        m_loadingStatusLabel->setFont(theme.font(ruwa::ui::core::ThemeFontRole::H6));
     }
     if (m_loadingIndicator) {
         m_loadingIndicator->setAccentColor(colors.primary);
@@ -2024,8 +2029,7 @@ void WorkspaceTab::setupPanels()
             if (!canvasPanel || !layerModel) {
                 return std::nullopt;
             }
-            if (canvasPanel->textEditingLayerId()
-                != layerModel->selectedLayerId()) {
+            if (canvasPanel->textEditingLayerId() != layerModel->selectedLayerId()) {
                 return std::nullopt;
             }
             return canvasPanel->textEditingSelection();
@@ -2602,7 +2606,8 @@ void WorkspaceTab::saveDockLayoutNow()
 
 void WorkspaceTab::setupToolbar()
 {
-    const auto& colors = ruwa::ui::core::ThemeManager::instance().colors();
+    const auto& theme = ruwa::ui::core::ThemeManager::instance();
+    const auto& colors = theme.colors();
 
     m_toolbar = new QWidget(this);
     m_toolbar->setFixedHeight(40);
@@ -2620,10 +2625,7 @@ void WorkspaceTab::setupToolbar()
 
     // Project name
     QLabel* nameLabel = new QLabel(m_projectName, m_toolbar);
-    QFont font = nameLabel->font();
-    font.setPointSize(10);
-    font.setBold(true);
-    nameLabel->setFont(font);
+    nameLabel->setFont(theme.font(ruwa::ui::core::ThemeFontRole::Label, QFont::Bold));
     nameLabel->setStyleSheet(
         QString("QLabel { color: %1; border: none; }").arg(colors.text.name()));
     layout->addWidget(nameLabel);

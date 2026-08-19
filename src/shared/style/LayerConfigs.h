@@ -187,7 +187,7 @@ struct ContentLayerConfig {
 
     // Text settings
     ContentAlignment textAlignment = ContentAlignment::Left;
-    int baseFontSize = 9;
+    ThemeFontRole fontRole = ThemeFontRole::Body;
     bool boldWhenActive = false;
 
     // Spacing

@@ -168,15 +168,9 @@ void BrushEditorTopBar::updateScaledSizes()
         titleLayout->setSpacing(theme.scaled(BaseTitleGap));
     }
 
-    QFont editorFont = m_editorLabel->font();
-    editorFont.setPixelSize(theme.scaled(11));
-    editorFont.setWeight(QFont::DemiBold);
-    m_editorLabel->setFont(editorFont);
+    m_editorLabel->setFont(theme.font(ThemeFontRole::BodyLarge, QFont::DemiBold));
 
-    QFont titleFont = m_titleLabel->font();
-    titleFont.setPixelSize(theme.scaled(11));
-    titleFont.setWeight(QFont::Medium);
-    m_titleLabel->setFont(titleFont);
+    m_titleLabel->setFont(theme.font(ThemeFontRole::BodyLarge, QFont::Medium));
 }
 
 void BrushEditorTopBar::updateStyles()

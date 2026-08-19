@@ -1438,15 +1438,10 @@ QString LayerRowWidget::typeBadgeText() const
 
 QFont LayerRowWidget::nameDisplayFont() const
 {
-    const auto& c = ThemeManager::instance().colors();
-    auto& tm = ThemeManager::instance();
-
-    QFont font;
-    font.setFamily(c.fonts.uiFont);
+    const auto& theme = ThemeManager::instance();
     const bool isGroup = m_data && m_data->isGroup();
-    font.setPixelSize(tm.scaledFontSize(isGroup ? 9 : 10));
-    font.setBold(isGroup);
-    return font;
+    return theme.font(isGroup ? ThemeFontRole::Body : ThemeFontRole::Label,
+        isGroup ? QFont::Bold : QFont::Normal);
 }
 
 QColor LayerRowWidget::nameDisplayColor() const
@@ -1473,9 +1468,7 @@ QRect LayerRowWidget::nameDisplayRect() const
     auto& tm = ThemeManager::instance();
 
     const QFont font = nameDisplayFont();
-    QFont metaMeasureFont = font;
-    metaMeasureFont.setBold(false);
-    metaMeasureFont.setPixelSize(tm.scaledFontSize(8));
+    const QFont metaMeasureFont = tm.font(ThemeFontRole::Small);
 
     const int nameLineHeight = QFontMetrics(font).height();
     const int metaLineHeight = QFontMetrics(metaMeasureFont).height();
@@ -2549,16 +2542,12 @@ void LayerRowWidget::drawMeta(QPainter& p, const QRect& r)
     metaCol.setAlphaF((m_selected ? 0.75 : 0.52)
         * (m_data->visible ? 1.0 : hiddenBlend(m_visibilityProgress, 0.6)));
 
-    QFont metaFont = p.font();
-    metaFont.setFamily(c.fonts.uiFont);
-    metaFont.setPixelSize(tm.scaledFontSize(8));
+    const QFont metaFont = tm.font(ThemeFontRole::Small);
     p.setFont(metaFont);
 
-    QFont nameMeasureFont = metaFont;
-    nameMeasureFont.setPixelSize(tm.scaledFontSize(m_data->isGroup() ? 9 : 10));
-    if (m_data->isGroup()) {
-        nameMeasureFont.setBold(true);
-    }
+    const QFont nameMeasureFont
+        = tm.font(m_data->isGroup() ? ThemeFontRole::Body : ThemeFontRole::Label,
+            m_data->isGroup() ? QFont::Bold : QFont::Normal);
     const int nameLineHeight = QFontMetrics(nameMeasureFont).height();
     const int metaLineHeight = p.fontMetrics().height();
     const int lineGap = 0;
@@ -2582,9 +2571,7 @@ void LayerRowWidget::drawMeta(QPainter& p, const QRect& r)
         return;
     }
 
-    QFont inlineBadgeFont = metaFont;
-    inlineBadgeFont.setPixelSize(tm.scaledFontSize(6));
-    inlineBadgeFont.setBold(true);
+    const QFont inlineBadgeFont = tm.font(ThemeFontRole::Caption, QFont::Bold);
     const QFontMetrics inlineBadgeMetrics(inlineBadgeFont);
 
     const QString separatorText = QStringLiteral("·");

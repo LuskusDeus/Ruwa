@@ -38,6 +38,7 @@ namespace ruwa::ui::widgets {
 
 using ruwa::ui::core::IconProvider;
 using ruwa::ui::core::ThemeColors;
+using ruwa::ui::core::ThemeFontRole;
 using ruwa::ui::core::ThemeManager;
 
 namespace {
@@ -171,10 +172,7 @@ private:
             return;
         }
 
-        QFont f = painter.font();
-        f.setPixelSize(qMax(10, iconSize - 2));
-        f.setWeight(QFont::DemiBold);
-        painter.setFont(f);
+        painter.setFont(tm.font(ThemeFontRole::H6, QFont::DemiBold));
         painter.setPen(iconColor);
         painter.drawText(rect(), Qt::AlignCenter, m_fallbackText);
     }
@@ -318,9 +316,7 @@ public:
         }
 
         if (m_titleLabel) {
-            QFont font = m_titleLabel->font();
-            font.setPixelSize(theme.scaled(10));
-            font.setWeight(QFont::DemiBold);
+            QFont font = theme.font(ThemeFontRole::Label, QFont::DemiBold);
             m_titleLabel->setFont(font);
             m_titleLabel->setStyleSheet(
                 QStringLiteral("QLabel { color: %1; background: transparent; }")
@@ -618,9 +614,7 @@ protected:
         painter.setBrush(bg);
         painter.drawRoundedRect(box, radius, radius);
 
-        QFont f = font();
-        f.setPixelSize(theme.scaled(13));
-        f.setWeight(QFont::DemiBold);
+        QFont f = theme.font(ThemeFontRole::H6, QFont::DemiBold);
         painter.setFont(f);
         painter.setPen(colors.textOnPrimary());
 
@@ -1668,8 +1662,7 @@ void PresetMenuListWidget::onThemeChanged()
     const auto& colors = ThemeManager::instance().colors();
 
     if (m_titleLabel) {
-        QFont titleFont = colors.fonts.getTitleFont(ThemeManager::instance().scaledFontSize(15));
-        titleFont.setWeight(QFont::DemiBold);
+        QFont titleFont = ThemeManager::instance().font(ThemeFontRole::H5, QFont::DemiBold);
         m_titleLabel->setFont(titleFont);
         m_titleLabel->setStyleSheet(QStringLiteral("QLabel { color: %1; background: transparent; }")
                 .arg(colors.text.name(QColor::HexArgb)));
@@ -1698,9 +1691,7 @@ void PresetMenuListWidget::onThemeChanged()
     }
 
     if (m_emptyTitleLabel) {
-        QFont f = font();
-        f.setPixelSize(ThemeManager::instance().scaled(14));
-        f.setWeight(QFont::Medium);
+        QFont f = ThemeManager::instance().font(ThemeFontRole::H5, QFont::Medium);
         m_emptyTitleLabel->setFont(f);
         m_emptyTitleLabel->setStyleSheet(
             QStringLiteral("QLabel { color: %1; background: transparent; }")
@@ -1708,8 +1699,7 @@ void PresetMenuListWidget::onThemeChanged()
     }
 
     if (m_emptyDescriptionLabel) {
-        QFont f = font();
-        f.setPixelSize(ThemeManager::instance().scaled(11));
+        QFont f = ThemeManager::instance().font(ThemeFontRole::BodyLarge);
         m_emptyDescriptionLabel->setFont(f);
         m_emptyDescriptionLabel->setStyleSheet(
             QStringLiteral("QLabel { color: %1; background: transparent; }")

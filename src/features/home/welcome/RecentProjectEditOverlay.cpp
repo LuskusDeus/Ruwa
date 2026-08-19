@@ -25,14 +25,13 @@
 
 namespace ruwa::ui::widgets {
 
+using ruwa::ui::core::ThemeFontRole;
+
 namespace {
 const int BASE_CARD_WIDTH = 440;
 const int BASE_CARD_PADDING = 20;
 const int BASE_CARD_RADIUS = 14;
 const int BASE_CARD_SPACING = 14;
-const int BASE_TITLE_FONT_SIZE = 14;
-const int BASE_BODY_FONT_SIZE = 9;
-const int BASE_CAPTION_FONT_SIZE = 8;
 const int BASE_INPUT_HEIGHT = 34;
 const int BASE_TOGGLE_ICON_SIZE = 16;
 const int BASE_BUTTON_HEIGHT = 32;
@@ -396,29 +395,28 @@ void RecentProjectEditOverlay::applyChrome()
     }
 
     if (m_titleLabel) {
-        QFont f = colors.fonts.getTitleFont(theme.scaledFontSize(BASE_TITLE_FONT_SIZE));
+        QFont f = theme.font(ThemeFontRole::H5, QFont::Bold);
         m_titleLabel->setFont(f);
         QPalette pal = m_titleLabel->palette();
         pal.setColor(QPalette::WindowText, colors.text);
         m_titleLabel->setPalette(pal);
     }
 
-    const auto applyMutedLabel = [&colors, &theme](QLabel* label, int fontSize) {
+    const auto applyMutedLabel = [&colors, &theme](QLabel* label, ThemeFontRole fontRole) {
         if (!label)
             return;
-        QFont f = colors.fonts.getUIFont(theme.scaledFontSize(fontSize));
+        QFont f = theme.font(fontRole);
         label->setFont(f);
         QPalette pal = label->palette();
         pal.setColor(QPalette::WindowText, colors.textMuted);
         label->setPalette(pal);
     };
 
-    applyMutedLabel(m_captionLabel, BASE_CAPTION_FONT_SIZE);
-    applyMutedLabel(m_previewBodyLabel, BASE_CAPTION_FONT_SIZE);
+    applyMutedLabel(m_captionLabel, ThemeFontRole::Small);
+    applyMutedLabel(m_previewBodyLabel, ThemeFontRole::Small);
 
     if (m_nameLabel) {
-        QFont f = colors.fonts.getUIFont(theme.scaledFontSize(BASE_BODY_FONT_SIZE));
-        f.setWeight(QFont::DemiBold);
+        QFont f = theme.font(ThemeFontRole::Body, QFont::DemiBold);
         m_nameLabel->setFont(f);
         QPalette pal = m_nameLabel->palette();
         pal.setColor(QPalette::WindowText, colors.text);
@@ -426,8 +424,7 @@ void RecentProjectEditOverlay::applyChrome()
     }
 
     if (m_previewTitleLabel) {
-        QFont f = colors.fonts.getUIFont(theme.scaledFontSize(BASE_BODY_FONT_SIZE));
-        f.setWeight(QFont::DemiBold);
+        QFont f = theme.font(ThemeFontRole::Body, QFont::DemiBold);
         m_previewTitleLabel->setFont(f);
         QPalette pal = m_previewTitleLabel->palette();
         pal.setColor(QPalette::WindowText, colors.text);
@@ -436,7 +433,7 @@ void RecentProjectEditOverlay::applyChrome()
 
     if (m_nameEdit) {
         m_nameEdit->setFixedHeight(theme.scaled(BASE_INPUT_HEIGHT));
-        m_nameEdit->setFont(colors.fonts.getUIFont(theme.scaledFontSize(BASE_BODY_FONT_SIZE)));
+        m_nameEdit->setFont(theme.font(ThemeFontRole::Body));
         m_nameEdit->setStyleSheet(QString("QLineEdit {"
                                           "  background: %1;"
                                           "  border: 1px solid %2;"

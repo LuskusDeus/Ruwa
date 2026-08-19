@@ -45,12 +45,13 @@
 
 namespace ruwa::ui::widgets {
 
+using ruwa::ui::core::ThemeFontRole;
+
 namespace {
 
 const int BASE_MAIN_MARGIN_H = 40;
 const int BASE_MAIN_MARGIN_V = 30;
 const int BASE_MAIN_SPACING = 16;
-const int BASE_TITLE_FONT_SIZE = 26;
 const int BASE_LOGO_PADDING = 24;
 const int BASE_INFO_PADDING_TOP = 24;
 const int BASE_INFO_PADDING_RIGHT = 24;
@@ -58,8 +59,6 @@ const int BASE_INFO_PADDING_BOTTOM = 24;
 const int BASE_LOGO_SIZE = 198;
 const int BASE_INFO_BLOCK_MIN_WIDTH = 640;
 const int BASE_TITLE_SUBTITLE_GAP = 0;
-const int BASE_PRODUCT_TITLE_FONT_SIZE = 32;
-const int BASE_PRODUCT_SUBTITLE_FONT_SIZE = 12;
 const int BASE_LINKS_TOP_SPACING = 22;
 const int BASE_LINKS_SPACING = 8;
 const int BASE_LINK_BUTTON_HEIGHT = 36;
@@ -72,7 +71,6 @@ const int BASE_DETAILS_TOP_MARGIN = 10;
 // mirrors the scroll bar's own 4px content margin.
 const int BASE_DETAILS_SPACING = 4;
 const int BASE_DETAILS_COLUMN_SPACING = 10;
-const int BASE_SECTION_TITLE_FONT_SIZE = 17;
 const int BASE_SECTION_SEPARATOR_TOP_MARGIN = 4;
 const int BASE_SECTION_CONTENT_TOP_MARGIN = 16;
 const int BASE_TOOL_CARD_SPACING = 10;
@@ -80,33 +78,24 @@ const int BASE_TOOL_CARD_VSPACING = 10;
 const int BASE_TOOL_CARD_PADDING_V = 10;
 const int BASE_TOOL_CARD_PADDING_H = 12;
 const int BASE_TOOL_CARD_RADIUS = 6;
-const int BASE_TOOL_CARD_TITLE_FONT_SIZE = 10;
-const int BASE_TOOL_CARD_DESCRIPTION_FONT_SIZE = 9;
 const int BASE_CREDITS_TOP_SPACING = 28;
 const int BASE_CREDITS_COLUMN_SPACING = 24;
 const int BASE_DEVELOPER_AVATAR_SIZE = 72;
 const int BASE_DEVELOPER_AVATAR_TEXT_GAP = 14;
 const int BASE_DEVELOPER_TEXT_SPACING = 5;
-const int BASE_DEVELOPER_NAME_FONT_SIZE = 12;
-const int BASE_DEVELOPER_DESCRIPTION_FONT_SIZE = 10;
 const int BASE_TESTERS_TITLE_BOTTOM_SPACING = 8;
 const int BASE_TESTER_BUTTON_HEIGHT = 28;
 const int BASE_TESTER_CARD_SPACING = 8;
 const int BASE_TESTER_CARD_VSPACING = 8;
-const int BASE_TESTER_CARD_FONT_SIZE = 10;
 const int BASE_ACKNOWLEDGEMENTS_TOP_SPACING = 28;
-const int BASE_ACKNOWLEDGEMENTS_BODY_FONT_SIZE = 11;
 const int BASE_BUILD_INFO_PADDING_H = 18;
 const int BASE_BUILD_INFO_PADDING_V = 14;
 const int BASE_BUILD_INFO_ROW_SPACING = 8;
 const int BASE_BUILD_INFO_SECTION_SPACING = 12;
-const int BASE_BUILD_INFO_LABEL_FONT_SIZE = 10;
 const int BASE_BUILD_INFO_MIN_WIDTH = 260;
 const int BASE_USAGE_PANEL_SPACING = 10;
 const int BASE_USAGE_PANEL_PADDING_H = 18;
 const int BASE_USAGE_PANEL_PADDING_V = 14;
-const int BASE_USAGE_CAPTION_FONT_SIZE = 10;
-const int BASE_USAGE_VALUE_FONT_SIZE = 15;
 const int BASE_USAGE_PANEL_MIN_HEIGHT = 74;
 
 ruwa::ui::core::WidgetStyle createBuildInfoPanelStyle()
@@ -756,14 +745,10 @@ void AboutContent::updateScaledSizes()
     m_logoLabel->setPixmap(ruwa::ui::core::IconProvider::instance().getApplicationLogoPixmap(
         QSize(logoSize, logoSize)));
 
-    m_titleLabel->setFont(
-        theme.colors().fonts.getTitleFont(theme.scaledFontSize(BASE_TITLE_FONT_SIZE)));
-    m_productTitleLabel->setFont(
-        theme.colors().fonts.getTitleFont(theme.scaledFontSize(BASE_PRODUCT_TITLE_FONT_SIZE)));
-    m_productSubtitleLabel->setFont(
-        theme.colors().fonts.getUIFont(theme.scaledFontSize(BASE_PRODUCT_SUBTITLE_FONT_SIZE)));
-    m_programInfoTitleLabel->setFont(
-        theme.colors().fonts.getTitleFont(theme.scaledFontSize(BASE_SECTION_TITLE_FONT_SIZE)));
+    m_titleLabel->setFont(theme.font(ThemeFontRole::H1, QFont::Bold));
+    m_productTitleLabel->setFont(theme.font(ThemeFontRole::H0, QFont::Bold));
+    m_productSubtitleLabel->setFont(theme.font(ThemeFontRole::H6));
+    m_programInfoTitleLabel->setFont(theme.font(ThemeFontRole::H3, QFont::Bold));
 
     if (auto* programInfoLayout = qobject_cast<QVBoxLayout*>(m_programInfoContainer->layout())) {
         programInfoLayout->setSpacing(0);
@@ -774,11 +759,8 @@ void AboutContent::updateScaledSizes()
         m_toolsCardsLayout->setVerticalSpacing(theme.scaled(BASE_TOOL_CARD_VSPACING));
     }
 
-    QFont toolCardTitleFont
-        = theme.colors().fonts.getUIFont(theme.scaledFontSize(BASE_TOOL_CARD_TITLE_FONT_SIZE));
-    toolCardTitleFont.setBold(true);
-    const QFont toolCardDescriptionFont = theme.colors().fonts.getUIFont(
-        theme.scaledFontSize(BASE_TOOL_CARD_DESCRIPTION_FONT_SIZE));
+    const QFont toolCardTitleFont = theme.font(ThemeFontRole::Label, QFont::Bold);
+    const QFont toolCardDescriptionFont = theme.font(ThemeFontRole::Body);
 
     for (int i = 0; i < m_toolCardTitleLabels.size(); ++i) {
         m_toolCardTitleLabels[i]->setFont(toolCardTitleFont);
@@ -793,8 +775,7 @@ void AboutContent::updateScaledSizes()
         }
     }
 
-    m_creditsTitleLabel->setFont(
-        theme.colors().fonts.getTitleFont(theme.scaledFontSize(BASE_SECTION_TITLE_FONT_SIZE)));
+    m_creditsTitleLabel->setFont(theme.font(ThemeFontRole::H3, QFont::Bold));
 
     if (auto* creditsLayout = qobject_cast<QHBoxLayout*>(m_creditsContentContainer->layout())) {
         creditsLayout->setSpacing(theme.scaled(BASE_CREDITS_COLUMN_SPACING));
@@ -822,15 +803,10 @@ void AboutContent::updateScaledSizes()
     m_developerAvatarLabel->setPixmap(
         createCircularPixmap(QStringLiteral(":/icons/MyPFP"), QString(), avatarSize));
 
-    QFont developerNameFont
-        = theme.colors().fonts.getUIFont(theme.scaledFontSize(BASE_DEVELOPER_NAME_FONT_SIZE));
-    developerNameFont.setBold(true);
+    QFont developerNameFont = theme.font(ThemeFontRole::H6, QFont::Bold);
     m_developerNameLabel->setFont(developerNameFont);
-    m_developerDescriptionLabel->setFont(
-        theme.colors().fonts.getUIFont(theme.scaledFontSize(BASE_DEVELOPER_DESCRIPTION_FONT_SIZE)));
-    QFont testersTitleFont
-        = theme.colors().fonts.getUIFont(theme.scaledFontSize(BASE_DEVELOPER_NAME_FONT_SIZE));
-    testersTitleFont.setBold(true);
+    m_developerDescriptionLabel->setFont(theme.font(ThemeFontRole::Label));
+    QFont testersTitleFont = theme.font(ThemeFontRole::H6, QFont::Bold);
     m_developerSectionTitleLabel->setFont(testersTitleFont);
     m_testersTitleLabel->setFont(testersTitleFont);
 
@@ -839,17 +815,14 @@ void AboutContent::updateScaledSizes()
         m_testersCardsLayout->setVerticalSpacing(theme.scaled(BASE_TESTER_CARD_VSPACING));
     }
 
-    const QFont testerCardFont
-        = theme.colors().fonts.getUIFont(theme.scaledFontSize(BASE_TESTER_CARD_FONT_SIZE));
+    const QFont testerCardFont = theme.font(ThemeFontRole::Label);
     for (CapsuleButton* testerButton : m_testerButtons) {
         testerButton->setFont(testerCardFont);
         testerButton->setFixedHeight(theme.scaled(BASE_TESTER_BUTTON_HEIGHT));
     }
 
-    m_acknowledgementsTitleLabel->setFont(
-        theme.colors().fonts.getTitleFont(theme.scaledFontSize(BASE_SECTION_TITLE_FONT_SIZE)));
-    m_acknowledgementsBodyLabel->setFont(
-        theme.colors().fonts.getUIFont(theme.scaledFontSize(BASE_ACKNOWLEDGEMENTS_BODY_FONT_SIZE)));
+    m_acknowledgementsTitleLabel->setFont(theme.font(ThemeFontRole::H3, QFont::Bold));
+    m_acknowledgementsBodyLabel->setFont(theme.font(ThemeFontRole::BodyLarge));
 
     if (m_buildInfoLayout) {
         m_buildInfoLayout->setContentsMargins(theme.scaled(BASE_BUILD_INFO_PADDING_H),
@@ -860,8 +833,7 @@ void AboutContent::updateScaledSizes()
 
     m_buildInfoPanel->setMinimumWidth(theme.scaled(BASE_BUILD_INFO_MIN_WIDTH));
 
-    QFont buildInfoFont
-        = theme.colors().fonts.getUIFont(theme.scaledFontSize(BASE_BUILD_INFO_LABEL_FONT_SIZE));
+    QFont buildInfoFont = theme.font(ThemeFontRole::Label);
     QFont buildInfoSectionFont = buildInfoFont;
     buildInfoSectionFont.setBold(true);
 
@@ -903,10 +875,8 @@ void AboutContent::updateScaledSizes()
     if (m_usagePanel) {
         m_usagePanel->setMinimumWidth(theme.scaled(BASE_BUILD_INFO_MIN_WIDTH));
 
-        m_usageCaptionLabel->setFont(
-            theme.colors().fonts.getUIFont(theme.scaledFontSize(BASE_USAGE_CAPTION_FONT_SIZE)));
-        m_usageValueLabel->setFont(
-            theme.colors().fonts.getTitleFont(theme.scaledFontSize(BASE_USAGE_VALUE_FONT_SIZE)));
+        m_usageCaptionLabel->setFont(theme.font(ThemeFontRole::Label));
+        m_usageValueLabel->setFont(theme.font(ThemeFontRole::H5, QFont::Bold));
 
         // Roughly half the build info panel, with a floor so it never collapses to text height.
         m_buildInfoPanel->ensurePolished();
@@ -915,7 +885,7 @@ void AboutContent::updateScaledSizes()
             buildInfoHeight > 0 ? buildInfoHeight / 2 : 0));
     }
 
-    const QFont linkFont = theme.colors().fonts.getUIFont(theme.scaledFontSize(11));
+    const QFont linkFont = theme.font(ThemeFontRole::BodyLarge);
     const int linkHeight = theme.scaled(BASE_LINK_BUTTON_HEIGHT);
     const int linkMinWidth = theme.scaled(BASE_LINK_BUTTON_MIN_WIDTH);
     const QSize linkIconSize(

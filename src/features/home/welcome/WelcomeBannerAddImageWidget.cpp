@@ -123,8 +123,7 @@ void WelcomeBannerAddImageWidget::drawContentLayer(QPainter& painter, const QRec
     QColor textColor = ThemeColors::interpolate(colors.textMuted, colors.text, hoverProgress());
 
     painter.setPen(textColor);
-    QFont nameFont = font();
-    nameFont.setPointSize(mgr.scaledFontSize(8));
+    QFont nameFont = mgr.font(ruwa::ui::core::ThemeFontRole::Small);
     painter.setFont(nameFont);
     painter.drawText(nameRect, Qt::AlignLeft | Qt::AlignVCenter, tr("Add image"));
 }

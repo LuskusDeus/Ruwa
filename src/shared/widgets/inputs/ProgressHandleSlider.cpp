@@ -330,9 +330,7 @@ void ProgressHandleSlider::paintEvent(QPaintEvent* event)
     }
 
     if (m_showValueText && m_orientation == Qt::Horizontal) {
-        QFont valueFont = font();
-        valueFont.setFamily(colors.fonts.uiFont);
-        valueFont.setPixelSize(tm.scaledFontSize(8));
+        QFont valueFont = tm.font(ruwa::ui::core::ThemeFontRole::Small);
         p.setFont(valueFont);
 
         const qreal textLeftPad = qMax<qreal>(6.0, tm.scaled(8.0));

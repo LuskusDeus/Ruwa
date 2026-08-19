@@ -19,9 +19,6 @@ const int BASE_RIGHT_PADDING = 16;
 const int BASE_PREVIEW_SIZE = 56;
 const int BASE_ICON_SIZE = 14;
 const int BASE_SPACING = 10;
-const int BASE_NAME_FONT_SIZE = 10;
-const int BASE_SIZE_FONT_SIZE = 8;
-const int BASE_DATE_FONT_SIZE = 8;
 } // namespace
 
 RecentProjectItem::RecentProjectItem(const QString& projectName, const QString& filePath,
@@ -50,8 +47,7 @@ void RecentProjectItem::updateScaledSizes()
 
     setFixedHeight(theme.scaled(BASE_HEIGHT));
 
-    QFont f = font();
-    f.setPointSize(theme.scaledFontSize(BASE_NAME_FONT_SIZE));
+    QFont f = theme.font(ruwa::ui::core::ThemeFontRole::Label);
     setFont(f);
 }
 
@@ -141,12 +137,10 @@ void RecentProjectItem::drawCardContent(QPainter& painter, const QRectF& rect)
     const int lineHeight = fmName.height();
     const int textBlockHeight = lineHeight * 2 + theme.scaled(2);
 
-    QFont sizeFont = font();
-    sizeFont.setPointSize(theme.scaledFontSize(BASE_SIZE_FONT_SIZE));
+    QFont sizeFont = theme.font(ruwa::ui::core::ThemeFontRole::Small);
     QFontMetrics fmSize(sizeFont);
 
-    QFont dateFont = font();
-    dateFont.setPointSize(theme.scaledFontSize(BASE_DATE_FONT_SIZE));
+    QFont dateFont = theme.font(ruwa::ui::core::ThemeFontRole::Small);
     QFontMetrics fmDate(dateFont);
     int dateWidth = fmDate.horizontalAdvance(m_lastModified);
     int availableTextWidth = width() - currentX - rightPadding - dateWidth - theme.scaled(24);

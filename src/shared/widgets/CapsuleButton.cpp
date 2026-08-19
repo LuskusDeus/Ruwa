@@ -25,7 +25,6 @@ const int BASE_ACTION_PAD_V = 13;
 const int BASE_HINT_SPACING = 8; // px between main text and hint text
 const int BASE_BANNER_HEIGHT = 48;
 const int BASE_BANNER_PAD_H = 22;
-const int BASE_BANNER_FONT_SIZE = 10;
 const int BASE_BANNER_ICON_SIZE = 16;
 const int BASE_BANNER_ICON_GAP = 8;
 const int BASE_BANNER_LOADING_SIZE = 18;
@@ -229,9 +228,9 @@ void CapsuleButton::updateBannerScaledSizes()
 {
     const auto& theme = ruwa::ui::core::ThemeManager::instance();
 
-    QFont f = font();
-    f.setPointSize(qMax(1, qRound(theme.scaledFontSize(BASE_BANNER_FONT_SIZE) * m_sizeScale)));
-    f.setBold(true);
+    QFont f = theme.font(ruwa::ui::core::ThemeFontRole::Label, QFont::Bold);
+    f.setPointSize(
+        qMax(1, qRound(theme.fontSize(ruwa::ui::core::ThemeFontRole::Label) * m_sizeScale)));
     setFont(f);
 
     const int baseH = m_bannerBaseHeight > 0 ? m_bannerBaseHeight : BASE_BANNER_HEIGHT;
@@ -310,8 +309,7 @@ QSize CapsuleButton::sizeHint() const
 
     int hintW = 0;
     if (m_variant == Variant::Action && !m_hintText.isEmpty()) {
-        QFont hf = font();
-        hf.setPointSize(qMax(6, font().pointSize() - 1));
+        const QFont hf = theme.font(ruwa::ui::core::ThemeFontRole::Body);
         hintW = QFontMetrics(hf).horizontalAdvance(m_hintText) + theme.scaled(BASE_HINT_SPACING);
     }
 
@@ -641,8 +639,7 @@ void CapsuleButton::paintEvent(QPaintEvent*)
         hintColor.setAlphaF(0.6);
 
         QFont mainFont = font();
-        QFont hintFont = font();
-        hintFont.setPointSize(qMax(6, mainFont.pointSize() - 1));
+        QFont hintFont = theme.font(ruwa::ui::core::ThemeFontRole::Body);
 
         QFontMetrics mainFM(mainFont);
         QFontMetrics hintFM(hintFont);

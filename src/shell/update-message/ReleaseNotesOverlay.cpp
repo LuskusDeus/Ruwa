@@ -37,9 +37,6 @@ constexpr int CardHeight = 840;
 constexpr int CardRadius = 12;
 constexpr int CardPadding = 28;
 constexpr int CardSpacing = 16;
-constexpr int TitleFontSize = 20;
-constexpr int EntryBadgeFontSize = 10;
-constexpr int EntryBodyFontSize = 11;
 constexpr int CloseButtonMinWidth = 110;
 constexpr int EntrySpacing = 36;
 constexpr int EntryBodySpacing = 8;
@@ -1284,7 +1281,7 @@ void ReleaseNotesOverlay::setupUi()
     m_titleLabel->setWordWrap(true);
     m_titleLabel->setStyleSheet(
         QStringLiteral("QLabel { background: transparent; color: %1; }").arg(colors.text.name()));
-    m_titleLabel->setFont(colors.fonts.getTitleFont(theme.scaledFontSize(TitleFontSize)));
+    m_titleLabel->setFont(theme.font(ruwa::ui::core::ThemeFontRole::H3, QFont::Bold));
     layout->addWidget(m_titleLabel);
 
     m_scrollArea = new SmoothScrollArea(m_card);
@@ -1369,9 +1366,8 @@ void ReleaseNotesOverlay::rebuildEntries()
     const QVector<ReleaseNoteEntry> entries = releaseNoteEntries();
     auto* contentWidget = static_cast<ReleaseNotesContentWidget*>(m_scrollContent);
     contentWidget->setContentsMargins(0, 0, theme.scaled(8), 0);
-    contentWidget->setEntries(entries,
-        colors.fonts.getUIFont(theme.scaledFontSize(EntryBodyFontSize)),
-        colors.fonts.getUIFont(theme.scaledFontSize(EntryBadgeFontSize)), colors.textMuted,
+    contentWidget->setEntries(entries, theme.font(ruwa::ui::core::ThemeFontRole::BodyLarge),
+        theme.font(ruwa::ui::core::ThemeFontRole::Label), colors.textMuted,
         theme.scaled(EntrySpacing), theme.scaled(EntryBodySpacing), theme.scaled(EntryBadgeRadius),
         theme.scaled(EntryBadgePaddingH), theme.scaled(EntryBadgePaddingV));
 

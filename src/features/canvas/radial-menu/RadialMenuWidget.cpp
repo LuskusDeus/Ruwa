@@ -28,6 +28,7 @@
 namespace ruwa::ui::widgets {
 
 using ruwa::ui::core::ThemeColors;
+using ruwa::ui::core::ThemeFontRole;
 using ruwa::ui::core::ThemeManager;
 
 namespace {
@@ -431,7 +432,7 @@ void RadialMenuWidget::rebuildMetrics()
                                           : metrics.hubRadius + seatPitch;
     metrics.ringRadius = qMax<qreal>(theme.scaled(77), minRing);
 
-    const QFont labelFont = colors.fonts.getUIFont(theme.scaledFontSize(10));
+    const QFont labelFont = theme.font(ThemeFontRole::Label);
     const QFontMetricsF labelMetrics(labelFont);
     const qreal pillPadding = theme.scaled(12);
 
@@ -562,8 +563,7 @@ QRectF RadialMenuWidget::titlePillRect() const
     }
 
     const auto& theme = ThemeManager::instance();
-    QFont font = theme.colors().fonts.getUIFont(theme.scaledFontSize(9));
-    font.setWeight(QFont::DemiBold);
+    const QFont font = theme.font(ThemeFontRole::Body, QFont::DemiBold);
 
     const qreal padding = theme.scaled(14);
     const qreal width = QFontMetricsF(font).horizontalAdvance(m_page.title) + padding * 2.0;
@@ -1337,7 +1337,7 @@ void RadialMenuWidget::paintGhosts(QPainter& painter) const
 
     painter.save();
     painter.setOpacity(baseOpacity * fade);
-    painter.setFont(colors.fonts.getUIFont(theme.scaledFontSize(10)));
+    painter.setFont(theme.font(ThemeFontRole::Label));
 
     for (const Ghost& ghost : m_ghosts) {
         const QRectF rect = ghost.rect.translated(origin + ghost.push * travel);
@@ -1543,8 +1543,7 @@ void RadialMenuWidget::paintSlots(QPainter& painter, qreal ringScale) const
         }
 
         // No icon: fall back to the first letter, which still tells the seats apart.
-        QFont font = colors.fonts.getUIFont(theme.scaledFontSize(11));
-        font.setWeight(QFont::DemiBold);
+        const QFont font = theme.font(ThemeFontRole::BodyLarge, QFont::DemiBold);
         painter.setFont(font);
         painter.setPen(contentColor);
         painter.drawText(discRect, Qt::AlignCenter, slot.title.left(1).toUpper());
@@ -1556,7 +1555,7 @@ void RadialMenuWidget::paintLabels(QPainter& painter, qreal ringScale) const
 {
     const auto& theme = ThemeManager::instance();
     const auto& colors = theme.colors();
-    const QFont labelFont = colors.fonts.getUIFont(theme.scaledFontSize(10));
+    const QFont labelFont = theme.font(ThemeFontRole::Label);
 
     painter.save();
     painter.setFont(labelFont);
@@ -1609,8 +1608,7 @@ void RadialMenuWidget::paintTitle(QPainter& painter) const
     const auto& theme = ThemeManager::instance();
     const auto& colors = theme.colors();
 
-    QFont font = colors.fonts.getUIFont(theme.scaledFontSize(9));
-    font.setWeight(QFont::DemiBold);
+    const QFont font = theme.font(ThemeFontRole::Body, QFont::DemiBold);
 
     paintGlassShape(painter, pill, m_metrics.titlePillHeight / 2.0);
 

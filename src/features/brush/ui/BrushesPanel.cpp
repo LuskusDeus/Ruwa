@@ -27,6 +27,7 @@ namespace ruwa::ui::workspace {
 namespace {
 
 using ruwa::ui::core::ThemeColors;
+using ruwa::ui::core::ThemeFontRole;
 using ruwa::ui::core::ThemeManager;
 using ruwa::ui::core::WidgetStyleManager;
 
@@ -52,13 +53,11 @@ public:
         setHoverDuration(130);
         setActiveDuration(180);
 
-        QFont buttonFont = font();
-        buttonFont.setPixelSize(ThemeManager::instance().scaled(10));
-        buttonFont.setWeight(QFont::Medium);
-        const int width = QFontMetrics(buttonFont).horizontalAdvance(translatedFilterText(m_text))
-            + ThemeManager::instance().scaled(18);
-        setFixedSize(
-            qMax(ThemeManager::instance().scaled(34), width), ThemeManager::instance().scaled(24));
+        refreshTypography();
+        connect(&ThemeManager::instance(), &ThemeManager::themeChanged, this, [this]() {
+            refreshTypography();
+            update();
+        });
     }
 
     void setSelected(bool selected) { setActive(selected); }
@@ -90,10 +89,7 @@ protected:
             painter.drawRoundedRect(buttonRect, radius, radius);
         }
 
-        QFont buttonFont = painter.font();
-        buttonFont.setPixelSize(ThemeManager::instance().scaled(10));
-        buttonFont.setWeight(QFont::Medium);
-        painter.setFont(buttonFont);
+        painter.setFont(font());
         const QColor idleText
             = ThemeColors::interpolate(colors.textMuted, colors.text, hoverProgress() * 0.32);
         const QColor textColor = ThemeColors::interpolate(idleText, colors.textOnPrimary(), active);
@@ -102,6 +98,16 @@ protected:
     }
 
 private:
+    void refreshTypography()
+    {
+        const auto& theme = ThemeManager::instance();
+        const QFont buttonFont = theme.font(ThemeFontRole::Label, QFont::Medium);
+        setFont(buttonFont);
+        const int width = QFontMetrics(buttonFont).horizontalAdvance(translatedFilterText(m_text))
+            + theme.scaled(18);
+        setFixedSize(qMax(theme.scaled(34), width), theme.scaled(24));
+    }
+
     QString m_text;
 };
 

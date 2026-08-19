@@ -134,10 +134,7 @@ protected:
         QColor inactiveText = ThemeColors::interpolate(colors.textMuted, colors.text, hover);
         QColor textColor = enabled ? inactiveText : colors.textDisabled();
 
-        QFont f = painter.font();
-        f.setPixelSize(theme.scaled(11));
-        f.setWeight(QFont::DemiBold);
-        painter.setFont(f);
+        painter.setFont(theme.font(ThemeFontRole::BodyLarge, QFont::DemiBold));
 
         const int iconSize = theme.scaled(13);
         const int contentGap = theme.scaled(7);
@@ -406,10 +403,8 @@ void BrushItem::paintEvent(QPaintEvent* event)
         QColor textColor = ThemeColors::interpolate(
             colors.textMuted, colors.text, qMax(m_hoverProgress * 0.5, m_activeProgress));
         painter.setPen(textColor);
-        QFont f = painter.font();
-        f.setPixelSize(theme.scaled(10));
-        f.setBold(m_activeProgress > 0.5);
-        painter.setFont(f);
+        painter.setFont(
+            theme.font(ThemeFontRole::Label, m_activeProgress > 0.5 ? QFont::Bold : QFont::Normal));
 
         QRectF textRect = headerRect.adjusted(theme.scaled(8), 0, -theme.scaled(6), 0);
         painter.drawText(textRect, Qt::AlignLeft | Qt::AlignVCenter,
@@ -714,10 +709,7 @@ void PresetButton::paintEvent(QPaintEvent* event)
         QColor initColor
             = ThemeColors::interpolate(colors.textMuted, colors.text, activeProgress());
         painter.setPen(initColor);
-        QFont f = painter.font();
-        f.setPixelSize(theme.scaled(10));
-        f.setBold(true);
-        painter.setFont(f);
+        painter.setFont(theme.font(ThemeFontRole::Label, QFont::Bold));
         painter.drawText(
             iconRect, Qt::AlignCenter, translateBrushOrPackName(m_data.name).left(1).toUpper());
     }
@@ -726,10 +718,8 @@ void PresetButton::paintEvent(QPaintEvent* event)
         QColor textColor = ThemeColors::interpolate(
             colors.textMuted, colors.text, qMax(hoverProgress() * 0.5, activeProgress()));
         painter.setPen(textColor);
-        QFont textFont = painter.font();
-        textFont.setPixelSize(theme.scaled(10));
-        textFont.setWeight(activeProgress() > 0.5 ? QFont::DemiBold : QFont::Medium);
-        painter.setFont(textFont);
+        painter.setFont(theme.font(
+            ThemeFontRole::Label, activeProgress() > 0.5 ? QFont::DemiBold : QFont::Medium));
         const QString shortName = compactPresetLabel(m_data.name);
         painter.drawText(textRect, Qt::AlignHCenter | Qt::AlignTop,
             painter.fontMetrics().elidedText(
@@ -806,13 +796,12 @@ void BrushPresetPage::setupUI()
         theme.scaled(14), theme.scaled(6), theme.scaled(14), theme.scaled(4));
     brushHeaderLayout->setSpacing(theme.scaled(7));
 
-    auto* brushesHeader = new QLabel(tr("Brushes"), brushHeaderRow);
-    brushesHeader->setStyleSheet(QStringLiteral("color: %1; background: transparent;")
+    m_brushesHeaderLabel = new QLabel(tr("Brushes"), brushHeaderRow);
+    m_brushesHeaderLabel->setStyleSheet(QStringLiteral("color: %1; background: transparent;")
             .arg(colors.text.name(QColor::HexArgb)));
-    QFont sectionHeaderFont(FontFamilyNames::InstrumentSerif);
-    sectionHeaderFont.setPixelSize(theme.scaled(22));
+    QFont sectionHeaderFont(FontFamilyNames::InstrumentSerif, theme.fontSize(ThemeFontRole::H2));
     sectionHeaderFont.setWeight(QFont::Normal);
-    brushesHeader->setFont(sectionHeaderFont);
+    m_brushesHeaderLabel->setFont(sectionHeaderFont);
 
     auto* openEditorButton = new BrushEditorOpenButton(tr("Brush Editor"), brushHeaderRow);
     QIcon pencilIcon = IconProvider::instance().getIcon(IconProvider::StandardIcon::Pencil);
@@ -825,7 +814,7 @@ void BrushPresetPage::setupUI()
     m_openBrushEditorButton = openEditorButton;
     connect(m_openBrushEditorButton, &QPushButton::clicked, this, [this]() { openBrushEditor(); });
 
-    brushHeaderLayout->addWidget(brushesHeader);
+    brushHeaderLayout->addWidget(m_brushesHeaderLabel);
     brushHeaderLayout->addStretch();
     brushHeaderLayout->addWidget(m_openBrushEditorButton);
     m_mainLayout->addWidget(brushHeaderRow);
@@ -864,15 +853,14 @@ void BrushPresetPage::setupUI()
     settingsHeaderLayout->setContentsMargins(theme.scaled(2), 0, theme.scaled(2), theme.scaled(4));
     settingsHeaderLayout->setSpacing(theme.scaled(6));
 
-    QLabel* settingsHeader = new QLabel(tr("Settings"), settingsHeaderRow);
-    settingsHeader->setStyleSheet(QStringLiteral("color: %1; background: transparent;")
+    m_settingsHeaderLabel = new QLabel(tr("Settings"), settingsHeaderRow);
+    m_settingsHeaderLabel->setStyleSheet(QStringLiteral("color: %1; background: transparent;")
             .arg(colors.text.name(QColor::HexArgb)));
-    QFont hdrFont(FontFamilyNames::InstrumentSerif);
-    hdrFont.setPixelSize(theme.scaled(22));
+    QFont hdrFont(FontFamilyNames::InstrumentSerif, theme.fontSize(ThemeFontRole::H2));
     hdrFont.setWeight(QFont::Normal);
-    settingsHeader->setFont(hdrFont);
+    m_settingsHeaderLabel->setFont(hdrFont);
 
-    settingsHeaderLayout->addWidget(settingsHeader);
+    settingsHeaderLayout->addWidget(m_settingsHeaderLabel);
     settingsHeaderLayout->addStretch();
     m_settingsLayout->addWidget(settingsHeaderRow);
 
@@ -909,6 +897,24 @@ void BrushPresetPage::setupUI()
     m_mainLayout->addWidget(m_settingsContainer, 38);
 }
 
+void BrushPresetPage::applyTypography()
+{
+    const auto& theme = ThemeManager::instance();
+    QFont headerFont(FontFamilyNames::InstrumentSerif, theme.fontSize(ThemeFontRole::H2));
+    headerFont.setWeight(QFont::Normal);
+    if (m_brushesHeaderLabel) {
+        m_brushesHeaderLabel->setFont(headerFont);
+    }
+    if (m_settingsHeaderLabel) {
+        m_settingsHeaderLabel->setFont(headerFont);
+    }
+    for (QLabel* label : m_categoryLabels) {
+        if (label) {
+            label->setFont(theme.font(ThemeFontRole::Label, QFont::DemiBold));
+        }
+    }
+}
+
 void BrushPresetPage::rebuildSettingsWidget()
 {
     auto& theme = ThemeManager::instance();
@@ -925,6 +931,7 @@ void BrushPresetPage::rebuildSettingsWidget()
         }
     }
     m_brushSettingsWidgets.clear();
+    m_categoryLabels.clear();
 
     // Collect starred setting definitions for the selected brush.
     const QSet<QString> starred = m_selectedBrushId.isEmpty()
@@ -995,9 +1002,8 @@ void BrushPresetPage::rebuildSettingsWidget()
         categoryLabel->setStyleSheet(
             QStringLiteral("color: %1; background: transparent; font-weight: 600;")
                 .arg(WidgetStyleManager::instance().colors().textMuted.name(QColor::HexArgb)));
-        QFont sectionFont = categoryLabel->font();
-        sectionFont.setPixelSize(theme.scaled(10));
-        categoryLabel->setFont(sectionFont);
+        categoryLabel->setFont(theme.font(ThemeFontRole::Label, QFont::DemiBold));
+        m_categoryLabels.append(categoryLabel);
         categoryLayout->addWidget(categoryIconLabel);
         categoryLayout->addWidget(categoryLabel, 1);
         m_settingsScrollLayout->addWidget(categoryHeader);
@@ -2563,6 +2569,11 @@ void BrushPackPanel::onThemeChanged()
 {
     updateSize();
     rebuildPresetSidebar();
+    for (BrushPresetPage* page : m_pages) {
+        if (page) {
+            page->applyTypography();
+        }
+    }
     applyRightSectionColors();
     updateControlButtonsState();
     update();

@@ -39,9 +39,6 @@ namespace {
 constexpr int kWelcomeLayoutPadding = 40;
 constexpr int kWelcomeLayoutSpacing = 16;
 constexpr int kWelcomeButtonSpacing = 12;
-constexpr int kWelcomeTitleFontSize = 32;
-constexpr int kWelcomeSubtitleFontSize = 14;
-constexpr int kWelcomeButtonFontSize = 10;
 constexpr int kExampleWidth = 450;
 constexpr int kExamplePopupHeight = 160;
 constexpr int kExamplePopupTopClip = 23;
@@ -71,8 +68,8 @@ void makeWidgetTreePassive(QWidget* root)
     }
 }
 
-void applySettingsPresentationTheme(QWidget* panel,
-    const ruwa::ui::core::ThemeColors& colors, const QPalette& palette)
+void applySettingsPresentationTheme(
+    QWidget* panel, const ruwa::ui::core::ThemeColors& colors, const QPalette& palette)
 {
     if (!panel) {
         return;
@@ -91,9 +88,8 @@ void applySettingsPresentationTheme(QWidget* panel,
     }
     const auto labels = panel->findChildren<QLabel*>();
     for (QLabel* label : labels) {
-        label->setStyleSheet(QStringLiteral(
-            "QLabel { color: %1; background: transparent; }")
-                                 .arg(colors.text.name()));
+        label->setStyleSheet(QStringLiteral("QLabel { color: %1; background: transparent; }")
+                .arg(colors.text.name()));
     }
 }
 
@@ -113,9 +109,8 @@ ThemeEditorThemesPreview::ThemeEditorThemesPreview(QWidget* parent)
     setupDockPreview();
     populatePreviewLayers();
 
-    connect(&ruwa::ui::core::ThemeManager::instance(),
-        &ruwa::ui::core::ThemeManager::themeChanged, this,
-        &ThemeEditorThemesPreview::updateTheme);
+    connect(&ruwa::ui::core::ThemeManager::instance(), &ruwa::ui::core::ThemeManager::themeChanged,
+        this, &ThemeEditorThemesPreview::updateTheme);
 
     updateTheme();
 }
@@ -181,10 +176,8 @@ void ThemeEditorThemesPreview::setupWidgetExamples()
     m_widgetExamples->setAttribute(Qt::WA_TranslucentBackground);
 
     auto* examplesLayout = new QVBoxLayout(m_widgetExamples);
-    examplesLayout->setContentsMargins(0,
-        kExamplePopupHeight - kExamplePopupTopClip
-            + theme.scaled(kExamplePopupBottomGap),
-        0, 0);
+    examplesLayout->setContentsMargins(
+        0, kExamplePopupHeight - kExamplePopupTopClip + theme.scaled(kExamplePopupBottomGap), 0, 0);
     examplesLayout->setSpacing(0);
 
     m_fontDropdown = new FontDropdownSelector(m_widgetExamples);
@@ -197,8 +190,8 @@ void ThemeEditorThemesPreview::setupWidgetExamples()
     examplesLayout->addWidget(m_toggleSetting);
     examplesLayout->addSpacing(theme.scaled(kExampleRowSpacing));
 
-    m_switcherSetting = new SettingsChoice(
-        QString(), QString(), { tr("Soft"), tr("Hard") }, 0, m_widgetExamples);
+    m_switcherSetting
+        = new SettingsChoice(QString(), QString(), { tr("Soft"), tr("Hard") }, 0, m_widgetExamples);
     examplesLayout->addWidget(m_switcherSetting);
     examplesLayout->addStretch();
 
@@ -287,34 +280,30 @@ void ThemeEditorThemesPreview::changeEvent(QEvent* event)
 void ThemeEditorThemesPreview::retranslatePreview()
 {
     if (m_titleLabel) {
-        m_titleLabel->setText(QCoreApplication::translate(
-            "WelcomeBanner", "Digital Painting Reimagined"));
+        m_titleLabel->setText(
+            QCoreApplication::translate("WelcomeBanner", "Digital Painting Reimagined"));
     }
     if (m_subtitleLabel) {
-        m_subtitleLabel->setText(QCoreApplication::translate(
-            "WelcomeBanner", "Free, open-source, and limitless."));
+        m_subtitleLabel->setText(
+            QCoreApplication::translate("WelcomeBanner", "Free, open-source, and limitless."));
     }
     if (m_primaryButton) {
-        m_primaryButton->setText(
-            QCoreApplication::translate("WelcomeBanner", "Create Project"));
+        m_primaryButton->setText(QCoreApplication::translate("WelcomeBanner", "Create Project"));
         m_primaryButton->syncSizeToText();
     }
     if (m_secondaryButton) {
-        m_secondaryButton->setText(
-            QCoreApplication::translate("WelcomeBanner", "Open Project"));
+        m_secondaryButton->setText(QCoreApplication::translate("WelcomeBanner", "Open Project"));
         m_secondaryButton->syncSizeToText();
     }
     if (m_toggleSetting) {
         m_toggleSetting->setLabel(tr("Use pen pressure"));
     }
     if (m_switcherSetting) {
-        m_switcherSetting->retranslateUi(
-            tr("Stroke mode"), QString(), { tr("Soft"), tr("Hard") });
+        m_switcherSetting->retranslateUi(tr("Stroke mode"), QString(), { tr("Soft"), tr("Hard") });
     }
     if (m_dropdownSetting) {
         m_dropdownSetting->setLabel(tr("Color profile"));
-        m_dropdownSetting->setOptions(
-            { tr("sRGB"), tr("Display P3"), tr("Adobe RGB") });
+        m_dropdownSetting->setOptions({ tr("sRGB"), tr("Display P3"), tr("Adobe RGB") });
         m_dropdownSetting->setSelectedIndex(0);
     }
 }
@@ -368,8 +357,7 @@ void ThemeEditorThemesPreview::updatePreviewGeometry()
 
     const auto& theme = ruwa::ui::core::ThemeManager::instance();
     const int availableWidth = qMax(1, width() - theme.scaled(48));
-    const int groupWidth
-        = qMin(qMax(theme.scaled(430), qRound(width() * 0.34)), availableWidth);
+    const int groupWidth = qMin(qMax(theme.scaled(430), qRound(width() * 0.34)), availableWidth);
     const int clippedRight = theme.scaled(8);
     const int groupX = width() - groupWidth + clippedRight;
     const int groupY = theme.scaled(34);
@@ -382,12 +370,11 @@ void ThemeEditorThemesPreview::updatePreviewGeometry()
     const int examplesRight = groupX - examplesRightGap;
     const int titleWidth = m_titleLabel->sizeHint().width();
     const int buttonsWidth = m_primaryButton->parentWidget()->sizeHint().width();
-    const int leftContentIdealWidth
-        = qMax(theme.scaled(360), qMax(titleWidth, buttonsWidth));
+    const int leftContentIdealWidth = qMax(theme.scaled(360), qMax(titleWidth, buttonsWidth));
     const int examplesAvailableWidth
         = examplesRight - leftMargin - examplesGap - leftContentIdealWidth;
-    const int examplesWidth = qMax(theme.scaled(220),
-        qMin(theme.scaled(kExampleWidth), examplesAvailableWidth));
+    const int examplesWidth
+        = qMax(theme.scaled(220), qMin(theme.scaled(kExampleWidth), examplesAvailableWidth));
     const int examplesX = examplesRight - examplesWidth;
     const int leftWidth = qMax(0, examplesX - leftMargin - examplesGap);
     const int leftHeight = qMax(1, height() - leftMargin * 2);
@@ -401,8 +388,7 @@ void ThemeEditorThemesPreview::updatePreviewGeometry()
     // Keep the real widgets alive and visible for QWidget::render(), but park
     // them beyond the parent's clip so only their themed snapshot is displayed.
     m_groupHeader->setGeometry(sourceX, 0, groupWidth, headerHeight);
-    m_layersPanel->setGeometry(
-        sourceX, headerHeight, groupWidth, groupHeight - headerHeight);
+    m_layersPanel->setGeometry(sourceX, headerHeight, groupWidth, groupHeight - headerHeight);
     m_leftContent->setGeometry(sourceX, 0, qMax(1, leftWidth), leftHeight);
     m_widgetExamples->setGeometry(
         sourceX, 0, qMax(1, examplesWidth), m_widgetExamplesTarget.height());
@@ -414,8 +400,7 @@ void ThemeEditorThemesPreview::updatePreviewGeometry()
     if (m_widgetExamples->layout()) {
         m_widgetExamples->layout()->activate();
     }
-    const int dropdownHeight = qMax(
-        theme.scaled(52), m_dropdownSetting->sizeHint().height());
+    const int dropdownHeight = qMax(theme.scaled(52), m_dropdownSetting->sizeHint().height());
     m_dropdownSetting->setGeometry(0,
         m_widgetExamples->height() - theme.scaled(kBottomSettingVisibleHeight),
         qMax(1, examplesWidth), dropdownHeight);
@@ -430,6 +415,13 @@ void ThemeEditorThemesPreview::updateTheme()
     const auto& theme = ruwa::ui::core::ThemeManager::instance();
     const QPalette previewPalette
         = ruwa::ui::core::ThemeManager::paletteForColors(m_previewColors, palette());
+    const auto previewFont
+        = [this, &theme](ruwa::ui::core::ThemeFontRole role, QFont::Weight weight = QFont::Normal) {
+              QFont font = m_previewColors.fonts.getFont(
+                  role, theme.scaledFontSize(m_previewColors.fonts.sizes.value(role)));
+              font.setWeight(weight);
+              return font;
+          };
 
     if (m_leftContent) {
         m_leftContent->setPalette(previewPalette);
@@ -444,18 +436,14 @@ void ThemeEditorThemesPreview::updateTheme()
         QPalette titlePalette = previewPalette;
         titlePalette.setColor(QPalette::WindowText, m_previewColors.text);
         m_titleLabel->setPalette(titlePalette);
-        m_titleLabel->setFont(m_previewColors.fonts.getTitleFont(
-            theme.scaledFontSize(kWelcomeTitleFontSize)));
+        m_titleLabel->setFont(previewFont(ruwa::ui::core::ThemeFontRole::H0, QFont::Bold));
 
         QPalette subtitlePalette = previewPalette;
         subtitlePalette.setColor(QPalette::WindowText, m_previewColors.textMuted);
         m_subtitleLabel->setPalette(subtitlePalette);
-        m_subtitleLabel->setFont(m_previewColors.fonts.getUIFont(
-            theme.scaledFontSize(kWelcomeSubtitleFontSize)));
+        m_subtitleLabel->setFont(previewFont(ruwa::ui::core::ThemeFontRole::H5));
 
-        QFont buttonFont = m_previewColors.fonts.getUIFont(
-            theme.scaledFontSize(kWelcomeButtonFontSize));
-        buttonFont.setBold(true);
+        QFont buttonFont = previewFont(ruwa::ui::core::ThemeFontRole::Label, QFont::Bold);
         m_primaryButton->setFont(buttonFont);
         m_secondaryButton->setFont(buttonFont);
         m_primaryButton->syncSizeToText();
@@ -463,16 +451,12 @@ void ThemeEditorThemesPreview::updateTheme()
     }
     if (m_widgetExamples) {
         m_widgetExamples->setPalette(previewPalette);
-        const QFont controlFont
-            = m_previewColors.fonts.getUIFont(theme.scaledFontSize(9));
+        const QFont controlFont = previewFont(ruwa::ui::core::ThemeFontRole::Body);
         m_fontDropdown->setFont(controlFont);
         m_fontDropdown->setCurrentFamily(m_previewColors.fonts.uiFont);
-        applySettingsPresentationTheme(
-            m_toggleSetting, m_previewColors, previewPalette);
-        applySettingsPresentationTheme(
-            m_switcherSetting, m_previewColors, previewPalette);
-        applySettingsPresentationTheme(
-            m_dropdownSetting, m_previewColors, previewPalette);
+        applySettingsPresentationTheme(m_toggleSetting, m_previewColors, previewPalette);
+        applySettingsPresentationTheme(m_switcherSetting, m_previewColors, previewPalette);
+        applySettingsPresentationTheme(m_dropdownSetting, m_previewColors, previewPalette);
     }
     if (m_groupHeader) {
         m_groupHeader->applyTheme(m_previewColors);
@@ -524,8 +508,7 @@ void ThemeEditorThemesPreview::rebuildSnapshot()
                 QRegion(m_widgetExamples->rect()),
                 QWidget::DrawWindowBackground | QWidget::DrawChildren);
 
-            const QSize popupSize
-                = m_fontDropdown->preparePresentationPopup(kExamplePopupHeight);
+            const QSize popupSize = m_fontDropdown->preparePresentationPopup(kExamplePopupHeight);
             if (!popupSize.isEmpty()) {
                 const QPoint popupTarget(m_widgetExamplesTarget.x(), -kExamplePopupTopClip);
                 m_fontDropdown->renderPresentationPopup(&snapshotPainter, popupTarget);

@@ -63,12 +63,6 @@ constexpr int TextAreaPadding = 32;
 constexpr int ImageAreaWidth = 380; // 3:4 for height 506 (380 = 506*3/4)
 constexpr int ImagePadding = 8;
 constexpr int GlassBlurRadius = 45;
-constexpr int DateFontSize = 8;
-constexpr int VersionFontSize = 54;
-constexpr int StatusFontSize = 8;
-constexpr int HeroTitleFontSize = 17;
-constexpr int BodyFontSize = 10;
-constexpr int BadgeFontSize = 8;
 constexpr int BadgeMinWidth = 76;
 constexpr int BadgePaddingH = 8;
 constexpr int BadgeColumnExtraWidth = 4;
@@ -136,11 +130,9 @@ void enableHeightForWidth(QWidget* widget)
     widget->setSizePolicy(policy);
 }
 
-int releaseBadgeColumnWidth(
-    const ruwa::ui::core::ThemeColors& colors, const ruwa::ui::core::ThemeManager& theme)
+int releaseBadgeColumnWidth(const ruwa::ui::core::ThemeManager& theme)
 {
-    QFont badgeFont = colors.fonts.getUIFont(theme.scaledFontSize(BadgeFontSize));
-    badgeFont.setWeight(QFont::DemiBold);
+    const QFont badgeFont = theme.font(ruwa::ui::core::ThemeFontRole::Small, QFont::DemiBold);
 
     const QFontMetrics metrics(badgeFont);
     int maxTextWidth = 0;
@@ -540,9 +532,7 @@ void addReleaseHighlightRow(QWidget* parent, QVBoxLayout* layout,
     badgeLayout->setSpacing(0);
 
     auto* badge = new QLabel(badgeBox);
-    QFont badgeFont = colors.fonts.getUIFont(theme.scaledFontSize(BadgeFontSize));
-    badgeFont.setWeight(QFont::DemiBold);
-    badge->setFont(badgeFont);
+    badge->setFont(theme.font(ruwa::ui::core::ThemeFontRole::Small, QFont::DemiBold));
     badge->setText(badgeText);
     badge->setAlignment(Qt::AlignCenter);
     badge->setStyleSheet(QStringLiteral("QLabel {"
@@ -558,14 +548,14 @@ void addReleaseHighlightRow(QWidget* parent, QVBoxLayout* layout,
             .arg(theme.scaled(BadgePaddingH)));
     badge->setSizePolicy(QSizePolicy::Fixed, QSizePolicy::Fixed);
     badge->adjustSize();
-    badgeBox->setFixedWidth(releaseBadgeColumnWidth(colors, theme));
+    badgeBox->setFixedWidth(releaseBadgeColumnWidth(theme));
 
     badgeLayout->addWidget(badge, 0, Qt::AlignHCenter);
     badgeLayout->addStretch();
 
     auto* textLabel = new WrappedTextLabel(row);
     textLabel->setText(text);
-    textLabel->setFont(colors.fonts.getUIFont(theme.scaledFontSize(BodyFontSize)));
+    textLabel->setFont(theme.font(ruwa::ui::core::ThemeFontRole::Label));
     textLabel->setStyleSheet(
         QStringLiteral("QLabel { background: transparent; color: %1; }").arg(colors.text.name()));
     textLabel->setTextInteractionFlags(Qt::NoTextInteraction);
@@ -735,9 +725,7 @@ void UpdateMessageOverlay::setupUI()
     leftLayout->setSpacing(theme.scaled(16));
 
     auto* dateLabel = new QLabel(displayReleaseDate(), leftWidget);
-    QFont dateFont = colors.fonts.getUIFont(theme.scaledFontSize(DateFontSize));
-    dateFont.setWeight(QFont::DemiBold);
-    dateLabel->setFont(dateFont);
+    dateLabel->setFont(theme.font(ruwa::ui::core::ThemeFontRole::Small, QFont::DemiBold));
     dateLabel->setStyleSheet(QStringLiteral("QLabel { background: transparent; color: %1; }")
             .arg(colors.textMuted.name()));
     leftLayout->addWidget(dateLabel);
@@ -750,7 +738,8 @@ void UpdateMessageOverlay::setupUI()
 
     auto* versionLabel = new VersionGradientLabel(heroRow);
     versionLabel->setText(displayReleaseVersion());
-    QFont versionFont = colors.fonts.getUIFont(theme.scaledFontSize(VersionFontSize));
+    QFont versionFont
+        = colors.fonts.getUIFont(theme.fontSize(ruwa::ui::core::ThemeFontRole::Display));
     versionFont.setWeight(QFont::Black);
     versionLabel->setFont(versionFont);
     versionLabel->setAlignment(Qt::AlignLeft | Qt::AlignVCenter);
@@ -766,9 +755,7 @@ void UpdateMessageOverlay::setupUI()
 
     auto* statusLabel = new QLabel(
         QCoreApplication::translate("UpdateMessageOverlay", "YOU'RE UP TO DATE!"), heroText);
-    QFont statusFont = colors.fonts.getUIFont(theme.scaledFontSize(StatusFontSize));
-    statusFont.setWeight(QFont::DemiBold);
-    statusLabel->setFont(statusFont);
+    statusLabel->setFont(theme.font(ruwa::ui::core::ThemeFontRole::Small, QFont::DemiBold));
     statusLabel->setStyleSheet(QStringLiteral("QLabel { background: transparent; color: %1; }")
             .arg(darkenedPrimary(colors).name()));
     heroTextLayout->addWidget(statusLabel);
@@ -776,9 +763,7 @@ void UpdateMessageOverlay::setupUI()
     auto* heroTitleLabel = new WrappedTextLabel(heroText);
     heroTitleLabel->setText(QCoreApplication::translate("UpdateMessageOverlay",
         "A radial menu, real selection commands, and cursors drawn on the canvas."));
-    QFont heroTitleFont = colors.fonts.getUIFont(theme.scaledFontSize(HeroTitleFontSize));
-    heroTitleFont.setWeight(QFont::DemiBold);
-    heroTitleLabel->setFont(heroTitleFont);
+    heroTitleLabel->setFont(theme.font(ruwa::ui::core::ThemeFontRole::H3, QFont::DemiBold));
     heroTitleLabel->setStyleSheet(
         QStringLiteral("QLabel { background: transparent; color: %1; }").arg(colors.text.name()));
     enableHeightForWidth(heroTitleLabel);
@@ -795,7 +780,7 @@ void UpdateMessageOverlay::setupUI()
         "Right-clicking the canvas opens a configurable radial menu, the selection operations "
         "became commands with a home in the Edit menu, and the cursor is now drawn by the canvas "
         "itself."));
-    descriptionLabel->setFont(colors.fonts.getUIFont(theme.scaledFontSize(BodyFontSize)));
+    descriptionLabel->setFont(theme.font(ruwa::ui::core::ThemeFontRole::Label));
     descriptionLabel->setStyleSheet(QStringLiteral("QLabel { background: transparent; color: %1; }")
             .arg(colors.textMuted.name()));
     enableHeightForWidth(descriptionLabel);

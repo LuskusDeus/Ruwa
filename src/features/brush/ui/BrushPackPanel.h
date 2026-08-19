@@ -173,6 +173,7 @@ public:
     BrushSettingsData selectedBrushSettings() const;
     bool hasBrush(const QString& brushId) const;
     void syncLayoutNow();
+    void applyTypography();
 
 signals:
     void brushSelectionRequested(const QString& brushId);
@@ -213,14 +214,17 @@ private:
     SmoothScrollArea* m_scrollArea = nullptr;
     QWidget* m_brushListWidget = nullptr;
     QVBoxLayout* m_brushListLayout = nullptr;
+    QLabel* m_brushesHeaderLabel = nullptr;
 
     // Settings section
     QWidget* m_settingsContainer = nullptr;
     QVBoxLayout* m_settingsLayout = nullptr;
+    QLabel* m_settingsHeaderLabel = nullptr;
     BaseAnimatedButton* m_openBrushEditorButton = nullptr;
     SmoothScrollArea* m_settingsScrollArea = nullptr;
     QWidget* m_settingsScrollContent = nullptr;
     QVBoxLayout* m_settingsScrollLayout = nullptr;
+    QVector<QLabel*> m_categoryLabels;
     QVector<BrushSettingsWidget*> m_brushSettingsWidgets;
 
     // Main

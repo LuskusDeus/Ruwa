@@ -68,8 +68,7 @@ void SearchBar::setupUI()
     m_lineEdit->setPlaceholderText(tr("Search projects..."));
     m_lineEdit->installEventFilter(this);
 
-    QFont font = m_lineEdit->font();
-    font.setPointSize(9);
+    QFont font = ruwa::ui::core::ThemeManager::instance().font(ruwa::ui::core::ThemeFontRole::Body);
     m_lineEdit->setFont(font);
 
     layout->addWidget(m_lineEdit);
@@ -306,6 +305,8 @@ void SearchBar::updateThemeColors()
 
 void SearchBar::onThemeChanged()
 {
+    m_lineEdit->setFont(
+        ruwa::ui::core::ThemeManager::instance().font(ruwa::ui::core::ThemeFontRole::Body));
     updateThemeColors();
 }
 

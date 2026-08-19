@@ -43,9 +43,6 @@ const int BASE_COMPACT_ROW_MIN = 16;
 // Leading glyph inside the box (see setLeadingIcon).
 const int BASE_LEADING_ICON = 14;
 const int BASE_LEADING_GAP = 6;
-// Base sizes follow ThemeManager::scaledFontSize "UI steps" (same ballpark as other panels).
-const int BASE_LABEL_FONT = 9;
-const int BASE_BOX_INPUT_FONT = 10;
 const int BASE_ARROW_SIZE = 4;
 const int BASE_ARROW_OFFSET = 14;
 
@@ -408,7 +405,7 @@ void StyledInputField::updateScaledSizes()
     if ((m_type == FieldType::Text || m_type == FieldType::Number || m_type == FieldType::Dropdown)
         && m_inputContainer) {
         if (m_label) {
-            QFont lf = colors.fonts.getUIFont(theme.scaledFontSize(BASE_LABEL_FONT));
+            QFont lf = theme.font(ruwa::ui::core::ThemeFontRole::Body);
             lf.setWeight(QFont::Normal);
             lf.setLetterSpacing(QFont::AbsoluteSpacing, theme.scaled(1.5));
             m_label->setFont(lf);
@@ -426,7 +423,7 @@ void StyledInputField::updateScaledSizes()
 
         QWidget* input = inputWidget();
         if (input) {
-            QFont f = colors.fonts.getUIFont(theme.scaledFontSize(BASE_BOX_INPUT_FONT));
+            QFont f = theme.font(ruwa::ui::core::ThemeFontRole::Label);
             f.setWeight(QFont::Normal);
             input->setFont(f);
             input->updateGeometry();

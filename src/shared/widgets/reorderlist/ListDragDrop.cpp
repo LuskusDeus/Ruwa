@@ -407,9 +407,7 @@ void DragGhostWidget::paintEvent(QPaintEvent* e)
             p.setPen(QPen(bord, 1.0));
             p.setBrush(Qt::NoBrush);
             p.drawRoundedRect(r.adjusted(0.5, 0.5, -0.5, -0.5), 5.5, 5.5);
-            QFont font;
-            font.setFamily(c.fonts.uiFont);
-            font.setPixelSize(tm.scaledFontSize(9));
+            QFont font = tm.font(ruwa::ui::core::ThemeFontRole::Body);
             p.setFont(font);
             p.setPen(c.text);
             p.drawText(pillRect.toRect(), Qt::AlignCenter,
@@ -483,10 +481,8 @@ void DragGhostWidget::paintEvent(QPaintEvent* e)
         p.setBrush(Qt::NoBrush);
         p.drawRoundedRect(r.adjusted(0.5, 0.5, -0.5, -0.5), 5.5, 5.5);
 
-        QFont font;
-        font.setFamily(c.fonts.uiFont);
+        QFont font = tm.font(ruwa::ui::core::ThemeFontRole::Body);
         int count = m_multiCount > 0 ? m_multiCount : m_rowSnapshots.size();
-        font.setPixelSize(tm.scaledFontSize(9));
         p.setFont(font);
         p.setPen(c.text);
         p.drawText(pillRect.toRect(), Qt::AlignCenter, QString("Dragging %1 layers").arg(count));

@@ -168,8 +168,7 @@ qreal CustomTabBar::computeStripContentWidth() const
     const int TEXT_PADDING = theme.scaled(4);
 
     qreal x = TAB_PADDING;
-    QFont tabFont = font();
-    tabFont.setPointSize(9);
+    const QFont tabFont = theme.font(ruwa::ui::core::ThemeFontRole::Body);
     const QFontMetrics fm(tabFont);
 
     for (int i = 0; i < m_items.size(); ++i) {
@@ -709,8 +708,7 @@ void CustomTabBar::updateLayout()
     const int TEXT_PADDING = theme.scaled(4); // Extra buffer for different font metrics
 
     qreal x = TAB_PADDING + m_stripAlignOffset;
-    QFont tabFont = font();
-    tabFont.setPointSize(9);
+    const QFont tabFont = theme.font(ruwa::ui::core::ThemeFontRole::Body);
     const QFontMetrics fm(tabFont);
 
     for (int i = 0; i < m_items.size(); ++i) {
@@ -766,8 +764,7 @@ void CustomTabBar::paintEvent(QPaintEvent* event)
             // breadcrumb arrow rather than a sibling slash.
             const QString glyph
                 = rightTab.isSmartObject ? QStringLiteral(">") : QStringLiteral("/");
-            const qreal dragOpacity
-                = item.isDragSource && rightTab.isDragSource ? 0.25 : 1.0;
+            const qreal dragOpacity = item.isDragSource && rightTab.isDragSource ? 0.25 : 1.0;
             drawSeparator(p, sepX, height() / 2.0, sepAnim, glyph, dragOpacity);
         }
     }
@@ -840,8 +837,7 @@ void CustomTabBar::drawTab(QPainter& painter, const TabItem& item, bool isActive
 
     // Title
     qreal textX = item.isSmartObject ? iconX : (iconX + ICON_SIZE + ICON_MARGIN);
-    QFont textFont = font();
-    textFont.setPointSize(9);
+    const QFont textFont = theme.font(ruwa::ui::core::ThemeFontRole::Body);
     // No bold on active - avoids text size jump and clipping with different fonts
     painter.setFont(textFont);
     painter.setPen(textColor);
@@ -870,18 +866,16 @@ void CustomTabBar::drawTab(QPainter& painter, const TabItem& item, bool isActive
     painter.restore();
 }
 
-void CustomTabBar::drawSeparator(
-    QPainter& painter, qreal x, qreal y, const TabItem& anim, const QString& glyph,
-    qreal opacityFactor)
+void CustomTabBar::drawSeparator(QPainter& painter, qreal x, qreal y, const TabItem& anim,
+    const QString& glyph, qreal opacityFactor)
 {
     painter.save();
     painter.setOpacity(anim.opacity * opacityFactor);
     painter.translate(0, anim.verticalOffset);
 
-    const auto& colors = ruwa::ui::core::ThemeManager::instance().colors();
-    QFont sepFont = font();
-    sepFont.setPointSize(9);
-    painter.setFont(sepFont);
+    const auto& theme = ruwa::ui::core::ThemeManager::instance();
+    const auto& colors = theme.colors();
+    painter.setFont(theme.font(ruwa::ui::core::ThemeFontRole::Body));
     painter.setPen(colors.textMuted);
     painter.drawText(QPointF(x - 6, y + 4), glyph);
     painter.restore();
@@ -942,20 +936,17 @@ QList<QUuid> CustomTabBar::managerOrderForVisibleRoots() const
     return order;
 }
 
-QRectF CustomTabBar::visualGroupBounds(
-    const QUuid& rootTabId, bool includeVisualOffsets) const
+QRectF CustomTabBar::visualGroupBounds(const QUuid& rootTabId, bool includeVisualOffsets) const
 {
     QRectF bounds;
     for (const TabItem& item : m_items) {
-        if (item.id != rootTabId
-            && !(item.isSmartObject && item.parentTabId == rootTabId)) {
+        if (item.id != rootTabId && !(item.isSmartObject && item.parentTabId == rootTabId)) {
             continue;
         }
 
         QRectF itemRect = item.rect;
         if (includeVisualOffsets) {
-            itemRect.translate(
-                item.slideOffsetX + item.enterOffsetX, item.verticalOffset);
+            itemRect.translate(item.slideOffsetX + item.enterOffsetX, item.verticalOffset);
         }
         bounds = bounds.isNull() ? itemRect : bounds.united(itemRect);
     }
@@ -1014,8 +1005,7 @@ void CustomTabBar::applyVisibleRootOrder(const QList<QUuid>& rootOrder, bool ani
 
     QHash<QUuid, qreal> visualLeftBefore;
     for (const TabItem& item : m_items) {
-        visualLeftBefore.insert(
-            item.id, item.rect.x() + item.slideOffsetX + item.enterOffsetX);
+        visualLeftBefore.insert(item.id, item.rect.x() + item.slideOffsetX + item.enterOffsetX);
     }
 
     if (m_layoutSlideAnim) {
@@ -1052,8 +1042,8 @@ void CustomTabBar::applyVisibleRootOrder(const QList<QUuid>& rootOrder, bool ani
     bool anyShift = false;
     if (animated) {
         for (TabItem& item : m_items) {
-            const qreal delta
-                = visualLeftBefore.value(item.id, item.rect.x()) - item.rect.x() - item.enterOffsetX;
+            const qreal delta = visualLeftBefore.value(item.id, item.rect.x()) - item.rect.x()
+                - item.enterOffsetX;
             item.slideOffsetX = delta;
             m_layoutSlideStartById.insert(item.id, delta);
             anyShift = anyShift || !qFuzzyIsNull(delta);
@@ -1088,8 +1078,7 @@ void CustomTabBar::moveDraggedGroupTo(int insertIndex)
 
 void CustomTabBar::startTabDrag(const QUuid& rootTabId, const QPoint& globalPos)
 {
-    if (rootTabId.isNull() || m_dragActive || m_dragSettling
-        || visibleRootOrder().size() < 2) {
+    if (rootTabId.isNull() || m_dragActive || m_dragSettling || visibleRootOrder().size() < 2) {
         cancelTabDragCandidate();
         return;
     }
@@ -1122,8 +1111,8 @@ void CustomTabBar::startTabDrag(const QUuid& rootTabId, const QPoint& globalPos)
     cancelTabDragCandidate();
 
     for (TabItem& item : m_items) {
-        item.isDragSource = item.id == rootTabId
-            || (item.isSmartObject && item.parentTabId == rootTabId);
+        item.isDragSource
+            = item.id == rootTabId || (item.isSmartObject && item.parentTabId == rootTabId);
         if (item.isDragSource) {
             item.closeHovered = false;
         }
@@ -1155,8 +1144,7 @@ void CustomTabBar::updateTabDrag(const QPoint& globalPos)
     }
     m_dragGhost->setFollowTarget(ghostTargetPosition(globalPos));
     const QPoint localPos = mapFromGlobal(globalPos);
-    const QPoint clampedPos(
-        qBound(0, localPos.x(), qMax(0, width() - 1)), height() / 2);
+    const QPoint clampedPos(qBound(0, localPos.x(), qMax(0, width() - 1)), height() / 2);
     moveDraggedGroupTo(tabInsertIndexAt(clampedPos));
 }
 
@@ -1340,8 +1328,7 @@ void CustomTabBar::mouseDoubleClickEvent(QMouseEvent* event)
 
 void CustomTabBar::mouseMoveEvent(QMouseEvent* event)
 {
-    if (!m_dragCandidateRootId.isNull() && !m_dragActive
-        && (event->buttons() & Qt::LeftButton)
+    if (!m_dragCandidateRootId.isNull() && !m_dragActive && (event->buttons() & Qt::LeftButton)
         && (event->globalPosition().toPoint() - m_dragPressGlobalPosition).manhattanLength()
             >= QApplication::startDragDistance()) {
         startTabDrag(m_dragCandidateRootId, event->globalPosition().toPoint());

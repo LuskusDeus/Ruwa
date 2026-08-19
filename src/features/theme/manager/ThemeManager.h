@@ -51,10 +51,7 @@ public:
 
     /// Get current active color palette. During a synchronous preview render,
     /// returns that render's local palette without changing the application.
-    const ThemeColors& colors() const
-    {
-        return s_colorOverride ? *s_colorOverride : m_colors;
-    }
+    const ThemeColors& colors() const { return s_colorOverride ? *s_colorOverride : m_colors; }
 
     /// Build the runtime color set used by widgets from an editable preset.
     static ThemeColors colorsForPreset(const ThemePreset& preset);
@@ -131,7 +128,21 @@ public:
     }
 
     /// Get scaled font size (base size will be multiplied by scale)
-    int scaledFontSize(int baseSize) const { return qMax(8, scaled(baseSize)); }
+    int scaledFontSize(int baseSize) const { return qMax(6, scaled(baseSize)); }
+
+    /// Resolve a semantic theme font size with the current UI scale.
+    int fontSize(ThemeFontRole role) const
+    {
+        return scaledFontSize(colors().fonts.sizes.value(role));
+    }
+
+    /// Build a font for a semantic UI role. Weight remains a widget concern.
+    QFont font(ThemeFontRole role, QFont::Weight weight = QFont::Normal) const
+    {
+        QFont resolved = colors().fonts.getFont(role, fontSize(role));
+        resolved.setWeight(weight);
+        return resolved;
+    }
 
     // === Custom Theme Management ===
 

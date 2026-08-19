@@ -21,7 +21,6 @@ namespace {
 const int BASE_PREVIEW_MARGIN_TOP = 4;
 const int BASE_PREVIEW_SPACING = 8;
 const int BASE_SEPARATOR_MARGIN_H = 12;
-const int BASE_SEPARATOR_FONT_SIZE = 9;
 } // namespace
 
 ThemeSelectorWidget::ThemeSelectorWidget(QWidget* parent, bool showCustomThemesEntry)
@@ -341,8 +340,7 @@ void ThemeSelectorWidget::updateScaledSizes()
         const int marginH = theme.scaled(BASE_SEPARATOR_MARGIN_H);
         m_separatorLabel->setContentsMargins(marginH, 0, marginH, 0);
 
-        QFont separatorFont = m_separatorLabel->font();
-        separatorFont.setPointSize(theme.scaledFontSize(BASE_SEPARATOR_FONT_SIZE));
+        QFont separatorFont = theme.font(ruwa::ui::core::ThemeFontRole::Body);
         m_separatorLabel->setFont(separatorFont);
 
         const auto& colors = theme.colors();

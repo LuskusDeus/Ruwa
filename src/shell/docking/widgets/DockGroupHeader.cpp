@@ -283,7 +283,7 @@ void DockGroupHeader::updateScaledSizes()
     m_tabPadding = theme.scaled(6);
     m_tabSpacing = theme.scaled(2);
 
-    m_titleFont = QFont(m_colors.fonts.uiFont, 9, QFont::Normal);
+    m_titleFont = theme.font(ruwa::ui::core::ThemeFontRole::Body);
 
     setFixedHeight(m_height);
 }
@@ -616,8 +616,7 @@ int DockGroupHeader::tabIndexAt(const QPointF& pos) const
             continue;
         }
         const TabItem& item = m_items[i];
-        if (item.rect
-                .translated(item.slideOffsetX + item.dragOffsetX, item.verticalOffset)
+        if (item.rect.translated(item.slideOffsetX + item.dragOffsetX, item.verticalOffset)
                 .contains(pos)) {
             return i;
         }
@@ -686,8 +685,7 @@ void DockGroupHeader::mousePressEvent(QMouseEvent* event)
     m_pressedPanel = m_items[index].panel.data();
     m_pressStartGlobal = event->globalPosition().toPoint();
     m_dragGrabOffsetX = event->position().x()
-        - (m_items[index].rect.left() + m_items[index].slideOffsetX
-            + m_items[index].dragOffsetX);
+        - (m_items[index].rect.left() + m_items[index].slideOffsetX + m_items[index].dragOffsetX);
     m_dragging = false;
 }
 
@@ -728,8 +726,7 @@ QHash<DockPanel*, qreal> DockGroupHeader::visualTabLefts() const
     result.reserve(m_items.size());
     for (const TabItem& item : m_items) {
         if (!item.panel.isNull()) {
-            result.insert(
-                item.panel.data(), item.rect.x() + item.slideOffsetX + item.dragOffsetX);
+            result.insert(item.panel.data(), item.rect.x() + item.slideOffsetX + item.dragOffsetX);
         }
     }
     return result;
@@ -747,8 +744,7 @@ void DockGroupHeader::updateDraggedTab(const QPoint& globalPos)
     const qreal tabWidth = m_items[index].rect.width();
     const qreal minLeft = m_tabPadding;
     const qreal maxLeft = qMax(minLeft, width() - m_tabPadding - tabWidth);
-    const qreal visualLeft
-        = qBound(minLeft, localPos.x() - m_dragGrabOffsetX, maxLeft);
+    const qreal visualLeft = qBound(minLeft, localPos.x() - m_dragGrabOffsetX, maxLeft);
     const qreal visualRight = visualLeft + tabWidth;
     const qreal visualCenter = visualLeft + tabWidth * 0.5;
 
@@ -759,8 +755,7 @@ void DockGroupHeader::updateDraggedTab(const QPoint& globalPos)
         // dragged tab may never get its center left of a narrow neighbour's
         // center. Its leading edge crossing the neighbour's center is the stable
         // insertion threshold used by movable tab bars.
-        while (targetIndex > 0
-            && visualLeft < m_items[targetIndex - 1].rect.center().x()) {
+        while (targetIndex > 0 && visualLeft < m_items[targetIndex - 1].rect.center().x()) {
             --targetIndex;
         }
     } else if (visualCenter > slotCenter) {

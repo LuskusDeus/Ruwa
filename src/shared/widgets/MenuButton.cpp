@@ -105,8 +105,7 @@ void MenuButton::updateMetrics()
 {
     const auto& theme = ruwa::ui::core::ThemeManager::instance();
 
-    QFont textFont = font();
-    textFont.setPointSize(theme.scaledFontSize(9));
+    QFont textFont = theme.font(ruwa::ui::core::ThemeFontRole::Body);
     setFont(textFont);
 
     setFixedHeight(theme.scaled(28));

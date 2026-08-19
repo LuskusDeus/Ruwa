@@ -783,8 +783,7 @@ void BaseStyledWidget::drawContentLayer(QPainter& painter, const QRectF& rect)
     if (content.iconPosition != IconPosition::Center && !text().isEmpty()) {
         painter.setPen(textColor);
 
-        QFont font = this->font();
-        font.setPointSize(mgr.scaledFontSize(content.baseFontSize));
+        QFont font = mgr.font(content.fontRole);
         if (content.boldWhenActive && m_activeProgress > 0.5) {
             font.setBold(true);
         }

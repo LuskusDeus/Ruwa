@@ -133,9 +133,9 @@ protected:
 QLabel* makeSectionLabel(const QString& text, QWidget* parent)
 {
     auto* label = new QLabel(text, parent);
-    const auto& colors = ruwa::ui::core::ThemeManager::instance().colors();
-    const auto& fonts = colors.fonts;
-    label->setFont(fonts.getUIFont(8));
+    const auto& theme = ruwa::ui::core::ThemeManager::instance();
+    const auto& colors = theme.colors();
+    label->setFont(theme.font(ruwa::ui::core::ThemeFontRole::Small));
     label->setStyleSheet(
         QString("color: %1; background: transparent;").arg(colors.textMuted.name()));
     return label;
@@ -171,8 +171,8 @@ void ExportSettingsPanel::setExportFrame(const QRect& frame)
 
 void ExportSettingsPanel::buildUI()
 {
-    const auto& colors = ruwa::ui::core::ThemeManager::instance().colors();
-    const auto& fonts = colors.fonts;
+    const auto& theme = ruwa::ui::core::ThemeManager::instance();
+    const auto& colors = theme.colors();
 
     auto* root = new QVBoxLayout(this);
     root->setContentsMargins(kPanelPadding, kPanelPadding, kPanelPadding, kPanelPadding);
@@ -189,9 +189,7 @@ void ExportSettingsPanel::buildUI()
     m_titleIconLabel->setStyleSheet(QStringLiteral("background: transparent;"));
 
     m_titleLabel = new QLabel(tr("Export image"), this);
-    QFont titleFont = fonts.getUIFont(10);
-    titleFont.setWeight(QFont::Medium);
-    m_titleLabel->setFont(titleFont);
+    m_titleLabel->setFont(theme.font(ruwa::ui::core::ThemeFontRole::Label, QFont::Medium));
     m_titleLabel->setStyleSheet(
         QString("color: %1; background: transparent;").arg(colors.text.name()));
     m_titleLabel->setAlignment(Qt::AlignLeft | Qt::AlignVCenter);
@@ -253,12 +251,13 @@ void ExportSettingsPanel::buildUI()
     estimatedSizeLayout->setSpacing(3);
 
     m_estimatedSizeTitleLabel = makeSectionLabel(tr("EST. SIZE"), estimatedSizeBlock);
-    QFont estimatedTitleFont = fonts.getUIFont(8);
-    estimatedTitleFont.setWeight(QFont::Medium);
-    m_estimatedSizeTitleLabel->setFont(estimatedTitleFont);
+    m_sectionLabels.append(m_estimatedSizeTitleLabel);
+    m_estimatedSizeTitleLabel->setFont(
+        theme.font(ruwa::ui::core::ThemeFontRole::Small, QFont::Medium));
 
     m_estimatedSizeLabel = new QLabel(QStringLiteral("--"), estimatedSizeBlock);
-    QFont estimatedSizeFont = fonts.getUIFont(14);
+    QFont estimatedSizeFont
+        = colors.fonts.getUIFont(theme.fontSize(ruwa::ui::core::ThemeFontRole::H5));
     estimatedSizeFont.setWeight(QFont::DemiBold);
     m_estimatedSizeLabel->setFont(estimatedSizeFont);
     m_estimatedSizeLabel->setStyleSheet(
@@ -286,8 +285,8 @@ void ExportSettingsPanel::buildUI()
 
 QWidget* ExportSettingsPanel::createFormatPage(bool includeQualityControls)
 {
-    const auto& colors = ruwa::ui::core::ThemeManager::instance().colors();
-    const auto& fonts = colors.fonts;
+    const auto& theme = ruwa::ui::core::ThemeManager::instance();
+    const auto& colors = theme.colors();
 
     auto* page = new QWidget(this);
     page->setAttribute(Qt::WA_TranslucentBackground, true);
@@ -308,6 +307,7 @@ QWidget* ExportSettingsPanel::createFormatPage(bool includeQualityControls)
         qualityLayout->setSpacing(kLabelSpacing);
 
         m_qualityLabel = makeSectionLabel(tr("Quality"), qualitySection);
+        m_sectionLabels.append(m_qualityLabel);
         qualityLayout->addWidget(m_qualityLabel);
 
         m_qualitySlider = new ruwa::ui::widgets::ProgressHandleSlider(qualitySection);
@@ -333,11 +333,11 @@ QWidget* ExportSettingsPanel::createFormatPage(bool includeQualityControls)
     sizeLayout->setSpacing(kLabelSpacing);
 
     auto* sizeTitleLabel = makeSectionLabel(tr("Export size"), sizeSection);
+    m_sectionLabels.append(sizeTitleLabel);
     sizeLayout->addWidget(sizeTitleLabel);
 
     auto* sizeLabel = new QLabel(QStringLiteral("-- x -- px"), sizeSection);
-    QFont sizeFont = fonts.getUIFont(9);
-    sizeLabel->setFont(sizeFont);
+    sizeLabel->setFont(theme.font(ruwa::ui::core::ThemeFontRole::Body));
     sizeLabel->setStyleSheet(
         QString("color: %1; background: transparent;").arg(colors.text.name()));
     sizeLayout->addWidget(sizeLabel);
@@ -370,24 +370,38 @@ void ExportSettingsPanel::onExportClicked()
 
 void ExportSettingsPanel::onThemeChanged()
 {
-    const auto& colors = ruwa::ui::core::ThemeManager::instance().colors();
+    const auto& theme = ruwa::ui::core::ThemeManager::instance();
+    const auto& colors = theme.colors();
 
     // Re-apply label colors
     if (m_titleLabel) {
+        m_titleLabel->setFont(theme.font(ruwa::ui::core::ThemeFontRole::Label, QFont::Medium));
         m_titleLabel->setStyleSheet(
             QString("color: %1; background: transparent;").arg(colors.text.name()));
     }
+    for (QLabel* label : m_sectionLabels) {
+        if (label) {
+            label->setFont(theme.font(ruwa::ui::core::ThemeFontRole::Small));
+        }
+    }
     for (QLabel* label : m_sizeLabels) {
         if (label) {
+            label->setFont(theme.font(ruwa::ui::core::ThemeFontRole::Body));
             label->setStyleSheet(
                 QString("color: %1; background: transparent;").arg(colors.text.name()));
         }
     }
     if (m_estimatedSizeTitleLabel) {
+        m_estimatedSizeTitleLabel->setFont(
+            theme.font(ruwa::ui::core::ThemeFontRole::Small, QFont::Medium));
         m_estimatedSizeTitleLabel->setStyleSheet(
             QString("color: %1; background: transparent;").arg(colors.textMuted.name()));
     }
     if (m_estimatedSizeLabel) {
+        QFont estimatedSizeFont
+            = colors.fonts.getUIFont(theme.fontSize(ruwa::ui::core::ThemeFontRole::H5));
+        estimatedSizeFont.setWeight(QFont::DemiBold);
+        m_estimatedSizeLabel->setFont(estimatedSizeFont);
         m_estimatedSizeLabel->setStyleSheet(
             QString("color: %1; background: transparent;").arg(colors.text.name()));
     }

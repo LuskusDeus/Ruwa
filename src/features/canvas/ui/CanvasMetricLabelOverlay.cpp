@@ -142,9 +142,7 @@ void CanvasMetricLabelOverlay::applySegmentStyling(SegmentWidgets& widgets)
     if (auto* inner = qobject_cast<QHBoxLayout*>(widgets.container->layout())) {
         inner->setSpacing(theme.scaled(kIconTextGapBase));
     }
-    QFont font = colors.fonts.getUIFont(theme.scaledFontSize(10));
-    font.setWeight(QFont::DemiBold);
-    widgets.text->setFont(font);
+    widgets.text->setFont(theme.font(ruwa::ui::core::ThemeFontRole::Label, QFont::DemiBold));
     widgets.text->setStyleSheet(
         QStringLiteral("QLabel#canvasMetricLabel { background: transparent; color: rgb(%1, %2, "
                        "%3); }")

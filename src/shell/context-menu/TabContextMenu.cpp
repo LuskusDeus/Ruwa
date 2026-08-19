@@ -152,8 +152,7 @@ void TabContextMenu::applyStyle()
     const auto& theme = ruwa::ui::core::ThemeManager::instance();
 
     if (m_tabTypeSectionLabel) {
-        QFont sf = colors.fonts.getUIFont(theme.scaledFontSize(10));
-        sf.setWeight(QFont::DemiBold);
+        QFont sf = theme.font(ruwa::ui::core::ThemeFontRole::Label, QFont::DemiBold);
         sf.setCapitalization(QFont::AllUppercase);
         sf.setLetterSpacing(QFont::AbsoluteSpacing, theme.scaled(1.8));
         m_tabTypeSectionLabel->setFont(sf);
@@ -162,8 +161,7 @@ void TabContextMenu::applyStyle()
         m_tabTypeSectionLabel->setPalette(sp);
     }
 
-    QFont inputFont = theme.colors().fonts.getUIFont(theme.scaledFontSize(9));
-    m_nameInput->setFont(inputFont);
+    m_nameInput->setFont(theme.font(ruwa::ui::core::ThemeFontRole::Body));
 
     m_nameInput->setStyleSheet(QString("QLineEdit {"
                                        "  background: %1;"
@@ -171,13 +169,12 @@ void TabContextMenu::applyStyle()
                                        "  border-radius: 4px;"
                                        "  color: %3;"
                                        "  padding: 4px 8px;"
-                                       "  font-size: %5pt;"
                                        "  selection-background-color: %4;"
                                        "}"
                                        "QLineEdit:focus { border-color: %4; }")
             .arg(colors.overlayBase().name(QColor::HexArgb),
                 colors.borderSubtle().name(QColor::HexArgb), colors.text.name(),
-                colors.primary.name(), QString::number(theme.scaledFontSize(9))));
+                colors.primary.name()));
 }
 
 void TabContextMenu::rebuildStandardMenu()

@@ -81,9 +81,7 @@ void ShortcutRowWidget::setupUI()
 
     m_titleLabel = new QLabel(m_commandTitle, this);
     m_titleLabel->setAttribute(Qt::WA_TranslucentBackground);
-    QFont titleFont = m_titleLabel->font();
-    titleFont.setPointSize(mgr.scaledFontSize(10));
-    m_titleLabel->setFont(titleFont);
+    m_titleLabel->setFont(ThemeManager::instance().font(ThemeFontRole::Label));
     m_titleLabel->setStyleSheet(
         QString("QLabel { color: %1; background: transparent; }").arg(colors.text.name()));
     leftLayout->addWidget(m_titleLabel);
@@ -91,9 +89,7 @@ void ShortcutRowWidget::setupUI()
     if (!m_commandDescription.isEmpty()) {
         m_descLabel = new QLabel(m_commandDescription, this);
         m_descLabel->setAttribute(Qt::WA_TranslucentBackground);
-        QFont descFont = m_descLabel->font();
-        descFont.setPointSize(mgr.scaledFontSize(8));
-        m_descLabel->setFont(descFont);
+        m_descLabel->setFont(ThemeManager::instance().font(ThemeFontRole::Small));
         m_descLabel->setStyleSheet(
             QString("QLabel { color: %1; background: transparent; }").arg(colors.textMuted.name()));
         leftLayout->addWidget(m_descLabel);
@@ -156,6 +152,7 @@ void ShortcutRowWidget::setupUI()
 void ShortcutRowWidget::updateScaledSizes()
 {
     auto& mgr = WidgetStyleManager::instance();
+    const auto& theme = ThemeManager::instance();
 
     const int padH = mgr.scaled(BASE_PADDING_H);
     const int padV = mgr.scaled(BASE_PADDING_V);
@@ -163,14 +160,10 @@ void ShortcutRowWidget::updateScaledSizes()
     m_layout->setSpacing(mgr.scaled(BASE_SPACING));
 
     if (m_titleLabel) {
-        QFont f = m_titleLabel->font();
-        f.setPointSize(mgr.scaledFontSize(10));
-        m_titleLabel->setFont(f);
+        m_titleLabel->setFont(theme.font(ThemeFontRole::Label));
     }
     if (m_descLabel) {
-        QFont f = m_descLabel->font();
-        f.setPointSize(mgr.scaledFontSize(8));
-        m_descLabel->setFont(f);
+        m_descLabel->setFont(theme.font(ThemeFontRole::Small));
     }
     if (m_resetButton) {
         m_resetButton->setIcon(

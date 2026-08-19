@@ -336,10 +336,8 @@ protected:
             width() - leftOffset - ThemeManager::instance().scaled(8),
             height() - ThemeManager::instance().scaled(15));
 
-        QFont textFont = painter.font();
-        textFont.setPixelSize(ThemeManager::instance().scaled(10));
-        textFont.setWeight(activeProgress() > 0.5 ? QFont::Medium : QFont::Normal);
-        painter.setFont(textFont);
+        painter.setFont(ThemeManager::instance().font(
+            ThemeFontRole::Label, activeProgress() > 0.5 ? QFont::Medium : QFont::Normal));
         const QColor baseText = ThemeColors::interpolate(colors.textMuted, colors.textMuted, 0.0);
         const QColor hoverText = ThemeColors::interpolate(colors.textMuted, colors.text, 0.22);
         const QColor activeText = ThemeColors::interpolate(colors.textMuted, colors.text, 0.62);
@@ -351,10 +349,7 @@ protected:
                 translatedBrushText(m_brush.name), Qt::ElideRight, textRect.width()));
 
         if (ruwa::core::SettingsManager::instance().isBrushFavorite(m_brush.id)) {
-            QFont favoriteFont = painter.font();
-            favoriteFont.setPixelSize(ThemeManager::instance().scaled(10));
-            favoriteFont.setWeight(QFont::DemiBold);
-            painter.setFont(favoriteFont);
+            painter.setFont(ThemeManager::instance().font(ThemeFontRole::Label, QFont::DemiBold));
             QColor favoriteColor = ThemeColors::interpolate(colors.textMuted, colors.primary, 0.82);
             favoriteColor.setAlpha(220);
             painter.setPen(favoriteColor);

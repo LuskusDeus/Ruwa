@@ -222,9 +222,7 @@ void ShortcutsNavigatorWidget::rebuildShortcutRows(const QStringList& shortcutId
 
         QLabel* titleLabel = new QLabel(title, shortcutRow);
         titleLabel->setAttribute(Qt::WA_TranslucentBackground);
-        QFont labelFont = titleLabel->font();
-        labelFont.setBold(true);
-        labelFont.setPointSize(mgr.scaledFontSize(style().content.baseFontSize));
+        QFont labelFont = mgr.font(style().content.fontRole, QFont::Bold);
         titleLabel->setFont(labelFont);
         titleLabel->setStyleSheet(
             QString("QLabel { color: %1; background: transparent; }").arg(colors.text.name()));
