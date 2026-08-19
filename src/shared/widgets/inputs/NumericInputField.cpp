@@ -11,6 +11,7 @@
 #include <QFontMetrics>
 #include <QFocusEvent>
 #include <QKeyEvent>
+#include <QMouseEvent>
 #include <QPainter>
 #include <QPainterPath>
 #include <QPropertyAnimation>
@@ -50,6 +51,7 @@ NumericInputField::NumericInputField(QWidget* parent)
 
     applyPalette();
     updateMargins();
+    updateScrubCursor();
     setText(formatValue(m_value));
 }
 
@@ -153,6 +155,141 @@ void NumericInputField::nudge(double delta)
     applyValue(m_value + delta, /*reformatText=*/true);
 }
 
+double NumericInputField::stepMultiplier(Qt::KeyboardModifiers modifiers)
+{
+    if (modifiers.testFlag(Qt::ShiftModifier)) {
+        return 10.0;
+    }
+    if (modifiers.testFlag(Qt::ControlModifier)) {
+        return 0.1;
+    }
+    return 1.0;
+}
+
+void NumericInputField::beginScrub(int anchorX)
+{
+    m_scrubbing = true;
+    m_scrubLastX = anchorX;
+    // The drag owns the value from here on, so it starts from what the field
+    // currently shows rather than from a stale accumulator.
+    m_scrubValue = m_value;
+    deselect();
+    if (m_pressTookFocus) {
+        // The press pulled focus in before we could tell it was a drag. Hand it
+        // back, so the caret stops blinking mid-scrub and the field is left in
+        // the state a scrub should leave it: showing a value, not editing one.
+        m_pressTookFocus = false;
+        clearFocus();
+    }
+    setCursor(Qt::SizeHorCursor);
+    emit scrubbingChanged(true);
+}
+
+void NumericInputField::endScrub()
+{
+    m_scrubbing = false;
+    applyValue(m_value, /*reformatText=*/true);
+    updateScrubCursor();
+    emit scrubbingChanged(false);
+    // One drag is one edit: listeners that commit on editingFinished (an undo
+    // step, a pixel move) get a single commit for the whole gesture rather than
+    // one per mouse move.
+    emit editingFinished();
+}
+
+void NumericInputField::updateScrubCursor()
+{
+    const bool editable = isEnabled() && !isReadOnly();
+    setCursor(editable && !hasFocus() ? Qt::SizeHorCursor : Qt::IBeamCursor);
+}
+
+void NumericInputField::mousePressEvent(QMouseEvent* event)
+{
+    // Qt focuses a click-focusable widget from QWidgetWindow, *before* the
+    // press reaches it, so hasFocus() is already true here even on the very
+    // first click. The gesture therefore keys off who owned the focus a moment
+    // ago: a field that was already being text-edited keeps "drag = select
+    // characters", a field the click just woke up offers the scrub.
+    const bool wasEditing = hasFocus() && !m_focusFromPress;
+    const bool tookFocus = m_focusFromPress;
+    m_focusFromPress = false;
+
+    if (event->button() == Qt::LeftButton && !wasEditing && isEnabled() && !isReadOnly()) {
+        m_scrubArmed = true;
+        m_scrubbing = false;
+        m_pressTookFocus = tookFocus;
+        m_pressPos = event->position().toPoint();
+        m_scrubLastX = m_pressPos.x();
+        m_scrubValue = m_value;
+        event->accept();
+        return;
+    }
+    QLineEdit::mousePressEvent(event);
+}
+
+void NumericInputField::mouseMoveEvent(QMouseEvent* event)
+{
+    if (!m_scrubArmed) {
+        QLineEdit::mouseMoveEvent(event);
+        return;
+    }
+
+    auto& theme = ruwa::ui::core::ThemeManager::instance();
+    const int x = event->position().toPoint().x();
+
+    if (!m_scrubbing) {
+        const int threshold = qMax(1, theme.scaled(BaseScrubThreshold));
+        const int travel = x - m_pressPos.x();
+        if (qAbs(travel) < threshold) {
+            event->accept();
+            return;
+        }
+        // Anchor on the point where the threshold was crossed, so crossing it
+        // does not hand the value a free jump of one dead zone's worth.
+        beginScrub(m_pressPos.x() + (travel > 0 ? threshold : -threshold));
+    }
+
+    const double pixelsPerStep = qMax(1, theme.scaled(BaseScrubPixelsPerStep));
+    const double delta = static_cast<double>(x - m_scrubLastX) / pixelsPerStep * m_step
+        * stepMultiplier(event->modifiers());
+    m_scrubLastX = x;
+    // Clamped as it accumulates: dragging past an end must not build up slack
+    // that the pointer has to travel back through before the value responds.
+    m_scrubValue = qBound(m_minimum, m_scrubValue + delta, m_maximum);
+    applyValue(m_scrubValue, /*reformatText=*/true);
+    event->accept();
+}
+
+void NumericInputField::mouseReleaseEvent(QMouseEvent* event)
+{
+    if (m_scrubArmed && event->button() == Qt::LeftButton) {
+        const bool wasScrubbing = m_scrubbing;
+        m_scrubArmed = false;
+        m_pressTookFocus = false;
+        if (wasScrubbing) {
+            endScrub();
+        } else {
+            // A press that never travelled reads as "I want to type in here".
+            setFocus(Qt::MouseFocusReason);
+            // The click is spent: from now on this field is being edited, so
+            // the next press must not read as a fresh scrub.
+            m_focusFromPress = false;
+            selectAll();
+        }
+        event->accept();
+        return;
+    }
+    QLineEdit::mouseReleaseEvent(event);
+}
+
+void NumericInputField::focusInEvent(QFocusEvent* event)
+{
+    // Runs just before the press that caused it — see mousePressEvent.
+    m_focusFromPress = event->reason() == Qt::MouseFocusReason;
+    QLineEdit::focusInEvent(event);
+    updateScrubCursor();
+}
+
 void NumericInputField::focusOutEvent(QFocusEvent* event)
 {
     // Whether QLineEdit emitted editingFinished on the way out depends on the
@@ -160,6 +297,7 @@ void NumericInputField::focusOutEvent(QFocusEvent* event)
     // input, so it emits nothing and the field is left showing the fragment.
     const bool wasReported = hasAcceptableInput();
     QLineEdit::focusOutEvent(event);
+    updateScrubCursor();
     if (wasReported) {
         return;
     }
@@ -208,18 +346,16 @@ void NumericInputField::wheelEvent(QWheelEvent* event)
         QLineEdit::wheelEvent(event);
         return;
     }
-    const bool big = event->modifiers().testFlag(Qt::ShiftModifier);
     const double dir = event->angleDelta().y() > 0 ? 1.0 : -1.0;
-    nudge(dir * m_step * (big ? 10.0 : 1.0));
+    nudge(dir * m_step * stepMultiplier(event->modifiers()));
     event->accept();
 }
 
 void NumericInputField::keyPressEvent(QKeyEvent* event)
 {
     if (event->key() == Qt::Key_Up || event->key() == Qt::Key_Down) {
-        const bool big = event->modifiers().testFlag(Qt::ShiftModifier);
         const double dir = event->key() == Qt::Key_Up ? 1.0 : -1.0;
-        nudge(dir * m_step * (big ? 10.0 : 1.0));
+        nudge(dir * m_step * stepMultiplier(event->modifiers()));
         event->accept();
         return;
     }
@@ -230,6 +366,16 @@ void NumericInputField::resizeEvent(QResizeEvent* event)
 {
     QLineEdit::resizeEvent(event);
     updateMargins();
+}
+
+void NumericInputField::changeEvent(QEvent* event)
+{
+    QLineEdit::changeEvent(event);
+    // A field turned read-only or disabled must stop advertising a gesture it
+    // no longer offers.
+    if (event->type() == QEvent::EnabledChange || event->type() == QEvent::ReadOnlyChange) {
+        updateScrubCursor();
+    }
 }
 
 int NumericInputField::suffixSlotWidth() const
