@@ -10,11 +10,15 @@
 #include "shared/widgets/BaseStyledPanel.h"
 #include "shared/widgets/CapsuleButton.h"
 #include "shared/widgets/inputs/ColorInputButton.h"
+#include "shared/widgets/inputs/FontDropdownSelector.h"
+#include "shared/widgets/inputs/NumericInputField.h"
 #include "shared/widgets/layout/AnimatedStackedWidget.h"
+#include "shared/widgets/layout/PropertyRowLayout.h"
 #include "shared/widgets/layout/SmoothScrollArea.h"
 
 #include <QButtonGroup>
 #include <QEvent>
+#include <QFontDatabase>
 #include <QHBoxLayout>
 #include <QLabel>
 #include <QPainter>
@@ -27,6 +31,33 @@ namespace {
 
 constexpr int kPreviewStretch = 30;
 constexpr int kSettingsStretch = 70;
+constexpr double kMinimumThemeFontSize = 6.0;
+constexpr double kMaximumThemeFontSize = 96.0;
+
+constexpr std::array<ruwa::ui::core::ThemeFontRole, 16> kFontSizeRoles {
+    ruwa::ui::core::ThemeFontRole::Display,
+    ruwa::ui::core::ThemeFontRole::H0,
+    ruwa::ui::core::ThemeFontRole::H1,
+    ruwa::ui::core::ThemeFontRole::H2,
+    ruwa::ui::core::ThemeFontRole::H3,
+    ruwa::ui::core::ThemeFontRole::H4,
+    ruwa::ui::core::ThemeFontRole::H5,
+    ruwa::ui::core::ThemeFontRole::H6,
+    ruwa::ui::core::ThemeFontRole::Subtitle,
+    ruwa::ui::core::ThemeFontRole::BodyLarge,
+    ruwa::ui::core::ThemeFontRole::Label,
+    ruwa::ui::core::ThemeFontRole::Body,
+    ruwa::ui::core::ThemeFontRole::Small,
+    ruwa::ui::core::ThemeFontRole::Caption,
+    ruwa::ui::core::ThemeFontRole::Micro,
+    ruwa::ui::core::ThemeFontRole::Code,
+};
+
+QString& fontFamilyAt(ruwa::ui::core::ThemePreset& preset, std::size_t familyIndex)
+{
+    Q_ASSERT(familyIndex < 2);
+    return familyIndex == 0 ? preset.fonts.titleFont : preset.fonts.uiFont;
+}
 
 int contentSideMarginForSize(const QSize& size)
 {
@@ -140,12 +171,14 @@ void ThemeEditorTab::setupUi()
                 m_themesPreview->setPreset(m_editingTheme);
             }
             syncColorInputs();
+            syncFontInputs();
             setDirtyState(false);
         });
 
     m_previewStack->setCurrentIndexWithoutAnimation(0);
     m_settingsStack->setCurrentIndexWithoutAnimation(0);
     syncColorInputs();
+    syncFontInputs();
     if (!m_pendingThemeId.isNull()) {
         m_sidebar->setEditingThemeById(m_pendingThemeId);
         m_pendingThemeId = QUuid();
@@ -289,9 +322,14 @@ QWidget* ThemeEditorTab::createSettingsSection(
         ruwa::ui::widgets::AnimatedStackedWidget::SlideOrientation::Horizontal);
 
     for (SettingsPage settingsPage : definition.pages) {
-        QWidget* settingsContent = settingsPage == SettingsPage::ThemeColors
-            ? createColorsSettingsPage(sectionUi.contentStack)
-            : createSettingsPlaceholder(settingsPage, sectionUi.contentStack);
+        QWidget* settingsContent = nullptr;
+        if (settingsPage == SettingsPage::ThemeColors) {
+            settingsContent = createColorsSettingsPage(sectionUi.contentStack);
+        } else if (settingsPage == SettingsPage::ThemeFont) {
+            settingsContent = createFontSettingsPage(sectionUi.contentStack);
+        } else {
+            settingsContent = createSettingsPlaceholder(settingsPage, sectionUi.contentStack);
+        }
         sectionUi.contentStack->addWidget(settingsContent);
     }
     sectionUi.contentStack->setCurrentIndexWithoutAnimation(0);
@@ -386,6 +424,141 @@ QWidget* ThemeEditorTab::createColorsSettingsPage(QWidget* parent)
     return scrollArea;
 }
 
+QWidget* ThemeEditorTab::createFontSettingsPage(QWidget* parent)
+{
+    auto* scrollArea = new ruwa::ui::widgets::SmoothScrollArea(parent);
+    scrollArea->setFillBackground(false);
+    scrollArea->setScrollBarTransparentTrack(true);
+    scrollArea->setScrollBarMargin(ruwa::ui::core::ThemeManager::instance().scaled(4));
+
+    auto* content = new QWidget();
+    content->setAttribute(Qt::WA_TranslucentBackground);
+    auto* columnsLayout = new QHBoxLayout(content);
+    columnsLayout->setContentsMargins(0, 0, 0, 0);
+    columnsLayout->setSpacing(ruwa::ui::core::ThemeManager::instance().scaled(16));
+
+    for (std::size_t index = 0; index < FontCategoryCount; ++index) {
+        columnsLayout->addWidget(createFontCategory(index, content), 1);
+    }
+
+    scrollArea->setWidget(content);
+    return scrollArea;
+}
+
+QWidget* ThemeEditorTab::createFontCategory(std::size_t categoryIndex, QWidget* parent)
+{
+    Q_ASSERT(categoryIndex < FontCategoryCount);
+
+    auto* category = new QWidget(parent);
+    category->setAttribute(Qt::WA_TranslucentBackground);
+    auto* layout = new QVBoxLayout(category);
+
+    const auto& theme = ruwa::ui::core::ThemeManager::instance();
+    layout->setContentsMargins(0, 0, 0, 0);
+    layout->setSpacing(theme.scaled(8));
+
+    auto* title = new QLabel(category);
+    title->setFont(theme.font(ruwa::ui::core::ThemeFontRole::BodyLarge, QFont::Bold));
+    m_fontCategoryTitles[categoryIndex] = title;
+    layout->addWidget(title);
+
+    auto* rowsHost = new QWidget(category);
+    rowsHost->setAttribute(Qt::WA_TranslucentBackground);
+    auto rows = std::make_unique<ruwa::ui::widgets::PropertyRowLayout>(rowsHost);
+
+    if (categoryIndex == 0) {
+        for (std::size_t familyIndex = 0; familyIndex < FontFamilyCount; ++familyIndex) {
+            auto* input = createFontFamilyInput(familyIndex, rowsHost);
+            m_fontFamilyLabels[familyIndex] = rows->addRow(QString(), input);
+        }
+    } else {
+        const std::size_t firstIndex = categoryIndex == 1 ? 0 : 8;
+        const std::size_t lastIndex = categoryIndex == 1 ? 8 : FontSizeFieldCount;
+        for (std::size_t sizeIndex = firstIndex; sizeIndex < lastIndex; ++sizeIndex) {
+            auto* input = createFontSizeInput(sizeIndex, rowsHost);
+            m_fontSizeLabels[sizeIndex] = rows->addRow(QString(), input);
+        }
+    }
+
+    m_fontPropertyLayouts[categoryIndex] = std::move(rows);
+    layout->addWidget(rowsHost);
+    layout->addStretch();
+    return category;
+}
+
+ruwa::ui::widgets::FontDropdownSelector* ThemeEditorTab::createFontFamilyInput(
+    std::size_t familyIndex, QWidget* parent)
+{
+    Q_ASSERT(familyIndex < FontFamilyCount);
+
+    auto* input = new ruwa::ui::widgets::FontDropdownSelector(parent);
+    input->setSizePolicy(QSizePolicy::Expanding, QSizePolicy::Fixed);
+    input->setFontFamilies(QFontDatabase::families());
+    input->setPopupMaxHeight(ruwa::ui::core::ThemeManager::instance().scaled(320));
+
+    connect(input, &ruwa::ui::widgets::FontDropdownSelector::popupShown, this,
+        [this, familyIndex]() {
+            m_fontPreviewOriginalFamilies[familyIndex]
+                = fontFamilyAt(m_editingTheme, familyIndex);
+        });
+    connect(input, &ruwa::ui::widgets::FontDropdownSelector::familyPreviewed, this,
+        [this, familyIndex](const QString& family) {
+            if (m_syncingFontInputs || family.isEmpty()) {
+                return;
+            }
+            fontFamilyAt(m_editingTheme, familyIndex) = family;
+            refreshThemesPreview();
+        });
+    connect(input, &ruwa::ui::widgets::FontDropdownSelector::previewCancelled, this,
+        [this, familyIndex]() {
+            if (m_syncingFontInputs || m_fontPreviewOriginalFamilies[familyIndex].isEmpty()) {
+                return;
+            }
+            fontFamilyAt(m_editingTheme, familyIndex)
+                = m_fontPreviewOriginalFamilies[familyIndex];
+            refreshThemesPreview();
+        });
+    connect(input, &ruwa::ui::widgets::FontDropdownSelector::activated, this,
+        [this, familyIndex](const QString& family) {
+            if (m_syncingFontInputs || family.isEmpty()) {
+                return;
+            }
+            fontFamilyAt(m_editingTheme, familyIndex) = family;
+            m_fontPreviewOriginalFamilies[familyIndex] = family;
+            refreshThemesPreview();
+            updateDirtyState();
+        });
+
+    m_fontFamilyInputs[familyIndex] = input;
+    return input;
+}
+
+ruwa::ui::widgets::NumericInputField* ThemeEditorTab::createFontSizeInput(
+    std::size_t sizeIndex, QWidget* parent)
+{
+    Q_ASSERT(sizeIndex < FontSizeFieldCount);
+
+    auto* input = new ruwa::ui::widgets::NumericInputField(parent);
+    input->setSizePolicy(QSizePolicy::Expanding, QSizePolicy::Fixed);
+    input->setRange(kMinimumThemeFontSize, kMaximumThemeFontSize);
+    input->setDecimals(0);
+    input->setSingleStep(1.0);
+    input->setSuffix(QStringLiteral("pt"));
+
+    connect(input, &ruwa::ui::widgets::NumericInputField::valueChanged, this,
+        [this, sizeIndex](double value) {
+            if (m_syncingFontInputs) {
+                return;
+            }
+            m_editingTheme.fonts.sizes.setValue(kFontSizeRoles[sizeIndex], qRound(value));
+            refreshThemesPreview();
+            updateDirtyState();
+        });
+
+    m_fontSizeInputs[sizeIndex] = input;
+    return input;
+}
+
 QWidget* ThemeEditorTab::createColorCategory(
     const QVector<ColorField>& fields, std::size_t categoryIndex, QWidget* parent)
 {
@@ -464,7 +637,7 @@ QString ThemeEditorTab::settingsPageDescription(SettingsPage settingsPage) const
     case SettingsPage::ThemeColors:
         return {};
     case SettingsPage::ThemeFont:
-        return tr("Theme font settings will be available here.");
+        return {};
     case SettingsPage::Interface:
         return tr("Interface appearance settings will be available here.");
     case SettingsPage::Canvas:
@@ -513,6 +686,22 @@ QString ThemeEditorTab::colorFieldLabel(ColorField field) const
     default:
         return {};
     }
+}
+
+QString ThemeEditorTab::fontFamilyLabel(std::size_t familyIndex) const
+{
+    Q_ASSERT(familyIndex < FontFamilyCount);
+    return familyIndex == 0 ? tr("Headings") : tr("Interface text");
+}
+
+QString ThemeEditorTab::fontSizeFieldLabel(std::size_t sizeIndex) const
+{
+    Q_ASSERT(sizeIndex < FontSizeFieldCount);
+    const std::array<QString, FontSizeFieldCount> labels { tr("Display"), tr("H0"), tr("H1"),
+        tr("H2"), tr("H3"), tr("H4"), tr("H5"), tr("H6"), tr("Subtitle"),
+        tr("Body Large"), tr("Label"), tr("Body"), tr("Small"), tr("Caption"), tr("Micro"),
+        tr("Code") };
+    return labels[sizeIndex];
 }
 
 QColor& ThemeEditorTab::editingColor(ColorField field)
@@ -600,6 +789,32 @@ void ThemeEditorTab::syncColorInputs()
     m_syncingColorInputs = false;
 }
 
+void ThemeEditorTab::syncFontInputs()
+{
+    m_syncingFontInputs = true;
+    for (std::size_t index = 0; index < FontFamilyCount; ++index) {
+        const QString& family = fontFamilyAt(m_editingTheme, index);
+        m_fontPreviewOriginalFamilies[index] = family;
+        if (m_fontFamilyInputs[index]) {
+            m_fontFamilyInputs[index]->setCurrentFamily(family);
+        }
+    }
+    for (std::size_t index = 0; index < FontSizeFieldCount; ++index) {
+        if (m_fontSizeInputs[index]) {
+            m_fontSizeInputs[index]->setValue(
+                m_editingTheme.fonts.sizes.value(kFontSizeRoles[index]));
+        }
+    }
+    m_syncingFontInputs = false;
+}
+
+void ThemeEditorTab::refreshThemesPreview()
+{
+    if (m_themesPreview) {
+        m_themesPreview->setPreset(m_editingTheme);
+    }
+}
+
 void ThemeEditorTab::updateDirtyState()
 {
     bool dirty = false;
@@ -609,6 +824,12 @@ void ThemeEditorTab::updateDirtyState()
             dirty = true;
             break;
         }
+    }
+    if (!dirty) {
+        dirty = m_editingTheme.fonts.uiFont != m_savedTheme.fonts.uiFont
+            || m_editingTheme.fonts.titleFont != m_savedTheme.fonts.titleFont
+            || m_editingTheme.fonts.codeFont != m_savedTheme.fonts.codeFont
+            || m_editingTheme.fonts.sizes != m_savedTheme.fonts.sizes;
     }
     setDirtyState(dirty);
 }
@@ -680,6 +901,32 @@ void ThemeEditorTab::retranslateUi()
         }
     }
 
+    const std::array<QString, FontCategoryCount> fontCategoryTitles { tr("Font Families"),
+        tr("Heading Sizes"), tr("Text Sizes") };
+    for (std::size_t index = 0; index < FontCategoryCount; ++index) {
+        if (m_fontCategoryTitles[index]) {
+            m_fontCategoryTitles[index]->setText(fontCategoryTitles[index]);
+        }
+    }
+    for (std::size_t index = 0; index < FontFamilyCount; ++index) {
+        if (m_fontFamilyLabels[index]) {
+            m_fontFamilyLabels[index]->setText(fontFamilyLabel(index));
+        }
+        if (m_fontFamilyInputs[index]) {
+            m_fontFamilyInputs[index]->setPlaceholderText(tr("Font"));
+        }
+    }
+    for (std::size_t index = 0; index < FontSizeFieldCount; ++index) {
+        if (m_fontSizeLabels[index]) {
+            m_fontSizeLabels[index]->setText(fontSizeFieldLabel(index));
+        }
+    }
+    for (auto& rows : m_fontPropertyLayouts) {
+        if (rows) {
+            rows->refreshLabelMetrics();
+        }
+    }
+
     for (auto& section : m_settingsSections) {
         for (int index = 0; index < section.tabButtons.size(); ++index) {
             section.tabButtons[index]->setText(settingsPageTitle(section.pages[index]));
@@ -737,6 +984,21 @@ void ThemeEditorTab::updateThemeColors()
     for (QLabel* title : m_colorCategoryTitles) {
         if (title) {
             title->setStyleSheet(QStringLiteral("color: %1;").arg(colors.text.name()));
+        }
+    }
+    for (QLabel* title : m_fontCategoryTitles) {
+        if (title) {
+            title->setStyleSheet(QStringLiteral("color: %1;").arg(colors.text.name()));
+        }
+    }
+    for (QLabel* label : m_fontFamilyLabels) {
+        if (label) {
+            label->setStyleSheet(QStringLiteral("color: %1;").arg(colors.textMuted.name()));
+        }
+    }
+    for (QLabel* label : m_fontSizeLabels) {
+        if (label) {
+            label->setStyleSheet(QStringLiteral("color: %1;").arg(colors.textMuted.name()));
         }
     }
 
@@ -799,6 +1061,36 @@ void ThemeEditorTab::updateScaledSizes()
             if (QWidget* content = category->parentWidget(); content && content->layout()) {
                 content->layout()->setSpacing(theme.scaled(8));
             }
+        }
+    }
+
+    for (QLabel* title : m_fontCategoryTitles) {
+        if (!title) {
+            continue;
+        }
+        title->setFont(theme.font(ruwa::ui::core::ThemeFontRole::BodyLarge, QFont::Bold));
+
+        if (QWidget* category = title->parentWidget(); category && category->layout()) {
+            category->layout()->setContentsMargins(0, 0, 0, 0);
+            category->layout()->setSpacing(theme.scaled(8));
+            if (QWidget* content = category->parentWidget(); content && content->layout()) {
+                content->layout()->setSpacing(theme.scaled(16));
+            }
+        }
+    }
+    for (QLabel* label : m_fontFamilyLabels) {
+        if (label) {
+            label->setFont(theme.font(ruwa::ui::core::ThemeFontRole::Body));
+        }
+    }
+    for (QLabel* label : m_fontSizeLabels) {
+        if (label) {
+            label->setFont(theme.font(ruwa::ui::core::ThemeFontRole::Body));
+        }
+    }
+    for (auto& rows : m_fontPropertyLayouts) {
+        if (rows) {
+            rows->refreshLabelMetrics();
         }
     }
 

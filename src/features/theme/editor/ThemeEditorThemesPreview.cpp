@@ -412,7 +412,7 @@ void ThemeEditorThemesPreview::updatePreviewGeometry()
 
 void ThemeEditorThemesPreview::updateTheme()
 {
-    const auto& theme = ruwa::ui::core::ThemeManager::instance();
+    auto& theme = ruwa::ui::core::ThemeManager::instance();
     const QPalette previewPalette
         = ruwa::ui::core::ThemeManager::paletteForColors(m_previewColors, palette());
     const auto previewFont
@@ -446,11 +446,13 @@ void ThemeEditorThemesPreview::updateTheme()
             theme.scaledFontSize(
                 m_previewColors.fonts.sizes.value(ruwa::ui::core::ThemeFontRole::H5))));
 
-        QFont buttonFont = previewFont(ruwa::ui::core::ThemeFontRole::Label, QFont::Bold);
-        m_primaryButton->setFont(buttonFont);
-        m_secondaryButton->setFont(buttonFont);
-        m_primaryButton->syncSizeToText();
-        m_secondaryButton->syncSizeToText();
+        // CapsuleButton resolves its banner font while synchronizing its size.
+        // Run that synchronization against the edited preset so it does not
+        // replace the preview font with the globally applied theme font.
+        theme.withColorOverride(m_previewColors, [this]() {
+            m_primaryButton->syncSizeToText();
+            m_secondaryButton->syncSizeToText();
+        });
     }
     if (m_widgetExamples) {
         m_widgetExamples->setPalette(previewPalette);

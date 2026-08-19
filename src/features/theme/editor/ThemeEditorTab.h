@@ -11,6 +11,7 @@
 #include <QUuid>
 #include <array>
 #include <cstddef>
+#include <memory>
 
 class QButtonGroup;
 class QEvent;
@@ -22,6 +23,9 @@ namespace ruwa::ui::widgets {
 class AnimatedStackedWidget;
 class CapsuleButton;
 class ColorInputButton;
+class FontDropdownSelector;
+class NumericInputField;
+class PropertyRowLayout;
 class ThemeEditorSidebar;
 class ThemeEditorThemesPreview;
 } // namespace ruwa::ui::widgets
@@ -109,6 +113,9 @@ private:
         = static_cast<std::size_t>(SettingsPage::Count);
     static constexpr std::size_t ColorFieldCount = static_cast<std::size_t>(ColorField::Count);
     static constexpr std::size_t ColorCategoryCount = 3;
+    static constexpr std::size_t FontFamilyCount = 2;
+    static constexpr std::size_t FontSizeFieldCount = 16;
+    static constexpr std::size_t FontCategoryCount = 3;
 
     void setupUi();
     QWidget* createThemesPreviewPage(QWidget* parent);
@@ -117,17 +124,27 @@ private:
         std::size_t sectionIndex, QWidget* parent);
     QWidget* createSettingsPlaceholder(SettingsPage settingsPage, QWidget* parent);
     QWidget* createColorsSettingsPage(QWidget* parent);
+    QWidget* createFontSettingsPage(QWidget* parent);
     QWidget* createColorCategory(
         const QVector<ColorField>& fields, std::size_t categoryIndex, QWidget* parent);
     ruwa::ui::widgets::ColorInputButton* createColorInput(ColorField field, QWidget* parent);
+    QWidget* createFontCategory(std::size_t categoryIndex, QWidget* parent);
+    ruwa::ui::widgets::FontDropdownSelector* createFontFamilyInput(
+        std::size_t familyIndex, QWidget* parent);
+    ruwa::ui::widgets::NumericInputField* createFontSizeInput(
+        std::size_t sizeIndex, QWidget* parent);
     std::array<SettingsSectionDefinition, SectionCount> settingsSectionDefinitions() const;
     QString settingsPageTitle(SettingsPage settingsPage) const;
     QString settingsPageDescription(SettingsPage settingsPage) const;
     QString saveButtonText() const;
     QString colorFieldLabel(ColorField field) const;
+    QString fontFamilyLabel(std::size_t familyIndex) const;
+    QString fontSizeFieldLabel(std::size_t sizeIndex) const;
     QColor& editingColor(ColorField field);
     const QColor& savedColor(ColorField field) const;
     void syncColorInputs();
+    void syncFontInputs();
+    void refreshThemesPreview();
     void updateDirtyState();
     void setDirtyState(bool dirty);
     void applyEditingTheme();
@@ -149,10 +166,19 @@ private:
     std::array<QLabel*, SettingsPageCount> m_settingsDescriptions {};
     std::array<QLabel*, ColorCategoryCount> m_colorCategoryTitles {};
     std::array<ruwa::ui::widgets::ColorInputButton*, ColorFieldCount> m_colorInputs {};
+    std::array<QLabel*, FontCategoryCount> m_fontCategoryTitles {};
+    std::array<QLabel*, FontFamilyCount> m_fontFamilyLabels {};
+    std::array<QLabel*, FontSizeFieldCount> m_fontSizeLabels {};
+    std::array<ruwa::ui::widgets::FontDropdownSelector*, FontFamilyCount> m_fontFamilyInputs {};
+    std::array<ruwa::ui::widgets::NumericInputField*, FontSizeFieldCount> m_fontSizeInputs {};
+    std::array<std::unique_ptr<ruwa::ui::widgets::PropertyRowLayout>, FontCategoryCount>
+        m_fontPropertyLayouts;
+    std::array<QString, FontFamilyCount> m_fontPreviewOriginalFamilies;
     ruwa::ui::core::ThemePreset m_editingTheme;
     ruwa::ui::core::ThemePreset m_savedTheme;
     QUuid m_pendingThemeId;
     bool m_syncingColorInputs { false };
+    bool m_syncingFontInputs { false };
 };
 
 } // namespace ruwa::ui::tabs
