@@ -6,6 +6,7 @@
 #include "shared/resources/ResourceManager.h"
 #include "shared/resources/IconProvider.h"
 #include "shared/resources/FontManager.h"
+#include "shared/style/WidgetStyleManager.h"
 #include "features/settings/SettingsManager.h"
 
 #include <QApplication>
@@ -233,6 +234,13 @@ void ThemeManager::loadCustomPresets()
         preset.fonts.sizes = loadThemeFontSizes(settings);
         preset.fonts = normalizedThemeFonts(preset.fonts);
 
+        preset.animations.enabled = settings.value("animations/enabled", true).toBool();
+        preset.animations.canvasEnabled
+            = settings.value("animations/canvasEnabled", true).toBool();
+        preset.animations.speed = qBound(WidgetStyleManager::kMinAnimationSpeed,
+            settings.value("animations/speed", 1.0).toReal(),
+            WidgetStyleManager::kMaxAnimationSpeed);
+
         settings.endGroup();
 
         // Validate and add
@@ -300,6 +308,10 @@ void ThemeManager::saveCustomPresets()
         settings.setValue("fonts/title", preset.fonts.titleFont);
         saveThemeFontSizes(settings, preset.fonts.sizes);
 
+        settings.setValue("animations/enabled", preset.animations.enabled);
+        settings.setValue("animations/canvasEnabled", preset.animations.canvasEnabled);
+        settings.setValue("animations/speed", preset.animations.speed);
+
         settings.endGroup();
     }
 
@@ -353,6 +365,11 @@ bool ThemeManager::applyPreset(const QUuid& id)
 bool ThemeManager::applyPreset(const ThemePreset& preset)
 {
     m_currentPresetId = preset.id;
+
+    auto& styleManager = WidgetStyleManager::instance();
+    styleManager.setAnimationsEnabled(preset.animations.enabled);
+    styleManager.setCanvasAnimationsEnabled(preset.animations.canvasEnabled);
+    styleManager.setAnimationSpeed(preset.animations.speed);
 
     // Phase 1 (immediate): Update colors + palette for instant visual feedback.
     // QPalette propagation is fast — Qt doesn't re-parse stylesheets.

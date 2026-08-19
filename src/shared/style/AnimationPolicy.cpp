@@ -12,6 +12,11 @@ bool enabled()
     return WidgetStyleManager::instance().animationsEnabled();
 }
 
+bool canvasEnabled()
+{
+    return WidgetStyleManager::instance().canvasAnimationsEnabled();
+}
+
 qreal speed()
 {
     return WidgetStyleManager::instance().animationSpeed();

@@ -36,10 +36,8 @@ int ThemeEditorSidebar::sectionToIndex(Section section)
     switch (section) {
     case Section::Themes:
         return 0;
-    case Section::Interface:
+    case Section::Animations:
         return 1;
-    case Section::Canvas:
-        return 2;
     default:
         return 0;
     }
@@ -111,33 +109,26 @@ void ThemeEditorSidebar::setupUi()
     auto& icons = ruwa::ui::core::ThemeManager::instance().icons();
     auto* themesButton = new SidebarButton(tr("Themes"),
         icons.getIcon(ruwa::ui::core::IconProvider::StandardIcon::Appearance), this);
-    auto* interfaceButton = new SidebarButton(tr("Interface"),
-        icons.getIcon(ruwa::ui::core::IconProvider::StandardIcon::Settings), this);
-    auto* canvasButton = new SidebarButton(tr("Canvas"),
-        icons.getIcon(ruwa::ui::core::IconProvider::StandardIcon::CanvasResize), this);
+    auto* animationsButton = new SidebarButton(tr("Animations"),
+        icons.getIcon(ruwa::ui::core::IconProvider::StandardIcon::Performance), this);
 
     m_buttons.insert(Section::Themes, themesButton);
-    m_buttons.insert(Section::Interface, interfaceButton);
-    m_buttons.insert(Section::Canvas, canvasButton);
+    m_buttons.insert(Section::Animations, animationsButton);
 
     connect(themesButton, &QPushButton::clicked, this,
         [this]() { setActiveSection(Section::Themes); });
-    connect(interfaceButton, &QPushButton::clicked, this,
-        [this]() { setActiveSection(Section::Interface); });
-    connect(canvasButton, &QPushButton::clicked, this,
-        [this]() { setActiveSection(Section::Canvas); });
+    connect(animationsButton, &QPushButton::clicked, this,
+        [this]() { setActiveSection(Section::Animations); });
 
     m_layout->addWidget(themesButton);
-    m_layout->addWidget(interfaceButton);
-    m_layout->addWidget(canvasButton);
+    m_layout->addWidget(animationsButton);
     m_layout->addStretch();
 }
 
 void ThemeEditorSidebar::retranslateUi()
 {
     m_buttons.value(Section::Themes)->setText(tr("Themes"));
-    m_buttons.value(Section::Interface)->setText(tr("Interface"));
-    m_buttons.value(Section::Canvas)->setText(tr("Canvas"));
+    m_buttons.value(Section::Animations)->setText(tr("Animations"));
 }
 
 void ThemeEditorSidebar::updateScaledSizes()

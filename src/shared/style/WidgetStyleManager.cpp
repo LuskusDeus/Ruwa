@@ -93,6 +93,14 @@ void WidgetStyleManager::setAnimationsEnabled(bool enabled)
     }
 }
 
+void WidgetStyleManager::setCanvasAnimationsEnabled(bool enabled)
+{
+    if (m_globalSettings.canvasAnimationsEnabled != enabled) {
+        m_globalSettings.canvasAnimationsEnabled = enabled;
+        emit globalSettingsChanged();
+    }
+}
+
 void WidgetStyleManager::setAnimationSpeed(qreal speed)
 {
     speed = qBound(kMinAnimationSpeed, speed, kMaxAnimationSpeed);

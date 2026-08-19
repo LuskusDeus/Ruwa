@@ -25,8 +25,7 @@ public:
     enum class Section {
         None,
         Themes,
-        Interface,
-        Canvas
+        Animations
     };
 
     explicit ThemeEditorSidebar(QWidget* parent = nullptr);

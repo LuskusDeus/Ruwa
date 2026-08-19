@@ -16,6 +16,12 @@
 
 namespace ruwa::ui::core {
 
+struct ThemeAnimations {
+    bool enabled { true };
+    bool canvasEnabled { true };
+    qreal speed { 1.0 };
+};
+
 struct ThemePreset {
     // === Identification ===
     QUuid id;
@@ -27,6 +33,9 @@ struct ThemePreset {
 
     // === Fonts ===
     ThemeFonts fonts;
+
+    // === Animations ===
+    ThemeAnimations animations;
 
     // === Core Colors ===
     QColor primary;

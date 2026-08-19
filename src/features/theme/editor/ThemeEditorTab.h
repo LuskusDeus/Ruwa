@@ -28,6 +28,7 @@ class NumericInputField;
 class PropertyRowLayout;
 class ThemeEditorSidebar;
 class ThemeEditorThemesPreview;
+class ToggleSwitch;
 } // namespace ruwa::ui::widgets
 
 namespace ruwa::ui::tabs {
@@ -68,8 +69,7 @@ private:
     enum class SettingsPage {
         ThemeColors,
         ThemeFont,
-        Interface,
-        Canvas,
+        Animations,
         Count
     };
 
@@ -108,7 +108,7 @@ private:
         QVector<SettingsPage> pages;
     };
 
-    static constexpr std::size_t SectionCount = 3;
+    static constexpr std::size_t SectionCount = 2;
     static constexpr std::size_t SettingsPageCount
         = static_cast<std::size_t>(SettingsPage::Count);
     static constexpr std::size_t ColorFieldCount = static_cast<std::size_t>(ColorField::Count);
@@ -116,6 +116,8 @@ private:
     static constexpr std::size_t FontFamilyCount = 2;
     static constexpr std::size_t FontSizeFieldCount = 16;
     static constexpr std::size_t FontCategoryCount = 3;
+    static constexpr std::size_t AnimationCategoryCount = 2;
+    static constexpr std::size_t AnimationSettingCount = 3;
 
     void setupUi();
     QWidget* createThemesPreviewPage(QWidget* parent);
@@ -125,10 +127,12 @@ private:
     QWidget* createSettingsPlaceholder(SettingsPage settingsPage, QWidget* parent);
     QWidget* createColorsSettingsPage(QWidget* parent);
     QWidget* createFontSettingsPage(QWidget* parent);
+    QWidget* createAnimationsSettingsPage(QWidget* parent);
     QWidget* createColorCategory(
         const QVector<ColorField>& fields, std::size_t categoryIndex, QWidget* parent);
     ruwa::ui::widgets::ColorInputButton* createColorInput(ColorField field, QWidget* parent);
     QWidget* createFontCategory(std::size_t categoryIndex, QWidget* parent);
+    QWidget* createAnimationCategory(std::size_t categoryIndex, QWidget* parent);
     ruwa::ui::widgets::FontDropdownSelector* createFontFamilyInput(
         std::size_t familyIndex, QWidget* parent);
     ruwa::ui::widgets::NumericInputField* createFontSizeInput(
@@ -140,10 +144,13 @@ private:
     QString colorFieldLabel(ColorField field) const;
     QString fontFamilyLabel(std::size_t familyIndex) const;
     QString fontSizeFieldLabel(std::size_t sizeIndex) const;
+    QString animationCategoryTitle(std::size_t categoryIndex) const;
+    QString animationSettingLabel(std::size_t settingIndex) const;
     QColor& editingColor(ColorField field);
     const QColor& savedColor(ColorField field) const;
     void syncColorInputs();
     void syncFontInputs();
+    void syncAnimationInputs();
     void refreshThemesPreview();
     void updateDirtyState();
     void setDirtyState(bool dirty);
@@ -173,12 +180,20 @@ private:
     std::array<ruwa::ui::widgets::NumericInputField*, FontSizeFieldCount> m_fontSizeInputs {};
     std::array<std::unique_ptr<ruwa::ui::widgets::PropertyRowLayout>, FontCategoryCount>
         m_fontPropertyLayouts;
+    std::array<QLabel*, AnimationCategoryCount> m_animationCategoryTitles {};
+    std::array<QLabel*, AnimationSettingCount> m_animationSettingLabels {};
+    std::array<std::unique_ptr<ruwa::ui::widgets::PropertyRowLayout>, AnimationCategoryCount>
+        m_animationPropertyLayouts;
+    ruwa::ui::widgets::ToggleSwitch* m_animationsToggle { nullptr };
+    ruwa::ui::widgets::ToggleSwitch* m_canvasAnimationsToggle { nullptr };
+    ruwa::ui::widgets::NumericInputField* m_animationSpeedInput { nullptr };
     std::array<QString, FontFamilyCount> m_fontPreviewOriginalFamilies;
     ruwa::ui::core::ThemePreset m_editingTheme;
     ruwa::ui::core::ThemePreset m_savedTheme;
     QUuid m_pendingThemeId;
     bool m_syncingColorInputs { false };
     bool m_syncingFontInputs { false };
+    bool m_syncingAnimationInputs { false };
 };
 
 } // namespace ruwa::ui::tabs

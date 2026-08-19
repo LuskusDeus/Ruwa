@@ -22,6 +22,14 @@ namespace ruwa::ui::core::anim {
 bool enabled();
 
 /**
+ * @brief Whether canvas-specific animations should play.
+ *
+ * Kept separate from enabled() so canvas motion can be configured without
+ * changing interface transitions.
+ */
+bool canvasEnabled();
+
+/**
  * @brief Playback speed multiplier, 0.5 (half speed) to 2.0 (double speed).
  *
  * 1.0 is the speed the animation was authored at. Meaningless while enabled()

@@ -102,6 +102,12 @@ QJsonObject presetToJson(const ThemePreset& preset)
     fonts[QStringLiteral("titleSize")] = preset.fonts.sizes.h4;
     object[QStringLiteral("fonts")] = fonts;
 
+    QJsonObject animations;
+    animations[QStringLiteral("enabled")] = preset.animations.enabled;
+    animations[QStringLiteral("canvasEnabled")] = preset.animations.canvasEnabled;
+    animations[QStringLiteral("speed")] = preset.animations.speed;
+    object[QStringLiteral("animations")] = animations;
+
     return object;
 }
 
@@ -125,8 +131,8 @@ QJsonObject toDocumentObject(const ThemePreset& preset)
 {
     QJsonObject document;
     document[QStringLiteral("format")] = QStringLiteral("ruwa-theme-preset");
-    // The new typography scale is an additive extension. Legacy anchors are
-    // still emitted, so the document remains compatible with format v1.
+    // Typography and animation settings are additive extensions. Legacy font
+    // anchors are still emitted, so the document remains compatible with v1.
     document[QStringLiteral("version")] = 1;
     document[QStringLiteral("preset")] = presetToJson(preset);
     return document;
@@ -210,6 +216,16 @@ bool fromDocumentObject(const QJsonObject& document, ThemePreset& preset, QStrin
     imported.fonts.uiFont = FontFamilyNames::migrateLegacyFamilyName(imported.fonts.uiFont);
     imported.fonts.codeFont = FontFamilyNames::migrateLegacyFamilyName(imported.fonts.codeFont);
     imported.fonts.titleFont = FontFamilyNames::migrateLegacyFamilyName(imported.fonts.titleFont);
+
+    const QJsonObject animations = object.value(QStringLiteral("animations")).toObject();
+    if (!animations.isEmpty()) {
+        imported.animations.enabled
+            = animations.value(QStringLiteral("enabled")).toBool(true);
+        imported.animations.canvasEnabled
+            = animations.value(QStringLiteral("canvasEnabled")).toBool(true);
+        imported.animations.speed
+            = qBound(0.5, animations.value(QStringLiteral("speed")).toDouble(1.0), 2.0);
+    }
 
     preset = imported;
     return true;

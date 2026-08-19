@@ -20,6 +20,10 @@ struct GlobalStyleSettings {
     // Animation master switch
     bool animationsEnabled = true;
 
+    // Canvas-specific motion can be controlled independently. Canvas
+    // animation call sites opt into this policy as they are migrated.
+    bool canvasAnimationsEnabled = true;
+
     // Playback speed multiplier for every animation that honours the policy.
     // 1.0 is the authored speed; above 1.0 is faster (shorter), below is slower.
     qreal animationSpeed = 1.0;
@@ -96,6 +100,9 @@ public:
     // Individual setting accessors
     bool animationsEnabled() const { return m_globalSettings.animationsEnabled; }
     void setAnimationsEnabled(bool enabled);
+
+    bool canvasAnimationsEnabled() const { return m_globalSettings.canvasAnimationsEnabled; }
+    void setCanvasAnimationsEnabled(bool enabled);
 
     /// Playback speed multiplier, clamped to [kMinAnimationSpeed, kMaxAnimationSpeed].
     qreal animationSpeed() const { return m_globalSettings.animationSpeed; }
