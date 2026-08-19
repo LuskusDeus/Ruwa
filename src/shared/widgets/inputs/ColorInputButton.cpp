@@ -130,10 +130,15 @@ void ColorInputButton::drawContentLayer(QPainter& painter, const QRectF& rect)
     const bool boxedStyle = m_options.boxedStyle;
     const bool capsuleStyle = m_options.capsuleStyle;
     const bool framed = boxedStyle || capsuleStyle;
-    const int padding = framed ? mgr.scaled(BASE_BOX_PAD_H) : mgr.scaled(BASE_PADDING);
-    const int padV = framed ? mgr.scaled(BASE_BOX_PAD_V) : padding;
-
     QRectF contentRect = rect;
+    const int regularPadding = framed ? mgr.scaled(BASE_BOX_PAD_H) : mgr.scaled(BASE_PADDING);
+    // Capsule content starts no earlier than the end of the rounded cap. Keep
+    // the swatch-to-text gap independent so moving the swatch inward does not
+    // create an oversized gap before the label/HEX value.
+    const int sidePadding
+        = capsuleStyle ? qRound(contentRect.height() * 0.5) : regularPadding;
+    const int swatchTextGap = regularPadding;
+    const int padV = framed ? mgr.scaled(BASE_BOX_PAD_V) : regularPadding;
     int swatchRadius;
 
     if (capsuleStyle) {
@@ -210,7 +215,7 @@ void ColorInputButton::drawContentLayer(QPainter& painter, const QRectF& rect)
 
     const int swatchSize = static_cast<int>(contentRect.height()) - (padV * 2);
     const QRectF swatchRect(
-        contentRect.left() + padding, contentRect.top() + padV, swatchSize, swatchSize);
+        contentRect.left() + sidePadding, contentRect.top() + padV, swatchSize, swatchSize);
 
     // Rounded swatch path — used both to clip the transparency checkerboard (so
     // it does not spill past the rounded corners) and to fill/stroke the swatch.
@@ -241,7 +246,8 @@ void ColorInputButton::drawContentLayer(QPainter& painter, const QRectF& rect)
     painter.setBrush(Qt::NoBrush);
     painter.drawPath(swatchPath);
 
-    QRectF textRect = contentRect.adjusted(swatchSize + (padding * 2), 0, -padding, 0);
+    QRectF textRect = contentRect.adjusted(
+        sidePadding + swatchSize + swatchTextGap, 0, -sidePadding, 0);
 
     const bool hasLabel = m_options.showLabel && !m_label.isEmpty();
     painter.setPen(currentTextColor());

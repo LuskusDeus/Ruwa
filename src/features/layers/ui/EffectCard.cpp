@@ -549,7 +549,6 @@ void EffectCard::addParamEditor(QVBoxLayout* parentLayout, const EffectParamDefi
         ruwa::ui::widgets::ColorInputButtonOptions opts;
         opts.showLabel = false;
         opts.showHex = true;
-        opts.capsuleStyle = true;
         opts.boldLabel = false;
         opts.baseHeight = kColorEditorHeight;
         opts.alphaEnabled = true; // effect colours are stored ARGB (e.g. gradient overlay)

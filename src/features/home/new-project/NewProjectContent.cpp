@@ -393,7 +393,6 @@ void NewProjectContent::setupContent()
     backgroundOptions.boldLabel = false;
     backgroundOptions.showLabel = false;
     backgroundOptions.showHex = true;
-    backgroundOptions.boxedStyle = true;
     backgroundOptions.baseHeight = 36;
 
     m_backgroundColorInput = new ColorInputButton(

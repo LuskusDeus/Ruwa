@@ -16,9 +16,9 @@ struct ColorInputButtonOptions {
     bool showHex = true;
     bool boxedStyle = false;
     /// Pill/capsule frame matching the Color-panel hex input: surfaceAlt resting
-    /// plate, soft surfaceElevated hover, gradient capsule border. Takes
-    /// precedence over boxedStyle when set.
-    bool capsuleStyle = false;
+    /// plate, soft surfaceElevated hover, gradient capsule border. This is the
+    /// standard ColorInputButton appearance and takes precedence over boxedStyle.
+    bool capsuleStyle = true;
     /// Request an opacity slider in the shared color-picker popup opened from this
     /// input (the color it stores carries an alpha channel).
     bool alphaEnabled = false;
