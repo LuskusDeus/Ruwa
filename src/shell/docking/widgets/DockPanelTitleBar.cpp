@@ -5,7 +5,6 @@
 #include "DockPanel.h"
 #include "DockPanelCloseButton.h"
 #include "features/theme/manager/ThemeManager.h"
-#include "shared/resources/FontManager.h"
 #include "shared/resources/IconProvider.h"
 #include "shared/style/WidgetStyleManager.h"
 
@@ -194,8 +193,7 @@ void DockPanelTitleBar::applyTheme(const ruwa::ui::core::ThemeColors& c)
     m_textColor = c.text;
     m_backgroundColor = c.surfaceAlt;
     m_borderColor = c.border;
-    m_titleFont = ruwa::ui::core::FontManager::instance().getFont(
-        ruwa::ui::core::FontManager::FontType::UI);
+    m_titleFont = QFont(c.fonts.uiFont, 9, QFont::Normal);
 
     m_scaledSlideExtra = ruwa::ui::core::ThemeManager::instance().scaled(10);
     if (m_closeButton) {

@@ -25,6 +25,7 @@
 #include <QPainter>
 #include <QPainterPath>
 #include <QPropertyAnimation>
+#include <QRegion>
 #include <QScreen>
 #include <QSortFilterProxyModel>
 #include <QStyle>
@@ -458,6 +459,33 @@ public:
         hide();
     }
 
+    void preparePresentation(int width, int maxHeight)
+    {
+        forceHide();
+        updateListStyle();
+        applySizeConstraints(width, maxHeight);
+        ensurePolished();
+        m_layout->activate();
+        if (m_scrollArea) {
+            m_scrollArea->refreshScrollGeometry();
+            m_scrollArea->finishLayoutTransitions();
+        }
+    }
+
+    void renderPresentation(QPainter* painter, const QPoint& target)
+    {
+        if (!painter || size().isEmpty()) {
+            return;
+        }
+
+        const bool effectWasEnabled = m_opacityEffect->isEnabled();
+        m_opacityEffect->setEnabled(false);
+        render(painter, target, QRegion(rect()),
+            QWidget::DrawWindowBackground | QWidget::DrawChildren);
+        m_opacityEffect->setEnabled(effectWasEnabled);
+        m_opacityEffect->setOpacity(m_popupOpacity);
+    }
+
     bool containsGlobal(const QPoint& globalPos) const
     {
         return isVisible() && QRect(mapToGlobal(QPoint(0, 0)), size()).contains(globalPos);
@@ -759,6 +787,31 @@ void FontDropdownSelector::setOpacityProvider(QWidget* provider)
 {
     m_opacityProvider = provider;
     update();
+}
+
+QSize FontDropdownSelector::preparePresentationPopup(int maxHeight)
+{
+    ensureFontsLoaded();
+    if (!m_popup || m_families.isEmpty()) {
+        return {};
+    }
+
+    if (m_popup->parentWidget() != window()) {
+        m_popup->setParent(window());
+    }
+    m_popup->setFont(font());
+    syncPopupState();
+    m_popup->preparePresentation(qMax(m_popupMinWidth, width()),
+        qMin(m_popupMaxHeight, qMax(kPopupMinVisibleHeight, maxHeight)));
+    return m_popup->size();
+}
+
+void FontDropdownSelector::renderPresentationPopup(QPainter* painter, const QPoint& target)
+{
+    if (!m_popup || !painter) {
+        return;
+    }
+    m_popup->renderPresentation(painter, target);
 }
 
 void FontDropdownSelector::setHoverProgress(qreal progress)

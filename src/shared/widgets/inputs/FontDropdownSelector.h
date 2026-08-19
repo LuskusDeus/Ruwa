@@ -17,6 +17,7 @@ class QHideEvent;
 class QKeyEvent;
 class QMouseEvent;
 class QObject;
+class QPainter;
 class QPaintEvent;
 class QPropertyAnimation;
 
@@ -49,6 +50,10 @@ public:
     int popupMaxHeight() const { return m_popupMaxHeight; }
 
     void setOpacityProvider(QWidget* provider);
+
+    /** Render the real font popup without opening an interactive overlay. */
+    QSize preparePresentationPopup(int maxHeight);
+    void renderPresentationPopup(QPainter* painter, const QPoint& target);
 
     /// True while the font list is open. Callers that push a family in from the
     /// document use it to leave the open list alone — a live preview writing the

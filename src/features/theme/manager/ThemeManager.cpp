@@ -17,6 +17,8 @@
 
 namespace ruwa::ui::core {
 
+thread_local const ThemeColors* ThemeManager::s_colorOverride = nullptr;
+
 // Delay before coalesced apply fires (ms).
 // Short enough to feel instant, long enough to collapse rapid changes
 // (e.g. dragging a color slider in theme editor).
@@ -398,35 +400,52 @@ void ThemeManager::executePendingApply()
 
 void ThemeManager::applyColorsFromPreset(const ThemePreset& preset)
 {
-    m_colors.primary = preset.primary;
-    m_colors.background = preset.background;
-    m_colors.surface = preset.surface;
-    m_colors.surfaceAlt = preset.surfaceAlt;
-    m_colors.border = preset.border;
-
-    m_colors.text = preset.text;
-    m_colors.textMuted = preset.textMuted;
-    m_colors._textOnPrimary = preset.textOnPrimary;
-
-    m_colors.overlayColor = preset.overlayColor;
-
-    m_colors.success = preset.success;
-    m_colors.warning = preset.warning;
-    m_colors.error = preset.error;
-    m_colors.info = preset.info;
-    m_colors.accent = preset.accent.isValid() ? preset.accent : QColor(124, 92, 252);
-
-    m_colors.isDark = preset.isDark;
-
-    // Copy the migrated font configuration before applying it.
-    const ThemeFonts fonts = migratedThemeFonts(preset.fonts);
-    m_colors.fonts = fonts;
+    m_colors = colorsForPreset(preset);
 
     // Apply fonts from preset
-    FontManager::instance().setUIFontFamily(fonts.uiFont);
-    FontManager::instance().setCodeFontFamily(fonts.codeFont);
-    FontManager::instance().setTitleFontFamily(fonts.titleFont);
+    FontManager::instance().setUIFontFamily(m_colors.fonts.uiFont);
+    FontManager::instance().setCodeFontFamily(m_colors.fonts.codeFont);
+    FontManager::instance().setTitleFontFamily(m_colors.fonts.titleFont);
     FontManager::instance().applyToApplication();
+}
+
+ThemeColors ThemeManager::colorsForPreset(const ThemePreset& preset)
+{
+    ThemeColors colors;
+    colors.primary = preset.primary;
+    colors.background = preset.background;
+    colors.surface = preset.surface;
+    colors.surfaceAlt = preset.surfaceAlt;
+    colors.border = preset.border;
+    colors.text = preset.text;
+    colors.textMuted = preset.textMuted;
+    colors._textOnPrimary = preset.textOnPrimary;
+    colors.overlayColor = preset.overlayColor;
+    colors.success = preset.success;
+    colors.warning = preset.warning;
+    colors.error = preset.error;
+    colors.info = preset.info;
+    colors.accent = preset.accent.isValid() ? preset.accent : QColor(124, 92, 252);
+    colors.isDark = preset.isDark;
+    colors.fonts = migratedThemeFonts(preset.fonts);
+    return colors;
+}
+
+void ThemeManager::withColorOverride(
+    const ThemeColors& colors, const std::function<void()>& render)
+{
+    if (!render) {
+        return;
+    }
+
+    const ThemeColors* previous = s_colorOverride;
+    s_colorOverride = &colors;
+    struct OverrideRestorer {
+        const ThemeColors* previous;
+        ~OverrideRestorer() { ThemeManager::s_colorOverride = previous; }
+    } restorer { previous };
+
+    render();
 }
 
 void ThemeManager::applyTheme()
@@ -617,42 +636,40 @@ void ThemeManager::applyPalette()
     // QPalette is Qt's native color propagation mechanism.
     // Setting it on QApplication instantly updates all widgets that don't
     // have an explicit stylesheet overriding these roles — no re-parsing needed.
-    QPalette pal = qApp->palette();
-
-    pal.setColor(QPalette::Window, m_colors.background);
-    pal.setColor(QPalette::WindowText, m_colors.text);
-    pal.setColor(QPalette::Base, m_colors.surfaceAlt);
-    pal.setColor(QPalette::AlternateBase, m_colors.surface);
-    pal.setColor(QPalette::Text, m_colors.text);
-    pal.setColor(QPalette::BrightText, m_colors._textOnPrimary);
-    pal.setColor(QPalette::Button, m_colors.surface);
-    pal.setColor(QPalette::ButtonText, m_colors.text);
-    pal.setColor(QPalette::Highlight, m_colors.primary);
-    pal.setColor(QPalette::HighlightedText, m_colors._textOnPrimary);
-    pal.setColor(QPalette::ToolTipBase, m_colors.surface);
-    pal.setColor(QPalette::ToolTipText, m_colors.text);
-    pal.setColor(QPalette::PlaceholderText, m_colors.textMuted);
-    pal.setColor(QPalette::Mid, m_colors.border);
-    pal.setColor(QPalette::Dark, m_colors.border);
-    pal.setColor(QPalette::Shadow, m_colors.border);
-
-    // Disabled state
-    pal.setColor(QPalette::Disabled, QPalette::WindowText, m_colors.textDisabled());
-    pal.setColor(QPalette::Disabled, QPalette::Text, m_colors.textDisabled());
-    pal.setColor(QPalette::Disabled, QPalette::ButtonText, m_colors.textDisabled());
-
-    // Repurposed roles carry theme colours that have no native palette slot, so
-    // the static palette()-driven QSS can reference them (see generateStyleSheet).
-    // Use Link / LinkVisited ONLY — they are used by the native style solely for
-    // hyperlink text (essentially never in this app), unlike Midlight/Light which
-    // the native style uses for widget bevels/gradients (repurposing those tinted
-    // many widgets incorrectly). borderLight folds onto Mid (the normal border).
-    pal.setColor(QPalette::Link, m_colors.surfaceHover()); // QSS hover bg
-    pal.setColor(QPalette::LinkVisited, m_colors.primaryPressed()); // QSS pressed bg
+    const QPalette pal = paletteForColors(m_colors, qApp->palette());
 
     QElapsedTimer profPal;
     profPal.start(); // [ThemeProfile]
     qApp->setPalette(pal);
+}
+
+QPalette ThemeManager::paletteForColors(const ThemeColors& colors, QPalette palette)
+{
+    palette.setColor(QPalette::Window, colors.background);
+    palette.setColor(QPalette::WindowText, colors.text);
+    palette.setColor(QPalette::Base, colors.surfaceAlt);
+    palette.setColor(QPalette::AlternateBase, colors.surface);
+    palette.setColor(QPalette::Text, colors.text);
+    palette.setColor(QPalette::BrightText, colors._textOnPrimary);
+    palette.setColor(QPalette::Button, colors.surface);
+    palette.setColor(QPalette::ButtonText, colors.text);
+    palette.setColor(QPalette::Highlight, colors.primary);
+    palette.setColor(QPalette::HighlightedText, colors._textOnPrimary);
+    palette.setColor(QPalette::ToolTipBase, colors.surface);
+    palette.setColor(QPalette::ToolTipText, colors.text);
+    palette.setColor(QPalette::PlaceholderText, colors.textMuted);
+    palette.setColor(QPalette::Mid, colors.border);
+    palette.setColor(QPalette::Dark, colors.border);
+    palette.setColor(QPalette::Shadow, colors.border);
+
+    palette.setColor(QPalette::Disabled, QPalette::WindowText, colors.textDisabled());
+    palette.setColor(QPalette::Disabled, QPalette::Text, colors.textDisabled());
+    palette.setColor(QPalette::Disabled, QPalette::ButtonText, colors.textDisabled());
+
+    // Repurposed roles used by the application's static palette-driven QSS.
+    palette.setColor(QPalette::Link, colors.surfaceHover());
+    palette.setColor(QPalette::LinkVisited, colors.primaryPressed());
+    return palette;
 }
 
 void ThemeManager::generateStyleSheet()

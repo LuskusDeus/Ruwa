@@ -3,6 +3,7 @@
 #include "ThemeEditorTab.h"
 
 #include "features/theme/editor/ThemeEditorSidebar.h"
+#include "features/theme/editor/ThemeEditorThemesPreview.h"
 #include "features/theme/manager/ThemeManager.h"
 #include "shared/i18n/TranslationManager.h"
 #include "shared/style/WidgetStyleManager.h"
@@ -120,7 +121,8 @@ void ThemeEditorTab::setupUi()
 
     const auto sectionDefinitions = settingsSectionDefinitions();
     for (std::size_t index = 0; index < SectionCount; ++index) {
-        m_previewStack->addWidget(createPreviewPlaceholder(m_previewStack));
+        m_previewStack->addWidget(index == 0 ? createThemesPreviewPage(m_previewStack)
+                                             : createPreviewPlaceholder(m_previewStack));
         m_settingsStack->addWidget(
             createSettingsSection(sectionDefinitions[index], index, m_settingsStack));
     }
@@ -135,6 +137,9 @@ void ThemeEditorTab::setupUi()
         [this](const ruwa::ui::core::ThemePreset& preset) {
             m_editingTheme = preset;
             m_savedTheme = preset;
+            if (m_themesPreview) {
+                m_themesPreview->setPreset(m_editingTheme);
+            }
             syncColorInputs();
             setDirtyState(false);
         });
@@ -148,6 +153,23 @@ void ThemeEditorTab::setupUi()
     }
     m_sidebar->setActiveSection(ruwa::ui::widgets::ThemeEditorSidebar::Section::Themes);
     retranslateUi();
+}
+
+QWidget* ThemeEditorTab::createThemesPreviewPage(QWidget* parent)
+{
+    auto* page = new QWidget(parent);
+    page->setAttribute(Qt::WA_TranslucentBackground);
+
+    auto* pageLayout = new QVBoxLayout(page);
+    const auto& theme = ruwa::ui::core::ThemeManager::instance();
+    pageLayout->setContentsMargins(
+        theme.scaled(8), theme.scaled(8), theme.scaled(8), theme.scaled(8));
+    pageLayout->setSpacing(0);
+
+    m_themesPreview = new ruwa::ui::widgets::ThemeEditorThemesPreview(page);
+    m_themesPreview->setPreset(m_editingTheme);
+    pageLayout->addWidget(m_themesPreview);
+    return page;
 }
 
 QWidget* ThemeEditorTab::createPreviewPlaceholder(QWidget* parent)
@@ -414,6 +436,9 @@ ruwa::ui::widgets::ColorInputButton* ThemeEditorTab::createColorInput(
         [this, field](const QColor& color) {
             if (!m_syncingColorInputs) {
                 editingColor(field) = color;
+                if (m_themesPreview) {
+                    m_themesPreview->setPreset(m_editingTheme);
+                }
                 updateDirtyState();
             }
         });
@@ -639,8 +664,12 @@ void ThemeEditorTab::retranslateUi()
     };
 
     for (std::size_t index = 0; index < SectionCount; ++index) {
-        m_previewTitles[index]->setText(previewTitles[index]);
-        m_previewDescriptions[index]->setText(tr("Preview placeholder"));
+        if (m_previewTitles[index]) {
+            m_previewTitles[index]->setText(previewTitles[index]);
+        }
+        if (m_previewDescriptions[index]) {
+            m_previewDescriptions[index]->setText(tr("Preview placeholder"));
+        }
     }
 
     for (std::size_t index = 0; index < SettingsPageCount; ++index) {
@@ -743,6 +772,13 @@ void ThemeEditorTab::updateScaledSizes()
     Q_ASSERT(sidebarButtonStyle);
     const int settingsTabHeight
         = sidebarButtonStyle ? theme.scaled(sidebarButtonStyle->metrics.baseHeight) : 0;
+
+    if (m_themesPreview) {
+        if (QWidget* page = m_themesPreview->parentWidget(); page && page->layout()) {
+            page->layout()->setContentsMargins(
+                theme.scaled(8), theme.scaled(8), theme.scaled(8), theme.scaled(8));
+        }
+    }
 
     for (std::size_t index = 0; index < SectionCount; ++index) {
         QLabel* title = m_previewTitles[index];

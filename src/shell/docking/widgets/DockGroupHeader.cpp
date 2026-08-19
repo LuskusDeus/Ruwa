@@ -4,7 +4,6 @@
 #include "DockGroupHeader.h"
 #include "DockPanel.h"
 #include "features/theme/manager/ThemeManager.h"
-#include "shared/resources/FontManager.h"
 #include "shared/resources/IconProvider.h"
 
 #include <QCursor>
@@ -284,8 +283,7 @@ void DockGroupHeader::updateScaledSizes()
     m_tabPadding = theme.scaled(6);
     m_tabSpacing = theme.scaled(2);
 
-    m_titleFont = ruwa::ui::core::FontManager::instance().getFont(
-        ruwa::ui::core::FontManager::FontType::UI);
+    m_titleFont = QFont(m_colors.fonts.uiFont, 9, QFont::Normal);
 
     setFixedHeight(m_height);
 }

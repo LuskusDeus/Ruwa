@@ -19,6 +19,7 @@
 
 class QTimer;
 class QWidget;
+class QPalette;
 
 namespace ruwa::ui::core {
 
@@ -48,8 +49,27 @@ public:
 
     // === Color Access ===
 
-    /// Get current active color palette
-    const ThemeColors& colors() const { return m_colors; }
+    /// Get current active color palette. During a synchronous preview render,
+    /// returns that render's local palette without changing the application.
+    const ThemeColors& colors() const
+    {
+        return s_colorOverride ? *s_colorOverride : m_colors;
+    }
+
+    /// Build the runtime color set used by widgets from an editable preset.
+    static ThemeColors colorsForPreset(const ThemePreset& preset);
+
+    /// Build the QPalette counterpart of a runtime color set.
+    static QPalette paletteForColors(const ThemeColors& colors, QPalette basePalette);
+
+    /**
+     * @brief Run a synchronous widget render against local theme colors.
+     *
+     * Custom-painted widgets often read ThemeManager::colors() directly. This
+     * scope lets a passive preview render those real widgets with an edited
+     * theme without applying it to the application or emitting theme signals.
+     */
+    void withColorOverride(const ThemeColors& colors, const std::function<void()>& render);
 
     // === Preset Management ===
 
@@ -192,6 +212,8 @@ private:
     void dispatchThemeHandlers();
 
 private:
+    static thread_local const ThemeColors* s_colorOverride;
+
     ThemeColors m_colors; ///< Current active colors
     QString m_styleSheet; ///< Generated QSS
     QVector<ThemePreset> m_presets; ///< All available presets

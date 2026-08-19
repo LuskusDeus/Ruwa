@@ -93,6 +93,7 @@ protected:
         textColor.setAlpha(180);
         painter.setPen(textColor);
         QFont categoryFont = font();
+        categoryFont.setFamily(colors.fonts.uiFont);
         categoryFont.setPointSize(8);
         categoryFont.setBold(true);
         painter.setFont(categoryFont);
@@ -213,6 +214,7 @@ protected:
         }
 
         QFont f = font();
+        f.setFamily(colors.fonts.uiFont);
         f.setPointSize(9);
         p.setFont(f);
         p.setPen(textColor);
@@ -313,6 +315,7 @@ protected:
         }
 
         QFont titleFont = font();
+        titleFont.setFamily(colors.fonts.uiFont);
         titleFont.setPixelSize(qMax(10, titleFont.pixelSize()));
         titleFont.setWeight(activeProgress() > 0.5 ? QFont::DemiBold : QFont::Medium);
         painter.setFont(titleFont);
@@ -1182,6 +1185,7 @@ void AnimatedComboBox::paintEvent(QPaintEvent* event)
 
     p.setPen(textColor);
     QFont f = font();
+    f.setFamily(colors.fonts.uiFont);
     f.setPointSize(9);
     p.setFont(f);
     p.drawText(QRect(textLeft, 0, width() - textLeft - 22, height()),

@@ -23,6 +23,7 @@ class AnimatedStackedWidget;
 class CapsuleButton;
 class ColorInputButton;
 class ThemeEditorSidebar;
+class ThemeEditorThemesPreview;
 } // namespace ruwa::ui::widgets
 
 namespace ruwa::ui::tabs {
@@ -31,7 +32,8 @@ namespace ruwa::ui::tabs {
  * @brief Shell for the multi-section appearance editor.
  *
  * The tab owns a context-sensitive preview area above a lower settings area.
- * Preview pages are placeholders while settings pages are provided per section.
+ * Each editor section owns its own preview page; implementations can therefore
+ * evolve independently without coupling their scene contents.
  */
 class ThemeEditorTab final : public ruwa::core::BaseTab {
     Q_OBJECT
@@ -109,6 +111,7 @@ private:
     static constexpr std::size_t ColorCategoryCount = 3;
 
     void setupUi();
+    QWidget* createThemesPreviewPage(QWidget* parent);
     QWidget* createPreviewPlaceholder(QWidget* parent);
     QWidget* createSettingsSection(const SettingsSectionDefinition& definition,
         std::size_t sectionIndex, QWidget* parent);
@@ -135,6 +138,7 @@ private:
     void updateThemeColors();
 
     ruwa::ui::widgets::AnimatedStackedWidget* m_previewStack { nullptr };
+    ruwa::ui::widgets::ThemeEditorThemesPreview* m_themesPreview { nullptr };
     QWidget* m_settingsFrame { nullptr };
     ruwa::ui::widgets::ThemeEditorSidebar* m_sidebar { nullptr };
     ruwa::ui::widgets::AnimatedStackedWidget* m_settingsStack { nullptr };
