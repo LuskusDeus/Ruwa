@@ -55,7 +55,6 @@ void CommandPaletteOverlay::setupUI()
 void CommandPaletteOverlay::setupAnimations()
 {
     m_dimAnimation = new QPropertyAnimation(this, "dimProgress", this);
-    m_dimAnimation->setDuration(AnimationDuration);
 
     connect(m_dimAnimation, &QPropertyAnimation::finished, this,
         &CommandPaletteOverlay::onDimAnimationFinished);
@@ -100,6 +99,7 @@ void CommandPaletteOverlay::showPalette()
     // The dim animation owns the completion (it emits shown()), so start it
     // last: with animations disabled it finishes inside the call, and the
     // palette must already be up by then.
+    m_dimAnimation->setDuration(anim::duration(AnimationDuration));
     anim::start(m_dimAnimation);
 }
 
@@ -120,6 +120,7 @@ void CommandPaletteOverlay::hidePalette()
     m_dimAnimation->setEasingCurve(QEasingCurve::InCubic);
     m_dimAnimation->setStartValue(m_dimProgress);
     m_dimAnimation->setEndValue(0.0);
+    m_dimAnimation->setDuration(anim::duration(AnimationDuration));
     anim::start(m_dimAnimation);
 }
 

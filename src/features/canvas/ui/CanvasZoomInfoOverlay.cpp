@@ -259,7 +259,7 @@ void CanvasZoomInfoOverlay::fadeTo(qreal opacity, int durationMs)
         m_fadeAnimation->stop();
     }
 
-    m_fadeAnimation->setDuration(durationMs);
+    m_fadeAnimation->setDuration(anim::duration(durationMs));
     m_fadeAnimation->setStartValue(m_opacityEffect->opacity());
     m_fadeAnimation->setEndValue(opacity);
     anim::start(m_fadeAnimation);

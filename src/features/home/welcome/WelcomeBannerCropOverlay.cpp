@@ -552,15 +552,12 @@ void WelcomeBannerCropOverlay::setupUI()
     layout->addLayout(buttonRow);
 
     m_dimAnimation = new QPropertyAnimation(this, "dimProgress", this);
-    m_dimAnimation->setDuration(DimAnimationDuration);
 
     m_cardOpacityAnim = new QPropertyAnimation(m_cardOpacityEffect, "opacity", this);
     m_cardOpacityAnim->setEasingCurve(QEasingCurve::OutCubic);
-    m_cardOpacityAnim->setDuration(CardAnimationDuration);
 
     m_cardPosAnim = new QPropertyAnimation(m_card, "pos", this);
     m_cardPosAnim->setEasingCurve(QEasingCurve::OutCubic);
-    m_cardPosAnim->setDuration(CardAnimationDuration);
 }
 
 void WelcomeBannerCropOverlay::setInitialCrop(const QRectF& normalizedCrop)
@@ -615,16 +612,19 @@ void WelcomeBannerCropOverlay::animateIn()
     m_dimAnimation->setEasingCurve(QEasingCurve::OutCubic);
     m_dimAnimation->setStartValue(m_dimProgress);
     m_dimAnimation->setEndValue(1.0);
+    m_dimAnimation->setDuration(anim::duration(DimAnimationDuration));
     anim::start(m_dimAnimation);
 
     m_cardOpacityAnim->stop();
     m_cardOpacityAnim->setStartValue(0.0);
     m_cardOpacityAnim->setEndValue(1.0);
+    m_cardOpacityAnim->setDuration(anim::duration(CardAnimationDuration));
     anim::start(m_cardOpacityAnim);
 
     m_cardPosAnim->stop();
     m_cardPosAnim->setStartValue(start);
     m_cardPosAnim->setEndValue(target);
+    m_cardPosAnim->setDuration(anim::duration(CardAnimationDuration));
     anim::start(m_cardPosAnim);
 }
 
@@ -669,8 +669,11 @@ void WelcomeBannerCropOverlay::animateOutThen(bool confirmed, const QRectF& norm
     // result, after which a receiver may well delete this object. Start it last
     // so nothing here runs afterwards — with animations disabled it finishes
     // inside the call.
+    m_dimAnimation->setDuration(anim::duration(DimAnimationDuration));
     anim::start(m_dimAnimation);
+    m_cardPosAnim->setDuration(anim::duration(CardAnimationDuration));
     anim::start(m_cardPosAnim);
+    m_cardOpacityAnim->setDuration(anim::duration(CardAnimationDuration));
     anim::start(m_cardOpacityAnim);
 }
 

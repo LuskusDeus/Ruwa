@@ -302,7 +302,6 @@ public:
         setGraphicsEffect(m_opacityEffect);
 
         m_opacityAnim = new QVariantAnimation(this);
-        m_opacityAnim->setDuration(kShowDurationMs);
         m_opacityAnim->setEasingCurve(QEasingCurve::OutCubic);
         connect(
             m_opacityAnim, &QVariantAnimation::valueChanged, this, [this](const QVariant& value) {
@@ -311,7 +310,6 @@ public:
             });
 
         m_posAnim = new QPropertyAnimation(this, "pos", this);
-        m_posAnim->setDuration(kSlideDurationMs);
         m_posAnim->setEasingCurve(QEasingCurve::OutCubic);
 
         connect(m_searchBar, &SearchBar::textChanged, this, [this](const QString& text) {
@@ -416,12 +414,12 @@ public:
         }
 
         m_opacityAnim->stop();
-        m_opacityAnim->setDuration(kShowDurationMs);
+        m_opacityAnim->setDuration(anim::duration(kShowDurationMs));
         m_opacityAnim->setStartValue(m_popupOpacity);
         m_opacityAnim->setEndValue(1.0);
         anim::start(m_opacityAnim);
 
-        m_posAnim->setDuration(kSlideDurationMs);
+        m_posAnim->setDuration(anim::duration(kSlideDurationMs));
         m_posAnim->setStartValue(startPos);
         m_posAnim->setEndValue(targetPos);
         anim::start(m_posAnim);
@@ -446,11 +444,11 @@ public:
             }
         });
 
-        m_opacityAnim->setDuration(kHideDurationMs);
+        m_opacityAnim->setDuration(anim::duration(kHideDurationMs));
         m_opacityAnim->setStartValue(m_popupOpacity);
         m_opacityAnim->setEndValue(0.0);
 
-        m_posAnim->setDuration(kHideDurationMs);
+        m_posAnim->setDuration(anim::duration(kHideDurationMs));
         m_posAnim->setStartValue(pos());
         m_posAnim->setEndValue(QPoint(pos().x(), pos().y() - (kPopupOffset / 2)));
 

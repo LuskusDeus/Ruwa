@@ -7,12 +7,15 @@
 #include "shell/docking/widgets/DockGroupHost.h"
 #include "shell/docking/widgets/DockPanel.h"
 #include "shell/docking/state/DockLayoutPreset.h"
+#include "shared/style/AnimationPolicy.h"
 #include <QSet>
 #include <functional>
 #include <QEasingCurve>
 #include <QJsonArray>
 #include <QCoreApplication>
 #include <QTimer>
+
+namespace anim = ruwa::ui::core::anim;
 
 namespace ruwa::ui::docking {
 
@@ -1989,7 +1992,7 @@ void DockLayoutRoot::animateLayoutChange(DockPanel* excludePanel)
 
     // Start animation
     m_animatingLayout = true;
-    m_layoutAnimation->setDuration(m_layoutAnimationDuration);
+    m_layoutAnimation->setDuration(anim::duration(m_layoutAnimationDuration));
     m_layoutAnimation->setCurrentTime(0);
     m_layoutAnimation->start();
 }

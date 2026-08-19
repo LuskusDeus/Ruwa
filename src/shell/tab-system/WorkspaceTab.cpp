@@ -1410,7 +1410,7 @@ void WorkspaceTab::hideLoadingShell(std::function<void()> onFinished)
 
     m_loadingShellFadeAnimation
         = new QPropertyAnimation(m_loadingShellFadeSnapshotOpacity, "opacity", this);
-    m_loadingShellFadeAnimation->setDuration(220);
+    m_loadingShellFadeAnimation->setDuration(anim::duration(220));
     m_loadingShellFadeAnimation->setEasingCurve(QEasingCurve::OutCubic);
     m_loadingShellFadeAnimation->setStartValue(1.0);
     m_loadingShellFadeAnimation->setEndValue(0.0);
@@ -2553,7 +2553,8 @@ void WorkspaceTab::startInitialCanvasBorderAppearanceAnimation()
 
     m_canvasBorderAppearanceAnimation
         = new QPropertyAnimation(m_canvasPanel, "borderOpacity", this);
-    m_canvasBorderAppearanceAnimation->setDuration(kCanvasBorderAppearanceDurationMs);
+    m_canvasBorderAppearanceAnimation->setDuration(
+        anim::duration(kCanvasBorderAppearanceDurationMs));
     m_canvasBorderAppearanceAnimation->setEasingCurve(QEasingCurve::OutCubic);
     m_canvasBorderAppearanceAnimation->setStartValue(m_canvasPanel->borderOpacity());
     m_canvasBorderAppearanceAnimation->setEndValue(1.0);

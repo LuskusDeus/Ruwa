@@ -189,13 +189,13 @@ void AnimatedViewSwitcher::animateSwitch(QWidget* from, QWidget* to, int directi
 
     // Create animations
     auto* animFrom = new QPropertyAnimation(from, "pos", this);
-    animFrom->setDuration(m_duration);
+    animFrom->setDuration(anim::duration(m_duration));
     animFrom->setStartValue(QPoint(0, 0));
     animFrom->setEndValue(QPoint(-offset, 0)); // Slides opposite direction
     animFrom->setEasingCurve(m_easingCurve);
 
     auto* animTo = new QPropertyAnimation(to, "pos", this);
-    animTo->setDuration(m_duration);
+    animTo->setDuration(anim::duration(m_duration));
     animTo->setStartValue(QPoint(offset, 0));
     animTo->setEndValue(QPoint(0, 0));
     animTo->setEasingCurve(m_easingCurve);

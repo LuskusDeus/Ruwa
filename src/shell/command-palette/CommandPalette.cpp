@@ -94,16 +94,13 @@ void CommandPalette::setupAnimations()
 {
     // Show progress (opacity)
     m_showAnimation = new QPropertyAnimation(this, "showProgress", this);
-    m_showAnimation->setDuration(ShowDuration);
     m_showAnimation->setEasingCurve(QEasingCurve::OutCubic);
 
     // List show
     m_listAnimation = new QPropertyAnimation(this, "listShowProgress", this);
-    m_listAnimation->setDuration(ListShowDuration);
     m_listAnimation->setEasingCurve(QEasingCurve::OutCubic);
 
     m_scrollAnimation = new QPropertyAnimation(this, "scrollOffset", this);
-    m_scrollAnimation->setDuration(ScrollDuration);
     m_scrollAnimation->setEasingCurve(QEasingCurve::OutCubic);
 
     connect(m_showAnimation, &QPropertyAnimation::finished, this,
@@ -172,7 +169,7 @@ void CommandPalette::showAnimated()
 
     // Start show animation (opacity only)
     m_showAnimation->stop();
-    m_showAnimation->setDuration(ShowDuration);
+    m_showAnimation->setDuration(anim::duration(ShowDuration));
     m_showAnimation->setEasingCurve(QEasingCurve::OutCubic);
     m_showAnimation->setStartValue(0.0);
     m_showAnimation->setEndValue(1.0);
@@ -201,7 +198,7 @@ void CommandPalette::hideAnimated()
 
     // Hide list first
     m_listAnimation->stop();
-    m_listAnimation->setDuration(HideDuration / 2);
+    m_listAnimation->setDuration(anim::duration(HideDuration / 2));
     m_listAnimation->setEasingCurve(QEasingCurve::InCubic);
     m_listAnimation->setStartValue(m_listShowProgress);
     m_listAnimation->setEndValue(0.0);
@@ -209,7 +206,7 @@ void CommandPalette::hideAnimated()
 
     // Start hide animation (opacity only)
     m_showAnimation->stop();
-    m_showAnimation->setDuration(HideDuration);
+    m_showAnimation->setDuration(anim::duration(HideDuration));
     m_showAnimation->setEasingCurve(QEasingCurve::InCubic);
     m_showAnimation->setStartValue(m_showProgress);
     m_showAnimation->setEndValue(0.0);
@@ -326,14 +323,14 @@ void CommandPalette::onSearchTextChanged(const QString& text)
 
     if (hasContent && m_listShowProgress < 1.0) {
         m_listAnimation->stop();
-        m_listAnimation->setDuration(ListShowDuration);
+        m_listAnimation->setDuration(anim::duration(ListShowDuration));
         m_listAnimation->setEasingCurve(QEasingCurve::OutCubic);
         m_listAnimation->setStartValue(m_listShowProgress);
         m_listAnimation->setEndValue(1.0);
         anim::start(m_listAnimation);
     } else if (!hasContent && m_listShowProgress > 0.0) {
         m_listAnimation->stop();
-        m_listAnimation->setDuration(ListShowDuration / 2);
+        m_listAnimation->setDuration(anim::duration(ListShowDuration / 2));
         m_listAnimation->setEasingCurve(QEasingCurve::InCubic);
         m_listAnimation->setStartValue(m_listShowProgress);
         m_listAnimation->setEndValue(0.0);
@@ -703,7 +700,7 @@ void CommandPalette::scrollToOffset(qreal offset, bool animated)
 
     if (animated && anim::enabled() && !qFuzzyCompare(m_targetScrollOffset, m_scrollOffset)) {
         m_scrollAnimation->stop();
-        m_scrollAnimation->setDuration(ScrollDuration);
+        m_scrollAnimation->setDuration(anim::duration(ScrollDuration));
         m_scrollAnimation->setStartValue(m_scrollOffset);
         m_scrollAnimation->setEndValue(m_targetScrollOffset);
         anim::start(m_scrollAnimation);

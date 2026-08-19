@@ -924,7 +924,6 @@ void UpdateMessageOverlay::setupUI()
 void UpdateMessageOverlay::setupAnimations()
 {
     m_dimAnimation = new QPropertyAnimation(this, "dimProgress", this);
-    m_dimAnimation->setDuration(DimAnimationDuration);
 
     m_cardOpacityAnim = new QPropertyAnimation(m_cardOpacityEffect, "opacity", this);
     m_cardOpacityAnim->setEasingCurve(QEasingCurve::OutCubic);
@@ -976,13 +975,13 @@ void UpdateMessageOverlay::showMessage()
 
     // Card slide + fade in (like MenuPopup / MessagePopup)
     m_cardOpacityAnim->stop();
-    m_cardOpacityAnim->setDuration(CardAnimationDuration);
+    m_cardOpacityAnim->setDuration(anim::duration(CardAnimationDuration));
     m_cardOpacityAnim->setStartValue(0.0);
     m_cardOpacityAnim->setEndValue(1.0);
     anim::start(m_cardOpacityAnim);
 
     m_cardPosAnim->stop();
-    m_cardPosAnim->setDuration(CardAnimationDuration);
+    m_cardPosAnim->setDuration(anim::duration(CardAnimationDuration));
     m_cardPosAnim->setStartValue(startPos);
     m_cardPosAnim->setEndValue(targetPos);
     anim::start(m_cardPosAnim);
@@ -990,6 +989,7 @@ void UpdateMessageOverlay::showMessage()
     // The dim animation owns the completion (it emits shown()), so start it
     // last: with animations disabled it finishes inside the call, and the card
     // must already be at its resting state by then.
+    m_dimAnimation->setDuration(anim::duration(DimAnimationDuration));
     anim::start(m_dimAnimation);
 }
 
@@ -1014,6 +1014,7 @@ void UpdateMessageOverlay::hideMessage(bool bypassCooldown)
     m_dimAnimation->setEasingCurve(QEasingCurve::InCubic);
     m_dimAnimation->setStartValue(m_dimProgress);
     m_dimAnimation->setEndValue(0.0);
+    m_dimAnimation->setDuration(anim::duration(DimAnimationDuration));
     anim::start(m_dimAnimation);
 
     // Card slide down + fade out (exit to bottom)
@@ -1021,12 +1022,12 @@ void UpdateMessageOverlay::hideMessage(bool bypassCooldown)
     QPoint endPos = currentPos + QPoint(0, SlideOffset);
 
     m_cardOpacityAnim->stop();
-    m_cardOpacityAnim->setDuration(CardAnimationDuration);
+    m_cardOpacityAnim->setDuration(anim::duration(CardAnimationDuration));
     m_cardOpacityAnim->setStartValue(m_cardOpacityEffect->opacity());
     m_cardOpacityAnim->setEndValue(0.0);
 
     m_cardPosAnim->stop();
-    m_cardPosAnim->setDuration(CardAnimationDuration);
+    m_cardPosAnim->setDuration(anim::duration(CardAnimationDuration));
     m_cardPosAnim->setStartValue(currentPos);
     m_cardPosAnim->setEndValue(endPos);
 

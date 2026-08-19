@@ -10,6 +10,7 @@
 #include "features/theme/manager/ThemeManager.h"
 #include "shared/style/PaintingUtils.h"
 #include "shared/style/WidgetStyleManager.h"
+#include "shared/style/AnimationPolicy.h"
 #include <QPaintEvent>
 #include <QPainter>
 #include <QPainterPath>
@@ -497,7 +498,7 @@ void CanvasStylusJoystickContainerWidget::animateLayoutSwap()
     m_swapAnim = new QVariantAnimation(this);
     m_swapAnim->setStartValue(0.0);
     m_swapAnim->setEndValue(1.0);
-    m_swapAnim->setDuration(kSwapAnimMs);
+    m_swapAnim->setDuration(anim::duration(kSwapAnimMs));
     m_swapAnim->setEasingCurve(QEasingCurve::OutCubic);
     connect(m_swapAnim, &QVariantAnimation::valueChanged, this,
         [this, jStart, pStart, jEnd, pEnd, lerpRect](const QVariant& v) {

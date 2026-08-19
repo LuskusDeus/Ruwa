@@ -32,6 +32,9 @@ using ruwa::ui::widgets::BrushDynamicsEditorWidget;
 
 namespace {
 
+/// Authored dim/panel fade of the overlay; the policy scales it at each start.
+constexpr int kOverlayFadeMs = 180;
+
 void makeWidgetTransparent(QWidget* widget)
 {
     if (!widget) {
@@ -164,7 +167,6 @@ BrushEditorParameterOverlay::BrushEditorParameterOverlay(QWidget* parent)
         &BrushEditorParameterOverlay::editingFinished);
 
     m_dimAnimation = new QVariantAnimation(this);
-    m_dimAnimation->setDuration(180);
     connect(m_dimAnimation, &QVariantAnimation::valueChanged, this, [this](const QVariant& value) {
         m_dimProgress = value.toReal();
         update();
@@ -179,7 +181,6 @@ BrushEditorParameterOverlay::BrushEditorParameterOverlay(QWidget* parent)
     });
 
     m_panelAnimation = new QVariantAnimation(this);
-    m_panelAnimation->setDuration(180);
     connect(
         m_panelAnimation, &QVariantAnimation::valueChanged, this, [this](const QVariant& value) {
             m_panelProgress = value.toReal();
@@ -240,6 +241,8 @@ void BrushEditorParameterOverlay::showOverlay(const QString& settingKey,
     m_isHiding = false;
     m_panelAnimation->stop();
     m_dimAnimation->stop();
+    m_panelAnimation->setDuration(anim::duration(kOverlayFadeMs));
+    m_dimAnimation->setDuration(anim::duration(kOverlayFadeMs));
     m_panelAnimation->setStartValue(wasActive ? m_panelProgress : 0.0);
     m_panelAnimation->setEndValue(1.0);
     m_panelAnimation->setEasingCurve(QEasingCurve::OutCubic);
@@ -262,6 +265,8 @@ void BrushEditorParameterOverlay::hideOverlay()
     m_isHiding = true;
     m_panelAnimation->stop();
     m_dimAnimation->stop();
+    m_panelAnimation->setDuration(anim::duration(kOverlayFadeMs));
+    m_dimAnimation->setDuration(anim::duration(kOverlayFadeMs));
     m_panelAnimation->setStartValue(m_panelProgress);
     m_panelAnimation->setEndValue(0.0);
     m_panelAnimation->setEasingCurve(QEasingCurve::InCubic);

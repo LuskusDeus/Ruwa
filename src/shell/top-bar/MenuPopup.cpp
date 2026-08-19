@@ -534,7 +534,7 @@ void MenuPopup::animateToPosition(const QPoint& targetPos)
 {
     ensurePosAnim();
     m_posAnim->stop();
-    m_posAnim->setDuration(SLIDE_DURATION);
+    m_posAnim->setDuration(anim::duration(SLIDE_DURATION));
     m_posAnim->setStartValue(pos());
     m_posAnim->setEndValue(targetPos);
     anim::start(m_posAnim);
@@ -740,7 +740,7 @@ void MenuPopup::showAt(const QPoint& pos, bool slideFromLeft)
     if (m_isSubmenu && startPos != pos) {
         ensurePosAnim();
         m_posAnim->stop();
-        m_posAnim->setDuration(SLIDE_DURATION);
+        m_posAnim->setDuration(anim::duration(SLIDE_DURATION));
         m_posAnim->setStartValue(startPos);
         m_posAnim->setEndValue(pos);
         m_posAnim->setEasingCurve(QEasingCurve::OutCubic);
@@ -780,7 +780,7 @@ void MenuPopup::animateSwitchTo(const QPoint& targetPos, int oldDisplayH)
 
     ensureHeightAnim();
     m_heightAnim->stop();
-    m_heightAnim->setDuration(SLIDE_DURATION);
+    m_heightAnim->setDuration(anim::duration(SLIDE_DURATION));
     m_heightAnim->setStartValue(oldDisplayH);
     m_heightAnim->setEndValue(m_targetHeight);
     m_heightAnim->setEasingCurve(QEasingCurve::OutCubic);
@@ -838,7 +838,7 @@ void MenuPopup::showBelow(QWidget* anchor, bool slideFromTop)
         m_displayHeight = 0;
         setFixedHeight(0);
         m_heightAnim->stop();
-        m_heightAnim->setDuration(SLIDE_DURATION);
+        m_heightAnim->setDuration(anim::duration(SLIDE_DURATION));
         m_heightAnim->setStartValue(0);
         m_heightAnim->setEndValue(m_targetHeight);
         m_heightAnim->setEasingCurve(QEasingCurve::OutCubic);
@@ -1029,7 +1029,7 @@ void MenuPopup::startShowAnimation()
     disconnect(m_opacityAnim, &QPropertyAnimation::finished, this, nullptr);
 
     m_opacityAnim->stop();
-    m_opacityAnim->setDuration(SHOW_DURATION);
+    m_opacityAnim->setDuration(anim::duration(SHOW_DURATION));
     m_opacityAnim->setStartValue(m_opacity);
     m_opacityAnim->setEndValue(1.0);
     m_opacityAnim->setEasingCurve(QEasingCurve::OutCubic);
@@ -1047,7 +1047,7 @@ void MenuPopup::startHideAnimation()
     if (m_heightAnim)
         m_heightAnim->stop();
 
-    m_opacityAnim->setDuration(SLIDE_DURATION);
+    m_opacityAnim->setDuration(anim::duration(SLIDE_DURATION));
     m_opacityAnim->setStartValue(m_opacity);
     m_opacityAnim->setEndValue(0.0);
     m_opacityAnim->setEasingCurve(QEasingCurve::OutCubic);
@@ -1059,7 +1059,7 @@ void MenuPopup::startHideAnimation()
         const QPoint endPos = m_submenuSlideFromLeft
             ? currentPos + QPoint(SLIDE_OFFSET, 0) // Slide out to the right
             : currentPos - QPoint(SLIDE_OFFSET, 0); // Slide out to the left
-        m_posAnim->setDuration(SLIDE_DURATION);
+        m_posAnim->setDuration(anim::duration(SLIDE_DURATION));
         m_posAnim->setStartValue(currentPos);
         m_posAnim->setEndValue(endPos);
         m_posAnim->setEasingCurve(QEasingCurve::OutCubic);
@@ -1070,7 +1070,7 @@ void MenuPopup::startHideAnimation()
         ensureHeightAnim();
         m_isAnimatingHeight = true;
         m_heightAnim->stop();
-        m_heightAnim->setDuration(SLIDE_DURATION);
+        m_heightAnim->setDuration(anim::duration(SLIDE_DURATION));
         m_heightAnim->setStartValue(m_displayHeight > 0 ? m_displayHeight : height());
         m_heightAnim->setEndValue(0);
         m_heightAnim->setEasingCurve(QEasingCurve::InCubic);

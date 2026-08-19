@@ -9,6 +9,7 @@
 #include "shell/docking/widgets/DockGroupHeader.h"
 #include "shell/docking/widgets/DockGroupHost.h"
 #include "shell/docking/widgets/DockPanel.h"
+#include "shared/style/AnimationPolicy.h"
 
 #include <QEvent>
 #include <QEasingCurve>
@@ -20,6 +21,8 @@
 #include <algorithm>
 #include <array>
 #include <utility>
+
+namespace anim = ruwa::ui::core::anim;
 
 namespace ruwa::ui::docking {
 
@@ -151,7 +154,7 @@ void DockPanelEntranceOverlay::start(int durationMs)
     m_animation = new QVariantAnimation(this);
     m_animation->setStartValue(0.0);
     m_animation->setEndValue(1.0);
-    m_animation->setDuration(qMax(1, durationMs));
+    m_animation->setDuration(anim::duration(qMax(1, durationMs)));
     m_animation->setEasingCurve(QEasingCurve::OutCubic);
 
     connect(m_animation, &QVariantAnimation::valueChanged, this, [this](const QVariant& value) {

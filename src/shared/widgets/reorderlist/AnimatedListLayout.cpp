@@ -5,12 +5,15 @@
 #include "shared/widgets/reorderlist/ReorderableRowWidget.h"
 
 #include "features/theme/manager/ThemeManager.h"
+#include "shared/style/AnimationPolicy.h"
 
 #include <QPropertyAnimation>
 #include <QParallelAnimationGroup>
 #include <QSet>
 #include <QtMath>
 #include <algorithm>
+
+namespace anim = ruwa::ui::core::anim;
 
 namespace ruwa::ui::widgets {
 
@@ -381,7 +384,7 @@ void AnimatedListLayout::applyPositions(
             entry.widget->setRowOpacity(0.0);
 
             auto* fadeAnim = new QPropertyAnimation(entry.widget, "rowOpacity", m_animGroup);
-            fadeAnim->setDuration(m_animDuration);
+            fadeAnim->setDuration(anim::duration(m_animDuration));
             fadeAnim->setEasingCurve(QEasingCurve::InOutCubic);
             fadeAnim->setStartValue(0.0);
             fadeAnim->setEndValue(1.0);
@@ -390,7 +393,7 @@ void AnimatedListLayout::applyPositions(
             // Existing entry: animate position
             if (qAbs(entry.currentY - entry.targetY) > 0.5) {
                 auto* posAnim = new QPropertyAnimation(entry.widget, "pos", m_animGroup);
-                posAnim->setDuration(m_animDuration);
+                posAnim->setDuration(anim::duration(m_animDuration));
                 posAnim->setEasingCurve(QEasingCurve::InOutCubic);
                 posAnim->setStartValue(QPoint(0, qRound(entry.currentY)));
                 posAnim->setEndValue(QPoint(0, qRound(entry.targetY)));

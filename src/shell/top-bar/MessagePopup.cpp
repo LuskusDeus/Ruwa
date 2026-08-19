@@ -567,7 +567,7 @@ void MessagePopup::startShowAnimation()
     disconnect(m_heightAnim, &QPropertyAnimation::finished, this, nullptr);
 
     m_heightAnim->stop();
-    m_heightAnim->setDuration(SHOW_DURATION);
+    m_heightAnim->setDuration(anim::duration(SHOW_DURATION));
     m_heightAnim->setStartValue(m_revealHeight);
     m_heightAnim->setEndValue(m_targetHeight);
     m_heightAnim->setEasingCurve(QEasingCurve::OutCubic);
@@ -608,7 +608,7 @@ void MessagePopup::startHideAnimation()
         emit hidden();
     });
 
-    m_heightAnim->setDuration(HIDE_DURATION);
+    m_heightAnim->setDuration(anim::duration(HIDE_DURATION));
     m_heightAnim->setStartValue(m_revealHeight);
     m_heightAnim->setEndValue(0);
     m_heightAnim->setEasingCurve(QEasingCurve::InCubic);

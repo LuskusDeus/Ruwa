@@ -2,10 +2,13 @@
 
 // DockDimOverlay.cpp
 #include "DockDimOverlay.h"
+#include "shared/style/AnimationPolicy.h"
 
 #include <QPainter>
 #include <QVariantAnimation>
 #include <QEasingCurve>
+
+namespace anim = ruwa::ui::core::anim;
 
 namespace ruwa::ui::docking {
 
@@ -219,7 +222,7 @@ void DockDimOverlay::startAnimation(qreal targetOpacity)
 
     m_animation->setStartValue(m_currentOpacity);
     m_animation->setEndValue(targetOpacity);
-    m_animation->setDuration(m_animationDuration);
+    m_animation->setDuration(anim::duration(m_animationDuration));
     m_animation->start();
 }
 

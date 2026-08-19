@@ -11,6 +11,7 @@
 #include "shell/main-window/MainWindow.h"
 #include "shell/top-bar/TopBar.h"
 #include "platform/Platform.h"
+#include "shared/style/AnimationPolicy.h"
 
 #include <QAbstractAnimation>
 #include <QCoreApplication>
@@ -19,7 +20,16 @@
 #include <QPropertyAnimation>
 #include <QTimer>
 #include <QWindow>
+namespace anim = ruwa::ui::core::anim;
+
 namespace ruwa::core {
+
+namespace {
+/// Authored startup reveal timings; the policy scales them at use.
+constexpr int kBarSlideMs = 420;
+constexpr int kSectionDelayStepMs = 105;
+constexpr int kSettleTailMs = 50;
+} // namespace
 
 StartupAnimationController::StartupAnimationController(QObject* parent)
     : QObject(parent)
@@ -160,11 +170,11 @@ void StartupAnimationController::expandSplashToWindow(ruwa::ui::windows::SplashS
                 topBar->move(startPos);
                 topBar->show();
                 topBarAnim = new QPropertyAnimation(topBar, "pos", this);
-                topBarAnim->setDuration(420);
+                topBarAnim->setDuration(anim::duration(kBarSlideMs));
                 topBarAnim->setStartValue(startPos);
                 topBarAnim->setEndValue(endPos);
                 topBarAnim->setEasingCurve(QEasingCurve::OutCubic);
-                startupSettleDelay = 470;
+                startupSettleDelay = anim::duration(kBarSlideMs) + kSettleTailMs;
             }
         }
 
@@ -175,18 +185,21 @@ void StartupAnimationController::expandSplashToWindow(ruwa::ui::windows::SplashS
             if (sidebarWidth > 0) {
                 sidebar->show();
                 sidebarAnim = new QPropertyAnimation(sidebar, "pos", this);
-                sidebarAnim->setDuration(420);
+                sidebarAnim->setDuration(anim::duration(kBarSlideMs));
                 sidebarAnim->setStartValue(QPoint(-sidebarWidth, 0));
                 sidebarAnim->setEndValue(QPoint(0, 0));
                 sidebarAnim->setEasingCurve(QEasingCurve::OutCubic);
-                startupSettleDelay = qMax(startupSettleDelay, 470);
+                startupSettleDelay
+                    = qMax(startupSettleDelay, anim::duration(kBarSlideMs) + kSettleTailMs);
             }
         }
 
         if (welcomeContent) {
             const QList<QWidget*> sections = welcomeContent->startupSections();
-            const int sectionDuration = 420;
-            const int sectionDelayStep = 105;
+            // Scaled once here: the per-section stagger and the settle delay have to
+            // shrink with the animation, or startup would wait on motion already over.
+            const int sectionDuration = anim::duration(kBarSlideMs);
+            const int sectionDelayStep = anim::duration(kSectionDelayStepMs);
 
             for (int i = 0; i < sections.size(); ++i) {
                 QWidget* sectionClip = sections[i];
@@ -221,7 +234,8 @@ void StartupAnimationController::expandSplashToWindow(ruwa::ui::windows::SplashS
                     sectionAnim->start(QAbstractAnimation::DeleteWhenStopped);
                 });
 
-                startupSettleDelay = qMax(startupSettleDelay, delay + sectionDuration + 50);
+                startupSettleDelay
+                    = qMax(startupSettleDelay, delay + sectionDuration + kSettleTailMs);
             }
         }
 

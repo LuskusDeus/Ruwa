@@ -1181,7 +1181,7 @@ void DockPanel::animateDocking(const QRect& sourceGeom, const QRect& targetGeom,
     // Start animation
     m_animatingDocking = true;
     updateOverlayVisibility();
-    m_dockingAnimation->setDuration(actualDuration);
+    m_dockingAnimation->setDuration(anim::duration(actualDuration));
     m_dockingAnimation->setCurrentTime(0);
     anim::start(m_dockingAnimation);
 }

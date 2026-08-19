@@ -9,6 +9,7 @@
 
 #include "features/canvas/rendering/OpenGLCanvasWidget.h"
 #include "features/layers/model/LayerModel.h"
+#include "shared/style/AnimationPolicy.h"
 
 #include <QWidget>
 #include <QVariantAnimation>
@@ -17,6 +18,8 @@
 
 #include <algorithm>
 #include <cmath>
+
+namespace anim = ruwa::ui::core::anim;
 
 namespace ruwa::ui::workspace {
 
@@ -78,7 +81,6 @@ void CanvasResizeController::setupRectAnimation()
         return;
     }
     m_rectAnim = new QVariantAnimation(this);
-    m_rectAnim->setDuration(130);
     m_rectAnim->setEasingCurve(QEasingCurve::InOutCubic);
     connect(m_rectAnim, &QVariantAnimation::valueChanged, this, [this](const QVariant& value) {
         if (!value.canConvert<QRectF>()) {
@@ -509,7 +511,7 @@ void CanvasResizeController::startRectTransition(
     }
 
     m_rectAnim->stop();
-    m_rectAnim->setDuration(qMax(60, durationMs));
+    m_rectAnim->setDuration(anim::duration(qMax(60, durationMs)));
     m_rectAnim->setStartValue(from.normalized());
     m_rectAnim->setEndValue(to.normalized());
     m_rectAnim->start();

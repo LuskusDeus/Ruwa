@@ -14,6 +14,7 @@
 #include "shared/resources/IconProvider.h"
 #include "features/theme/manager/ThemeManager.h"
 #include "shared/style/WidgetStyleManager.h"
+#include "shared/style/AnimationPolicy.h"
 
 #include <QApplication>
 #include <QContextMenuEvent>
@@ -722,7 +723,7 @@ void ToolsPanel::animateToolButtonVisibility(ToolId displayTool, bool visible)
     button->show();
 
     auto* animation = new QVariantAnimation(button);
-    animation->setDuration(160);
+    animation->setDuration(anim::duration(160));
     animation->setEasingCurve(visible ? QEasingCurve::OutCubic : QEasingCurve::InCubic);
     animation->setStartValue(startOpacity);
     animation->setEndValue(visible ? 1.0 : 0.0);

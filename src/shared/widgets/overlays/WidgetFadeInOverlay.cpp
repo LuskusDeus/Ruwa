@@ -88,7 +88,7 @@ void WidgetFadeInOverlay::startAnimation(
     auto doStartAnimation = [this, durationMs, easingCurve]() {
         // Create fade animation
         m_animation = new QPropertyAnimation(this, "opacity", this);
-        m_animation->setDuration(durationMs);
+        m_animation->setDuration(anim::duration(durationMs));
         m_animation->setStartValue(1.0);
         m_animation->setEndValue(0.0);
         m_animation->setEasingCurve(easingCurve);

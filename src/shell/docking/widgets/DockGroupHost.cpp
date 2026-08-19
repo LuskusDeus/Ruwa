@@ -349,7 +349,7 @@ void DockGroupHost::setCurrentPanel(DockPanel* panel, bool animated, SlideDirect
     m_slideAnimation = new QVariantAnimation(this);
     m_slideAnimation->setStartValue(0.0);
     m_slideAnimation->setEndValue(1.0);
-    m_slideAnimation->setDuration(kMemberSlideMs);
+    m_slideAnimation->setDuration(anim::duration(kMemberSlideMs));
     m_slideAnimation->setEasingCurve(kMemberSlideEasing);
     connect(m_slideAnimation, &QVariantAnimation::valueChanged, this,
         [this](const QVariant& value) { onSlideValue(value.toReal()); });
@@ -381,7 +381,7 @@ void DockGroupHost::runInsertionSlide(GroupInsertSide side, int duration)
     m_slideAnimation = new QVariantAnimation(this);
     m_slideAnimation->setStartValue(0.0);
     m_slideAnimation->setEndValue(1.0);
-    m_slideAnimation->setDuration(duration);
+    m_slideAnimation->setDuration(anim::duration(duration));
     m_slideAnimation->setEasingCurve(QEasingCurve::OutCubic);
     connect(m_slideAnimation, &QVariantAnimation::valueChanged, this,
         [this](const QVariant& value) { onSlideValue(value.toReal()); });
@@ -685,7 +685,7 @@ void DockGroupHost::runFarewell(int duration)
     auto* collapseAnim = new QVariantAnimation(this);
     collapseAnim->setStartValue(1.0);
     collapseAnim->setEndValue(0.0);
-    collapseAnim->setDuration(duration);
+    collapseAnim->setDuration(anim::duration(duration));
     collapseAnim->setEasingCurve(QEasingCurve::OutCubic);
     connect(collapseAnim, &QVariantAnimation::valueChanged, this,
         [this, start](const QVariant& value) {

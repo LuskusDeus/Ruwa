@@ -124,7 +124,7 @@ void AnimatedTabWidget::finishThemeLoadingWithConfirmation(std::function<void()>
         }
         m_themeLoadingFade->stop();
         QObject::disconnect(m_themeLoadingFade, nullptr, this, nullptr);
-        m_themeLoadingFade->setDuration(260);
+        m_themeLoadingFade->setDuration(anim::duration(260));
         m_themeLoadingFade->setEasingCurve(QEasingCurve::OutCubic);
         m_themeLoadingFade->setStartValue(1.0);
         m_themeLoadingFade->setEndValue(0.0);
@@ -558,13 +558,13 @@ void AnimatedTabWidget::slideToTab(ruwa::core::BaseTab* newTab, ruwa::core::Base
 
     // Create animations using actual current positions
     auto* animOld = new QPropertyAnimation(oldTab, "pos", this);
-    animOld->setDuration(adjustedDuration);
+    animOld->setDuration(anim::duration(adjustedDuration));
     animOld->setStartValue(oldTabStartPos);
     animOld->setEndValue(QPoint(-offset, 0));
     animOld->setEasingCurve(m_easingCurve);
 
     auto* animNew = new QPropertyAnimation(newTab, "pos", this);
-    animNew->setDuration(adjustedDuration);
+    animNew->setDuration(anim::duration(adjustedDuration));
     animNew->setStartValue(newTabStartPos);
     animNew->setEndValue(QPoint(0, 0));
     animNew->setEasingCurve(m_easingCurve);
@@ -577,7 +577,7 @@ void AnimatedTabWidget::slideToTab(ruwa::core::BaseTab* newTab, ruwa::core::Base
     // Slide the theme-loading overlay in together with the incoming tab.
     if (slideThemeOverlay) {
         auto* animOverlay = new QPropertyAnimation(m_themeLoadingOverlay, "pos", this);
-        animOverlay->setDuration(adjustedDuration);
+        animOverlay->setDuration(anim::duration(adjustedDuration));
         animOverlay->setStartValue(newTabStartPos);
         animOverlay->setEndValue(QPoint(0, 0));
         animOverlay->setEasingCurve(m_easingCurve);

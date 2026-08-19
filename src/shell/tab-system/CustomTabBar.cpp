@@ -65,6 +65,7 @@ namespace {
 /// Authored tab hover / close-reveal durations; the policy scales them at each
 /// transition.
 constexpr int kTabHoverAnimationMs = 200;
+constexpr int kStripAlignAnimMs = 280;
 constexpr int kCloseRevealInMs = 170;
 constexpr int kCloseRevealOutMs = 150;
 } // namespace
@@ -77,7 +78,7 @@ CustomTabBar::CustomTabBar(QWidget* parent)
     setSizePolicy(QSizePolicy::Expanding, QSizePolicy::Fixed);
 
     m_layoutSlideAnim = new QVariantAnimation(this);
-    m_layoutSlideAnim->setDuration(240);
+    m_layoutSlideAnim->setDuration(anim::duration(240));
     connect(m_layoutSlideAnim, &QVariantAnimation::valueChanged, this, [this](const QVariant& v) {
         const qreal t = v.toReal();
         for (auto& item : m_items) {
@@ -96,7 +97,6 @@ CustomTabBar::CustomTabBar(QWidget* parent)
     });
 
     m_stripAlignAnim = new QVariantAnimation(this);
-    m_stripAlignAnim->setDuration(280);
     m_stripAlignAnim->setEasingCurve(QEasingCurve::OutCubic);
     connect(m_stripAlignAnim, &QVariantAnimation::valueChanged, this, [this](const QVariant& v) {
         m_stripAlignOffset = v.toReal();
@@ -253,6 +253,7 @@ void CustomTabBar::refreshStripAlignment(bool animated)
     }
 
     m_stripAlignAnim->stop();
+    m_stripAlignAnim->setDuration(anim::duration(kStripAlignAnimMs));
     m_stripAlignAnim->setStartValue(m_stripAlignOffset);
     m_stripAlignAnim->setEndValue(target);
     m_stripAlignAnim->start();
@@ -331,7 +332,7 @@ CustomTabBar::TabItem CustomTabBar::makeItem(ruwa::core::BaseTab* tab)
         });
 
     item.fadeAnim = new QVariantAnimation(this);
-    item.fadeAnim->setDuration(250); // Fade-in duration
+    item.fadeAnim->setDuration(anim::duration(250)); // Fade-in duration
     item.fadeAnim->setEasingCurve(QEasingCurve::OutCubic);
     item.fadeAnim->setStartValue(0.0);
     item.fadeAnim->setEndValue(1.0);
@@ -1065,7 +1066,7 @@ void CustomTabBar::applyVisibleRootOrder(const QList<QUuid>& rootOrder, bool ani
     if (animated && anyShift && m_layoutSlideAnim) {
         m_layoutSlideAnim->setStartValue(1.0);
         m_layoutSlideAnim->setEndValue(0.0);
-        m_layoutSlideAnim->setDuration(240);
+        m_layoutSlideAnim->setDuration(anim::duration(240));
         m_layoutSlideAnim->setEasingCurve(QEasingCurve::OutCubic);
         m_layoutSlideAnim->start();
     } else {
@@ -1528,7 +1529,7 @@ void CustomTabBar::startFadeInAnimation(int index)
 
     fadeAnim->setStartValue(0.0);
     fadeAnim->setEndValue(1.0);
-    fadeAnim->setDuration(340);
+    fadeAnim->setDuration(anim::duration(340));
     fadeAnim->setEasingCurve(QEasingCurve::OutCubic);
     fadeAnim->start();
 }
@@ -1594,7 +1595,7 @@ void CustomTabBar::runPostRemoveLayoutSlide(const QHash<QUuid, qreal>& visualLef
 
     m_layoutSlideAnim->setStartValue(1.0);
     m_layoutSlideAnim->setEndValue(0.0);
-    m_layoutSlideAnim->setDuration(240);
+    m_layoutSlideAnim->setDuration(anim::duration(240));
     m_layoutSlideAnim->setEasingCurve(QEasingCurve::OutCubic);
     m_layoutSlideAnim->start();
 }
@@ -1619,7 +1620,7 @@ void CustomTabBar::startFadeOutAnimation(int index)
     fadeAnim->stop();
     fadeAnim->setStartValue(0.0);
     fadeAnim->setEndValue(1.0);
-    fadeAnim->setDuration(240);
+    fadeAnim->setDuration(anim::duration(240));
     fadeAnim->setEasingCurve(QEasingCurve::InCubic);
 
     // Use tabId for lookup - index may change when other tabs are removed

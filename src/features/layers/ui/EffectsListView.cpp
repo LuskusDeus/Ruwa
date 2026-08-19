@@ -292,7 +292,7 @@ void EffectsListView::syncRows(const QList<ReorderableRowWidget*>& orderedRows,
             setRowVisibleMask(row, newIds.contains(id) ? 0 : fullH);
             if (newIds.contains(id)) {
                 auto* hAnim = new QVariantAnimation(m_syncAnim);
-                hAnim->setDuration(kAnimMs);
+                hAnim->setDuration(anim::duration(kAnimMs));
                 hAnim->setEasingCurve(QEasingCurve::OutCubic);
                 hAnim->setStartValue(0);
                 hAnim->setEndValue(fullH);
@@ -305,7 +305,7 @@ void EffectsListView::syncRows(const QList<ReorderableRowWidget*>& orderedRows,
             if (oy != finalY) {
                 row->move(0, oy);
                 auto* posAnim = new QPropertyAnimation(row, "pos", m_syncAnim);
-                posAnim->setDuration(kAnimMs);
+                posAnim->setDuration(anim::duration(kAnimMs));
                 posAnim->setEasingCurve(QEasingCurve::InOutCubic);
                 posAnim->setStartValue(QPoint(0, oy));
                 posAnim->setEndValue(QPoint(0, finalY));
@@ -322,7 +322,7 @@ void EffectsListView::syncRows(const QList<ReorderableRowWidget*>& orderedRows,
         m_rowsToDelete.append(row);
         const int startH = rowFullHeight(row);
         auto* hAnim = new QVariantAnimation(m_syncAnim);
-        hAnim->setDuration(kAnimMs);
+        hAnim->setDuration(anim::duration(kAnimMs));
         hAnim->setEasingCurve(QEasingCurve::InOutCubic);
         hAnim->setStartValue(startH);
         hAnim->setEndValue(0);
@@ -335,7 +335,7 @@ void EffectsListView::syncRows(const QList<ReorderableRowWidget*>& orderedRows,
     m_targetContentHeight = newContentH;
     m_content->setFixedHeight(oldContentH);
     auto* contentAnim = new QVariantAnimation(m_syncAnim);
-    contentAnim->setDuration(kAnimMs);
+    contentAnim->setDuration(anim::duration(kAnimMs));
     contentAnim->setEasingCurve(QEasingCurve::InOutCubic);
     contentAnim->setStartValue(oldContentH);
     contentAnim->setEndValue(newContentH);
@@ -527,7 +527,7 @@ void EffectsListView::onSourceRowCollapseRequested(const QUuid& sourceId)
 
     QPointer<FadingSnapshot> sp(shot);
     m_sourceCollapseAnim = new QVariantAnimation(this);
-    m_sourceCollapseAnim->setDuration(kAnimMs);
+    m_sourceCollapseAnim->setDuration(anim::duration(kAnimMs));
     m_sourceCollapseAnim->setEasingCurve(QEasingCurve::InOutCubic);
     m_sourceCollapseAnim->setStartValue(kSourceDimOpacity);
     m_sourceCollapseAnim->setEndValue(0.0);

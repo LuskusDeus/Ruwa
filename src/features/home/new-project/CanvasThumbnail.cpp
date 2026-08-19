@@ -4,6 +4,7 @@
 #include "CanvasThumbnail.h"
 #include "shared/style/WidgetStyleManager.h"
 #include "features/theme/manager/ThemeManager.h"
+#include "shared/style/AnimationPolicy.h"
 
 #include <QPainter>
 #include <QPainterPath>
@@ -17,6 +18,7 @@ namespace ruwa::ui::widgets {
 using namespace ruwa::ui::core;
 
 namespace {
+const int MORPH_ANIM_DURATION = 300; // authored; the policy scales it at each start
 const int BASE_CONTENT_INSET = 12; // padding from widget edges to content area
 const int BASE_GHOST_RADIUS = 5; // corner radius of the dashed ghost rect
 const int BASE_ROW_GAP = 4; // gap between text rows
@@ -83,14 +85,12 @@ CanvasThumbnail::~CanvasThumbnail() = default;
 void CanvasThumbnail::setupMorphAnimation()
 {
     m_morphAnimation = new QPropertyAnimation(this, "morphProgress", this);
-    m_morphAnimation->setDuration(300);
     m_morphAnimation->setEasingCurve(QEasingCurve::OutCubic);
 }
 
 void CanvasThumbnail::setupMetadataAnimation()
 {
     m_metadataAnimation = new QPropertyAnimation(this, "metadataProgress", this);
-    m_metadataAnimation->setDuration(300);
     // Symmetric easing so the classic<->infinite reveal feels identical in both directions
     // (OutCubic front-loads the motion, making the grow-out look like a blink).
     m_metadataAnimation->setEasingCurve(QEasingCurve::InOutCubic);
@@ -157,6 +157,7 @@ void CanvasThumbnail::startMorphAnimation()
     }
 
     m_morphAnimation->stop();
+    m_morphAnimation->setDuration(anim::duration(MORPH_ANIM_DURATION));
     m_morphAnimation->setStartValue(0.0);
     m_morphAnimation->setEndValue(1.0);
     m_morphAnimation->start();
@@ -174,6 +175,7 @@ void CanvasThumbnail::startMetadataAnimation()
     }
 
     m_metadataAnimation->stop();
+    m_metadataAnimation->setDuration(anim::duration(MORPH_ANIM_DURATION));
     m_metadataAnimation->setStartValue(m_metadataProgress);
     m_metadataAnimation->setEndValue(targetProgress);
     m_metadataAnimation->start();

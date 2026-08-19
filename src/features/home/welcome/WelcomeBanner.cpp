@@ -11,6 +11,7 @@
 #include "shared/rendering/CanvasBackdropSource.h"
 #include "shared/resources/IconProvider.h"
 #include "shared/resources/ResourceManager.h"
+#include "shared/style/AnimationPolicy.h"
 
 #include <QCoreApplication>
 #include <QEasingCurve>
@@ -31,6 +32,8 @@
 #include <QtMath>
 
 #include <cmath>
+
+namespace anim = ruwa::ui::core::anim;
 
 namespace ruwa::ui::widgets {
 
@@ -302,7 +305,6 @@ WelcomeBanner::WelcomeBanner(QWidget* parent)
     setupUI();
 
     m_splitAnimation = new QPropertyAnimation(this, "splitProgress", this);
-    m_splitAnimation->setDuration(SPLIT_ANIM_DURATION);
     m_splitAnimation->setEasingCurve(QEasingCurve::OutCubic);
 
     m_revealTimer = new QTimer(this);
@@ -588,6 +590,7 @@ void WelcomeBanner::animateSplitTo(qreal target)
         return;
     }
     m_splitAnimation->stop();
+    m_splitAnimation->setDuration(anim::duration(SPLIT_ANIM_DURATION));
     m_splitAnimation->setStartValue(m_splitProgress);
     m_splitAnimation->setEndValue(target);
     m_splitAnimation->start();

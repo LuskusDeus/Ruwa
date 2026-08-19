@@ -5,10 +5,13 @@
 #include "features/theme/manager/ThemeColors.h"
 #include "features/theme/manager/ThemeManager.h"
 #include "shared/style/WidgetStyleManager.h"
+#include "shared/style/AnimationPolicy.h"
 
 #include <QFont>
 #include <QPainter>
 #include <QVariantAnimation>
+
+namespace anim = ruwa::ui::core::anim;
 
 namespace ruwa::ui::widgets {
 
@@ -32,7 +35,6 @@ SectionHeaderButton::SectionHeaderButton(QWidget* parent)
     updateScaledSize();
 
     m_expandAnimation = new QVariantAnimation(this);
-    m_expandAnimation->setDuration(kExpandAnimationMs);
     m_expandAnimation->setEasingCurve(QEasingCurve::InOutCubic);
     connect(
         m_expandAnimation, &QVariantAnimation::valueChanged, this, [this](const QVariant& value) {
@@ -74,6 +76,7 @@ void SectionHeaderButton::setExpanded(bool expanded, bool animated)
         return;
     }
 
+    m_expandAnimation->setDuration(anim::duration(kExpandAnimationMs));
     m_expandAnimation->setStartValue(m_expandProgress);
     m_expandAnimation->setEndValue(target);
     m_expandAnimation->start();

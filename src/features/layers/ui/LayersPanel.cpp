@@ -24,6 +24,7 @@
 #include "shared/widgets/reorderlist/ListDragDrop.h"
 #include "shell/top-bar/MessagePopupManager.h"
 #include "shared/tiles/TilePixelAccess.h"
+#include "shared/style/AnimationPolicy.h"
 
 #include <QVBoxLayout>
 #include <QHBoxLayout>
@@ -53,6 +54,8 @@
 #include <cstring>
 #include <utility>
 #include <vector>
+
+namespace anim = ruwa::ui::core::anim;
 
 namespace ruwa::ui::workspace {
 
@@ -2195,7 +2198,7 @@ void LayersPanel::animateToolbarItemVisibility(ToolbarItem item, bool visible)
     itemWidget->show();
 
     auto* animation = new QVariantAnimation(itemWidget);
-    animation->setDuration(160);
+    animation->setDuration(anim::duration(160));
     animation->setEasingCurve(visible ? QEasingCurve::OutCubic : QEasingCurve::InCubic);
     animation->setStartValue(startOpacity);
     animation->setEndValue(visible ? 1.0 : 0.0);
@@ -4666,7 +4669,8 @@ void LayersPanel::onAddGroup()
         if (!moveRecords.isEmpty()) {
             const LayerId newGroupId = newGroup->id;
             const QList<GroupedLayerMoveRecord> delayedMoves = moveRecords;
-            QTimer::singleShot(kGroupInsertAnimationMs, this, [this, newGroupId, delayedMoves]() {
+            const int insertDelayMs = anim::duration(kGroupInsertAnimationMs);
+            QTimer::singleShot(insertDelayMs, this, [this, newGroupId, delayedMoves]() {
                 LayerData* liveGroup = m_layerModel.layerById(newGroupId);
                 if (!liveGroup) {
                     return;

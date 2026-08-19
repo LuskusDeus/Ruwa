@@ -248,7 +248,7 @@ void AnimatedStackedWidget::slideToWidget(int newIndex)
     m_incomingEndRatio = 0.0;
 
     m_animation = new QVariantAnimation(this);
-    m_animation->setDuration(m_duration);
+    m_animation->setDuration(anim::duration(m_duration));
     // On interruption use an "out" curve: the in-flight slide is already
     // moving, so an inOut curve (zero velocity at t=0) would visibly stall.
     // OutCubic starts at max velocity → seamless pickup → smooth landing,

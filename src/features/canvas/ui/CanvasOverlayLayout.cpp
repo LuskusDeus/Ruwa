@@ -5,6 +5,7 @@
 // ==========================================================================
 
 #include "CanvasOverlayLayout.h"
+#include "shared/style/AnimationPolicy.h"
 
 #include <QPropertyAnimation>
 #include <QTimer>
@@ -12,6 +13,8 @@
 
 #include <algorithm>
 #include <cmath>
+
+namespace anim = ruwa::ui::core::anim;
 
 namespace ruwa::ui::workspace {
 
@@ -351,7 +354,7 @@ void CanvasOverlayLayout::moveItem(Item& it, const QPoint& pos, bool animate, in
             it.anim->setEasingCurve(QEasingCurve::OutCubic);
         }
         it.anim->stop();
-        it.anim->setDuration(duration);
+        it.anim->setDuration(anim::duration(duration));
         it.anim->setStartValue(it.widget->pos());
         it.anim->setEndValue(target);
         it.anim->start();

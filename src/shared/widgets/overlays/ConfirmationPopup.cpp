@@ -194,7 +194,7 @@ void ConfirmationPopup::showAt(const QPoint& topLeft, bool animateShow, bool ani
         if (m_anchorXAnim->state() == QAbstractAnimation::Running) {
             m_anchorXAnim->setEndValue(targetX);
         } else if (dx > 0.5) {
-            m_anchorXAnim->setDuration(SHOW_DURATION);
+            m_anchorXAnim->setDuration(anim::duration(SHOW_DURATION));
             m_anchorXAnim->setStartValue(m_anchorX);
             m_anchorXAnim->setEndValue(targetX);
             anim::start(m_anchorXAnim);
@@ -204,7 +204,7 @@ void ConfirmationPopup::showAt(const QPoint& topLeft, bool animateShow, bool ani
         if (m_anchorYAnim->state() == QAbstractAnimation::Running) {
             m_anchorYAnim->setEndValue(targetY);
         } else if (dy > 0.5) {
-            m_anchorYAnim->setDuration(SHOW_DURATION);
+            m_anchorYAnim->setDuration(anim::duration(SHOW_DURATION));
             m_anchorYAnim->setStartValue(m_anchorY);
             m_anchorYAnim->setEndValue(targetY);
             anim::start(m_anchorYAnim);
@@ -401,7 +401,7 @@ void ConfirmationPopup::startShowAnimation(bool animateSlide)
     disconnect(m_opacityAnim, &QPropertyAnimation::finished, this, nullptr);
 
     m_opacityAnim->stop();
-    m_opacityAnim->setDuration(SHOW_DURATION);
+    m_opacityAnim->setDuration(anim::duration(SHOW_DURATION));
     m_opacityAnim->setStartValue(m_opacity);
     m_opacityAnim->setEndValue(1.0);
     anim::start(m_opacityAnim);
@@ -410,7 +410,7 @@ void ConfirmationPopup::startShowAnimation(bool animateSlide)
         m_slideAnim->stop();
     }
     if (animateSlide || qAbs(m_slideOffset) > 0.5) {
-        m_slideAnim->setDuration(SHOW_DURATION);
+        m_slideAnim->setDuration(anim::duration(SHOW_DURATION));
         m_slideAnim->setStartValue(m_slideOffset);
         m_slideAnim->setEndValue(0.0);
         anim::start(m_slideAnim);
@@ -433,12 +433,12 @@ void ConfirmationPopup::startHideAnimation()
     m_anchorXAnim->stop();
     m_anchorYAnim->stop();
 
-    m_opacityAnim->setDuration(HIDE_DURATION);
+    m_opacityAnim->setDuration(anim::duration(HIDE_DURATION));
     m_opacityAnim->setStartValue(m_opacity);
     m_opacityAnim->setEndValue(0.0);
     m_opacityAnim->setEasingCurve(QEasingCurve::OutCubic);
 
-    m_slideAnim->setDuration(HIDE_DURATION);
+    m_slideAnim->setDuration(anim::duration(HIDE_DURATION));
     m_slideAnim->setStartValue(m_slideOffset);
     m_slideAnim->setEndValue(-SLIDE_OFFSET);
     m_slideAnim->setEasingCurve(QEasingCurve::OutCubic);

@@ -162,7 +162,7 @@ void ToolGroupPopup::showFor(QWidget* anchor, bool animate)
     startShowAnimation(animate);
 
     m_posAnim->stop();
-    m_posAnim->setDuration(kSlideDuration);
+    m_posAnim->setDuration(anim::duration(kSlideDuration));
     m_posAnim->setStartValue(startPos);
     m_posAnim->setEndValue(targetPos);
     if (animate) {
@@ -495,7 +495,7 @@ void ToolGroupPopup::startShowAnimation(bool animateSlide)
     disconnect(m_opacityAnim, &QPropertyAnimation::finished, this, nullptr);
 
     m_opacityAnim->stop();
-    m_opacityAnim->setDuration(kShowDuration);
+    m_opacityAnim->setDuration(anim::duration(kShowDuration));
     m_opacityAnim->setStartValue(m_opacity);
     m_opacityAnim->setEndValue(1.0);
     anim::start(m_opacityAnim);
@@ -516,12 +516,12 @@ void ToolGroupPopup::startHideAnimation()
     const QPoint currentPos = pos();
     const QPoint endPos = currentPos + slideOffsetForSide(m_side, kSlideOffset);
 
-    m_opacityAnim->setDuration(kHideDuration);
+    m_opacityAnim->setDuration(anim::duration(kHideDuration));
     m_opacityAnim->setStartValue(m_opacity);
     m_opacityAnim->setEndValue(0.0);
     m_opacityAnim->setEasingCurve(QEasingCurve::OutCubic);
 
-    m_posAnim->setDuration(kHideDuration);
+    m_posAnim->setDuration(anim::duration(kHideDuration));
     m_posAnim->setStartValue(currentPos);
     m_posAnim->setEndValue(endPos);
     m_posAnim->setEasingCurve(QEasingCurve::OutCubic);

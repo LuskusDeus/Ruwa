@@ -2,6 +2,7 @@
 
 // DropZoneIndicator.cpp
 #include "DropZoneIndicator.h"
+#include "shared/style/AnimationPolicy.h"
 
 #include <QPainter>
 #include <QPainterPath>
@@ -12,6 +13,8 @@
 #include <QGraphicsScene>
 #include <QImage>
 #include <QtMath>
+
+namespace anim = ruwa::ui::core::anim;
 
 namespace ruwa::ui::docking {
 
@@ -314,7 +317,7 @@ void DropZoneIndicator::startAnimation(bool showing)
         m_animation->setEndValue(0.0);
     }
 
-    m_animation->setDuration(m_animationDuration);
+    m_animation->setDuration(anim::duration(m_animationDuration));
     m_animation->start();
 }
 

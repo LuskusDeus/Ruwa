@@ -89,7 +89,6 @@ BrushDynamicsPopup::BrushDynamicsPopup(QWidget* parent)
     setGraphicsEffect(m_opacityEffect);
 
     m_showAnimation = new QVariantAnimation(this);
-    m_showAnimation->setDuration(kShowDurationMs);
     m_showAnimation->setEasingCurve(QEasingCurve::OutCubic);
     m_showAnimation->setStartValue(0.0);
     m_showAnimation->setEndValue(1.0);
@@ -157,6 +156,7 @@ void BrushDynamicsPopup::showForSetting(const QString& settingKey, const QString
             applyShowProgress(0.0);
         }
         show();
+        m_showAnimation->setDuration(anim::duration(kShowDurationMs));
         anim::start(m_showAnimation);
     }
     raise();
@@ -186,6 +186,7 @@ void BrushDynamicsPopup::hidePopup()
 
     m_showAnimation->stop();
     m_showAnimation->setDirection(QAbstractAnimation::Backward);
+    m_showAnimation->setDuration(anim::duration(kShowDurationMs));
     anim::start(m_showAnimation);
 }
 

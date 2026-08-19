@@ -5,6 +5,7 @@
 #include "CategoryListItem.h"
 #include "shared/widgets/layout/SmoothScrollArea.h"
 #include "features/theme/manager/ThemeManager.h"
+#include "shared/style/AnimationPolicy.h"
 
 #include <QVBoxLayout>
 #include <QPainter>
@@ -28,7 +29,6 @@ CategoryHeader::CategoryHeader(const QString& title, QWidget* parent)
     setCursor(Qt::PointingHandCursor);
 
     m_expandAnimation = new QPropertyAnimation(this, "expandProgress", this);
-    m_expandAnimation->setDuration(ANIMATION_DURATION);
     m_expandAnimation->setEasingCurve(QEasingCurve::OutCubic);
 
     updateScaledSize();
@@ -52,6 +52,7 @@ void CategoryHeader::setExpanded(bool expanded, bool animated)
 
         if (animated) {
             m_expandAnimation->stop();
+            m_expandAnimation->setDuration(anim::duration(ANIMATION_DURATION));
             m_expandAnimation->setStartValue(m_expandProgress);
             m_expandAnimation->setEndValue(expanded ? 1.0 : 0.0);
             m_expandAnimation->start();

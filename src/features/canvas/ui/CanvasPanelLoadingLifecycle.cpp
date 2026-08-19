@@ -182,7 +182,7 @@ void CanvasPanel::fadeOutLoadingOverlay()
 
     m_loadingOverlayFadeAnimation
         = new QPropertyAnimation(m_loadingOverlayOpacity, "opacity", this);
-    m_loadingOverlayFadeAnimation->setDuration(400);
+    m_loadingOverlayFadeAnimation->setDuration(anim::duration(400));
     m_loadingOverlayFadeAnimation->setEasingCurve(QEasingCurve::OutCubic);
     m_loadingOverlayFadeAnimation->setStartValue(m_loadingOverlayOpacity->opacity());
     m_loadingOverlayFadeAnimation->setEndValue(0.0);
@@ -234,7 +234,7 @@ void CanvasPanel::hideLoadingOverlayImmediately()
         if (m_brushOverlayOpacity) {
             m_brushOverlayOpacity->setOpacity(0.0);
             auto* fadeAnim = new QPropertyAnimation(m_brushOverlayOpacity, "opacity", this);
-            fadeAnim->setDuration(300);
+            fadeAnim->setDuration(anim::duration(300));
             fadeAnim->setEasingCurve(QEasingCurve::OutCubic);
             fadeAnim->setStartValue(0.0);
             fadeAnim->setEndValue(1.0);
@@ -260,7 +260,7 @@ void CanvasPanel::hideLoadingOverlayImmediately()
         if (m_toolStateOverlayOpacity) {
             m_toolStateOverlayOpacity->setOpacity(0.0);
             auto* fadeAnim = new QPropertyAnimation(m_toolStateOverlayOpacity, "opacity", this);
-            fadeAnim->setDuration(300);
+            fadeAnim->setDuration(anim::duration(300));
             fadeAnim->setEasingCurve(QEasingCurve::OutCubic);
             fadeAnim->setStartValue(0.0);
             fadeAnim->setEndValue(1.0);
@@ -284,7 +284,7 @@ void CanvasPanel::hideLoadingOverlayImmediately()
         m_stylusJoystick->setVisible(true);
         m_stylusJoystickOpacity->setOpacity(0.0);
         auto* fadeAnim = new QPropertyAnimation(m_stylusJoystickOpacity, "opacity", this);
-        fadeAnim->setDuration(300);
+        fadeAnim->setDuration(anim::duration(300));
         fadeAnim->setEasingCurve(QEasingCurve::OutCubic);
         fadeAnim->setStartValue(0.0);
         fadeAnim->setEndValue(1.0);

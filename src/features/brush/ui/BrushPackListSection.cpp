@@ -17,6 +17,7 @@
 #include "shared/widgets/SectionHeaderButton.h"
 #include "shared/widgets/layout/AnimatedFlowWidget.h"
 #include "shell/context-menu/IContextMenuProvider.h"
+#include "shared/style/AnimationPolicy.h"
 
 #include <QLatin1String>
 #include <QColor>
@@ -649,7 +650,6 @@ BrushPackListSection::BrushPackListSection(QWidget* parent)
     rootLayout->addWidget(m_contentContainer);
 
     m_expandAnimation = new QPropertyAnimation(this, "contentHeight", this);
-    m_expandAnimation->setDuration(220);
     m_expandAnimation->setEasingCurve(QEasingCurve::InOutCubic);
 
     connect(m_expandAnimation, &QPropertyAnimation::valueChanged, this,
@@ -939,7 +939,7 @@ void BrushPackListSection::animateContentHeightTo(int targetHeight)
 
     const int duration = contentAnimationDurationForDelta(qAbs(clampedTarget - currentHeight));
     m_expandAnimation->stop();
-    m_expandAnimation->setDuration(duration);
+    m_expandAnimation->setDuration(anim::duration(duration));
     m_expandAnimation->setStartValue(currentHeight);
     m_expandAnimation->setEndValue(clampedTarget);
     m_expandAnimation->start();

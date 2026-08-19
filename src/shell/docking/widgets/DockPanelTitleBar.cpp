@@ -7,6 +7,7 @@
 #include "features/theme/manager/ThemeManager.h"
 #include "shared/resources/IconProvider.h"
 #include "shared/style/WidgetStyleManager.h"
+#include "shared/style/AnimationPolicy.h"
 
 #include <QApplication>
 #include <QEasingCurve>
@@ -18,11 +19,14 @@
 #include <QShowEvent>
 #include <QVariantAnimation>
 
+namespace anim = ruwa::ui::core::anim;
+
 namespace ruwa::ui::docking {
 
 namespace {
 
 constexpr int kTitleSidePadding = 6;
+constexpr int kFloatingLayoutAnimMs = 400;
 constexpr int kInteractiveGap = 6;
 constexpr int kInteractiveVerticalPadding = 1;
 
@@ -230,6 +234,7 @@ void DockPanelTitleBar::syncFloatingLayout(bool floating)
     }
 
     m_floatingLayoutAnim->stop();
+    m_floatingLayoutAnim->setDuration(anim::duration(kFloatingLayoutAnimMs));
     m_floatingLayoutAnim->setStartValue(m_floatingLayoutProgress);
     m_floatingLayoutAnim->setEndValue(target);
     m_floatingLayoutAnim->start();
@@ -512,7 +517,6 @@ void DockPanelTitleBar::paintEvent(QPaintEvent* /*event*/)
 void DockPanelTitleBar::setupFloatingLayoutAnimation()
 {
     m_floatingLayoutAnim = new QVariantAnimation(this);
-    m_floatingLayoutAnim->setDuration(400);
     m_floatingLayoutAnim->setEasingCurve(QEasingCurve::InOutSine);
     connect(m_floatingLayoutAnim, &QVariantAnimation::valueChanged, this,
         [this](const QVariant& v) { setFloatingLayoutProgress(v.toDouble()); });

@@ -5,12 +5,15 @@
 #include "shared/resources/IconProvider.h"
 #include "shared/style/WidgetStyleManager.h"
 #include "features/theme/manager/ThemeManager.h"
+#include "shared/style/AnimationPolicy.h"
 
 #include <QMouseEvent>
 #include <QPainter>
 #include <QPainterPath>
 #include <QPropertyAnimation>
 #include <QtMath>
+
+namespace anim = ruwa::ui::core::anim;
 
 namespace ruwa::ui::widgets {
 
@@ -35,15 +38,14 @@ ColorSlotSwitchWidget::ColorSlotSwitchWidget(QWidget* parent)
     setMouseTracking(true);
     setFixedSize(sizeHint());
 
-    auto makeAnim = [this](const char* prop, int dur, QEasingCurve::Type easing) {
+    auto makeAnim = [this](const char* prop, QEasingCurve::Type easing) {
         auto* a = new QPropertyAnimation(this, prop, this);
-        a->setDuration(dur);
         a->setEasingCurve(easing);
         return a;
     };
-    m_hoverFgAnim = makeAnim("hoverFg", kAnimDuration, QEasingCurve::OutCubic);
-    m_hoverBgAnim = makeAnim("hoverBg", kAnimDuration, QEasingCurve::OutCubic);
-    m_hoverSwapAnim = makeAnim("hoverSwap", kAnimDuration, QEasingCurve::OutCubic);
+    m_hoverFgAnim = makeAnim("hoverFg", QEasingCurve::OutCubic);
+    m_hoverBgAnim = makeAnim("hoverBg", QEasingCurve::OutCubic);
+    m_hoverSwapAnim = makeAnim("hoverSwap", QEasingCurve::OutCubic);
 }
 
 void ColorSlotSwitchWidget::setForegroundColor(const QColor& color)
@@ -139,16 +141,17 @@ ColorSlotSwitchWidget::HitTarget ColorSlotSwitchWidget::hitTest(const QPoint& po
     return HitTarget::None;
 }
 
-void ColorSlotSwitchWidget::startAnimation(QPropertyAnimation* anim, qreal target)
+void ColorSlotSwitchWidget::startAnimation(QPropertyAnimation* animation, qreal target)
 {
-    if (!anim)
+    if (!animation)
         return;
-    anim->stop();
-    anim->setStartValue(anim->propertyName() == QByteArray("hoverFg") ? m_hoverFg
-            : anim->propertyName() == QByteArray("hoverBg")           ? m_hoverBg
-                                                                      : m_hoverSwap);
-    anim->setEndValue(target);
-    anim->start();
+    animation->stop();
+    animation->setDuration(anim::duration(kAnimDuration));
+    animation->setStartValue(animation->propertyName() == QByteArray("hoverFg") ? m_hoverFg
+            : animation->propertyName() == QByteArray("hoverBg")                ? m_hoverBg
+                                                                                : m_hoverSwap);
+    animation->setEndValue(target);
+    anim::start(animation);
 }
 
 void ColorSlotSwitchWidget::updateHoverState(HitTarget target)

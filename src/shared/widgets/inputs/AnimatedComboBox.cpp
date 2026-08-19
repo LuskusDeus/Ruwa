@@ -391,7 +391,6 @@ public:
         setGraphicsEffect(m_opacityEffect);
 
         m_opacityAnim = new QVariantAnimation(this);
-        m_opacityAnim->setDuration(kShowDurationMs);
         m_opacityAnim->setEasingCurve(QEasingCurve::OutCubic);
         connect(
             m_opacityAnim, &QVariantAnimation::valueChanged, this, [this](const QVariant& value) {
@@ -400,7 +399,6 @@ public:
             });
 
         m_posAnim = new QPropertyAnimation(this, "pos", this);
-        m_posAnim->setDuration(kSlideDurationMs);
         m_posAnim->setEasingCurve(QEasingCurve::OutCubic);
     }
 
@@ -506,12 +504,12 @@ public:
             m_popupOpacity = 0.0;
             m_opacityEffect->setOpacity(0.0);
         }
-        m_opacityAnim->setDuration(kShowDurationMs);
+        m_opacityAnim->setDuration(anim::duration(kShowDurationMs));
         m_opacityAnim->setStartValue(m_popupOpacity);
         m_opacityAnim->setEndValue(1.0);
         anim::start(m_opacityAnim);
 
-        m_posAnim->setDuration(kSlideDurationMs);
+        m_posAnim->setDuration(anim::duration(kSlideDurationMs));
         m_posAnim->setStartValue(startPos);
         m_posAnim->setEndValue(targetPos);
         anim::start(m_posAnim);
@@ -534,13 +532,13 @@ public:
                 m_onPopupHidden();
         });
 
-        m_opacityAnim->setDuration(kHideDurationMs);
+        m_opacityAnim->setDuration(anim::duration(kHideDurationMs));
         m_opacityAnim->setStartValue(m_popupOpacity);
         m_opacityAnim->setEndValue(0.0);
 
         const QPoint currentPos = pos();
         const QPoint hidePos(currentPos.x(), currentPos.y() - (kPopupOffset / 2));
-        m_posAnim->setDuration(kHideDurationMs);
+        m_posAnim->setDuration(anim::duration(kHideDurationMs));
         m_posAnim->setStartValue(currentPos);
         m_posAnim->setEndValue(hidePos);
 

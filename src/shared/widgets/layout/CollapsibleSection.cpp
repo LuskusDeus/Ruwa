@@ -4,11 +4,14 @@
 
 #include "features/theme/manager/ThemeManager.h"
 #include "shared/widgets/SectionHeaderButton.h"
+#include "shared/style/AnimationPolicy.h"
 
 #include <QEvent>
 #include <QPropertyAnimation>
 #include <QResizeEvent>
 #include <QVBoxLayout>
+
+namespace anim = ruwa::ui::core::anim;
 
 namespace ruwa::ui::widgets {
 
@@ -47,7 +50,6 @@ CollapsibleSection::CollapsibleSection(const QString& title, QWidget* parent)
     rootLayout->addWidget(m_clip);
 
     m_expandAnimation = new QPropertyAnimation(this, "contentHeight", this);
-    m_expandAnimation->setDuration(220);
     m_expandAnimation->setEasingCurve(QEasingCurve::InOutCubic);
 
     m_header->setExpanded(m_expanded, false);
@@ -224,8 +226,8 @@ void CollapsibleSection::animateContentHeightTo(int targetHeight)
 
     const int delta = qAbs(clamped - m_contentHeight);
     m_expandAnimation->stop();
-    m_expandAnimation->setDuration(qBound(
-        kExpandAnimationMinMs, qRound(delta * kExpandAnimationMsPerPixel), kExpandAnimationMaxMs));
+    m_expandAnimation->setDuration(anim::duration(qBound(
+        kExpandAnimationMinMs, qRound(delta * kExpandAnimationMsPerPixel), kExpandAnimationMaxMs)));
     m_expandAnimation->setStartValue(m_contentHeight);
     m_expandAnimation->setEndValue(clamped);
     m_expandAnimation->start();

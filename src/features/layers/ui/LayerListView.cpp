@@ -1637,7 +1637,7 @@ void LayerListView::animateMultiDragCollapse(const QSet<LayerId>& allDragIds,
 
         // Opacity fade
         auto* opAnim = new QPropertyAnimation(row, "rowOpacity", m_multiDragAnim);
-        opAnim->setDuration(300);
+        opAnim->setDuration(anim::duration(300));
         opAnim->setEasingCurve(QEasingCurve::InOutCubic);
         opAnim->setStartValue(row->rowOpacity());
         opAnim->setEndValue(0.0);
@@ -1645,7 +1645,7 @@ void LayerListView::animateMultiDragCollapse(const QSet<LayerId>& allDragIds,
 
         // Height shrink
         auto* hAnim = new QVariantAnimation(m_multiDragAnim);
-        hAnim->setDuration(300);
+        hAnim->setDuration(anim::duration(300));
         hAnim->setEasingCurve(QEasingCurve::InOutCubic);
         hAnim->setStartValue(info.startH);
         hAnim->setEndValue(0);
@@ -1661,7 +1661,7 @@ void LayerListView::animateMultiDragCollapse(const QSet<LayerId>& allDragIds,
     if (!layoutHandlesSlide) {
         for (auto& info : slideRows) {
             auto* posAnim = new QPropertyAnimation(info.row, "pos", m_multiDragAnim);
-            posAnim->setDuration(300);
+            posAnim->setDuration(anim::duration(300));
             posAnim->setEasingCurve(QEasingCurve::InOutCubic);
             posAnim->setStartValue(QPoint(0, info.startY));
             posAnim->setEndValue(QPoint(0, info.endY));
@@ -1669,7 +1669,7 @@ void LayerListView::animateMultiDragCollapse(const QSet<LayerId>& allDragIds,
         }
 
         auto* contentAnim = new QVariantAnimation(m_multiDragAnim);
-        contentAnim->setDuration(300);
+        contentAnim->setDuration(anim::duration(300));
         contentAnim->setEasingCurve(QEasingCurve::InOutCubic);
         contentAnim->setStartValue(preContentH);
         contentAnim->setEndValue(newContentH);
@@ -1777,7 +1777,7 @@ void LayerListView::animateMultiDragExpand(
     // Slide shifted rows to their new positions
     for (auto& info : slideRows) {
         auto* posAnim = new QPropertyAnimation(info.row, "pos", m_multiDragAnim);
-        posAnim->setDuration(300);
+        posAnim->setDuration(anim::duration(300));
         posAnim->setEasingCurve(QEasingCurve::InOutCubic);
         posAnim->setStartValue(QPoint(0, info.startY));
         posAnim->setEndValue(QPoint(0, info.finalY));
@@ -1829,7 +1829,7 @@ void LayerListView::onContentHeightChanged(int newHeight)
         // insertion space opens at the same pace as the row layout.
         if (!m_heightAnim) {
             m_heightAnim = new QVariantAnimation(this);
-            m_heightAnim->setDuration(300);
+            m_heightAnim->setDuration(anim::duration(300));
             m_heightAnim->setEasingCurve(QEasingCurve::InOutCubic);
             connect(m_heightAnim, &QVariantAnimation::valueChanged, this,
                 [this](const QVariant& v) { m_contentWidget->setFixedHeight(v.toInt()); });
@@ -2441,7 +2441,7 @@ void LayerListView::animateGroupCollapse(const LayerId& groupId)
     m_groupAnim = new QParallelAnimationGroup(this);
 
     auto* revealAnim = new QVariantAnimation(m_groupAnim);
-    revealAnim->setDuration(durationMs);
+    revealAnim->setDuration(anim::duration(durationMs));
     revealAnim->setEasingCurve(QEasingCurve::InOutCubic);
     revealAnim->setStartValue(startFront);
     revealAnim->setEndValue(0);
@@ -2469,7 +2469,7 @@ void LayerListView::animateGroupCollapse(const LayerId& groupId)
     // Slide rows that remain in the collapsed layout
     for (auto& info : movedRows) {
         auto* posAnim = new QPropertyAnimation(info.row, "pos", m_groupAnim);
-        posAnim->setDuration(durationMs);
+        posAnim->setDuration(anim::duration(durationMs));
         posAnim->setEasingCurve(QEasingCurve::InOutCubic);
         posAnim->setStartValue(QPoint(0, info.oldY));
         posAnim->setEndValue(QPoint(0, info.finalY));
@@ -2478,7 +2478,7 @@ void LayerListView::animateGroupCollapse(const LayerId& groupId)
 
     // Content height animation (separate from the normal m_heightAnim)
     auto* contentHeightAnim = new QVariantAnimation(m_groupAnim);
-    contentHeightAnim->setDuration(durationMs);
+    contentHeightAnim->setDuration(anim::duration(durationMs));
     contentHeightAnim->setEasingCurve(QEasingCurve::InOutCubic);
     contentHeightAnim->setStartValue(oldContentH);
     contentHeightAnim->setEndValue(newContentH);
@@ -2629,7 +2629,7 @@ void LayerListView::animateGroupExpand(const LayerId& groupId)
     m_groupAnim = new QParallelAnimationGroup(this);
 
     auto* revealAnim = new QVariantAnimation(m_groupAnim);
-    revealAnim->setDuration(durationMs);
+    revealAnim->setDuration(anim::duration(durationMs));
     revealAnim->setEasingCurve(QEasingCurve::InOutCubic);
     revealAnim->setStartValue(startFront);
     revealAnim->setEndValue(revealSpan);
@@ -2657,7 +2657,7 @@ void LayerListView::animateGroupExpand(const LayerId& groupId)
     // Slide moved rows from old to final positions
     for (auto& info : movedRows) {
         auto* posAnim = new QPropertyAnimation(info.row, "pos", m_groupAnim);
-        posAnim->setDuration(durationMs);
+        posAnim->setDuration(anim::duration(durationMs));
         posAnim->setEasingCurve(QEasingCurve::InOutCubic);
         posAnim->setStartValue(QPoint(0, info.oldY));
         posAnim->setEndValue(QPoint(0, info.finalY));
@@ -2666,7 +2666,7 @@ void LayerListView::animateGroupExpand(const LayerId& groupId)
 
     // Content height animation (parented to group anim)
     auto* contentHeightAnim = new QVariantAnimation(m_groupAnim);
-    contentHeightAnim->setDuration(durationMs);
+    contentHeightAnim->setDuration(anim::duration(durationMs));
     contentHeightAnim->setEasingCurve(QEasingCurve::InOutCubic);
     contentHeightAnim->setStartValue(oldContentH);
     contentHeightAnim->setEndValue(newContentH);
@@ -2707,7 +2707,7 @@ void LayerListView::animateSourceRowCollapse(const QList<LayerRowWidget*>& rows)
     }
 
     m_collapseAnim = new QVariantAnimation(this);
-    m_collapseAnim->setDuration(300);
+    m_collapseAnim->setDuration(anim::duration(300));
     m_collapseAnim->setEasingCurve(QEasingCurve::InOutCubic);
     m_collapseAnim->setStartValue(1.0);
     m_collapseAnim->setEndValue(0.0);
@@ -2766,7 +2766,7 @@ void LayerListView::animateCopyDragSourceRestore()
         row->show();
 
         auto* opAnim = new QPropertyAnimation(row, "rowOpacity", group);
-        opAnim->setDuration(220);
+        opAnim->setDuration(anim::duration(220));
         opAnim->setEasingCurve(QEasingCurve::InOutCubic);
         opAnim->setStartValue(row->rowOpacity());
         opAnim->setEndValue(1.0);
@@ -3145,7 +3145,7 @@ void LayerListView::animateNewLayerInsert(
     for (auto& nr : newRows) {
         // Opacity fade in
         auto* opAnim = new QPropertyAnimation(nr.row, "rowOpacity", m_creationAnim);
-        opAnim->setDuration(300);
+        opAnim->setDuration(anim::duration(300));
         opAnim->setEasingCurve(QEasingCurve::InOutCubic);
         opAnim->setStartValue(0.0);
         opAnim->setEndValue(1.0);
@@ -3153,7 +3153,7 @@ void LayerListView::animateNewLayerInsert(
 
         // Height grow
         auto* hAnim = new QVariantAnimation(m_creationAnim);
-        hAnim->setDuration(300);
+        hAnim->setDuration(anim::duration(300));
         hAnim->setEasingCurve(QEasingCurve::InOutCubic);
         hAnim->setStartValue(0);
         hAnim->setEndValue(nr.targetH);
@@ -3165,7 +3165,7 @@ void LayerListView::animateNewLayerInsert(
     // Slide moved rows from old to final positions
     for (auto& info : movedRows) {
         auto* posAnim = new QPropertyAnimation(info.row, "pos", m_creationAnim);
-        posAnim->setDuration(300);
+        posAnim->setDuration(anim::duration(300));
         posAnim->setEasingCurve(QEasingCurve::InOutCubic);
         posAnim->setStartValue(QPoint(0, info.oldY));
         posAnim->setEndValue(QPoint(0, info.finalY));
@@ -3174,7 +3174,7 @@ void LayerListView::animateNewLayerInsert(
 
     // Content height animation
     auto* contentAnim = new QVariantAnimation(m_creationAnim);
-    contentAnim->setDuration(300);
+    contentAnim->setDuration(anim::duration(300));
     contentAnim->setEasingCurve(QEasingCurve::InOutCubic);
     contentAnim->setStartValue(oldContentH);
     contentAnim->setEndValue(newContentH);
@@ -3261,14 +3261,14 @@ void LayerListView::animateLayerRemoval(const QSet<LayerId>& removedIds)
         auto* row = info.row;
 
         auto* opAnim = new QPropertyAnimation(row, "rowOpacity", m_deleteAnim);
-        opAnim->setDuration(300);
+        opAnim->setDuration(anim::duration(300));
         opAnim->setEasingCurve(QEasingCurve::InOutCubic);
         opAnim->setStartValue(row->rowOpacity());
         opAnim->setEndValue(0.0);
         m_deleteAnim->addAnimation(opAnim);
 
         auto* hAnim = new QVariantAnimation(m_deleteAnim);
-        hAnim->setDuration(300);
+        hAnim->setDuration(anim::duration(300));
         hAnim->setEasingCurve(QEasingCurve::InOutCubic);
         hAnim->setStartValue(info.startH);
         hAnim->setEndValue(0);

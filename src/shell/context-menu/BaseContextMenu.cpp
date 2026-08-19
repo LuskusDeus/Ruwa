@@ -74,7 +74,6 @@ BaseContextMenu::BaseContextMenu(QWidget* parent)
 
     // Setup position animation
     m_posAnimation = new QPropertyAnimation(this, "menuPos", this);
-    m_posAnimation->setDuration(RepositionDuration);
     m_posAnimation->setEasingCurve(QEasingCurve::InOutExpo);
 
     connect(m_posAnimation, &QPropertyAnimation::finished, this,
@@ -118,6 +117,7 @@ void BaseContextMenu::showAt(
         if (finalPosition != targetPosition) {
             m_posAnimation->stop();
             m_isRepositioning = true;
+            m_posAnimation->setDuration(anim::duration(RepositionDuration));
             m_posAnimation->setStartValue(m_restPos);
             m_posAnimation->setEndValue(finalPosition);
             anim::start(m_posAnimation);
@@ -159,7 +159,7 @@ void BaseContextMenu::showAt(
 
     m_showStartProgress = m_showProgress;
     m_showProgressAnim->stop();
-    m_showProgressAnim->setDuration(ShowDurationMs);
+    m_showProgressAnim->setDuration(anim::duration(ShowDurationMs));
     m_showProgressAnim->setStartValue(0.0);
     m_showProgressAnim->setEndValue(1.0);
     anim::start(m_showProgressAnim);
@@ -197,7 +197,7 @@ void BaseContextMenu::hideAnimated()
     }
 
     m_hideStartProgress = m_showProgress;
-    m_showProgressAnim->setDuration(HideDurationMs);
+    m_showProgressAnim->setDuration(anim::duration(HideDurationMs));
     m_showProgressAnim->setStartValue(0.0);
     m_showProgressAnim->setEndValue(1.0);
     anim::start(m_showProgressAnim);
@@ -301,6 +301,7 @@ void BaseContextMenu::animateToPosition(const QPoint& targetPos)
 
     m_isRepositioning = true;
 
+    m_posAnimation->setDuration(anim::duration(RepositionDuration));
     m_posAnimation->setStartValue(m_restPos);
     m_posAnimation->setEndValue(targetPos);
 

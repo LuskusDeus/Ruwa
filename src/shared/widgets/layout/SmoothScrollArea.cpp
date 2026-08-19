@@ -70,13 +70,11 @@ SmoothScrollArea::SmoothScrollArea(QWidget* parent)
         &SmoothScrollArea::onStepScrollRequested);
 
     m_scrollAnimation = new QPropertyAnimation(this, "scrollValue");
-    m_scrollAnimation->setDuration(kDefaultScrollDurationMs);
     m_scrollAnimation->setEasingCurve(QEasingCurve::OutCubic);
 
     // Animates the reserved scrollbar column width so content is pushed aside
     // smoothly (and the bar slides out) instead of snapping.
     m_reserveAnimation = new QPropertyAnimation(this, "scrollBarReserveExtent");
-    m_reserveAnimation->setDuration(kReserveAnimationMs);
     m_reserveAnimation->setEasingCurve(QEasingCurve::OutCubic);
     connect(m_reserveAnimation, &QPropertyAnimation::finished, this, [this]() {
         // Content extent may depend on the final viewport width — settle the range.

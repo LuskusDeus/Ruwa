@@ -2,6 +2,7 @@
 
 // ListCollapseAnimator.cpp
 #include "ListCollapseAnimator.h"
+#include "shared/style/AnimationPolicy.h"
 
 #include <QBoxLayout>
 #include <QEasingCurve>
@@ -13,6 +14,8 @@
 #include <QSizePolicy>
 #include <QVariantAnimation>
 #include <QWidget>
+
+namespace anim = ruwa::ui::core::anim;
 
 namespace ruwa::ui::widgets {
 
@@ -220,25 +223,26 @@ void ListCollapseAnimator::collapseRange(QBoxLayout* layout, QWidget* content, i
     collapse->layout = layout;
     collapse->onFinished = std::move(onFinished);
 
-    auto* anim = new QVariantAnimation(this);
-    anim->setStartValue(0.0);
-    anim->setEndValue(1.0);
-    anim->setDuration(durationMs > 0 ? durationMs : kDefaultDurationMs);
-    anim->setEasingCurve(QEasingCurve::InOutCubic);
-    collapse->animation = anim;
+    auto* animation = new QVariantAnimation(this);
+    animation->setStartValue(0.0);
+    animation->setEndValue(1.0);
+    animation->setDuration(anim::duration(durationMs > 0 ? durationMs : kDefaultDurationMs));
+    animation->setEasingCurve(QEasingCurve::InOutCubic);
+    collapse->animation = animation;
 
     QPointer<TransitionSnapshot> snapGuard(snap);
-    connect(anim, &QVariantAnimation::valueChanged, this, [this, snapGuard](const QVariant& value) {
-        if (snapGuard) {
-            snapGuard->setProgress(value.toReal());
-        }
-        emit stepped();
-    });
-    connect(anim, &QVariantAnimation::finished, this,
+    connect(animation, &QVariantAnimation::valueChanged, this,
+        [this, snapGuard](const QVariant& value) {
+            if (snapGuard) {
+                snapGuard->setProgress(value.toReal());
+            }
+            emit stepped();
+        });
+    connect(animation, &QVariantAnimation::finished, this,
         [this, collapse]() { finishCollapse(collapse, /*jumpToEnd=*/false); });
 
     m_active.append(collapse);
-    anim->start();
+    anim::start(animation);
 }
 
 void ListCollapseAnimator::revealWidget(QBoxLayout* layout, QWidget* content, QWidget* widget,
@@ -290,25 +294,26 @@ void ListCollapseAnimator::revealWidget(QBoxLayout* layout, QWidget* content, QW
     transition->revealIndex = index;
     transition->onFinished = std::move(onFinished);
 
-    auto* anim = new QVariantAnimation(this);
-    anim->setStartValue(0.0);
-    anim->setEndValue(1.0);
-    anim->setDuration(durationMs > 0 ? durationMs : kDefaultDurationMs);
-    anim->setEasingCurve(QEasingCurve::InOutCubic);
-    transition->animation = anim;
+    auto* animation = new QVariantAnimation(this);
+    animation->setStartValue(0.0);
+    animation->setEndValue(1.0);
+    animation->setDuration(anim::duration(durationMs > 0 ? durationMs : kDefaultDurationMs));
+    animation->setEasingCurve(QEasingCurve::InOutCubic);
+    transition->animation = animation;
 
     QPointer<TransitionSnapshot> snapGuard(snap);
-    connect(anim, &QVariantAnimation::valueChanged, this, [this, snapGuard](const QVariant& value) {
-        if (snapGuard) {
-            snapGuard->setProgress(value.toReal());
-        }
-        emit stepped();
-    });
-    connect(anim, &QVariantAnimation::finished, this,
+    connect(animation, &QVariantAnimation::valueChanged, this,
+        [this, snapGuard](const QVariant& value) {
+            if (snapGuard) {
+                snapGuard->setProgress(value.toReal());
+            }
+            emit stepped();
+        });
+    connect(animation, &QVariantAnimation::finished, this,
         [this, transition]() { finishCollapse(transition, /*jumpToEnd=*/false); });
 
     m_active.append(transition);
-    anim->start();
+    anim::start(animation);
 }
 
 void ListCollapseAnimator::finishCollapse(ActiveCollapse* collapse, bool jumpToEnd)

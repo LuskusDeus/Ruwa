@@ -223,7 +223,7 @@ void DragGhostWidget::captureBackdrop(QWidget* backdropWidget)
         m_backdropFadeAnimation->stop();
     }
     m_backdropFadeAnimation = new QPropertyAnimation(this, "backdropOpacity", this);
-    m_backdropFadeAnimation->setDuration(300);
+    m_backdropFadeAnimation->setDuration(anim::duration(300));
     m_backdropFadeAnimation->setStartValue(0.0);
     m_backdropFadeAnimation->setEndValue(1.0);
     m_backdropFadeAnimation->setEasingCurve(QEasingCurve::OutCubic);
@@ -250,28 +250,28 @@ void DragGhostWidget::animateTo(
     m_transitionAnimation = group;
 
     auto* positionAnimation = new QPropertyAnimation(this, "pos", group);
-    positionAnimation->setDuration(300);
+    positionAnimation->setDuration(anim::duration(300));
     positionAnimation->setEasingCurve(QEasingCurve::InOutCubic);
     positionAnimation->setStartValue(pos());
     positionAnimation->setEndValue(targetPos);
     group->addAnimation(positionAnimation);
 
     auto* opacityAnimation = new QPropertyAnimation(this, "ghostOpacity", group);
-    opacityAnimation->setDuration(returning ? 300 : 80);
+    opacityAnimation->setDuration(anim::duration(returning ? 300 : 80));
     opacityAnimation->setEasingCurve(returning ? QEasingCurve::InOutCubic : QEasingCurve::OutCubic);
     opacityAnimation->setStartValue(ghostOpacity());
     opacityAnimation->setEndValue(returning ? 0.0 : 1.0);
     group->addAnimation(opacityAnimation);
 
     auto* backdropAnimation = new QPropertyAnimation(this, "backdropOpacity", group);
-    backdropAnimation->setDuration(300);
+    backdropAnimation->setDuration(anim::duration(300));
     backdropAnimation->setEasingCurve(QEasingCurve::InOutCubic);
     backdropAnimation->setStartValue(backdropOpacity());
     backdropAnimation->setEndValue(0.0);
     group->addAnimation(backdropAnimation);
 
     auto* rotationAnimation = new QPropertyAnimation(this, "ghostRotation", group);
-    rotationAnimation->setDuration(returning ? 200 : 160);
+    rotationAnimation->setDuration(anim::duration(returning ? 200 : 160));
     rotationAnimation->setEasingCurve(QEasingCurve::OutCubic);
     rotationAnimation->setStartValue(ghostRotation());
     rotationAnimation->setEndValue(0.0);
@@ -787,7 +787,7 @@ void ListDragDrop::createGhost(ReorderableRowWidget* sourceWidget, const QPoint&
         if (m_backdropAnim)
             m_backdropAnim->stop();
         m_backdropAnim = new QPropertyAnimation(m_ghost, "backdropOpacity", m_ghost);
-        m_backdropAnim->setDuration(300);
+        m_backdropAnim->setDuration(anim::duration(300));
         m_backdropAnim->setStartValue(0.0);
         m_backdropAnim->setEndValue(1.0);
         m_backdropAnim->setEasingCurve(QEasingCurve::OutCubic);
@@ -1095,28 +1095,28 @@ void ListDragDrop::endDrag(const QPoint& globalPos)
         if (m_ghost) {
             auto* group = new QParallelAnimationGroup(this);
             auto* fadeAnim = new QPropertyAnimation(m_ghost, "ghostOpacity", group);
-            fadeAnim->setDuration(300);
+            fadeAnim->setDuration(anim::duration(300));
             fadeAnim->setEasingCurve(QEasingCurve::InOutCubic);
             fadeAnim->setStartValue(m_ghost->ghostOpacity());
             fadeAnim->setEndValue(0.0);
             group->addAnimation(fadeAnim);
 
             auto* backdropAnim = new QPropertyAnimation(m_ghost, "backdropOpacity", group);
-            backdropAnim->setDuration(300);
+            backdropAnim->setDuration(anim::duration(300));
             backdropAnim->setEasingCurve(QEasingCurve::InOutCubic);
             backdropAnim->setStartValue(m_ghost->backdropOpacity());
             backdropAnim->setEndValue(0.0);
             group->addAnimation(backdropAnim);
 
             auto* scaleAnim = new QPropertyAnimation(m_ghost, "ghostScale", group);
-            scaleAnim->setDuration(300);
+            scaleAnim->setDuration(anim::duration(300));
             scaleAnim->setEasingCurve(QEasingCurve::InOutCubic);
             scaleAnim->setStartValue(m_ghost->ghostScale());
             scaleAnim->setEndValue(0.85);
             group->addAnimation(scaleAnim);
 
             auto* rotationAnim = new QPropertyAnimation(m_ghost, "ghostRotation", group);
-            rotationAnim->setDuration(180);
+            rotationAnim->setDuration(anim::duration(180));
             rotationAnim->setEasingCurve(QEasingCurve::OutCubic);
             rotationAnim->setStartValue(m_ghost->ghostRotation());
             rotationAnim->setEndValue(0.0);
@@ -1188,28 +1188,28 @@ void ListDragDrop::animateGhostFadeOut()
     // Ghost fades out and shrinks — purely visual, no state dependencies
     auto* group = new QParallelAnimationGroup(this);
     auto* fadeAnim = new QPropertyAnimation(m_ghost, "ghostOpacity", group);
-    fadeAnim->setDuration(300);
+    fadeAnim->setDuration(anim::duration(300));
     fadeAnim->setEasingCurve(QEasingCurve::InOutCubic);
     fadeAnim->setStartValue(m_ghost->ghostOpacity());
     fadeAnim->setEndValue(0.0);
     group->addAnimation(fadeAnim);
 
     auto* backdropAnim = new QPropertyAnimation(m_ghost, "backdropOpacity", group);
-    backdropAnim->setDuration(300);
+    backdropAnim->setDuration(anim::duration(300));
     backdropAnim->setEasingCurve(QEasingCurve::InOutCubic);
     backdropAnim->setStartValue(m_ghost->backdropOpacity());
     backdropAnim->setEndValue(0.0);
     group->addAnimation(backdropAnim);
 
     auto* scaleAnim = new QPropertyAnimation(m_ghost, "ghostScale", group);
-    scaleAnim->setDuration(300);
+    scaleAnim->setDuration(anim::duration(300));
     scaleAnim->setEasingCurve(QEasingCurve::InOutCubic);
     scaleAnim->setStartValue(m_ghost->ghostScale());
     scaleAnim->setEndValue(0.85);
     group->addAnimation(scaleAnim);
 
     auto* rotationAnim = new QPropertyAnimation(m_ghost, "ghostRotation", group);
-    rotationAnim->setDuration(180);
+    rotationAnim->setDuration(anim::duration(180));
     rotationAnim->setEasingCurve(QEasingCurve::OutCubic);
     rotationAnim->setStartValue(m_ghost->ghostRotation());
     rotationAnim->setEndValue(0.0);
@@ -1247,14 +1247,14 @@ void ListDragDrop::animateGhostToTarget()
     QParallelAnimationGroup* settleGroup = new QParallelAnimationGroup(this);
 
     m_settleAnim = new QPropertyAnimation(m_ghost, "pos", settleGroup);
-    m_settleAnim->setDuration(300);
+    m_settleAnim->setDuration(anim::duration(300));
     m_settleAnim->setEasingCurve(QEasingCurve::InOutCubic);
     m_settleAnim->setStartValue(m_ghost->pos());
     m_settleAnim->setEndValue(targetLocal);
     settleGroup->addAnimation(m_settleAnim);
 
     m_ghostOpacityAnim = new QPropertyAnimation(m_ghost, "ghostOpacity", settleGroup);
-    m_ghostOpacityAnim->setDuration(80);
+    m_ghostOpacityAnim->setDuration(anim::duration(80));
     m_ghostOpacityAnim->setEasingCurve(QEasingCurve::OutCubic);
     m_ghostOpacityAnim->setStartValue(m_ghost->ghostOpacity());
     m_ghostOpacityAnim->setEndValue(1.0);
@@ -1263,14 +1263,14 @@ void ListDragDrop::animateGhostToTarget()
     // Fade glass backdrop (and its border) out during the settle flight so
     // the rounded outline doesn't pop when the ghost is destroyed.
     auto* settleBackdropAnim = new QPropertyAnimation(m_ghost, "backdropOpacity", settleGroup);
-    settleBackdropAnim->setDuration(300);
+    settleBackdropAnim->setDuration(anim::duration(300));
     settleBackdropAnim->setEasingCurve(QEasingCurve::InOutCubic);
     settleBackdropAnim->setStartValue(m_ghost->backdropOpacity());
     settleBackdropAnim->setEndValue(0.0);
     settleGroup->addAnimation(settleBackdropAnim);
 
     auto* rotationAnim = new QPropertyAnimation(m_ghost, "ghostRotation", settleGroup);
-    rotationAnim->setDuration(160);
+    rotationAnim->setDuration(anim::duration(160));
     rotationAnim->setEasingCurve(QEasingCurve::OutCubic);
     rotationAnim->setStartValue(m_ghost->ghostRotation());
     rotationAnim->setEndValue(0.0);
@@ -1308,14 +1308,14 @@ void ListDragDrop::animateGhostToSource()
     }
 
     m_settleAnim = new QPropertyAnimation(m_ghost, "pos", this);
-    m_settleAnim->setDuration(300);
+    m_settleAnim->setDuration(anim::duration(300));
     m_settleAnim->setEasingCurve(QEasingCurve::InOutCubic);
     m_settleAnim->setStartValue(m_ghost->pos());
     m_settleAnim->setEndValue(sourceLocal);
 
     // Also fade out
     m_ghostOpacityAnim = new QPropertyAnimation(m_ghost, "ghostOpacity", this);
-    m_ghostOpacityAnim->setDuration(300);
+    m_ghostOpacityAnim->setDuration(anim::duration(300));
     m_ghostOpacityAnim->setStartValue(m_ghost->ghostOpacity());
     m_ghostOpacityAnim->setEndValue(0.0);
     m_ghostOpacityAnim->setEasingCurve(QEasingCurve::InOutCubic);
@@ -1325,14 +1325,14 @@ void ListDragDrop::animateGhostToSource()
     if (m_backdropAnim)
         m_backdropAnim->stop();
     m_backdropAnim = new QPropertyAnimation(m_ghost, "backdropOpacity", this);
-    m_backdropAnim->setDuration(300);
+    m_backdropAnim->setDuration(anim::duration(300));
     m_backdropAnim->setStartValue(m_ghost->backdropOpacity());
     m_backdropAnim->setEndValue(0.0);
     m_backdropAnim->setEasingCurve(QEasingCurve::InOutCubic);
     anim::start(m_backdropAnim, QAbstractAnimation::DeleteWhenStopped);
 
     auto* rotationAnim = new QPropertyAnimation(m_ghost, "ghostRotation", this);
-    rotationAnim->setDuration(200);
+    rotationAnim->setDuration(anim::duration(200));
     rotationAnim->setStartValue(m_ghost->ghostRotation());
     rotationAnim->setEndValue(0.0);
     rotationAnim->setEasingCurve(QEasingCurve::OutCubic);
@@ -1461,14 +1461,14 @@ bool ListDragDrop::animateMultiGhostSettle(
     if (m_ghostOpacityAnim)
         m_ghostOpacityAnim->stop();
     m_ghostOpacityAnim = new QPropertyAnimation(m_ghost, "ghostOpacity", this);
-    m_ghostOpacityAnim->setDuration(80);
+    m_ghostOpacityAnim->setDuration(anim::duration(80));
     m_ghostOpacityAnim->setEasingCurve(QEasingCurve::OutCubic);
     m_ghostOpacityAnim->setStartValue(m_ghost->ghostOpacity());
     m_ghostOpacityAnim->setEndValue(1.0);
     anim::start(m_ghostOpacityAnim, QAbstractAnimation::DeleteWhenStopped);
 
     auto* rotationAnim = new QPropertyAnimation(m_ghost, "ghostRotation", this);
-    rotationAnim->setDuration(160);
+    rotationAnim->setDuration(anim::duration(160));
     rotationAnim->setEasingCurve(QEasingCurve::OutCubic);
     rotationAnim->setStartValue(m_ghost->ghostRotation());
     rotationAnim->setEndValue(0.0);
@@ -1476,7 +1476,7 @@ bool ListDragDrop::animateMultiGhostSettle(
 
     // Phase 1: fly ghost to gap (300 ms)
     m_settleAnim = new QPropertyAnimation(m_ghost, "pos", this);
-    m_settleAnim->setDuration(300);
+    m_settleAnim->setDuration(anim::duration(300));
     m_settleAnim->setEasingCurve(QEasingCurve::InOutCubic);
     m_settleAnim->setStartValue(m_ghost->pos());
     m_settleAnim->setEndValue(targetLocal);
@@ -1488,7 +1488,7 @@ bool ListDragDrop::animateMultiGhostSettle(
     QParallelAnimationGroup* morphGroup = new QParallelAnimationGroup(this);
 
     m_morphAnim = new QPropertyAnimation(m_ghost, "morphProgress", morphGroup);
-    m_morphAnim->setDuration(300);
+    m_morphAnim->setDuration(anim::duration(300));
     m_morphAnim->setEasingCurve(QEasingCurve::InOutCubic);
     m_morphAnim->setStartValue(0.0);
     m_morphAnim->setEndValue(1.0);
@@ -1496,14 +1496,14 @@ bool ListDragDrop::animateMultiGhostSettle(
 
     // Fade the glass backdrop + border smoothly so they don't pop on destroy
     auto* multiBackdropAnim = new QPropertyAnimation(m_ghost, "backdropOpacity", morphGroup);
-    multiBackdropAnim->setDuration(300);
+    multiBackdropAnim->setDuration(anim::duration(300));
     multiBackdropAnim->setEasingCurve(QEasingCurve::InOutCubic);
     multiBackdropAnim->setStartValue(m_ghost->backdropOpacity());
     multiBackdropAnim->setEndValue(0.0);
     morphGroup->addAnimation(multiBackdropAnim);
 
     auto* widthAnim = new QVariantAnimation(morphGroup);
-    widthAnim->setDuration(300);
+    widthAnim->setDuration(anim::duration(300));
     widthAnim->setEasingCurve(QEasingCurve::InOutCubic);
     widthAnim->setStartValue(pillW);
     widthAnim->setEndValue(rowWidth);
@@ -1517,7 +1517,7 @@ bool ListDragDrop::animateMultiGhostSettle(
     morphGroup->addAnimation(widthAnim);
 
     auto* heightAnim = new QVariantAnimation(morphGroup);
-    heightAnim->setDuration(300);
+    heightAnim->setDuration(anim::duration(300));
     heightAnim->setEasingCurve(QEasingCurve::InOutCubic);
     heightAnim->setStartValue(pillH);
     heightAnim->setEndValue(totalSpread);

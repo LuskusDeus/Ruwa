@@ -501,7 +501,7 @@ void LayoutPresetsPopup::showBelow(QWidget* anchor, bool slideFromTop)
 
     disconnect(m_opacityAnim, &QPropertyAnimation::finished, this, nullptr);
     m_opacityAnim->stop();
-    m_opacityAnim->setDuration(SHOW_DURATION);
+    m_opacityAnim->setDuration(anim::duration(SHOW_DURATION));
     m_opacityAnim->setStartValue(m_opacity);
     m_opacityAnim->setEndValue(1.0);
     m_opacityAnim->setEasingCurve(QEasingCurve::OutCubic);
@@ -514,7 +514,7 @@ void LayoutPresetsPopup::showBelow(QWidget* anchor, bool slideFromTop)
         m_displayHeight = 0;
         setFixedHeight(0);
         m_heightAnim->stop();
-        m_heightAnim->setDuration(SLIDE_DURATION);
+        m_heightAnim->setDuration(anim::duration(SLIDE_DURATION));
         m_heightAnim->setStartValue(0);
         m_heightAnim->setEndValue(m_targetHeight);
         m_heightAnim->setEasingCurve(QEasingCurve::OutCubic);
@@ -539,7 +539,7 @@ void LayoutPresetsPopup::hidePopup()
     m_opacityAnim->stop();
     m_posAnim->stop();
 
-    m_opacityAnim->setDuration(SLIDE_DURATION);
+    m_opacityAnim->setDuration(anim::duration(SLIDE_DURATION));
     m_opacityAnim->setStartValue(m_opacity);
     m_opacityAnim->setEndValue(0.0);
     m_opacityAnim->setEasingCurve(QEasingCurve::OutCubic);
@@ -548,7 +548,7 @@ void LayoutPresetsPopup::hidePopup()
     ensureHeightAnim();
     m_isAnimatingHeight = true;
     m_heightAnim->stop();
-    m_heightAnim->setDuration(SLIDE_DURATION);
+    m_heightAnim->setDuration(anim::duration(SLIDE_DURATION));
     m_heightAnim->setStartValue(m_displayHeight > 0 ? m_displayHeight : height());
     m_heightAnim->setEndValue(0);
     m_heightAnim->setEasingCurve(QEasingCurve::InCubic);

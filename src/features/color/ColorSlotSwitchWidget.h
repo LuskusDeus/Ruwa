@@ -54,7 +54,7 @@ private:
     HitTarget hitTest(const QPoint& pos) const;
 
     void updateHoverState(HitTarget target);
-    void startAnimation(QPropertyAnimation* anim, qreal target);
+    void startAnimation(QPropertyAnimation* animation, qreal target);
 
     QColor m_foregroundColor = Qt::black;
     QColor m_backgroundColor = Qt::white;

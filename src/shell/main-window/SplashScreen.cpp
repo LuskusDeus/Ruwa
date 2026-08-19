@@ -151,13 +151,13 @@ void SplashScreen::animateAppearance(int durationMs)
     auto* group = new QParallelAnimationGroup(this);
 
     auto* scaleAnim = new QPropertyAnimation(this, "appearProgress", this);
-    scaleAnim->setDuration(durationMs);
+    scaleAnim->setDuration(anim::duration(durationMs));
     scaleAnim->setStartValue(0.0);
     scaleAnim->setEndValue(1.0);
     scaleAnim->setEasingCurve(QEasingCurve::OutCubic);
 
     auto* opacityAnim = new QPropertyAnimation(this, "contentOpacity", this);
-    opacityAnim->setDuration(durationMs);
+    opacityAnim->setDuration(anim::duration(durationMs));
     opacityAnim->setStartValue(0.0);
     opacityAnim->setEndValue(1.0);
     opacityAnim->setEasingCurve(QEasingCurve::OutCubic);
@@ -279,7 +279,7 @@ void SplashScreen::expandToMainWindow(int durationMs)
     m_pendingExpandDurationMs = durationMs;
 
     auto* fadeChrome = new QPropertyAnimation(this, "foregroundOpacity", this);
-    fadeChrome->setDuration(400);
+    fadeChrome->setDuration(anim::duration(400));
     fadeChrome->setStartValue(1.0);
     fadeChrome->setEndValue(0.0);
     fadeChrome->setEasingCurve(QEasingCurve::InCubic);
@@ -296,7 +296,7 @@ void SplashScreen::fadeOut(int durationMs)
     setGraphicsEffect(effect);
 
     auto* animation = new QPropertyAnimation(effect, "opacity", this);
-    animation->setDuration(durationMs);
+    animation->setDuration(anim::duration(durationMs));
     animation->setStartValue(1.0);
     animation->setEndValue(0.0);
     animation->setEasingCurve(QEasingCurve::OutCubic);

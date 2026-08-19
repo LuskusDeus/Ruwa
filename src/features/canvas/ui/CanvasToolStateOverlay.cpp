@@ -481,7 +481,6 @@ CanvasToolStateOverlay::CanvasToolStateOverlay(QWidget* parent)
     setTabletTracking(true);
     setSizePolicy(QSizePolicy::Fixed, QSizePolicy::Fixed);
     m_geometryAnimation = new QPropertyAnimation(this, "transitionProgress", this);
-    m_geometryAnimation->setDuration(kTransitionDurationMs);
     m_geometryAnimation->setEasingCurve(kTransitionEasing);
     m_geometryAnimation->setStartValue(0.0);
     m_geometryAnimation->setEndValue(1.0);
@@ -1331,6 +1330,7 @@ void CanvasToolStateOverlay::animateOverlayGeometry(const QSize& targetSize)
     m_geometryAnimation->setEasingCurve(
         wasAnimating ? kTransitionInterruptEasing : kTransitionEasing);
     m_transitionProgress = 0.0;
+    m_geometryAnimation->setDuration(anim::duration(kTransitionDurationMs));
     anim::start(m_geometryAnimation);
 }
 

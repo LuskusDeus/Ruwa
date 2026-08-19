@@ -944,7 +944,8 @@ void DockGroupHeader::startCloseAnimation(int index, bool matchHandover)
     item.fadeAnim->stop();
     item.fadeAnim->setStartValue(0.0);
     item.fadeAnim->setEndValue(1.0);
-    item.fadeAnim->setDuration(matchHandover ? kCloseFadeWithHandoverMs : kCloseFadeMs);
+    item.fadeAnim->setDuration(
+        anim::duration(matchHandover ? kCloseFadeWithHandoverMs : kCloseFadeMs));
     item.fadeAnim->setEasingCurve(QEasingCurve::InCubic);
 
     // Indexes shift while this runs (another tab may leave), so every frame
@@ -1021,7 +1022,7 @@ void DockGroupHeader::runLayoutSlide(const QHash<DockPanel*, qreal>& visualLeftB
 
     m_layoutSlideAnim->setStartValue(1.0);
     m_layoutSlideAnim->setEndValue(0.0);
-    m_layoutSlideAnim->setDuration(qMax(0, duration));
+    m_layoutSlideAnim->setDuration(anim::duration(qMax(0, duration)));
     m_layoutSlideAnim->start();
 }
 
@@ -1048,8 +1049,8 @@ void DockGroupHeader::startCloseRevealAnimation(int index, bool reveal)
     item.closeRevealAnim->stop();
     item.closeRevealAnim->setStartValue(item.closeRevealProgress);
     item.closeRevealAnim->setEndValue(reveal ? 1.0 : 0.0);
-    item.closeRevealAnim->setDuration(
-        anim::duration(reveal ? kCloseRevealInMs : kCloseRevealOutMs));
+    item.closeRevealAnim->setDuration(anim::duration(
+        anim::duration(reveal ? kCloseRevealInMs : kCloseRevealOutMs)));
     item.closeRevealAnim->setEasingCurve(reveal ? QEasingCurve::OutCubic : QEasingCurve::InCubic);
     anim::start(item.closeRevealAnim);
 }

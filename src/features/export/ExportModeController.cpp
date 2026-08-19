@@ -65,7 +65,6 @@ ExportModeController::ExportModeController(QWidget* hostWidget, CanvasPanel* can
     m_workspace->installEventFilter(this);
 
     m_animation = new QVariantAnimation(this);
-    m_animation->setDuration(kAnimationDurationMs);
     m_animation->setEasingCurve(QEasingCurve::InOutCubic);
 
     connect(m_animation, &QVariantAnimation::valueChanged, this,
@@ -134,7 +133,7 @@ void ExportModeController::startAnimation(bool entering)
 
     // Scale duration proportionally to remaining distance
     const qreal distance = qAbs(endVal - startVal);
-    m_animation->setDuration(qRound(kAnimationDurationMs * distance));
+    m_animation->setDuration(anim::duration(qRound(kAnimationDurationMs * distance)));
 
     m_animation->setStartValue(startVal);
     m_animation->setEndValue(endVal);

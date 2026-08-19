@@ -3,11 +3,14 @@
 // DockCompassWidget.cpp
 #include "DockCompassWidget.h"
 #include "shared/resources/IconProvider.h"
+#include "shared/style/AnimationPolicy.h"
 
 #include <QPainter>
 #include <QPainterPath>
 #include <QMouseEvent>
 #include <QEasingCurve>
+
+namespace anim = ruwa::ui::core::anim;
 
 namespace ruwa::ui::docking {
 
@@ -34,7 +37,6 @@ DockCompassWidget::DockCompassWidget(QWidget* parent)
     for (DropZone z : zones) {
         ZoneState& state = m_zoneStates[z];
         auto* anim = new QVariantAnimation(this);
-        anim->setDuration(m_animationDuration);
         anim->setEasingCurve(QEasingCurve::OutCubic);
         connect(anim, &QVariantAnimation::valueChanged, this, [this, z](const QVariant& value) {
             auto it = m_zoneStates.find(z);
@@ -433,27 +435,27 @@ void DockCompassWidget::startHoverAnimation(DropZone zone, bool hovering)
     if (it == m_zoneStates.end() || !it->animation) {
         return;
     }
-    QVariantAnimation* anim = it->animation;
+    QVariantAnimation* hoverAnimation = it->animation;
 
     const qreal target = hovering ? 1.0 : 0.0;
 
     // Idempotent: don't restart an animation that's already heading to the
     // same target — restarting from the current progress over the full
     // duration produces an asymptotic "never quite arrives" feel.
-    if (anim->state() == QAbstractAnimation::Running
-        && qFuzzyCompare(anim->endValue().toReal() + 1.0, target + 1.0)) {
+    if (hoverAnimation->state() == QAbstractAnimation::Running
+        && qFuzzyCompare(hoverAnimation->endValue().toReal() + 1.0, target + 1.0)) {
         return;
     }
 
-    if (anim->state() == QAbstractAnimation::Running) {
-        anim->stop();
+    if (hoverAnimation->state() == QAbstractAnimation::Running) {
+        hoverAnimation->stop();
     }
 
     qreal currentProgress = it->hoverProgress;
-    anim->setStartValue(currentProgress);
-    anim->setEndValue(target);
-    anim->setDuration(m_animationDuration);
-    anim->start();
+    hoverAnimation->setStartValue(currentProgress);
+    hoverAnimation->setEndValue(target);
+    hoverAnimation->setDuration(anim::duration(m_animationDuration));
+    anim::start(hoverAnimation);
 }
 
 // ============================================================================
@@ -515,7 +517,7 @@ void DockCompassWidget::startOpacityAnimation(qreal targetOpacity)
 
     m_opacityAnimation->setStartValue(m_widgetOpacity);
     m_opacityAnimation->setEndValue(targetOpacity);
-    m_opacityAnimation->setDuration(m_opacityAnimationDuration);
+    m_opacityAnimation->setDuration(anim::duration(m_opacityAnimationDuration));
     m_opacityAnimation->start();
 }
 

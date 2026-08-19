@@ -4,6 +4,7 @@
 #include "DockFloatingContainer.h"
 #include "DockContainerWidget.h"
 #include "shell/docking/widgets/DockPanel.h"
+#include "shared/style/AnimationPolicy.h"
 
 #include <QApplication>
 #include <QVBoxLayout>
@@ -17,6 +18,8 @@
 #include <QVariantAnimation>
 #include <QEasingCurve>
 #include <QtMath>
+
+namespace anim = ruwa::ui::core::anim;
 
 namespace ruwa::ui::docking {
 
@@ -379,7 +382,7 @@ void DockFloatingContainer::animateAppearance(
     m_animatingAppearance = true;
     m_dragging = true; // Enable drag during animation
     m_panel->setOverlayAnimationSuspended(true);
-    m_appearanceAnimation->setDuration(actualDuration);
+    m_appearanceAnimation->setDuration(anim::duration(actualDuration));
     m_appearanceAnimation->setCurrentTime(0);
     m_appearanceAnimation->start();
 }

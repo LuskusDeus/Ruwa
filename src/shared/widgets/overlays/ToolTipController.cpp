@@ -8,6 +8,7 @@
 #include "shared/style/PaintingUtils.h"
 #include "shared/widgets/ShortcutKeycapRenderer.h"
 #include "shared/style/WidgetStyleManager.h"
+#include "shared/style/AnimationPolicy.h"
 
 #include <QAbstractTextDocumentLayout>
 #include <QCursor>
@@ -26,6 +27,8 @@
 #include <QVariantAnimation>
 #include <QWidget>
 #include <QtMath>
+
+namespace anim = ruwa::ui::core::anim;
 
 namespace ruwa::ui::widgets {
 
@@ -208,7 +211,7 @@ public:
         raise();
 
         if (animated) {
-            m_presentationAnimation->setDuration(kShowDurationMs);
+            m_presentationAnimation->setDuration(anim::duration(kShowDurationMs));
             m_presentationAnimation->setEasingCurve(QEasingCurve::OutCubic);
             m_presentationAnimation->setStartValue(0.0);
             m_presentationAnimation->setEndValue(1.0);
@@ -228,7 +231,7 @@ public:
 
         m_presentationAnimation->stop();
         m_hiding = true;
-        m_presentationAnimation->setDuration(kHideDurationMs);
+        m_presentationAnimation->setDuration(anim::duration(kHideDurationMs));
         m_presentationAnimation->setEasingCurve(QEasingCurve::InCubic);
         m_presentationAnimation->setStartValue(m_presentationProgress);
         m_presentationAnimation->setEndValue(0.0);

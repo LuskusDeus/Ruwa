@@ -801,12 +801,12 @@ private:
         raise();
 
         m_opacityAnim->stop();
-        m_opacityAnim->setDuration(120);
+        m_opacityAnim->setDuration(anim::duration(120));
         m_opacityAnim->setStartValue(m_opacityEffect->opacity());
         m_opacityAnim->setEndValue(1.0);
 
         m_posAnim->stop();
-        m_posAnim->setDuration(120);
+        m_posAnim->setDuration(anim::duration(120));
         m_posAnim->setStartValue(startPos);
         m_posAnim->setEndValue(topLeft);
 
@@ -826,12 +826,12 @@ private:
         const QPoint currentPos = pos();
 
         m_opacityAnim->stop();
-        m_opacityAnim->setDuration(180);
+        m_opacityAnim->setDuration(anim::duration(180));
         m_opacityAnim->setStartValue(m_opacityEffect->opacity());
         m_opacityAnim->setEndValue(0.0);
 
         m_posAnim->stop();
-        m_posAnim->setDuration(180);
+        m_posAnim->setDuration(anim::duration(180));
         m_posAnim->setStartValue(currentPos);
         m_posAnim->setEndValue(currentPos - QPoint(0, 10));
 
@@ -858,7 +858,7 @@ private:
     {
         m_posAnim->stop();
         m_geometryAnim->stop();
-        m_geometryAnim->setDuration(150);
+        m_geometryAnim->setDuration(anim::duration(150));
         m_geometryAnim->setStartValue(startGeometry);
         m_geometryAnim->setEndValue(targetGeometry);
         setGeometry(startGeometry);
@@ -6393,7 +6393,12 @@ bool OpenGLCanvasWidget::startAnimatedSelectionFlip(bool flipHorizontal, bool fl
 
     requestRender();
 
-    QTimer::singleShot(kAutoFlipAnimationDurationMs, this, [this, sequence]() {
+    // Mirrors the transform's own scale animation, which rides the canvas
+    // animation policy — this wait has to shrink with it.
+    const int flipSettleMs = anim::canvasEnabled()
+        ? qMax(1, qRound(kAutoFlipAnimationDurationMs / anim::speed()))
+        : 0;
+    QTimer::singleShot(flipSettleMs, this, [this, sequence]() {
         if (!m_autoApplyingTransform || sequence != m_autoApplyTransformSequence) {
             return;
         }

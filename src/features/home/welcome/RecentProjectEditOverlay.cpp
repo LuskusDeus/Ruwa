@@ -120,12 +120,13 @@ void RecentProjectEditOverlay::showForProject(
             m_dimAnimation->setEasingCurve(QEasingCurve::OutCubic);
             m_dimAnimation->setStartValue(m_dimProgress);
             m_dimAnimation->setEndValue(1.0);
+            m_dimAnimation->setDuration(anim::duration(DimAnimationDuration));
             anim::start(m_dimAnimation);
         }
 
         if (m_cardOpacityAnim) {
             m_cardOpacityAnim->stop();
-            m_cardOpacityAnim->setDuration(CardAnimationDuration);
+            m_cardOpacityAnim->setDuration(anim::duration(CardAnimationDuration));
             m_cardOpacityAnim->setStartValue(0.0);
             m_cardOpacityAnim->setEndValue(1.0);
             anim::start(m_cardOpacityAnim);
@@ -133,7 +134,7 @@ void RecentProjectEditOverlay::showForProject(
 
         if (m_cardPosAnim) {
             m_cardPosAnim->stop();
-            m_cardPosAnim->setDuration(CardAnimationDuration);
+            m_cardPosAnim->setDuration(anim::duration(CardAnimationDuration));
             m_cardPosAnim->setStartValue(startPos);
             m_cardPosAnim->setEndValue(targetPos);
             anim::start(m_cardPosAnim);
@@ -164,6 +165,7 @@ void RecentProjectEditOverlay::hideOverlay()
         m_dimAnimation->setEasingCurve(QEasingCurve::InCubic);
         m_dimAnimation->setStartValue(m_dimProgress);
         m_dimAnimation->setEndValue(0.0);
+        m_dimAnimation->setDuration(anim::duration(DimAnimationDuration));
         anim::start(m_dimAnimation);
     }
 
@@ -172,7 +174,7 @@ void RecentProjectEditOverlay::hideOverlay()
 
     if (m_cardPosAnim) {
         m_cardPosAnim->stop();
-        m_cardPosAnim->setDuration(CardAnimationDuration);
+        m_cardPosAnim->setDuration(anim::duration(CardAnimationDuration));
         m_cardPosAnim->setStartValue(currentPos);
         m_cardPosAnim->setEndValue(endPos);
         anim::start(m_cardPosAnim);
@@ -182,7 +184,7 @@ void RecentProjectEditOverlay::hideOverlay()
     // last: with animations disabled it finishes inside the call.
     if (m_cardOpacityAnim) {
         m_cardOpacityAnim->stop();
-        m_cardOpacityAnim->setDuration(CardAnimationDuration);
+        m_cardOpacityAnim->setDuration(anim::duration(CardAnimationDuration));
         m_cardOpacityAnim->setStartValue(
             m_cardOpacityEffect ? m_cardOpacityEffect->opacity() : 1.0);
         m_cardOpacityAnim->setEndValue(0.0);
@@ -358,7 +360,6 @@ void RecentProjectEditOverlay::buildUi()
 void RecentProjectEditOverlay::setupAnimations()
 {
     m_dimAnimation = new QPropertyAnimation(this, "dimProgress", this);
-    m_dimAnimation->setDuration(DimAnimationDuration);
 
     m_cardOpacityAnim = new QPropertyAnimation(m_cardOpacityEffect, "opacity", this);
     m_cardOpacityAnim->setEasingCurve(QEasingCurve::OutCubic);
