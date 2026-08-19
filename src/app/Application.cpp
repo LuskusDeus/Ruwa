@@ -15,6 +15,7 @@
 #include "features/canvas/CanvasModifierShortcutManager.h"
 #include "commands/definitions/CommandDefinitions.h"
 #include "features/settings/SettingsManager.h"
+#include "features/settings/UsageTracker.h"
 #include "features/brush/manager/BrushManager.h"
 #include "services/discord/DiscordService.h"
 #include "services/updates/UpdateManager.h"
@@ -220,6 +221,9 @@ void Application::initializeManagers()
     pumpStartupUi();
     services::DiscordService::instance()->initialize();
     pumpStartupUi();
+
+    // Usage time tracking (About page statistic). Started once settings are available.
+    core::UsageTracker::instance().start();
 
     // 5. U P D A T E   M A N A G E R   ( N E T W O R K   T E S T )
     // ----------------------------------------------------------------------

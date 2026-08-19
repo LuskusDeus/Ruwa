@@ -93,6 +93,13 @@ public:
     void setUndoMemoryLimitMb(int megabytes); // 300, 1024, 3072, 8192
     void setTabletBackend(int backend); // 0=WinTab (Qt), 1=Windows Ink, 2=WinTab (Ruwa)
 
+    // === USAGE ===
+    /// Total seconds spent in the app across all sessions (persisted value only —
+    /// the running session's uncommitted time lives in UsageTracker).
+    qint64 totalUsageSeconds() const { return m_settings.usage.totalSeconds; }
+    /// Add elapsed seconds to the persisted usage total. Persists asynchronously.
+    void addUsageSeconds(qint64 seconds);
+
     // === WINDOW STATE SETTERS ===
     void setMainWindowSize(const QSize& size);
     void setIsMaximized(bool maximized);
@@ -113,6 +120,7 @@ signals:
     void welcomeBannerDisplayedImageKeyChanged(const QString& key);
     void brushDisplayColorChanged(const QString& brushId, int colorIndex);
     void brushFavoriteChanged(const QString& brushId, bool favorite);
+    void totalUsageSecondsChanged(qint64 totalSeconds);
 
 private:
     SettingsManager();
@@ -126,12 +134,14 @@ private:
     void loadEditor(QSettings& settings);
     void loadOnboarding(QSettings& settings);
     void loadPerformance(QSettings& settings);
+    void loadUsage(QSettings& settings);
     void loadWindowState(QSettings& settings);
 
     void saveAppearance(QSettings& settings);
     void saveEditor(QSettings& settings);
     void saveOnboarding(QSettings& settings);
     void savePerformance(QSettings& settings);
+    void saveUsage(QSettings& settings);
     void saveWindowState(QSettings& settings);
     void saveBrushDisplayColorsAsync();
     void saveBrushFavoritesAsync();

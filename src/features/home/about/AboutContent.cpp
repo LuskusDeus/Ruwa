@@ -2,6 +2,7 @@
 
 #include "features/home/about/AboutContent.h"
 
+#include "features/settings/UsageTracker.h"
 #include "features/theme/manager/ThemeManager.h"
 #include "shared/resources/IconProvider.h"
 #include "shared/widgets/BaseStyledPanel.h"
@@ -21,6 +22,7 @@
 #include <QPainterPath>
 #include <QPushButton>
 #include <QSizePolicy>
+#include <QHideEvent>
 #include <QShowEvent>
 #include <QSpacerItem>
 #include <QStringList>
@@ -65,7 +67,10 @@ const int BASE_LINK_BUTTON_MIN_WIDTH = 95;
 const int BASE_LINK_BUTTON_RADIUS = 18;
 const int BASE_LINK_BUTTON_ICON_SIZE = 18;
 const int BASE_DETAILS_TOP_MARGIN = 10;
-const int BASE_DETAILS_SPACING = 56;
+// Gap between the scrolling left column and the build info panel. The left column's
+// SmoothScrollArea already ends at its scroll bar, so this is the bar-to-panel gap and
+// mirrors the scroll bar's own 4px content margin.
+const int BASE_DETAILS_SPACING = 4;
 const int BASE_DETAILS_COLUMN_SPACING = 10;
 const int BASE_SECTION_TITLE_FONT_SIZE = 17;
 const int BASE_SECTION_SEPARATOR_TOP_MARGIN = 4;
@@ -97,6 +102,12 @@ const int BASE_BUILD_INFO_ROW_SPACING = 8;
 const int BASE_BUILD_INFO_SECTION_SPACING = 12;
 const int BASE_BUILD_INFO_LABEL_FONT_SIZE = 10;
 const int BASE_BUILD_INFO_MIN_WIDTH = 260;
+const int BASE_USAGE_PANEL_SPACING = 10;
+const int BASE_USAGE_PANEL_PADDING_H = 18;
+const int BASE_USAGE_PANEL_PADDING_V = 14;
+const int BASE_USAGE_CAPTION_FONT_SIZE = 10;
+const int BASE_USAGE_VALUE_FONT_SIZE = 15;
+const int BASE_USAGE_PANEL_MIN_HEIGHT = 74;
 
 ruwa::ui::core::WidgetStyle createBuildInfoPanelStyle()
 {
@@ -130,6 +141,28 @@ QFrame* createBuiltWithCard(QWidget* parent, QLabel*& titleLabel, QLabel*& descr
     layout->addWidget(descriptionLabel);
 
     return card;
+}
+
+/// "1 hour and 20 minutes" — hours/minutes only, so a long-lived total stays readable.
+QString formatUsageDuration(qint64 totalSeconds)
+{
+    const qint64 totalMinutes = qMax<qint64>(0, totalSeconds) / 60;
+    const int hours = static_cast<int>(totalMinutes / 60);
+    const int minutes = static_cast<int>(totalMinutes % 60);
+
+    if (totalMinutes < 1) {
+        return AboutContent::tr("less than a minute");
+    }
+    if (hours <= 0) {
+        return AboutContent::tr("%n minutes", nullptr, minutes);
+    }
+    if (minutes <= 0) {
+        return AboutContent::tr("%n hours", nullptr, hours);
+    }
+
+    return AboutContent::tr("%1 and %2")
+        .arg(AboutContent::tr("%n hours", nullptr, hours),
+            AboutContent::tr("%n minutes", nullptr, minutes));
 }
 
 QPixmap createCircularPixmap(const QString& resourcePath, const QString& fallbackPath, int size)
@@ -266,7 +299,7 @@ void AboutContent::setupContent()
     m_mainLayout->addWidget(m_aboutPanel);
 
     m_detailsSection = new QWidget(this);
-    m_detailsSection->setSizePolicy(QSizePolicy::Expanding, QSizePolicy::Maximum);
+    m_detailsSection->setSizePolicy(QSizePolicy::Expanding, QSizePolicy::Expanding);
     m_detailsLayout = new QHBoxLayout(m_detailsSection);
 
     m_programInfoContainer = new QWidget(m_detailsSection);
@@ -473,10 +506,29 @@ void AboutContent::setupContent()
     addSeparator();
     addInfoRow(m_localeCaptionLabel, m_localeValueLabel);
 
-    m_detailsLayout->addWidget(m_programInfoContainer, 3);
-    m_detailsLayout->addWidget(m_buildInfoPanel, 2, Qt::AlignTop);
+    // Usage banner under the build info panel: lifetime time spent in the app.
+    m_usagePanel = new BaseStyledPanel(createBuildInfoPanelStyle(), m_detailsSection);
+    m_usagePanel->setHoverEnabled(false);
+    m_usagePanel->setSizePolicy(QSizePolicy::Expanding, QSizePolicy::Fixed);
+    m_usageLayout = new QVBoxLayout(m_usagePanel);
 
-    m_detailsScrollArea = new SmoothScrollArea(this);
+    m_usageCaptionLabel = new QLabel(m_usagePanel);
+    m_usageCaptionLabel->setSizePolicy(QSizePolicy::Preferred, QSizePolicy::Fixed);
+    m_usageValueLabel = new QLabel(m_usagePanel);
+    m_usageValueLabel->setSizePolicy(QSizePolicy::Preferred, QSizePolicy::Fixed);
+    m_usageLayout->addWidget(m_usageCaptionLabel);
+    m_usageLayout->addWidget(m_usageValueLabel);
+
+    m_rightColumn = new QWidget(m_detailsSection);
+    m_rightColumnLayout = new QVBoxLayout(m_rightColumn);
+    m_rightColumnLayout->setContentsMargins(0, 0, 0, 0);
+    m_rightColumnLayout->addWidget(m_buildInfoPanel);
+    m_rightColumnLayout->addWidget(m_usagePanel);
+    m_rightColumnLayout->addStretch();
+
+    // Only the left column (Built with / Credits / Acknowledgements) scrolls; the build
+    // info panel on the right stays put next to the scroll area.
+    m_detailsScrollArea = new SmoothScrollArea(m_detailsSection);
     m_detailsScrollArea->setVerticalScrollBarPolicy(Qt::ScrollBarAsNeeded);
     m_detailsScrollArea->setScrollBarMargin(4);
     m_detailsScrollArea->setFillBackground(false);
@@ -487,13 +539,22 @@ void AboutContent::setupContent()
     auto* scrollContentLayout = new QVBoxLayout(scrollContent);
     scrollContentLayout->setContentsMargins(0, 0, 0, 0);
     scrollContentLayout->setSpacing(0);
-    scrollContentLayout->addWidget(m_detailsSection);
+    scrollContentLayout->addWidget(m_programInfoContainer);
     // SmoothScrollArea keeps content at least viewport-high, so a trailing stretch
-    // absorbs spare height instead of stretching the details section.
+    // absorbs spare height instead of stretching the program info column.
     scrollContentLayout->addStretch();
 
     m_detailsScrollArea->setWidget(scrollContent);
-    m_mainLayout->addWidget(m_detailsScrollArea, 1);
+
+    m_detailsLayout->addWidget(m_detailsScrollArea, 3);
+    m_detailsLayout->addWidget(m_rightColumn, 2, Qt::AlignTop);
+
+    m_mainLayout->addWidget(m_detailsSection, 1);
+
+    // The banner counts the running session too, so refresh it while the page is open.
+    m_usageRefreshTimer = new QTimer(this);
+    m_usageRefreshTimer->setInterval(30 * 1000);
+    connect(m_usageRefreshTimer, &QTimer::timeout, this, &AboutContent::updateUsageText);
 
     retranslateUi();
 }
@@ -516,12 +577,26 @@ void AboutContent::showEvent(QShowEvent* event)
     // squeezed to fit the viewport instead of scrolling, with a stale font/layout pass.
     // Re-apply once shown (deferred so the viewport has settled) — this is what a UI
     // re-scale does, and it un-squeezes the section and restores the correct fonts.
+    updateUsageText();
+    if (m_usageRefreshTimer) {
+        m_usageRefreshTimer->start();
+    }
+
     QTimer::singleShot(0, this, [this]() {
         updateScaledSizes();
         if (m_detailsScrollArea) {
             m_detailsScrollArea->refreshScrollGeometry();
         }
     });
+}
+
+void AboutContent::hideEvent(QHideEvent* event)
+{
+    HomePageContent::hideEvent(event);
+
+    if (m_usageRefreshTimer) {
+        m_usageRefreshTimer->stop();
+    }
 }
 
 void AboutContent::retranslateUi()
@@ -608,6 +683,19 @@ void AboutContent::retranslateUi()
     m_platformValueLabel->setText(platformName.isEmpty() ? QStringLiteral("-") : platformName);
     m_localeCaptionLabel->setText(tr("Locale"));
     m_localeValueLabel->setText(systemLocale.name());
+
+    m_usageCaptionLabel->setText(tr("You have spent with Ruwa"));
+    updateUsageText();
+}
+
+void AboutContent::updateUsageText()
+{
+    if (!m_usageValueLabel) {
+        return;
+    }
+
+    m_usageValueLabel->setText(
+        formatUsageDuration(ruwa::core::UsageTracker::instance().totalSeconds()));
 }
 
 void AboutContent::updateScaledSizes()
@@ -801,6 +889,32 @@ void AboutContent::updateScaledSizes()
     }
     m_buildInfoLayout->invalidate();
 
+    if (m_rightColumnLayout) {
+        m_rightColumnLayout->setSpacing(theme.scaled(BASE_USAGE_PANEL_SPACING));
+    }
+
+    if (m_usageLayout) {
+        m_usageLayout->setContentsMargins(theme.scaled(BASE_USAGE_PANEL_PADDING_H),
+            theme.scaled(BASE_USAGE_PANEL_PADDING_V), theme.scaled(BASE_USAGE_PANEL_PADDING_H),
+            theme.scaled(BASE_USAGE_PANEL_PADDING_V));
+        m_usageLayout->setSpacing(theme.scaled(BASE_BUILD_INFO_ROW_SPACING) / 2);
+    }
+
+    if (m_usagePanel) {
+        m_usagePanel->setMinimumWidth(theme.scaled(BASE_BUILD_INFO_MIN_WIDTH));
+
+        m_usageCaptionLabel->setFont(
+            theme.colors().fonts.getUIFont(theme.scaledFontSize(BASE_USAGE_CAPTION_FONT_SIZE)));
+        m_usageValueLabel->setFont(
+            theme.colors().fonts.getTitleFont(theme.scaledFontSize(BASE_USAGE_VALUE_FONT_SIZE)));
+
+        // Roughly half the build info panel, with a floor so it never collapses to text height.
+        m_buildInfoPanel->ensurePolished();
+        const int buildInfoHeight = m_buildInfoPanel->sizeHint().height();
+        m_usagePanel->setFixedHeight(qMax(theme.scaled(BASE_USAGE_PANEL_MIN_HEIGHT),
+            buildInfoHeight > 0 ? buildInfoHeight / 2 : 0));
+    }
+
     const QFont linkFont = theme.colors().fonts.getUIFont(theme.scaledFontSize(11));
     const int linkHeight = theme.scaled(BASE_LINK_BUTTON_HEIGHT);
     const int linkMinWidth = theme.scaled(BASE_LINK_BUTTON_MIN_WIDTH);
@@ -914,6 +1028,9 @@ void AboutContent::updateThemeColors()
     m_releaseValueLabel->setStyleSheet(buildInfoValueSheet);
     m_platformValueLabel->setStyleSheet(buildInfoValueSheet);
     m_localeValueLabel->setStyleSheet(buildInfoValueSheet);
+
+    m_usageCaptionLabel->setStyleSheet(buildInfoCaptionSheet);
+    m_usageValueLabel->setStyleSheet(buildInfoValueSheet);
 
     const QString separatorSheet
         = QStringLiteral("QFrame#BuildInfoSeparator { background: %1; border: none; }")

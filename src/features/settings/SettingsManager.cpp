@@ -99,6 +99,7 @@ void SettingsManager::load()
     loadEditor(settings);
     loadOnboarding(settings);
     loadPerformance(settings);
+    loadUsage(settings);
     loadWindowState(settings);
 
     m_loaded = true;
@@ -120,6 +121,7 @@ void SettingsManager::save()
     saveEditor(settings);
     saveOnboarding(settings);
     savePerformance(settings);
+    saveUsage(settings);
     saveWindowState(settings);
 
     settings.sync();
@@ -193,6 +195,11 @@ void SettingsManager::saveAsync()
         settings.setValue("tabletBackend", snapshot.performance.tabletBackend);
         settings.endGroup();
 
+        // Usage
+        settings.beginGroup("Usage");
+        settings.setValue("totalSeconds", snapshot.usage.totalSeconds);
+        settings.endGroup();
+
         // Window state
         settings.beginGroup("WindowState");
         settings.setValue("mainWindowSize", snapshot.windowState.mainWindowSize);
@@ -209,7 +216,10 @@ void SettingsManager::resetToDefaults()
     const bool onboardingChanged = m_settings.onboarding.firstRunIntegrationCompleted
         != AppSettings::defaults().onboarding.firstRunIntegrationCompleted;
     const QSet<QString> previousFavoriteBrushIds = m_settings.appearance.favoriteBrushIds;
+    // Usage time is a lifetime statistic, not a preference — a settings reset keeps it.
+    const qint64 previousUsageSeconds = m_settings.usage.totalSeconds;
     m_settings = AppSettings::defaults();
+    m_settings.usage.totalSeconds = previousUsageSeconds;
     save();
     saveBrushFavoritesAsync();
     if (onboardingChanged) {
@@ -779,6 +789,34 @@ void SettingsManager::setTabletBackend(int backend)
         emit tabletBackendChanged(backend);
         emit settingsChanged();
     }
+}
+
+// === USAGE ===
+
+void SettingsManager::loadUsage(QSettings& settings)
+{
+    settings.beginGroup("Usage");
+    m_settings.usage.totalSeconds = qMax(0LL, settings.value("totalSeconds", 0).toLongLong());
+    settings.endGroup();
+}
+
+void SettingsManager::saveUsage(QSettings& settings)
+{
+    settings.beginGroup("Usage");
+    settings.setValue("totalSeconds", m_settings.usage.totalSeconds);
+    settings.endGroup();
+}
+
+void SettingsManager::addUsageSeconds(qint64 seconds)
+{
+    if (seconds <= 0) {
+        return;
+    }
+
+    m_settings.usage.totalSeconds += seconds;
+    saveAsync();
+    emit totalUsageSecondsChanged(m_settings.usage.totalSeconds);
+    emit settingsChanged();
 }
 
 // === WINDOW STATE ===

@@ -68,6 +68,14 @@ struct AppSettings {
         int tabletBackend = 2; // 0=WinTab (Qt), 1=Windows Ink, 2=WinTab (Ruwa)
     } performance;
 
+    // === USAGE ===
+    struct Usage {
+        /// Accumulated wall-clock seconds the application has been running, across all
+        /// sessions. Committed periodically while running, so a crash loses at most one
+        /// commit interval.
+        qint64 totalSeconds = 0;
+    } usage;
+
     // === WINDOW STATE ===
     struct WindowState {
         QSize mainWindowSize = QSize(1280, 800);

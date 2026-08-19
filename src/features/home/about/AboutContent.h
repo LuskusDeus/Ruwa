@@ -9,11 +9,13 @@
 
 class QEvent;
 class QShowEvent;
+class QHideEvent;
 class QFrame;
 class QGridLayout;
 class QHBoxLayout;
 class QLabel;
 class QSpacerItem;
+class QTimer;
 class QVBoxLayout;
 class QWidget;
 
@@ -36,9 +38,11 @@ protected:
     void setupContent() override;
     void changeEvent(QEvent* event) override;
     void showEvent(QShowEvent* event) override;
+    void hideEvent(QHideEvent* event) override;
 
 private:
     void retranslateUi();
+    void updateUsageText();
     void updateScaledSizes();
     void updateThemeColors();
 
@@ -88,6 +92,8 @@ private:
     QLabel* m_acknowledgementsTitleLabel { nullptr };
     QFrame* m_acknowledgementsSeparator { nullptr };
     QLabel* m_acknowledgementsBodyLabel { nullptr };
+    QWidget* m_rightColumn { nullptr };
+    QVBoxLayout* m_rightColumnLayout { nullptr };
     BaseStyledPanel* m_buildInfoPanel { nullptr };
     QVBoxLayout* m_buildInfoLayout { nullptr };
     QLabel* m_buildDetailsTitleLabel { nullptr };
@@ -102,6 +108,11 @@ private:
     QLabel* m_platformValueLabel { nullptr };
     QLabel* m_localeCaptionLabel { nullptr };
     QLabel* m_localeValueLabel { nullptr };
+    BaseStyledPanel* m_usagePanel { nullptr };
+    QVBoxLayout* m_usageLayout { nullptr };
+    QLabel* m_usageCaptionLabel { nullptr };
+    QLabel* m_usageValueLabel { nullptr };
+    QTimer* m_usageRefreshTimer { nullptr };
 };
 
 } // namespace ruwa::ui::widgets
