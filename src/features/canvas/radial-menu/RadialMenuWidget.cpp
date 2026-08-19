@@ -184,7 +184,6 @@ RadialMenuWidget::RadialMenuWidget(QWidget* parent)
     m_transitionAnim = new QVariantAnimation(this);
     m_transitionAnim->setStartValue(0.0);
     m_transitionAnim->setEndValue(1.0);
-    m_transitionAnim->setDuration(kPageTransitionMs);
     m_transitionAnim->setEasingCurve(QEasingCurve::Linear);
     connect(
         m_transitionAnim, &QVariantAnimation::valueChanged, this, [this](const QVariant& value) {
@@ -247,7 +246,8 @@ void RadialMenuWidget::setPage(const Page& page, PageTransition transition, int 
     if (animate) {
         finishTransitionSetup();
         m_transitionRaw = 0.0;
-        m_transitionAnim->start();
+        m_transitionAnim->setDuration(anim::duration(kPageTransitionMs));
+        anim::start(m_transitionAnim);
     }
     update();
 }
@@ -777,10 +777,10 @@ void RadialMenuWidget::showAt(const QPoint& centerInParent, bool armReleaseSelec
     show();
     raise();
 
-    m_progressAnim->setDuration(kShowDurationMs);
+    m_progressAnim->setDuration(anim::duration(kShowDurationMs));
     m_progressAnim->setStartValue(showProgress());
     m_progressAnim->setEndValue(1.0);
-    m_progressAnim->start();
+    anim::start(m_progressAnim);
 }
 
 void RadialMenuWidget::hideMenu(bool animate)
@@ -800,10 +800,10 @@ void RadialMenuWidget::hideMenu(bool animate)
     setAttribute(Qt::WA_TransparentForMouseEvents, true);
 
     m_progressAnim->stop();
-    m_progressAnim->setDuration(kHideDurationMs);
+    m_progressAnim->setDuration(anim::duration(kHideDurationMs));
     m_progressAnim->setStartValue(showProgress());
     m_progressAnim->setEndValue(0.0);
-    m_progressAnim->start();
+    anim::start(m_progressAnim);
 }
 
 void RadialMenuWidget::hideImmediate()

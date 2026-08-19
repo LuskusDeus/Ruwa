@@ -32,6 +32,8 @@ namespace ruwa::ui::workspace {
 namespace {
 /// Authored row/header hover fade; the policy scales it at each transition.
 constexpr int kRowHoverAnimationMs = 140;
+constexpr int kHeaderExpandMs = 190;
+constexpr int kPopupFadeMs = 150;
 } // namespace
 
 using ruwa::core::effects::EffectCatalogCategory;
@@ -157,7 +159,6 @@ public:
         setAttribute(Qt::WA_Hover, true);
 
         m_expandAnim = new QVariantAnimation(this);
-        m_expandAnim->setDuration(190);
         m_expandAnim->setEasingCurve(QEasingCurve::InOutCubic);
         connect(m_expandAnim, &QVariantAnimation::valueChanged, this, [this](const QVariant& v) {
             m_expandProgress = v.toReal();
@@ -180,9 +181,10 @@ public:
         }
         m_expanded = expanded;
         m_expandAnim->stop();
+        m_expandAnim->setDuration(anim::duration(kHeaderExpandMs));
         m_expandAnim->setStartValue(m_expandProgress);
         m_expandAnim->setEndValue(m_expanded ? 1.0 : 0.0);
-        m_expandAnim->start();
+        anim::start(m_expandAnim);
         if (onToggled) {
             onToggled(m_expanded);
         }
@@ -311,7 +313,6 @@ EffectPickerPopup::EffectPickerPopup(QWidget* parent)
     setGraphicsEffect(m_opacityEffect);
 
     m_opacityAnim = new QPropertyAnimation(this, "popupOpacity", this);
-    m_opacityAnim->setDuration(150);
     m_opacityAnim->setEasingCurve(QEasingCurve::OutCubic);
 }
 
@@ -406,10 +407,10 @@ void EffectPickerPopup::setSectionBodyExpanded(
 
     const int duration = qBound(kFolderAnimMinMs,
         qRound(qAbs(targetHeight - currentHeight) * kFolderAnimMsPerPixel), kFolderAnimMaxMs);
-    heightAnim->setDuration(duration);
+    heightAnim->setDuration(anim::duration(duration));
     heightAnim->setStartValue(currentHeight);
     heightAnim->setEndValue(targetHeight);
-    heightAnim->start();
+    anim::start(heightAnim);
 }
 
 void EffectPickerPopup::applyFilter(const QString& text)
@@ -533,6 +534,7 @@ void EffectPickerPopup::popupUnder(QWidget* anchor)
 void EffectPickerPopup::startShowAnimation()
 {
     m_opacityAnim->stop();
+    m_opacityAnim->setDuration(anim::duration(kPopupFadeMs));
     m_opacityAnim->setStartValue(m_opacity);
     m_opacityAnim->setEndValue(1.0);
     disconnect(m_opacityAnim, &QPropertyAnimation::finished, this, nullptr);
@@ -552,6 +554,7 @@ void EffectPickerPopup::hidePopup()
     }
 
     m_opacityAnim->stop();
+    m_opacityAnim->setDuration(anim::duration(kPopupFadeMs));
     m_opacityAnim->setStartValue(m_opacity);
     m_opacityAnim->setEndValue(0.0);
     disconnect(m_opacityAnim, &QPropertyAnimation::finished, this, nullptr);

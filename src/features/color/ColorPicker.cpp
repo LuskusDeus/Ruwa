@@ -194,7 +194,6 @@ void ColorPicker::setMaskEditMode(bool active)
         m_maskGrayscaleEffect = effect;
 
         m_maskGrayscaleAnim = new QVariantAnimation(this);
-        m_maskGrayscaleAnim->setDuration(MaskGrayscaleDuration);
         m_maskGrayscaleAnim->setEasingCurve(QEasingCurve::InOutCubic);
         connect(m_maskGrayscaleAnim, &QVariantAnimation::valueChanged, this,
             [this](const QVariant& value) {
@@ -216,7 +215,8 @@ void ColorPicker::setMaskEditMode(bool active)
     effect->setEnabled(true); // render through the effect for the whole transition
     m_maskGrayscaleAnim->setStartValue(effect->amount());
     m_maskGrayscaleAnim->setEndValue(active ? 1.0 : 0.0);
-    m_maskGrayscaleAnim->start();
+    m_maskGrayscaleAnim->setDuration(anim::duration(MaskGrayscaleDuration));
+    anim::start(m_maskGrayscaleAnim);
 }
 
 void ColorPicker::setupUI()
@@ -265,7 +265,6 @@ void ColorPicker::setupAnimations()
     // Slide animation for mode transitions
     m_slideAnimation = new QPropertyAnimation(this, "slideProgress", this);
     m_slideAnimation->setEasingCurve(QEasingCurve::OutCubic);
-    m_slideAnimation->setDuration(SlideDuration);
     connect(m_slideAnimation, &QPropertyAnimation::finished, this, [this]() {
         m_slideSnapshot = QPixmap();
         m_slideNewSnapshot = QPixmap();
@@ -281,7 +280,6 @@ void ColorPicker::setupAnimations()
     m_recentHoverAnimation->setEasingCurve(QEasingCurve::OutCubic);
 
     m_recentLayoutAnimation = new QPropertyAnimation(this, "recentLayoutProgress", this);
-    m_recentLayoutAnimation->setDuration(RecentColorsLayoutDuration);
     m_recentLayoutAnimation->setEasingCurve(QEasingCurve::OutCubic);
     connect(m_recentLayoutAnimation, &QPropertyAnimation::finished, this, [this]() {
         m_recentPreviousVisibleCount = m_recentTargetVisibleCount;
@@ -314,10 +312,10 @@ void ColorPicker::showAnimated()
     setFocus();
 
     m_showAnimation->stop();
-    m_showAnimation->setDuration(ShowDuration);
+    m_showAnimation->setDuration(anim::duration(ShowDuration));
     m_showAnimation->setStartValue(m_showProgress);
     m_showAnimation->setEndValue(1.0);
-    m_showAnimation->start();
+    anim::start(m_showAnimation);
 }
 
 void ColorPicker::hideAnimated()
@@ -330,10 +328,10 @@ void ColorPicker::hideAnimated()
     m_isShowing = false;
 
     m_showAnimation->stop();
-    m_showAnimation->setDuration(HideDuration);
+    m_showAnimation->setDuration(anim::duration(HideDuration));
     m_showAnimation->setStartValue(m_showProgress);
     m_showAnimation->setEndValue(0.0);
-    m_showAnimation->start();
+    anim::start(m_showAnimation);
 }
 
 bool ColorPicker::isActive() const
@@ -408,9 +406,10 @@ void ColorPicker::setPickerMode(PickerMode mode)
         if (m_colorSlotSwitch)
             m_colorSlotSwitch->hide();
         m_slideProgress = 0.0;
+        m_slideAnimation->setDuration(anim::duration(SlideDuration));
         m_slideAnimation->setStartValue(0.0);
         m_slideAnimation->setEndValue(1.0);
-        m_slideAnimation->start();
+        anim::start(m_slideAnimation);
     }
     update();
 }
@@ -1618,9 +1617,10 @@ void ColorPicker::updateRecentColorsVisibility(bool animated)
     }
 
     if (m_recentLayoutAnimation) {
+        m_recentLayoutAnimation->setDuration(anim::duration(RecentColorsLayoutDuration));
         m_recentLayoutAnimation->setStartValue(0.0);
         m_recentLayoutAnimation->setEndValue(1.0);
-        m_recentLayoutAnimation->start();
+        anim::start(m_recentLayoutAnimation);
     } else {
         setRecentLayoutProgress(1.0);
     }

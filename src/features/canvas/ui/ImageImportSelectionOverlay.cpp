@@ -3,6 +3,7 @@
 #include "ImageImportSelectionOverlay.h"
 
 #include "shared/resources/IconProvider.h"
+#include "shared/style/AnimationPolicy.h"
 #include "features/theme/manager/ThemeColors.h"
 #include "features/theme/manager/ThemeManager.h"
 #include "shared/widgets/BaseAnimatedButton.h"
@@ -29,6 +30,8 @@
 #include <QtConcurrent>
 
 #include <algorithm>
+
+namespace anim = ruwa::ui::core::anim;
 
 namespace ruwa::ui::workspace {
 namespace {
@@ -719,15 +722,15 @@ void ImageImportSelectionOverlay::startShowAnimation()
     m_opacityAnimation->stop();
     m_panelOffsetAnimation->stop();
 
-    m_opacityAnimation->setDuration(SHOW_DURATION);
+    m_opacityAnimation->setDuration(anim::duration(SHOW_DURATION));
     m_opacityAnimation->setStartValue(m_overlayOpacity);
     m_opacityAnimation->setEndValue(1.0);
-    m_opacityAnimation->start();
+    anim::start(m_opacityAnimation);
 
-    m_panelOffsetAnimation->setDuration(SHOW_DURATION);
+    m_panelOffsetAnimation->setDuration(anim::duration(SHOW_DURATION));
     m_panelOffsetAnimation->setStartValue(m_panelOffset);
     m_panelOffsetAnimation->setEndValue(0.0);
-    m_panelOffsetAnimation->start();
+    anim::start(m_panelOffsetAnimation);
 }
 
 void ImageImportSelectionOverlay::startHideAnimation()
@@ -748,15 +751,17 @@ void ImageImportSelectionOverlay::startHideAnimation()
         }
     });
 
-    m_opacityAnimation->setDuration(HIDE_DURATION);
-    m_opacityAnimation->setStartValue(m_overlayOpacity);
-    m_opacityAnimation->setEndValue(0.0);
-    m_opacityAnimation->start();
-
-    m_panelOffsetAnimation->setDuration(HIDE_DURATION);
+    m_panelOffsetAnimation->setDuration(anim::duration(HIDE_DURATION));
     m_panelOffsetAnimation->setStartValue(m_panelOffset);
     m_panelOffsetAnimation->setEndValue(-PANEL_SLIDE_OFFSET);
-    m_panelOffsetAnimation->start();
+    anim::start(m_panelOffsetAnimation);
+
+    // Started last: its finished() handler runs hideImmediate(), which resets
+    // both animated values — with animations off that happens synchronously.
+    m_opacityAnimation->setDuration(anim::duration(HIDE_DURATION));
+    m_opacityAnimation->setStartValue(m_overlayOpacity);
+    m_opacityAnimation->setEndValue(0.0);
+    anim::start(m_opacityAnimation);
 }
 
 void ImageImportSelectionOverlay::hideImmediate()

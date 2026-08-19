@@ -1488,7 +1488,6 @@ void BrushPackPanel::setupAnimations()
     });
 
     m_compactAnimation = new QPropertyAnimation(this, "compactProgress", this);
-    m_compactAnimation->setDuration(CompactDuration);
     m_compactAnimation->setEasingCurve(QEasingCurve::OutCubic);
     connect(m_compactAnimation, &QPropertyAnimation::finished, this, [this]() {
         if (m_dragMode == DragMode::Widget) {
@@ -1575,9 +1574,10 @@ void BrushPackPanel::setCompactMode(bool compact, bool animate)
     }
 
     m_compactAnimation->stop();
+    m_compactAnimation->setDuration(anim::duration(CompactDuration));
     m_compactAnimation->setStartValue(m_compactProgress);
     m_compactAnimation->setEndValue(target);
-    m_compactAnimation->start();
+    anim::start(m_compactAnimation);
 }
 
 void BrushPackPanel::applyCompactLayout()
@@ -2515,10 +2515,10 @@ void BrushPackPanel::showAnimated()
     setFocus();
 
     m_showAnimation->stop();
-    m_showAnimation->setDuration(ShowDuration);
+    m_showAnimation->setDuration(anim::duration(ShowDuration));
     m_showAnimation->setStartValue(m_showProgress);
     m_showAnimation->setEndValue(1.0);
-    m_showAnimation->start();
+    anim::start(m_showAnimation);
 
     // Ensure all list layouts are synced after the panel becomes visible.
     refreshSidebarGeometry();
@@ -2539,10 +2539,10 @@ void BrushPackPanel::hideAnimated()
     m_isShowing = false;
 
     m_showAnimation->stop();
-    m_showAnimation->setDuration(HideDuration);
+    m_showAnimation->setDuration(anim::duration(HideDuration));
     m_showAnimation->setStartValue(m_showProgress);
     m_showAnimation->setEndValue(0.0);
-    m_showAnimation->start();
+    anim::start(m_showAnimation);
 }
 
 bool BrushPackPanel::isActive() const

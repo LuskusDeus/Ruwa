@@ -9,6 +9,7 @@
 #include "features/theme/manager/ThemeManager.h"
 #include "shared/resources/IconProvider.h"
 #include "shared/style/PaintingUtils.h"
+#include "shared/style/AnimationPolicy.h"
 #include "shared/style/WidgetStyleManager.h"
 
 #include <QApplication>
@@ -23,6 +24,8 @@
 #include <QStringList>
 #include <QVariantAnimation>
 #include <QtMath>
+
+namespace anim = ruwa::ui::core::anim;
 
 namespace ruwa::ui::widgets {
 
@@ -67,7 +70,7 @@ QPointer<LayerPreviewPopup> g_popup;
 
 bool animationsEnabled()
 {
-    return ruwa::ui::core::WidgetStyleManager::instance().animationsEnabled();
+    return anim::enabled();
 }
 
 qreal devicePixelRatioFor(const QWidget* widget)
@@ -289,13 +292,13 @@ void LayerPreviewPopup::present(QWidget* source, const LayerData* data, const QR
         m_contentFadeProgress = 0.0;
 
         if (animationsEnabled()) {
-            m_geometryAnimation->setDuration(kMoveDurationMs);
+            m_geometryAnimation->setDuration(anim::duration(kMoveDurationMs));
             m_geometryAnimation->setEasingCurve(QEasingCurve::OutCubic);
             m_geometryAnimation->setStartValue(geometry());
             m_geometryAnimation->setEndValue(windowRect);
             m_geometryAnimation->start();
 
-            m_contentFadeAnimation->setDuration(kContentFadeDurationMs);
+            m_contentFadeAnimation->setDuration(anim::duration(kContentFadeDurationMs));
             m_contentFadeAnimation->setEasingCurve(QEasingCurve::InOutCubic);
             m_contentFadeAnimation->setStartValue(0.0);
             m_contentFadeAnimation->setEndValue(1.0);
@@ -328,7 +331,7 @@ void LayerPreviewPopup::present(QWidget* source, const LayerData* data, const QR
     raise();
 
     if (animated) {
-        m_presentationAnimation->setDuration(kShowDurationMs);
+        m_presentationAnimation->setDuration(anim::duration(kShowDurationMs));
         m_presentationAnimation->setEasingCurve(QEasingCurve::OutCubic);
         m_presentationAnimation->setStartValue(m_presentationProgress);
         m_presentationAnimation->setEndValue(1.0);
@@ -365,7 +368,7 @@ void LayerPreviewPopup::dismiss(bool animated)
 
     m_presentationAnimation->stop();
     m_hiding = true;
-    m_presentationAnimation->setDuration(kHideDurationMs);
+    m_presentationAnimation->setDuration(anim::duration(kHideDurationMs));
     m_presentationAnimation->setEasingCurve(QEasingCurve::InCubic);
     m_presentationAnimation->setStartValue(m_presentationProgress);
     m_presentationAnimation->setEndValue(0.0);

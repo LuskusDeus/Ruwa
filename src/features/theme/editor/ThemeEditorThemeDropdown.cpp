@@ -6,6 +6,7 @@
 #include "features/theme/manager/ThemePresetJson.h"
 #include "shared/i18n/TranslationManager.h"
 #include "shared/resources/IconProvider.h"
+#include "shared/style/AnimationPolicy.h"
 #include "shared/style/PaintingUtils.h"
 #include "shared/utils/FileDialogMemory.h"
 #include "shared/widgets/CapsuleButton.h"
@@ -36,6 +37,8 @@
 
 #include <functional>
 
+namespace anim = ruwa::ui::core::anim;
+
 namespace ruwa::ui::widgets {
 
 namespace {
@@ -47,6 +50,7 @@ constexpr int kPopupRadius = 12;
 constexpr int kPopupMargin = 12;
 constexpr int kActionsBaseWidth = 190;
 constexpr int kDetailedActionBaseWidth = 178;
+constexpr int kPopupFadeMs = 150;
 
 QVector<QColor> previewColors(const ruwa::ui::core::ThemePreset& preset)
 {
@@ -152,7 +156,6 @@ public:
         setGraphicsEffect(m_opacityEffect);
 
         m_opacityAnimation = new QVariantAnimation(this);
-        m_opacityAnimation->setDuration(150);
         m_opacityAnimation->setEasingCurve(QEasingCurve::OutCubic);
         connect(m_opacityAnimation, &QVariantAnimation::valueChanged, this,
             [this](const QVariant& value) {
@@ -258,10 +261,11 @@ public:
         m_overlay->refreshGenericPopups();
 
         m_opacityAnimation->stop();
+        m_opacityAnimation->setDuration(anim::duration(kPopupFadeMs));
         m_opacityAnimation->setStartValue(m_opacity);
         m_opacityAnimation->setEndValue(1.0);
         disconnect(m_opacityAnimation, &QVariantAnimation::finished, this, nullptr);
-        m_opacityAnimation->start();
+        anim::start(m_opacityAnimation);
 
         if (!m_appFilterInstalled) {
             qApp->installEventFilter(this);
@@ -288,11 +292,12 @@ public:
 
         m_hiding = true;
         m_opacityAnimation->stop();
+        m_opacityAnimation->setDuration(anim::duration(kPopupFadeMs));
         m_opacityAnimation->setStartValue(m_opacity);
         m_opacityAnimation->setEndValue(0.0);
         disconnect(m_opacityAnimation, &QVariantAnimation::finished, this, nullptr);
         connect(m_opacityAnimation, &QVariantAnimation::finished, this, [this]() { finishHide(); });
-        m_opacityAnimation->start();
+        anim::start(m_opacityAnimation);
     }
 
     void retranslateUi()

@@ -3,6 +3,7 @@
 // BrushPackOverlay.cpp
 #include "BrushPackOverlay.h"
 #include "features/brush/ui/BrushPackPanel.h"
+#include "shared/style/AnimationPolicy.h"
 
 #include <QWidget>
 #include <QVariant>
@@ -13,6 +14,8 @@
 #include <QResizeEvent>
 #include <QTimer>
 #include <QCursor>
+
+namespace anim = ruwa::ui::core::anim;
 
 namespace ruwa::ui::widgets {
 
@@ -42,7 +45,6 @@ void BrushPackOverlay::setupPanel()
 void BrushPackOverlay::setupAnimations()
 {
     m_posAnimation = new QPropertyAnimation(this, "panelPos", this);
-    m_posAnimation->setDuration(PositionAnimationDuration);
     m_posAnimation->setEasingCurve(QEasingCurve::InOutCubic);
 }
 
@@ -164,7 +166,7 @@ void BrushPackOverlay::showPanel(QWidget* sourceWidget, const QPoint* slideFromP
     animatePanelTo(targetPos);
     m_panel->showAnimated();
 
-    QTimer::singleShot(PositionAnimationDuration, this, [this]() {
+    QTimer::singleShot(anim::duration(PositionAnimationDuration), this, [this]() {
         m_isShowing = false;
         emit shown();
     });
@@ -212,14 +214,15 @@ void BrushPackOverlay::hidePanel()
         }
 
         m_posAnimation->stop();
+        m_posAnimation->setDuration(anim::duration(PositionAnimationDuration));
         m_posAnimation->setStartValue(currentPos);
         m_posAnimation->setEndValue(endPos);
-        m_posAnimation->start();
+        anim::start(m_posAnimation);
     }
 
     m_panel->hideAnimated();
 
-    QTimer::singleShot(PositionAnimationDuration, this, [this]() {
+    QTimer::singleShot(anim::duration(PositionAnimationDuration), this, [this]() {
         m_isHiding = false;
         m_sourceWidget = nullptr;
         emit hidden();
@@ -331,9 +334,10 @@ void BrushPackOverlay::animatePanelTo(const QPoint& targetPos)
         return;
 
     m_posAnimation->stop();
+    m_posAnimation->setDuration(anim::duration(PositionAnimationDuration));
     m_posAnimation->setStartValue(m_panel->pos());
     m_posAnimation->setEndValue(targetPos);
-    m_posAnimation->start();
+    anim::start(m_posAnimation);
 }
 
 bool BrushPackOverlay::isPanelOrChild(QWidget* widget) const

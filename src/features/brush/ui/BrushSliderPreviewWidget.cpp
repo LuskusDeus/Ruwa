@@ -6,6 +6,7 @@
 #include "features/theme/manager/ThemeManager.h"
 #include "shared/style/WidgetStyleManager.h"
 #include "features/brush/ui/BrushSizeCurve.h"
+#include "shared/style/AnimationPolicy.h"
 #include "shared/style/PaintingUtils.h"
 
 #include <QPainter>
@@ -214,16 +215,16 @@ void BrushSliderPreviewWidget::showAnimated()
     raise();
 
     m_slideAnimation->stop();
-    m_slideAnimation->setDuration(ShowDuration);
+    m_slideAnimation->setDuration(anim::duration(ShowDuration));
     m_slideAnimation->setStartValue(startPos);
     m_slideAnimation->setEndValue(targetPos);
-    m_slideAnimation->start();
+    anim::start(m_slideAnimation);
 
     m_showAnimation->stop();
-    m_showAnimation->setDuration(ShowDuration);
+    m_showAnimation->setDuration(anim::duration(ShowDuration));
     m_showAnimation->setStartValue(m_showProgress);
     m_showAnimation->setEndValue(1.0);
-    m_showAnimation->start();
+    anim::start(m_showAnimation);
 }
 
 void BrushSliderPreviewWidget::hideAnimated()
@@ -246,16 +247,16 @@ void BrushSliderPreviewWidget::hideAnimated()
     }
 
     m_slideAnimation->stop();
-    m_slideAnimation->setDuration(HideDuration);
+    m_slideAnimation->setDuration(anim::duration(HideDuration));
     m_slideAnimation->setStartValue(startPos);
     m_slideAnimation->setEndValue(endPos);
-    m_slideAnimation->start();
+    anim::start(m_slideAnimation);
 
     m_showAnimation->stop();
-    m_showAnimation->setDuration(HideDuration);
+    m_showAnimation->setDuration(anim::duration(HideDuration));
     m_showAnimation->setStartValue(m_showProgress);
     m_showAnimation->setEndValue(0.0);
-    m_showAnimation->start();
+    anim::start(m_showAnimation);
 }
 
 void BrushSliderPreviewWidget::setShowProgress(qreal progress)

@@ -3,6 +3,7 @@
 // ColorPickerOverlay.cpp
 #include "ColorPickerOverlay.h"
 #include "ColorPicker.h"
+#include "shared/style/AnimationPolicy.h"
 #include "shared/widgets/inputs/ColorInputButton.h"
 
 #include <QWidget>
@@ -11,6 +12,9 @@
 #include <QResizeEvent>
 #include <QTimer>
 #include <QApplication>
+
+namespace anim = ruwa::ui::core::anim;
+
 namespace ruwa::ui::widgets {
 
 ColorPickerOverlay::ColorPickerOverlay(QWidget* container)
@@ -40,7 +44,6 @@ void ColorPickerOverlay::setupPicker()
 void ColorPickerOverlay::setupAnimations()
 {
     m_posAnimation = new QPropertyAnimation(this, "pickerPos", this);
-    m_posAnimation->setDuration(PositionAnimationDuration);
     m_posAnimation->setEasingCurve(QEasingCurve::OutCubic);
 }
 
@@ -117,7 +120,7 @@ void ColorPickerOverlay::showPicker(const QColor& initialColor, QWidget* sourceB
     animatePickerTo(targetPos);
     m_picker->showAnimated();
 
-    QTimer::singleShot(PositionAnimationDuration, this, [this]() {
+    QTimer::singleShot(anim::duration(PositionAnimationDuration), this, [this]() {
         m_isShowing = false;
         emit shown();
     });
@@ -158,14 +161,15 @@ void ColorPickerOverlay::hidePicker()
         }
 
         m_posAnimation->stop();
+        m_posAnimation->setDuration(anim::duration(PositionAnimationDuration));
         m_posAnimation->setStartValue(currentPos);
         m_posAnimation->setEndValue(endPos);
-        m_posAnimation->start();
+        anim::start(m_posAnimation);
     }
 
     m_picker->hideAnimated();
 
-    QTimer::singleShot(PositionAnimationDuration, this, [this]() {
+    QTimer::singleShot(anim::duration(PositionAnimationDuration), this, [this]() {
         m_isHiding = false;
         m_sourceButton = nullptr;
         emit hidden();
@@ -246,9 +250,10 @@ void ColorPickerOverlay::animatePickerTo(const QPoint& targetPos)
         return;
 
     m_posAnimation->stop();
+    m_posAnimation->setDuration(anim::duration(PositionAnimationDuration));
     m_posAnimation->setStartValue(m_picker->pos());
     m_posAnimation->setEndValue(targetPos);
-    m_posAnimation->start();
+    anim::start(m_posAnimation);
 }
 
 bool ColorPickerOverlay::isColorInputButton(QWidget* widget) const
