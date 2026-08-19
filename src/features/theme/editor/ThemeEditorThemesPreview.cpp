@@ -441,7 +441,10 @@ void ThemeEditorThemesPreview::updateTheme()
         QPalette subtitlePalette = previewPalette;
         subtitlePalette.setColor(QPalette::WindowText, m_previewColors.textMuted);
         m_subtitleLabel->setPalette(subtitlePalette);
-        m_subtitleLabel->setFont(previewFont(ruwa::ui::core::ThemeFontRole::H5));
+        m_subtitleLabel->setFont(m_previewColors.fonts.getFont(
+            ruwa::ui::core::ThemeFontRole::H5, ruwa::ui::core::ThemeFontFamilyRole::Ui,
+            theme.scaledFontSize(
+                m_previewColors.fonts.sizes.value(ruwa::ui::core::ThemeFontRole::H5))));
 
         QFont buttonFont = previewFont(ruwa::ui::core::ThemeFontRole::Label, QFont::Bold);
         m_primaryButton->setFont(buttonFont);

@@ -671,7 +671,8 @@ void ImageImportSelectionOverlay::updateStyles()
     const auto& colors = theme.colors();
 
     if (m_titleLabel) {
-        m_titleLabel->setFont(theme.font(ruwa::ui::core::ThemeFontRole::H4, QFont::DemiBold));
+        m_titleLabel->setFont(theme.font(ruwa::ui::core::ThemeFontRole::H6,
+            ruwa::ui::core::ThemeFontFamilyRole::Ui, QFont::DemiBold));
     }
 
     m_panel->setStyleSheet(QString(R"(

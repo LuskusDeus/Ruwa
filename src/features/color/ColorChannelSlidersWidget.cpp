@@ -305,7 +305,7 @@ void ColorChannelSlidersWidget::paintEvent(QPaintEvent* event)
     ruwa::ui::painting::drawGradientBorder(
         painter, outer, outerRadius, colors.borderSubtleHover(), colors.borderSubtle());
 
-    painter.setFont(theme.font(ruwa::ui::core::ThemeFontRole::Small, QFont::DemiBold));
+    painter.setFont(theme.font(ruwa::ui::core::ThemeFontRole::Micro, QFont::DemiBold));
 
     const qreal chipInset = theme.scaled(kBaseChipInset);
     const qreal labelWidth = theme.scaled(kBaseLabelWidth);

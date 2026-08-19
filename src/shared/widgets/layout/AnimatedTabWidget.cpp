@@ -181,7 +181,8 @@ void AnimatedTabWidget::updateThemeLoadingOverlayColors()
 
     const auto& theme = ruwa::ui::core::ThemeManager::instance();
     const auto& colors = theme.colors();
-    m_themeLoadingLabel->setFont(theme.font(ruwa::ui::core::ThemeFontRole::H5, QFont::Medium));
+    m_themeLoadingLabel->setFont(
+        theme.font(ruwa::ui::core::ThemeFontRole::BodyLarge, QFont::Medium));
     m_themeLoadingOverlay->setStyleSheet(QString(R"(
         QWidget {
             background-color: %1;

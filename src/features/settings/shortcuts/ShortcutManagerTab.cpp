@@ -284,7 +284,8 @@ void ShortcutManagerTab::createLayout()
 
     auto makeSectionHeader = [&](const QString& text) {
         auto* label = new QLabel(text, this);
-        label->setFont(theme.font(ThemeFontRole::H6, QFont::DemiBold));
+        label->setFont(
+            theme.font(ThemeFontRole::H6, ThemeFontFamilyRole::Ui, QFont::DemiBold));
         label->setStyleSheet(QString("QLabel { color: %1; }").arg(colors.text.name()));
         return label;
     };
@@ -364,7 +365,8 @@ void ShortcutManagerTab::createLayout()
 
     m_shortcutsHeaderLabel = new QLabel(m_shortcutsPanel);
     {
-        m_shortcutsHeaderLabel->setFont(theme.font(ThemeFontRole::H2, QFont::DemiBold));
+        m_shortcutsHeaderLabel->setFont(
+            theme.font(ThemeFontRole::H2, ThemeFontFamilyRole::Ui, QFont::DemiBold));
     }
     m_shortcutsHeaderLabel->setStyleSheet(QString("QLabel { color: %1; }").arg(colors.text.name()));
 
@@ -1199,14 +1201,16 @@ void ShortcutManagerTab::updateScaledSizes()
         m_titleLabel->setFont(theme.font(ThemeFontRole::H3, QFont::Bold));
     }
 
-    const QFont sectionFont = theme.font(ThemeFontRole::H6, QFont::DemiBold);
+    const QFont sectionFont
+        = theme.font(ThemeFontRole::H6, ThemeFontFamilyRole::Ui, QFont::DemiBold);
     for (QLabel* l : { m_presetsHeaderLabel, m_categoriesHeaderLabel }) {
         if (l)
             l->setFont(sectionFont);
     }
 
     if (m_shortcutsHeaderLabel) {
-        m_shortcutsHeaderLabel->setFont(theme.font(ThemeFontRole::H2, QFont::DemiBold));
+        m_shortcutsHeaderLabel->setFont(
+            theme.font(ThemeFontRole::H2, ThemeFontFamilyRole::Ui, QFont::DemiBold));
     }
     if (m_shortcutsMetaLabel) {
         m_shortcutsMetaLabel->setFont(theme.font(ThemeFontRole::Label));

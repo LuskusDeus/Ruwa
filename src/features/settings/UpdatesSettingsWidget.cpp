@@ -562,7 +562,7 @@ void UpdatesSettingsWidget::rebuildBackgroundCache()
     painter.drawText(
         titleMeasureRect, Qt::AlignLeft | Qt::AlignTop | Qt::TextWordWrap, m_titleText);
 
-    const QFont subtitleFont = theme.font(ruwa::ui::core::ThemeFontRole::H6);
+    const QFont subtitleFont = theme.font(ruwa::ui::core::ThemeFontRole::Subtitle);
     painter.setFont(subtitleFont);
     painter.setPen(colors.textMuted);
     QFontMetrics subtitleFm(subtitleFont);

@@ -168,9 +168,9 @@ void BrushEditorTopBar::updateScaledSizes()
         titleLayout->setSpacing(theme.scaled(BaseTitleGap));
     }
 
-    m_editorLabel->setFont(theme.font(ThemeFontRole::BodyLarge, QFont::DemiBold));
+    m_editorLabel->setFont(theme.font(ThemeFontRole::Body, QFont::DemiBold));
 
-    m_titleLabel->setFont(theme.font(ThemeFontRole::BodyLarge, QFont::Medium));
+    m_titleLabel->setFont(theme.font(ThemeFontRole::Body, QFont::Medium));
 }
 
 void BrushEditorTopBar::updateStyles()

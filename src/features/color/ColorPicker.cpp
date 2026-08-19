@@ -2172,7 +2172,7 @@ void ColorPicker::drawPopupHeader(QPainter& painter)
         qMax<qreal>(1.0, closeRect.left() - spacing - (swatchRect.right() + spacing)),
         header.height());
 
-    const QFont titleFont = theme.font(ruwa::ui::core::ThemeFontRole::Label, QFont::Bold);
+    const QFont titleFont = theme.font(ruwa::ui::core::ThemeFontRole::Small, QFont::Bold);
     painter.setFont(titleFont);
     painter.setPen(colors.text);
     painter.drawText(textRect, Qt::AlignLeft | Qt::AlignVCenter,
@@ -2482,7 +2482,7 @@ void ColorPicker::drawRecentColors(QPainter& painter)
         if (c.alpha() < 255) {
             const int opacityPct = qBound(0, qRound(c.alpha() / 255.0 * 100), 99);
             const QString text = QString::number(opacityPct);
-            painter.setFont(theme.font(ruwa::ui::core::ThemeFontRole::Small));
+            painter.setFont(theme.font(ruwa::ui::core::ThemeFontRole::Micro));
             const qreal lum
                 = 0.299 * drawColor.red() + 0.587 * drawColor.green() + 0.114 * drawColor.blue();
             painter.setPen(lum < 128 ? Qt::white : Qt::black);

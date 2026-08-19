@@ -507,7 +507,8 @@ void WelcomeBannerCropOverlay::setupUI()
     layout->setSpacing(theme.scaled(CardSpacing));
 
     auto* title = new QLabel(tr("Choose the area to show on the banner"), m_card);
-    title->setFont(theme.font(ruwa::ui::core::ThemeFontRole::H6, QFont::DemiBold));
+    title->setFont(theme.font(ruwa::ui::core::ThemeFontRole::H6,
+        ruwa::ui::core::ThemeFontFamilyRole::Ui, QFont::DemiBold));
     title->setStyleSheet(
         QStringLiteral("QLabel { background: transparent; color: %1; }").arg(colors.text.name()));
     layout->addWidget(title);

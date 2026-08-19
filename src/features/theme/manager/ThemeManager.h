@@ -144,6 +144,15 @@ public:
         return resolved;
     }
 
+    /// Build a font using a semantic size and an explicitly selected family.
+    QFont font(ThemeFontRole sizeRole, ThemeFontFamilyRole familyRole,
+        QFont::Weight weight = QFont::Normal) const
+    {
+        QFont resolved = colors().fonts.getFont(sizeRole, familyRole, fontSize(sizeRole));
+        resolved.setWeight(weight);
+        return resolved;
+    }
+
     // === Custom Theme Management ===
 
     /// Add a custom theme preset

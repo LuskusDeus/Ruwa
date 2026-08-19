@@ -181,7 +181,7 @@ protected:
         painter.setBrush(fill);
         painter.drawRoundedRect(r, radius, radius);
 
-        painter.setFont(theme.font(ThemeFontRole::Label, isActive() ? QFont::Bold : QFont::Normal));
+        painter.setFont(theme.font(ThemeFontRole::Small, isActive() ? QFont::Bold : QFont::Normal));
         painter.setPen(textColor);
 
         const int iconSize = theme.scaled(12);
@@ -1324,8 +1324,8 @@ void BrushDynamicsEditorWidget::updateStyles()
     const int timeControlWidth = theme.scaled(m_compact ? 168 : 220);
     const int curveHeight = theme.scaled(m_compact ? 170 : 250);
 
-    const QFont sectionFont = theme.font(ThemeFontRole::Label, QFont::Bold);
-    const QFont sourcesHeaderFont = theme.font(ThemeFontRole::Small, QFont::Bold);
+    const QFont sectionFont = theme.font(ThemeFontRole::Small, QFont::Bold);
+    const QFont sourcesHeaderFont = theme.font(ThemeFontRole::Micro, QFont::Bold);
     m_sourcesLabel->setFont(sourcesHeaderFont);
 
     const QString labelStyle = QStringLiteral("QLabel { background: transparent; color: %1; }")

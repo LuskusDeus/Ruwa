@@ -1137,11 +1137,11 @@ void WorkspaceTab::updateThemeColors()
                 .arg(colors.background.name(), colors.text.name(), colors.textMuted.name()));
     }
     if (m_loadingTitleLabel) {
-        m_loadingTitleLabel->setFont(
-            theme.font(ruwa::ui::core::ThemeFontRole::H3, QFont::DemiBold));
+        m_loadingTitleLabel->setFont(theme.font(ruwa::ui::core::ThemeFontRole::H5,
+            ruwa::ui::core::ThemeFontFamilyRole::Ui, QFont::DemiBold));
     }
     if (m_loadingStatusLabel) {
-        m_loadingStatusLabel->setFont(theme.font(ruwa::ui::core::ThemeFontRole::H6));
+        m_loadingStatusLabel->setFont(theme.font(ruwa::ui::core::ThemeFontRole::Body));
     }
     if (m_loadingIndicator) {
         m_loadingIndicator->setAccentColor(colors.primary);

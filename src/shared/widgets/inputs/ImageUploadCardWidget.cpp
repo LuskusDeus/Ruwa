@@ -665,7 +665,7 @@ void ImageUploadCardWidget::updateScaledSizes()
         if (!button) {
             continue;
         }
-        QFont buttonFont = theme.font(ThemeFontRole::Label, QFont::Medium);
+        QFont buttonFont = theme.font(ThemeFontRole::Small, QFont::Medium);
         button->setFont(buttonFont);
         button->setBannerBaseHeight(kBaseButtonHeight);
         button->setBaseMinimumWidth(72);
@@ -673,14 +673,14 @@ void ImageUploadCardWidget::updateScaledSizes()
         button->setFixedHeight(buttonHeight);
     }
 
-    QFont titleFont = theme.font(ThemeFontRole::H6, QFont::DemiBold);
+    QFont titleFont = theme.font(ThemeFontRole::Body, QFont::DemiBold);
     m_emptyTitleLabel->setFont(titleFont);
     m_nameLabel->setFont(titleFont);
 
-    QFont bodyFont = theme.font(ThemeFontRole::BodyLarge);
+    QFont bodyFont = theme.font(ThemeFontRole::Body);
     m_emptyDescriptionLabel->setFont(bodyFont);
 
-    QFont metaFont = theme.font(ThemeFontRole::Label);
+    QFont metaFont = theme.font(ThemeFontRole::Small);
     m_metaLabel->setFont(metaFont);
 
     const int iconSize = theme.scaled(kBaseIconSize);

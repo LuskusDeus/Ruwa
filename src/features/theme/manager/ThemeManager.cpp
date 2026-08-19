@@ -50,12 +50,15 @@ static ThemeFontSizes loadThemeFontSizes(QSettings& settings)
     sizes.h4 = settings.value(QStringLiteral("fonts/sizes/h4"), fallback.h4).toInt();
     sizes.h5 = settings.value(QStringLiteral("fonts/sizes/h5"), fallback.h5).toInt();
     sizes.h6 = settings.value(QStringLiteral("fonts/sizes/h6"), fallback.h6).toInt();
+    sizes.subtitle
+        = settings.value(QStringLiteral("fonts/sizes/subtitle"), fallback.subtitle).toInt();
     sizes.bodyLarge
         = settings.value(QStringLiteral("fonts/sizes/bodyLarge"), fallback.bodyLarge).toInt();
     sizes.label = settings.value(QStringLiteral("fonts/sizes/label"), fallback.label).toInt();
     sizes.body = settings.value(QStringLiteral("fonts/sizes/body"), fallback.body).toInt();
     sizes.small = settings.value(QStringLiteral("fonts/sizes/small"), fallback.small).toInt();
     sizes.caption = settings.value(QStringLiteral("fonts/sizes/caption"), fallback.caption).toInt();
+    sizes.micro = settings.value(QStringLiteral("fonts/sizes/micro"), fallback.micro).toInt();
     sizes.code = settings.value(QStringLiteral("fonts/sizes/code"), fallback.code).toInt();
     sizes.normalize();
     return sizes;
@@ -71,11 +74,13 @@ static void saveThemeFontSizes(QSettings& settings, const ThemeFontSizes& sizes)
     settings.setValue(QStringLiteral("fonts/sizes/h4"), sizes.h4);
     settings.setValue(QStringLiteral("fonts/sizes/h5"), sizes.h5);
     settings.setValue(QStringLiteral("fonts/sizes/h6"), sizes.h6);
+    settings.setValue(QStringLiteral("fonts/sizes/subtitle"), sizes.subtitle);
     settings.setValue(QStringLiteral("fonts/sizes/bodyLarge"), sizes.bodyLarge);
     settings.setValue(QStringLiteral("fonts/sizes/label"), sizes.label);
     settings.setValue(QStringLiteral("fonts/sizes/body"), sizes.body);
     settings.setValue(QStringLiteral("fonts/sizes/small"), sizes.small);
     settings.setValue(QStringLiteral("fonts/sizes/caption"), sizes.caption);
+    settings.setValue(QStringLiteral("fonts/sizes/micro"), sizes.micro);
     settings.setValue(QStringLiteral("fonts/sizes/code"), sizes.code);
 
     // Keep legacy anchors so older Ruwa versions can still open a saved theme.

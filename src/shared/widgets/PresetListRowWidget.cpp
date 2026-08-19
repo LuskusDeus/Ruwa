@@ -421,7 +421,7 @@ int PresetListRowWidget::rightReservedWidth() const
     const bool showBadge = !m_item.badgeText.trimmed().isEmpty();
     int badgeWidth = 0;
     if (showBadge) {
-        QFont badgeFont = theme.font(ruwa::ui::core::ThemeFontRole::Label);
+        QFont badgeFont = theme.font(ruwa::ui::core::ThemeFontRole::Small);
         const QFontMetrics fm(badgeFont);
         badgeWidth = theme.scaled(BASE_BADGE_HPAD * 2) + fm.horizontalAdvance(m_item.badgeText);
     }
@@ -949,7 +949,8 @@ void PresetListRowWidget::paintEvent(QPaintEvent* event)
 
     if (!m_isEditing) {
         QFont titleFont = theme.font(
-            ruwa::ui::core::ThemeFontRole::H6, m_isSelected ? QFont::DemiBold : QFont::Medium);
+            ruwa::ui::core::ThemeFontRole::Label,
+            m_isSelected ? QFont::DemiBold : QFont::Medium);
         painter.setFont(titleFont);
         painter.setPen(titleColor);
 
@@ -981,7 +982,7 @@ void PresetListRowWidget::paintEvent(QPaintEvent* event)
         }
 
         if (!m_item.subtitle.trimmed().isEmpty()) {
-            QFont subtitleFont = theme.font(ruwa::ui::core::ThemeFontRole::Label);
+            QFont subtitleFont = theme.font(ruwa::ui::core::ThemeFontRole::Small);
             painter.setFont(subtitleFont);
             painter.setPen(subtitleColor);
             QRect subtitleRect = textRect;
@@ -993,7 +994,7 @@ void PresetListRowWidget::paintEvent(QPaintEvent* event)
     }
 
     if (showBadge) {
-        QFont badgeFont = theme.font(ruwa::ui::core::ThemeFontRole::Label);
+        QFont badgeFont = theme.font(ruwa::ui::core::ThemeFontRole::Small);
         painter.setFont(badgeFont);
         const QFontMetrics badgeFm(badgeFont);
         const int badgeW

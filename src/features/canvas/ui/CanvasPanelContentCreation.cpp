@@ -79,8 +79,9 @@ QWidget* CanvasPanel::createContent()
     m_loadingStatusLabel->setObjectName(QStringLiteral("canvasLoadingStatus"));
 
     const auto& theme = ruwa::ui::core::ThemeManager::instance();
-    m_loadingTitleLabel->setFont(theme.font(ruwa::ui::core::ThemeFontRole::H3, QFont::DemiBold));
-    m_loadingStatusLabel->setFont(theme.font(ruwa::ui::core::ThemeFontRole::H6));
+    m_loadingTitleLabel->setFont(theme.font(ruwa::ui::core::ThemeFontRole::H5,
+        ruwa::ui::core::ThemeFontFamilyRole::Ui, QFont::DemiBold));
+    m_loadingStatusLabel->setFont(theme.font(ruwa::ui::core::ThemeFontRole::Body));
 
     loadingLayout->addWidget(m_loadingIndicator, 0, Qt::AlignCenter);
     loadingLayout->addWidget(m_loadingTitleLabel, 0, Qt::AlignCenter);

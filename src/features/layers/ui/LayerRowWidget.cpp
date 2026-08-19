@@ -1440,7 +1440,7 @@ QFont LayerRowWidget::nameDisplayFont() const
 {
     const auto& theme = ThemeManager::instance();
     const bool isGroup = m_data && m_data->isGroup();
-    return theme.font(isGroup ? ThemeFontRole::Body : ThemeFontRole::Label,
+    return theme.font(isGroup ? ThemeFontRole::Caption : ThemeFontRole::Small,
         isGroup ? QFont::Bold : QFont::Normal);
 }
 
@@ -1468,7 +1468,7 @@ QRect LayerRowWidget::nameDisplayRect() const
     auto& tm = ThemeManager::instance();
 
     const QFont font = nameDisplayFont();
-    const QFont metaMeasureFont = tm.font(ThemeFontRole::Small);
+    const QFont metaMeasureFont = tm.font(ThemeFontRole::Micro);
 
     const int nameLineHeight = QFontMetrics(font).height();
     const int metaLineHeight = QFontMetrics(metaMeasureFont).height();
@@ -2542,11 +2542,11 @@ void LayerRowWidget::drawMeta(QPainter& p, const QRect& r)
     metaCol.setAlphaF((m_selected ? 0.75 : 0.52)
         * (m_data->visible ? 1.0 : hiddenBlend(m_visibilityProgress, 0.6)));
 
-    const QFont metaFont = tm.font(ThemeFontRole::Small);
+    const QFont metaFont = tm.font(ThemeFontRole::Micro);
     p.setFont(metaFont);
 
     const QFont nameMeasureFont
-        = tm.font(m_data->isGroup() ? ThemeFontRole::Body : ThemeFontRole::Label,
+        = tm.font(m_data->isGroup() ? ThemeFontRole::Caption : ThemeFontRole::Small,
             m_data->isGroup() ? QFont::Bold : QFont::Normal);
     const int nameLineHeight = QFontMetrics(nameMeasureFont).height();
     const int metaLineHeight = p.fontMetrics().height();
@@ -2571,7 +2571,7 @@ void LayerRowWidget::drawMeta(QPainter& p, const QRect& r)
         return;
     }
 
-    const QFont inlineBadgeFont = tm.font(ThemeFontRole::Caption, QFont::Bold);
+    const QFont inlineBadgeFont = tm.font(ThemeFontRole::Micro, QFont::Bold);
     const QFontMetrics inlineBadgeMetrics(inlineBadgeFont);
 
     const QString separatorText = QStringLiteral("·");

@@ -141,7 +141,7 @@ void EmptyStateTab::onInitialize()
     m_hintLabel->setMaximumWidth(600);
     m_hintLabel->setText(tr("Meow-meow, it seems you closed all tabs. "
                             "Click on the Ruwa logo in the corner to open the home tab."));
-    m_hintLabel->setFont(theme.font(ruwa::ui::core::ThemeFontRole::H6));
+    m_hintLabel->setFont(theme.font(ruwa::ui::core::ThemeFontRole::Label));
     m_hintLabel->setStyleSheet(QString("color: %1;").arg(colors.textMuted.name()));
     mainLayout->addWidget(m_hintLabel, 0, Qt::AlignHCenter);
 
@@ -155,7 +155,7 @@ void EmptyStateTab::onInitialize()
                 asciiArt->setTextColor(c.text);
             }
             if (m_hintLabel) {
-                m_hintLabel->setFont(theme.font(ruwa::ui::core::ThemeFontRole::H6));
+                m_hintLabel->setFont(theme.font(ruwa::ui::core::ThemeFontRole::Label));
                 m_hintLabel->setStyleSheet(QString("color: %1;").arg(c.textMuted.name()));
             }
             update();

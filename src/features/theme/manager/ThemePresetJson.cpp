@@ -24,11 +24,13 @@ QJsonObject fontSizesToJson(const ThemeFontSizes& sizes)
     object[QStringLiteral("h4")] = sizes.h4;
     object[QStringLiteral("h5")] = sizes.h5;
     object[QStringLiteral("h6")] = sizes.h6;
+    object[QStringLiteral("subtitle")] = sizes.subtitle;
     object[QStringLiteral("bodyLarge")] = sizes.bodyLarge;
     object[QStringLiteral("label")] = sizes.label;
     object[QStringLiteral("body")] = sizes.body;
     object[QStringLiteral("small")] = sizes.small;
     object[QStringLiteral("caption")] = sizes.caption;
+    object[QStringLiteral("micro")] = sizes.micro;
     object[QStringLiteral("code")] = sizes.code;
     return object;
 }
@@ -53,11 +55,13 @@ ThemeFontSizes fontSizesFromJson(const QJsonObject& fonts)
     sizes.h4 = object.value(QStringLiteral("h4")).toInt(fallback.h4);
     sizes.h5 = object.value(QStringLiteral("h5")).toInt(fallback.h5);
     sizes.h6 = object.value(QStringLiteral("h6")).toInt(fallback.h6);
+    sizes.subtitle = object.value(QStringLiteral("subtitle")).toInt(fallback.subtitle);
     sizes.bodyLarge = object.value(QStringLiteral("bodyLarge")).toInt(fallback.bodyLarge);
     sizes.label = object.value(QStringLiteral("label")).toInt(fallback.label);
     sizes.body = object.value(QStringLiteral("body")).toInt(fallback.body);
     sizes.small = object.value(QStringLiteral("small")).toInt(fallback.small);
     sizes.caption = object.value(QStringLiteral("caption")).toInt(fallback.caption);
+    sizes.micro = object.value(QStringLiteral("micro")).toInt(fallback.micro);
     sizes.code = object.value(QStringLiteral("code")).toInt(fallback.code);
     sizes.normalize();
     return sizes;

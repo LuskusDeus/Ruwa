@@ -134,7 +134,7 @@ protected:
         QColor inactiveText = ThemeColors::interpolate(colors.textMuted, colors.text, hover);
         QColor textColor = enabled ? inactiveText : colors.textDisabled();
 
-        painter.setFont(theme.font(ThemeFontRole::BodyLarge, QFont::DemiBold));
+        painter.setFont(theme.font(ThemeFontRole::Body, QFont::DemiBold));
 
         const int iconSize = theme.scaled(13);
         const int contentGap = theme.scaled(7);
@@ -404,7 +404,7 @@ void BrushItem::paintEvent(QPaintEvent* event)
             colors.textMuted, colors.text, qMax(m_hoverProgress * 0.5, m_activeProgress));
         painter.setPen(textColor);
         painter.setFont(
-            theme.font(ThemeFontRole::Label, m_activeProgress > 0.5 ? QFont::Bold : QFont::Normal));
+            theme.font(ThemeFontRole::Small, m_activeProgress > 0.5 ? QFont::Bold : QFont::Normal));
 
         QRectF textRect = headerRect.adjusted(theme.scaled(8), 0, -theme.scaled(6), 0);
         painter.drawText(textRect, Qt::AlignLeft | Qt::AlignVCenter,
@@ -709,7 +709,7 @@ void PresetButton::paintEvent(QPaintEvent* event)
         QColor initColor
             = ThemeColors::interpolate(colors.textMuted, colors.text, activeProgress());
         painter.setPen(initColor);
-        painter.setFont(theme.font(ThemeFontRole::Label, QFont::Bold));
+        painter.setFont(theme.font(ThemeFontRole::Small, QFont::Bold));
         painter.drawText(
             iconRect, Qt::AlignCenter, translateBrushOrPackName(m_data.name).left(1).toUpper());
     }
@@ -719,7 +719,7 @@ void PresetButton::paintEvent(QPaintEvent* event)
             colors.textMuted, colors.text, qMax(hoverProgress() * 0.5, activeProgress()));
         painter.setPen(textColor);
         painter.setFont(theme.font(
-            ThemeFontRole::Label, activeProgress() > 0.5 ? QFont::DemiBold : QFont::Medium));
+            ThemeFontRole::Small, activeProgress() > 0.5 ? QFont::DemiBold : QFont::Medium));
         const QString shortName = compactPresetLabel(m_data.name);
         painter.drawText(textRect, Qt::AlignHCenter | Qt::AlignTop,
             painter.fontMetrics().elidedText(
@@ -799,7 +799,7 @@ void BrushPresetPage::setupUI()
     m_brushesHeaderLabel = new QLabel(tr("Brushes"), brushHeaderRow);
     m_brushesHeaderLabel->setStyleSheet(QStringLiteral("color: %1; background: transparent;")
             .arg(colors.text.name(QColor::HexArgb)));
-    QFont sectionHeaderFont(FontFamilyNames::InstrumentSerif, theme.fontSize(ThemeFontRole::H2));
+    QFont sectionHeaderFont(FontFamilyNames::InstrumentSerif, theme.fontSize(ThemeFontRole::H4));
     sectionHeaderFont.setWeight(QFont::Normal);
     m_brushesHeaderLabel->setFont(sectionHeaderFont);
 
@@ -856,7 +856,7 @@ void BrushPresetPage::setupUI()
     m_settingsHeaderLabel = new QLabel(tr("Settings"), settingsHeaderRow);
     m_settingsHeaderLabel->setStyleSheet(QStringLiteral("color: %1; background: transparent;")
             .arg(colors.text.name(QColor::HexArgb)));
-    QFont hdrFont(FontFamilyNames::InstrumentSerif, theme.fontSize(ThemeFontRole::H2));
+    QFont hdrFont(FontFamilyNames::InstrumentSerif, theme.fontSize(ThemeFontRole::H4));
     hdrFont.setWeight(QFont::Normal);
     m_settingsHeaderLabel->setFont(hdrFont);
 
@@ -900,7 +900,7 @@ void BrushPresetPage::setupUI()
 void BrushPresetPage::applyTypography()
 {
     const auto& theme = ThemeManager::instance();
-    QFont headerFont(FontFamilyNames::InstrumentSerif, theme.fontSize(ThemeFontRole::H2));
+    QFont headerFont(FontFamilyNames::InstrumentSerif, theme.fontSize(ThemeFontRole::H4));
     headerFont.setWeight(QFont::Normal);
     if (m_brushesHeaderLabel) {
         m_brushesHeaderLabel->setFont(headerFont);
@@ -910,7 +910,7 @@ void BrushPresetPage::applyTypography()
     }
     for (QLabel* label : m_categoryLabels) {
         if (label) {
-            label->setFont(theme.font(ThemeFontRole::Label, QFont::DemiBold));
+        label->setFont(theme.font(ThemeFontRole::Small, QFont::DemiBold));
         }
     }
 }
@@ -1002,7 +1002,7 @@ void BrushPresetPage::rebuildSettingsWidget()
         categoryLabel->setStyleSheet(
             QStringLiteral("color: %1; background: transparent; font-weight: 600;")
                 .arg(WidgetStyleManager::instance().colors().textMuted.name(QColor::HexArgb)));
-        categoryLabel->setFont(theme.font(ThemeFontRole::Label, QFont::DemiBold));
+        categoryLabel->setFont(theme.font(ThemeFontRole::Small, QFont::DemiBold));
         m_categoryLabels.append(categoryLabel);
         categoryLayout->addWidget(categoryIconLabel);
         categoryLayout->addWidget(categoryLabel, 1);

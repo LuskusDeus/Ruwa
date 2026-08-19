@@ -312,7 +312,7 @@ protected:
         }
 
         QFont titleFont
-            = ruwa::ui::core::ThemeManager::instance().font(ruwa::ui::core::ThemeFontRole::Label,
+            = ruwa::ui::core::ThemeManager::instance().font(ruwa::ui::core::ThemeFontRole::Small,
                 activeProgress() > 0.5 ? QFont::DemiBold : QFont::Medium);
         painter.setFont(titleFont);
         painter.setPen(isEnabled() ? colors.text : colors.textDisabled());
@@ -321,7 +321,7 @@ protected:
 
         if (!m_item.subtitle.isEmpty()) {
             QFont subtitleFont = ruwa::ui::core::ThemeManager::instance().font(
-                ruwa::ui::core::ThemeFontRole::Body);
+                ruwa::ui::core::ThemeFontRole::Caption);
             painter.setFont(subtitleFont);
             painter.setPen(colors.textMuted);
             painter.drawText(labelRect.adjusted(0, 14, 0, 0).toRect(),

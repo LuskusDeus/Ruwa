@@ -71,7 +71,7 @@ void BaseSettingsWidget::setupUI()
         m_descriptionWidget = new QLabel(m_description, m_textContainer);
         m_descriptionWidget->setAttribute(Qt::WA_TranslucentBackground);
         m_descriptionWidget->setWordWrap(true);
-        QFont descFont = mgr.font(ruwa::ui::core::ThemeFontRole::Small);
+        QFont descFont = mgr.font(ruwa::ui::core::ThemeFontRole::Body);
         m_descriptionWidget->setFont(descFont);
         m_descriptionWidget->setStyleSheet(
             QString("QLabel { color: %1; background: transparent; }").arg(colors.textMuted.name()));
@@ -116,7 +116,7 @@ void BaseSettingsWidget::updateScaledSizes()
     }
 
     if (m_descriptionWidget) {
-        QFont descFont = mgr.font(ruwa::ui::core::ThemeFontRole::Small);
+        QFont descFont = mgr.font(ruwa::ui::core::ThemeFontRole::Body);
         m_descriptionWidget->setFont(descFont);
     }
 
@@ -192,7 +192,7 @@ void BaseSettingsWidget::setDescription(const QString& description)
         m_descriptionWidget = new QLabel(description, m_textContainer);
         m_descriptionWidget->setAttribute(Qt::WA_TranslucentBackground);
         m_descriptionWidget->setWordWrap(true);
-        QFont descFont = mgr.font(ruwa::ui::core::ThemeFontRole::Small);
+        QFont descFont = mgr.font(ruwa::ui::core::ThemeFontRole::Body);
         m_descriptionWidget->setFont(descFont);
         m_descriptionWidget->setStyleSheet(
             QStringLiteral("QLabel { color: %1; background: transparent; }")

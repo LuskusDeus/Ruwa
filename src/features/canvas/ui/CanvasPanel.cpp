@@ -2966,11 +2966,11 @@ void CanvasPanel::onThemeChanged()
 {
     const auto& theme = ruwa::ui::core::ThemeManager::instance();
     if (m_loadingTitleLabel) {
-        m_loadingTitleLabel->setFont(
-            theme.font(ruwa::ui::core::ThemeFontRole::H3, QFont::DemiBold));
+        m_loadingTitleLabel->setFont(theme.font(ruwa::ui::core::ThemeFontRole::H5,
+            ruwa::ui::core::ThemeFontFamilyRole::Ui, QFont::DemiBold));
     }
     if (m_loadingStatusLabel) {
-        m_loadingStatusLabel->setFont(theme.font(ruwa::ui::core::ThemeFontRole::H6));
+        m_loadingStatusLabel->setFont(theme.font(ruwa::ui::core::ThemeFontRole::Body));
     }
 
     if (m_loadingOverlay && m_loadingOverlay->isVisible()) {

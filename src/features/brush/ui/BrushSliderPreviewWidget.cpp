@@ -491,7 +491,7 @@ void BrushSliderPreviewWidget::drawLabel(QPainter& painter, const QRectF& rect)
     auto& theme = ThemeManager::instance();
 
     painter.setPen(mgr.colors().textMuted);
-    painter.setFont(theme.font(ThemeFontRole::BodyLarge));
+    painter.setFont(theme.font(ThemeFontRole::Body));
 
     painter.drawText(rect, Qt::AlignCenter,
         painter.fontMetrics().elidedText(

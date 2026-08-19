@@ -30,6 +30,7 @@
 namespace ruwa::ui::widgets {
 
 using ruwa::ui::core::ThemeFontRole;
+using ruwa::ui::core::ThemeFontFamilyRole;
 
 namespace {
 const int BASE_MAIN_SPACING = 16;
@@ -388,7 +389,7 @@ void RecentProjectsWidget::rebuildListView()
 
             QLabel* msgLabel = new QLabel(
                 QCoreApplication::translate(ctx, kNoRecentProjectsMessage), emptyStateContainer);
-            QFont msgFont = theme.font(ThemeFontRole::H6);
+            QFont msgFont = theme.font(ThemeFontRole::H6, ThemeFontFamilyRole::Ui);
             msgLabel->setFont(msgFont);
             msgLabel->setStyleSheet(QString("QLabel { color: %1; }").arg(colors.textMuted.name()));
             msgLabel->setAlignment(Qt::AlignCenter);
@@ -493,7 +494,7 @@ void RecentProjectsWidget::rebuildGridView()
 
             QLabel* msgLabel = new QLabel(
                 QCoreApplication::translate(ctx, kNoRecentProjectsMessage), emptyStateContainer);
-            QFont msgFont = theme.font(ThemeFontRole::H6);
+            QFont msgFont = theme.font(ThemeFontRole::H6, ThemeFontFamilyRole::Ui);
             msgLabel->setFont(msgFont);
             msgLabel->setStyleSheet(QString("QLabel { color: %1; }").arg(colors.textMuted.name()));
             msgLabel->setAlignment(Qt::AlignCenter);

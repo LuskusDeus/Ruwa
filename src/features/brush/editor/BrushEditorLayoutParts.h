@@ -284,7 +284,7 @@ public:
         m_nameEditor->setPlaceholderText(QObject::tr("Pack name"));
         m_nameEditor->setFocusPolicy(Qt::StrongFocus);
 
-        m_nameEditor->setFont(theme.font(ThemeFontRole::Label, QFont::Bold));
+        m_nameEditor->setFont(theme.font(ThemeFontRole::Small, QFont::Bold));
         m_nameEditor->setStyleSheet(QStringLiteral(
             "QLineEdit { background: transparent; border: none; color: %1; padding: 0 2px; }")
                 .arg(colors.text.name(QColor::HexArgb)));
@@ -297,7 +297,7 @@ public:
         });
         connect(m_nameEditor, &QLineEdit::editingFinished, this, [this]() { finishRename(); });
         connect(&ThemeManager::instance(), &ThemeManager::themeChanged, this, [this]() {
-            m_nameEditor->setFont(ThemeManager::instance().font(ThemeFontRole::Label, QFont::Bold));
+            m_nameEditor->setFont(ThemeManager::instance().font(ThemeFontRole::Small, QFont::Bold));
             update();
         });
     }
@@ -375,7 +375,7 @@ protected:
         const int arrowY = (height() - arrowSize) / 2;
         QColor arrowColor = m_selected ? colors.text : colors.textMuted;
         painter.setPen(arrowColor);
-        painter.setFont(theme.font(ThemeFontRole::Small));
+        painter.setFont(theme.font(ThemeFontRole::Micro));
         painter.drawText(QRect(arrowX, arrowY, arrowSize, arrowSize), Qt::AlignCenter,
             m_expanded ? QStringLiteral("\u25BE") : QStringLiteral("\u25B8"));
 
@@ -384,7 +384,7 @@ protected:
             QColor textColor
                 = m_selected ? colors.text : (m_hovered ? colors.text : colors.textMuted);
             painter.setPen(textColor);
-            painter.setFont(theme.font(ThemeFontRole::Label, QFont::Bold));
+            painter.setFont(theme.font(ThemeFontRole::Small, QFont::Bold));
             const QString displayName = m_name.isEmpty()
                 ? m_name
                 : QCoreApplication::translate("QObject", m_name.toUtf8().constData());
@@ -518,7 +518,7 @@ public:
         m_nameEditor->setPlaceholderText(QObject::tr("Brush name"));
         m_nameEditor->setFocusPolicy(Qt::StrongFocus);
 
-        m_nameEditor->setFont(theme.font(ThemeFontRole::Label));
+        m_nameEditor->setFont(theme.font(ThemeFontRole::Small));
         m_nameEditor->setStyleSheet(QStringLiteral(
             "QLineEdit { background: transparent; border: none; color: %1; padding: 0 2px; }")
                 .arg(colors.text.name(QColor::HexArgb)));
@@ -531,7 +531,7 @@ public:
         });
         connect(m_nameEditor, &QLineEdit::editingFinished, this, [this]() { finishRename(); });
         connect(&ThemeManager::instance(), &ThemeManager::themeChanged, this, [this]() {
-            m_nameEditor->setFont(ThemeManager::instance().font(ThemeFontRole::Label));
+            m_nameEditor->setFont(ThemeManager::instance().font(ThemeFontRole::Small));
             update();
         });
     }
@@ -602,7 +602,7 @@ protected:
             QColor textColor
                 = m_selected ? colors.text : (m_hovered ? colors.text : colors.textMuted);
             painter.setPen(textColor);
-            painter.setFont(theme.font(ThemeFontRole::Label));
+            painter.setFont(theme.font(ThemeFontRole::Small));
             const QString displayName = m_name.isEmpty()
                 ? m_name
                 : QCoreApplication::translate("QObject", m_name.toUtf8().constData());

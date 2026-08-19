@@ -458,7 +458,7 @@ void CanvasThumbnail::drawCenteredText(QPainter& painter, const QRectF& ghostRec
     }
 
     // Row 2: dimensions
-    QFont dimFont = mgr.font(ThemeFontRole::H6, QFont::Bold);
+    QFont dimFont = mgr.font(ThemeFontRole::H6, ThemeFontFamilyRole::Ui, QFont::Bold);
     const qreal detailsScale = 0.84 + 0.16 * metadataProgress;
     drawScaledText(QRectF(ghostRect.left(), curY, ghostRect.width(), dimH), dimFont, textMain,
         QString("%1 \u00d7 %2").arg(dispW).arg(dispH), detailsScale);

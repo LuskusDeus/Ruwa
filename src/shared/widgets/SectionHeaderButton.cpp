@@ -104,7 +104,7 @@ void SectionHeaderButton::paintEvent(QPaintEvent* event)
     const int gapWidth = ThemeManager::instance().scaled(8);
 
     QFont titleFont = ThemeManager::instance().font(
-        ThemeFontRole::BodyLarge, activeProgress() > 0.5 ? QFont::Medium : QFont::Normal);
+        ThemeFontRole::Body, activeProgress() > 0.5 ? QFont::Medium : QFont::Normal);
     painter.setFont(titleFont);
 
     const int textWidth

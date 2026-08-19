@@ -407,7 +407,7 @@ void DragGhostWidget::paintEvent(QPaintEvent* e)
             p.setPen(QPen(bord, 1.0));
             p.setBrush(Qt::NoBrush);
             p.drawRoundedRect(r.adjusted(0.5, 0.5, -0.5, -0.5), 5.5, 5.5);
-            QFont font = tm.font(ruwa::ui::core::ThemeFontRole::Body);
+            QFont font = tm.font(ruwa::ui::core::ThemeFontRole::Caption);
             p.setFont(font);
             p.setPen(c.text);
             p.drawText(pillRect.toRect(), Qt::AlignCenter,
@@ -481,7 +481,7 @@ void DragGhostWidget::paintEvent(QPaintEvent* e)
         p.setBrush(Qt::NoBrush);
         p.drawRoundedRect(r.adjusted(0.5, 0.5, -0.5, -0.5), 5.5, 5.5);
 
-        QFont font = tm.font(ruwa::ui::core::ThemeFontRole::Body);
+        QFont font = tm.font(ruwa::ui::core::ThemeFontRole::Caption);
         int count = m_multiCount > 0 ? m_multiCount : m_rowSnapshots.size();
         p.setFont(font);
         p.setPen(c.text);

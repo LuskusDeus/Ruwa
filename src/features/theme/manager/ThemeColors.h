@@ -21,8 +21,8 @@ struct ThemePreset;
  *
  * Widget code must request a role instead of embedding a numeric font size.
  * Display is reserved for oversized hero text. H0 is the largest regular
- * heading; H6 is the smallest heading. Body roles use the UI family, while
- * Code uses the code family.
+ * heading; H6 is the smallest heading. Subtitle and body roles use the UI
+ * family, while Code uses the code family.
  */
 enum class ThemeFontRole {
     Display,
@@ -33,13 +33,24 @@ enum class ThemeFontRole {
     H4,
     H5,
     H6,
+    Subtitle,
     BodyLarge,
     Label,
     Body,
     Small,
     Caption,
+    Micro,
     Code
 };
+
+/**
+ * @brief Font family selection, independent from the semantic size role.
+ *
+ * Most widgets use the family implied by ThemeFontRole. Components that need
+ * a heading-sized UI font (or a body-sized title font) can explicitly select
+ * the family without bypassing the theme typography scale.
+ */
+enum class ThemeFontFamilyRole { Ui, Title, Code };
 
 /**
  * @brief Theme-owned typography scale.
@@ -56,11 +67,13 @@ struct ThemeFontSizes {
     int h4 { 16 };
     int h5 { 14 };
     int h6 { 12 };
+    int subtitle { 13 };
     int bodyLarge { 11 };
     int label { 10 };
     int body { 9 };
     int small { 8 };
     int caption { 7 };
+    int micro { 6 };
     int code { 9 };
 
     static ThemeFontSizes fromLegacy(int uiSize, int codeSize, int titleSize)
@@ -74,11 +87,13 @@ struct ThemeFontSizes {
         sizes.h4 = titleSize;
         sizes.h5 = titleSize - 2;
         sizes.h6 = titleSize - 4;
+        sizes.subtitle = titleSize - 3;
         sizes.bodyLarge = uiSize + 2;
         sizes.label = uiSize + 1;
         sizes.body = uiSize;
         sizes.small = uiSize - 1;
         sizes.caption = uiSize - 2;
+        sizes.micro = uiSize - 3;
         sizes.code = codeSize;
         sizes.normalize();
         return sizes;
@@ -103,6 +118,8 @@ struct ThemeFontSizes {
             return h5;
         case ThemeFontRole::H6:
             return h6;
+        case ThemeFontRole::Subtitle:
+            return subtitle;
         case ThemeFontRole::BodyLarge:
             return bodyLarge;
         case ThemeFontRole::Label:
@@ -113,6 +130,8 @@ struct ThemeFontSizes {
             return small;
         case ThemeFontRole::Caption:
             return caption;
+        case ThemeFontRole::Micro:
+            return micro;
         case ThemeFontRole::Code:
             return code;
         }
@@ -147,6 +166,9 @@ struct ThemeFontSizes {
         case ThemeFontRole::H6:
             h6 = size;
             break;
+        case ThemeFontRole::Subtitle:
+            subtitle = size;
+            break;
         case ThemeFontRole::BodyLarge:
             bodyLarge = size;
             break;
@@ -161,6 +183,9 @@ struct ThemeFontSizes {
             break;
         case ThemeFontRole::Caption:
             caption = size;
+            break;
+        case ThemeFontRole::Micro:
+            micro = size;
             break;
         case ThemeFontRole::Code:
             code = size;
@@ -178,11 +203,13 @@ struct ThemeFontSizes {
         h4 = std::clamp(h4, MinimumSize, MaximumSize);
         h5 = std::clamp(h5, MinimumSize, MaximumSize);
         h6 = std::clamp(h6, MinimumSize, MaximumSize);
+        subtitle = std::clamp(subtitle, MinimumSize, MaximumSize);
         bodyLarge = std::clamp(bodyLarge, MinimumSize, MaximumSize);
         label = std::clamp(label, MinimumSize, MaximumSize);
         body = std::clamp(body, MinimumSize, MaximumSize);
         small = std::clamp(small, MinimumSize, MaximumSize);
         caption = std::clamp(caption, MinimumSize, MaximumSize);
+        micro = std::clamp(micro, MinimumSize, MaximumSize);
         code = std::clamp(code, MinimumSize, MaximumSize);
     }
 
@@ -190,8 +217,9 @@ struct ThemeFontSizes {
     {
         return display == other.display && h0 == other.h0 && h1 == other.h1 && h2 == other.h2
             && h3 == other.h3 && h4 == other.h4 && h5 == other.h5 && h6 == other.h6
-            && bodyLarge == other.bodyLarge && label == other.label && body == other.body
-            && small == other.small && caption == other.caption && code == other.code;
+            && subtitle == other.subtitle && bodyLarge == other.bodyLarge && label == other.label
+            && body == other.body && small == other.small && caption == other.caption
+            && micro == other.micro && code == other.code;
     }
 
     bool operator!=(const ThemeFontSizes& other) const { return !(*this == other); }
@@ -230,9 +258,27 @@ struct ThemeFonts {
         }
     }
 
+    QString family(ThemeFontFamilyRole role) const
+    {
+        switch (role) {
+        case ThemeFontFamilyRole::Ui:
+            return uiFont;
+        case ThemeFontFamilyRole::Title:
+            return titleFont;
+        case ThemeFontFamilyRole::Code:
+            return codeFont;
+        }
+        return uiFont;
+    }
+
     QFont getFont(ThemeFontRole role, int size = -1) const
     {
         return QFont(family(role), size > 0 ? size : sizes.value(role));
+    }
+
+    QFont getFont(ThemeFontRole sizeRole, ThemeFontFamilyRole familyRole, int size = -1) const
+    {
+        return QFont(family(familyRole), size > 0 ? size : sizes.value(sizeRole));
     }
 
     // Helper to create font instances

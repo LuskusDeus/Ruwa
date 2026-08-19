@@ -776,15 +776,15 @@ void FirstRunIntegrationWidget::updateTheme()
         = theme.icons().getApplicationLogoPixmap(QSize(kHeroLogoSize, kHeroLogoSize));
     m_heroLogo->setPixmap(logo);
 
-    m_heroTitle->setFont(theme.font(ruwa::ui::core::ThemeFontRole::Display, QFont::Bold));
+    m_heroTitle->setFont(theme.font(ruwa::ui::core::ThemeFontRole::H0, QFont::Bold));
 
-    const QFont heroDescriptionFont
-        = colors.fonts.getUIFont(theme.fontSize(ruwa::ui::core::ThemeFontRole::H5));
+    const QFont heroDescriptionFont = theme.font(ruwa::ui::core::ThemeFontRole::H6,
+        ruwa::ui::core::ThemeFontFamilyRole::Ui);
     m_heroDescription->setFont(heroDescriptionFont);
 
-    m_finishDescription->setFont(theme.font(ruwa::ui::core::ThemeFontRole::BodyLarge));
+    m_finishDescription->setFont(theme.font(ruwa::ui::core::ThemeFontRole::Label));
 
-    const QFont sectionFont = theme.font(ruwa::ui::core::ThemeFontRole::H2, QFont::Bold);
+    const QFont sectionFont = theme.font(ruwa::ui::core::ThemeFontRole::H4, QFont::Bold);
     for (QLabel* label : { m_appearanceTitle, m_editorTitle, m_performanceTitle }) {
         label->setFont(sectionFont);
     }

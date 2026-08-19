@@ -1725,11 +1725,11 @@ void BrushEditorLayoutWidget::updateScaledSizes()
     if (m_previewLayout)
         m_previewLayout->setSpacing(theme.scaled(4));
 
-    applyThemeFont(m_previewTitleLabel, ThemeFontRole::BodyLarge, QFont::Bold);
+    applyThemeFont(m_previewTitleLabel, ThemeFontRole::Body, QFont::Bold);
     if (m_brushNameInput) {
         m_brushNameInput->setMinimumWidth(theme.scaled(180));
         if (auto* lineEdit = m_brushNameInput->findChild<QLineEdit*>()) {
-            applyThemeFont(lineEdit, ThemeFontRole::Label);
+            applyThemeFont(lineEdit, ThemeFontRole::Small);
             lineEdit->setFixedHeight(theme.scaled(20));
             if (auto* inputContainer = lineEdit->parentWidget()) {
                 inputContainer->setFixedHeight(theme.scaled(30));
@@ -1744,7 +1744,7 @@ void BrushEditorLayoutWidget::updateScaledSizes()
     }
     for (QPushButton* button : { m_resetButton, m_saveButton }) {
         if (button) {
-            applyThemeFont(button, ThemeFontRole::Label, QFont::Bold);
+            applyThemeFont(button, ThemeFontRole::Small, QFont::Bold);
             button->setFixedHeight(theme.scaled(30));
         }
     }
@@ -1753,7 +1753,7 @@ void BrushEditorLayoutWidget::updateScaledSizes()
     if (m_saveButton)
         m_saveButton->setMinimumWidth(theme.scaled(92));
     for (QPushButton* button : m_tabButtons) {
-        applyThemeFont(button, ThemeFontRole::Label);
+        applyThemeFont(button, ThemeFontRole::Small);
         button->setMinimumHeight(theme.scaled(28));
     }
     if (m_textureModeSelector) {
@@ -1766,7 +1766,7 @@ void BrushEditorLayoutWidget::updateScaledSizes()
         m_dabImageUpload->setMinimumWidth(theme.scaled(460));
     }
     if (m_dabPresetHintLabel) {
-        applyThemeFont(m_dabPresetHintLabel, ThemeFontRole::Label);
+        applyThemeFont(m_dabPresetHintLabel, ThemeFontRole::Small);
     }
     if (m_dabPresetSelector) {
         m_dabPresetSelector->setFixedHeight(theme.scaled(30));
@@ -1837,25 +1837,25 @@ void BrushEditorLayoutWidget::updateStyles()
         = m_settingsStack->findChildren<QLabel*>(QStringLiteral("brush_editor_section_title"));
     for (QLabel* label : pageTitles) {
         label->setStyleSheet(titleStyle);
-        applyThemeFont(label, ThemeFontRole::BodyLarge, QFont::Bold);
+        applyThemeFont(label, ThemeFontRole::Body, QFont::Bold);
     }
     const auto pageCaptions
         = m_settingsStack->findChildren<QLabel*>(QStringLiteral("brush_editor_section_caption"));
     for (QLabel* label : pageCaptions) {
         label->setStyleSheet(captionStyle);
-        applyThemeFont(label, ThemeFontRole::Label);
+        applyThemeFont(label, ThemeFontRole::Small);
     }
     const auto placeholderTitles
         = m_settingsStack->findChildren<QLabel*>(QStringLiteral("brush_editor_placeholder_title"));
     for (QLabel* label : placeholderTitles) {
         label->setStyleSheet(titleStyle);
-        applyThemeFont(label, ThemeFontRole::BodyLarge, QFont::Bold);
+        applyThemeFont(label, ThemeFontRole::Body, QFont::Bold);
     }
     const auto placeholderCaptions = m_settingsStack->findChildren<QLabel*>(
         QStringLiteral("brush_editor_placeholder_caption"));
     for (QLabel* label : placeholderCaptions) {
         label->setStyleSheet(captionStyle);
-        applyThemeFont(label, ThemeFontRole::Label);
+        applyThemeFont(label, ThemeFontRole::Small);
     }
     const auto placeholderIcons
         = m_settingsStack->findChildren<QLabel*>(QStringLiteral("brush_editor_placeholder_icon"));

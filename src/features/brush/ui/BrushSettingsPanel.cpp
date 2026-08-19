@@ -418,7 +418,7 @@ void BrushSettingsPanel::rebuildSettings()
         categoryLabel->setStyleSheet(
             QStringLiteral("color: %1; background: transparent; font-weight: 600;")
                 .arg(WidgetStyleManager::instance().colors().textMuted.name(QColor::HexArgb)));
-        categoryLabel->setFont(theme.font(ThemeFontRole::Label, QFont::DemiBold));
+        categoryLabel->setFont(theme.font(ThemeFontRole::Small, QFont::DemiBold));
 
         categoryLayout->addWidget(categoryIconLabel);
         categoryLayout->addWidget(categoryLabel, 1);
@@ -602,11 +602,11 @@ void BrushSettingsPanel::updateHeader()
 
     updateDabPreview(brushSettings ? &*brushSettings : nullptr);
 
-    m_headerCaptionLabel->setFont(theme.font(ThemeFontRole::Body, QFont::Medium));
+    m_headerCaptionLabel->setFont(theme.font(ThemeFontRole::Caption, QFont::Medium));
     m_headerCaptionLabel->setStyleSheet(QStringLiteral("color: %1; background: transparent;")
             .arg(colors.textMuted.name(QColor::HexArgb)));
 
-    m_brushNameLabel->setFont(theme.font(ThemeFontRole::BodyLarge, QFont::DemiBold));
+    m_brushNameLabel->setFont(theme.font(ThemeFontRole::Body, QFont::DemiBold));
     m_brushNameLabel->setStyleSheet(QStringLiteral("color: %1; background: transparent;")
             .arg((hasBrush ? colors.text : colors.textMuted).name(QColor::HexArgb)));
 }

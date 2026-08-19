@@ -101,7 +101,7 @@ private:
     void refreshTypography()
     {
         const auto& theme = ThemeManager::instance();
-        const QFont buttonFont = theme.font(ThemeFontRole::Label, QFont::Medium);
+        const QFont buttonFont = theme.font(ThemeFontRole::Small, QFont::Medium);
         setFont(buttonFont);
         const int width = QFontMetrics(buttonFont).horizontalAdvance(translatedFilterText(m_text))
             + theme.scaled(18);

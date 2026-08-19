@@ -172,7 +172,7 @@ private:
             return;
         }
 
-        painter.setFont(tm.font(ThemeFontRole::H6, QFont::DemiBold));
+        painter.setFont(tm.font(ThemeFontRole::Label, QFont::DemiBold));
         painter.setPen(iconColor);
         painter.drawText(rect(), Qt::AlignCenter, m_fallbackText);
     }
@@ -316,7 +316,7 @@ public:
         }
 
         if (m_titleLabel) {
-            QFont font = theme.font(ThemeFontRole::Label, QFont::DemiBold);
+            QFont font = theme.font(ThemeFontRole::Small, QFont::DemiBold);
             m_titleLabel->setFont(font);
             m_titleLabel->setStyleSheet(
                 QStringLiteral("QLabel { color: %1; background: transparent; }")
@@ -614,7 +614,7 @@ protected:
         painter.setBrush(bg);
         painter.drawRoundedRect(box, radius, radius);
 
-        QFont f = theme.font(ThemeFontRole::H6, QFont::DemiBold);
+        QFont f = theme.font(ThemeFontRole::Label, QFont::DemiBold);
         painter.setFont(f);
         painter.setPen(colors.textOnPrimary());
 
@@ -1691,7 +1691,7 @@ void PresetMenuListWidget::onThemeChanged()
     }
 
     if (m_emptyTitleLabel) {
-        QFont f = ThemeManager::instance().font(ThemeFontRole::H5, QFont::Medium);
+        QFont f = ThemeManager::instance().font(ThemeFontRole::BodyLarge, QFont::Medium);
         m_emptyTitleLabel->setFont(f);
         m_emptyTitleLabel->setStyleSheet(
             QStringLiteral("QLabel { color: %1; background: transparent; }")
@@ -1699,7 +1699,7 @@ void PresetMenuListWidget::onThemeChanged()
     }
 
     if (m_emptyDescriptionLabel) {
-        QFont f = ThemeManager::instance().font(ThemeFontRole::BodyLarge);
+        QFont f = ThemeManager::instance().font(ThemeFontRole::Small);
         m_emptyDescriptionLabel->setFont(f);
         m_emptyDescriptionLabel->setStyleSheet(
             QStringLiteral("QLabel { color: %1; background: transparent; }")
