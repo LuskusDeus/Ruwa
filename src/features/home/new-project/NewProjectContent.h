@@ -19,6 +19,10 @@ class QVBoxLayout;
 class QSpacerItem;
 class QWidget;
 
+namespace ruwa::core::serialization {
+struct RecentProjectPresetEntry;
+}
+
 namespace ruwa::ui::widgets {
 
 class ProjectSettingsField;
@@ -95,6 +99,13 @@ private:
     void applyRecentPreset(const QString& id);
     void updateRecentPresetVisibility();
     void clearSelectedRecentPreset();
+    /// Re-highlights the recent card whose settings match the current form (none if no match).
+    void refreshRecentPresetSelection();
+    void setSelectedRecentPresetId(const QString& id);
+    QString recentPresetLabel(
+        const ruwa::core::serialization::RecentProjectPresetEntry& entry) const;
+    QString recentPresetTooltip(
+        const ruwa::core::serialization::RecentProjectPresetEntry& entry) const;
     QString formatRatio(const QSize& size) const;
     void syncDimensionFieldsEnabledState();
 

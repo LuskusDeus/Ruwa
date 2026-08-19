@@ -7,6 +7,7 @@
 
 #include <QCoreApplication>
 #include <QEvent>
+#include <QFontMetricsF>
 #include <QPainter>
 #include <QSizePolicy>
 #include <QWidget>
@@ -230,6 +231,9 @@ void ProjectPresetCard::drawContentLayer(QPainter& painter, const QRectF& rect)
         const QByteArray k = m_nameKey.toUtf8();
         displayName = QCoreApplication::translate(kNewProjectPresetCtx, k.constData());
     }
+
+    // Recent cards carry user-typed project names, which can be far wider than the text column.
+    displayName = QFontMetricsF(nameFont).elidedText(displayName, Qt::ElideRight, textW);
 
     QRectF nameRect(textLeft, textTop, textW, nameH);
     painter.drawText(nameRect, Qt::AlignLeft | Qt::AlignVCenter, displayName);

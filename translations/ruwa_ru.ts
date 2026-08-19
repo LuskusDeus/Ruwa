@@ -3750,6 +3750,21 @@ Ruwa использует фреймворк Qt (версия %1), динами�
         <source>Delete</source>
         <translation>Удалить</translation>
     </message>
+    <message>
+        <location filename="../src/features/home/new-project/NewProjectContent.cpp" line="819"/>
+        <source>Background: %1</source>
+        <translation>Фон: %1</translation>
+    </message>
+    <message>
+        <location filename="../src/features/home/new-project/NewProjectContent.cpp" line="822"/>
+        <source>Used %1 times</source>
+        <translation>Использован %1 раз</translation>
+    </message>
+    <message>
+        <location filename="../src/features/home/new-project/NewProjectContent.cpp" line="825"/>
+        <source>Last used: %1</source>
+        <translation>Последнее использование: %1</translation>
+    </message>
 </context>
 <context>
     <name>ruwa::ui::widgets::NoActionsContextMenu</name>

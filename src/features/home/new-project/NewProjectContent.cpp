@@ -4,6 +4,7 @@
 #include "NewProjectContent.h"
 #include "ProjectSettingsField.h"
 #include "ProjectPresetCard.h"
+#include "ProjectPresets.h"
 #include "CanvasThumbnail.h"
 #include "AspectRatioLockButton.h"
 #include "features/project/RecentProjectPresetsManager.h"
@@ -24,6 +25,8 @@
 #include <QHBoxLayout>
 #include <QIcon>
 #include <QLayoutItem>
+#include <QLocale>
+#include <QStringList>
 #include <QSpacerItem>
 #include <QVBoxLayout>
 #include <QLabel>
@@ -345,7 +348,7 @@ void NewProjectContent::setupContent()
     // enum order RGBA8=0 / RGBA16F=1 / RGBA32F=2 maps 1:1 to the option index.
     m_bitDepthSelector->setCurrentIndex(static_cast<int>(aether::kDefaultTileFormat), false);
     connect(m_bitDepthSelector, &SegmentedOptionSelector::selectionChanged, this, [this](int) {
-        clearSelectedRecentPreset();
+        refreshRecentPresetSelection();
         updateMemoryLabel();
     });
     bitDepthLayout->addWidget(m_bitDepthSelector);
@@ -401,7 +404,7 @@ void NewProjectContent::setupContent()
     connect(
         m_backgroundColorInput, &ColorInputButton::colorChanged, this, [this](const QColor& color) {
             m_backgroundColor = color;
-            clearSelectedRecentPreset();
+            refreshRecentPresetSelection();
         });
     connect(m_backgroundColorInput, &ColorInputButton::colorPickerRequested, this,
         [this](const QColor& color) { emit colorPickerRequested(color, m_backgroundColorInput); });
@@ -519,11 +522,11 @@ void NewProjectContent::retranslateUi()
     if (m_recentPresetsTabButton)
         m_recentPresetsTabButton->setToolTip(tr("Recent Projects"));
 
-    const QStringList categories = { tr("Basics"), tr("Screen"), tr("Illustration"),
-        tr("Comics & Manga"), tr("Print"), tr("Covers & Posters"), tr("Pixel Art") };
+    const QList<PresetCategory>& categories = ProjectPresets::categories();
     for (int i = 0;
         i < categories.size() && i + kFirstBuiltInCategoryIndex < m_categoryButtons.size(); ++i) {
-        m_categoryButtons[i + kFirstBuiltInCategoryIndex]->setText(categories[i]);
+        m_categoryButtons[i + kFirstBuiltInCategoryIndex]->setText(
+            ProjectPresets::translated(categories[i].nameKey));
     }
 
     const QList<ProjectPresetCard*> presetCardList = m_presetCards.values();
@@ -532,6 +535,9 @@ void NewProjectContent::retranslateUi()
             card->update();
         }
     }
+
+    // Recent cards carry resolved strings (borrowed preset names, tooltips) — rebuild them.
+    rebuildRecentPresets();
 
     QTimer::singleShot(0, this, [this]() { syncLockColumnLayout(); });
 }
@@ -587,7 +593,6 @@ void NewProjectContent::createSettingsPanel(QWidget* fieldParent)
     m_projectNameField->setPlaceholder(tr("Untitled Project"));
     m_projectNameField->setText(tr("Untitled Project"));
     connect(m_projectNameField, &ProjectSettingsField::textChanged, this, [this]() {
-        clearSelectedRecentPreset();
         if (m_canvasThumbnail)
             m_canvasThumbnail->setProjectName(projectName());
     });
@@ -673,89 +678,15 @@ void NewProjectContent::createPresets()
     recentPageLayout->addStretch();
     m_presetsStack->addWidget(m_recentPresetsPage);
 
-    // English keys only — UI strings come from QCoreApplication::translate (same context as tr()).
-    struct Preset {
-        QString nameKey;
-        QSize size;
-    };
-    struct PresetCategory {
-        QString nameKey;
-        QList<Preset> presets;
-    };
-
-    QList<PresetCategory> categories = {
-        { QStringLiteral("Basics"),
-            {
-                { QStringLiteral("Quick Sketch"), QSize(2048, 2048) },
-                { QStringLiteral("Square Canvas"), QSize(3000, 3000) },
-                { QStringLiteral("Landscape Canvas"), QSize(4000, 3000) },
-                { QStringLiteral("Portrait Canvas"), QSize(3000, 4000) },
-                { QStringLiteral("Large Square"), QSize(4096, 4096) },
-            } },
-        { QStringLiteral("Screen"),
-            {
-                { QStringLiteral("Full HD"), QSize(1920, 1080) },
-                { QStringLiteral("QHD"), QSize(2560, 1440) },
-                { QStringLiteral("4K UHD"), QSize(3840, 2160) },
-                { QStringLiteral("Ultrawide"), QSize(3440, 1440) },
-                { QStringLiteral("Vertical Screen"), QSize(2160, 3840) },
-            } },
-        { QStringLiteral("Illustration"),
-            {
-                { QStringLiteral("Illustration Portrait"), QSize(4000, 5000) },
-                { QStringLiteral("Illustration Large Portrait"), QSize(5000, 7000) },
-                { QStringLiteral("Illustration Landscape"), QSize(6000, 4000) },
-                { QStringLiteral("Cinematic Matte"), QSize(6000, 3375) },
-                { QStringLiteral("Concept Sheet"), QSize(7000, 7000) },
-            } },
-        { QStringLiteral("Comics & Manga"),
-            {
-                { QStringLiteral("Manga A4"), QSize(2480, 3508) },
-                { QStringLiteral("Manga B5"), QSize(2079, 2953) },
-                { QStringLiteral("US Comic Page"), QSize(2550, 3900) },
-                { QStringLiteral("Comic Spread"), QSize(5100, 3900) },
-                { QStringLiteral("Webtoon Episode"), QSize(1600, 12000) },
-            } },
-        { QStringLiteral("Print"),
-            {
-                { QStringLiteral("A5"), QSize(1748, 2480) },
-                { QStringLiteral("A4"), QSize(2480, 3508) },
-                { QStringLiteral("A3"), QSize(3508, 4961) },
-                { QStringLiteral("Letter"), QSize(2550, 3300) },
-                { QStringLiteral("Poster A2"), QSize(4961, 7016) },
-                { QStringLiteral("Poster A1"), QSize(7016, 9933) },
-            } },
-        { QStringLiteral("Covers & Posters"),
-            {
-                { QStringLiteral("Book Cover"), QSize(3000, 4500) },
-                { QStringLiteral("Album Cover"), QSize(3000, 3000) },
-                { QStringLiteral("Vertical Poster"), QSize(4000, 6000) },
-                { QStringLiteral("Landscape Poster"), QSize(6000, 4000) },
-                { QStringLiteral("Square Cover"), QSize(4000, 4000) },
-            } },
-        { QStringLiteral("Pixel Art"),
-            {
-                { QStringLiteral("Sprite 64"), QSize(64, 64) },
-                { QStringLiteral("Sprite 128"), QSize(128, 128) },
-                { QStringLiteral("Tile Set 256"), QSize(256, 256) },
-                { QStringLiteral("Pixel Scene"), QSize(512, 512) },
-                { QStringLiteral("Pixel HD"), QSize(1024, 1024) },
-            } },
-    };
-
-    const char* presetCtx = metaObject()->className();
+    // English keys only — UI strings come from ProjectPresets::translated().
+    const QList<PresetCategory>& categories = ProjectPresets::categories();
 
     for (int builtInIndex = 0; builtInIndex < categories.size(); ++builtInIndex) {
         const int categoryIndex = builtInIndex + kFirstBuiltInCategoryIndex;
         const auto& category = categories[builtInIndex];
 
-        QString categoryTitle;
-        {
-            const QByteArray catUtf8 = category.nameKey.toUtf8();
-            categoryTitle = QCoreApplication::translate(presetCtx, catUtf8.constData());
-        }
-        CapsuleButton* categoryButton
-            = new CapsuleButton(categoryTitle, CapsuleButton::Variant::Tab, tabsWidget);
+        CapsuleButton* categoryButton = new CapsuleButton(
+            ProjectPresets::translated(category.nameKey), CapsuleButton::Variant::Tab, tabsWidget);
         connect(categoryButton, &QPushButton::clicked, this,
             [this, categoryIndex]() { setActivePresetCategory(categoryIndex); });
         tabsLayout->addWidget(categoryButton);
@@ -812,9 +743,12 @@ void NewProjectContent::rebuildRecentPresets()
         = ruwa::core::serialization::RecentProjectPresetsManager::instance().entries();
     bool selectedEntryStillExists = false;
     for (const auto& entry : entries) {
+        // Unnamed entries borrow the built-in preset name their size matches, so the tab reads
+        // "Full HD" instead of a stack of identical "Untitled Project" cards.
         auto* card = new ProjectPresetCard(
-            entry.projectName, entry.canvasSize, m_recentPresetsPage, false);
+            recentPresetLabel(entry), entry.canvasSize, m_recentPresetsPage, false);
         card->setDeletable(true);
+        card->setToolTip(recentPresetTooltip(entry));
         connect(card, &ProjectPresetCard::clicked, this,
             [this, id = entry.id]() { applyRecentPreset(id); });
         connect(card, &ProjectPresetCard::deleteRequested, this, [id = entry.id]() {
@@ -831,12 +765,87 @@ void NewProjectContent::rebuildRecentPresets()
 
     if (!selectedEntryStillExists) {
         m_selectedRecentPresetId.clear();
+        // Entries collapse and get reordered behind our back; the highlight follows the
+        // settings, not the card that happened to be clicked.
+        refreshRecentPresetSelection();
     }
 
     updateRecentPresetVisibility();
     if (m_recentPresetsPage) {
         m_recentPresetsPage->updateGeometry();
     }
+}
+
+QString NewProjectContent::recentPresetLabel(
+    const ruwa::core::serialization::RecentProjectPresetEntry& entry) const
+{
+    if (entry.hasCustomName()) {
+        return entry.projectName;
+    }
+
+    const QString presetKey = ProjectPresets::matchingNameKey(entry.canvasSize);
+    if (!presetKey.isEmpty()) {
+        return ProjectPresets::translated(presetKey);
+    }
+    return tr("Untitled Project");
+}
+
+QString NewProjectContent::recentPresetTooltip(
+    const ruwa::core::serialization::RecentProjectPresetEntry& entry) const
+{
+    QStringList lines;
+    lines << recentPresetLabel(entry);
+
+    QString depth = tr("8-bit");
+    if (entry.tileFormat == aether::TilePixelFormat::RGBA16F) {
+        depth = tr("16-bit");
+    } else if (entry.tileFormat == aether::TilePixelFormat::RGBA32F) {
+        depth = tr("32-bit float");
+    }
+    lines << QStringLiteral("%1 x %2  ·  %3  ·  %4")
+                 .arg(entry.canvasSize.width())
+                 .arg(entry.canvasSize.height())
+                 .arg(depth,
+                     entry.infiniteCanvasEnabled ? tr("Infinite canvas") : tr("Classic canvas"));
+
+    lines << tr("Background: %1").arg(entry.backgroundColor.name(QColor::HexRgb).toUpper());
+
+    if (entry.useCount > 1) {
+        lines << tr("Used %1 times").arg(entry.useCount);
+    }
+    if (entry.createdAt.isValid()) {
+        const QString stamp = QLocale::system().toString(entry.createdAt, QLocale::ShortFormat);
+        lines << tr("Last used: %1").arg(stamp);
+    }
+
+    return lines.join(QLatin1Char('\n'));
+}
+
+void NewProjectContent::setSelectedRecentPresetId(const QString& id)
+{
+    if (m_selectedRecentPresetId == id) {
+        return;
+    }
+    clearSelectedRecentPreset();
+    if (id.isEmpty()) {
+        return;
+    }
+    m_selectedRecentPresetId = id;
+    if (ProjectPresetCard* card = m_recentPresetCards.value(id)) {
+        card->setSelected(true);
+    }
+}
+
+void NewProjectContent::refreshRecentPresetSelection()
+{
+    if (m_recentPresetCards.isEmpty() || !m_widthField || !m_heightField) {
+        clearSelectedRecentPreset();
+        return;
+    }
+
+    setSelectedRecentPresetId(
+        ruwa::core::serialization::RecentProjectPresetsManager::instance().findMatchingEntryId(
+            canvasSize(), infiniteCanvasEnabled(), colorMode(), backgroundColor(), tileFormat()));
 }
 
 void NewProjectContent::applyRecentPreset(const QString& id)
@@ -862,13 +871,18 @@ void NewProjectContent::applyRecentPreset(const QString& id)
         card->setSelected(true);
     }
 
+    // Unnamed entries are pure setups, so restoring one resets the name to the placeholder
+    // instead of pasting the borrowed preset label into the field.
+    const QString restoredName
+        = entry.hasCustomName() ? entry.projectName : tr("Untitled Project");
+
     {
         const QSignalBlocker nameBlocker(m_projectNameField);
         const QSignalBlocker canvasBlocker(m_canvasBoundsSelector);
         const QSignalBlocker bitDepthBlocker(m_bitDepthSelector);
         const QSignalBlocker backgroundBlocker(m_backgroundColorInput);
 
-        m_projectNameField->setText(entry.projectName);
+        m_projectNameField->setText(restoredName);
         updateDimensionsFromPreset(entry.canvasSize);
         m_canvasBoundsSelector->setCurrentIndex(entry.infiniteCanvasEnabled ? 1 : 0, false);
         m_bitDepthSelector->setCurrentIndex(static_cast<int>(entry.tileFormat), false);
@@ -879,7 +893,7 @@ void NewProjectContent::applyRecentPreset(const QString& id)
     syncDimensionFieldsEnabledState();
     if (m_canvasThumbnail) {
         m_canvasThumbnail->setDimensions(entry.canvasSize);
-        m_canvasThumbnail->setProjectName(entry.projectName);
+        m_canvasThumbnail->setProjectName(restoredName);
         m_canvasThumbnail->setInfiniteCanvasEnabled(entry.infiniteCanvasEnabled);
     }
     if (m_aspectLockButton && m_aspectLockButton->isLocked()) {
@@ -985,7 +999,7 @@ void NewProjectContent::onAspectLockToggled(bool locked)
 
 void NewProjectContent::onCanvasBoundsSelectionChanged(int)
 {
-    clearSelectedRecentPreset();
+    refreshRecentPresetSelection();
     syncDimensionFieldsEnabledState();
     if (m_canvasThumbnail) {
         m_canvasThumbnail->setInfiniteCanvasEnabled(infiniteCanvasEnabled());
@@ -1110,7 +1124,7 @@ void NewProjectContent::clearSelectedPreset()
     if (!m_selectedPreset.isEmpty() && m_presetCards.contains(m_selectedPreset))
         m_presetCards[m_selectedPreset]->setSelected(false);
     m_selectedPreset.clear();
-    clearSelectedRecentPreset();
+    refreshRecentPresetSelection();
 }
 
 void NewProjectContent::clearSelectedRecentPreset()
