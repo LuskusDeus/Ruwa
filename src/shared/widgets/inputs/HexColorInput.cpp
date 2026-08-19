@@ -5,6 +5,7 @@
 #include "features/theme/manager/ThemeManager.h"
 #include "shared/resources/IconProvider.h"
 #include "shared/style/PaintingUtils.h"
+#include "shared/style/AnimationPolicy.h"
 #include "shared/widgets/ToolButton.h"
 
 #include <QPainter>
@@ -19,7 +20,14 @@
 #include <QGuiApplication>
 #include <QRegularExpression>
 
+namespace anim = ruwa::ui::core::anim;
+
 namespace ruwa::ui::widgets {
+
+namespace {
+/// Authored hover fade; the animation policy scales it at each transition.
+constexpr int kHoverAnimationMs = 180;
+} // namespace
 
 HexColorInput::HexColorInput(QWidget* parent)
     : QLineEdit(parent)
@@ -30,7 +38,6 @@ HexColorInput::HexColorInput(QWidget* parent)
     setMaxLength(8); // RRGGBBAA, no '#'
     setPlaceholderText("FFFFFF");
     m_hoverAnimation = new QPropertyAnimation(this, "hoverProgress", this);
-    m_hoverAnimation->setDuration(180);
     m_hoverAnimation->setEasingCurve(QEasingCurve::OutCubic);
 
     m_copyButton
@@ -110,7 +117,8 @@ void HexColorInput::startHoverAnimation(bool hovered)
     m_hoverAnimation->stop();
     m_hoverAnimation->setStartValue(m_hoverProgress);
     m_hoverAnimation->setEndValue(hovered ? 1.0 : 0.0);
-    m_hoverAnimation->start();
+    m_hoverAnimation->setDuration(anim::duration(kHoverAnimationMs));
+    anim::start(m_hoverAnimation);
 }
 
 void HexColorInput::enterEvent(QEnterEvent* event)

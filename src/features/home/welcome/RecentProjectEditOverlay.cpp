@@ -5,6 +5,7 @@
 #include "commands/ShortcutManager.h"
 #include "features/theme/manager/ThemeManager.h"
 #include "shared/resources/IconProvider.h"
+#include "shared/style/AnimationPolicy.h"
 #include "shared/widgets/CapsuleButton.h"
 #include "shared/widgets/inputs/ToggleSwitch.h"
 
@@ -22,6 +23,8 @@
 #include <QResizeEvent>
 #include <QSignalBlocker>
 #include <QVBoxLayout>
+
+namespace anim = ruwa::ui::core::anim;
 
 namespace ruwa::ui::widgets {
 
@@ -117,7 +120,7 @@ void RecentProjectEditOverlay::showForProject(
             m_dimAnimation->setEasingCurve(QEasingCurve::OutCubic);
             m_dimAnimation->setStartValue(m_dimProgress);
             m_dimAnimation->setEndValue(1.0);
-            m_dimAnimation->start();
+            anim::start(m_dimAnimation);
         }
 
         if (m_cardOpacityAnim) {
@@ -125,7 +128,7 @@ void RecentProjectEditOverlay::showForProject(
             m_cardOpacityAnim->setDuration(CardAnimationDuration);
             m_cardOpacityAnim->setStartValue(0.0);
             m_cardOpacityAnim->setEndValue(1.0);
-            m_cardOpacityAnim->start();
+            anim::start(m_cardOpacityAnim);
         }
 
         if (m_cardPosAnim) {
@@ -133,7 +136,7 @@ void RecentProjectEditOverlay::showForProject(
             m_cardPosAnim->setDuration(CardAnimationDuration);
             m_cardPosAnim->setStartValue(startPos);
             m_cardPosAnim->setEndValue(targetPos);
-            m_cardPosAnim->start();
+            anim::start(m_cardPosAnim);
         }
     }
 
@@ -161,27 +164,29 @@ void RecentProjectEditOverlay::hideOverlay()
         m_dimAnimation->setEasingCurve(QEasingCurve::InCubic);
         m_dimAnimation->setStartValue(m_dimProgress);
         m_dimAnimation->setEndValue(0.0);
-        m_dimAnimation->start();
+        anim::start(m_dimAnimation);
     }
 
     const QPoint currentPos = m_card ? m_card->pos() : QPoint();
     const QPoint endPos = currentPos + QPoint(0, SlideOffset);
-
-    if (m_cardOpacityAnim) {
-        m_cardOpacityAnim->stop();
-        m_cardOpacityAnim->setDuration(CardAnimationDuration);
-        m_cardOpacityAnim->setStartValue(
-            m_cardOpacityEffect ? m_cardOpacityEffect->opacity() : 1.0);
-        m_cardOpacityAnim->setEndValue(0.0);
-        m_cardOpacityAnim->start();
-    }
 
     if (m_cardPosAnim) {
         m_cardPosAnim->stop();
         m_cardPosAnim->setDuration(CardAnimationDuration);
         m_cardPosAnim->setStartValue(currentPos);
         m_cardPosAnim->setEndValue(endPos);
-        m_cardPosAnim->start();
+        anim::start(m_cardPosAnim);
+    }
+
+    // The card fade owns the completion (it hides the overlay), so start it
+    // last: with animations disabled it finishes inside the call.
+    if (m_cardOpacityAnim) {
+        m_cardOpacityAnim->stop();
+        m_cardOpacityAnim->setDuration(CardAnimationDuration);
+        m_cardOpacityAnim->setStartValue(
+            m_cardOpacityEffect ? m_cardOpacityEffect->opacity() : 1.0);
+        m_cardOpacityAnim->setEndValue(0.0);
+        anim::start(m_cardOpacityAnim);
     }
 }
 

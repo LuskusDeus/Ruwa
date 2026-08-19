@@ -7,6 +7,7 @@
 #include "features/theme/manager/ThemeManager.h"
 #include "shared/widgets/BaseAnimatedButton.h"
 #include "shared/widgets/overlays/ToolTipController.h"
+#include "shared/style/AnimationPolicy.h"
 #include "shared/style/PaintingUtils.h"
 
 #include <QCoreApplication>
@@ -22,6 +23,8 @@
 #include <QTabletEvent>
 #include <QPushButton>
 #include <cmath>
+
+namespace anim = ruwa::ui::core::anim;
 
 namespace ruwa::ui::widgets {
 
@@ -287,7 +290,7 @@ void SelectionActionPopup::showAt(const QPoint& topLeft, bool animateShow, bool 
             m_anchorXAnim->setDuration(SHOW_DURATION);
             m_anchorXAnim->setStartValue(m_anchorX);
             m_anchorXAnim->setEndValue(targetX);
-            m_anchorXAnim->start();
+            anim::start(m_anchorXAnim);
         } else {
             setAnchorX(targetX);
         }
@@ -297,7 +300,7 @@ void SelectionActionPopup::showAt(const QPoint& topLeft, bool animateShow, bool 
             m_anchorYAnim->setDuration(SHOW_DURATION);
             m_anchorYAnim->setStartValue(m_anchorY);
             m_anchorYAnim->setEndValue(targetY);
-            m_anchorYAnim->start();
+            anim::start(m_anchorYAnim);
         } else {
             setAnchorY(targetY);
         }
@@ -544,7 +547,7 @@ void SelectionActionPopup::startShowAnimation(bool animateSlide)
     m_opacityAnim->setDuration(SHOW_DURATION);
     m_opacityAnim->setStartValue(m_opacity);
     m_opacityAnim->setEndValue(1.0);
-    m_opacityAnim->start();
+    anim::start(m_opacityAnim);
 
     if (m_slideAnim->state() == QAbstractAnimation::Running) {
         m_slideAnim->stop();
@@ -553,7 +556,7 @@ void SelectionActionPopup::startShowAnimation(bool animateSlide)
         m_slideAnim->setDuration(SHOW_DURATION);
         m_slideAnim->setStartValue(m_slideOffset);
         m_slideAnim->setEndValue(0.0);
-        m_slideAnim->start();
+        anim::start(m_slideAnim);
     } else {
         setSlideOffset(0.0);
     }
@@ -592,8 +595,11 @@ void SelectionActionPopup::startHideAnimation()
         hide();
     });
 
-    m_opacityAnim->start();
-    m_slideAnim->start();
+    // The opacity animation owns the completion (it hides the popup), so start
+    // it last: with animations disabled it finishes inside the call, and the
+    // slide must already have settled by then.
+    anim::start(m_slideAnim);
+    anim::start(m_opacityAnim);
 }
 
 void SelectionActionPopup::updateWidgetPosition()

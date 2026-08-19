@@ -6,6 +6,7 @@
 #include "shell/docking/core/DockManager.h"
 #include "shell/docking/core/DockFloatingContainer.h"
 #include "shell/docking/core/DockContainerWidget.h"
+#include "shared/style/AnimationPolicy.h"
 #include "features/theme/manager/ThemeManager.h"
 
 #include <QCoreApplication>
@@ -18,6 +19,8 @@
 #include <QTimer>
 #include <QVariantAnimation>
 #include <QEasingCurve>
+
+namespace anim = ruwa::ui::core::anim;
 
 namespace ruwa::ui::docking {
 
@@ -1180,7 +1183,7 @@ void DockPanel::animateDocking(const QRect& sourceGeom, const QRect& targetGeom,
     updateOverlayVisibility();
     m_dockingAnimation->setDuration(actualDuration);
     m_dockingAnimation->setCurrentTime(0);
-    m_dockingAnimation->start();
+    anim::start(m_dockingAnimation);
 }
 
 void DockPanel::onDockingAnimationValueChanged(const QVariant& value)

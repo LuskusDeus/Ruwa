@@ -4,6 +4,7 @@
 
 #include "features/theme/manager/ThemeManager.h"
 #include "features/theme/manager/ThemeColors.h"
+#include "shared/style/AnimationPolicy.h"
 
 #include <QEnterEvent>
 #include <QKeyEvent>
@@ -15,7 +16,14 @@
 
 #include <cmath>
 
+namespace anim = ruwa::ui::core::anim;
+
 namespace ruwa::ui::widgets {
+
+namespace {
+/// Authored hover fade; the animation policy scales it at each transition.
+constexpr int kHoverAnimationMs = 160;
+} // namespace
 
 ProgressHandleSlider::ProgressHandleSlider(QWidget* parent)
     : QWidget(parent)
@@ -29,7 +37,6 @@ ProgressHandleSlider::ProgressHandleSlider(QWidget* parent)
     setSizePolicy(QSizePolicy::Expanding, QSizePolicy::Fixed);
 
     m_hoverAnimation = new QVariantAnimation(this);
-    m_hoverAnimation->setDuration(160);
     m_hoverAnimation->setEasingCurve(QEasingCurve::OutCubic);
     connect(
         m_hoverAnimation, &QVariantAnimation::valueChanged, this, [this](const QVariant& value) {
@@ -465,7 +472,8 @@ void ProgressHandleSlider::enterEvent(QEnterEvent* event)
     m_hoverAnimation->stop();
     m_hoverAnimation->setStartValue(m_hoverProgress);
     m_hoverAnimation->setEndValue(1.0);
-    m_hoverAnimation->start();
+    m_hoverAnimation->setDuration(anim::duration(kHoverAnimationMs));
+    anim::start(m_hoverAnimation);
     QWidget::enterEvent(event);
 }
 
@@ -475,7 +483,8 @@ void ProgressHandleSlider::leaveEvent(QEvent* event)
     m_hoverAnimation->stop();
     m_hoverAnimation->setStartValue(m_hoverProgress);
     m_hoverAnimation->setEndValue(0.0);
-    m_hoverAnimation->start();
+    m_hoverAnimation->setDuration(anim::duration(kHoverAnimationMs));
+    anim::start(m_hoverAnimation);
     QWidget::leaveEvent(event);
 }
 

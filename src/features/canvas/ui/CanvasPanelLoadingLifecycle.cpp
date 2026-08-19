@@ -16,6 +16,7 @@
 #include "features/canvas/ui/CanvasToolStateOverlay.h"
 #include "features/canvas/ui/CanvasStylusJoystickContainerWidget.h"
 #include "shared/widgets/DotGridLoadingIndicator.h"
+#include "shared/style/AnimationPolicy.h"
 
 #include <QAbstractAnimation>
 #include <QCursor>
@@ -27,6 +28,8 @@
 #include <QWidget>
 
 #include <algorithm>
+
+namespace anim = ruwa::ui::core::anim;
 
 namespace ruwa::ui::workspace {
 
@@ -162,6 +165,15 @@ void CanvasPanel::fadeOutLoadingOverlay()
         return;
 
     m_loadingOverlay->setAttribute(Qt::WA_TransparentForMouseEvents, true);
+
+    // Nothing to fade with animations off — drop the overlay outright rather
+    // than run a zero-length fade whose finished() handler would have to tear
+    // down the very animation that is emitting it.
+    if (!anim::enabled()) {
+        hideLoadingOverlayImmediately();
+        return;
+    }
+
     if (m_loadingOverlayFadeAnimation) {
         m_loadingOverlayFadeAnimation->stop();
         m_loadingOverlayFadeAnimation->deleteLater();
@@ -221,12 +233,12 @@ void CanvasPanel::hideLoadingOverlayImmediately()
 
         if (m_brushOverlayOpacity) {
             m_brushOverlayOpacity->setOpacity(0.0);
-            auto* anim = new QPropertyAnimation(m_brushOverlayOpacity, "opacity", this);
-            anim->setDuration(300);
-            anim->setEasingCurve(QEasingCurve::OutCubic);
-            anim->setStartValue(0.0);
-            anim->setEndValue(1.0);
-            anim->start(QAbstractAnimation::DeleteWhenStopped);
+            auto* fadeAnim = new QPropertyAnimation(m_brushOverlayOpacity, "opacity", this);
+            fadeAnim->setDuration(300);
+            fadeAnim->setEasingCurve(QEasingCurve::OutCubic);
+            fadeAnim->setStartValue(0.0);
+            fadeAnim->setEndValue(1.0);
+            anim::start(fadeAnim, QAbstractAnimation::DeleteWhenStopped);
         }
     } else if (m_brushOverlay) {
         m_brushOverlay->hide();
@@ -247,12 +259,12 @@ void CanvasPanel::hideLoadingOverlayImmediately()
         m_toolStateOverlay->show();
         if (m_toolStateOverlayOpacity) {
             m_toolStateOverlayOpacity->setOpacity(0.0);
-            auto* anim = new QPropertyAnimation(m_toolStateOverlayOpacity, "opacity", this);
-            anim->setDuration(300);
-            anim->setEasingCurve(QEasingCurve::OutCubic);
-            anim->setStartValue(0.0);
-            anim->setEndValue(1.0);
-            anim->start(QAbstractAnimation::DeleteWhenStopped);
+            auto* fadeAnim = new QPropertyAnimation(m_toolStateOverlayOpacity, "opacity", this);
+            fadeAnim->setDuration(300);
+            fadeAnim->setEasingCurve(QEasingCurve::OutCubic);
+            fadeAnim->setStartValue(0.0);
+            fadeAnim->setEndValue(1.0);
+            anim::start(fadeAnim, QAbstractAnimation::DeleteWhenStopped);
         }
     } else if (m_toolStateOverlay) {
         m_toolStateOverlay->hide();
@@ -271,12 +283,12 @@ void CanvasPanel::hideLoadingOverlayImmediately()
         }
         m_stylusJoystick->setVisible(true);
         m_stylusJoystickOpacity->setOpacity(0.0);
-        auto* anim = new QPropertyAnimation(m_stylusJoystickOpacity, "opacity", this);
-        anim->setDuration(300);
-        anim->setEasingCurve(QEasingCurve::OutCubic);
-        anim->setStartValue(0.0);
-        anim->setEndValue(1.0);
-        anim->start(QAbstractAnimation::DeleteWhenStopped);
+        auto* fadeAnim = new QPropertyAnimation(m_stylusJoystickOpacity, "opacity", this);
+        fadeAnim->setDuration(300);
+        fadeAnim->setEasingCurve(QEasingCurve::OutCubic);
+        fadeAnim->setStartValue(0.0);
+        fadeAnim->setEndValue(1.0);
+        anim::start(fadeAnim, QAbstractAnimation::DeleteWhenStopped);
     } else if (m_stylusJoystick) {
         m_stylusJoystick->setVisible(false);
     }

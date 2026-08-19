@@ -4,6 +4,7 @@
 
 #include "features/effects/LayerEffectRegistry.h"
 #include "features/theme/manager/ThemeManager.h"
+#include "shared/style/AnimationPolicy.h"
 #include "shared/widgets/inputs/SearchBar.h"
 #include "shared/widgets/layout/SmoothScrollArea.h"
 #include "shell/top-bar/OverlayContainer.h"
@@ -24,7 +25,14 @@
 
 #include <functional>
 
+namespace anim = ruwa::ui::core::anim;
+
 namespace ruwa::ui::workspace {
+
+namespace {
+/// Authored row/header hover fade; the policy scales it at each transition.
+constexpr int kRowHoverAnimationMs = 140;
+} // namespace
 
 using ruwa::core::effects::EffectCatalogCategory;
 using ruwa::core::effects::EffectCatalogEntry;
@@ -68,7 +76,6 @@ public:
         setAttribute(Qt::WA_Hover, true);
 
         m_hoverAnim = new QVariantAnimation(this);
-        m_hoverAnim->setDuration(140);
         m_hoverAnim->setEasingCurve(QEasingCurve::OutCubic);
         connect(m_hoverAnim, &QVariantAnimation::valueChanged, this, [this](const QVariant& v) {
             m_hoverProgress = v.toReal();
@@ -122,9 +129,10 @@ private:
     void animateHoverTo(qreal target)
     {
         m_hoverAnim->stop();
+        m_hoverAnim->setDuration(anim::duration(kRowHoverAnimationMs));
         m_hoverAnim->setStartValue(m_hoverProgress);
         m_hoverAnim->setEndValue(target);
-        m_hoverAnim->start();
+        anim::start(m_hoverAnim);
     }
 
     QString m_typeId;
@@ -157,7 +165,6 @@ public:
         });
 
         m_hoverAnim = new QVariantAnimation(this);
-        m_hoverAnim->setDuration(140);
         m_hoverAnim->setEasingCurve(QEasingCurve::OutCubic);
         connect(m_hoverAnim, &QVariantAnimation::valueChanged, this, [this](const QVariant& v) {
             m_hoverProgress = v.toReal();
@@ -244,9 +251,10 @@ private:
     void animateHoverTo(qreal target)
     {
         m_hoverAnim->stop();
+        m_hoverAnim->setDuration(anim::duration(kRowHoverAnimationMs));
         m_hoverAnim->setStartValue(m_hoverProgress);
         m_hoverAnim->setEndValue(target);
-        m_hoverAnim->start();
+        anim::start(m_hoverAnim);
     }
 
     QString m_name;
@@ -377,15 +385,15 @@ void EffectPickerPopup::rebuild()
 }
 
 void EffectPickerPopup::setSectionBodyExpanded(
-    QWidget* body, QVariantAnimation* anim, bool expanded, bool animated)
+    QWidget* body, QVariantAnimation* heightAnim, bool expanded, bool animated)
 {
-    if (!body || !anim) {
+    if (!body || !heightAnim) {
         return;
     }
-    anim->stop();
+    heightAnim->stop();
 
     const int targetHeight = expanded ? body->sizeHint().height() : 0;
-    if (!animated) {
+    if (!animated || !anim::enabled()) {
         body->setFixedHeight(targetHeight);
         m_scroll->refreshScrollGeometry();
         return;
@@ -398,10 +406,10 @@ void EffectPickerPopup::setSectionBodyExpanded(
 
     const int duration = qBound(kFolderAnimMinMs,
         qRound(qAbs(targetHeight - currentHeight) * kFolderAnimMsPerPixel), kFolderAnimMaxMs);
-    anim->setDuration(duration);
-    anim->setStartValue(currentHeight);
-    anim->setEndValue(targetHeight);
-    anim->start();
+    heightAnim->setDuration(duration);
+    heightAnim->setStartValue(currentHeight);
+    heightAnim->setEndValue(targetHeight);
+    heightAnim->start();
 }
 
 void EffectPickerPopup::applyFilter(const QString& text)
@@ -528,7 +536,7 @@ void EffectPickerPopup::startShowAnimation()
     m_opacityAnim->setStartValue(m_opacity);
     m_opacityAnim->setEndValue(1.0);
     disconnect(m_opacityAnim, &QPropertyAnimation::finished, this, nullptr);
-    m_opacityAnim->start();
+    anim::start(m_opacityAnim);
 }
 
 void EffectPickerPopup::hidePopup()
@@ -548,7 +556,7 @@ void EffectPickerPopup::hidePopup()
     m_opacityAnim->setEndValue(0.0);
     disconnect(m_opacityAnim, &QPropertyAnimation::finished, this, nullptr);
     connect(m_opacityAnim, &QPropertyAnimation::finished, this, [this]() { finishHide(); });
-    m_opacityAnim->start();
+    anim::start(m_opacityAnim);
 }
 
 void EffectPickerPopup::finishHide()

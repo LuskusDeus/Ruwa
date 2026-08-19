@@ -71,7 +71,8 @@ protected:
 private:
     void startHoverAnimation(bool entering);
     void startSelectionAnimation(bool selecting);
-    void startButtonHoverAnimation(QVariantAnimation*& anim, qreal* progress, bool entering);
+    void startButtonHoverAnimation(
+        QVariantAnimation*& hoverAnim, qreal* progress, bool entering);
 
     int actionsCount() const;
     QRect editButtonRect() const;

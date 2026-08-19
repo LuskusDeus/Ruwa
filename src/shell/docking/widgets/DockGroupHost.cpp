@@ -5,6 +5,7 @@
 #include "DockGroupHeader.h"
 #include "DockPanel.h"
 #include "shell/docking/layout/DockLeafNode.h"
+#include "shared/style/AnimationPolicy.h"
 
 #include <QEasingCurve>
 #include <QKeySequence>
@@ -14,6 +15,8 @@
 #include <QShortcut>
 #include <QTimer>
 #include <QVariantAnimation>
+
+namespace anim = ruwa::ui::core::anim;
 
 namespace ruwa::ui::docking {
 
@@ -310,8 +313,8 @@ void DockGroupHost::setCurrentPanel(DockPanel* panel, bool animated, SlideDirect
 
     // No outgoing member is fine: when the visible one was closed or dragged
     // out, the replacement slides in over an empty viewport.
-    const bool canAnimate = animated && m_animationsEnabled && m_animationDuration > 0
-        && isVisible() && m_viewport->width() > 0;
+    const bool canAnimate = animated && m_animationsEnabled && anim::enabled()
+        && m_animationDuration > 0 && isVisible() && m_viewport->width() > 0;
 
     if (!canAnimate) {
         stopSlide();
@@ -357,7 +360,8 @@ void DockGroupHost::setCurrentPanel(DockPanel* panel, bool animated, SlideDirect
 void DockGroupHost::runInsertionSlide(GroupInsertSide side, int duration)
 {
     DockPanel* outgoing = m_currentPanel.data();
-    if (!outgoing || !m_animationsEnabled || duration <= 0 || m_viewport->width() <= 0) {
+    if (!outgoing || !m_animationsEnabled || !anim::enabled() || duration <= 0
+        || m_viewport->width() <= 0) {
         return;
     }
 
@@ -665,7 +669,7 @@ void DockGroupHost::runFarewell(int duration)
     }
 
     const int header = headerHeight();
-    if (duration <= 0 || header <= 0 || !isVisible()) {
+    if (duration <= 0 || header <= 0 || !isVisible() || !anim::enabled()) {
         hide();
         deleteLater();
         return;
@@ -678,20 +682,21 @@ void DockGroupHost::runFarewell(int duration)
     setGeometry(start);
     raise();
 
-    auto* anim = new QVariantAnimation(this);
-    anim->setStartValue(1.0);
-    anim->setEndValue(0.0);
-    anim->setDuration(duration);
-    anim->setEasingCurve(QEasingCurve::OutCubic);
-    connect(anim, &QVariantAnimation::valueChanged, this, [this, start](const QVariant& value) {
-        const int h = qMax(0, qRound(start.height() * value.toReal()));
-        setGeometry(QRect(start.x(), start.y(), start.width(), h));
-    });
-    connect(anim, &QVariantAnimation::finished, this, [this]() {
+    auto* collapseAnim = new QVariantAnimation(this);
+    collapseAnim->setStartValue(1.0);
+    collapseAnim->setEndValue(0.0);
+    collapseAnim->setDuration(duration);
+    collapseAnim->setEasingCurve(QEasingCurve::OutCubic);
+    connect(collapseAnim, &QVariantAnimation::valueChanged, this,
+        [this, start](const QVariant& value) {
+            const int h = qMax(0, qRound(start.height() * value.toReal()));
+            setGeometry(QRect(start.x(), start.y(), start.width(), h));
+        });
+    connect(collapseAnim, &QVariantAnimation::finished, this, [this]() {
         hide();
         deleteLater();
     });
-    anim->start(QAbstractAnimation::DeleteWhenStopped);
+    collapseAnim->start(QAbstractAnimation::DeleteWhenStopped);
 }
 
 // ============================================================================

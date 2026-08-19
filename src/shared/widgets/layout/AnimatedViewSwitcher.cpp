@@ -3,7 +3,11 @@
 // AnimatedViewSwitcher.cpp
 #include "AnimatedViewSwitcher.h"
 
+#include "shared/style/AnimationPolicy.h"
+
 #include <QResizeEvent>
+
+namespace anim = ruwa::ui::core::anim;
 
 namespace ruwa::ui::widgets {
 
@@ -223,7 +227,7 @@ void AnimatedViewSwitcher::animateSwitch(QWidget* from, QWidget* to, int directi
             finishAnimation();
         });
 
-    m_animation->start();
+    anim::start(m_animation);
 }
 
 void AnimatedViewSwitcher::finishAnimation()

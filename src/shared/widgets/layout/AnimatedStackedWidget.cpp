@@ -4,8 +4,11 @@
 #include "AnimatedStackedWidget.h"
 
 #include "shared/types/ScopedProfiler.h"
+#include "shared/style/AnimationPolicy.h"
 
 #include <QLayout>
+
+namespace anim = ruwa::ui::core::anim;
 
 namespace ruwa::ui::widgets {
 
@@ -297,7 +300,7 @@ void AnimatedStackedWidget::slideToWidget(int newIndex)
     }
 
     updateTransitionGeometry(0.0);
-    m_animation->start();
+    anim::start(m_animation);
 }
 
 void AnimatedStackedWidget::finishAnimation()

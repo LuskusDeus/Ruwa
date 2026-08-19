@@ -60,6 +60,7 @@
 #include "shared/undo/LayerRemoveCommand.h"
 #include "features/layers/smart/SmartDocument.h"
 #include "shared/clipboard/EditClipboard.h"
+#include "shared/style/AnimationPolicy.h"
 #include "shared/tiles/TileGrid.h"
 #include "shared/tiles/TileGridClone.h"
 #include "shared/tiles/TilePixelAccess.h"
@@ -122,6 +123,8 @@
 #include <unordered_map>
 #include <unordered_set>
 #include <vector>
+
+namespace anim = ruwa::ui::core::anim;
 
 namespace {
 
@@ -807,8 +810,8 @@ private:
         m_posAnim->setStartValue(startPos);
         m_posAnim->setEndValue(topLeft);
 
-        m_opacityAnim->start();
-        m_posAnim->start();
+        anim::start(m_opacityAnim);
+        anim::start(m_posAnim);
     }
 
     void startHide()
@@ -845,8 +848,10 @@ private:
             hide();
         });
 
-        m_opacityAnim->start();
-        m_posAnim->start();
+        // The opacity animation owns the completion (it hides the popup), so
+        // start it last: with animations disabled it finishes inside the call.
+        anim::start(m_posAnim);
+        anim::start(m_opacityAnim);
     }
 
     void startMorph(const QRect& startGeometry, const QRect& targetGeometry, int token)
@@ -866,7 +871,7 @@ private:
             scheduleDoneHide(token);
         });
 
-        m_geometryAnim->start();
+        anim::start(m_geometryAnim);
     }
 
     void scheduleDoneHide(int token)

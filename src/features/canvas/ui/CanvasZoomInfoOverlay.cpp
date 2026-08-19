@@ -7,6 +7,7 @@
 #include "CanvasZoomInfoOverlay.h"
 
 #include "features/theme/manager/ThemeManager.h"
+#include "shared/style/AnimationPolicy.h"
 #include "shared/style/PaintingUtils.h"
 #include "shared/style/WidgetStyleManager.h"
 
@@ -26,6 +27,8 @@
 #include <QVariant>
 
 #include <algorithm>
+
+namespace anim = ruwa::ui::core::anim;
 
 namespace ruwa::ui::widgets {
 
@@ -259,7 +262,7 @@ void CanvasZoomInfoOverlay::fadeTo(qreal opacity, int durationMs)
     m_fadeAnimation->setDuration(durationMs);
     m_fadeAnimation->setStartValue(m_opacityEffect->opacity());
     m_fadeAnimation->setEndValue(opacity);
-    m_fadeAnimation->start();
+    anim::start(m_fadeAnimation);
 }
 
 QString CanvasZoomInfoOverlay::zoomText(qreal zoom) const

@@ -2,6 +2,7 @@
 
 // LayerRowWidget.cpp
 #include "LayerRowWidget.h"
+#include "shared/style/AnimationPolicy.h"
 
 #include "features/layers/ui/LayerListView.h"
 #include "features/layers/ui/LayerPreviewPopup.h"
@@ -37,6 +38,27 @@
 #include <cmath>
 
 namespace ruwa::ui::widgets {
+
+namespace {
+
+// Authored row-feedback durations. The animation policy scales them at each
+// transition, so they are applied where the animation starts rather than where
+// it is built — a policy change then reaches rows that already exist.
+constexpr int kHoverAnimMs = 180;
+constexpr int kSelectionAnimMs = 200;
+constexpr int kPrimaryAnimMs = 200;
+constexpr int kExpandAnimMs = 200;
+constexpr int kIndentAnimMs = 200;
+constexpr int kVisibilityAnimMs = 250;
+constexpr int kClipOffsetAnimMs = 200;
+constexpr int kRightExpandAnimMs = 220;
+constexpr int kThumbnailGlowAnimMs = 170;
+constexpr int kThumbnailFlashAnimMs = 150;
+constexpr int kChildDisclosureAnimMs = 200;
+constexpr int kMaskRevealAnimMs = 220;
+
+} // namespace
+
 
 using namespace ruwa::ui::core;
 using namespace ruwa::core::layers;
@@ -624,47 +646,36 @@ LayerRowWidget::LayerRowWidget(QWidget* parent)
     setFixedHeight(kRowHeight);
 
     m_hoverAnim = new QPropertyAnimation(this, "hoverProgress", this);
-    m_hoverAnim->setDuration(180);
     m_hoverAnim->setEasingCurve(QEasingCurve::OutCubic);
 
     m_selectionAnim = new QPropertyAnimation(this, "selectionProgress", this);
-    m_selectionAnim->setDuration(200);
     m_selectionAnim->setEasingCurve(QEasingCurve::InOutCubic);
 
     m_primaryAnim = new QPropertyAnimation(this, "primaryProgress", this);
-    m_primaryAnim->setDuration(200);
     m_primaryAnim->setEasingCurve(QEasingCurve::InOutCubic);
 
     m_expandAnim = new QPropertyAnimation(this, "expandRotation", this);
-    m_expandAnim->setDuration(200);
     m_expandAnim->setEasingCurve(QEasingCurve::InOutCubic);
 
     m_opacityAnim = new QPropertyAnimation(this, "visibilityProgress", this);
-    m_opacityAnim->setDuration(250);
     m_opacityAnim->setEasingCurve(QEasingCurve::InOutCubic);
 
     m_effectiveOpacityAnim = new QPropertyAnimation(this, "effectiveVisibilityProgress", this);
-    m_effectiveOpacityAnim->setDuration(250);
     m_effectiveOpacityAnim->setEasingCurve(QEasingCurve::InOutCubic);
 
     m_clipOffsetAnim = new QPropertyAnimation(this, "clipOffsetProgress", this);
-    m_clipOffsetAnim->setDuration(200);
     m_clipOffsetAnim->setEasingCurve(QEasingCurve::InOutCubic);
 
     m_thumbnailCtrlGlowAnim = new QPropertyAnimation(this, "thumbnailCtrlGlowProgress", this);
-    m_thumbnailCtrlGlowAnim->setDuration(170);
     m_thumbnailCtrlGlowAnim->setEasingCurve(QEasingCurve::OutCubic);
 
     m_thumbnailClickFlashAnim = new QPropertyAnimation(this, "thumbnailClickFlashProgress", this);
-    m_thumbnailClickFlashAnim->setDuration(150);
     m_thumbnailClickFlashAnim->setEasingCurve(QEasingCurve::OutCubic);
 
     m_childDisclosureAnim = new QPropertyAnimation(this, "childDisclosureProgress", this);
-    m_childDisclosureAnim->setDuration(200);
     m_childDisclosureAnim->setEasingCurve(QEasingCurve::InOutCubic);
 
     m_maskRevealAnim = new QPropertyAnimation(this, "maskRevealProgress", this);
-    m_maskRevealAnim->setDuration(220);
     m_maskRevealAnim->setEasingCurve(QEasingCurve::InOutCubic);
 
     using Icon = ruwa::ui::core::IconProvider::StandardIcon;
@@ -1520,7 +1531,8 @@ void LayerRowWidget::animateHover(bool in)
     m_hoverAnim->stop();
     m_hoverAnim->setStartValue(m_hoverProgress);
     m_hoverAnim->setEndValue(in ? 1.0 : 0.0);
-    m_hoverAnim->start();
+    m_hoverAnim->setDuration(anim::duration(kHoverAnimMs));
+    anim::start(m_hoverAnim);
 }
 
 void LayerRowWidget::animateSelection(bool sel)
@@ -1528,7 +1540,8 @@ void LayerRowWidget::animateSelection(bool sel)
     m_selectionAnim->stop();
     m_selectionAnim->setStartValue(m_selectionProgress);
     m_selectionAnim->setEndValue(sel ? 1.0 : 0.0);
-    m_selectionAnim->start();
+    m_selectionAnim->setDuration(anim::duration(kSelectionAnimMs));
+    anim::start(m_selectionAnim);
 }
 
 void LayerRowWidget::animatePrimary(bool primary)
@@ -1541,7 +1554,8 @@ void LayerRowWidget::animatePrimary(bool primary)
     m_primaryAnim->stop();
     m_primaryAnim->setStartValue(m_primaryProgress);
     m_primaryAnim->setEndValue(primary ? 1.0 : 0.0);
-    m_primaryAnim->start();
+    m_primaryAnim->setDuration(anim::duration(kPrimaryAnimMs));
+    anim::start(m_primaryAnim);
 }
 
 void LayerRowWidget::animateExpand(bool exp)
@@ -1549,20 +1563,21 @@ void LayerRowWidget::animateExpand(bool exp)
     m_expandAnim->stop();
     m_expandAnim->setStartValue(m_expandRotation);
     m_expandAnim->setEndValue(exp ? 90.0 : 0.0);
-    m_expandAnim->start();
+    m_expandAnim->setDuration(anim::duration(kExpandAnimMs));
+    anim::start(m_expandAnim);
 }
 
 void LayerRowWidget::animateIndent(int fromDepth, int toDepth)
 {
     if (!m_indentAnim) {
         m_indentAnim = new QPropertyAnimation(this, "animatedDepth", this);
-        m_indentAnim->setDuration(200);
+        m_indentAnim->setDuration(anim::duration(kIndentAnimMs));
         m_indentAnim->setEasingCurve(QEasingCurve::InOutCubic);
     }
     m_indentAnim->stop();
     m_indentAnim->setStartValue(qreal(fromDepth));
     m_indentAnim->setEndValue(qreal(toDepth));
-    m_indentAnim->start();
+    anim::start(m_indentAnim);
 }
 
 void LayerRowWidget::animateClipOffset(bool clipped)
@@ -1573,7 +1588,8 @@ void LayerRowWidget::animateClipOffset(bool clipped)
     m_clipOffsetAnim->stop();
     m_clipOffsetAnim->setStartValue(m_clipOffsetProgress);
     m_clipOffsetAnim->setEndValue(clipped ? 1.0 : 0.0);
-    m_clipOffsetAnim->start();
+    m_clipOffsetAnim->setDuration(anim::duration(kClipOffsetAnimMs));
+    anim::start(m_clipOffsetAnim);
 }
 
 void LayerRowWidget::closeRightExpandMenu()
@@ -1587,13 +1603,13 @@ void LayerRowWidget::animateRightExpand(bool expand)
 {
     if (!m_rightExpandAnim) {
         m_rightExpandAnim = new QPropertyAnimation(this, "rightExpandProgress", this);
-        m_rightExpandAnim->setDuration(220);
+        m_rightExpandAnim->setDuration(anim::duration(kRightExpandAnimMs));
         m_rightExpandAnim->setEasingCurve(QEasingCurve::OutCubic);
     }
     m_rightExpandAnim->stop();
     m_rightExpandAnim->setStartValue(m_rightExpandProgress);
     m_rightExpandAnim->setEndValue(expand ? 1.0 : 0.0);
-    m_rightExpandAnim->start();
+    anim::start(m_rightExpandAnim);
 }
 
 void LayerRowWidget::animateVisibility(bool visible)
@@ -1607,7 +1623,8 @@ void LayerRowWidget::animateVisibility(bool visible)
     m_opacityAnim->stop();
     m_opacityAnim->setStartValue(m_visibilityProgress);
     m_opacityAnim->setEndValue(visible ? 1.0 : 0.0);
-    m_opacityAnim->start();
+    m_opacityAnim->setDuration(anim::duration(kVisibilityAnimMs));
+    anim::start(m_opacityAnim);
 }
 
 void LayerRowWidget::animateEffectiveVisibility(bool visible)
@@ -1621,7 +1638,8 @@ void LayerRowWidget::animateEffectiveVisibility(bool visible)
     m_effectiveOpacityAnim->stop();
     m_effectiveOpacityAnim->setStartValue(m_effectiveVisibilityProgress);
     m_effectiveOpacityAnim->setEndValue(visible ? 1.0 : 0.0);
-    m_effectiveOpacityAnim->start();
+    m_effectiveOpacityAnim->setDuration(anim::duration(kVisibilityAnimMs));
+    anim::start(m_effectiveOpacityAnim);
 }
 
 void LayerRowWidget::animateChildDisclosure(bool hasChildren)
@@ -1635,7 +1653,8 @@ void LayerRowWidget::animateChildDisclosure(bool hasChildren)
     m_childDisclosureAnim->stop();
     m_childDisclosureAnim->setStartValue(m_childDisclosureProgress);
     m_childDisclosureAnim->setEndValue(hasChildren ? 1.0 : 0.0);
-    m_childDisclosureAnim->start();
+    m_childDisclosureAnim->setDuration(anim::duration(kChildDisclosureAnimMs));
+    anim::start(m_childDisclosureAnim);
 }
 
 void LayerRowWidget::animateMaskReveal(bool hasMask)
@@ -1649,7 +1668,8 @@ void LayerRowWidget::animateMaskReveal(bool hasMask)
     m_maskRevealAnim->stop();
     m_maskRevealAnim->setStartValue(m_maskRevealProgress);
     m_maskRevealAnim->setEndValue(hasMask ? 1.0 : 0.0);
-    m_maskRevealAnim->start();
+    m_maskRevealAnim->setDuration(anim::duration(kMaskRevealAnimMs));
+    anim::start(m_maskRevealAnim);
 }
 
 void LayerRowWidget::animateThumbnailCtrlGlow(bool in)
@@ -1660,7 +1680,8 @@ void LayerRowWidget::animateThumbnailCtrlGlow(bool in)
     m_thumbnailCtrlGlowAnim->stop();
     m_thumbnailCtrlGlowAnim->setStartValue(m_thumbnailCtrlGlowProgress);
     m_thumbnailCtrlGlowAnim->setEndValue(in ? 1.0 : 0.0);
-    m_thumbnailCtrlGlowAnim->start();
+    m_thumbnailCtrlGlowAnim->setDuration(anim::duration(kThumbnailGlowAnimMs));
+    anim::start(m_thumbnailCtrlGlowAnim);
 }
 
 void LayerRowWidget::triggerThumbnailClickFlash(bool onMaskThumbnail)
@@ -1674,7 +1695,8 @@ void LayerRowWidget::triggerThumbnailClickFlash(bool onMaskThumbnail)
     setThumbnailClickFlashProgress(1.0);
     m_thumbnailClickFlashAnim->setStartValue(1.0);
     m_thumbnailClickFlashAnim->setEndValue(0.0);
-    m_thumbnailClickFlashAnim->start();
+    m_thumbnailClickFlashAnim->setDuration(anim::duration(kThumbnailFlashAnimMs));
+    anim::start(m_thumbnailClickFlashAnim);
 }
 
 void LayerRowWidget::updateThumbnailCtrlGlowState()

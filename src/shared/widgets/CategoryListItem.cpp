@@ -2,6 +2,7 @@
 
 // CategoryListItem.cpp
 #include "CategoryListItem.h"
+#include "shared/style/AnimationPolicy.h"
 #include "features/theme/manager/ThemeManager.h"
 #include "shared/style/WidgetStyleManager.h"
 
@@ -36,10 +37,8 @@ CategoryListItem::~CategoryListItem() = default;
 void CategoryListItem::setupAnimations()
 {
     m_hoverAnimation = new QPropertyAnimation(this, "hoverProgress", this);
-    m_hoverAnimation->setDuration(ANIMATION_DURATION);
 
     m_selectionAnimation = new QPropertyAnimation(this, "selectionProgress", this);
-    m_selectionAnimation->setDuration(ANIMATION_DURATION + 50); // Slightly longer for smoother feel
     m_selectionAnimation->setEasingCurve(QEasingCurve::OutCubic);
 }
 
@@ -66,7 +65,9 @@ void CategoryListItem::setSelected(bool selected)
         m_selectionAnimation->stop();
         m_selectionAnimation->setStartValue(m_selectionProgress);
         m_selectionAnimation->setEndValue(selected ? 1.0 : 0.0);
-        m_selectionAnimation->start();
+        // Slightly longer than hover, for a smoother feel.
+        m_selectionAnimation->setDuration(anim::duration(ANIMATION_DURATION + 50));
+        anim::start(m_selectionAnimation);
     }
 }
 
@@ -475,7 +476,8 @@ void CategoryListItem::enterEvent(QEnterEvent* event)
     m_hoverAnimation->setEasingCurve(QEasingCurve::OutCubic);
     m_hoverAnimation->setStartValue(m_hoverProgress);
     m_hoverAnimation->setEndValue(1.0);
-    m_hoverAnimation->start();
+    m_hoverAnimation->setDuration(anim::duration(ANIMATION_DURATION));
+    anim::start(m_hoverAnimation);
 }
 
 void CategoryListItem::leaveEvent(QEvent* event)
@@ -492,7 +494,8 @@ void CategoryListItem::leaveEvent(QEvent* event)
     m_hoverAnimation->setEasingCurve(QEasingCurve::InCubic);
     m_hoverAnimation->setStartValue(m_hoverProgress);
     m_hoverAnimation->setEndValue(0.0);
-    m_hoverAnimation->start();
+    m_hoverAnimation->setDuration(anim::duration(ANIMATION_DURATION));
+    anim::start(m_hoverAnimation);
 }
 
 void CategoryListItem::mousePressEvent(QMouseEvent* event)

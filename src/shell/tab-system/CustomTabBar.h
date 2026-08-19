@@ -146,7 +146,7 @@ private:
     bool isCloseButtonAt(int index, const QPointF& pos) const;
     void drawTab(QPainter& painter, const TabItem& item, bool isActive, bool isHovered);
     void drawSeparator(
-        QPainter& painter, qreal x, qreal y, const TabItem& anim, const QString& glyph,
+        QPainter& painter, qreal x, qreal y, const TabItem& item, const QString& glyph,
         qreal opacityFactor = 1.0);
     QUuid rootTabIdForItem(int index) const;
     QList<QUuid> visibleRootOrder() const;

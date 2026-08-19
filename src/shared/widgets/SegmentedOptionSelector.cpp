@@ -5,6 +5,7 @@
 #include "BaseAnimatedButton.h"
 #include "BaseStyledPanel.h"
 #include "shared/style/PaintingUtils.h"
+#include "shared/style/AnimationPolicy.h"
 #include "shared/style/WidgetStyle.h"
 #include "features/theme/manager/ThemeManager.h"
 
@@ -16,6 +17,8 @@
 #include <QResizeEvent>
 #include <QSizePolicy>
 #include <QTimer>
+
+namespace anim = ruwa::ui::core::anim;
 
 namespace ruwa::ui::widgets {
 
@@ -299,7 +302,6 @@ void SegmentedOptionSelector::setupUI()
     m_indicatorPanel->hide();
 
     m_indicatorAnimation = new QPropertyAnimation(m_indicatorPanel, "geometry", this);
-    m_indicatorAnimation->setDuration(BASE_ANIMATION_DURATION);
     m_indicatorAnimation->setEasingCurve(QEasingCurve::OutCubic);
 
     m_indicatorPanel->lower();
@@ -525,10 +527,6 @@ void SegmentedOptionSelector::updateScaledSizes()
         }
     }
 
-    if (m_indicatorAnimation) {
-        m_indicatorAnimation->setDuration(theme.scaled(BASE_ANIMATION_DURATION));
-    }
-
     if (m_indicatorPanel) {
         m_indicatorPanel->applyStyleChanges();
     }
@@ -559,9 +557,12 @@ void SegmentedOptionSelector::updateIndicatorGeometry(bool animated)
     }
 
     if (animated && m_indicatorPanel->isVisible()) {
+        const int scaledMs
+            = ruwa::ui::core::ThemeManager::instance().scaled(BASE_ANIMATION_DURATION);
+        m_indicatorAnimation->setDuration(anim::duration(scaledMs));
         m_indicatorAnimation->setStartValue(m_indicatorPanel->geometry());
         m_indicatorAnimation->setEndValue(targetRect);
-        m_indicatorAnimation->start();
+        anim::start(m_indicatorAnimation);
     } else {
         m_indicatorPanel->setGeometry(targetRect);
     }

@@ -9,6 +9,7 @@
 #include "features/theme/manager/ThemeColors.h"
 #include "shared/widgets/BaseStyledWidget.h"
 #include "shared/style/WidgetStyle.h"
+#include "shared/style/AnimationPolicy.h"
 #include "shared/style/PaintingUtils.h"
 #include "shell/top-bar/TopBar.h"
 
@@ -25,6 +26,8 @@
 #include <QApplication>
 #include <QScreen>
 #include <QTimer>
+
+namespace anim = ruwa::ui::core::anim;
 
 namespace ruwa::ui::widgets {
 
@@ -117,7 +120,7 @@ void BaseContextMenu::showAt(
             m_isRepositioning = true;
             m_posAnimation->setStartValue(m_restPos);
             m_posAnimation->setEndValue(finalPosition);
-            m_posAnimation->start();
+            anim::start(m_posAnimation);
         }
 
         return;
@@ -159,7 +162,7 @@ void BaseContextMenu::showAt(
     m_showProgressAnim->setDuration(ShowDurationMs);
     m_showProgressAnim->setStartValue(0.0);
     m_showProgressAnim->setEndValue(1.0);
-    m_showProgressAnim->start();
+    anim::start(m_showProgressAnim);
 
     QTimer::singleShot(0, this, [this] {
         if (!isVisible()) {
@@ -197,7 +200,7 @@ void BaseContextMenu::hideAnimated()
     m_showProgressAnim->setDuration(HideDurationMs);
     m_showProgressAnim->setStartValue(0.0);
     m_showProgressAnim->setEndValue(1.0);
-    m_showProgressAnim->start();
+    anim::start(m_showProgressAnim);
 }
 
 void BaseContextMenu::hide()
@@ -301,7 +304,7 @@ void BaseContextMenu::animateToPosition(const QPoint& targetPos)
     m_posAnimation->setStartValue(m_restPos);
     m_posAnimation->setEndValue(targetPos);
 
-    m_posAnimation->start();
+    anim::start(m_posAnimation);
 }
 
 QPoint BaseContextMenu::calculateMenuPosition(

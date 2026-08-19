@@ -2,6 +2,7 @@
 
 // BrushPackPanel.cpp
 #include "BrushPackPanel.h"
+#include "shared/style/AnimationPolicy.h"
 #include "features/brush/engine/BrushEngineRegistry.h"
 #include "shared/widgets/layout/SmoothScrollArea.h"
 #include "shared/widgets/layout/AnimatedStackedWidget.h"
@@ -35,6 +36,13 @@
 #include <QTimer>
 
 namespace ruwa::ui::widgets {
+
+namespace {
+/// Authored row-feedback durations; the policy scales them at each transition.
+constexpr int kRowHoverAnimationMs = 150;
+constexpr int kRowActiveAnimationMs = 200;
+} // namespace
+
 
 using namespace ruwa::ui::core;
 
@@ -200,11 +208,9 @@ BrushItem::BrushItem(const BrushData& data, QWidget* parent)
     setAttribute(Qt::WA_TranslucentBackground);
 
     m_hoverAnim = new QPropertyAnimation(this, "hoverProgress", this);
-    m_hoverAnim->setDuration(150);
     m_hoverAnim->setEasingCurve(QEasingCurve::OutCubic);
 
     m_activeAnim = new QPropertyAnimation(this, "activeProgress", this);
-    m_activeAnim->setDuration(200);
     m_activeAnim->setEasingCurve(QEasingCurve::InOutCubic);
 
     auto& previewManager = ruwa::core::brushes::BrushPreviewManager::instance();
@@ -255,7 +261,8 @@ void BrushItem::setSelected(bool selected)
     m_activeAnim->stop();
     m_activeAnim->setStartValue(m_activeProgress);
     m_activeAnim->setEndValue(selected ? 1.0 : 0.0);
-    m_activeAnim->start();
+    m_activeAnim->setDuration(anim::duration(kRowActiveAnimationMs));
+    anim::start(m_activeAnim);
 }
 
 void BrushItem::setName(const QString& name)
@@ -484,7 +491,8 @@ void BrushItem::enterEvent(QEnterEvent* event)
     m_hoverAnim->stop();
     m_hoverAnim->setStartValue(m_hoverProgress);
     m_hoverAnim->setEndValue(1.0);
-    m_hoverAnim->start();
+    m_hoverAnim->setDuration(anim::duration(kRowHoverAnimationMs));
+    anim::start(m_hoverAnim);
 }
 
 void BrushItem::leaveEvent(QEvent* event)
@@ -493,7 +501,8 @@ void BrushItem::leaveEvent(QEvent* event)
     m_hoverAnim->stop();
     m_hoverAnim->setStartValue(m_hoverProgress);
     m_hoverAnim->setEndValue(0.0);
-    m_hoverAnim->start();
+    m_hoverAnim->setDuration(anim::duration(kRowHoverAnimationMs));
+    anim::start(m_hoverAnim);
 }
 
 void BrushItem::mousePressEvent(QMouseEvent* event)

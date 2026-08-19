@@ -10,6 +10,7 @@
 #include "features/layers/smart/SmartEditSession.h"
 #include "features/effects/EffectCoverageResolver.h"
 #include "features/transform/TransformState.h"
+#include "shared/style/AnimationPolicy.h"
 #include "features/project/ProjectSerializer.h"
 #include "features/project/RecentProjectsManager.h"
 #include "features/project/ThumbnailCache.h"
@@ -69,6 +70,8 @@
 
 #include <cmath>
 #include <memory>
+
+namespace anim = ruwa::ui::core::anim;
 
 namespace ruwa::ui::tabs {
 
@@ -1359,7 +1362,9 @@ void WorkspaceTab::hideLoadingShell(std::function<void()> onFinished)
 {
     m_loadingShellHideContinuation = std::move(onFinished);
 
-    if (!m_loadingShell) {
+    // Nothing to cross-fade with animations off: drop the shell and run the
+    // continuation now rather than snapshot it for a zero-length fade.
+    if (!m_loadingShell || !anim::enabled()) {
         hideLoadingShellImmediately();
         return;
     }
@@ -2530,6 +2535,13 @@ void WorkspaceTab::startInitialDockEntranceAnimation()
 void WorkspaceTab::startInitialCanvasBorderAppearanceAnimation()
 {
     if (!m_initialCanvasBorderAppearanceArmed || !m_canvasPanel) {
+        return;
+    }
+
+    // Still armed at this point, so the restore below disarms it and puts the
+    // border at its final opacity — the same end state the animation reaches.
+    if (!anim::enabled()) {
+        restoreInitialCanvasBorderImmediately();
         return;
     }
 

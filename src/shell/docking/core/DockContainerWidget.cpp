@@ -481,14 +481,18 @@ void DockContainerWidget::dockPanel(DockPanel* panel, DockPosition position)
         // Animate docking if panel was floating and animations enabled
         if (m_animationsEnabled && wasFloating && sourceGeom.isValid()) {
             QRect targetGeom = panel->geometry();
-            panel->animateDocking(sourceGeom, targetGeom, m_animationDuration);
 
             // Raise panel above handles during animation to prevent visual overlap
             panel->raise();
 
-            // Restore z-order when animation finishes
+            // Restore z-order when animation finishes. Connected before the
+            // animation starts: one that completes inside the call would
+            // otherwise emit into a connection that does not exist yet, and the
+            // panel would stay raised.
             connect(panel, &DockPanel::dockingAnimationFinished, this,
                 &DockContainerWidget::onPanelDockingAnimationFinished, Qt::SingleShotConnection);
+
+            panel->animateDocking(sourceGeom, targetGeom, m_animationDuration);
         }
 
         // Animate other panels in layout (excluding the docked panel)
@@ -550,14 +554,18 @@ void DockContainerWidget::dockPanelRelativeTo(
         // Animate docking if panel was floating and animations enabled
         if (m_animationsEnabled && wasFloating && sourceGeom.isValid()) {
             QRect targetGeom = panel->geometry();
-            panel->animateDocking(sourceGeom, targetGeom, m_animationDuration);
 
             // Raise panel above handles during animation to prevent visual overlap
             panel->raise();
 
-            // Restore z-order when animation finishes
+            // Restore z-order when animation finishes. Connected before the
+            // animation starts: one that completes inside the call would
+            // otherwise emit into a connection that does not exist yet, and the
+            // panel would stay raised.
             connect(panel, &DockPanel::dockingAnimationFinished, this,
                 &DockContainerWidget::onPanelDockingAnimationFinished, Qt::SingleShotConnection);
+
+            panel->animateDocking(sourceGeom, targetGeom, m_animationDuration);
         }
 
         // Animate other panels in layout (excluding the docked panel)
@@ -642,8 +650,10 @@ void DockContainerWidget::dockPanelIntoGroup(DockPanel* panel, const DockDropTar
         // outgoing one until the landing — then snapping — reads as the wrong
         // tab having been selected all along.
         host->previewCurrentTab(panel);
-        panel->animateDocking(sourceGeom, host->memberAreaInParent(), m_animationDuration);
 
+        // Connected before the animation starts: this handler is what actually
+        // commits the insertion, and an animation that completes inside the
+        // call would emit into a connection that does not exist yet.
         QPointer<DockGroupHost> hostRef(host);
         QPointer<DockPanel> panelRef(panel);
         connect(
@@ -658,6 +668,8 @@ void DockContainerWidget::dockPanelIntoGroup(DockPanel* panel, const DockDropTar
                 onPanelDockingAnimationFinished();
             },
             Qt::SingleShotConnection);
+
+        panel->animateDocking(sourceGeom, host->memberAreaInParent(), m_animationDuration);
     } else if (host) {
         host->syncFromLeaf();
     } else {
@@ -713,10 +725,11 @@ bool DockContainerWidget::ungroupPanel(DockPanel* panel)
     addPanelRelativeTo(panel, sibling, DockPosition::Right);
 
     if (m_animationsEnabled && m_animationDuration > 0 && sourceGeom.isValid()) {
-        panel->animateDocking(sourceGeom, panel->geometry(), m_animationDuration);
         panel->raise();
+        // Connected before the animation starts — see docking above.
         connect(panel, &DockPanel::dockingAnimationFinished, this,
             &DockContainerWidget::onPanelDockingAnimationFinished, Qt::SingleShotConnection);
+        panel->animateDocking(sourceGeom, panel->geometry(), m_animationDuration);
     }
 
     if (m_animationsEnabled) {

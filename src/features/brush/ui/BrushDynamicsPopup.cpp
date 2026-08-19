@@ -5,6 +5,7 @@
 #include "features/theme/manager/ThemeManager.h"
 #include "shared/resources/IconProvider.h"
 #include "shared/style/WidgetStyleManager.h"
+#include "shared/style/AnimationPolicy.h"
 #include "shared/widgets/CapsuleButton.h"
 
 #include <QApplication>
@@ -156,7 +157,7 @@ void BrushDynamicsPopup::showForSetting(const QString& settingKey, const QString
             applyShowProgress(0.0);
         }
         show();
-        m_showAnimation->start();
+        anim::start(m_showAnimation);
     }
     raise();
     setFocus(Qt::PopupFocusReason);
@@ -185,7 +186,7 @@ void BrushDynamicsPopup::hidePopup()
 
     m_showAnimation->stop();
     m_showAnimation->setDirection(QAbstractAnimation::Backward);
-    m_showAnimation->start();
+    anim::start(m_showAnimation);
 }
 
 bool BrushDynamicsPopup::isPopupVisible() const

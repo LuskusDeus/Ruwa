@@ -7,6 +7,7 @@
 #include "features/theme/manager/ThemeManager.h"
 #include "features/theme/manager/ThemeColors.h"
 #include "shared/resources/IconProvider.h"
+#include "shared/style/AnimationPolicy.h"
 #include "shared/style/PaintingUtils.h"
 #include "shared/widgets/ShortcutKeycapRenderer.h"
 
@@ -26,6 +27,8 @@
 #include <QDateTime>
 #include <QCursor>
 #include <QtMath>
+namespace anim = ruwa::ui::core::anim;
+
 namespace ruwa::ui::widgets {
 
 namespace {
@@ -534,7 +537,7 @@ void MenuPopup::animateToPosition(const QPoint& targetPos)
     m_posAnim->setDuration(SLIDE_DURATION);
     m_posAnim->setStartValue(pos());
     m_posAnim->setEndValue(targetPos);
-    m_posAnim->start();
+    anim::start(m_posAnim);
 }
 
 void MenuPopup::showSubmenu(QWidget* anchor, const QList<MenuItem>& items)
@@ -741,7 +744,7 @@ void MenuPopup::showAt(const QPoint& pos, bool slideFromLeft)
         m_posAnim->setStartValue(startPos);
         m_posAnim->setEndValue(pos);
         m_posAnim->setEasingCurve(QEasingCurve::OutCubic);
-        m_posAnim->start();
+        anim::start(m_posAnim);
     }
 
     startShowAnimation();
@@ -781,7 +784,7 @@ void MenuPopup::animateSwitchTo(const QPoint& targetPos, int oldDisplayH)
     m_heightAnim->setStartValue(oldDisplayH);
     m_heightAnim->setEndValue(m_targetHeight);
     m_heightAnim->setEasingCurve(QEasingCurve::OutCubic);
-    m_heightAnim->start();
+    anim::start(m_heightAnim);
 
     emit contentChanged();
 }
@@ -839,7 +842,7 @@ void MenuPopup::showBelow(QWidget* anchor, bool slideFromTop)
         m_heightAnim->setStartValue(0);
         m_heightAnim->setEndValue(m_targetHeight);
         m_heightAnim->setEasingCurve(QEasingCurve::OutCubic);
-        m_heightAnim->start();
+        anim::start(m_heightAnim);
     }
 
     startShowAnimation();
@@ -1030,7 +1033,7 @@ void MenuPopup::startShowAnimation()
     m_opacityAnim->setStartValue(m_opacity);
     m_opacityAnim->setEndValue(1.0);
     m_opacityAnim->setEasingCurve(QEasingCurve::OutCubic);
-    m_opacityAnim->start();
+    anim::start(m_opacityAnim);
 }
 
 void MenuPopup::startHideAnimation()
@@ -1060,7 +1063,7 @@ void MenuPopup::startHideAnimation()
         m_posAnim->setStartValue(currentPos);
         m_posAnim->setEndValue(endPos);
         m_posAnim->setEasingCurve(QEasingCurve::OutCubic);
-        m_posAnim->start();
+        anim::start(m_posAnim);
     } else {
         // Attached popup: retract the body upward into the TopBar seam (no move),
         // mirroring the height-reveal it opened with.
@@ -1071,7 +1074,7 @@ void MenuPopup::startHideAnimation()
         m_heightAnim->setStartValue(m_displayHeight > 0 ? m_displayHeight : height());
         m_heightAnim->setEndValue(0);
         m_heightAnim->setEasingCurve(QEasingCurve::InCubic);
-        m_heightAnim->start();
+        anim::start(m_heightAnim);
     }
 
     // Disconnect any previous hide-finished connection, then connect for this hide cycle
@@ -1087,7 +1090,7 @@ void MenuPopup::startHideAnimation()
         }
     });
 
-    m_opacityAnim->start();
+    anim::start(m_opacityAnim);
 }
 
 } // namespace ruwa::ui::widgets

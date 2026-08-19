@@ -2,6 +2,7 @@
 
 // StyledInputField.cpp
 #include "StyledInputField.h"
+#include "shared/style/AnimationPolicy.h"
 #include "features/theme/manager/ThemeManager.h"
 
 #include <QVBoxLayout>
@@ -20,7 +21,15 @@
 #include <QSizePolicy>
 #include <QLocale>
 
+namespace anim = ruwa::ui::core::anim;
+
 namespace ruwa::ui::widgets {
+
+namespace {
+/// Authored durations; the animation policy scales them at each transition.
+constexpr int kFocusAnimationMs = 250;
+constexpr int kHoverAnimationMs = 200;
+} // namespace
 
 namespace {
 // Reference: project-panel.html — .field (boxed)
@@ -179,11 +188,9 @@ StyledInputField::~StyledInputField()
 void StyledInputField::setupAnimations()
 {
     m_focusAnimation = new QPropertyAnimation(this, "focusProgress");
-    m_focusAnimation->setDuration(250);
     m_focusAnimation->setEasingCurve(QEasingCurve::InOutCubic);
 
     m_hoverAnimation = new QPropertyAnimation(this, "hoverProgress");
-    m_hoverAnimation->setDuration(200);
     m_hoverAnimation->setEasingCurve(QEasingCurve::OutCubic);
 }
 
@@ -589,7 +596,8 @@ void StyledInputField::startFocusAnimation(bool focused)
     m_focusAnimation->stop();
     m_focusAnimation->setStartValue(m_focusProgress);
     m_focusAnimation->setEndValue(focused ? 1.0 : 0.0);
-    m_focusAnimation->start();
+    m_focusAnimation->setDuration(anim::duration(kFocusAnimationMs));
+    anim::start(m_focusAnimation);
 }
 
 void StyledInputField::startHoverAnimation(bool hovered)
@@ -603,7 +611,8 @@ void StyledInputField::startHoverAnimation(bool hovered)
     m_hoverAnimation->setEasingCurve(hovered ? QEasingCurve::OutCubic : QEasingCurve::InOutCubic);
     m_hoverAnimation->setStartValue(m_hoverProgress);
     m_hoverAnimation->setEndValue(hovered ? 1.0 : 0.0);
-    m_hoverAnimation->start();
+    m_hoverAnimation->setDuration(anim::duration(kHoverAnimationMs));
+    anim::start(m_hoverAnimation);
 }
 
 void StyledInputField::setFocusProgress(qreal progress)

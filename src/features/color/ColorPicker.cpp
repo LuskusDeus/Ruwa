@@ -7,6 +7,7 @@
 #include "shared/widgets/inputs/HexColorInput.h"
 #include "features/theme/manager/ThemeManager.h"
 #include "shared/style/WidgetStyleManager.h"
+#include "shared/style/AnimationPolicy.h"
 
 #include <QPainter>
 #include <QFont>
@@ -32,6 +33,12 @@
 #include <cmath>
 
 namespace ruwa::ui::widgets {
+
+namespace {
+/// Authored hover fades; the animation policy scales them at each transition.
+constexpr int kRecentHoverAnimationMs = 160;
+constexpr int kCloseHoverAnimationMs = 140;
+} // namespace
 
 using namespace ruwa::ui::core;
 
@@ -271,7 +278,6 @@ void ColorPicker::setupAnimations()
     });
 
     m_recentHoverAnimation = new QPropertyAnimation(this, "recentHoverProgress", this);
-    m_recentHoverAnimation->setDuration(160);
     m_recentHoverAnimation->setEasingCurve(QEasingCurve::OutCubic);
 
     m_recentLayoutAnimation = new QPropertyAnimation(this, "recentLayoutProgress", this);
@@ -284,7 +290,6 @@ void ColorPicker::setupAnimations()
     });
 
     m_closeHoverAnimation = new QPropertyAnimation(this, "closeHoverProgress", this);
-    m_closeHoverAnimation->setDuration(140);
     m_closeHoverAnimation->setEasingCurve(QEasingCurve::OutCubic);
 }
 
@@ -1607,7 +1612,8 @@ void ColorPicker::updateRecentColorsVisibility(bool animated)
             m_recentHoverAnimation->stop();
             m_recentHoverAnimation->setStartValue(m_recentHoverProgress);
             m_recentHoverAnimation->setEndValue(0.0);
-            m_recentHoverAnimation->start();
+            m_recentHoverAnimation->setDuration(anim::duration(kRecentHoverAnimationMs));
+            anim::start(m_recentHoverAnimation);
         }
     }
 
@@ -1835,7 +1841,8 @@ void ColorPicker::setPopupCloseHovered(bool hovered)
         m_closeHoverAnimation->stop();
         m_closeHoverAnimation->setStartValue(m_closeHoverProgress);
         m_closeHoverAnimation->setEndValue(hovered ? 1.0 : 0.0);
-        m_closeHoverAnimation->start();
+        m_closeHoverAnimation->setDuration(anim::duration(kCloseHoverAnimationMs));
+        anim::start(m_closeHoverAnimation);
     } else {
         setCloseHoverProgress(hovered ? 1.0 : 0.0);
     }
@@ -1973,7 +1980,8 @@ void ColorPicker::mouseMoveEvent(QMouseEvent* event)
             m_recentHoverAnimation->stop();
             m_recentHoverAnimation->setStartValue(m_recentHoverProgress);
             m_recentHoverAnimation->setEndValue(hoveredRecent >= 0 ? 1.0 : 0.0);
-            m_recentHoverAnimation->start();
+            m_recentHoverAnimation->setDuration(anim::duration(kRecentHoverAnimationMs));
+            anim::start(m_recentHoverAnimation);
         }
         update();
     }
@@ -2025,7 +2033,8 @@ void ColorPicker::leaveEvent(QEvent* event)
             m_recentHoverAnimation->stop();
             m_recentHoverAnimation->setStartValue(m_recentHoverProgress);
             m_recentHoverAnimation->setEndValue(0.0);
-            m_recentHoverAnimation->start();
+            m_recentHoverAnimation->setDuration(anim::duration(kRecentHoverAnimationMs));
+            anim::start(m_recentHoverAnimation);
         }
         update();
     }

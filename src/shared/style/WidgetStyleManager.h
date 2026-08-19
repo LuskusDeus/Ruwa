@@ -20,6 +20,10 @@ struct GlobalStyleSettings {
     // Animation master switch
     bool animationsEnabled = true;
 
+    // Playback speed multiplier for every animation that honours the policy.
+    // 1.0 is the authored speed; above 1.0 is faster (shorter), below is slower.
+    qreal animationSpeed = 1.0;
+
     // Global animation durations (can be overridden per-style)
     int hoverDuration = 200;
     int activeDuration = 250;
@@ -93,6 +97,13 @@ public:
     bool animationsEnabled() const { return m_globalSettings.animationsEnabled; }
     void setAnimationsEnabled(bool enabled);
 
+    /// Playback speed multiplier, clamped to [kMinAnimationSpeed, kMaxAnimationSpeed].
+    qreal animationSpeed() const { return m_globalSettings.animationSpeed; }
+    void setAnimationSpeed(qreal speed);
+
+    static constexpr qreal kMinAnimationSpeed = 0.5;
+    static constexpr qreal kMaxAnimationSpeed = 2.0;
+
     bool hoverEffectsEnabled() const { return m_globalSettings.hoverEffectsEnabled; }
     void setHoverEffectsEnabled(bool enabled);
 
@@ -111,6 +122,12 @@ public:
     // ========================================================================
     // Resolved Values (considering overrides)
     // ========================================================================
+
+    /// Apply the animation policy (master switch + speed multiplier) to an
+    /// authored duration. Returns 0 while animations are disabled. Call it where
+    /// the animation starts, not where it is constructed, so a settings change
+    /// takes effect without rebuilding the widget.
+    int scaledDuration(int authoredMs) const;
 
     /// Get effective hover duration for a style
     int effectiveHoverDuration(const WidgetStyle& style) const;

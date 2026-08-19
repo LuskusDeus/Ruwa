@@ -7,6 +7,7 @@
 #include "shared/widgets/reorderlist/AnimatedListLayout.h"
 #include "shared/widgets/reorderlist/ListDragDrop.h"
 #include "shared/widgets/reorderlist/ReorderableRowWidget.h"
+#include "shared/style/AnimationPolicy.h"
 
 #include <QApplication>
 #include <QEvent>
@@ -19,6 +20,8 @@
 #include <QRegion>
 #include <QVariantAnimation>
 #include <QVBoxLayout>
+
+namespace anim = ruwa::ui::core::anim;
 
 namespace ruwa::ui::workspace {
 
@@ -219,7 +222,7 @@ void EffectsListView::syncRows(const QList<ReorderableRowWidget*>& orderedRows,
 {
     stopSyncAnim();
 
-    const bool doAnimate = animate && !m_skipNextAnim && isVisible();
+    const bool doAnimate = animate && !m_skipNextAnim && isVisible() && anim::enabled();
     m_skipNextAnim = false;
 
     const QSet<ReorderableRowWidget*> removedSet(removedRows.begin(), removedRows.end());
@@ -538,7 +541,7 @@ void EffectsListView::onSourceRowCollapseRequested(const QUuid& sourceId)
         m_sourceSnapshot = nullptr;
         m_sourceCollapseAnim = nullptr;
     });
-    m_sourceCollapseAnim->start(QAbstractAnimation::DeleteWhenStopped);
+    anim::start(m_sourceCollapseAnim, QAbstractAnimation::DeleteWhenStopped);
 }
 
 void EffectsListView::onGhostSettled(const QUuid& movedId, int dropInsertIndex, int /*targetDepth*/)

@@ -3,11 +3,15 @@
 // WidgetFadeInOverlay.cpp
 #include "WidgetFadeInOverlay.h"
 
+#include "shared/style/AnimationPolicy.h"
+
 #include <QPainter>
 #include <QPropertyAnimation>
 #include <QAbstractAnimation>
 #include <QEvent>
 #include <QTimer>
+
+namespace anim = ruwa::ui::core::anim;
 
 namespace ruwa::ui::widgets {
 
@@ -94,10 +98,13 @@ void WidgetFadeInOverlay::startAnimation(
             close(); // Will trigger deleteLater via WA_DeleteOnClose
         });
 
-        m_animation->start(QAbstractAnimation::DeleteWhenStopped);
+        anim::start(m_animation, QAbstractAnimation::DeleteWhenStopped);
     };
 
-    if (delayMs > 0) {
+    // The delay is part of the reveal, not a functional wait: with animations
+    // disabled the overlay has to come off now, or the content it covers stays
+    // hidden for no reason.
+    if (delayMs > 0 && anim::enabled()) {
         QTimer::singleShot(delayMs, this, doStartAnimation);
     } else {
         doStartAnimation();

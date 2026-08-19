@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: MPL-2.0
 
 #include "ColorInputButton.h"
+#include "shared/style/AnimationPolicy.h"
 #include "features/theme/manager/ThemeManager.h"
 #include "shared/style/PaintingUtils.h"
 
@@ -51,7 +52,6 @@ ColorInputButton::ColorInputButton(const QString& label, const QColor& initialCo
     updateScaledSize();
 
     m_hoverAnimation = new QPropertyAnimation(this, "hoverAlpha", this);
-    m_hoverAnimation->setDuration(HOVER_ANIMATION_DURATION);
     m_hoverAnimation->setEasingCurve(QEasingCurve::OutCubic);
 
     connect(&ThemeManager::instance(), &ThemeManager::themeChanged, this,
@@ -87,7 +87,8 @@ void ColorInputButton::clearHover()
     m_hoverAnimation->stop();
     m_hoverAnimation->setStartValue(m_hoverAlpha);
     m_hoverAnimation->setEndValue(0.0);
-    m_hoverAnimation->start();
+    m_hoverAnimation->setDuration(anim::duration(HOVER_ANIMATION_DURATION));
+    anim::start(m_hoverAnimation);
 }
 
 void ColorInputButton::updateScaledSize()
@@ -108,7 +109,8 @@ void ColorInputButton::enterEvent(QEnterEvent* event)
     m_hoverAnimation->stop();
     m_hoverAnimation->setStartValue(m_hoverAlpha);
     m_hoverAnimation->setEndValue(1.0);
-    m_hoverAnimation->start();
+    m_hoverAnimation->setDuration(anim::duration(HOVER_ANIMATION_DURATION));
+    anim::start(m_hoverAnimation);
 }
 
 void ColorInputButton::leaveEvent(QEvent* event)
@@ -117,7 +119,8 @@ void ColorInputButton::leaveEvent(QEvent* event)
     m_hoverAnimation->stop();
     m_hoverAnimation->setStartValue(m_hoverAlpha);
     m_hoverAnimation->setEndValue(0.0);
-    m_hoverAnimation->start();
+    m_hoverAnimation->setDuration(anim::duration(HOVER_ANIMATION_DURATION));
+    anim::start(m_hoverAnimation);
 }
 
 void ColorInputButton::drawContentLayer(QPainter& painter, const QRectF& rect)

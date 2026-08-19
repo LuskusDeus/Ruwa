@@ -4,6 +4,7 @@
 #include "MessagePopup.h"
 #include "OverlayContainer.h"
 #include "shared/widgets/CapsuleButton.h"
+#include "shared/style/AnimationPolicy.h"
 #include "shared/style/PaintingUtils.h"
 #include "features/theme/manager/ThemeManager.h"
 #include "features/theme/manager/ThemeColors.h"
@@ -20,6 +21,8 @@
 #include <QLabel>
 #include <QtMath>
 #include <cmath>
+
+namespace anim = ruwa::ui::core::anim;
 
 namespace ruwa::ui::widgets {
 
@@ -212,6 +215,8 @@ void MessagePopup::showPopup()
         startShowAnimation();
     }
 
+    // Ambient border glow — deliberately outside the animation policy, so it
+    // plays the same whether or not UI animations are enabled.
     m_borderGlowProgress = 0.0;
     m_borderGlowAnim->stop();
     m_borderGlowAnim->setDuration(600);
@@ -226,6 +231,9 @@ void MessagePopup::showPopup()
         disconnect(m_timebarAnim, &QPropertyAnimation::finished, this, nullptr);
     }
     if (m_autoHideDuration > 0 && m_buttons.isEmpty()) {
+        // The timebar is a countdown, not an effect: its duration IS the
+        // auto-hide timeout and its completion is what closes the popup. It
+        // must never be shortened or skipped by the animation policy.
         m_timebarProgress = 1.0;
         m_timebarAnim->setDuration(m_autoHideDuration);
         m_timebarAnim->setStartValue(1.0);
@@ -563,7 +571,7 @@ void MessagePopup::startShowAnimation()
     m_heightAnim->setStartValue(m_revealHeight);
     m_heightAnim->setEndValue(m_targetHeight);
     m_heightAnim->setEasingCurve(QEasingCurve::OutCubic);
-    m_heightAnim->start();
+    anim::start(m_heightAnim);
 }
 
 void MessagePopup::startHideAnimation()
@@ -604,7 +612,7 @@ void MessagePopup::startHideAnimation()
     m_heightAnim->setStartValue(m_revealHeight);
     m_heightAnim->setEndValue(0);
     m_heightAnim->setEasingCurve(QEasingCurve::InCubic);
-    m_heightAnim->start();
+    anim::start(m_heightAnim);
 }
 
 } // namespace ruwa::ui::widgets

@@ -5,6 +5,7 @@
 #include "shell/tab-system/BaseTab.h"
 #include "features/theme/manager/ThemeManager.h"
 #include "shared/widgets/DotGridLoadingIndicator.h"
+#include "shared/style/AnimationPolicy.h"
 #include "shared/resources/IconProvider.h"
 
 #include <QGraphicsOpacityEffect>
@@ -13,6 +14,8 @@
 #include <QTimer>
 #include <QVBoxLayout>
 #include <utility>
+
+namespace anim = ruwa::ui::core::anim;
 
 namespace ruwa::ui::widgets {
 
@@ -74,6 +77,26 @@ void AnimatedTabWidget::finishThemeLoadingWithConfirmation(std::function<void()>
         return;
     }
 
+    // The checkmark hold and the fade that follows it are the confirmation
+    // beat, not a step the caller waits on, so with animations disabled the
+    // overlay simply goes away and the continuation runs now.
+    if (!anim::enabled()) {
+        if (m_themeLoadingIndicator) {
+            m_themeLoadingIndicator->stop();
+        }
+        if (m_themeLoadingCheck) {
+            m_themeLoadingCheck->hide();
+        }
+        if (m_themeLoadingOpacity) {
+            m_themeLoadingOpacity->setOpacity(1.0);
+        }
+        m_themeLoadingOverlay->hide();
+        if (onHidden) {
+            onHidden();
+        }
+        return;
+    }
+
     // Swap the spinner for a confirmation checkmark.
     if (m_themeLoadingIndicator) {
         m_themeLoadingIndicator->stop();
@@ -124,7 +147,7 @@ void AnimatedTabWidget::finishThemeLoadingWithConfirmation(std::function<void()>
                     onHidden();
                 }
             });
-        m_themeLoadingFade->start();
+        anim::start(m_themeLoadingFade);
     });
 }
 
@@ -603,7 +626,7 @@ void AnimatedTabWidget::slideToTab(ruwa::core::BaseTab* newTab, ruwa::core::Base
             confirmPendingCloses();
         });
 
-    m_animation->start();
+    anim::start(m_animation);
 }
 
 void AnimatedTabWidget::finishAnimation(QParallelAnimationGroup* animation)

@@ -5,11 +5,14 @@
 #include "features/theme/manager/ThemeColors.h"
 #include "features/theme/manager/ThemeManager.h"
 #include "shared/style/WidgetStyleManager.h"
+#include "shared/style/AnimationPolicy.h"
 
 #include <QMouseEvent>
 #include <QPainter>
 #include <QResizeEvent>
 #include <QVariantAnimation>
+
+namespace anim = ruwa::ui::core::anim;
 
 namespace ruwa::ui::widgets {
 
@@ -45,7 +48,6 @@ AnchorGridSelector::AnchorGridSelector(QWidget* parent)
 
     for (int index = 0; index < 9; ++index) {
         auto* hoverAnimation = new QVariantAnimation(this);
-        hoverAnimation->setDuration(kHoverAnimationMs);
         hoverAnimation->setEasingCurve(QEasingCurve::OutCubic);
         connect(hoverAnimation, &QVariantAnimation::valueChanged, this,
             [this, index](const QVariant& value) {
@@ -55,7 +57,6 @@ AnchorGridSelector::AnchorGridSelector(QWidget* parent)
         m_cellHoverAnimations[index] = hoverAnimation;
 
         auto* selectionAnimation = new QVariantAnimation(this);
-        selectionAnimation->setDuration(kSelectionAnimationMs);
         selectionAnimation->setEasingCurve(QEasingCurve::OutCubic);
         connect(selectionAnimation, &QVariantAnimation::valueChanged, this,
             [this, index](const QVariant& value) {
@@ -155,9 +156,10 @@ void AnchorGridSelector::retargetSelectionAnimations(int index, bool animated)
         // interrupted mid-fade (a rapid second change before the first
         // finished) keeps going from its real state instead of popping.
         animation->stop();
+        animation->setDuration(anim::duration(kSelectionAnimationMs));
         animation->setStartValue(m_cellSelection[cell]);
         animation->setEndValue(target);
-        animation->start();
+        anim::start(animation);
     }
 }
 
@@ -359,9 +361,10 @@ void AnchorGridSelector::setHoveredIndex(int index)
         }
 
         animation->stop();
+        animation->setDuration(anim::duration(kHoverAnimationMs));
         animation->setStartValue(m_cellHover[cell]);
         animation->setEndValue(target);
-        animation->start();
+        anim::start(animation);
     }
     update();
 }

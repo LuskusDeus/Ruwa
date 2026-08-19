@@ -5,6 +5,7 @@
 #include "commands/ShortcutManager.h"
 #include "features/theme/manager/ThemeManager.h"
 #include "features/theme/manager/ThemeColors.h"
+#include "shared/style/AnimationPolicy.h"
 #include "shared/style/PaintingUtils.h"
 #include "shared/widgets/CapsuleButton.h"
 #include "shared/widgets/layout/SmoothScrollArea.h"
@@ -27,6 +28,8 @@
 #include <QVector>
 #include <QVBoxLayout>
 #include <QtMath>
+
+namespace anim = ruwa::ui::core::anim;
 
 namespace ruwa::ui::widgets {
 
@@ -1428,14 +1431,13 @@ void ReleaseNotesOverlay::showOverlay()
     m_dimAnimation->setEasingCurve(QEasingCurve::OutCubic);
     m_dimAnimation->setStartValue(m_dimProgress);
     m_dimAnimation->setEndValue(1.0);
-    m_dimAnimation->start();
 
     m_cardOpacityAnim->stop();
     disconnect(m_cardOpacityAnim, &QPropertyAnimation::finished, this, nullptr);
     m_cardOpacityAnim->setDuration(CardAnimationDuration);
     m_cardOpacityAnim->setStartValue(0.0);
     m_cardOpacityAnim->setEndValue(1.0);
-    m_cardOpacityAnim->start();
+    anim::start(m_cardOpacityAnim);
 
     m_cardPosAnim->stop();
     disconnect(m_cardPosAnim, &QPropertyAnimation::finished, this,
@@ -1443,7 +1445,12 @@ void ReleaseNotesOverlay::showOverlay()
     m_cardPosAnim->setDuration(CardAnimationDuration);
     m_cardPosAnim->setStartValue(startPos);
     m_cardPosAnim->setEndValue(targetPos);
-    m_cardPosAnim->start();
+    anim::start(m_cardPosAnim);
+
+    // The dim animation owns the completion (it emits shown()), so start it
+    // last: with animations disabled it finishes inside the call, and the card
+    // must already be at its resting state by then.
+    anim::start(m_dimAnimation);
 }
 
 void ReleaseNotesOverlay::hideOverlay(bool bypassCooldown)
@@ -1466,7 +1473,7 @@ void ReleaseNotesOverlay::hideOverlay(bool bypassCooldown)
     m_dimAnimation->setEasingCurve(QEasingCurve::InCubic);
     m_dimAnimation->setStartValue(m_dimProgress);
     m_dimAnimation->setEndValue(0.0);
-    m_dimAnimation->start();
+    anim::start(m_dimAnimation);
 
     const QPoint currentPos = m_card->pos();
     const QPoint endPos = currentPos + QPoint(0, SlideOffset);
@@ -1475,13 +1482,16 @@ void ReleaseNotesOverlay::hideOverlay(bool bypassCooldown)
     m_cardOpacityAnim->setDuration(CardAnimationDuration);
     m_cardOpacityAnim->setStartValue(m_cardOpacityEffect->opacity());
     m_cardOpacityAnim->setEndValue(0.0);
-    m_cardOpacityAnim->start();
 
     m_cardPosAnim->stop();
     m_cardPosAnim->setDuration(CardAnimationDuration);
     m_cardPosAnim->setStartValue(currentPos);
     m_cardPosAnim->setEndValue(endPos);
-    m_cardPosAnim->start();
+
+    // The card fade owns the completion (it hides the overlay), so start it
+    // last: with animations disabled it finishes inside the call.
+    anim::start(m_cardPosAnim);
+    anim::start(m_cardOpacityAnim);
 }
 
 bool ReleaseNotesOverlay::isActive() const

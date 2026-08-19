@@ -5,6 +5,7 @@
 #include "commands/ShortcutManager.h"
 #include "features/theme/manager/ThemeManager.h"
 #include "shared/resources/IconProvider.h"
+#include "shared/style/AnimationPolicy.h"
 #include "shared/style/WidgetStyleManager.h"
 #include "shared/widgets/BaseAnimatedButton.h"
 #include "shared/widgets/CapsuleButton.h"
@@ -242,11 +243,11 @@ void BrushEditorParameterOverlay::showOverlay(const QString& settingKey,
     m_panelAnimation->setStartValue(wasActive ? m_panelProgress : 0.0);
     m_panelAnimation->setEndValue(1.0);
     m_panelAnimation->setEasingCurve(QEasingCurve::OutCubic);
-    m_panelAnimation->start();
+    anim::start(m_panelAnimation);
     m_dimAnimation->setStartValue(m_dimProgress);
     m_dimAnimation->setEndValue(1.0);
     m_dimAnimation->setEasingCurve(QEasingCurve::OutCubic);
-    m_dimAnimation->start();
+    anim::start(m_dimAnimation);
 }
 
 void BrushEditorParameterOverlay::hideOverlay()
@@ -264,11 +265,11 @@ void BrushEditorParameterOverlay::hideOverlay()
     m_panelAnimation->setStartValue(m_panelProgress);
     m_panelAnimation->setEndValue(0.0);
     m_panelAnimation->setEasingCurve(QEasingCurve::InCubic);
-    m_panelAnimation->start();
+    anim::start(m_panelAnimation);
     m_dimAnimation->setStartValue(m_dimProgress);
     m_dimAnimation->setEndValue(0.0);
     m_dimAnimation->setEasingCurve(QEasingCurve::InCubic);
-    m_dimAnimation->start();
+    anim::start(m_dimAnimation);
 }
 
 bool BrushEditorParameterOverlay::isActive() const

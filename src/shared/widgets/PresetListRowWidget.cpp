@@ -2,6 +2,7 @@
 
 // PresetListRowWidget.cpp
 #include "PresetListRowWidget.h"
+#include "shared/style/AnimationPolicy.h"
 #include "features/theme/manager/ThemeManager.h"
 #include "shared/resources/IconProvider.h"
 
@@ -19,6 +20,12 @@
 #include <cmath>
 
 namespace ruwa::ui::widgets {
+
+namespace {
+/// Authored durations for the row's inline action buttons; the animation policy
+/// scales them at each transition.
+constexpr int kActionHoverAnimationMs = 140;
+} // namespace
 
 using namespace ruwa::ui::core;
 
@@ -57,19 +64,15 @@ PresetListRowWidget::~PresetListRowWidget() = default;
 void PresetListRowWidget::setupAnimations()
 {
     m_hoverAnimation = new QPropertyAnimation(this, "hoverProgress", this);
-    m_hoverAnimation->setDuration(ANIMATION_DURATION);
     m_hoverAnimation->setEasingCurve(QEasingCurve::OutCubic);
 
     m_selectionAnimation = new QPropertyAnimation(this, "selectionProgress", this);
-    m_selectionAnimation->setDuration(ANIMATION_DURATION + 50);
     m_selectionAnimation->setEasingCurve(QEasingCurve::OutCubic);
 
     m_renameHoverAnimation = new QPropertyAnimation(this, "renameHoverProgress", this);
-    m_renameHoverAnimation->setDuration(140);
     m_renameHoverAnimation->setEasingCurve(QEasingCurve::OutCubic);
 
     m_deleteHoverAnimation = new QPropertyAnimation(this, "deleteHoverProgress", this);
-    m_deleteHoverAnimation->setDuration(140);
     m_deleteHoverAnimation->setEasingCurve(QEasingCurve::OutCubic);
 }
 
@@ -197,7 +200,8 @@ void PresetListRowWidget::setSelected(bool selected, bool animate)
 
     m_selectionAnimation->setStartValue(m_selectionProgress);
     m_selectionAnimation->setEndValue(selected ? 1.0 : 0.0);
-    m_selectionAnimation->start();
+    m_selectionAnimation->setDuration(anim::duration(ANIMATION_DURATION + 50));
+    anim::start(m_selectionAnimation);
 }
 
 void PresetListRowWidget::setActive(bool active)
@@ -484,15 +488,17 @@ void PresetListRowWidget::updateInlineActionHover(const QPoint& pos)
     const int extraIndex = hitExtraIndex(pos);
     bool changed = (renameHovered != m_renameHovered) || (deleteHovered != m_deleteHovered);
 
-    const auto animateHover = [](QPropertyAnimation* anim, qreal current, bool hovered) {
-        if (!anim) {
-            return;
-        }
-        anim->stop();
-        anim->setStartValue(current);
-        anim->setEndValue(hovered ? 1.0 : 0.0);
-        anim->start();
-    };
+    const auto animateHover
+        = [](QPropertyAnimation* hoverAnim, qreal current, bool hovered) {
+              if (!hoverAnim) {
+                  return;
+              }
+              hoverAnim->stop();
+              hoverAnim->setDuration(anim::duration(kActionHoverAnimationMs));
+              hoverAnim->setStartValue(current);
+              hoverAnim->setEndValue(hovered ? 1.0 : 0.0);
+              anim::start(hoverAnim);
+          };
 
     if (renameHovered != m_renameHovered) {
         animateHover(m_renameHoverAnimation, m_renameHoverProgress, renameHovered);
@@ -525,13 +531,15 @@ void PresetListRowWidget::clearInlineActionState()
         m_renameHoverAnimation->stop();
         m_renameHoverAnimation->setStartValue(m_renameHoverProgress);
         m_renameHoverAnimation->setEndValue(0.0);
-        m_renameHoverAnimation->start();
+        m_renameHoverAnimation->setDuration(anim::duration(kActionHoverAnimationMs));
+        anim::start(m_renameHoverAnimation);
     }
     if (m_deleteHovered && m_deleteHoverAnimation) {
         m_deleteHoverAnimation->stop();
         m_deleteHoverAnimation->setStartValue(m_deleteHoverProgress);
         m_deleteHoverAnimation->setEndValue(0.0);
-        m_deleteHoverAnimation->start();
+        m_deleteHoverAnimation->setDuration(anim::duration(kActionHoverAnimationMs));
+        anim::start(m_deleteHoverAnimation);
     }
 
     m_renameHovered = false;
@@ -1095,7 +1103,8 @@ void PresetListRowWidget::enterEvent(QEnterEvent* event)
     m_hoverAnimation->setEasingCurve(QEasingCurve::OutCubic);
     m_hoverAnimation->setStartValue(m_hoverProgress);
     m_hoverAnimation->setEndValue(1.0);
-    m_hoverAnimation->start();
+    m_hoverAnimation->setDuration(anim::duration(ANIMATION_DURATION));
+    anim::start(m_hoverAnimation);
     syncActionButtons();
 }
 
@@ -1112,7 +1121,8 @@ void PresetListRowWidget::leaveEvent(QEvent* event)
     m_hoverAnimation->setEasingCurve(QEasingCurve::InCubic);
     m_hoverAnimation->setStartValue(m_hoverProgress);
     m_hoverAnimation->setEndValue(0.0);
-    m_hoverAnimation->start();
+    m_hoverAnimation->setDuration(anim::duration(ANIMATION_DURATION));
+    anim::start(m_hoverAnimation);
     syncActionButtons();
 }
 

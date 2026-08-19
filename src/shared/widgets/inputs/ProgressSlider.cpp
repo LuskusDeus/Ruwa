@@ -2,10 +2,13 @@
 
 // ProgressSlider.cpp
 #include "ProgressSlider.h"
+#include "shared/style/AnimationPolicy.h"
 #include "features/theme/manager/ThemeManager.h"
 
 #include <QPainter>
 #include <QVariantAnimation>
+
+namespace anim = ruwa::ui::core::anim;
 
 namespace ruwa::ui::widgets {
 
@@ -24,7 +27,6 @@ ProgressSlider::ProgressSlider(QWidget* parent)
     setSizePolicy(QSizePolicy::Expanding, QSizePolicy::Fixed);
 
     m_progressAnimation = new QVariantAnimation(this);
-    m_progressAnimation->setDuration(BASE_PROGRESS_ANIMATION_DURATION);
     m_progressAnimation->setEasingCurve(QEasingCurve::OutCubic);
     connect(
         m_progressAnimation, &QVariantAnimation::valueChanged, this, [this](const QVariant& value) {
@@ -63,7 +65,8 @@ void ProgressSlider::setValue(int value)
     m_progressAnimation->stop();
     m_progressAnimation->setStartValue(m_displayedRatio);
     m_progressAnimation->setEndValue(targetRatio);
-    m_progressAnimation->start();
+    m_progressAnimation->setDuration(anim::duration(BASE_PROGRESS_ANIMATION_DURATION));
+    anim::start(m_progressAnimation);
 }
 
 void ProgressSlider::setShowText(bool show)

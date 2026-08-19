@@ -3,6 +3,7 @@
 #include "FontDropdownSelector.h"
 
 #include "features/theme/manager/ThemeManager.h"
+#include "shared/style/AnimationPolicy.h"
 #include "shared/style/PaintingUtils.h"
 #include "shared/widgets/inputs/SearchBar.h"
 #include "shared/widgets/layout/SmoothScrollArea.h"
@@ -38,7 +39,16 @@
 #include <functional>
 #include <utility>
 
+namespace anim = ruwa::ui::core::anim;
+
 namespace ruwa::ui::widgets {
+
+namespace {
+/// Authored trigger feedback; the policy scales it at each transition.
+constexpr int kTriggerHoverAnimationMs = 170;
+constexpr int kTriggerArrowAnimationMs = 160;
+} // namespace
+
 
 namespace {
 
@@ -409,12 +419,12 @@ public:
         m_opacityAnim->setDuration(kShowDurationMs);
         m_opacityAnim->setStartValue(m_popupOpacity);
         m_opacityAnim->setEndValue(1.0);
-        m_opacityAnim->start();
+        anim::start(m_opacityAnim);
 
         m_posAnim->setDuration(kSlideDurationMs);
         m_posAnim->setStartValue(startPos);
         m_posAnim->setEndValue(targetPos);
-        m_posAnim->start();
+        anim::start(m_posAnim);
     }
 
     void hideAnimated()
@@ -439,12 +449,16 @@ public:
         m_opacityAnim->setDuration(kHideDurationMs);
         m_opacityAnim->setStartValue(m_popupOpacity);
         m_opacityAnim->setEndValue(0.0);
-        m_opacityAnim->start();
 
         m_posAnim->setDuration(kHideDurationMs);
         m_posAnim->setStartValue(pos());
         m_posAnim->setEndValue(QPoint(pos().x(), pos().y() - (kPopupOffset / 2)));
-        m_posAnim->start();
+
+        // The opacity animation owns the completion (it hides the popup and
+        // notifies the owner), so start it last: with animations disabled it
+        // finishes inside the call.
+        anim::start(m_posAnim);
+        anim::start(m_opacityAnim);
     }
 
     void forceHide()
@@ -714,11 +728,9 @@ FontDropdownSelector::FontDropdownSelector(QWidget* parent)
     });
 
     m_hoverAnim = new QPropertyAnimation(this, "hoverProgress", this);
-    m_hoverAnim->setDuration(170);
     m_hoverAnim->setEasingCurve(QEasingCurve::OutCubic);
 
     m_arrowAnim = new QPropertyAnimation(this, "arrowProgress", this);
-    m_arrowAnim->setDuration(160);
     m_arrowAnim->setEasingCurve(QEasingCurve::OutCubic);
 }
 
@@ -1210,7 +1222,8 @@ void FontDropdownSelector::animateHoverTo(qreal target)
     m_hoverAnim->stop();
     m_hoverAnim->setStartValue(m_hoverProgress);
     m_hoverAnim->setEndValue(target);
-    m_hoverAnim->start();
+    m_hoverAnim->setDuration(anim::duration(kTriggerHoverAnimationMs));
+    anim::start(m_hoverAnim);
 }
 
 void FontDropdownSelector::animateArrowTo(qreal target)
@@ -1218,7 +1231,8 @@ void FontDropdownSelector::animateArrowTo(qreal target)
     m_arrowAnim->stop();
     m_arrowAnim->setStartValue(m_arrowProgress);
     m_arrowAnim->setEndValue(target);
-    m_arrowAnim->start();
+    m_arrowAnim->setDuration(anim::duration(kTriggerArrowAnimationMs));
+    anim::start(m_arrowAnim);
 }
 
 bool FontDropdownSelector::isPopupActive() const

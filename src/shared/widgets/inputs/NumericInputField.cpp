@@ -2,6 +2,7 @@
 
 // NumericInputField.cpp
 #include "NumericInputField.h"
+#include "shared/style/AnimationPolicy.h"
 #include "features/theme/manager/ThemeManager.h"
 #include "shared/style/PaintingUtils.h"
 
@@ -19,7 +20,14 @@
 
 #include <cmath>
 
+namespace anim = ruwa::ui::core::anim;
+
 namespace ruwa::ui::widgets {
+
+namespace {
+/// Authored hover fade; the animation policy scales it at each transition.
+constexpr int kHoverAnimationMs = 180;
+} // namespace
 
 NumericInputField::NumericInputField(QWidget* parent)
     : QLineEdit(parent)
@@ -33,7 +41,6 @@ NumericInputField::NumericInputField(QWidget* parent)
     setValidator(m_validator);
 
     m_hoverAnimation = new QPropertyAnimation(this, "hoverProgress", this);
-    m_hoverAnimation->setDuration(180);
     m_hoverAnimation->setEasingCurve(QEasingCurve::OutCubic);
 
     connect(&ruwa::ui::core::ThemeManager::instance(), &ruwa::ui::core::ThemeManager::themeChanged,
@@ -177,7 +184,8 @@ void NumericInputField::startHoverAnimation(bool hovered)
     m_hoverAnimation->stop();
     m_hoverAnimation->setStartValue(m_hoverProgress);
     m_hoverAnimation->setEndValue(hovered ? 1.0 : 0.0);
-    m_hoverAnimation->start();
+    m_hoverAnimation->setDuration(anim::duration(kHoverAnimationMs));
+    anim::start(m_hoverAnimation);
 }
 
 void NumericInputField::enterEvent(QEnterEvent* event)

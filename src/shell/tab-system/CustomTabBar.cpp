@@ -8,6 +8,7 @@
 #include "features/settings/SettingsManager.h"
 #include "shared/resources/IconProvider.h"
 #include "shared/style/PaintingUtils.h"
+#include "shared/style/AnimationPolicy.h"
 #include "shared/widgets/reorderlist/ListDragDrop.h"
 #include "shell/top-bar/TopBar.h"
 #include "shell/top-bar/UnsavedChangesHelper.h"
@@ -56,7 +57,18 @@ QString defaultIconForTabType(ruwa::core::BaseTab::TabType type)
 
 } // anonymous namespace
 
+namespace anim = ruwa::ui::core::anim;
+
 namespace ruwa::ui::tabs {
+
+namespace {
+/// Authored tab hover / close-reveal durations; the policy scales them at each
+/// transition.
+constexpr int kTabHoverAnimationMs = 200;
+constexpr int kCloseRevealInMs = 170;
+constexpr int kCloseRevealOutMs = 150;
+} // namespace
+
 
 CustomTabBar::CustomTabBar(QWidget* parent)
     : QWidget(parent)
@@ -304,7 +316,6 @@ CustomTabBar::TabItem CustomTabBar::makeItem(ruwa::core::BaseTab* tab)
     }
 
     item.hoverAnim = new QVariantAnimation(this);
-    item.hoverAnim->setDuration(200);
     item.hoverAnim->setEasingCurve(QEasingCurve::OutCubic);
     item.hoverAnim->setStartValue(0.0);
     item.hoverAnim->setEndValue(1.0);
@@ -866,12 +877,12 @@ void CustomTabBar::drawTab(QPainter& painter, const TabItem& item, bool isActive
     painter.restore();
 }
 
-void CustomTabBar::drawSeparator(QPainter& painter, qreal x, qreal y, const TabItem& anim,
+void CustomTabBar::drawSeparator(QPainter& painter, qreal x, qreal y, const TabItem& item,
     const QString& glyph, qreal opacityFactor)
 {
     painter.save();
-    painter.setOpacity(anim.opacity * opacityFactor);
-    painter.translate(0, anim.verticalOffset);
+    painter.setOpacity(item.opacity * opacityFactor);
+    painter.translate(0, item.verticalOffset);
 
     const auto& theme = ruwa::ui::core::ThemeManager::instance();
     const auto& colors = theme.colors();
@@ -1464,13 +1475,14 @@ void CustomTabBar::startHoverAnimation(int index, bool hovering)
     if (m_items[index].isClosing)
         return;
 
-    auto* anim = m_items[index].hoverAnim;
-    if (!anim)
+    auto* hoverAnim = m_items[index].hoverAnim;
+    if (!hoverAnim)
         return;
 
-    anim->stop();
-    anim->setDirection(hovering ? QAbstractAnimation::Forward : QAbstractAnimation::Backward);
-    anim->start();
+    hoverAnim->stop();
+    hoverAnim->setDuration(anim::duration(kTabHoverAnimationMs));
+    hoverAnim->setDirection(hovering ? QAbstractAnimation::Forward : QAbstractAnimation::Backward);
+    anim::start(hoverAnim);
 }
 
 void CustomTabBar::startCloseRevealAnimation(int index, bool reveal)
@@ -1479,8 +1491,8 @@ void CustomTabBar::startCloseRevealAnimation(int index, bool reveal)
         return;
 
     TabItem& item = m_items[index];
-    auto* anim = item.closeRevealAnim;
-    if (!anim)
+    auto* revealAnim = item.closeRevealAnim;
+    if (!revealAnim)
         return;
 
     if (reveal && qFuzzyCompare(item.closeRevealProgress, 1.0))
@@ -1488,12 +1500,12 @@ void CustomTabBar::startCloseRevealAnimation(int index, bool reveal)
     if (!reveal && qFuzzyIsNull(item.closeRevealProgress))
         return;
 
-    anim->stop();
-    anim->setStartValue(item.closeRevealProgress);
-    anim->setEndValue(reveal ? 1.0 : 0.0);
-    anim->setDuration(reveal ? 170 : 150);
-    anim->setEasingCurve(reveal ? QEasingCurve::OutCubic : QEasingCurve::InCubic);
-    anim->start();
+    revealAnim->stop();
+    revealAnim->setStartValue(item.closeRevealProgress);
+    revealAnim->setEndValue(reveal ? 1.0 : 0.0);
+    revealAnim->setDuration(anim::duration(reveal ? kCloseRevealInMs : kCloseRevealOutMs));
+    revealAnim->setEasingCurve(reveal ? QEasingCurve::OutCubic : QEasingCurve::InCubic);
+    anim::start(revealAnim);
 }
 
 void CustomTabBar::startFadeInAnimation(int index)
@@ -1502,11 +1514,11 @@ void CustomTabBar::startFadeInAnimation(int index)
         return;
 
     TabItem& item = m_items[index];
-    auto* anim = item.fadeAnim;
-    if (!anim)
+    auto* fadeAnim = item.fadeAnim;
+    if (!fadeAnim)
         return;
 
-    anim->stop();
+    fadeAnim->stop();
     item.isClosing = false;
     const qreal dist = tabPopDistancePx();
     item.opacity = 0.0;
@@ -1514,11 +1526,11 @@ void CustomTabBar::startFadeInAnimation(int index)
     item.enterSlideDistance = ruwa::ui::core::ThemeManager::instance().scaled(22);
     item.enterOffsetX = item.enterSlideDistance;
 
-    anim->setStartValue(0.0);
-    anim->setEndValue(1.0);
-    anim->setDuration(340);
-    anim->setEasingCurve(QEasingCurve::OutCubic);
-    anim->start();
+    fadeAnim->setStartValue(0.0);
+    fadeAnim->setEndValue(1.0);
+    fadeAnim->setDuration(340);
+    fadeAnim->setEasingCurve(QEasingCurve::OutCubic);
+    fadeAnim->start();
 }
 
 void CustomTabBar::applyTabVisibilityAnimFrame(const QUuid& itemId, qreal raw)
@@ -1593,8 +1605,8 @@ void CustomTabBar::startFadeOutAnimation(int index)
         return;
 
     TabItem& item = m_items[index];
-    auto* anim = item.fadeAnim;
-    if (!anim)
+    auto* fadeAnim = item.fadeAnim;
+    if (!fadeAnim)
         return;
 
     item.isClosing = true;
@@ -1602,18 +1614,18 @@ void CustomTabBar::startFadeOutAnimation(int index)
     item.fadeOutStartOffset = item.verticalOffset;
 
     // Disconnect any previous finished handler (e.g. from restart)
-    disconnect(anim, &QVariantAnimation::finished, this, nullptr);
+    disconnect(fadeAnim, &QVariantAnimation::finished, this, nullptr);
 
-    anim->stop();
-    anim->setStartValue(0.0);
-    anim->setEndValue(1.0);
-    anim->setDuration(240);
-    anim->setEasingCurve(QEasingCurve::InCubic);
+    fadeAnim->stop();
+    fadeAnim->setStartValue(0.0);
+    fadeAnim->setEndValue(1.0);
+    fadeAnim->setDuration(240);
+    fadeAnim->setEasingCurve(QEasingCurve::InCubic);
 
     // Use tabId for lookup - index may change when other tabs are removed
     QUuid tabId = item.id;
     connect(
-        anim, &QVariantAnimation::finished, this,
+        fadeAnim, &QVariantAnimation::finished, this,
         [this, tabId]() {
             int idx = m_indexById.value(tabId, -1);
             if (idx < 0)
@@ -1682,7 +1694,7 @@ void CustomTabBar::startFadeOutAnimation(int index)
         },
         Qt::SingleShotConnection);
 
-    anim->start();
+    fadeAnim->start();
 }
 
 void CustomTabBar::updateScaledSizes()

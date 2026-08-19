@@ -6,6 +6,7 @@
 #include "features/theme/manager/ThemeManager.h"
 #include "shared/widgets/ToolButton.h"
 #include "shared/widgets/overlays/ToolTipController.h"
+#include "shared/style/AnimationPolicy.h"
 #include "shared/style/PaintingUtils.h"
 
 #include <QApplication>
@@ -23,6 +24,8 @@
 #include <QScreen>
 #include <QSignalBlocker>
 #include <utility>
+
+namespace anim = ruwa::ui::core::anim;
 
 namespace ruwa::ui::workspace {
 
@@ -163,7 +166,7 @@ void ToolGroupPopup::showFor(QWidget* anchor, bool animate)
     m_posAnim->setStartValue(startPos);
     m_posAnim->setEndValue(targetPos);
     if (animate) {
-        m_posAnim->start();
+        anim::start(m_posAnim);
     } else {
         move(targetPos);
     }
@@ -495,7 +498,7 @@ void ToolGroupPopup::startShowAnimation(bool animateSlide)
     m_opacityAnim->setDuration(kShowDuration);
     m_opacityAnim->setStartValue(m_opacity);
     m_opacityAnim->setEndValue(1.0);
-    m_opacityAnim->start();
+    anim::start(m_opacityAnim);
 
     if (!animateSlide) {
         m_posAnim->stop();
@@ -535,8 +538,11 @@ void ToolGroupPopup::startHideAnimation()
         emit hidden();
     });
 
-    m_opacityAnim->start();
-    m_posAnim->start();
+    // The opacity animation owns the completion (it hides the popup and emits
+    // hidden()), so start it last: with animations disabled it finishes inside
+    // the call.
+    anim::start(m_posAnim);
+    anim::start(m_opacityAnim);
 }
 
 void ToolGroupPopup::detachGlobalFilters()

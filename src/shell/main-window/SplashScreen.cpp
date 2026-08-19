@@ -8,6 +8,7 @@
 #include "features/theme/manager/ThemeManager.h"
 #include "shared/resources/FontFamilyNames.h"
 #include "shared/resources/IconProvider.h"
+#include "shared/style/AnimationPolicy.h"
 #include "shell/main-window/WindowSetupCoordinator.h"
 
 #include <QApplication>
@@ -26,6 +27,8 @@
 #include <QWindow>
 #include <QtMath>
 #include <QGraphicsOpacityEffect>
+
+namespace anim = ruwa::ui::core::anim;
 
 namespace ruwa::ui::windows {
 
@@ -178,7 +181,7 @@ void SplashScreen::animateAppearance(int durationMs)
         }
     });
 
-    group->start(QAbstractAnimation::DeleteWhenStopped);
+    anim::start(group, QAbstractAnimation::DeleteWhenStopped);
 }
 
 void SplashScreen::startRectExpansion(int durationMs)
@@ -189,6 +192,18 @@ void SplashScreen::startRectExpansion(int durationMs)
 
     m_isExpanding = true;
     m_isAppearing = false;
+
+    // The signal this animation ends with is the only thing that closes the
+    // splash, so with animations disabled it has to be delivered here rather
+    // than left to a timer that would never be worth running.
+    if (!anim::enabled()) {
+        m_animatedRect = m_targetLocalRect;
+        m_hasExpanded = true;
+        m_isExpanding = false;
+        update();
+        emit expansionFinished();
+        return;
+    }
 
     const int fps = 60;
     const int frameTime = 1000 / fps;
@@ -272,7 +287,7 @@ void SplashScreen::expandToMainWindow(int durationMs)
     connect(fadeChrome, &QPropertyAnimation::finished, this,
         [this]() { startRectExpansion(m_pendingExpandDurationMs); });
 
-    fadeChrome->start(QAbstractAnimation::DeleteWhenStopped);
+    anim::start(fadeChrome, QAbstractAnimation::DeleteWhenStopped);
 }
 
 void SplashScreen::fadeOut(int durationMs)
@@ -288,7 +303,7 @@ void SplashScreen::fadeOut(int durationMs)
 
     connect(animation, &QPropertyAnimation::finished, this, &QWidget::close);
 
-    animation->start(QPropertyAnimation::DeleteWhenStopped);
+    anim::start(animation, QAbstractAnimation::DeleteWhenStopped);
 }
 
 void SplashScreen::paintInterior(QPainter& painter) const

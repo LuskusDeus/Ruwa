@@ -2,6 +2,9 @@
 
 // BaseAnimatedButton.cpp
 #include "BaseAnimatedButton.h"
+
+#include "shared/style/AnimationPolicy.h"
+
 #include <QApplication>
 #include <QCursor>
 #include <QEvent>
@@ -9,6 +12,8 @@
 #include <QPointer>
 #include <QTimer>
 #include <QWidget>
+
+namespace anim = ruwa::ui::core::anim;
 
 namespace ruwa::ui::widgets {
 
@@ -54,14 +59,13 @@ void reconcileHoverStateLater(BaseAnimatedButton* button)
 BaseAnimatedButton::BaseAnimatedButton(QWidget* parent)
     : QPushButton(parent)
 {
-    // Initialize hover animation
+    // Durations are applied per transition, not here: the animation policy can
+    // change while the button is alive, and every button in the application
+    // would otherwise keep whatever speed it was built with.
     m_hoverAnimation = new QPropertyAnimation(this, "hoverProgress", this);
-    m_hoverAnimation->setDuration(200);
     m_hoverAnimation->setEasingCurve(QEasingCurve::OutCubic);
 
-    // Initialize active state animation
     m_activeAnimation = new QPropertyAnimation(this, "activeProgress", this);
-    m_activeAnimation->setDuration(250);
     m_activeAnimation->setEasingCurve(QEasingCurve::InOutCubic);
 
     // Configure widget for custom painting
@@ -83,9 +87,10 @@ void BaseAnimatedButton::setActive(bool active)
 
     // Animate to new state
     m_activeAnimation->stop();
+    m_activeAnimation->setDuration(anim::duration(m_activeDurationMs));
     m_activeAnimation->setStartValue(m_activeProgress);
     m_activeAnimation->setEndValue(active ? 1.0 : 0.0);
-    m_activeAnimation->start();
+    anim::start(m_activeAnimation);
 }
 
 void BaseAnimatedButton::setActiveImmediate(bool active)
@@ -168,12 +173,12 @@ void BaseAnimatedButton::changeEvent(QEvent* event)
 
 void BaseAnimatedButton::setHoverDuration(int ms)
 {
-    m_hoverAnimation->setDuration(ms);
+    m_hoverDurationMs = qMax(0, ms);
 }
 
 void BaseAnimatedButton::setActiveDuration(int ms)
 {
-    m_activeAnimation->setDuration(ms);
+    m_activeDurationMs = qMax(0, ms);
 }
 
 void BaseAnimatedButton::setHovered(bool hovered)
@@ -183,9 +188,10 @@ void BaseAnimatedButton::setHovered(bool hovered)
     }
     m_isHovered = hovered;
     m_hoverAnimation->stop();
+    m_hoverAnimation->setDuration(anim::duration(m_hoverDurationMs));
     m_hoverAnimation->setStartValue(m_hoverProgress);
     m_hoverAnimation->setEndValue(hovered ? 1.0 : 0.0);
-    m_hoverAnimation->start();
+    anim::start(m_hoverAnimation);
 }
 
 void BaseAnimatedButton::finishVisualTransitions()

@@ -3,6 +3,7 @@
 // CommandPalette.cpp
 #include "CommandPalette.h"
 #include "shared/widgets/inputs/SearchBar.h"
+#include "shared/style/AnimationPolicy.h"
 #include "shared/i18n/TranslationManager.h"
 #include "commands/Command.h"
 #include "commands/CommandRegistry.h"
@@ -28,6 +29,8 @@
 #include <QtMath>
 
 #include <algorithm>
+
+namespace anim = ruwa::ui::core::anim;
 
 namespace ruwa::ui::widgets {
 
@@ -178,7 +181,7 @@ void CommandPalette::showAnimated()
     connect(m_showAnimation, &QPropertyAnimation::finished, this,
         &CommandPalette::onShowAnimationFinished);
 
-    m_showAnimation->start();
+    anim::start(m_showAnimation);
 
     // Focus search bar after small delay
     QTimer::singleShot(50, this, [this]() {
@@ -202,7 +205,7 @@ void CommandPalette::hideAnimated()
     m_listAnimation->setEasingCurve(QEasingCurve::InCubic);
     m_listAnimation->setStartValue(m_listShowProgress);
     m_listAnimation->setEndValue(0.0);
-    m_listAnimation->start();
+    anim::start(m_listAnimation);
 
     // Start hide animation (opacity only)
     m_showAnimation->stop();
@@ -215,7 +218,7 @@ void CommandPalette::hideAnimated()
     connect(m_showAnimation, &QPropertyAnimation::finished, this,
         &CommandPalette::onHideAnimationFinished);
 
-    m_showAnimation->start();
+    anim::start(m_showAnimation);
 }
 
 void CommandPalette::focusSearchBar()
@@ -327,14 +330,14 @@ void CommandPalette::onSearchTextChanged(const QString& text)
         m_listAnimation->setEasingCurve(QEasingCurve::OutCubic);
         m_listAnimation->setStartValue(m_listShowProgress);
         m_listAnimation->setEndValue(1.0);
-        m_listAnimation->start();
+        anim::start(m_listAnimation);
     } else if (!hasContent && m_listShowProgress > 0.0) {
         m_listAnimation->stop();
         m_listAnimation->setDuration(ListShowDuration / 2);
         m_listAnimation->setEasingCurve(QEasingCurve::InCubic);
         m_listAnimation->setStartValue(m_listShowProgress);
         m_listAnimation->setEndValue(0.0);
-        m_listAnimation->start();
+        anim::start(m_listAnimation);
     }
 }
 
@@ -698,12 +701,12 @@ void CommandPalette::scrollToOffset(qreal offset, bool animated)
 {
     m_targetScrollOffset = qBound(0.0, offset, m_maxScrollOffset);
 
-    if (animated && !qFuzzyCompare(m_targetScrollOffset, m_scrollOffset)) {
+    if (animated && anim::enabled() && !qFuzzyCompare(m_targetScrollOffset, m_scrollOffset)) {
         m_scrollAnimation->stop();
         m_scrollAnimation->setDuration(ScrollDuration);
         m_scrollAnimation->setStartValue(m_scrollOffset);
         m_scrollAnimation->setEndValue(m_targetScrollOffset);
-        m_scrollAnimation->start();
+        anim::start(m_scrollAnimation);
         if (m_scrollBar) {
             m_scrollBar->showAnimated();
         }

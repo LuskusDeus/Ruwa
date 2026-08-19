@@ -75,7 +75,9 @@ protected:
     void mouseReleaseEvent(QMouseEvent* event) override;
     void changeEvent(QEvent* event) override;
 
-    /// Configure animation durations (can be called in derived constructors)
+    /// Configure animation durations (can be called in derived constructors).
+    /// These are the authored durations; the animation policy scales them each
+    /// time a transition starts.
     void setHoverDuration(int ms);
     void setActiveDuration(int ms);
 
@@ -92,6 +94,10 @@ private:
     /// Animations
     QPropertyAnimation* m_hoverAnimation { nullptr };
     QPropertyAnimation* m_activeAnimation { nullptr };
+
+    /// Authored durations, before the animation policy scales them.
+    int m_hoverDurationMs { 200 };
+    int m_activeDurationMs { 250 };
 };
 
 } // namespace ruwa::ui::widgets

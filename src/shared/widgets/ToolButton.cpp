@@ -2,6 +2,7 @@
 
 // ToolButton.cpp
 #include "ToolButton.h"
+#include "shared/style/AnimationPolicy.h"
 #include "shared/style/PaintingUtils.h"
 #include "shared/style/WidgetStyleManager.h"
 
@@ -19,6 +20,10 @@ using namespace ruwa::ui::core;
 using namespace ruwa::ui::widgets;
 
 namespace {
+
+/// Authored enabled-state fade; the policy scales it at each transition.
+constexpr int kEnabledAnimationMs = 180;
+
 const int BASE_GROUP_INDICATOR_SIZE = 7;
 const int BASE_GROUP_INDICATOR_MARGIN = 4;
 const int BASE_ICON_LABEL_SPACING = 7;
@@ -54,7 +59,6 @@ ToolButton::ToolButton(Mode mode, QWidget* parent)
 
     m_enabledProgress = isEnabled() ? 1.0 : 0.0;
     m_enabledAnimation = new QPropertyAnimation(this, "enabledProgress", this);
-    m_enabledAnimation->setDuration(180);
     m_enabledAnimation->setEasingCurve(QEasingCurve::OutCubic);
 
     updateScaledSize();
@@ -202,7 +206,8 @@ void ToolButton::changeEvent(QEvent* event)
         if (isVisible()) {
             m_enabledAnimation->setStartValue(m_enabledProgress);
             m_enabledAnimation->setEndValue(target);
-            m_enabledAnimation->start();
+            m_enabledAnimation->setDuration(anim::duration(kEnabledAnimationMs));
+            anim::start(m_enabledAnimation);
         } else {
             setEnabledProgress(target);
         }

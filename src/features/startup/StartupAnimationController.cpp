@@ -114,11 +114,7 @@ void StartupAnimationController::expandSplashToWindow(ruwa::ui::windows::SplashS
         }
     }
 
-    // === 4. S T A R T   E X P A N S I O N ===
-
-    splash->expandToMainWindow(durationMs);
-
-    // === 5. W H E N   E X P A N S I O N   F I N I S H E S ===
+    // === 4. W H E N   E X P A N S I O N   F I N I S H E S ===
 
     m_splashTornDown = false;
     QPointer<ruwa::ui::windows::SplashScreen> splashGuard(splash);
@@ -127,8 +123,8 @@ void StartupAnimationController::expandSplashToWindow(ruwa::ui::windows::SplashS
     // timers (a 400ms fade, then a 16ms-tick rect-expansion timer) actually ticking. If the GUI
     // thread is starved badly enough that those timers never accumulate progress (e.g. a
     // runaway input loop), expansionFinished never fires and the user is left staring at an
-    // undismissable full-screen splash with no recourse but Task Manager. Armed here, at the
-    // moment expansion starts, as a hard 8s ceiling on that wait.
+    // undismissable full-screen splash with no recourse but Task Manager. Armed just before
+    // expansion is started at the end of this function, as a hard 8s ceiling on that wait.
     auto* watchdog = new QTimer(this);
     watchdog->setSingleShot(true);
     watchdog->setInterval(8000);
@@ -275,6 +271,15 @@ void StartupAnimationController::expandSplashToWindow(ruwa::ui::windows::SplashS
     connect(watchdog, &QTimer::timeout, this, revealMainWindowAndCloseSplash);
 
     watchdog->start();
+
+    // === 5. S T A R T   E X P A N S I O N ===
+    //
+    // Started only now that the handler above is connected and the watchdog is
+    // armed. An expansion that completes inside this call — which is what a
+    // disabled animation does — would otherwise emit expansionFinished into a
+    // connection that does not exist yet, and the splash would hang on screen
+    // until the watchdog fired.
+    splash->expandToMainWindow(durationMs);
 }
 
 } // namespace ruwa::core

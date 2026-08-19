@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: MPL-2.0
 
 #include "RadialMenuWidget.h"
+#include "shared/style/AnimationPolicy.h"
 
 #include "features/theme/manager/ThemeColors.h"
 #include "features/theme/manager/ThemeManager.h"
@@ -24,6 +25,8 @@
 #include <QtMath>
 
 #include <cmath>
+
+namespace anim = ruwa::ui::core::anim;
 
 namespace ruwa::ui::widgets {
 
@@ -149,7 +152,6 @@ RadialMenuWidget::RadialMenuWidget(QWidget* parent)
     m_hoverAnim = new QVariantAnimation(this);
     m_hoverAnim->setStartValue(0.0);
     m_hoverAnim->setEndValue(1.0);
-    m_hoverAnim->setDuration(kHoverDurationMs);
     // Left linear: the two things it drives want different curves, applied
     // below. Fades ease out, so they commit early and settle; the wedge's
     // rotation eases in and out, which is what makes the swing read as one
@@ -903,7 +905,8 @@ void RadialMenuWidget::startHoverAnimation()
         m_wedgeOpacityTo = 0.0;
     }
 
-    m_hoverAnim->start();
+    m_hoverAnim->setDuration(anim::duration(kHoverDurationMs));
+    anim::start(m_hoverAnim);
 }
 
 void RadialMenuWidget::updateHoverFromGlobal(const QPoint& globalPos)

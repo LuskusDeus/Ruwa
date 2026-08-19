@@ -6,6 +6,7 @@
 #include "shared/widgets/reorderlist/AnimatedListLayout.h"
 
 #include "features/theme/manager/ThemeManager.h"
+#include "shared/style/AnimationPolicy.h"
 
 #include <QPainter>
 #include <QPainterPath>
@@ -228,7 +229,7 @@ void DragGhostWidget::captureBackdrop(QWidget* backdropWidget)
     m_backdropFadeAnimation->setEasingCurve(QEasingCurve::OutCubic);
     connect(m_backdropFadeAnimation, &QPropertyAnimation::finished, this,
         [this]() { m_backdropFadeAnimation = nullptr; });
-    m_backdropFadeAnimation->start(QAbstractAnimation::DeleteWhenStopped);
+    anim::start(m_backdropFadeAnimation, QAbstractAnimation::DeleteWhenStopped);
 }
 
 void DragGhostWidget::animateTo(
@@ -283,7 +284,7 @@ void DragGhostWidget::animateTo(
                 finished();
             }
         });
-    group->start(QAbstractAnimation::DeleteWhenStopped);
+    anim::start(group, QAbstractAnimation::DeleteWhenStopped);
 }
 
 void DragGhostWidget::advanceFollow()
@@ -790,7 +791,7 @@ void ListDragDrop::createGhost(ReorderableRowWidget* sourceWidget, const QPoint&
         m_backdropAnim->setStartValue(0.0);
         m_backdropAnim->setEndValue(1.0);
         m_backdropAnim->setEasingCurve(QEasingCurve::OutCubic);
-        m_backdropAnim->start(QAbstractAnimation::DeleteWhenStopped);
+        anim::start(m_backdropAnim, QAbstractAnimation::DeleteWhenStopped);
     }
 
     m_ghost->show();
@@ -1122,7 +1123,7 @@ void ListDragDrop::endDrag(const QPoint& globalPos)
             group->addAnimation(rotationAnim);
 
             connect(group, &QParallelAnimationGroup::finished, this, [this]() { destroyGhost(); });
-            group->start(QAbstractAnimation::DeleteWhenStopped);
+            anim::start(group, QAbstractAnimation::DeleteWhenStopped);
         }
 
         // Commit the move directly — ghostSettled triggers model update + rebuild
@@ -1215,7 +1216,7 @@ void ListDragDrop::animateGhostFadeOut()
     group->addAnimation(rotationAnim);
 
     connect(group, &QParallelAnimationGroup::finished, this, [this]() { destroyGhost(); });
-    group->start(QAbstractAnimation::DeleteWhenStopped);
+    anim::start(group, QAbstractAnimation::DeleteWhenStopped);
 }
 
 void ListDragDrop::animateGhostToTarget()
@@ -1285,7 +1286,7 @@ void ListDragDrop::animateGhostToTarget()
         onSettleAnimFinished();
     });
 
-    settleGroup->start(QAbstractAnimation::DeleteWhenStopped);
+    anim::start(settleGroup, QAbstractAnimation::DeleteWhenStopped);
 }
 
 void ListDragDrop::animateGhostToSource()
@@ -1318,7 +1319,7 @@ void ListDragDrop::animateGhostToSource()
     m_ghostOpacityAnim->setStartValue(m_ghost->ghostOpacity());
     m_ghostOpacityAnim->setEndValue(0.0);
     m_ghostOpacityAnim->setEasingCurve(QEasingCurve::InOutCubic);
-    m_ghostOpacityAnim->start(QAbstractAnimation::DeleteWhenStopped);
+    anim::start(m_ghostOpacityAnim, QAbstractAnimation::DeleteWhenStopped);
 
     // Fade glass backdrop in sync with the ghost
     if (m_backdropAnim)
@@ -1328,14 +1329,14 @@ void ListDragDrop::animateGhostToSource()
     m_backdropAnim->setStartValue(m_ghost->backdropOpacity());
     m_backdropAnim->setEndValue(0.0);
     m_backdropAnim->setEasingCurve(QEasingCurve::InOutCubic);
-    m_backdropAnim->start(QAbstractAnimation::DeleteWhenStopped);
+    anim::start(m_backdropAnim, QAbstractAnimation::DeleteWhenStopped);
 
     auto* rotationAnim = new QPropertyAnimation(m_ghost, "ghostRotation", this);
     rotationAnim->setDuration(200);
     rotationAnim->setStartValue(m_ghost->ghostRotation());
     rotationAnim->setEndValue(0.0);
     rotationAnim->setEasingCurve(QEasingCurve::OutCubic);
-    rotationAnim->start(QAbstractAnimation::DeleteWhenStopped);
+    anim::start(rotationAnim, QAbstractAnimation::DeleteWhenStopped);
 
     connect(m_settleAnim, &QPropertyAnimation::finished, this, [this]() {
         m_dragging = false;
@@ -1343,7 +1344,7 @@ void ListDragDrop::animateGhostToSource()
         emit dragCancelled();
     });
 
-    m_settleAnim->start(QAbstractAnimation::DeleteWhenStopped);
+    anim::start(m_settleAnim, QAbstractAnimation::DeleteWhenStopped);
 }
 
 void ListDragDrop::onSettleAnimFinished()
@@ -1447,7 +1448,10 @@ bool ListDragDrop::animateMultiGhostSettle(
             break;
         }
     }
-    if (allSkipPositioning) {
+    // With animations disabled there is no flight or morph to play, so take the
+    // same immediate path as a settle where every row is already in place: the
+    // ghost goes away and the move commits in this call.
+    if (allSkipPositioning || !anim::enabled()) {
         destroyGhost();
         onSettleAnimFinished();
         return true; // caller must skip collapse
@@ -1461,14 +1465,14 @@ bool ListDragDrop::animateMultiGhostSettle(
     m_ghostOpacityAnim->setEasingCurve(QEasingCurve::OutCubic);
     m_ghostOpacityAnim->setStartValue(m_ghost->ghostOpacity());
     m_ghostOpacityAnim->setEndValue(1.0);
-    m_ghostOpacityAnim->start(QAbstractAnimation::DeleteWhenStopped);
+    anim::start(m_ghostOpacityAnim, QAbstractAnimation::DeleteWhenStopped);
 
     auto* rotationAnim = new QPropertyAnimation(m_ghost, "ghostRotation", this);
     rotationAnim->setDuration(160);
     rotationAnim->setEasingCurve(QEasingCurve::OutCubic);
     rotationAnim->setStartValue(m_ghost->ghostRotation());
     rotationAnim->setEndValue(0.0);
-    rotationAnim->start(QAbstractAnimation::DeleteWhenStopped);
+    anim::start(rotationAnim, QAbstractAnimation::DeleteWhenStopped);
 
     // Phase 1: fly ghost to gap (300 ms)
     m_settleAnim = new QPropertyAnimation(m_ghost, "pos", this);
@@ -1478,7 +1482,7 @@ bool ListDragDrop::animateMultiGhostSettle(
     m_settleAnim->setEndValue(targetLocal);
     connect(
         m_settleAnim, &QPropertyAnimation::finished, this, [this]() { m_settleAnim = nullptr; });
-    m_settleAnim->start(QAbstractAnimation::DeleteWhenStopped);
+    anim::start(m_settleAnim, QAbstractAnimation::DeleteWhenStopped);
 
     // Phase 2: morph pill → N row cards + size expansion — runs in parallel with fly (300ms)
     QParallelAnimationGroup* morphGroup = new QParallelAnimationGroup(this);
@@ -1530,7 +1534,7 @@ bool ListDragDrop::animateMultiGhostSettle(
         m_morphAnim = nullptr;
         onSettleAnimFinished();
     });
-    morphGroup->start(QAbstractAnimation::DeleteWhenStopped);
+    anim::start(morphGroup, QAbstractAnimation::DeleteWhenStopped);
     return false;
 }
 

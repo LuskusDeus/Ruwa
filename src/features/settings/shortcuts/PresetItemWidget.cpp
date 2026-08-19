@@ -7,6 +7,7 @@
 #include "features/theme/manager/ThemeColors.h"
 #include "shared/resources/IconProvider.h"
 #include "shared/style/PaintingUtils.h"
+#include "shared/style/AnimationPolicy.h"
 
 #include <QEnterEvent>
 #include <QEvent>
@@ -20,6 +21,8 @@
 #include <QPainterPath>
 #include <QResizeEvent>
 #include <QVariantAnimation>
+
+namespace anim = ruwa::ui::core::anim;
 
 namespace ruwa::ui::widgets {
 
@@ -168,38 +171,38 @@ void PresetItemWidget::startHoverAnimation(bool entering)
     m_hoverAnim = new QVariantAnimation(this);
     m_hoverAnim->setStartValue(m_hoverProgress);
     m_hoverAnim->setEndValue(target);
-    m_hoverAnim->setDuration(HOVER_ANIM_MS);
+    m_hoverAnim->setDuration(anim::duration(HOVER_ANIM_MS));
     m_hoverAnim->setEasingCurve(QEasingCurve::OutCubic);
     connect(m_hoverAnim, &QVariantAnimation::valueChanged, this, [this](const QVariant& v) {
         m_hoverProgress = v.toReal();
         update();
     });
-    m_hoverAnim->start();
+    anim::start(m_hoverAnim);
 }
 
 void PresetItemWidget::startButtonHoverAnimation(
-    QVariantAnimation*& anim, qreal* progress, bool entering)
+    QVariantAnimation*& hoverAnim, qreal* progress, bool entering)
 {
     if (!progress) {
         return;
     }
 
-    if (anim) {
-        anim->stop();
-        anim->deleteLater();
-        anim = nullptr;
+    if (hoverAnim) {
+        hoverAnim->stop();
+        hoverAnim->deleteLater();
+        hoverAnim = nullptr;
     }
     const qreal target = entering ? 1.0 : 0.0;
-    anim = new QVariantAnimation(this);
-    anim->setStartValue(*progress);
-    anim->setEndValue(target);
-    anim->setDuration(HOVER_ANIM_MS);
-    anim->setEasingCurve(QEasingCurve::OutCubic);
-    connect(anim, &QVariantAnimation::valueChanged, this, [this, progress](const QVariant& v) {
+    hoverAnim = new QVariantAnimation(this);
+    hoverAnim->setStartValue(*progress);
+    hoverAnim->setEndValue(target);
+    hoverAnim->setDuration(anim::duration(HOVER_ANIM_MS));
+    hoverAnim->setEasingCurve(QEasingCurve::OutCubic);
+    connect(hoverAnim, &QVariantAnimation::valueChanged, this, [this, progress](const QVariant& v) {
         *progress = v.toReal();
         update();
     });
-    anim->start();
+    anim::start(hoverAnim);
 }
 
 void PresetItemWidget::updateButtonHoverStates(const QPoint& pos)
@@ -235,13 +238,13 @@ void PresetItemWidget::startSelectionAnimation(bool selecting)
     m_selectionAnim = new QVariantAnimation(this);
     m_selectionAnim->setStartValue(m_selectionProgress);
     m_selectionAnim->setEndValue(target);
-    m_selectionAnim->setDuration(SELECTION_ANIM_MS);
+    m_selectionAnim->setDuration(anim::duration(SELECTION_ANIM_MS));
     m_selectionAnim->setEasingCurve(QEasingCurve::OutCubic);
     connect(m_selectionAnim, &QVariantAnimation::valueChanged, this, [this](const QVariant& v) {
         m_selectionProgress = v.toReal();
         update();
     });
-    m_selectionAnim->start();
+    anim::start(m_selectionAnim);
 }
 
 void PresetItemWidget::enterEvent(QEnterEvent* event)

@@ -2,6 +2,9 @@
 
 // WidgetStyleManager.cpp
 #include "WidgetStyleManager.h"
+
+#include <QtMath>
+
 namespace ruwa::ui::core {
 
 WidgetStyleManager::WidgetStyleManager()
@@ -90,6 +93,15 @@ void WidgetStyleManager::setAnimationsEnabled(bool enabled)
     }
 }
 
+void WidgetStyleManager::setAnimationSpeed(qreal speed)
+{
+    speed = qBound(kMinAnimationSpeed, speed, kMaxAnimationSpeed);
+    if (!qFuzzyCompare(m_globalSettings.animationSpeed, speed)) {
+        m_globalSettings.animationSpeed = speed;
+        emit globalSettingsChanged();
+    }
+}
+
 void WidgetStyleManager::setHoverEffectsEnabled(bool enabled)
 {
     if (m_globalSettings.hoverEffectsEnabled != enabled) {
@@ -137,20 +149,23 @@ void WidgetStyleManager::setGlobalCornerRadius(int radius)
 // Resolved Values
 // ============================================================================
 
-int WidgetStyleManager::effectiveHoverDuration(const WidgetStyle& style) const
+int WidgetStyleManager::scaledDuration(int authoredMs) const
 {
-    if (!m_globalSettings.animationsEnabled) {
+    if (!m_globalSettings.animationsEnabled || authoredMs <= 0) {
         return 0;
     }
-    return style.animations.hoverDuration.value_or(m_globalSettings.hoverDuration);
+    return qMax(1, qRound(authoredMs / m_globalSettings.animationSpeed));
+}
+
+int WidgetStyleManager::effectiveHoverDuration(const WidgetStyle& style) const
+{
+    return scaledDuration(style.animations.hoverDuration.value_or(m_globalSettings.hoverDuration));
 }
 
 int WidgetStyleManager::effectiveActiveDuration(const WidgetStyle& style) const
 {
-    if (!m_globalSettings.animationsEnabled) {
-        return 0;
-    }
-    return style.animations.activeDuration.value_or(m_globalSettings.activeDuration);
+    return scaledDuration(
+        style.animations.activeDuration.value_or(m_globalSettings.activeDuration));
 }
 
 int WidgetStyleManager::effectiveCornerRadius(const WidgetStyle& style) const

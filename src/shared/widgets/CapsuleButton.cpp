@@ -2,6 +2,7 @@
 
 // CapsuleButton.cpp
 #include "CapsuleButton.h"
+#include "shared/style/AnimationPolicy.h"
 #include "features/theme/manager/ThemeManager.h"
 #include "shared/style/PaintingUtils.h"
 #include "shared/widgets/DotGridLoadingIndicator.h"
@@ -13,7 +14,15 @@
 #include <QEnterEvent>
 #include <QResizeEvent>
 
+namespace anim = ruwa::ui::core::anim;
+
 namespace ruwa::ui::widgets {
+
+namespace {
+/// Authored durations; the animation policy scales them at each transition.
+constexpr int kHoverAnimationMs = 180;
+constexpr int kCheckAnimationMs = 240;
+} // namespace
 
 namespace {
 const int BASE_TAB_PAD_H = 14;
@@ -65,12 +74,10 @@ CapsuleButton::~CapsuleButton()
 void CapsuleButton::setupAnimations()
 {
     m_hoverAnimation = new QPropertyAnimation(this, "hoverProgress");
-    m_hoverAnimation->setDuration(180);
     m_hoverAnimation->setEasingCurve(QEasingCurve::OutCubic);
 
     if (m_variant == Variant::Tab) {
         m_checkAnimation = new QPropertyAnimation(this, "checkProgress");
-        m_checkAnimation->setDuration(240);
         m_checkAnimation->setEasingCurve(QEasingCurve::InOutCubic);
         connect(this, &QPushButton::toggled, this, [this](bool on) { startCheckAnimation(on); });
     }
@@ -365,7 +372,8 @@ void CapsuleButton::startHoverAnimation(bool hovered)
     m_hoverAnimation->stop();
     m_hoverAnimation->setStartValue(m_hoverProgress);
     m_hoverAnimation->setEndValue(hovered ? 1.0 : 0.0);
-    m_hoverAnimation->start();
+    m_hoverAnimation->setDuration(anim::duration(kHoverAnimationMs));
+    anim::start(m_hoverAnimation);
 }
 
 void CapsuleButton::startCheckAnimation(bool checked)
@@ -375,7 +383,8 @@ void CapsuleButton::startCheckAnimation(bool checked)
     m_checkAnimation->stop();
     m_checkAnimation->setStartValue(m_checkProgress);
     m_checkAnimation->setEndValue(checked ? 1.0 : 0.0);
-    m_checkAnimation->start();
+    m_checkAnimation->setDuration(anim::duration(kCheckAnimationMs));
+    anim::start(m_checkAnimation);
 }
 
 // ============================================================================

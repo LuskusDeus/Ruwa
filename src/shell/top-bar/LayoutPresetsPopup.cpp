@@ -7,6 +7,7 @@
 #include "shell/docking/state/DockLayoutPresetStore.h"
 #include "shared/widgets/PresetMenuListWidget.h"
 #include "shared/widgets/PresetMenuTypes.h"
+#include "shared/style/AnimationPolicy.h"
 #include "shared/style/PaintingUtils.h"
 #include "features/theme/manager/ThemeManager.h"
 #include "features/theme/manager/ThemeColors.h"
@@ -24,6 +25,8 @@
 #include <QResizeEvent>
 #include <QScreen>
 #include <QVBoxLayout>
+
+namespace anim = ruwa::ui::core::anim;
 
 namespace ruwa::ui::widgets {
 
@@ -502,7 +505,7 @@ void LayoutPresetsPopup::showBelow(QWidget* anchor, bool slideFromTop)
     m_opacityAnim->setStartValue(m_opacity);
     m_opacityAnim->setEndValue(1.0);
     m_opacityAnim->setEasingCurve(QEasingCurve::OutCubic);
-    m_opacityAnim->start();
+    anim::start(m_opacityAnim);
 
     if (slideFromTop) {
         // Reveal by growing the body downward from the TopBar seam (MessagePopup feel).
@@ -515,7 +518,7 @@ void LayoutPresetsPopup::showBelow(QWidget* anchor, bool slideFromTop)
         m_heightAnim->setStartValue(0);
         m_heightAnim->setEndValue(m_targetHeight);
         m_heightAnim->setEasingCurve(QEasingCurve::OutCubic);
-        m_heightAnim->start();
+        anim::start(m_heightAnim);
     }
 
     emit shown();
@@ -549,7 +552,7 @@ void LayoutPresetsPopup::hidePopup()
     m_heightAnim->setStartValue(m_displayHeight > 0 ? m_displayHeight : height());
     m_heightAnim->setEndValue(0);
     m_heightAnim->setEasingCurve(QEasingCurve::InCubic);
-    m_heightAnim->start();
+    anim::start(m_heightAnim);
 
     disconnect(m_opacityAnim, &QPropertyAnimation::finished, this, nullptr);
     connect(m_opacityAnim, &QPropertyAnimation::finished, this, [this]() {
@@ -563,7 +566,7 @@ void LayoutPresetsPopup::hidePopup()
         }
     });
 
-    m_opacityAnim->start();
+    anim::start(m_opacityAnim);
 }
 
 void LayoutPresetsPopup::forceHide()

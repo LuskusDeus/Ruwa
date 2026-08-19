@@ -2,6 +2,7 @@
 
 // DockGroupHeader.cpp
 #include "DockGroupHeader.h"
+#include "shared/style/AnimationPolicy.h"
 #include "DockPanel.h"
 #include "features/theme/manager/ThemeManager.h"
 #include "shared/resources/IconProvider.h"
@@ -16,6 +17,8 @@
 #include <QVariantAnimation>
 #include <QWheelEvent>
 #include <utility>
+
+namespace anim = ruwa::ui::core::anim;
 
 namespace ruwa::ui::docking {
 
@@ -105,12 +108,12 @@ void DockGroupHeader::destroyItemAnimations(TabItem& item)
     // own finished handler, and the layout surgery that follows runs all the
     // way back into setPanels() — i.e. into here — while that signal is still
     // being emitted. Deleting the sender outright there is a crash.
-    for (QVariantAnimation** anim : { &item.hoverAnim, &item.closeRevealAnim, &item.fadeAnim }) {
-        if (*anim) {
-            (*anim)->stop();
-            (*anim)->disconnect(this);
-            (*anim)->deleteLater();
-            *anim = nullptr;
+    for (QVariantAnimation** slot : { &item.hoverAnim, &item.closeRevealAnim, &item.fadeAnim }) {
+        if (*slot) {
+            (*slot)->stop();
+            (*slot)->disconnect(this);
+            (*slot)->deleteLater();
+            *slot = nullptr;
         }
     }
 }
@@ -894,7 +897,7 @@ void DockGroupHeader::startHoverAnimation(int index, bool hovering)
     TabItem& item = m_items[index];
     if (!item.hoverAnim) {
         item.hoverAnim = new QVariantAnimation(this);
-        item.hoverAnim->setDuration(kHoverAnimationMs);
+        item.hoverAnim->setDuration(anim::duration(kHoverAnimationMs));
         item.hoverAnim->setEasingCurve(QEasingCurve::OutCubic);
         DockPanel* owner = item.panel.data();
         connect(item.hoverAnim, &QVariantAnimation::valueChanged, this,
@@ -910,7 +913,7 @@ void DockGroupHeader::startHoverAnimation(int index, bool hovering)
     item.hoverAnim->stop();
     item.hoverAnim->setStartValue(item.hoverProgress);
     item.hoverAnim->setEndValue(hovering ? 1.0 : 0.0);
-    item.hoverAnim->start();
+    anim::start(item.hoverAnim);
 }
 
 void DockGroupHeader::startCloseAnimation(int index, bool matchHandover)
@@ -1045,9 +1048,10 @@ void DockGroupHeader::startCloseRevealAnimation(int index, bool reveal)
     item.closeRevealAnim->stop();
     item.closeRevealAnim->setStartValue(item.closeRevealProgress);
     item.closeRevealAnim->setEndValue(reveal ? 1.0 : 0.0);
-    item.closeRevealAnim->setDuration(reveal ? kCloseRevealInMs : kCloseRevealOutMs);
+    item.closeRevealAnim->setDuration(
+        anim::duration(reveal ? kCloseRevealInMs : kCloseRevealOutMs));
     item.closeRevealAnim->setEasingCurve(reveal ? QEasingCurve::OutCubic : QEasingCurve::InCubic);
-    item.closeRevealAnim->start();
+    anim::start(item.closeRevealAnim);
 }
 
 } // namespace ruwa::ui::docking

@@ -97,11 +97,14 @@ void StartupController::showSplash()
 
     // Phase 3: Splash appearance animation
     m_currentPhase = StartupPhase::SplashAppear;
-    m_splash->animateAppearance(400);
 
-    // Connect to appearance finished
+    // Connect before starting: an appearance that completes inside the call —
+    // which is what a disabled animation does — would otherwise emit into a
+    // connection that does not exist yet, and startup would never advance.
     connect(m_splash, &ui::windows::SplashScreen::appearanceFinished, this,
         &StartupController::onSplashAppearanceFinished);
+
+    m_splash->animateAppearance(400);
 }
 
 void StartupController::onSplashAppearanceFinished()

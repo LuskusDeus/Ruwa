@@ -3,12 +3,21 @@
 // SmoothScrollBar.cpp
 #include "SmoothScrollbar.h"
 #include "features/theme/manager/ThemeManager.h"
+#include "shared/style/AnimationPolicy.h"
 
 #include <QPainter>
 #include <QMouseEvent>
 #include <QTimer>
 
+namespace anim = ruwa::ui::core::anim;
+
 namespace ruwa::ui::widgets {
+
+namespace {
+/// Authored durations; the animation policy scales them at each transition.
+constexpr int kHoverAnimationMs = 200;
+constexpr int kVisibilityAnimationMs = 200;
+} // namespace
 
 SmoothScrollBar::SmoothScrollBar(Qt::Orientation orientation, QWidget* parent)
     : QScrollBar(orientation, parent)
@@ -20,7 +29,6 @@ SmoothScrollBar::SmoothScrollBar(Qt::Orientation orientation, QWidget* parent)
 
     // Setup animations
     m_hoverAnimation = new QPropertyAnimation(this, "hoverProgress");
-    m_hoverAnimation->setDuration(200);
     m_hoverAnimation->setEasingCurve(QEasingCurve::OutCubic);
 
     m_visibilityAnimation = new QPropertyAnimation(this, "visibilityProgress");
@@ -29,7 +37,6 @@ SmoothScrollBar::SmoothScrollBar(Qt::Orientation orientation, QWidget* parent)
     // OutCubic (matching the slide) makes opacity change from the very first frame —
     // InOutCubic's slow start left the bar near full opacity for most of the slide,
     // so the fade looked like it only began once the bar had stopped moving.
-    m_visibilityAnimation->setDuration(200);
     m_visibilityAnimation->setEasingCurve(QEasingCurve::OutCubic);
     // Once a fade-out completes, actually take the widget out of the layout so it
     // stops eating hover/paint work. Fade-in keeps it shown throughout.
@@ -136,9 +143,10 @@ void SmoothScrollBar::showAnimated()
     }
 
     m_visibilityAnimation->stop();
+    m_visibilityAnimation->setDuration(anim::duration(kVisibilityAnimationMs));
     m_visibilityAnimation->setStartValue(m_visibilityProgress);
     m_visibilityAnimation->setEndValue(1.0);
-    m_visibilityAnimation->start();
+    anim::start(m_visibilityAnimation);
 }
 
 void SmoothScrollBar::hideAnimated()
@@ -155,9 +163,10 @@ void SmoothScrollBar::hideAnimated()
 
     // Keep the widget visible while it fades; the finished handler hides it.
     m_visibilityAnimation->stop();
+    m_visibilityAnimation->setDuration(anim::duration(kVisibilityAnimationMs));
     m_visibilityAnimation->setStartValue(m_visibilityProgress);
     m_visibilityAnimation->setEndValue(0.0);
-    m_visibilityAnimation->start();
+    anim::start(m_visibilityAnimation);
 }
 
 QRect SmoothScrollBar::getHandleRect() const
@@ -346,7 +355,8 @@ void SmoothScrollBar::enterEvent(QEnterEvent* event)
     m_hoverAnimation->stop();
     m_hoverAnimation->setStartValue(m_hoverProgress);
     m_hoverAnimation->setEndValue(1.0);
-    m_hoverAnimation->start();
+    m_hoverAnimation->setDuration(anim::duration(kHoverAnimationMs));
+    anim::start(m_hoverAnimation);
 
     // Don't auto-hide - keep visible
     showAnimated();
@@ -360,7 +370,8 @@ void SmoothScrollBar::leaveEvent(QEvent* event)
         m_hoverAnimation->stop();
         m_hoverAnimation->setStartValue(m_hoverProgress);
         m_hoverAnimation->setEndValue(0.0);
-        m_hoverAnimation->start();
+        m_hoverAnimation->setDuration(anim::duration(kHoverAnimationMs));
+        anim::start(m_hoverAnimation);
 
         // Don't auto-hide on leave
     }
@@ -431,7 +442,8 @@ void SmoothScrollBar::mouseReleaseEvent(QMouseEvent* event)
                 m_hoverAnimation->stop();
                 m_hoverAnimation->setStartValue(m_hoverProgress);
                 m_hoverAnimation->setEndValue(0.0);
-                m_hoverAnimation->start();
+                m_hoverAnimation->setDuration(anim::duration(kHoverAnimationMs));
+                anim::start(m_hoverAnimation);
             }
         }
     }

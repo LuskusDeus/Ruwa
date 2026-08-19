@@ -6,6 +6,7 @@
 #include "features/theme/manager/ThemeManager.h"
 #include "features/theme/manager/ThemeColors.h"
 #include "shared/style/PaintingUtils.h"
+#include "shared/style/AnimationPolicy.h"
 
 #include <QEnterEvent>
 #include <QFont>
@@ -13,6 +14,8 @@
 #include <QMouseEvent>
 #include <QPainter>
 #include <QVariantAnimation>
+
+namespace anim = ruwa::ui::core::anim;
 
 namespace ruwa::ui::widgets {
 
@@ -104,13 +107,13 @@ void CategoryItemWidget::startHoverAnimation(bool entering)
     m_hoverAnim = new QVariantAnimation(this);
     m_hoverAnim->setStartValue(m_hoverProgress);
     m_hoverAnim->setEndValue(target);
-    m_hoverAnim->setDuration(HOVER_ANIM_MS);
+    m_hoverAnim->setDuration(anim::duration(HOVER_ANIM_MS));
     m_hoverAnim->setEasingCurve(QEasingCurve::OutCubic);
     connect(m_hoverAnim, &QVariantAnimation::valueChanged, this, [this](const QVariant& v) {
         m_hoverProgress = v.toReal();
         update();
     });
-    m_hoverAnim->start();
+    anim::start(m_hoverAnim);
 }
 
 void CategoryItemWidget::startSelectionAnimation(bool selecting)
@@ -124,13 +127,13 @@ void CategoryItemWidget::startSelectionAnimation(bool selecting)
     m_selectionAnim = new QVariantAnimation(this);
     m_selectionAnim->setStartValue(m_selectionProgress);
     m_selectionAnim->setEndValue(target);
-    m_selectionAnim->setDuration(SELECTION_ANIM_MS);
+    m_selectionAnim->setDuration(anim::duration(SELECTION_ANIM_MS));
     m_selectionAnim->setEasingCurve(QEasingCurve::OutCubic);
     connect(m_selectionAnim, &QVariantAnimation::valueChanged, this, [this](const QVariant& v) {
         m_selectionProgress = v.toReal();
         update();
     });
-    m_selectionAnim->start();
+    anim::start(m_selectionAnim);
 }
 
 void CategoryItemWidget::enterEvent(QEnterEvent* event)

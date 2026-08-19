@@ -4,6 +4,7 @@
 
 #include "features/theme/manager/ThemeManager.h"
 #include "shared/style/PaintingUtils.h"
+#include "shared/style/AnimationPolicy.h"
 
 #include <QFocusEvent>
 #include <QKeyEvent>
@@ -14,6 +15,8 @@
 #include <QTabletEvent>
 #include <QVariantAnimation>
 #include <QtMath>
+
+namespace anim = ruwa::ui::core::anim;
 
 namespace ruwa::ui::widgets {
 
@@ -44,7 +47,6 @@ ColorChannelSlidersWidget::ColorChannelSlidersWidget(Model model, QWidget* paren
 
     for (int i = 0; i < 3; ++i) {
         auto* animation = new QVariantAnimation(this);
-        animation->setDuration(kHoverDuration);
         animation->setEasingCurve(QEasingCurve::OutCubic);
         connect(
             animation, &QVariantAnimation::valueChanged, this, [this, i](const QVariant& value) {
@@ -276,9 +278,10 @@ void ColorChannelSlidersWidget::animateHover(int index, qreal target)
         return;
     }
     animation->stop();
+    animation->setDuration(anim::duration(kHoverDuration));
     animation->setStartValue(m_hoverProgress[index]);
     animation->setEndValue(target);
-    animation->start();
+    anim::start(animation);
 }
 
 void ColorChannelSlidersWidget::onThemeChanged()

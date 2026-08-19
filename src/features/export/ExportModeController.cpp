@@ -9,6 +9,7 @@
 #include "features/canvas/ui/CanvasPanel.h"
 #include "features/canvas/scene/Canvas.h"
 #include "features/canvas/scene/Viewport.h"
+#include "shared/style/AnimationPolicy.h"
 #include "features/canvas/scene/Camera2D.h"
 
 #include <QVariantAnimation>
@@ -17,6 +18,8 @@
 #include <QWidget>
 
 #include <cmath>
+
+namespace anim = ruwa::ui::core::anim;
 
 namespace ruwa::ui::workspace {
 
@@ -144,7 +147,7 @@ void ExportModeController::startAnimation(bool entering)
         }
     }
 
-    m_animation->start();
+    anim::start(m_animation);
 }
 
 int ExportModeController::exportPanelTargetWidth() const

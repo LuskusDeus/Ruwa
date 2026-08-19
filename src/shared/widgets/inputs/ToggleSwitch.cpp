@@ -3,6 +3,7 @@
 // ToggleSwitch.cpp
 #include "ToggleSwitch.h"
 #include "shared/style/WidgetStyleManager.h"
+#include "shared/style/AnimationPolicy.h"
 
 #include <QPainter>
 #include <QMouseEvent>
@@ -15,6 +16,9 @@ namespace ruwa::ui::widgets {
 using namespace ruwa::ui::core;
 
 namespace {
+
+/// Authored thumb travel; the animation policy scales it at each transition.
+constexpr int kThumbAnimationMs = 200;
 const int BASE_THUMB_PADDING = 3;
 
 qreal adaptiveTrackRadius(const QRectF& rect, qreal requestedRadius)
@@ -132,7 +136,6 @@ ToggleSwitch::ToggleSwitch(const InitOptions& options, QWidget* parent)
 void ToggleSwitch::setupThumbAnimation()
 {
     m_thumbAnimation = new QPropertyAnimation(this, "thumbPosition", this);
-    m_thumbAnimation->setDuration(200);
     m_thumbAnimation->setEasingCurve(QEasingCurve::InOutCubic);
 }
 
@@ -179,7 +182,8 @@ void ToggleSwitch::animateThumb(bool checked, TransitionMode mode)
     m_thumbAnimation->stop();
     m_thumbAnimation->setStartValue(m_thumbPosition);
     m_thumbAnimation->setEndValue(checked ? 1.0 : 0.0);
-    m_thumbAnimation->start();
+    m_thumbAnimation->setDuration(anim::duration(kThumbAnimationMs));
+    anim::start(m_thumbAnimation);
 }
 
 void ToggleSwitch::mousePressEvent(QMouseEvent* event)

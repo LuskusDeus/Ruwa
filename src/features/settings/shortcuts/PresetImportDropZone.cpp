@@ -7,6 +7,7 @@
 #include "features/theme/manager/ThemeColors.h"
 #include "shared/resources/IconProvider.h"
 #include "shared/style/PaintingUtils.h"
+#include "shared/style/AnimationPolicy.h"
 
 #include <QDragEnterEvent>
 #include <QDragLeaveEvent>
@@ -22,6 +23,8 @@
 #include <QPen>
 #include <QUrl>
 #include <QVariantAnimation>
+
+namespace anim = ruwa::ui::core::anim;
 
 namespace ruwa::ui::widgets {
 
@@ -68,13 +71,13 @@ void PresetImportDropZone::startHoverAnimation(bool entering)
     m_hoverAnim = new QVariantAnimation(this);
     m_hoverAnim->setStartValue(m_hoverProgress);
     m_hoverAnim->setEndValue(entering ? 1.0 : 0.0);
-    m_hoverAnim->setDuration(ANIM_MS);
+    m_hoverAnim->setDuration(anim::duration(ANIM_MS));
     m_hoverAnim->setEasingCurve(QEasingCurve::OutCubic);
     connect(m_hoverAnim, &QVariantAnimation::valueChanged, this, [this](const QVariant& v) {
         m_hoverProgress = v.toReal();
         update();
     });
-    m_hoverAnim->start();
+    anim::start(m_hoverAnim);
 }
 
 void PresetImportDropZone::startDragAnimation(bool active)
@@ -87,13 +90,13 @@ void PresetImportDropZone::startDragAnimation(bool active)
     m_dragAnim = new QVariantAnimation(this);
     m_dragAnim->setStartValue(m_dragProgress);
     m_dragAnim->setEndValue(active ? 1.0 : 0.0);
-    m_dragAnim->setDuration(ANIM_MS);
+    m_dragAnim->setDuration(anim::duration(ANIM_MS));
     m_dragAnim->setEasingCurve(QEasingCurve::OutCubic);
     connect(m_dragAnim, &QVariantAnimation::valueChanged, this, [this](const QVariant& v) {
         m_dragProgress = v.toReal();
         update();
     });
-    m_dragAnim->start();
+    anim::start(m_dragAnim);
 }
 
 void PresetImportDropZone::enterEvent(QEnterEvent* event)

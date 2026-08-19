@@ -6,6 +6,7 @@
 
 #include "features/theme/manager/ThemeManager.h"
 #include "shared/resources/IconProvider.h"
+#include "shared/style/AnimationPolicy.h"
 #include "shared/style/WidgetStyleManager.h"
 #include "shared/widgets/Separator.h"
 #include "shared/widgets/ToolButton.h"
@@ -35,6 +36,8 @@
 #include <QVariantList>
 #include <QVariantMap>
 #include <QVBoxLayout>
+
+namespace anim = ruwa::ui::core::anim;
 
 namespace ruwa::ui::widgets {
 
@@ -1328,7 +1331,7 @@ void CanvasToolStateOverlay::animateOverlayGeometry(const QSize& targetSize)
     m_geometryAnimation->setEasingCurve(
         wasAnimating ? kTransitionInterruptEasing : kTransitionEasing);
     m_transitionProgress = 0.0;
-    m_geometryAnimation->start();
+    anim::start(m_geometryAnimation);
 }
 
 void CanvasToolStateOverlay::updateOverlaySize()

@@ -6,6 +6,7 @@
 #include "WelcomeBannerButton.h"
 #include "commands/ShortcutManager.h"
 #include "features/theme/manager/ThemeManager.h"
+#include "shared/style/AnimationPolicy.h"
 #include "features/theme/manager/ThemeColors.h"
 #include "shared/style/PaintingUtils.h"
 
@@ -24,6 +25,8 @@
 #include <QVBoxLayout>
 #include <QVector>
 #include <QtMath>
+
+namespace anim = ruwa::ui::core::anim;
 
 namespace ruwa::ui::widgets {
 
@@ -612,17 +615,17 @@ void WelcomeBannerCropOverlay::animateIn()
     m_dimAnimation->setEasingCurve(QEasingCurve::OutCubic);
     m_dimAnimation->setStartValue(m_dimProgress);
     m_dimAnimation->setEndValue(1.0);
-    m_dimAnimation->start();
+    anim::start(m_dimAnimation);
 
     m_cardOpacityAnim->stop();
     m_cardOpacityAnim->setStartValue(0.0);
     m_cardOpacityAnim->setEndValue(1.0);
-    m_cardOpacityAnim->start();
+    anim::start(m_cardOpacityAnim);
 
     m_cardPosAnim->stop();
     m_cardPosAnim->setStartValue(start);
     m_cardPosAnim->setEndValue(target);
-    m_cardPosAnim->start();
+    anim::start(m_cardPosAnim);
 }
 
 void WelcomeBannerCropOverlay::animateOutThen(bool confirmed, const QRectF& norm)
@@ -653,17 +656,22 @@ void WelcomeBannerCropOverlay::animateOutThen(bool confirmed, const QRectF& norm
     m_dimAnimation->setEasingCurve(QEasingCurve::InCubic);
     m_dimAnimation->setStartValue(m_dimProgress);
     m_dimAnimation->setEndValue(0.0);
-    m_dimAnimation->start();
 
     m_cardOpacityAnim->stop();
     m_cardOpacityAnim->setStartValue(m_cardOpacityEffect->opacity());
     m_cardOpacityAnim->setEndValue(0.0);
-    m_cardOpacityAnim->start();
 
     m_cardPosAnim->stop();
     m_cardPosAnim->setStartValue(current);
     m_cardPosAnim->setEndValue(end);
-    m_cardPosAnim->start();
+
+    // The card fade owns the completion: it hides the overlay and emits the
+    // result, after which a receiver may well delete this object. Start it last
+    // so nothing here runs afterwards — with animations disabled it finishes
+    // inside the call.
+    anim::start(m_dimAnimation);
+    anim::start(m_cardPosAnim);
+    anim::start(m_cardOpacityAnim);
 }
 
 void WelcomeBannerCropOverlay::setDimProgress(qreal progress)

@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: MPL-2.0
 
 #include "CanvasStylusJoystickWidget.h"
+#include "shared/style/AnimationPolicy.h"
 
 #include "shared/style/WidgetStyleManager.h"
 #include "shared/style/PaintingUtils.h"
@@ -17,7 +18,16 @@
 #include <QVariantAnimation>
 #include <QtMath>
 
+namespace anim = ruwa::ui::core::anim;
+
 namespace ruwa::ui::widgets {
+
+namespace {
+/// Authored joystick feedback; the policy scales it at each transition.
+constexpr int kRingHoverAnimationMs = 180;
+constexpr int kKnobReturnAnimationMs = 200;
+} // namespace
+
 
 namespace {
 
@@ -48,11 +58,9 @@ CanvasStylusJoystickWidget::CanvasStylusJoystickWidget(QWidget* parent)
     setFixedSize(kWidgetSizePx, kWidgetSizePx);
 
     m_ringHoverAnim = new QPropertyAnimation(this, "ringHoverProgress", this);
-    m_ringHoverAnim->setDuration(180);
     m_ringHoverAnim->setEasingCurve(QEasingCurve::OutCubic);
 
     m_knobReturnAnim = new QVariantAnimation(this);
-    m_knobReturnAnim->setDuration(200);
     m_knobReturnAnim->setEasingCurve(QEasingCurve::OutCubic);
     connect(
         m_knobReturnAnim, &QVariantAnimation::valueChanged, this, [this](const QVariant& value) {
@@ -227,7 +235,8 @@ void CanvasStylusJoystickWidget::startRingHoverAnimation(bool hovered)
     m_ringHoverAnim->stop();
     m_ringHoverAnim->setStartValue(m_ringHoverProgress);
     m_ringHoverAnim->setEndValue(target);
-    m_ringHoverAnim->start();
+    m_ringHoverAnim->setDuration(anim::duration(kRingHoverAnimationMs));
+    anim::start(m_ringHoverAnim);
 }
 
 void CanvasStylusJoystickWidget::startKnobReturnAnimation()
@@ -235,7 +244,8 @@ void CanvasStylusJoystickWidget::startKnobReturnAnimation()
     m_knobReturnAnim->stop();
     m_knobReturnAnim->setStartValue(m_knobOffset);
     m_knobReturnAnim->setEndValue(QPointF(0.0, 0.0));
-    m_knobReturnAnim->start();
+    m_knobReturnAnim->setDuration(anim::duration(kKnobReturnAnimationMs));
+    anim::start(m_knobReturnAnim);
 }
 
 void CanvasStylusJoystickWidget::stopKnobReturnAnimation()

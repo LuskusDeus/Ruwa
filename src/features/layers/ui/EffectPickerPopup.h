@@ -80,7 +80,7 @@ private:
     /// Rows keep their real geometry throughout; only the folder's own clipped
     /// height changes, so nothing is ever reparented or hidden outright.
     void setSectionBodyExpanded(
-        QWidget* body, QVariantAnimation* anim, bool expanded, bool animated);
+        QWidget* body, QVariantAnimation* heightAnim, bool expanded, bool animated);
 
     struct Section {
         EffectPickerHeader* header = nullptr;

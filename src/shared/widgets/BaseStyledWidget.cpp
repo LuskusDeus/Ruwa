@@ -12,6 +12,11 @@
 
 namespace ruwa::ui::widgets {
 
+namespace {
+/// The glow fades out faster than it grew in — a lingering halo reads as lag.
+constexpr int kGlowFadeOutMs = 250;
+} // namespace
+
 using namespace ruwa::ui::core;
 
 // ============================================================================
@@ -242,7 +247,8 @@ void BaseStyledWidget::animateGlow(bool show)
     m_glowAnimation->stop();
     m_glowAnimation->setEasingCurve(
         show ? m_style.hoverGlow.sizeEasingIn : m_style.hoverGlow.sizeEasingOut);
-    m_glowAnimation->setDuration(show ? m_style.hoverGlow.sizeDuration : 250);
+    m_glowAnimation->setDuration(
+        mgr.scaledDuration(show ? m_style.hoverGlow.sizeDuration : kGlowFadeOutMs));
     m_glowAnimation->setStartValue(m_glowSize);
     m_glowAnimation->setEndValue(show ? 1.0 : 0.0);
     m_glowAnimation->start();

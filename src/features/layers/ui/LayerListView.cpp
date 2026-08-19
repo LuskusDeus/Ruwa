@@ -9,6 +9,7 @@
 
 #include "shared/widgets/layout/SmoothScrollArea.h"
 #include "shared/resources/IconProvider.h"
+#include "shared/style/AnimationPolicy.h"
 #include "features/theme/manager/ThemeManager.h"
 
 #include <QPixmap>
@@ -23,6 +24,8 @@
 #include <QFutureWatcher>
 #include <QtConcurrent>
 #include <limits>
+
+namespace anim = ruwa::ui::core::anim;
 
 namespace ruwa::ui::widgets {
 
@@ -1696,7 +1699,7 @@ void LayerListView::animateMultiDragCollapse(const QSet<LayerId>& allDragIds,
         // Pending data already set; onGhostSettled will fire when morph completes
     });
 
-    m_multiDragAnim->start(QAbstractAnimation::DeleteWhenStopped);
+    anim::start(m_multiDragAnim, QAbstractAnimation::DeleteWhenStopped);
 }
 
 void LayerListView::animateMultiDragExpand(
@@ -1795,7 +1798,7 @@ void LayerListView::animateMultiDragExpand(
         syncContentHeight();
     });
 
-    m_multiDragAnim->start(QAbstractAnimation::DeleteWhenStopped);
+    anim::start(m_multiDragAnim, QAbstractAnimation::DeleteWhenStopped);
 }
 
 // ============================================================================
@@ -1838,7 +1841,7 @@ void LayerListView::onContentHeightChanged(int newHeight)
 
         m_heightAnim->setStartValue(currentHeight);
         m_heightAnim->setEndValue(newHeight);
-        m_heightAnim->start();
+        anim::start(m_heightAnim);
     }
 }
 
@@ -2499,7 +2502,7 @@ void LayerListView::animateGroupCollapse(const LayerId& groupId)
         syncContentHeight();
     });
 
-    m_groupAnim->start(QAbstractAnimation::DeleteWhenStopped);
+    anim::start(m_groupAnim, QAbstractAnimation::DeleteWhenStopped);
 }
 
 void LayerListView::animateGroupExpand(const LayerId& groupId)
@@ -2687,7 +2690,7 @@ void LayerListView::animateGroupExpand(const LayerId& groupId)
         syncContentHeight();
     });
 
-    m_groupAnim->start(QAbstractAnimation::DeleteWhenStopped);
+    anim::start(m_groupAnim, QAbstractAnimation::DeleteWhenStopped);
 }
 
 // ============================================================================
@@ -2730,7 +2733,7 @@ void LayerListView::animateSourceRowCollapse(const QList<LayerRowWidget*>& rows)
         }
     });
 
-    m_collapseAnim->start(QAbstractAnimation::DeleteWhenStopped);
+    anim::start(m_collapseAnim, QAbstractAnimation::DeleteWhenStopped);
 }
 
 void LayerListView::animateCopyDragSourceRestore()
@@ -3195,7 +3198,7 @@ void LayerListView::animateNewLayerInsert(
         syncContentHeight();
     });
 
-    m_creationAnim->start(QAbstractAnimation::DeleteWhenStopped);
+    anim::start(m_creationAnim, QAbstractAnimation::DeleteWhenStopped);
 }
 
 // ============================================================================
@@ -3297,7 +3300,7 @@ void LayerListView::animateLayerRemoval(const QSet<LayerId>& removedIds)
         syncContentHeight();
     });
 
-    m_deleteAnim->start(QAbstractAnimation::DeleteWhenStopped);
+    anim::start(m_deleteAnim, QAbstractAnimation::DeleteWhenStopped);
 }
 
 } // namespace ruwa::ui::widgets

@@ -4,11 +4,14 @@
 #include "CommandPaletteOverlay.h"
 #include "CommandPalette.h"
 #include "commands/ShortcutManager.h"
+#include "shared/style/AnimationPolicy.h"
 
 #include <QPainter>
 #include <QMouseEvent>
 #include <QKeyEvent>
 #include <QResizeEvent>
+
+namespace anim = ruwa::ui::core::anim;
 
 namespace ruwa::ui::widgets {
 
@@ -84,17 +87,20 @@ void CommandPaletteOverlay::showPalette()
     }
     updatePalettePosition();
 
-    // Start dim animation
     m_dimAnimation->stop();
     m_dimAnimation->setEasingCurve(QEasingCurve::OutCubic);
     m_dimAnimation->setStartValue(m_dimProgress);
     m_dimAnimation->setEndValue(1.0);
-    m_dimAnimation->start();
 
     // Show palette
     m_palette->showAnimated();
     updatePalettePosition();
     m_palette->refreshGlassBackdropFrom(parentWidget());
+
+    // The dim animation owns the completion (it emits shown()), so start it
+    // last: with animations disabled it finishes inside the call, and the
+    // palette must already be up by then.
+    anim::start(m_dimAnimation);
 }
 
 void CommandPaletteOverlay::hidePalette()
@@ -114,7 +120,7 @@ void CommandPaletteOverlay::hidePalette()
     m_dimAnimation->setEasingCurve(QEasingCurve::InCubic);
     m_dimAnimation->setStartValue(m_dimProgress);
     m_dimAnimation->setEndValue(0.0);
-    m_dimAnimation->start();
+    anim::start(m_dimAnimation);
 }
 
 bool CommandPaletteOverlay::isActive() const
