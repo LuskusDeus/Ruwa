@@ -2403,58 +2403,165 @@ Rasterize the layer to transform the selection?</source>
 <context>
     <name>ruwa::ui::tabs::ThemeEditorTab</name>
     <message>
-        <location filename="../src/features/theme/editor/ThemeEditorTab.cpp" line="208"/>
+        <location filename="../src/features/theme/editor/ThemeEditorTab.cpp" line="337"/>
         <source>Theme Preview</source>
         <translation>Предпросмотр темы</translation>
     </message>
     <message>
-        <location filename="../src/features/theme/editor/ThemeEditorTab.cpp" line="208"/>
+        <location filename="../src/features/theme/editor/ThemeEditorTab.cpp" line="337"/>
         <source>Interface Preview</source>
         <translation>Предпросмотр интерфейса</translation>
     </message>
     <message>
-        <location filename="../src/features/theme/editor/ThemeEditorTab.cpp" line="208"/>
+        <location filename="../src/features/theme/editor/ThemeEditorTab.cpp" line="337"/>
         <source>Canvas Preview</source>
         <translation>Предпросмотр холста</translation>
     </message>
     <message>
-        <location filename="../src/features/theme/editor/ThemeEditorTab.cpp" line="211"/>
-        <source>Themes</source>
-        <translation>Темы</translation>
+        <location filename="../src/features/theme/editor/ThemeEditorTab.cpp" line="306"/>
+        <source>Colors</source>
+        <translation>Цвета</translation>
     </message>
     <message>
-        <location filename="../src/features/theme/editor/ThemeEditorTab.cpp" line="211"/>
+        <location filename="../src/features/theme/editor/ThemeEditorTab.cpp" line="255"/>
+        <location filename="../src/features/theme/editor/ThemeEditorTab.cpp" line="651"/>
+        <source>Apply</source>
+        <translation>Применить</translation>
+    </message>
+    <message>
+        <location filename="../src/features/theme/editor/ThemeEditorTab.cpp" line="263"/>
+        <location filename="../src/features/theme/editor/ThemeEditorTab.cpp" line="655"/>
+        <source>Save</source>
+        <translation>Сохранить</translation>
+    </message>
+    <message>
+        <location filename="../src/features/theme/editor/ThemeEditorTab.cpp" line="474"/>
+        <source>Save as new +</source>
+        <translation>Сохранить как новую +</translation>
+    </message>
+    <message>
+        <location filename="../src/features/theme/editor/ThemeEditorTab.cpp" line="308"/>
+        <source>Font</source>
+        <translation>Шрифт</translation>
+    </message>
+    <message>
+        <location filename="../src/features/theme/editor/ThemeEditorTab.cpp" line="310"/>
         <source>Interface</source>
         <translation>Интерфейс</translation>
     </message>
     <message>
-        <location filename="../src/features/theme/editor/ThemeEditorTab.cpp" line="211"/>
+        <location filename="../src/features/theme/editor/ThemeEditorTab.cpp" line="312"/>
         <source>Canvas</source>
         <translation>Холст</translation>
     </message>
     <message>
-        <location filename="../src/features/theme/editor/ThemeEditorTab.cpp" line="214"/>
-        <source>Theme presets and color settings will be available here.</source>
-        <translation>Здесь появятся пресеты тем и настройки цветов.</translation>
+        <location filename="../src/features/theme/editor/ThemeEditorTab.cpp" line="434"/>
+        <source>Primary</source>
+        <translation>Основной</translation>
     </message>
     <message>
-        <location filename="../src/features/theme/editor/ThemeEditorTab.cpp" line="215"/>
+        <location filename="../src/features/theme/editor/ThemeEditorTab.cpp" line="436"/>
+        <source>Accent</source>
+        <translation>Акцент</translation>
+    </message>
+    <message>
+        <location filename="../src/features/theme/editor/ThemeEditorTab.cpp" line="438"/>
+        <source>Background</source>
+        <translation>Фон</translation>
+    </message>
+    <message>
+        <location filename="../src/features/theme/editor/ThemeEditorTab.cpp" line="440"/>
+        <source>Surface</source>
+        <translation>Поверхность</translation>
+    </message>
+    <message>
+        <location filename="../src/features/theme/editor/ThemeEditorTab.cpp" line="442"/>
+        <source>Surface Alt</source>
+        <translation>Альтернативная поверхность</translation>
+    </message>
+    <message>
+        <location filename="../src/features/theme/editor/ThemeEditorTab.cpp" line="444"/>
+        <source>Border</source>
+        <translation>Граница</translation>
+    </message>
+    <message>
+        <location filename="../src/features/theme/editor/ThemeEditorTab.cpp" line="446"/>
+        <source>Overlay</source>
+        <translation>Оверлей</translation>
+    </message>
+    <message>
+        <location filename="../src/features/theme/editor/ThemeEditorTab.cpp" line="448"/>
+        <source>Text</source>
+        <translation>Текст</translation>
+    </message>
+    <message>
+        <location filename="../src/features/theme/editor/ThemeEditorTab.cpp" line="450"/>
+        <source>Muted Text</source>
+        <translation>Приглушённый текст</translation>
+    </message>
+    <message>
+        <location filename="../src/features/theme/editor/ThemeEditorTab.cpp" line="452"/>
+        <source>Text on Primary</source>
+        <translation>Текст на основном цвете</translation>
+    </message>
+    <message>
+        <location filename="../src/features/theme/editor/ThemeEditorTab.cpp" line="454"/>
+        <source>Success</source>
+        <translation>Успех</translation>
+    </message>
+    <message>
+        <location filename="../src/features/theme/editor/ThemeEditorTab.cpp" line="456"/>
+        <source>Warning</source>
+        <translation>Предупреждение</translation>
+    </message>
+    <message>
+        <location filename="../src/features/theme/editor/ThemeEditorTab.cpp" line="458"/>
+        <source>Error</source>
+        <translation>Ошибка</translation>
+    </message>
+    <message>
+        <location filename="../src/features/theme/editor/ThemeEditorTab.cpp" line="460"/>
+        <source>Info</source>
+        <translation>Информация</translation>
+    </message>
+    <message>
+        <location filename="../src/features/theme/editor/ThemeEditorTab.cpp" line="545"/>
+        <source>Core Colors</source>
+        <translation>Основные цвета</translation>
+    </message>
+    <message>
+        <location filename="../src/features/theme/editor/ThemeEditorTab.cpp" line="545"/>
+        <source>Text Colors</source>
+        <translation>Цвета текста</translation>
+    </message>
+    <message>
+        <location filename="../src/features/theme/editor/ThemeEditorTab.cpp" line="545"/>
+        <source>Semantic Colors</source>
+        <translation>Семантические цвета</translation>
+    </message>
+    <message>
+        <location filename="../src/features/theme/editor/ThemeEditorTab.cpp" line="324"/>
+        <source>Theme font settings will be available here.</source>
+        <translation>Здесь появятся настройки шрифта темы.</translation>
+    </message>
+    <message>
+        <location filename="../src/features/theme/editor/ThemeEditorTab.cpp" line="326"/>
         <source>Interface appearance settings will be available here.</source>
         <translation>Здесь появятся настройки внешнего вида интерфейса.</translation>
     </message>
     <message>
-        <location filename="../src/features/theme/editor/ThemeEditorTab.cpp" line="216"/>
+        <location filename="../src/features/theme/editor/ThemeEditorTab.cpp" line="328"/>
         <source>Canvas appearance settings will be available here.</source>
         <translation>Здесь появятся настройки внешнего вида холста.</translation>
     </message>
     <message>
-        <location filename="../src/features/theme/editor/ThemeEditorTab.cpp" line="222"/>
+        <location filename="../src/features/theme/editor/ThemeEditorTab.cpp" line="342"/>
         <source>Preview placeholder</source>
         <translation>Здесь появится предпросмотр</translation>
     </message>
     <message>
-        <location filename="../src/features/theme/editor/ThemeEditorTab.h" line="39"/>
-        <location filename="../src/features/theme/editor/ThemeEditorTab.h" line="40"/>
+        <location filename="../src/features/theme/editor/ThemeEditorTab.h" line="44"/>
+        <location filename="../src/features/theme/editor/ThemeEditorTab.h" line="45"/>
         <source>Theme Editor</source>
         <translation>Редактор тем</translation>
     </message>

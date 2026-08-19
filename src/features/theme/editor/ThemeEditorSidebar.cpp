@@ -73,6 +73,12 @@ const ruwa::ui::core::ThemePreset& ThemeEditorSidebar::editingTheme() const
     return m_themeDropdown->editingTheme();
 }
 
+ruwa::ui::core::ThemePreset ThemeEditorSidebar::saveEditingTheme(
+    const ruwa::ui::core::ThemePreset& preset)
+{
+    return m_themeDropdown->saveEditingTheme(preset);
+}
+
 void ThemeEditorSidebar::changeEvent(QEvent* event)
 {
     QWidget::changeEvent(event);
@@ -140,7 +146,7 @@ void ThemeEditorSidebar::updateScaledSizes()
     setFixedWidth(theme.scaled(220));
     m_layout->setSpacing(theme.scaled(8));
     m_layout->setContentsMargins(
-        theme.scaled(8), theme.scaled(8), theme.scaled(8), theme.scaled(20));
+        theme.scaled(8), 0, theme.scaled(8), theme.scaled(20));
 
     if (m_dropdownDivider) {
         m_dropdownDivider->setFixedHeight(qMax(1, theme.scaled(1)));

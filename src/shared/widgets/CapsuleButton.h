@@ -32,6 +32,7 @@ class CapsuleButton : public QPushButton {
 
 public:
     enum class Variant { Tab, Action, Primary, Secondary };
+    enum class DisabledTextTone { Default, Dark };
 
     explicit CapsuleButton(const QString& text, Variant variant, QWidget* parent = nullptr);
     ~CapsuleButton() override;
@@ -53,6 +54,8 @@ public:
     /// instead of a transparent outline. Default off.
     void setSecondaryRestingFillAlt(bool enabled);
     void setPrimaryBorderVisible(bool visible);
+    /// Dark tone blends textOnPrimary with textMuted for a solid, subdued label.
+    void setDisabledTextTone(DisabledTextTone tone);
     void setTrailingLoadingVisible(bool visible);
     bool trailingLoadingVisible() const { return m_trailingLoadingVisible; }
 
@@ -96,6 +99,7 @@ private:
     int m_secondaryIdleFillAlpha { 0 };
     bool m_secondaryRestingFillAlt { false };
     bool m_primaryBorderVisible { true };
+    DisabledTextTone m_disabledTextTone { DisabledTextTone::Default };
     bool m_trailingLoadingVisible { false };
     DotGridLoadingIndicator* m_trailingLoadingIndicator { nullptr };
     QPropertyAnimation* m_hoverAnimation { nullptr };

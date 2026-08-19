@@ -52,7 +52,7 @@ public:
     void setPreviewIcon(ruwa::ui::core::IconProvider::StandardIcon icon);
 
     bool isSelected() const { return m_isSelected; }
-    void setSelected(bool selected);
+    void setSelected(bool selected, bool animate = true);
 
     bool isActive() const { return m_isActive; }
     void setActive(bool active);

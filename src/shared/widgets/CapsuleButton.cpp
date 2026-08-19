@@ -177,6 +177,15 @@ void CapsuleButton::setPrimaryBorderVisible(bool visible)
     update();
 }
 
+void CapsuleButton::setDisabledTextTone(DisabledTextTone tone)
+{
+    if (m_disabledTextTone == tone) {
+        return;
+    }
+    m_disabledTextTone = tone;
+    update();
+}
+
 void CapsuleButton::setTrailingLoadingVisible(bool visible)
 {
     if (m_trailingLoadingVisible == visible) {
@@ -383,6 +392,9 @@ void CapsuleButton::paintEvent(QPaintEvent*)
     const bool enabled = isEnabled();
     const qreal hover = enabled ? m_hoverProgress : 0.0;
     const bool pressed = enabled && isDown();
+    const QColor disabledText = m_disabledTextTone == DisabledTextTone::Dark
+        ? TC::interpolate(colors.textOnPrimary(), colors.textMuted, 0.5)
+        : colors.textDisabled();
 
     QPainter p(this);
     p.setRenderHint(QPainter::Antialiasing);
@@ -403,7 +415,7 @@ void CapsuleButton::paintEvent(QPaintEvent*)
             QColor bgColor;
             if (!enabled) {
                 bgColor = colors.primaryDisabled();
-                textPen = colors.textDisabled();
+                textPen = disabledText;
             } else if (m_lightBanner) {
                 if (colors.isDark) {
                     bgColor = colors.background;
@@ -504,7 +516,7 @@ void CapsuleButton::paintEvent(QPaintEvent*)
             }
 
             textPen = !enabled
-                ? colors.textDisabled()
+                ? disabledText
                 : (m_lightBanner
                           ? TC::interpolate(TC::adjustBrightness(colors.textOnPrimary(), 1.25),
                                 colors.textOnPrimary(), hover)
@@ -624,7 +636,7 @@ void CapsuleButton::paintEvent(QPaintEvent*)
         p.setPen(Qt::NoPen);
         p.drawRoundedRect(r, radius, radius);
 
-        const QColor mainColor = enabled ? colors.textOnPrimary() : colors.textDisabled();
+        const QColor mainColor = enabled ? colors.textOnPrimary() : disabledText;
         QColor hintColor = mainColor;
         hintColor.setAlphaF(0.6);
 

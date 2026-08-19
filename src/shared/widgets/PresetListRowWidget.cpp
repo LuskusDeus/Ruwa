@@ -181,15 +181,23 @@ void PresetListRowWidget::setPreviewIcon(IconProvider::StandardIcon icon)
     }
 }
 
-void PresetListRowWidget::setSelected(bool selected)
+void PresetListRowWidget::setSelected(bool selected, bool animate)
 {
-    if (m_isSelected != selected) {
-        m_isSelected = selected;
-        m_selectionAnimation->stop();
-        m_selectionAnimation->setStartValue(m_selectionProgress);
-        m_selectionAnimation->setEndValue(selected ? 1.0 : 0.0);
-        m_selectionAnimation->start();
+    if (m_isSelected == selected && animate) {
+        return;
     }
+
+    m_isSelected = selected;
+    m_selectionAnimation->stop();
+    if (!animate) {
+        setSelectionProgress(selected ? 1.0 : 0.0);
+        update();
+        return;
+    }
+
+    m_selectionAnimation->setStartValue(m_selectionProgress);
+    m_selectionAnimation->setEndValue(selected ? 1.0 : 0.0);
+    m_selectionAnimation->start();
 }
 
 void PresetListRowWidget::setActive(bool active)

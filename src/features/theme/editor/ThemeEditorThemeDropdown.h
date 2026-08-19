@@ -28,6 +28,8 @@ public:
 
     bool setEditingThemeById(const QUuid& id);
     void setEditingTheme(const ruwa::ui::core::ThemePreset& preset);
+    ruwa::ui::core::ThemePreset saveEditingTheme(
+        const ruwa::ui::core::ThemePreset& preset);
 
 signals:
     void editingThemeChanged(const ruwa::ui::core::ThemePreset& preset);
@@ -51,6 +53,8 @@ private:
     void exportTheme();
     void deleteTheme();
     void saveThemeAsNew();
+    ruwa::ui::core::ThemePreset createThemeCopy(
+        const ruwa::ui::core::ThemePreset& preset) const;
     QString uniqueThemeName(const QString& requestedName) const;
     void showInfo(const QString& title, const QString& message);
     void updateScaledSize();

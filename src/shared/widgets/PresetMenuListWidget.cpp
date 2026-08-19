@@ -1108,14 +1108,17 @@ bool PresetMenuListWidget::setSubtitleForItem(const QVariant& userData, const QS
     return false;
 }
 
-void PresetMenuListWidget::setSelectedUserData(const QVariant& data)
+void PresetMenuListWidget::setSelectedUserData(const QVariant& data, bool animate)
 {
     if (m_selectedData == data) {
+        if (!animate) {
+            updateSelectionVisuals(false);
+        }
         return;
     }
 
     m_selectedData = data;
-    updateSelectionVisuals();
+    updateSelectionVisuals(animate);
 }
 
 void PresetMenuListWidget::setActiveUserData(const QVariant& data)
@@ -1613,13 +1616,13 @@ bool PresetMenuListWidget::tryAnimatedRemoval(const QVector<PresetMenuItem>& new
     return true;
 }
 
-void PresetMenuListWidget::updateSelectionVisuals()
+void PresetMenuListWidget::updateSelectionVisuals(bool animateSelection)
 {
     for (PresetListRowWidget* row : m_rows) {
         if (!row) {
             continue;
         }
-        row->setSelected(row->userData() == m_selectedData);
+        row->setSelected(row->userData() == m_selectedData, animateSelection);
         row->setActive(row->userData() == m_activeData);
     }
 }

@@ -2397,58 +2397,165 @@ Rasterize the layer to transform the selection?</source>
 <context>
     <name>ruwa::ui::tabs::ThemeEditorTab</name>
     <message>
-        <location filename="../src/features/theme/editor/ThemeEditorTab.cpp" line="208"/>
+        <location filename="../src/features/theme/editor/ThemeEditorTab.cpp" line="337"/>
         <source>Theme Preview</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location filename="../src/features/theme/editor/ThemeEditorTab.cpp" line="208"/>
+        <location filename="../src/features/theme/editor/ThemeEditorTab.cpp" line="337"/>
         <source>Interface Preview</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location filename="../src/features/theme/editor/ThemeEditorTab.cpp" line="208"/>
+        <location filename="../src/features/theme/editor/ThemeEditorTab.cpp" line="337"/>
         <source>Canvas Preview</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location filename="../src/features/theme/editor/ThemeEditorTab.cpp" line="211"/>
-        <source>Themes</source>
+        <location filename="../src/features/theme/editor/ThemeEditorTab.cpp" line="306"/>
+        <source>Colors</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location filename="../src/features/theme/editor/ThemeEditorTab.cpp" line="211"/>
+        <location filename="../src/features/theme/editor/ThemeEditorTab.cpp" line="255"/>
+        <location filename="../src/features/theme/editor/ThemeEditorTab.cpp" line="651"/>
+        <source>Apply</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location filename="../src/features/theme/editor/ThemeEditorTab.cpp" line="263"/>
+        <location filename="../src/features/theme/editor/ThemeEditorTab.cpp" line="655"/>
+        <source>Save</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location filename="../src/features/theme/editor/ThemeEditorTab.cpp" line="474"/>
+        <source>Save as new +</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location filename="../src/features/theme/editor/ThemeEditorTab.cpp" line="308"/>
+        <source>Font</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location filename="../src/features/theme/editor/ThemeEditorTab.cpp" line="310"/>
         <source>Interface</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location filename="../src/features/theme/editor/ThemeEditorTab.cpp" line="211"/>
+        <location filename="../src/features/theme/editor/ThemeEditorTab.cpp" line="312"/>
         <source>Canvas</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location filename="../src/features/theme/editor/ThemeEditorTab.cpp" line="214"/>
-        <source>Theme presets and color settings will be available here.</source>
+        <location filename="../src/features/theme/editor/ThemeEditorTab.cpp" line="434"/>
+        <source>Primary</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location filename="../src/features/theme/editor/ThemeEditorTab.cpp" line="215"/>
+        <location filename="../src/features/theme/editor/ThemeEditorTab.cpp" line="436"/>
+        <source>Accent</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location filename="../src/features/theme/editor/ThemeEditorTab.cpp" line="438"/>
+        <source>Background</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location filename="../src/features/theme/editor/ThemeEditorTab.cpp" line="440"/>
+        <source>Surface</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location filename="../src/features/theme/editor/ThemeEditorTab.cpp" line="442"/>
+        <source>Surface Alt</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location filename="../src/features/theme/editor/ThemeEditorTab.cpp" line="444"/>
+        <source>Border</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location filename="../src/features/theme/editor/ThemeEditorTab.cpp" line="446"/>
+        <source>Overlay</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location filename="../src/features/theme/editor/ThemeEditorTab.cpp" line="448"/>
+        <source>Text</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location filename="../src/features/theme/editor/ThemeEditorTab.cpp" line="450"/>
+        <source>Muted Text</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location filename="../src/features/theme/editor/ThemeEditorTab.cpp" line="452"/>
+        <source>Text on Primary</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location filename="../src/features/theme/editor/ThemeEditorTab.cpp" line="454"/>
+        <source>Success</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location filename="../src/features/theme/editor/ThemeEditorTab.cpp" line="456"/>
+        <source>Warning</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location filename="../src/features/theme/editor/ThemeEditorTab.cpp" line="458"/>
+        <source>Error</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location filename="../src/features/theme/editor/ThemeEditorTab.cpp" line="460"/>
+        <source>Info</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location filename="../src/features/theme/editor/ThemeEditorTab.cpp" line="545"/>
+        <source>Core Colors</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location filename="../src/features/theme/editor/ThemeEditorTab.cpp" line="545"/>
+        <source>Text Colors</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location filename="../src/features/theme/editor/ThemeEditorTab.cpp" line="545"/>
+        <source>Semantic Colors</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location filename="../src/features/theme/editor/ThemeEditorTab.cpp" line="324"/>
+        <source>Theme font settings will be available here.</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location filename="../src/features/theme/editor/ThemeEditorTab.cpp" line="326"/>
         <source>Interface appearance settings will be available here.</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location filename="../src/features/theme/editor/ThemeEditorTab.cpp" line="216"/>
+        <location filename="../src/features/theme/editor/ThemeEditorTab.cpp" line="328"/>
         <source>Canvas appearance settings will be available here.</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location filename="../src/features/theme/editor/ThemeEditorTab.cpp" line="222"/>
+        <location filename="../src/features/theme/editor/ThemeEditorTab.cpp" line="342"/>
         <source>Preview placeholder</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location filename="../src/features/theme/editor/ThemeEditorTab.h" line="39"/>
-        <location filename="../src/features/theme/editor/ThemeEditorTab.h" line="40"/>
+        <location filename="../src/features/theme/editor/ThemeEditorTab.h" line="44"/>
+        <location filename="../src/features/theme/editor/ThemeEditorTab.h" line="45"/>
         <source>Theme Editor</source>
         <translation type="unfinished"></translation>
     </message>

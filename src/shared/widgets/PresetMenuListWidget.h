@@ -76,7 +76,7 @@ public:
     /// previews). Returns false if no row matches.
     bool setSubtitleForItem(const QVariant& userData, const QString& subtitle);
 
-    void setSelectedUserData(const QVariant& data);
+    void setSelectedUserData(const QVariant& data, bool animate = true);
     QVariant selectedUserData() const { return m_selectedData; }
 
     void setActiveUserData(const QVariant& data);
@@ -127,7 +127,7 @@ private:
     void applyContentMargins();
     void applyLayerChromeTransparency(bool transparent);
     void updateSectionVisibility();
-    void updateSelectionVisuals();
+    void updateSelectionVisuals(bool animateSelection = true);
     bool itemMatchesFilter(const PresetMenuItem& item) const;
     /// Try to apply \p newItems as a pure removal (a subsequence of the current
     /// items) by smoothly collapsing the removed rows instead of rebuilding the

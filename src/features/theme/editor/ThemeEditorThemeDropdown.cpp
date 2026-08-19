@@ -186,7 +186,7 @@ public:
 
     bool isPopupVisible() const { return m_visible; }
 
-    void refreshThemes()
+    void refreshThemes(bool animateSelection = true)
     {
         QVector<PresetMenuItem> items;
         const auto presets = ruwa::ui::core::ThemeManager::instance().allPresets();
@@ -216,13 +216,14 @@ public:
         }
 
         m_themeList->setItems(items);
-        syncSelection();
+        syncSelection(animateSelection);
     }
 
-    void syncSelection()
+    void syncSelection(bool animateSelection = true)
     {
         if (m_owner && m_owner->hasEditingTheme()) {
-            m_themeList->setSelectedUserData(m_owner->editingTheme().id.toString());
+            m_themeList->setSelectedUserData(
+                m_owner->editingTheme().id.toString(), animateSelection);
         }
         m_themeList->setActiveUserData(
             ruwa::ui::core::ThemeManager::instance().currentPresetId().toString());
@@ -243,13 +244,17 @@ public:
         m_overlay->registerGenericPopup(this);
 
         updateScaledSizes();
-        refreshThemes();
-
-        updatePopupGeometry();
+        refreshThemes(false);
 
         m_visible = true;
         m_hiding = false;
+
+        // showOverlay() synchronizes the overlay with the current window geometry. This must
+        // happen before placement is calculated because a newly created overlay may still have
+        // the size captured before the main window finished its initial layout.
         m_overlay->showOverlay();
+        updatePopupGeometry();
+
         show();
         raise();
         m_overlay->refreshGenericPopups();
@@ -571,6 +576,29 @@ void ThemeEditorThemeDropdown::setEditingTheme(const ruwa::ui::core::ThemePreset
     setEditingThemeInternal(preset, true);
 }
 
+ruwa::ui::core::ThemePreset ThemeEditorThemeDropdown::saveEditingTheme(
+    const ruwa::ui::core::ThemePreset& preset)
+{
+    auto savedPreset = preset;
+    if (savedPreset.isBuiltIn) {
+        savedPreset = createThemeCopy(savedPreset);
+    }
+
+    // Keep the dropdown's working copy in sync before ThemeManager emits
+    // presetsChanged, so an open popup rebuilds from the saved values.
+    setEditingThemeInternal(savedPreset, false);
+    m_presetMutationInProgress = true;
+    if (preset.isBuiltIn) {
+        ruwa::ui::core::ThemeManager::instance().addCustomPreset(savedPreset);
+    } else {
+        ruwa::ui::core::ThemeManager::instance().updateCustomPreset(savedPreset);
+    }
+    m_presetMutationInProgress = false;
+
+    emit editingThemeChanged(savedPreset);
+    return savedPreset;
+}
+
 void ThemeEditorThemeDropdown::setEditingThemeInternal(
     const ruwa::ui::core::ThemePreset& preset, bool notify)
 {
@@ -860,16 +888,23 @@ void ThemeEditorThemeDropdown::saveThemeAsNew()
         return;
     }
 
-    ruwa::ui::core::ThemePreset copy = m_editingTheme;
-    copy.id = QUuid::createUuid();
-    copy.name = uniqueThemeName(tr("%1 Copy").arg(
-        ruwa::ui::core::ThemePreset::translatedDisplayName(m_editingTheme)));
-    copy.isBuiltIn = false;
-    copy.isFavorite = false;
+    const auto copy = createThemeCopy(m_editingTheme);
     m_presetMutationInProgress = true;
     ruwa::ui::core::ThemeManager::instance().addCustomPreset(copy);
     m_presetMutationInProgress = false;
     setEditingThemeInternal(copy, true);
+}
+
+ruwa::ui::core::ThemePreset ThemeEditorThemeDropdown::createThemeCopy(
+    const ruwa::ui::core::ThemePreset& preset) const
+{
+    auto copy = preset;
+    copy.id = QUuid::createUuid();
+    copy.name = uniqueThemeName(tr("%1 Copy").arg(
+        ruwa::ui::core::ThemePreset::translatedDisplayName(preset)));
+    copy.isBuiltIn = false;
+    copy.isFavorite = false;
+    return copy;
 }
 
 QString ThemeEditorThemeDropdown::uniqueThemeName(const QString& requestedName) const
