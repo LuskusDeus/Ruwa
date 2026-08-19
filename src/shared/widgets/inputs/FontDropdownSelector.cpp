@@ -10,6 +10,7 @@
 #include <QAbstractListModel>
 #include <QApplication>
 #include <QAbstractItemView>
+#include <QCoreApplication>
 #include <QEnterEvent>
 #include <QEvent>
 #include <QFocusEvent>
@@ -208,6 +209,24 @@ public:
     }
 };
 
+/// The list is scrolled by the surrounding SmoothScrollArea, so it never scrolls
+/// itself: it reports its full content height and is resized to it by the area.
+class FontListView final : public QListView {
+public:
+    explicit FontListView(QWidget* parent = nullptr)
+        : QListView(parent)
+    {
+    }
+
+    QSize sizeHint() const override
+    {
+        const int rows = model() ? model()->rowCount() : 0;
+        return QSize(QListView::sizeHint().width(), qMax(1, rows * kRowHeight));
+    }
+
+    QSize minimumSizeHint() const override { return QSize(1, 1); }
+};
+
 } // namespace
 
 class FontDropdownPopup final : public QWidget {
@@ -236,7 +255,7 @@ public:
         m_proxyModel = new FontFilterProxyModel(this);
         m_proxyModel->setSourceModel(m_model);
 
-        m_listView = new QListView(this);
+        m_listView = new FontListView(this);
         m_listView->setModel(m_proxyModel);
         m_listView->setItemDelegate(new FontItemDelegate(m_listView));
         m_listView->setFrameShape(QFrame::NoFrame);
@@ -244,12 +263,26 @@ public:
         m_listView->setUniformItemSizes(true);
         m_listView->setVerticalScrollMode(QAbstractItemView::ScrollPerPixel);
         m_listView->setHorizontalScrollBarPolicy(Qt::ScrollBarAlwaysOff);
-        m_listView->setVerticalScrollBarPolicy(Qt::ScrollBarAsNeeded);
+        m_listView->setVerticalScrollBarPolicy(Qt::ScrollBarAlwaysOff);
         m_listView->setSelectionMode(QAbstractItemView::SingleSelection);
         m_listView->setEditTriggers(QAbstractItemView::NoEditTriggers);
+        // Any internal auto-scroll would fight the area that owns the offset.
+        m_listView->setAutoScroll(false);
         m_listView->setAttribute(Qt::WA_TranslucentBackground);
         m_listView->viewport()->setAttribute(Qt::WA_TranslucentBackground);
-        m_layout->addWidget(m_listView);
+
+        m_scrollArea = new SmoothScrollArea(this);
+        m_scrollArea->setFillBackground(false);
+        m_scrollArea->setScrollBarTransparentTrack(true);
+        m_scrollArea->setContentWidthFixedToViewport(true);
+        m_scrollArea->setVerticalScrollBarPolicy(Qt::ScrollBarAsNeeded);
+        m_scrollArea->setWidget(m_listView);
+        m_layout->addWidget(m_scrollArea);
+
+        // The list has no scrollbar of its own, so a wheel event over it would
+        // die on an empty range instead of reaching the area behind it.
+        m_listView->installEventFilter(this);
+        m_listView->viewport()->installEventFilter(this);
 
         m_opacityEffect = new QGraphicsOpacityEffect(this);
         m_opacityEffect->setOpacity(0.0);
@@ -270,6 +303,7 @@ public:
 
         connect(m_searchBar, &SearchBar::textChanged, this, [this](const QString& text) {
             m_proxyModel->setFilterText(text);
+            refreshListContentHeight();
             selectFamily(m_selectedFamily, false);
             updateHeightForCurrentFilter();
         });
@@ -307,6 +341,7 @@ public:
     void setFamilies(const QStringList& families)
     {
         m_model->setFamilies(families);
+        refreshListContentHeight();
         selectFamily(m_selectedFamily, false);
         updateHeightForCurrentFilter();
     }
@@ -347,8 +382,9 @@ public:
         const int heightValue = qMax(kPopupMinVisibleHeight, qMin(preferredHeight(), maxHeight));
         const int listHeight = qMax(1, heightValue - kPopupPadding * 2 - 34 - kSearchBottomSpacing);
 
-        m_listView->setFixedHeight(listHeight);
+        m_scrollArea->setFixedHeight(listHeight);
         setFixedSize(widthValue, heightValue);
+        refreshListContentHeight();
         selectFamily(m_selectedFamily, true);
     }
 
@@ -442,7 +478,7 @@ public:
             m_listView->selectionModel()->select(
                 current, QItemSelectionModel::ClearAndSelect | QItemSelectionModel::Rows);
         }
-        m_listView->scrollTo(current, QAbstractItemView::PositionAtCenter);
+        scrollRowIntoView(current, true);
     }
 
     void activateCurrentOrFirst()
@@ -459,6 +495,16 @@ public:
     }
 
 protected:
+    bool eventFilter(QObject* watched, QEvent* event) override
+    {
+        if (event->type() == QEvent::Wheel && m_scrollArea && m_listView
+            && (watched == m_listView || watched == m_listView->viewport())) {
+            QCoreApplication::sendEvent(m_scrollArea, event);
+            return true;
+        }
+        return QWidget::eventFilter(watched, event);
+    }
+
     void paintEvent(QPaintEvent* event) override
     {
         Q_UNUSED(event);
@@ -480,6 +526,33 @@ protected:
     }
 
 private:
+    /// The list's height is its whole row stack; the area around it does the
+    /// scrolling, so the height has to be re-derived whenever the rows change.
+    void refreshListContentHeight()
+    {
+        if (!m_listView || !m_scrollArea) {
+            return;
+        }
+        m_listView->updateGeometry();
+        m_scrollArea->refreshScrollGeometry();
+    }
+
+    /// Stands in for QListView::scrollTo now that the rows are scrolled by the
+    /// area around them. Rows are uniform, so the offset is arithmetic.
+    void scrollRowIntoView(const QModelIndex& index, bool animated)
+    {
+        if (!m_scrollArea || !m_scrollArea->viewport() || !index.isValid()) {
+            return;
+        }
+        const int viewportHeight = m_scrollArea->viewport()->height();
+        if (viewportHeight <= 0) {
+            return;
+        }
+        const int top = index.row() * kRowHeight;
+        const int centred = top - ((viewportHeight - kRowHeight) / 2);
+        m_scrollArea->scrollTo(qMax(0, centred), animated);
+    }
+
     void updateListStyle()
     {
         const auto& colors = ruwa::ui::core::ThemeManager::instance().colors();
@@ -495,26 +568,8 @@ private:
                     background: transparent;
                     border: none;
                 }
-                QScrollBar:vertical {
-                    background: transparent;
-                    width: 6px;
-                    margin: 2px 0 2px 0;
-                }
-                QScrollBar::handle:vertical {
-                    background: %2;
-                    border-radius: 3px;
-                    min-height: 24px;
-                }
-                QScrollBar::add-line:vertical,
-                QScrollBar::sub-line:vertical {
-                    height: 0;
-                }
-                QScrollBar::add-page:vertical,
-                QScrollBar::sub-page:vertical {
-                    background: transparent;
-                }
             )")
-                    .arg(colors.text.name(), colors.borderSubtleHover().name()));
+                    .arg(colors.text.name()));
         }
     }
 
@@ -544,7 +599,7 @@ private:
                     selected, QItemSelectionModel::ClearAndSelect | QItemSelectionModel::Rows);
             }
             if (scrollToSelection) {
-                m_listView->scrollTo(selected, QAbstractItemView::PositionAtCenter);
+                scrollRowIntoView(selected, false);
             }
         } else {
             m_listView->clearSelection();
@@ -573,7 +628,8 @@ private:
 private:
     QVBoxLayout* m_layout = nullptr;
     SearchBar* m_searchBar = nullptr;
-    QListView* m_listView = nullptr;
+    FontListView* m_listView = nullptr;
+    SmoothScrollArea* m_scrollArea = nullptr;
     FontListModel* m_model = nullptr;
     FontFilterProxyModel* m_proxyModel = nullptr;
     QGraphicsOpacityEffect* m_opacityEffect = nullptr;
