@@ -2,6 +2,7 @@
 
 // SmoothScrollArea.cpp
 #include "SmoothScrollArea.h"
+#include "shared/style/AnimationPolicy.h"
 #include "shared/widgets/SmoothScrollbar.h"
 
 #include <QPainter>
@@ -16,6 +17,8 @@
 #include <QScreen>
 #include <QtMath>
 #include <cmath>
+
+namespace anim = ruwa::ui::core::anim;
 
 namespace ruwa::ui::widgets {
 
@@ -265,11 +268,11 @@ void SmoothScrollArea::scrollTo(int value, int durationMs, QEasingCurve::Type ea
     stopDamping();
 
     if (durationMs > 0 && m_targetScrollValue != m_currentScrollValue) {
-        m_scrollAnimation->setDuration(durationMs);
+        m_scrollAnimation->setDuration(anim::duration(durationMs));
         m_scrollAnimation->setEasingCurve(easingCurve);
         m_scrollAnimation->setStartValue(m_currentScrollValue);
         m_scrollAnimation->setEndValue(m_targetScrollValue);
-        m_scrollAnimation->start();
+        anim::start(m_scrollAnimation);
     } else {
         setScrollValue(m_targetScrollValue);
     }
@@ -365,7 +368,19 @@ int SmoothScrollArea::damperIntervalMs() const
 
 void SmoothScrollArea::startDamping(qreal lambda)
 {
-    m_damperLambda = qMax(0.5, lambda);
+    // The decay rate is the animation's speed: a faster policy scales lambda up,
+    // and with animations off there is no flight at all — the content is already
+    // where the impulse was sending it.
+    if (!anim::enabled()) {
+        if (m_scrollAnimation->state() == QAbstractAnimation::Running) {
+            m_scrollAnimation->stop();
+        }
+        applyScrollPosition(m_scrollTarget);
+        stopDamping();
+        return;
+    }
+
+    m_damperLambda = qMax(0.5, lambda * anim::speed());
 
     // The damper and the explicit-duration scrollTo() animation are mutually
     // exclusive owners of the position.
@@ -1049,9 +1064,10 @@ void SmoothScrollArea::updateScrollBarVisibility()
         setScrollBarReserveExtent(target);
     } else if (reserveChanged) {
         m_reserveAnimation->stop();
+        m_reserveAnimation->setDuration(anim::duration(kReserveAnimationMs));
         m_reserveAnimation->setStartValue(m_scrollBarReserveExtent);
         m_reserveAnimation->setEndValue(target);
-        m_reserveAnimation->start();
+        anim::start(m_reserveAnimation);
     }
 
     switch (m_scrollBarPolicy) {

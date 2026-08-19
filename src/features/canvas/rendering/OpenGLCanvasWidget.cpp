@@ -10667,9 +10667,22 @@ void OpenGLCanvasWidget::paintGL_updateCameraAndEmitSignals()
         }
     }
 
-    m_viewport.camera().update(dt);
-    if (m_transformController.isActive() && m_transformController.updateAnimation(dt)) {
-        update();
+    // Canvas motion (camera inertia, transform easing) is a rate, not a duration:
+    // a faster policy means a faster decay, which is exactly a longer time step.
+    // With canvas animations off there is nothing to interpolate — both the
+    // camera and the transform jump to the state they were heading for.
+    if (anim::canvasEnabled()) {
+        const float animatedDt = dt * static_cast<float>(anim::speed());
+        m_viewport.camera().update(animatedDt);
+        if (m_transformController.isActive() && m_transformController.updateAnimation(animatedDt)) {
+            update();
+        }
+    } else {
+        m_viewport.camera().finishAnimation();
+        if (m_transformController.isActive() && m_transformController.hasPendingAnimation()) {
+            m_transformController.finalizePendingAnimation();
+            update();
+        }
     }
     m_cameraWasAnimatingLastFrame
         = m_viewport.camera().isAnimating() || m_transformController.hasPendingAnimation();

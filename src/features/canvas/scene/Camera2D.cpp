@@ -307,6 +307,32 @@ void Camera2D::update(float dt)
     clampZoom();
 }
 
+void Camera2D::finishAnimation()
+{
+    if (!m_animating)
+        return;
+
+    m_zoom = m_targetZoom;
+    m_rotation = normalizeRadians0ToTwoPi(m_targetRotation);
+    m_targetRotation = m_rotation;
+
+    if (m_hasAnchor) {
+        // Same derivation update() uses: the anchored world point stays pinned
+        // under its screen point, now at the target zoom and rotation.
+        const Vector2 screenOffset = m_anchorScreen - m_anchorViewportSize * 0.5f;
+        m_position = m_anchorWorld - screenOffsetToWorldOffset(screenOffset, m_zoom, m_rotation);
+        m_targetPosition = m_position;
+    } else {
+        m_position = m_targetPosition;
+    }
+
+    m_animating = false;
+    m_fitToViewAnimating = false;
+    m_hasAnchor = false;
+
+    clampZoom();
+}
+
 void Camera2D::stopAnimation()
 {
     m_targetZoom = m_zoom;

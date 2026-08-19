@@ -55,6 +55,8 @@ public:
     bool isAnimating() const { return m_animating; }
     bool isFitToViewAnimating() const { return m_fitToViewAnimating; }
     void stopAnimation();
+    /// Jump straight to the animation target (used when canvas animations are off).
+    void finishAnimation();
     void setSmoothSpeed(float speed) { m_smoothSpeed = speed; }
     float smoothSpeed() const { return m_smoothSpeed; }
 
