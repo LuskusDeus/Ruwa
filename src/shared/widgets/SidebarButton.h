@@ -1,8 +1,7 @@
 // SPDX-License-Identifier: MPL-2.0
 
-// SidebarButton.h
-#ifndef RUWA_UI_WIDGETS_HOMEPAGE_SIDEBAR_SIDEBARBUTTON_H
-#define RUWA_UI_WIDGETS_HOMEPAGE_SIDEBAR_SIDEBARBUTTON_H
+#ifndef RUWA_UI_WIDGETS_SIDEBARBUTTON_H
+#define RUWA_UI_WIDGETS_SIDEBARBUTTON_H
 
 #include "shared/widgets/BaseStyledWidget.h"
 
@@ -12,13 +11,10 @@ class QRectF;
 namespace ruwa::ui::widgets {
 
 /**
- * @brief Custom button for HomePage sidebar navigation
+ * @brief Shared navigation button used by full-page sidebars.
  *
- * Uses BaseStyledWidget with "SidebarButton" style.
- * Features:
- * - Icon and text with automatic color matching
- * - Active/inactive states with smooth transitions
- * - Minimal inactive state with light hover fill
+ * Uses the SidebarButton style and provides the animated active indicator used
+ * by both the home page and editor tabs.
  */
 class SidebarButton : public BaseStyledWidget {
     Q_OBJECT
@@ -35,4 +31,4 @@ protected:
 
 } // namespace ruwa::ui::widgets
 
-#endif // RUWA_UI_WIDGETS_HOMEPAGE_SIDEBAR_SIDEBARBUTTON_H
+#endif // RUWA_UI_WIDGETS_SIDEBARBUTTON_H

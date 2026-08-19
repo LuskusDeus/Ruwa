@@ -2,7 +2,7 @@
 
 // HomePageSidebar.cpp
 #include "HomePageSidebar.h"
-#include "SidebarButton.h"
+#include "shared/widgets/SidebarButton.h"
 #include "features/theme/manager/ThemeManager.h"
 #include "shared/i18n/TranslationManager.h"
 #include "shared/resources/IconProvider.h"

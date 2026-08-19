@@ -1,6 +1,5 @@
 // SPDX-License-Identifier: MPL-2.0
 
-// SidebarButton.cpp
 #include "SidebarButton.h"
 #include "features/theme/manager/ThemeManager.h"
 

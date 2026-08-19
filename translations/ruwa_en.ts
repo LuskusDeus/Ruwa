@@ -809,7 +809,7 @@ Try Square Selection first to restrict the area.</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location filename="../src/features/theme/editor/ThemeEditorTab.cpp" line="154"/>
+        <location filename="../src/features/theme/editor/ThemeEditorTab.cpp" line="155"/>
         <source>Missing preset data.</source>
         <translation type="unfinished"></translation>
     </message>
@@ -2397,234 +2397,58 @@ Rasterize the layer to transform the selection?</source>
 <context>
     <name>ruwa::ui::tabs::ThemeEditorTab</name>
     <message>
-        <location filename="../src/features/theme/editor/ThemeEditorTab.cpp" line="354"/>
-        <location filename="../src/features/theme/editor/ThemeEditorTab.cpp" line="860"/>
-        <source>Presets</source>
+        <location filename="../src/features/theme/editor/ThemeEditorTab.cpp" line="208"/>
+        <source>Theme Preview</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location filename="../src/features/theme/editor/ThemeEditorTab.cpp" line="355"/>
-        <location filename="../src/features/theme/editor/ThemeEditorTab.cpp" line="861"/>
-        <source>Search themes</source>
+        <location filename="../src/features/theme/editor/ThemeEditorTab.cpp" line="208"/>
+        <source>Interface Preview</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location filename="../src/features/theme/editor/ThemeEditorTab.cpp" line="357"/>
-        <location filename="../src/features/theme/editor/ThemeEditorTab.cpp" line="863"/>
-        <source>No themes found</source>
+        <location filename="../src/features/theme/editor/ThemeEditorTab.cpp" line="208"/>
+        <source>Canvas Preview</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location filename="../src/features/theme/editor/ThemeEditorTab.cpp" line="357"/>
-        <location filename="../src/features/theme/editor/ThemeEditorTab.cpp" line="863"/>
-        <source>Try another search or create a new theme.</source>
+        <location filename="../src/features/theme/editor/ThemeEditorTab.cpp" line="211"/>
+        <source>Themes</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location filename="../src/features/theme/editor/ThemeEditorTab.cpp" line="363"/>
-        <location filename="../src/features/theme/editor/ThemeEditorTab.cpp" line="869"/>
-        <source>New theme</source>
+        <location filename="../src/features/theme/editor/ThemeEditorTab.cpp" line="211"/>
+        <source>Interface</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location filename="../src/features/theme/editor/ThemeEditorTab.cpp" line="379"/>
-        <location filename="../src/features/theme/editor/ThemeEditorTab.cpp" line="1088"/>
-        <location filename="../src/features/theme/editor/ThemeEditorTab.cpp" line="1092"/>
-        <source>Delete Theme</source>
+        <location filename="../src/features/theme/editor/ThemeEditorTab.cpp" line="211"/>
+        <source>Canvas</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location filename="../src/features/theme/editor/ThemeEditorTab.cpp" line="380"/>
-        <location filename="../src/features/theme/editor/ThemeEditorTab.cpp" line="1093"/>
-        <source>Are you sure you want to delete &apos;%1&apos;?</source>
+        <location filename="../src/features/theme/editor/ThemeEditorTab.cpp" line="214"/>
+        <source>Theme presets and color settings will be available here.</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location filename="../src/features/theme/editor/ThemeEditorTab.cpp" line="472"/>
-        <location filename="../src/features/theme/editor/ThemeEditorTab.cpp" line="852"/>
-        <source>Colors</source>
+        <location filename="../src/features/theme/editor/ThemeEditorTab.cpp" line="215"/>
+        <source>Interface appearance settings will be available here.</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location filename="../src/features/theme/editor/ThemeEditorTab.cpp" line="480"/>
-        <location filename="../src/features/theme/editor/ThemeEditorTab.cpp" line="484"/>
-        <location filename="../src/features/theme/editor/ThemeEditorTab.cpp" line="854"/>
-        <source>Save &amp;&amp; Apply</source>
+        <location filename="../src/features/theme/editor/ThemeEditorTab.cpp" line="216"/>
+        <source>Canvas appearance settings will be available here.</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location filename="../src/features/theme/editor/ThemeEditorTab.cpp" line="511"/>
-        <location filename="../src/features/theme/editor/ThemeEditorTab.cpp" line="858"/>
-        <source>Preview</source>
+        <location filename="../src/features/theme/editor/ThemeEditorTab.cpp" line="222"/>
+        <source>Preview placeholder</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location filename="../src/features/theme/editor/ThemeEditorTab.cpp" line="536"/>
-        <location filename="../src/features/theme/editor/ThemeEditorTab.cpp" line="876"/>
-        <source>Core Colors</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <location filename="../src/features/theme/editor/ThemeEditorTab.cpp" line="552"/>
-        <location filename="../src/features/theme/editor/ThemeEditorTab.cpp" line="883"/>
-        <source>Primary / Accent</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <location filename="../src/features/theme/editor/ThemeEditorTab.cpp" line="554"/>
-        <location filename="../src/features/theme/editor/ThemeEditorTab.cpp" line="885"/>
-        <source>Background</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <location filename="../src/features/theme/editor/ThemeEditorTab.cpp" line="556"/>
-        <location filename="../src/features/theme/editor/ThemeEditorTab.cpp" line="887"/>
-        <source>Surface</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <location filename="../src/features/theme/editor/ThemeEditorTab.cpp" line="558"/>
-        <location filename="../src/features/theme/editor/ThemeEditorTab.cpp" line="889"/>
-        <source>Surface Alt</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <location filename="../src/features/theme/editor/ThemeEditorTab.cpp" line="560"/>
-        <location filename="../src/features/theme/editor/ThemeEditorTab.cpp" line="891"/>
-        <source>Border</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <location filename="../src/features/theme/editor/ThemeEditorTab.cpp" line="571"/>
-        <location filename="../src/features/theme/editor/ThemeEditorTab.cpp" line="877"/>
-        <source>Text Colors</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <location filename="../src/features/theme/editor/ThemeEditorTab.cpp" line="587"/>
-        <location filename="../src/features/theme/editor/ThemeEditorTab.cpp" line="893"/>
-        <source>Text Main</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <location filename="../src/features/theme/editor/ThemeEditorTab.cpp" line="589"/>
-        <location filename="../src/features/theme/editor/ThemeEditorTab.cpp" line="895"/>
-        <source>Text Muted</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <location filename="../src/features/theme/editor/ThemeEditorTab.cpp" line="591"/>
-        <location filename="../src/features/theme/editor/ThemeEditorTab.cpp" line="898"/>
-        <source>Text on Primary</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <location filename="../src/features/theme/editor/ThemeEditorTab.cpp" line="600"/>
-        <location filename="../src/features/theme/editor/ThemeEditorTab.cpp" line="878"/>
-        <source>Semantic Colors</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <location filename="../src/features/theme/editor/ThemeEditorTab.cpp" line="616"/>
-        <location filename="../src/features/theme/editor/ThemeEditorTab.cpp" line="900"/>
-        <source>Success</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <location filename="../src/features/theme/editor/ThemeEditorTab.cpp" line="618"/>
-        <location filename="../src/features/theme/editor/ThemeEditorTab.cpp" line="902"/>
-        <source>Warning</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <location filename="../src/features/theme/editor/ThemeEditorTab.cpp" line="620"/>
-        <location filename="../src/features/theme/editor/ThemeEditorTab.cpp" line="904"/>
-        <source>Error</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <location filename="../src/features/theme/editor/ThemeEditorTab.cpp" line="622"/>
-        <location filename="../src/features/theme/editor/ThemeEditorTab.cpp" line="906"/>
-        <source>Info</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <location filename="../src/features/theme/editor/ThemeEditorTab.cpp" line="646"/>
-        <source>Edit Theme</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <location filename="../src/features/theme/editor/ThemeEditorTab.cpp" line="647"/>
-        <source>Cannot edit built-in themes. Create a copy to customize colors.</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <location filename="../src/features/theme/editor/ThemeEditorTab.cpp" line="931"/>
-        <source>Built-in</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <location filename="../src/features/theme/editor/ThemeEditorTab.cpp" line="931"/>
-        <source>Custom</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <location filename="../src/features/theme/editor/ThemeEditorTab.cpp" line="979"/>
-        <source> (Copy)</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <location filename="../src/features/theme/editor/ThemeEditorTab.cpp" line="1026"/>
-        <source>Export theme</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <location filename="../src/features/theme/editor/ThemeEditorTab.cpp" line="1027"/>
-        <location filename="../src/features/theme/editor/ThemeEditorTab.cpp" line="1050"/>
-        <source>Ruwa theme preset (*.json)</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <location filename="../src/features/theme/editor/ThemeEditorTab.cpp" line="1040"/>
-        <source>Export Theme</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <location filename="../src/features/theme/editor/ThemeEditorTab.cpp" line="1040"/>
-        <source>Could not write file.</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <location filename="../src/features/theme/editor/ThemeEditorTab.cpp" line="1049"/>
-        <source>Import theme</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <location filename="../src/features/theme/editor/ThemeEditorTab.cpp" line="1058"/>
-        <location filename="../src/features/theme/editor/ThemeEditorTab.cpp" line="1065"/>
-        <location filename="../src/features/theme/editor/ThemeEditorTab.cpp" line="1069"/>
-        <location filename="../src/features/theme/editor/ThemeEditorTab.cpp" line="1076"/>
-        <source>Import Theme</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <location filename="../src/features/theme/editor/ThemeEditorTab.cpp" line="1058"/>
-        <source>Could not read file.</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <location filename="../src/features/theme/editor/ThemeEditorTab.cpp" line="1069"/>
-        <source>Invalid file format.</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <location filename="../src/features/theme/editor/ThemeEditorTab.cpp" line="1088"/>
-        <source>Cannot delete built-in themes.</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <location filename="../src/features/theme/editor/ThemeEditorTab.h" line="46"/>
-        <location filename="../src/features/theme/editor/ThemeEditorTab.h" line="47"/>
+        <location filename="../src/features/theme/editor/ThemeEditorTab.h" line="39"/>
+        <location filename="../src/features/theme/editor/ThemeEditorTab.h" line="40"/>
         <source>Theme Editor</source>
         <translation type="unfinished"></translation>
     </message>
@@ -2754,6 +2578,32 @@ Save it to upgrade the file and preserve the recovered layer formats.</source>
 </context>
 <context>
     <name>ruwa::ui::widgets::AboutContent</name>
+    <message>
+        <source>You have spent with Ruwa</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>less than a minute</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>%1 and %2</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message numerus="yes">
+        <source>%n hours</source>
+        <translation type="unfinished">
+            <numerusform></numerusform>
+            <numerusform></numerusform>
+        </translation>
+    </message>
+    <message numerus="yes">
+        <source>%n minutes</source>
+        <translation type="unfinished">
+            <numerusform></numerusform>
+            <numerusform></numerusform>
+        </translation>
+    </message>
     <message>
         <location filename="../src/features/home/about/AboutContent.cpp" line="531"/>
         <location filename="../src/features/home/about/AboutContent.h" line="33"/>
@@ -3139,64 +2989,6 @@ Ruwa uses the Qt framework (version %1), dynamically linked under the GNU Lesser
     </message>
 </context>
 <context>
-    <name>ruwa::ui::widgets::DetailedThemePreview</name>
-    <message>
-        <location filename="../src/features/theme/editor/DetailedThemePreview.cpp" line="128"/>
-        <source>Background</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <location filename="../src/features/theme/editor/DetailedThemePreview.cpp" line="132"/>
-        <source>Surface</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <location filename="../src/features/theme/editor/DetailedThemePreview.cpp" line="136"/>
-        <source>Text Main</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <location filename="../src/features/theme/editor/DetailedThemePreview.cpp" line="140"/>
-        <source>Primary</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <location filename="../src/features/theme/editor/DetailedThemePreview.cpp" line="144"/>
-        <source>Surface Alt</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <location filename="../src/features/theme/editor/DetailedThemePreview.cpp" line="148"/>
-        <source>Border</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <location filename="../src/features/theme/editor/DetailedThemePreview.cpp" line="193"/>
-        <source>Welcome to Ruwa</source>
-        <translation type="unfinished">Welcome to Ruwa</translation>
-    </message>
-    <message>
-        <location filename="../src/features/theme/editor/DetailedThemePreview.cpp" line="213"/>
-        <source>Digital Painting Reimagined</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <location filename="../src/features/theme/editor/DetailedThemePreview.cpp" line="222"/>
-        <source>Free, open-source, and limitless.</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <location filename="../src/features/theme/editor/DetailedThemePreview.cpp" line="235"/>
-        <source>Create Project</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <location filename="../src/features/theme/editor/DetailedThemePreview.cpp" line="261"/>
-        <source>Recent Projects</source>
-        <translation type="unfinished"></translation>
-    </message>
-</context>
-<context>
     <name>ruwa::ui::widgets::DockPanelContextMenu</name>
     <message>
         <location filename="../src/shell/context-menu/DockPanelContextMenu.cpp" line="195"/>
@@ -3263,6 +3055,27 @@ Ruwa uses the Qt framework (version %1), dynamically linked under the GNU Lesser
         <location filename="../src/shared/widgets/inputs/HexColorInput.cpp" line="45"/>
         <location filename="../src/shared/widgets/inputs/HexColorInput.cpp" line="46"/>
         <source>Copy HEX color</source>
+        <translation type="unfinished"></translation>
+    </message>
+</context>
+<context>
+    <name>ruwa::ui::widgets::ThemeEditorSidebar</name>
+    <message>
+        <location filename="../src/features/theme/editor/ThemeEditorSidebar.cpp" line="82"/>
+        <location filename="../src/features/theme/editor/ThemeEditorSidebar.cpp" line="108"/>
+        <source>Themes</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location filename="../src/features/theme/editor/ThemeEditorSidebar.cpp" line="84"/>
+        <location filename="../src/features/theme/editor/ThemeEditorSidebar.cpp" line="109"/>
+        <source>Interface</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location filename="../src/features/theme/editor/ThemeEditorSidebar.cpp" line="86"/>
+        <location filename="../src/features/theme/editor/ThemeEditorSidebar.cpp" line="110"/>
+        <source>Canvas</source>
         <translation type="unfinished"></translation>
     </message>
 </context>
@@ -6082,5 +5895,45 @@ Ruwa uses the Qt framework (version %1), dynamically linked under the GNU Lesser
         <source>Tools</source>
         <translation>Tools</translation>
     </message>
+</context>
+<context>
+    <name>ruwa::ui::widgets::ThemeEditorThemeDropdown</name>
+    <message><source>Built-in</source><translation type="unfinished"></translation></message>
+    <message><source>Custom</source><translation type="unfinished"></translation></message>
+    <message><source>Themes</source><translation type="unfinished"></translation></message>
+    <message><source>Search themes</source><translation type="unfinished"></translation></message>
+    <message><source>No themes found</source><translation type="unfinished"></translation></message>
+    <message><source>Try a different search.</source><translation type="unfinished"></translation></message>
+    <message><source>Actions</source><translation type="unfinished"></translation></message>
+    <message><source>New theme</source><translation type="unfinished"></translation></message>
+    <message><source>Import</source><translation type="unfinished"></translation></message>
+    <message><source>Export</source><translation type="unfinished"></translation></message>
+    <message><source>Delete theme</source><translation type="unfinished"></translation></message>
+    <message><source>Save as new</source><translation type="unfinished"></translation></message>
+    <message><source>Select theme</source><translation type="unfinished"></translation></message>
+    <message><source>New Theme</source><translation type="unfinished"></translation></message>
+    <message><source>Import theme</source><translation type="unfinished"></translation></message>
+    <message><source>Ruwa theme preset (*.json)</source><translation type="unfinished"></translation></message>
+    <message><source>Import Theme</source><translation type="unfinished"></translation></message>
+    <message><source>Could not read file.</source><translation type="unfinished"></translation></message>
+    <message><source>Invalid file format.</source><translation type="unfinished"></translation></message>
+    <message><source>Export theme</source><translation type="unfinished"></translation></message>
+    <message><source>Export Theme</source><translation type="unfinished"></translation></message>
+    <message><source>Could not write file.</source><translation type="unfinished"></translation></message>
+    <message><source>Delete Theme</source><translation type="unfinished"></translation></message>
+    <message><source>Are you sure you want to delete '%1'?</source><translation type="unfinished"></translation></message>
+    <message><source>Delete</source><translation type="unfinished"></translation></message>
+    <message><source>Cancel</source><translation type="unfinished"></translation></message>
+    <message><source>%1 Copy</source><translation type="unfinished"></translation></message>
+    <message><source>Theme</source><translation type="unfinished"></translation></message>
+    <message><source>OK</source><translation type="unfinished"></translation></message>
+</context>
+<context>
+    <name>ThemePresetJson</name>
+    <message><source>Invalid color value: %1</source><translation type="unfinished"></translation></message>
+    <message><source>Invalid file format.</source><translation type="unfinished"></translation></message>
+    <message><source>Unsupported preset version.</source><translation type="unfinished"></translation></message>
+    <message><source>Missing preset data.</source><translation type="unfinished"></translation></message>
+    <message><source>Preset has no name.</source><translation type="unfinished"></translation></message>
 </context>
 </TS>

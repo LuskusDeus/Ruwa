@@ -732,7 +732,7 @@ Try Square Selection first to restrict the area.</source>
         <translation>Неверный формат файла.</translation>
     </message>
     <message>
-        <location filename="../src/features/theme/editor/ThemeEditorTab.cpp" line="154"/>
+        <location filename="../src/features/theme/editor/ThemeEditorTab.cpp" line="155"/>
         <source>Missing preset data.</source>
         <translation>Отсутствуют данные пресета.</translation>
     </message>
@@ -2403,234 +2403,58 @@ Rasterize the layer to transform the selection?</source>
 <context>
     <name>ruwa::ui::tabs::ThemeEditorTab</name>
     <message>
-        <location filename="../src/features/theme/editor/ThemeEditorTab.cpp" line="354"/>
-        <location filename="../src/features/theme/editor/ThemeEditorTab.cpp" line="860"/>
-        <source>Presets</source>
-        <translation>Пресеты</translation>
+        <location filename="../src/features/theme/editor/ThemeEditorTab.cpp" line="208"/>
+        <source>Theme Preview</source>
+        <translation>Предпросмотр темы</translation>
     </message>
     <message>
-        <location filename="../src/features/theme/editor/ThemeEditorTab.cpp" line="355"/>
-        <location filename="../src/features/theme/editor/ThemeEditorTab.cpp" line="861"/>
-        <source>Search themes</source>
-        <translation>Поиск тем</translation>
+        <location filename="../src/features/theme/editor/ThemeEditorTab.cpp" line="208"/>
+        <source>Interface Preview</source>
+        <translation>Предпросмотр интерфейса</translation>
     </message>
     <message>
-        <location filename="../src/features/theme/editor/ThemeEditorTab.cpp" line="357"/>
-        <location filename="../src/features/theme/editor/ThemeEditorTab.cpp" line="863"/>
-        <source>No themes found</source>
-        <translation>Темы не найдены</translation>
+        <location filename="../src/features/theme/editor/ThemeEditorTab.cpp" line="208"/>
+        <source>Canvas Preview</source>
+        <translation>Предпросмотр холста</translation>
     </message>
     <message>
-        <location filename="../src/features/theme/editor/ThemeEditorTab.cpp" line="357"/>
-        <location filename="../src/features/theme/editor/ThemeEditorTab.cpp" line="863"/>
-        <source>Try another search or create a new theme.</source>
-        <translation>Измените запрос или создайте новую тему.</translation>
+        <location filename="../src/features/theme/editor/ThemeEditorTab.cpp" line="211"/>
+        <source>Themes</source>
+        <translation>Темы</translation>
     </message>
     <message>
-        <location filename="../src/features/theme/editor/ThemeEditorTab.cpp" line="363"/>
-        <location filename="../src/features/theme/editor/ThemeEditorTab.cpp" line="869"/>
-        <source>New theme</source>
-        <translation>Новая тема</translation>
+        <location filename="../src/features/theme/editor/ThemeEditorTab.cpp" line="211"/>
+        <source>Interface</source>
+        <translation>Интерфейс</translation>
     </message>
     <message>
-        <location filename="../src/features/theme/editor/ThemeEditorTab.cpp" line="379"/>
-        <location filename="../src/features/theme/editor/ThemeEditorTab.cpp" line="1088"/>
-        <location filename="../src/features/theme/editor/ThemeEditorTab.cpp" line="1092"/>
-        <source>Delete Theme</source>
-        <translation>Удалить тему</translation>
+        <location filename="../src/features/theme/editor/ThemeEditorTab.cpp" line="211"/>
+        <source>Canvas</source>
+        <translation>Холст</translation>
     </message>
     <message>
-        <location filename="../src/features/theme/editor/ThemeEditorTab.cpp" line="380"/>
-        <location filename="../src/features/theme/editor/ThemeEditorTab.cpp" line="1093"/>
-        <source>Are you sure you want to delete &apos;%1&apos;?</source>
-        <translation>Вы уверены, что хотите удалить «%1»?</translation>
+        <location filename="../src/features/theme/editor/ThemeEditorTab.cpp" line="214"/>
+        <source>Theme presets and color settings will be available here.</source>
+        <translation>Здесь появятся пресеты тем и настройки цветов.</translation>
     </message>
     <message>
-        <location filename="../src/features/theme/editor/ThemeEditorTab.cpp" line="472"/>
-        <location filename="../src/features/theme/editor/ThemeEditorTab.cpp" line="852"/>
-        <source>Colors</source>
-        <translation>Цвета</translation>
+        <location filename="../src/features/theme/editor/ThemeEditorTab.cpp" line="215"/>
+        <source>Interface appearance settings will be available here.</source>
+        <translation>Здесь появятся настройки внешнего вида интерфейса.</translation>
     </message>
     <message>
-        <location filename="../src/features/theme/editor/ThemeEditorTab.cpp" line="480"/>
-        <location filename="../src/features/theme/editor/ThemeEditorTab.cpp" line="484"/>
-        <location filename="../src/features/theme/editor/ThemeEditorTab.cpp" line="854"/>
-        <source>Save &amp;&amp; Apply</source>
-        <translation>Сохранить и применить</translation>
+        <location filename="../src/features/theme/editor/ThemeEditorTab.cpp" line="216"/>
+        <source>Canvas appearance settings will be available here.</source>
+        <translation>Здесь появятся настройки внешнего вида холста.</translation>
     </message>
     <message>
-        <location filename="../src/features/theme/editor/ThemeEditorTab.cpp" line="511"/>
-        <location filename="../src/features/theme/editor/ThemeEditorTab.cpp" line="858"/>
-        <source>Preview</source>
-        <translation>Превью</translation>
+        <location filename="../src/features/theme/editor/ThemeEditorTab.cpp" line="222"/>
+        <source>Preview placeholder</source>
+        <translation>Здесь появится предпросмотр</translation>
     </message>
     <message>
-        <location filename="../src/features/theme/editor/ThemeEditorTab.cpp" line="536"/>
-        <location filename="../src/features/theme/editor/ThemeEditorTab.cpp" line="876"/>
-        <source>Core Colors</source>
-        <translation>Основные цвета</translation>
-    </message>
-    <message>
-        <location filename="../src/features/theme/editor/ThemeEditorTab.cpp" line="552"/>
-        <location filename="../src/features/theme/editor/ThemeEditorTab.cpp" line="883"/>
-        <source>Primary / Accent</source>
-        <translation>Основной / Акцент</translation>
-    </message>
-    <message>
-        <location filename="../src/features/theme/editor/ThemeEditorTab.cpp" line="554"/>
-        <location filename="../src/features/theme/editor/ThemeEditorTab.cpp" line="885"/>
-        <source>Background</source>
-        <translation>Фон</translation>
-    </message>
-    <message>
-        <location filename="../src/features/theme/editor/ThemeEditorTab.cpp" line="556"/>
-        <location filename="../src/features/theme/editor/ThemeEditorTab.cpp" line="887"/>
-        <source>Surface</source>
-        <translation>Поверхность</translation>
-    </message>
-    <message>
-        <location filename="../src/features/theme/editor/ThemeEditorTab.cpp" line="558"/>
-        <location filename="../src/features/theme/editor/ThemeEditorTab.cpp" line="889"/>
-        <source>Surface Alt</source>
-        <translation>Поверхность (альт)</translation>
-    </message>
-    <message>
-        <location filename="../src/features/theme/editor/ThemeEditorTab.cpp" line="560"/>
-        <location filename="../src/features/theme/editor/ThemeEditorTab.cpp" line="891"/>
-        <source>Border</source>
-        <translation>Граница</translation>
-    </message>
-    <message>
-        <location filename="../src/features/theme/editor/ThemeEditorTab.cpp" line="571"/>
-        <location filename="../src/features/theme/editor/ThemeEditorTab.cpp" line="877"/>
-        <source>Text Colors</source>
-        <translation>Цвета текста</translation>
-    </message>
-    <message>
-        <location filename="../src/features/theme/editor/ThemeEditorTab.cpp" line="587"/>
-        <location filename="../src/features/theme/editor/ThemeEditorTab.cpp" line="893"/>
-        <source>Text Main</source>
-        <translation>Основной текст</translation>
-    </message>
-    <message>
-        <location filename="../src/features/theme/editor/ThemeEditorTab.cpp" line="589"/>
-        <location filename="../src/features/theme/editor/ThemeEditorTab.cpp" line="895"/>
-        <source>Text Muted</source>
-        <translation>Приглушённый текст</translation>
-    </message>
-    <message>
-        <location filename="../src/features/theme/editor/ThemeEditorTab.cpp" line="591"/>
-        <location filename="../src/features/theme/editor/ThemeEditorTab.cpp" line="898"/>
-        <source>Text on Primary</source>
-        <translation>Текст на основном</translation>
-    </message>
-    <message>
-        <location filename="../src/features/theme/editor/ThemeEditorTab.cpp" line="600"/>
-        <location filename="../src/features/theme/editor/ThemeEditorTab.cpp" line="878"/>
-        <source>Semantic Colors</source>
-        <translation>Семантические цвета</translation>
-    </message>
-    <message>
-        <location filename="../src/features/theme/editor/ThemeEditorTab.cpp" line="616"/>
-        <location filename="../src/features/theme/editor/ThemeEditorTab.cpp" line="900"/>
-        <source>Success</source>
-        <translation>Успех</translation>
-    </message>
-    <message>
-        <location filename="../src/features/theme/editor/ThemeEditorTab.cpp" line="618"/>
-        <location filename="../src/features/theme/editor/ThemeEditorTab.cpp" line="902"/>
-        <source>Warning</source>
-        <translation>Предупреждение</translation>
-    </message>
-    <message>
-        <location filename="../src/features/theme/editor/ThemeEditorTab.cpp" line="620"/>
-        <location filename="../src/features/theme/editor/ThemeEditorTab.cpp" line="904"/>
-        <source>Error</source>
-        <translation>Ошибка</translation>
-    </message>
-    <message>
-        <location filename="../src/features/theme/editor/ThemeEditorTab.cpp" line="622"/>
-        <location filename="../src/features/theme/editor/ThemeEditorTab.cpp" line="906"/>
-        <source>Info</source>
-        <translation>Информация</translation>
-    </message>
-    <message>
-        <location filename="../src/features/theme/editor/ThemeEditorTab.cpp" line="646"/>
-        <source>Edit Theme</source>
-        <translation>Редактирование темы</translation>
-    </message>
-    <message>
-        <location filename="../src/features/theme/editor/ThemeEditorTab.cpp" line="647"/>
-        <source>Cannot edit built-in themes. Create a copy to customize colors.</source>
-        <translation>Встроенные темы нельзя редактировать. Создайте копию для настройки цветов.</translation>
-    </message>
-    <message>
-        <location filename="../src/features/theme/editor/ThemeEditorTab.cpp" line="931"/>
-        <source>Built-in</source>
-        <translation>Встроенные</translation>
-    </message>
-    <message>
-        <location filename="../src/features/theme/editor/ThemeEditorTab.cpp" line="931"/>
-        <source>Custom</source>
-        <translation>Пользовательские</translation>
-    </message>
-    <message>
-        <location filename="../src/features/theme/editor/ThemeEditorTab.cpp" line="979"/>
-        <source> (Copy)</source>
-        <translation> (Копия)</translation>
-    </message>
-    <message>
-        <location filename="../src/features/theme/editor/ThemeEditorTab.cpp" line="1026"/>
-        <source>Export theme</source>
-        <translation>Экспорт темы</translation>
-    </message>
-    <message>
-        <location filename="../src/features/theme/editor/ThemeEditorTab.cpp" line="1027"/>
-        <location filename="../src/features/theme/editor/ThemeEditorTab.cpp" line="1050"/>
-        <source>Ruwa theme preset (*.json)</source>
-        <translation>Пресет темы Ruwa (*.json)</translation>
-    </message>
-    <message>
-        <location filename="../src/features/theme/editor/ThemeEditorTab.cpp" line="1040"/>
-        <source>Export Theme</source>
-        <translation>Экспорт темы</translation>
-    </message>
-    <message>
-        <location filename="../src/features/theme/editor/ThemeEditorTab.cpp" line="1040"/>
-        <source>Could not write file.</source>
-        <translation>Не удалось записать файл.</translation>
-    </message>
-    <message>
-        <location filename="../src/features/theme/editor/ThemeEditorTab.cpp" line="1049"/>
-        <source>Import theme</source>
-        <translation>Импорт темы</translation>
-    </message>
-    <message>
-        <location filename="../src/features/theme/editor/ThemeEditorTab.cpp" line="1058"/>
-        <location filename="../src/features/theme/editor/ThemeEditorTab.cpp" line="1065"/>
-        <location filename="../src/features/theme/editor/ThemeEditorTab.cpp" line="1069"/>
-        <location filename="../src/features/theme/editor/ThemeEditorTab.cpp" line="1076"/>
-        <source>Import Theme</source>
-        <translation>Импорт темы</translation>
-    </message>
-    <message>
-        <location filename="../src/features/theme/editor/ThemeEditorTab.cpp" line="1058"/>
-        <source>Could not read file.</source>
-        <translation>Не удалось прочитать файл.</translation>
-    </message>
-    <message>
-        <location filename="../src/features/theme/editor/ThemeEditorTab.cpp" line="1069"/>
-        <source>Invalid file format.</source>
-        <translation>Неверный формат файла.</translation>
-    </message>
-    <message>
-        <location filename="../src/features/theme/editor/ThemeEditorTab.cpp" line="1088"/>
-        <source>Cannot delete built-in themes.</source>
-        <translation>Встроенные темы нельзя удалить.</translation>
-    </message>
-    <message>
-        <location filename="../src/features/theme/editor/ThemeEditorTab.h" line="46"/>
-        <location filename="../src/features/theme/editor/ThemeEditorTab.h" line="47"/>
+        <location filename="../src/features/theme/editor/ThemeEditorTab.h" line="39"/>
+        <location filename="../src/features/theme/editor/ThemeEditorTab.h" line="40"/>
         <source>Theme Editor</source>
         <translation>Редактор тем</translation>
     </message>
@@ -2762,6 +2586,34 @@ Save it to upgrade the file and preserve the recovered layer formats.</source>
 </context>
 <context>
     <name>ruwa::ui::widgets::AboutContent</name>
+    <message>
+        <source>You have spent with Ruwa</source>
+        <translation>Вы провели времени с Ruwa</translation>
+    </message>
+    <message>
+        <source>less than a minute</source>
+        <translation>меньше минуты</translation>
+    </message>
+    <message>
+        <source>%1 and %2</source>
+        <translation>%1 и %2</translation>
+    </message>
+    <message numerus="yes">
+        <source>%n hours</source>
+        <translation>
+            <numerusform>%n час</numerusform>
+            <numerusform>%n часа</numerusform>
+            <numerusform>%n часов</numerusform>
+        </translation>
+    </message>
+    <message numerus="yes">
+        <source>%n minutes</source>
+        <translation>
+            <numerusform>%n минута</numerusform>
+            <numerusform>%n минуты</numerusform>
+            <numerusform>%n минут</numerusform>
+        </translation>
+    </message>
     <message>
         <location filename="../src/features/home/about/AboutContent.cpp" line="531"/>
         <location filename="../src/features/home/about/AboutContent.h" line="33"/>
@@ -3149,64 +3001,6 @@ Ruwa использует фреймворк Qt (версия %1), динами�
     </message>
 </context>
 <context>
-    <name>ruwa::ui::widgets::DetailedThemePreview</name>
-    <message>
-        <location filename="../src/features/theme/editor/DetailedThemePreview.cpp" line="128"/>
-        <source>Background</source>
-        <translation>Фон</translation>
-    </message>
-    <message>
-        <location filename="../src/features/theme/editor/DetailedThemePreview.cpp" line="132"/>
-        <source>Surface</source>
-        <translation>Поверхность</translation>
-    </message>
-    <message>
-        <location filename="../src/features/theme/editor/DetailedThemePreview.cpp" line="136"/>
-        <source>Text Main</source>
-        <translation>Основной текст</translation>
-    </message>
-    <message>
-        <location filename="../src/features/theme/editor/DetailedThemePreview.cpp" line="140"/>
-        <source>Primary</source>
-        <translation>Основной</translation>
-    </message>
-    <message>
-        <location filename="../src/features/theme/editor/DetailedThemePreview.cpp" line="144"/>
-        <source>Surface Alt</source>
-        <translation>Поверхность (альт)</translation>
-    </message>
-    <message>
-        <location filename="../src/features/theme/editor/DetailedThemePreview.cpp" line="148"/>
-        <source>Border</source>
-        <translation>Граница</translation>
-    </message>
-    <message>
-        <location filename="../src/features/theme/editor/DetailedThemePreview.cpp" line="193"/>
-        <source>Welcome to Ruwa</source>
-        <translation>Добро пожаловать в Ruwa</translation>
-    </message>
-    <message>
-        <location filename="../src/features/theme/editor/DetailedThemePreview.cpp" line="213"/>
-        <source>Digital Painting Reimagined</source>
-        <translation>Цифровая живопись заново</translation>
-    </message>
-    <message>
-        <location filename="../src/features/theme/editor/DetailedThemePreview.cpp" line="222"/>
-        <source>Free, open-source, and limitless.</source>
-        <translation>Бесплатно, с открытым исходным кодом и без ограничений.</translation>
-    </message>
-    <message>
-        <location filename="../src/features/theme/editor/DetailedThemePreview.cpp" line="235"/>
-        <source>Create Project</source>
-        <translation>Создать проект</translation>
-    </message>
-    <message>
-        <location filename="../src/features/theme/editor/DetailedThemePreview.cpp" line="261"/>
-        <source>Recent Projects</source>
-        <translation>Недавние проекты</translation>
-    </message>
-</context>
-<context>
     <name>ruwa::ui::widgets::DockPanelContextMenu</name>
     <message>
         <location filename="../src/shell/context-menu/DockPanelContextMenu.cpp" line="195"/>
@@ -3274,6 +3068,27 @@ Ruwa использует фреймворк Qt (версия %1), динами�
         <location filename="../src/shared/widgets/inputs/HexColorInput.cpp" line="46"/>
         <source>Copy HEX color</source>
         <translation>Скопировать HEX-цвет</translation>
+    </message>
+</context>
+<context>
+    <name>ruwa::ui::widgets::ThemeEditorSidebar</name>
+    <message>
+        <location filename="../src/features/theme/editor/ThemeEditorSidebar.cpp" line="82"/>
+        <location filename="../src/features/theme/editor/ThemeEditorSidebar.cpp" line="108"/>
+        <source>Themes</source>
+        <translation>Темы</translation>
+    </message>
+    <message>
+        <location filename="../src/features/theme/editor/ThemeEditorSidebar.cpp" line="84"/>
+        <location filename="../src/features/theme/editor/ThemeEditorSidebar.cpp" line="109"/>
+        <source>Interface</source>
+        <translation>Интерфейс</translation>
+    </message>
+    <message>
+        <location filename="../src/features/theme/editor/ThemeEditorSidebar.cpp" line="86"/>
+        <location filename="../src/features/theme/editor/ThemeEditorSidebar.cpp" line="110"/>
+        <source>Canvas</source>
+        <translation>Холст</translation>
     </message>
 </context>
 <context>
@@ -6105,5 +5920,45 @@ Ruwa использует фреймворк Qt (версия %1), динами�
         <source>Tools</source>
         <translation>Инструменты</translation>
     </message>
+</context>
+<context>
+    <name>ruwa::ui::widgets::ThemeEditorThemeDropdown</name>
+    <message><source>Built-in</source><translation>Встроенная</translation></message>
+    <message><source>Custom</source><translation>Пользовательская</translation></message>
+    <message><source>Themes</source><translation>Темы</translation></message>
+    <message><source>Search themes</source><translation>Поиск тем</translation></message>
+    <message><source>No themes found</source><translation>Темы не найдены</translation></message>
+    <message><source>Try a different search.</source><translation>Попробуйте изменить запрос.</translation></message>
+    <message><source>Actions</source><translation>Действия</translation></message>
+    <message><source>New theme</source><translation>Новая тема</translation></message>
+    <message><source>Import</source><translation>Импорт</translation></message>
+    <message><source>Export</source><translation>Экспорт</translation></message>
+    <message><source>Delete theme</source><translation>Удалить тему</translation></message>
+    <message><source>Save as new</source><translation>Сохранить как новую</translation></message>
+    <message><source>Select theme</source><translation>Выберите тему</translation></message>
+    <message><source>New Theme</source><translation>Новая тема</translation></message>
+    <message><source>Import theme</source><translation>Импорт темы</translation></message>
+    <message><source>Ruwa theme preset (*.json)</source><translation>Пресет темы Ruwa (*.json)</translation></message>
+    <message><source>Import Theme</source><translation>Импорт темы</translation></message>
+    <message><source>Could not read file.</source><translation>Не удалось прочитать файл.</translation></message>
+    <message><source>Invalid file format.</source><translation>Некорректный формат файла.</translation></message>
+    <message><source>Export theme</source><translation>Экспорт темы</translation></message>
+    <message><source>Export Theme</source><translation>Экспорт темы</translation></message>
+    <message><source>Could not write file.</source><translation>Не удалось записать файл.</translation></message>
+    <message><source>Delete Theme</source><translation>Удаление темы</translation></message>
+    <message><source>Are you sure you want to delete '%1'?</source><translation>Удалить тему «%1»?</translation></message>
+    <message><source>Delete</source><translation>Удалить</translation></message>
+    <message><source>Cancel</source><translation>Отмена</translation></message>
+    <message><source>%1 Copy</source><translation>%1 — копия</translation></message>
+    <message><source>Theme</source><translation>Тема</translation></message>
+    <message><source>OK</source><translation>ОК</translation></message>
+</context>
+<context>
+    <name>ThemePresetJson</name>
+    <message><source>Invalid color value: %1</source><translation>Некорректное значение цвета: %1</translation></message>
+    <message><source>Invalid file format.</source><translation>Некорректный формат файла.</translation></message>
+    <message><source>Unsupported preset version.</source><translation>Версия пресета не поддерживается.</translation></message>
+    <message><source>Missing preset data.</source><translation>В файле отсутствуют данные пресета.</translation></message>
+    <message><source>Preset has no name.</source><translation>У пресета отсутствует название.</translation></message>
 </context>
 </TS>
