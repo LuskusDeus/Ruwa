@@ -18,6 +18,8 @@
 #include <QSizePolicy>
 #include <QTimer>
 
+#include <cmath>
+
 namespace anim = ruwa::ui::core::anim;
 
 namespace ruwa::ui::widgets {
@@ -373,6 +375,55 @@ QVariant SegmentedOptionSelector::currentData() const
         return {};
     }
     return m_options[m_currentIndex].data;
+}
+
+void SegmentedOptionSelector::setIndicatorFraction(qreal fraction)
+{
+    if (!m_indicatorPanel || m_buttons.isEmpty()) {
+        return;
+    }
+
+    if (m_backgroundPanel && m_backgroundPanel->layout()) {
+        m_backgroundPanel->layout()->activate();
+    }
+
+    const qreal clamped = qBound(0.0, fraction, qreal(m_buttons.size() - 1));
+    const int lower = static_cast<int>(std::floor(clamped));
+    const int upper = qMin(lower + 1, m_buttons.size() - 1);
+    const qreal blend = clamped - lower;
+
+    const QRect from = indicatorTargetRectForIndex(lower);
+    const QRect to = indicatorTargetRectForIndex(upper);
+    if (!from.isValid() || !to.isValid()) {
+        return;
+    }
+
+    if (m_indicatorAnimation) {
+        m_indicatorAnimation->stop();
+    }
+
+    const auto mix = [blend](int a, int b) { return qRound(a + (b - a) * blend); };
+    m_indicatorPanel->setGeometry(mix(from.x(), to.x()), mix(from.y(), to.y()),
+        mix(from.width(), to.width()), mix(from.height(), to.height()));
+    m_indicatorPanel->show();
+    m_indicatorPanel->lower();
+
+    // The label colours ride the same fraction, so text and indicator never
+    // disagree about where the selection currently is.
+    for (int index = 0; index < m_buttons.size(); ++index) {
+        if (!m_buttons[index]) {
+            continue;
+        }
+        qreal progress = 0.0;
+        if (index == lower) {
+            progress = 1.0 - blend;
+        }
+        if (index == upper) {
+            progress = qMax(progress, blend);
+        }
+        m_buttons[index]->setActiveProgress(progress);
+        m_buttons[index]->raise();
+    }
 }
 
 void SegmentedOptionSelector::setDisplayMode(DisplayMode mode)

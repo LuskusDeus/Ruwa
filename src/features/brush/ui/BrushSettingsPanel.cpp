@@ -299,6 +299,11 @@ void BrushSettingsPanel::onThemeChanged()
     rebuildSettings();
 }
 
+void BrushSettingsPanel::showPresentationBrush(const QString& brushId)
+{
+    setCurrentBrush(brushId);
+}
+
 void BrushSettingsPanel::setCurrentBrush(const QString& brushId)
 {
     if (m_currentBrushId == brushId) {

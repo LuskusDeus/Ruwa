@@ -574,6 +574,30 @@ public:
         m_opacityEffect->setOpacity(m_popupOpacity);
     }
 
+    void preparePresentation(int maxHeight)
+    {
+        forceHide();
+        ensurePolished();
+        m_layout->activate();
+        applyHeightConstraint(maxHeight);
+    }
+
+    void renderPresentation(QPainter* painter, const QPoint& target)
+    {
+        if (!painter || size().isEmpty()) {
+            return;
+        }
+
+        // The popup lives behind a QGraphicsOpacityEffect parked at 0 while it is
+        // hidden, and an effect at zero opacity renders nothing at all.
+        const bool effectWasEnabled = m_opacityEffect->isEnabled();
+        m_opacityEffect->setEnabled(false);
+        render(painter, target, QRegion(rect()),
+            QWidget::DrawWindowBackground | QWidget::DrawChildren);
+        m_opacityEffect->setEnabled(effectWasEnabled);
+        m_opacityEffect->setOpacity(m_popupOpacity);
+    }
+
     void forceHide()
     {
         m_isVisible = false;
@@ -1102,6 +1126,33 @@ void AnimatedComboBox::setItemPreviewImage(int index, const QImage& image)
     if (m_currentIndex == index) {
         update();
     }
+}
+
+QSize AnimatedComboBox::preparePresentationPopup(int maxHeight)
+{
+    if (m_items.isEmpty()) {
+        return {};
+    }
+
+    AnimatedComboPopup* popup = ensurePopup();
+    if (!popup) {
+        return {};
+    }
+
+    popup->setFont(font());
+    if (popupContentNeedsRebuild()) {
+        syncPopupItems();
+    }
+    popup->preparePresentation(maxHeight);
+    return popup->size();
+}
+
+void AnimatedComboBox::renderPresentationPopup(QPainter* painter, const QPoint& target)
+{
+    if (!m_popup || !painter) {
+        return;
+    }
+    m_popup->renderPresentation(painter, target);
 }
 
 void AnimatedComboBox::setHoverProgress(qreal progress)

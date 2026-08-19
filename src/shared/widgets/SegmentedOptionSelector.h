@@ -45,6 +45,12 @@ public:
     void clearOptions();
 
     void setCurrentIndex(int index, bool animated = true);
+
+    /// Place the swipe indicator anywhere between two options, without any
+    /// animation of its own. Presentation surfaces that drive the motion from
+    /// their own clock use it instead of setCurrentIndex(); @p fraction is a
+    /// continuous option index, so 1.5 is halfway between the second and third.
+    void setIndicatorFraction(qreal fraction);
     int currentIndex() const { return m_currentIndex; }
     int optionCount() const { return m_options.size(); }
     QVariant currentData() const;

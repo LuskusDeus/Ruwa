@@ -2,12 +2,12 @@
 
 #include "ThemeEditorTab.h"
 
+#include "features/theme/editor/ThemeEditorAnimationsPreview.h"
 #include "features/theme/editor/ThemeEditorSidebar.h"
 #include "features/theme/editor/ThemeEditorThemesPreview.h"
 #include "features/theme/manager/ThemeManager.h"
 #include "shared/i18n/TranslationManager.h"
 #include "shared/style/WidgetStyleManager.h"
-#include "shared/widgets/BaseStyledPanel.h"
 #include "shared/widgets/CapsuleButton.h"
 #include "shared/widgets/inputs/ColorInputButton.h"
 #include "shared/widgets/inputs/FontDropdownSelector.h"
@@ -153,7 +153,7 @@ void ThemeEditorTab::setupUi()
     const auto sectionDefinitions = settingsSectionDefinitions();
     for (std::size_t index = 0; index < SectionCount; ++index) {
         m_previewStack->addWidget(index == 0 ? createThemesPreviewPage(m_previewStack)
-                                             : createPreviewPlaceholder(m_previewStack));
+                                             : createAnimationsPreviewPage(m_previewStack));
         m_settingsStack->addWidget(
             createSettingsSection(sectionDefinitions[index], index, m_settingsStack));
     }
@@ -168,9 +168,7 @@ void ThemeEditorTab::setupUi()
         [this](const ruwa::ui::core::ThemePreset& preset) {
             m_editingTheme = preset;
             m_savedTheme = preset;
-            if (m_themesPreview) {
-                m_themesPreview->setPreset(m_editingTheme);
-            }
+            refreshPreviews();
             syncColorInputs();
             syncFontInputs();
             syncAnimationInputs();
@@ -207,46 +205,20 @@ QWidget* ThemeEditorTab::createThemesPreviewPage(QWidget* parent)
     return page;
 }
 
-QWidget* ThemeEditorTab::createPreviewPlaceholder(QWidget* parent)
+QWidget* ThemeEditorTab::createAnimationsPreviewPage(QWidget* parent)
 {
     auto* page = new QWidget(parent);
     page->setAttribute(Qt::WA_TranslucentBackground);
-    auto* pageLayout = new QVBoxLayout(page);
 
+    auto* pageLayout = new QVBoxLayout(page);
     const auto& theme = ruwa::ui::core::ThemeManager::instance();
     pageLayout->setContentsMargins(
         theme.scaled(8), theme.scaled(8), theme.scaled(8), theme.scaled(8));
     pageLayout->setSpacing(0);
 
-    auto previewStyle = ruwa::ui::core::WidgetStyle::settingsPanelStyle();
-    previewStyle.metrics.baseCornerRadius = 12;
-    previewStyle.background.color = ruwa::ui::core::ColorSource::Surface;
-    auto* previewPanel = new ruwa::ui::widgets::BaseStyledPanel(previewStyle, page);
-    previewPanel->setHoverEnabled(false);
-    auto* contentLayout = new QVBoxLayout(previewPanel);
-    contentLayout->setContentsMargins(
-        theme.scaled(24), theme.scaled(24), theme.scaled(24), theme.scaled(24));
-    contentLayout->setSpacing(theme.scaled(8));
-    contentLayout->addStretch();
-
-    const int index = m_previewStack->count();
-    auto* title = new QLabel(previewPanel);
-    title->setAlignment(Qt::AlignCenter);
-    QFont titleFont = theme.font(ruwa::ui::core::ThemeFontRole::H4, QFont::Bold);
-    title->setFont(titleFont);
-    m_previewTitles[static_cast<std::size_t>(index)] = title;
-    contentLayout->addWidget(title);
-
-    auto* description = new QLabel(previewPanel);
-    description->setAlignment(Qt::AlignCenter);
-    description->setWordWrap(true);
-    QFont descriptionFont = theme.font(ruwa::ui::core::ThemeFontRole::Body);
-    description->setFont(descriptionFont);
-    m_previewDescriptions[static_cast<std::size_t>(index)] = description;
-    contentLayout->addWidget(description);
-
-    contentLayout->addStretch();
-    pageLayout->addWidget(previewPanel);
+    m_animationsPreview = new ruwa::ui::widgets::ThemeEditorAnimationsPreview(page);
+    m_animationsPreview->setPreset(m_editingTheme);
+    pageLayout->addWidget(m_animationsPreview);
     return page;
 }
 
@@ -501,6 +473,7 @@ QWidget* ThemeEditorTab::createAnimationCategory(std::size_t categoryIndex, QWid
                     return;
                 }
                 m_editingTheme.animations.enabled = enabled;
+                refreshPreviews();
                 updateDirtyState();
             });
 
@@ -518,6 +491,7 @@ QWidget* ThemeEditorTab::createAnimationCategory(std::size_t categoryIndex, QWid
                     return;
                 }
                 m_editingTheme.animations.speed = speed;
+                refreshPreviews();
                 updateDirtyState();
             });
     } else {
@@ -601,7 +575,7 @@ ruwa::ui::widgets::FontDropdownSelector* ThemeEditorTab::createFontFamilyInput(
                 return;
             }
             fontFamilyAt(m_editingTheme, familyIndex) = family;
-            refreshThemesPreview();
+            refreshPreviews();
         });
     connect(input, &ruwa::ui::widgets::FontDropdownSelector::previewCancelled, this,
         [this, familyIndex]() {
@@ -610,7 +584,7 @@ ruwa::ui::widgets::FontDropdownSelector* ThemeEditorTab::createFontFamilyInput(
             }
             fontFamilyAt(m_editingTheme, familyIndex)
                 = m_fontPreviewOriginalFamilies[familyIndex];
-            refreshThemesPreview();
+            refreshPreviews();
         });
     connect(input, &ruwa::ui::widgets::FontDropdownSelector::activated, this,
         [this, familyIndex](const QString& family) {
@@ -619,7 +593,7 @@ ruwa::ui::widgets::FontDropdownSelector* ThemeEditorTab::createFontFamilyInput(
             }
             fontFamilyAt(m_editingTheme, familyIndex) = family;
             m_fontPreviewOriginalFamilies[familyIndex] = family;
-            refreshThemesPreview();
+            refreshPreviews();
             updateDirtyState();
         });
 
@@ -645,7 +619,7 @@ ruwa::ui::widgets::NumericInputField* ThemeEditorTab::createFontSizeInput(
                 return;
             }
             m_editingTheme.fonts.sizes.setValue(kFontSizeRoles[sizeIndex], qRound(value));
-            refreshThemesPreview();
+            refreshPreviews();
             updateDirtyState();
         });
 
@@ -689,9 +663,7 @@ ruwa::ui::widgets::ColorInputButton* ThemeEditorTab::createColorInput(
         [this, field](const QColor& color) {
             if (!m_syncingColorInputs) {
                 editingColor(field) = color;
-                if (m_themesPreview) {
-                    m_themesPreview->setPreset(m_editingTheme);
-                }
+                refreshPreviews();
                 updateDirtyState();
             }
         });
@@ -927,10 +899,13 @@ void ThemeEditorTab::syncAnimationInputs()
     m_syncingAnimationInputs = false;
 }
 
-void ThemeEditorTab::refreshThemesPreview()
+void ThemeEditorTab::refreshPreviews()
 {
     if (m_themesPreview) {
         m_themesPreview->setPreset(m_editingTheme);
+    }
+    if (m_animationsPreview) {
+        m_animationsPreview->setPreset(m_editingTheme);
     }
 }
 
@@ -992,21 +967,6 @@ void ThemeEditorTab::saveEditingTheme()
 
 void ThemeEditorTab::retranslateUi()
 {
-    const std::array<QString, SectionCount> previewTitles {
-        tr("Theme Preview"), tr("Animation Preview")
-    };
-
-    for (std::size_t index = 0; index < SectionCount; ++index) {
-        if (m_previewTitles[index]) {
-            m_previewTitles[index]->setText(previewTitles[index]);
-        }
-        if (m_previewDescriptions[index]) {
-            m_previewDescriptions[index]->setText(index == 1
-                    ? tr("Animation preview will be available here.")
-                    : QString());
-        }
-    }
-
     for (std::size_t index = 0; index < SettingsPageCount; ++index) {
         const auto settingsPage = static_cast<SettingsPage>(index);
         if (m_settingsTitles[index]) {
@@ -1106,16 +1066,6 @@ void ThemeEditorTab::updateThemeColors()
 
     updateScaledSizes();
 
-    for (QLabel* title : m_previewTitles) {
-        if (title) {
-            title->setStyleSheet(QStringLiteral("color: %1;").arg(colors.text.name()));
-        }
-    }
-    for (QLabel* description : m_previewDescriptions) {
-        if (description) {
-            description->setStyleSheet(QStringLiteral("color: %1;").arg(colors.textMuted.name()));
-        }
-    }
     for (QLabel* title : m_settingsTitles) {
         if (title) {
             title->setStyleSheet(QStringLiteral("color: %1;").arg(colors.text.name()));
@@ -1172,36 +1122,17 @@ void ThemeEditorTab::updateScaledSizes()
     const int settingsTabHeight
         = sidebarButtonStyle ? theme.scaled(sidebarButtonStyle->metrics.baseHeight) : 0;
 
-    if (m_themesPreview) {
-        if (QWidget* page = m_themesPreview->parentWidget(); page && page->layout()) {
+    const auto refreshPreviewPageMargins = [&theme](QWidget* preview) {
+        if (!preview) {
+            return;
+        }
+        if (QWidget* page = preview->parentWidget(); page && page->layout()) {
             page->layout()->setContentsMargins(
                 theme.scaled(8), theme.scaled(8), theme.scaled(8), theme.scaled(8));
         }
-    }
-
-    for (std::size_t index = 0; index < SectionCount; ++index) {
-        QLabel* title = m_previewTitles[index];
-        QLabel* description = m_previewDescriptions[index];
-        if (!title || !description) {
-            continue;
-        }
-
-        if (QWidget* panel = title->parentWidget(); panel && panel->layout()) {
-            panel->layout()->setContentsMargins(
-                theme.scaled(24), theme.scaled(24), theme.scaled(24), theme.scaled(24));
-            panel->layout()->setSpacing(theme.scaled(8));
-            if (QWidget* page = panel->parentWidget(); page && page->layout()) {
-                page->layout()->setContentsMargins(
-                    theme.scaled(8), theme.scaled(8), theme.scaled(8), theme.scaled(8));
-            }
-        }
-
-        QFont titleFont = theme.font(ruwa::ui::core::ThemeFontRole::H4, QFont::Bold);
-        title->setFont(titleFont);
-
-        QFont descriptionFont = theme.font(ruwa::ui::core::ThemeFontRole::Body);
-        description->setFont(descriptionFont);
-    }
+    };
+    refreshPreviewPageMargins(m_themesPreview);
+    refreshPreviewPageMargins(m_animationsPreview);
 
     for (QLabel* title : m_colorCategoryTitles) {
         if (!title) {

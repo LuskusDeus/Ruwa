@@ -12,6 +12,7 @@
 #include <QVariant>
 #include <QWidget>
 
+class QPainter;
 class QPropertyAnimation;
 class QGraphicsOpacityEffect;
 
@@ -83,6 +84,12 @@ public:
     QSize popupCardSize() const { return m_popupCardSize; }
 
     void setItemPreviewImage(int index, const QImage& image);
+
+    /** Lay the real popup out without opening an interactive overlay, and draw
+     * it into an arbitrary painter. Presentation surfaces (theme previews) use
+     * this to show an open dropdown that no one can click. */
+    QSize preparePresentationPopup(int maxHeight);
+    void renderPresentationPopup(QPainter* painter, const QPoint& target);
 
     qreal hoverProgress() const { return m_hoverProgress; }
     void setHoverProgress(qreal progress);

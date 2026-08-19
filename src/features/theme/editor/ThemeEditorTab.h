@@ -26,6 +26,7 @@ class ColorInputButton;
 class FontDropdownSelector;
 class NumericInputField;
 class PropertyRowLayout;
+class ThemeEditorAnimationsPreview;
 class ThemeEditorSidebar;
 class ThemeEditorThemesPreview;
 class ToggleSwitch;
@@ -121,7 +122,7 @@ private:
 
     void setupUi();
     QWidget* createThemesPreviewPage(QWidget* parent);
-    QWidget* createPreviewPlaceholder(QWidget* parent);
+    QWidget* createAnimationsPreviewPage(QWidget* parent);
     QWidget* createSettingsSection(const SettingsSectionDefinition& definition,
         std::size_t sectionIndex, QWidget* parent);
     QWidget* createSettingsPlaceholder(SettingsPage settingsPage, QWidget* parent);
@@ -151,7 +152,7 @@ private:
     void syncColorInputs();
     void syncFontInputs();
     void syncAnimationInputs();
-    void refreshThemesPreview();
+    void refreshPreviews();
     void updateDirtyState();
     void setDirtyState(bool dirty);
     void applyEditingTheme();
@@ -163,11 +164,10 @@ private:
 
     ruwa::ui::widgets::AnimatedStackedWidget* m_previewStack { nullptr };
     ruwa::ui::widgets::ThemeEditorThemesPreview* m_themesPreview { nullptr };
+    ruwa::ui::widgets::ThemeEditorAnimationsPreview* m_animationsPreview { nullptr };
     QWidget* m_settingsFrame { nullptr };
     ruwa::ui::widgets::ThemeEditorSidebar* m_sidebar { nullptr };
     ruwa::ui::widgets::AnimatedStackedWidget* m_settingsStack { nullptr };
-    std::array<QLabel*, SectionCount> m_previewTitles {};
-    std::array<QLabel*, SectionCount> m_previewDescriptions {};
     std::array<SettingsSectionUi, SectionCount> m_settingsSections {};
     std::array<QLabel*, SettingsPageCount> m_settingsTitles {};
     std::array<QLabel*, SettingsPageCount> m_settingsDescriptions {};

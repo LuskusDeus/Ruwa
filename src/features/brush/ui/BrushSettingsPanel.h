@@ -46,6 +46,10 @@ public:
     bool visiblePreviewReady() const;
     void preparePresentationSnapshot();
 
+    /// Show @p brushId as though it were the selected one. For presentation
+    /// surfaces (theme previews) that have no canvas to take a selection from.
+    void showPresentationBrush(const QString& brushId);
+
 signals:
     void brushEditorRequested(const QString& brushId);
     void visiblePreviewStateChanged();
