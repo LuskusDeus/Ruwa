@@ -160,6 +160,14 @@ public:
         /// smooth — the only artifact is a frame or two of content lag in a
         /// small region.
         ///
+        /// PER LEVEL, not per frame, and the levels the display samples are
+        /// exempt from it entirely (see levelDeferrableBudget). One cap shared
+        /// by the cascade is spent bottom-up on level 1, which holds four times
+        /// the tiles of the level above it, and the levels actually on screen
+        /// then rebuild NOTHING — invisible while a stroke dirties a handful of
+        /// tiles, and a frozen canvas as soon as a layer effect's coverage
+        /// expansion makes every dab dirty a ring of them.
+        ///
         /// A tile with no texture yet ignores this budget entirely. Deferring
         /// one would not leave a stale patch, it would leave a HOLE: the
         /// display pass has nothing to bind and skips the quad, so the

@@ -134,11 +134,17 @@ namespace {
 /// that applies this, and never to a discrete edit. Absent tiles are never
 /// counted — see DisplayPyramidPacing.
 ///
+/// This is the LEVEL-1 allowance: the pyramid shrinks it by four per level and
+/// exempts the levels the display samples, because the work shrinks the same
+/// way and a shared cap is otherwise spent entirely on the bottom of the
+/// cascade (see DisplayPyramid::UpdateRequest::deferrableBudget).
+///
 /// A rebuild is one 258x258 draw with four taps, so the GPU side is noise; the
 /// cost that matters is ~20 GL calls each, and this caps that at the same order
 /// as one frame's compositing. A normal stroke dirties 2-6 level-zero tiles and
 /// so asks for well under ten rebuilds — the budget only ever bites on a
-/// full-canvas event (a fill preview, a transform over a big layer), which is
+/// full-canvas event (a fill preview, a transform over a big layer, a stroke
+/// under a layer effect whose coverage expansion rings every dab), which is
 /// exactly where a couple of frames of content lag in the corners of the screen
 /// is preferable to spending the frame.
 constexpr uint32_t kDisplayPyramidDeferrableBudget = 64;
@@ -1330,10 +1336,29 @@ aether::GLViewportCompositor::OverscanLayerSource resolveOverscanRasterSource(
 }
 
 // Bounds-expanding layer effects (blur/shadow) make an edit in one tile affect
-// the composited result of surrounding tiles. Grow a set of edited tile keys by
-// the largest neighbourhood ring any layer's effect chain needs, so those
-// neighbour composite tiles are recomposited too. Cheap no-op when no layer has
-// such an effect.
+// the composited result of surrounding tiles, so those neighbours have to
+// recomposite as well. Every layer's chain is considered, not just the edited
+// one: an adjustment layer or a group effect above the edit reads the composite
+// BELOW it, so its bleed is driven by content it does not own.
+//
+// The reach comes from the same resolver the compositor asks for a layer's
+// output coverage (effectOutputKeysForGrid), rather than a square ring derived
+// from the neighbourhood pad. Two things follow from that, and both of them
+// matter:
+//
+//   * the shape is the effect's own. A directional drop shadow used to ring the
+//     edit in all four directions because the pad is a scalar; now it reaches
+//     only where it actually draws. The dirty set feeds the display pyramid's
+//     rebuild budget, so an expansion wider than the truth is not free — see
+//     DisplayPyramid::UpdateRequest::deferrableBudget.
+//
+//   * the trigger is expandsBounds, the capability that actually describes
+//     bleed. The pad only counts effects that additionally declare
+//     requiresNeighborTiles; one that expands its bounds without asking for
+//     neighbour tiles (a plugin is free to) bled into tiles nothing ever marked
+//     dirty, and they stayed stale until something else recomposited them.
+//
+// Cheap no-op when no visible layer carries a bounds-expanding effect.
 std::unordered_set<aether::TileKey, aether::TileKeyHash> expandDirtyKeysByLayerEffects(
     const ruwa::core::layers::LayerModel* model, const std::vector<aether::TileKey>& keys)
 {
@@ -1342,30 +1367,20 @@ std::unordered_set<aether::TileKey, aether::TileKeyHash> expandDirtyKeysByLayerE
         return result;
     }
 
-    int maxRing = 0;
+    const std::unordered_set<aether::TileKey, aether::TileKeyHash> sourceKeys(
+        keys.begin(), keys.end());
     model->forEach([&](ruwa::core::layers::LayerData* layer) {
-        if (!layer || layer->effects.isEmpty()) {
+        // A hidden layer composites nothing, so it cannot bleed anywhere, and a
+        // chain that does not expand its bounds (every colour effect) would only
+        // hand back the set it was given.
+        if (!layer || !layer->visible || layer->effects.isEmpty()
+            || !ruwa::core::effects::EffectCoverageResolver::chainExpandsBounds(layer->effects)) {
             return;
         }
-        const int pad
-            = ruwa::core::effects::EffectCoverageResolver::neighborhoodPadPixels(layer->effects);
-        if (pad > 0) {
-            const int ring = (pad + static_cast<int>(aether::TILE_SIZE) - 1)
-                / static_cast<int>(aether::TILE_SIZE);
-            maxRing = std::max(maxRing, ring);
-        }
+        const auto expanded = ruwa::core::effects::EffectCoverageResolver::expandedDocumentCoverage(
+            sourceKeys, layer->effects);
+        result.insert(expanded.begin(), expanded.end());
     });
-    if (maxRing <= 0) {
-        return result;
-    }
-
-    for (const aether::TileKey& key : keys) {
-        for (int dy = -maxRing; dy <= maxRing; ++dy) {
-            for (int dx = -maxRing; dx <= maxRing; ++dx) {
-                result.insert(aether::TileKey { key.x + dx, key.y + dy });
-            }
-        }
-    }
     return result;
 }
 

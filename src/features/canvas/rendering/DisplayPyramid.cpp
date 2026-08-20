@@ -41,6 +41,40 @@ TextureParams pyramidTextureParams(TilePixelFormat format)
     return params;
 }
 
+/// Floor under the shrinking per-level allowance, so a level whose share has
+/// rounded away still makes progress every frame.
+constexpr uint32_t kMinLevelDeferrableBudget = 8;
+
+/// How many tiles that ALREADY hold content one level may rebuild this frame.
+///
+/// Two rules, and they come straight out of the pyramid's own cost model.
+///
+/// The levels the display samples are never deferred. They are the CHEAPEST
+/// sets in the lattice — a level tile covers 2^L tiles of level zero, so the
+/// visible count at the top is a few dozen whatever the zoom — and they are the
+/// only ones the user can see. Pacing them buys a few GL calls and pays for it
+/// in exactly the artifact the budget exists to avoid.
+///
+/// Below them the allowance shrinks by four per level, matching the shape of
+/// the work: a region that dirties K tiles at level L dirties about K/4 at
+/// L+1. A flat cap shared across levels is spent entirely on the bottom one for
+/// the same reason.
+uint32_t levelDeferrableBudget(uint32_t frameBudget, int level, int topLevel)
+{
+    if (frameBudget == 0) {
+        return 0; // 0 == unlimited, all the way up
+    }
+    // The display lerps request.topLevel with the level above it, and update()
+    // climbs one past that, so the top TWO levels here are what is on screen.
+    if (level >= std::max(1, topLevel - 1)) {
+        return 0;
+    }
+    const int shift = std::min(2 * (level - 1), 30);
+    const uint32_t divisor = 1u << shift;
+    const uint32_t share = (frameBudget + divisor - 1u) / divisor;
+    return std::max(share, kMinLevelDeferrableBudget);
+}
+
 } // namespace
 
 // ==========================================================================
@@ -335,7 +369,6 @@ bool DisplayPyramid::update(const TileGrid& source, const UpdateRequest& request
         = request.hasFocusPoint ? request.focusY : 0.5f * (request.worldMinY + request.worldMaxY);
 
     bool complete = true;
-    uint32_t deferrableBuilds = 0;
     // Rebuilds that actually changed what the pyramid holds. Not the same as
     // m_lastBuildCount, which counts attempts: a provisional tile that keeps
     // coming out empty is attempted every frame and changes nothing, and if that
@@ -354,6 +387,22 @@ bool DisplayPyramid::update(const TileGrid& source, const UpdateRequest& request
         }
         const KeyRange range = rangeForLevel(request, level);
         const KeyRange parentRange = rangeForLevel(request, level - 1);
+        // Per LEVEL, and reset here on purpose. One cap shared by the whole
+        // cascade is spent bottom-up, and level 1 is where the dirt is: it
+        // carries four times the tiles of level 2 and sixteen times level 3, so
+        // a frame that dirties enough of it consumes the entire allowance
+        // before the climb even reaches the levels the display samples. A plain
+        // stroke never got near the cap, but a layer effect puts every dab
+        // through the coverage expansion — a ring of composite tiles per dab,
+        // and a whole-canvas markAllDirty when the chain carries a
+        // preview-disabled effect — and then the levels ON SCREEN stopped
+        // rebuilding for as long as the stroke lasted, while level zero and the
+        // invisible bottom of the pyramid tracked the brush perfectly. It came
+        // right the moment the stroke committed, because a discrete edit runs
+        // with no budget at all.
+        const uint32_t levelBudget
+            = levelDeferrableBudget(request.deferrableBudget, level, topLevel);
+        uint32_t deferrableBuilds = 0;
 
         batch.clear();
         for (const TileKey& key : m_dirty[level]) {
@@ -365,7 +414,7 @@ bool DisplayPyramid::update(const TileGrid& source, const UpdateRequest& request
             continue;
         }
 
-        if (request.deferrableBudget != 0 && batch.size() > 1) {
+        if (levelBudget != 0 && batch.size() > 1) {
             // Nearest the focus point first, so a budget that runs out spends
             // what it had on the tiles the user is looking at. Pointless when
             // the whole batch is going to be built anyway.
@@ -423,8 +472,7 @@ bool DisplayPyramid::update(const TileGrid& source, const UpdateRequest& request
                 continue;
             }
 
-            if (!absent && request.deferrableBudget != 0
-                && deferrableBuilds >= request.deferrableBudget) {
+            if (!absent && levelBudget != 0 && deferrableBuilds >= levelBudget) {
                 complete = false;
                 continue;
             }

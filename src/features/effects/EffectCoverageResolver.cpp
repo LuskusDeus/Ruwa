@@ -70,6 +70,26 @@ EffectCoverageResolver::TileKeySet EffectCoverageResolver::expandedDocumentCover
     return coverage;
 }
 
+bool EffectCoverageResolver::chainExpandsBounds(const QList<LayerEffectState>& effects)
+{
+    for (const LayerEffectState& effect : effects) {
+        if (!effect.enabled) {
+            continue;
+        }
+        const auto* descriptor = LayerEffectRegistry::instance().descriptor(effect.typeId);
+        if (!descriptor) {
+            continue;
+        }
+        // Same two doors expandDocumentCoverageInPlace goes through: a custom
+        // resolver is consulted unconditionally, everything else is gated on the
+        // capability.
+        if (descriptor->coverageResolver || descriptor->capabilities.expandsBounds) {
+            return true;
+        }
+    }
+    return false;
+}
+
 void EffectCoverageResolver::expandDocumentCoverageInPlace(
     TileKeySet& coverage, const QList<LayerEffectState>& effects)
 {

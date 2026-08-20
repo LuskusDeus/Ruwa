@@ -16,6 +16,11 @@ public:
 
     static TileKeySet expandedDocumentCoverage(
         const TileKeySet& sourceCoverage, const QList<LayerEffectState>& effects);
+    /// True when expandedDocumentCoverage could return more than it was given,
+    /// i.e. some enabled effect in the chain bleeds outside its source tiles.
+    /// Mirrors expandDocumentCoverageInPlace's own gate exactly, so a caller can
+    /// skip building a coverage set for a chain that would not grow it.
+    static bool chainExpandsBounds(const QList<LayerEffectState>& effects);
     static void expandDocumentCoverageInPlace(
         TileKeySet& coverage, const QList<LayerEffectState>& effects);
     /// Output tile offsets for a rectangular pixel bleed around one source tile.
