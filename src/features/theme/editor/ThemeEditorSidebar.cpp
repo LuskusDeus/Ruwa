@@ -21,9 +21,8 @@ ThemeEditorSidebar::ThemeEditorSidebar(QWidget* parent)
 {
     setupUi();
 
-    connect(&ruwa::ui::core::ThemeManager::instance(),
-        &ruwa::ui::core::ThemeManager::themeChanged, this,
-        &ThemeEditorSidebar::onThemeChanged);
+    connect(&ruwa::ui::core::ThemeManager::instance(), &ruwa::ui::core::ThemeManager::themeChanged,
+        this, &ThemeEditorSidebar::onThemeChanged);
     connect(&ruwa::ui::core::TranslationManager::instance(),
         &ruwa::ui::core::TranslationManager::languageChanged, this,
         &ThemeEditorSidebar::retranslateUi);
@@ -107,16 +106,16 @@ void ThemeEditorSidebar::setupUi()
     m_layout->addWidget(m_dropdownDivider);
 
     auto& icons = ruwa::ui::core::ThemeManager::instance().icons();
-    auto* themesButton = new SidebarButton(tr("Themes"),
-        icons.getIcon(ruwa::ui::core::IconProvider::StandardIcon::Appearance), this);
+    auto* themesButton = new SidebarButton(
+        tr("Themes"), icons.getIcon(ruwa::ui::core::IconProvider::StandardIcon::Appearance), this);
     auto* animationsButton = new SidebarButton(tr("Animations"),
         icons.getIcon(ruwa::ui::core::IconProvider::StandardIcon::Performance), this);
 
     m_buttons.insert(Section::Themes, themesButton);
     m_buttons.insert(Section::Animations, animationsButton);
 
-    connect(themesButton, &QPushButton::clicked, this,
-        [this]() { setActiveSection(Section::Themes); });
+    connect(
+        themesButton, &QPushButton::clicked, this, [this]() { setActiveSection(Section::Themes); });
     connect(animationsButton, &QPushButton::clicked, this,
         [this]() { setActiveSection(Section::Animations); });
 
@@ -136,8 +135,7 @@ void ThemeEditorSidebar::updateScaledSizes()
     const auto& theme = ruwa::ui::core::ThemeManager::instance();
     setFixedWidth(theme.scaled(220));
     m_layout->setSpacing(theme.scaled(8));
-    m_layout->setContentsMargins(
-        theme.scaled(8), 0, theme.scaled(8), theme.scaled(20));
+    m_layout->setContentsMargins(theme.scaled(8), 0, theme.scaled(8), theme.scaled(20));
 
     if (m_dropdownDivider) {
         m_dropdownDivider->setFixedHeight(qMax(1, theme.scaled(1)));
@@ -150,8 +148,8 @@ void ThemeEditorSidebar::onThemeChanged()
     if (m_dropdownDivider) {
         m_dropdownDivider->setAutoFillBackground(true);
         QPalette palette = m_dropdownDivider->palette();
-        palette.setColor(QPalette::Window,
-            ruwa::ui::core::ThemeManager::instance().colors().border);
+        palette.setColor(
+            QPalette::Window, ruwa::ui::core::ThemeManager::instance().colors().border);
         m_dropdownDivider->setPalette(palette);
     }
     update();

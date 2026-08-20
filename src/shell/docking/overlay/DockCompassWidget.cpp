@@ -32,8 +32,8 @@ DockCompassWidget::DockCompassWidget(QWidget* parent)
     // Initialize zone states and eagerly create the per-zone hover animations
     // up front. Lazy allocation on first hover used to incur a heap alloc and
     // a connect() call on the user's first interaction with each direction.
-    constexpr DropZone zones[] = { DropZone::InnerTop, DropZone::InnerBottom,
-        DropZone::InnerLeft, DropZone::InnerRight, DropZone::InnerCenter };
+    constexpr DropZone zones[] = { DropZone::InnerTop, DropZone::InnerBottom, DropZone::InnerLeft,
+        DropZone::InnerRight, DropZone::InnerCenter };
     for (DropZone z : zones) {
         ZoneState& state = m_zoneStates[z];
         auto* anim = new QVariantAnimation(this);
@@ -353,8 +353,8 @@ void DockCompassWidget::drawZoneSymbol(
 
     if (zone == DropZone::InnerCenter) {
         const int iconSize = qRound(qMin(rect.width(), rect.height()) * 0.62 * scale);
-        const QRect iconRect(rect.center().x() - iconSize / 2,
-            rect.center().y() - iconSize / 2, iconSize, iconSize);
+        const QRect iconRect(
+            rect.center().x() - iconSize / 2, rect.center().y() - iconSize / 2, iconSize, iconSize);
         painter.drawPixmap(iconRect, m_groupIcon);
         painter.restore();
         return;

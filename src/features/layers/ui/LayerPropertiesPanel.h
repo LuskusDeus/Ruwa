@@ -52,8 +52,7 @@ public:
     /// Characters selected in the canvas's open text editing session, as
     /// [from, to). Nullopt when no session is open on the selected layer, which
     /// is what makes the Character group show the whole layer instead.
-    void setTextSelectionProvider(
-        std::function<std::optional<std::pair<int, int>>()> provider);
+    void setTextSelectionProvider(std::function<std::optional<std::pair<int, int>>()> provider);
 
 protected:
     QWidget* createContent() override;

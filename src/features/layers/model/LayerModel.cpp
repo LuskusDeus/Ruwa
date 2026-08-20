@@ -2491,10 +2491,9 @@ std::shared_ptr<LayerData> LayerModel::entryToLayerData(const LayerEntry& entry,
             data->textData->spaceAfter = entry.textSpaceAfter;
             data->textData->styleRuns.reserve(entry.textStyleRuns.size());
             for (const auto& run : entry.textStyleRuns) {
-                data->textData->styleRuns.append(
-                    { run.start, run.length, run.fontFamily, run.fontSize,
-                        QColor::fromRgba(run.colorRgba), run.bold, run.italic, run.underline,
-                        run.strikethrough, run.tracking, textCapsFromValue(run.caps) });
+                data->textData->styleRuns.append({ run.start, run.length, run.fontFamily,
+                    run.fontSize, QColor::fromRgba(run.colorRgba), run.bold, run.italic,
+                    run.underline, run.strikethrough, run.tracking, textCapsFromValue(run.caps) });
             }
         }
     }

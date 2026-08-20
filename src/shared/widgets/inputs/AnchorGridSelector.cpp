@@ -233,7 +233,8 @@ QRectF AnchorGridSelector::cellRect(int index) const
     return QRectF(padding + column * (span + gap), padding + row * (span + gap), span, span);
 }
 
-QPainterPath AnchorGridSelector::outwardRoundedRect(const QRectF& rect, int index, qreal radius) const
+QPainterPath AnchorGridSelector::outwardRoundedRect(
+    const QRectF& rect, int index, qreal radius) const
 {
     QPainterPath path;
     if (rect.isNull()) {

@@ -219,8 +219,7 @@ bool fromDocumentObject(const QJsonObject& document, ThemePreset& preset, QStrin
 
     const QJsonObject animations = object.value(QStringLiteral("animations")).toObject();
     if (!animations.isEmpty()) {
-        imported.animations.enabled
-            = animations.value(QStringLiteral("enabled")).toBool(true);
+        imported.animations.enabled = animations.value(QStringLiteral("enabled")).toBool(true);
         imported.animations.canvasEnabled
             = animations.value(QStringLiteral("canvasEnabled")).toBool(true);
         imported.animations.speed

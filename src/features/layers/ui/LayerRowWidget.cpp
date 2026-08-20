@@ -59,7 +59,6 @@ constexpr int kMaskRevealAnimMs = 220;
 
 } // namespace
 
-
 using namespace ruwa::ui::core;
 using namespace ruwa::core::layers;
 

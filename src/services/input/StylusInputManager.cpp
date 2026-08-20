@@ -1090,9 +1090,8 @@ void StylusInputManager::syncSystemCursorFromNative(const QPoint& globalPos)
     if (trace::enabled()) {
         const QPoint from = QCursor::pos();
         trace::write(QStringLiteral("SETPOS (") + QString::number(from.x()) + QStringLiteral(",")
-            + QString::number(from.y()) + QStringLiteral(") -> (")
-            + QString::number(globalPos.x()) + QStringLiteral(",")
-            + QString::number(globalPos.y()) + QStringLiteral(")"));
+            + QString::number(from.y()) + QStringLiteral(") -> (") + QString::number(globalPos.x())
+            + QStringLiteral(",") + QString::number(globalPos.y()) + QStringLiteral(")"));
     }
     QCursor::setPos(globalPos);
 }

@@ -159,8 +159,8 @@ void makeWidgetTreePassive(QWidget* root)
     }
 }
 
-void applyPresentationTheme(QWidget* row, const ruwa::ui::core::ThemeColors& colors,
-    const QPalette& palette)
+void applyPresentationTheme(
+    QWidget* row, const ruwa::ui::core::ThemeColors& colors, const QPalette& palette)
 {
     if (!row) {
         return;
@@ -238,19 +238,18 @@ void ThemeEditorAnimationsPreview::setupSettings()
     // Scenery rows first, then the three the loop operates, then more scenery:
     // the column is taller than the banner, so both ends stay clipped.
     m_settings[0].widget = new SettingsToggle(QString(), QString(), true, this);
-    m_settings[1].widget = new SettingsChoice(
-        QString(), QString(), { QString(), QString() }, 0, this);
-    m_dropdownRow = new SettingsComboBox(
-        QString(), QString(), { QString(), QString(), QString() }, 0, this);
+    m_settings[1].widget
+        = new SettingsChoice(QString(), QString(), { QString(), QString() }, 0, this);
+    m_dropdownRow
+        = new SettingsComboBox(QString(), QString(), { QString(), QString(), QString() }, 0, this);
     m_settings[DropdownRow].widget = m_dropdownRow;
     m_toggleRow = new SettingsToggle(QString(), QString(), false, this);
     m_settings[ToggleRow].widget = m_toggleRow;
-    m_switcherRow = new SettingsChoice(
-        QString(), QString(), { QString(), QString() }, 0, this);
+    m_switcherRow = new SettingsChoice(QString(), QString(), { QString(), QString() }, 0, this);
     m_settings[SwitcherRow].widget = m_switcherRow;
     m_settings[5].widget = new SettingsToggle(QString(), QString(), true, this);
-    m_settings[6].widget = new SettingsComboBox(
-        QString(), QString(), { QString(), QString() }, 0, this);
+    m_settings[6].widget
+        = new SettingsComboBox(QString(), QString(), { QString(), QString() }, 0, this);
 
     for (SettingRow& row : m_settings) {
         if (row.widget) {
@@ -336,8 +335,7 @@ void ThemeEditorAnimationsPreview::retranslatePreview()
         }
     }
     if (auto* quality = qobject_cast<SettingsChoice*>(m_settings[1].widget)) {
-        quality->retranslateUi(
-            rowLabels[1], QString(), { tr("Balanced"), tr("Sharp") });
+        quality->retranslateUi(rowLabels[1], QString(), { tr("Balanced"), tr("Sharp") });
     }
     if (m_dropdownRow) {
         m_dropdownRow->setOptions({ tr("sRGB"), tr("Display P3"), tr("Adobe RGB") });
@@ -551,9 +549,8 @@ void ThemeEditorAnimationsPreview::updateGroupLayout()
 
     const auto& theme = ruwa::ui::core::ThemeManager::instance();
     const int listRight = theme.scaled(kListLeftMargin) + theme.scaled(kListWidth);
-    const int settingsLeft = m_settings[DropdownRow].target.isNull()
-        ? width()
-        : m_settings[DropdownRow].target.left();
+    const int settingsLeft
+        = m_settings[DropdownRow].target.isNull() ? width() : m_settings[DropdownRow].target.left();
     const int available = qMax(theme.scaled(kGroupMinWidth), settingsLeft - listRight);
     const int drawnWidth = qMin(qRound(theme.scaled(kGroupWidth) * kGroupScale), available);
     const int sourceWidth = qMax(1, qRound(drawnWidth / kGroupScale));
@@ -942,19 +939,16 @@ void ThemeEditorAnimationsPreview::renderSceneLayer()
                 continue;
             }
             item.button->ensurePolished();
-            item.button->render(&layerPainter, item.target.topLeft(),
-                QRegion(item.button->rect()),
+            item.button->render(&layerPainter, item.target.topLeft(), QRegion(item.button->rect()),
                 QWidget::DrawWindowBackground | QWidget::DrawChildren);
         }
 
         const QRect listRect = m_items[0].target;
         QColor dividerColor = m_previewColors.border;
         dividerColor.setAlpha(110);
-        const int dividerThickness
-            = qMax(1, ruwa::ui::core::ThemeManager::instance().scaled(1));
+        const int dividerThickness = qMax(1, ruwa::ui::core::ThemeManager::instance().scaled(1));
         layerPainter.fillRect(
-            QRect(listRect.left(), m_dividerY, listRect.width(), dividerThickness),
-            dividerColor);
+            QRect(listRect.left(), m_dividerY, listRect.width(), dividerThickness), dividerColor);
 
         renderGroup(layerPainter);
 

@@ -29,8 +29,8 @@
 
 namespace ruwa::ui::widgets {
 
-using ruwa::ui::core::ThemeFontRole;
 using ruwa::ui::core::ThemeFontFamilyRole;
+using ruwa::ui::core::ThemeFontRole;
 
 namespace {
 const int BASE_MAIN_SPACING = 16;

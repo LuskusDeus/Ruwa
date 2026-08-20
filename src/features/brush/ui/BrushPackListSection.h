@@ -21,7 +21,7 @@ class QResizeEvent;
 namespace ruwa::ui::widgets {
 class AnimatedFlowWidget;
 class SectionHeaderButton;
-}
+} // namespace ruwa::ui::widgets
 
 namespace ruwa::ui::workspace {
 

@@ -192,9 +192,9 @@ struct TextLayerTypography {
     {
         return fontFamily == other.fontFamily && qFuzzyCompare(fontSize, other.fontSize)
             && color.rgba() == other.color.rgba() && alignment == other.alignment
-            && qFuzzyCompare(lineHeight, other.lineHeight)
-            && strikethrough == other.strikethrough && qFuzzyCompare(tracking, other.tracking)
-            && caps == other.caps && qFuzzyCompare(spaceBefore, other.spaceBefore)
+            && qFuzzyCompare(lineHeight, other.lineHeight) && strikethrough == other.strikethrough
+            && qFuzzyCompare(tracking, other.tracking) && caps == other.caps
+            && qFuzzyCompare(spaceBefore, other.spaceBefore)
             && qFuzzyCompare(spaceAfter, other.spaceAfter);
     }
 
@@ -485,9 +485,8 @@ inline void applyTextCapsToRange(
  * first, which is the same rule Photoshop's character panel follows.
  */
 template <typename Reader>
-inline auto uniformTextStyleValue(
-    const TextLayerData& textData, int selectionStart, int selectionEnd, Reader reader)
-    -> std::optional<decltype(reader(TextCharStyle {}))>
+inline auto uniformTextStyleValue(const TextLayerData& textData, int selectionStart,
+    int selectionEnd, Reader reader) -> std::optional<decltype(reader(TextCharStyle {}))>
 {
     using Value = decltype(reader(TextCharStyle {}));
     const int size = static_cast<int>(textData.text.size());
@@ -609,8 +608,7 @@ struct LayerData : public std::enable_shared_from_this<LayerData> {
     // "Layer" -> "Layer (copy)" -> "Layer (copy 2)" -> "Layer (copy 3)".
     static QString copiedName(const QString& sourceName)
     {
-        static const QRegularExpression copySuffix(
-            QStringLiteral(R"(\s*\(copy(?:\s+(\d+))?\)$)"),
+        static const QRegularExpression copySuffix(QStringLiteral(R"(\s*\(copy(?:\s+(\d+))?\)$)"),
             QRegularExpression::CaseInsensitiveOption);
 
         QString base = sourceName;
@@ -623,9 +621,8 @@ struct LayerData : public std::enable_shared_from_this<LayerData> {
             nextIndex = qMax(2, current + 1);
         }
 
-        const QString suffix = (nextIndex <= 1)
-            ? QStringLiteral(" (copy)")
-            : QStringLiteral(" (copy %1)").arg(nextIndex);
+        const QString suffix = (nextIndex <= 1) ? QStringLiteral(" (copy)")
+                                                : QStringLiteral(" (copy %1)").arg(nextIndex);
         const int baseLimit = qMax(0, kMaxNameLength - suffix.size());
         return clampedName(base.left(baseLimit) + suffix);
     }

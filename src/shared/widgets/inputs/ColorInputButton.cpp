@@ -135,8 +135,7 @@ void ColorInputButton::drawContentLayer(QPainter& painter, const QRectF& rect)
     // Capsule content starts no earlier than the end of the rounded cap. Keep
     // the swatch-to-text gap independent so moving the swatch inward does not
     // create an oversized gap before the label/HEX value.
-    const int sidePadding
-        = capsuleStyle ? qRound(contentRect.height() * 0.5) : regularPadding;
+    const int sidePadding = capsuleStyle ? qRound(contentRect.height() * 0.5) : regularPadding;
     const int swatchTextGap = regularPadding;
     const int padV = framed ? mgr.scaled(BASE_BOX_PAD_V) : regularPadding;
     int swatchRadius;
@@ -246,8 +245,8 @@ void ColorInputButton::drawContentLayer(QPainter& painter, const QRectF& rect)
     painter.setBrush(Qt::NoBrush);
     painter.drawPath(swatchPath);
 
-    QRectF textRect = contentRect.adjusted(
-        sidePadding + swatchSize + swatchTextGap, 0, -sidePadding, 0);
+    QRectF textRect
+        = contentRect.adjusted(sidePadding + swatchSize + swatchTextGap, 0, -sidePadding, 0);
 
     const bool hasLabel = m_options.showLabel && !m_label.isEmpty();
     painter.setPen(currentTextColor());

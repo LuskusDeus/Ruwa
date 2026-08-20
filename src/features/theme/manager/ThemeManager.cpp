@@ -235,8 +235,7 @@ void ThemeManager::loadCustomPresets()
         preset.fonts = normalizedThemeFonts(preset.fonts);
 
         preset.animations.enabled = settings.value("animations/enabled", true).toBool();
-        preset.animations.canvasEnabled
-            = settings.value("animations/canvasEnabled", true).toBool();
+        preset.animations.canvasEnabled = settings.value("animations/canvasEnabled", true).toBool();
         preset.animations.speed = qBound(WidgetStyleManager::kMinAnimationSpeed,
             settings.value("animations/speed", 1.0).toReal(),
             WidgetStyleManager::kMaxAnimationSpeed);

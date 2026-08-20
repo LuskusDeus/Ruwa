@@ -778,8 +778,8 @@ void FirstRunIntegrationWidget::updateTheme()
 
     m_heroTitle->setFont(theme.font(ruwa::ui::core::ThemeFontRole::H0, QFont::Bold));
 
-    const QFont heroDescriptionFont = theme.font(ruwa::ui::core::ThemeFontRole::H6,
-        ruwa::ui::core::ThemeFontFamilyRole::Ui);
+    const QFont heroDescriptionFont
+        = theme.font(ruwa::ui::core::ThemeFontRole::H6, ruwa::ui::core::ThemeFontFamilyRole::Ui);
     m_heroDescription->setFont(heroDescriptionFont);
 
     m_finishDescription->setFont(theme.font(ruwa::ui::core::ThemeFontRole::Label));

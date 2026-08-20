@@ -28,7 +28,6 @@ constexpr int kRingHoverAnimationMs = 180;
 constexpr int kKnobReturnAnimationMs = 200;
 } // namespace
 
-
 namespace {
 
 constexpr qreal kPi = 3.14159265358979323846;

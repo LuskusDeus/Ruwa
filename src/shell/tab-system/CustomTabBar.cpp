@@ -70,7 +70,6 @@ constexpr int kCloseRevealInMs = 170;
 constexpr int kCloseRevealOutMs = 150;
 } // namespace
 
-
 CustomTabBar::CustomTabBar(QWidget* parent)
     : QWidget(parent)
 {

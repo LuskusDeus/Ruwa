@@ -162,8 +162,7 @@ void StartupAnimationController::expandSplashToWindow(ruwa::ui::windows::SplashS
 
         if (topBar && topBarClip) {
             mainWindow->relayoutTopBarInset();
-            const int barH
-                = topBar->height() > 0 ? topBar->height() : topBar->sizeHint().height();
+            const int barH = topBar->height() > 0 ? topBar->height() : topBar->sizeHint().height();
             if (barH > 0) {
                 const QPoint endPos = topBar->pos();
                 const QPoint startPos(endPos.x(), endPos.y() - barH);

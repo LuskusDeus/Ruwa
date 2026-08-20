@@ -436,18 +436,17 @@ bool WinTabBackend::attach(void* hwnd)
         UINT deviceCount = 0;
         m_data->wtInfoA(WTI_INTERFACE, IFC_NDEVICES, &deviceCount);
 
-        trace::write(QStringLiteral("ATTACH driver=\"") + wintabId
-            + QStringLiteral("\" spec=0x") + QString::number(specVersion, 16)
-            + QStringLiteral(" impl=0x") + QString::number(implVersion, 16)
-            + QStringLiteral(" devices=") + QString::number(deviceCount)
-            + QStringLiteral(" extendedLayout=")
+        trace::write(QStringLiteral("ATTACH driver=\"") + wintabId + QStringLiteral("\" spec=0x")
+            + QString::number(specVersion, 16) + QStringLiteral(" impl=0x")
+            + QString::number(implVersion, 16) + QStringLiteral(" devices=")
+            + QString::number(deviceCount) + QStringLiteral(" extendedLayout=")
             + QString::number(m_data->extendedPacketData ? 1 : 0));
 
         trace::write(QStringLiteral("CONTEXT granted lcOptions=0x")
             + QString::number(context.lcOptions, 16) + QStringLiteral(" lcPktData=0x")
             + QString::number(context.lcPktData, 16) + QStringLiteral(" requestedPktData=0x")
-            + QString::number(m_data->extendedPacketData ? kExtendedPacketData : kBasicPacketData,
-                16)
+            + QString::number(
+                m_data->extendedPacketData ? kExtendedPacketData : kBasicPacketData, 16)
             + QStringLiteral(" lcMoveMask=0x") + QString::number(context.lcMoveMask, 16)
             + QStringLiteral(" lcDevice=") + QString::number(context.lcDevice));
 
@@ -477,11 +476,10 @@ bool WinTabBackend::attach(void* hwnd)
         for (UINT device = 0; device < deviceCount; ++device) {
             AXIS pressureAxis {};
             m_data->wtInfoA(WTI_DEVICES + device, DVC_NPRESSURE, &pressureAxis);
-            trace::write(QStringLiteral("DEVICE ") + QString::number(device)
-                + QStringLiteral(" \"") + readInfoString(WTI_DEVICES + device, DVC_NAME)
-                + QStringLiteral("\" pressure=[") + QString::number(pressureAxis.axMin)
-                + QStringLiteral("..") + QString::number(pressureAxis.axMax)
-                + QStringLiteral("]"));
+            trace::write(QStringLiteral("DEVICE ") + QString::number(device) + QStringLiteral(" \"")
+                + readInfoString(WTI_DEVICES + device, DVC_NAME) + QStringLiteral("\" pressure=[")
+                + QString::number(pressureAxis.axMin) + QStringLiteral("..")
+                + QString::number(pressureAxis.axMax) + QStringLiteral("]"));
         }
     }
 
@@ -763,9 +761,9 @@ bool WinTabBackend::handleNativeEvent(void* message)
                 + (enteringContext ? QStringLiteral("enter") : QStringLiteral("leave"))
                 + (hardwareTransition ? QStringLiteral(" hardware") : QStringLiteral(" context"))
                 + QStringLiteral(" penEngaged=") + QString::number(m_data->penEngaged ? 1 : 0)
-                + QStringLiteral(" lastScreen=(")
-                + QString::number(m_data->globalPos.x(), 'f', 2) + QStringLiteral(",")
-                + QString::number(m_data->globalPos.y(), 'f', 2) + QStringLiteral(")"));
+                + QStringLiteral(" lastScreen=(") + QString::number(m_data->globalPos.x(), 'f', 2)
+                + QStringLiteral(",") + QString::number(m_data->globalPos.y(), 'f', 2)
+                + QStringLiteral(")"));
         }
 
         if (enteringContext) {

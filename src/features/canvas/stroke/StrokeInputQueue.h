@@ -212,7 +212,7 @@ inline std::size_t decimateToBudget(
         const float totalTime = last.strokeElapsedSeconds - first.strokeElapsedSeconds;
         const float timeFraction = totalTime > 0.0f
             ? std::clamp((middle.strokeElapsedSeconds - first.strokeElapsedSeconds) / totalTime,
-                0.0f, 1.0f)
+                  0.0f, 1.0f)
             : 0.5f;
         const float expectedPressure
             = first.pressure + (last.pressure - first.pressure) * timeFraction;

@@ -873,8 +873,7 @@ void NewProjectContent::applyRecentPreset(const QString& id)
 
     // Unnamed entries are pure setups, so restoring one resets the name to the placeholder
     // instead of pasting the borrowed preset label into the field.
-    const QString restoredName
-        = entry.hasCustomName() ? entry.projectName : tr("Untitled Project");
+    const QString restoredName = entry.hasCustomName() ? entry.projectName : tr("Untitled Project");
 
     {
         const QSignalBlocker nameBlocker(m_projectNameField);

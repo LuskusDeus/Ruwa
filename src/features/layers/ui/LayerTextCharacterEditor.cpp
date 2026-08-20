@@ -58,15 +58,13 @@ LayerTextCharacterEditor::LayerTextCharacterEditor(QWidget* parent)
         emit editRequested(edit);
     };
     connect(m_fontDropdown, &FontDropdownSelector::activated, this,
-        [emitFamilyEdit](const QString& family) {
-            emitFamilyEdit(family, TextLayerEdit::Phase::Commit);
-        });
+        [emitFamilyEdit](
+            const QString& family) { emitFamilyEdit(family, TextLayerEdit::Phase::Commit); });
     // Hovering a row shows the font on the canvas without choosing it; the run
     // is closed by the activation above, or undone by the cancel below.
     connect(m_fontDropdown, &FontDropdownSelector::familyPreviewed, this,
-        [emitFamilyEdit](const QString& family) {
-            emitFamilyEdit(family, TextLayerEdit::Phase::Live);
-        });
+        [emitFamilyEdit](
+            const QString& family) { emitFamilyEdit(family, TextLayerEdit::Phase::Live); });
     connect(m_fontDropdown, &FontDropdownSelector::previewCancelled, this, [this]() {
         if (m_syncing) {
             return;
@@ -229,10 +227,11 @@ void LayerTextCharacterEditor::syncToggle(AssetToggleButton* button, bool on)
 }
 
 void LayerTextCharacterEditor::bindNumericField(NumericInputField* field,
-    TextLayerEdit::Property property, bool& dirtyFlag, std::function<std::optional<qreal>()> current)
+    TextLayerEdit::Property property, bool& dirtyFlag,
+    std::function<std::optional<qreal>()> current)
 {
-    connect(field, &NumericInputField::valueChanged, this,
-        [this, property, &dirtyFlag](double value) {
+    connect(
+        field, &NumericInputField::valueChanged, this, [this, property, &dirtyFlag](double value) {
             if (m_syncing) {
                 return;
             }

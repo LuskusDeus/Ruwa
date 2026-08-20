@@ -687,8 +687,8 @@ void DockGroupHost::runFarewell(int duration)
     collapseAnim->setEndValue(0.0);
     collapseAnim->setDuration(anim::duration(duration));
     collapseAnim->setEasingCurve(QEasingCurve::OutCubic);
-    connect(collapseAnim, &QVariantAnimation::valueChanged, this,
-        [this, start](const QVariant& value) {
+    connect(
+        collapseAnim, &QVariantAnimation::valueChanged, this, [this, start](const QVariant& value) {
             const int h = qMax(0, qRound(start.height() * value.toReal()));
             setGeometry(QRect(start.x(), start.y(), start.width(), h));
         });

@@ -600,10 +600,9 @@ ruwa::ui::widgets::FontDropdownSelector* ThemeEditorTab::createFontFamilyInput(
     input->setFontFamilies(QFontDatabase::families());
     input->setPopupMaxHeight(ruwa::ui::core::ThemeManager::instance().scaled(320));
 
-    connect(input, &ruwa::ui::widgets::FontDropdownSelector::popupShown, this,
-        [this, familyIndex]() {
-            m_fontPreviewOriginalFamilies[familyIndex]
-                = fontFamilyAt(m_editingTheme, familyIndex);
+    connect(
+        input, &ruwa::ui::widgets::FontDropdownSelector::popupShown, this, [this, familyIndex]() {
+            m_fontPreviewOriginalFamilies[familyIndex] = fontFamilyAt(m_editingTheme, familyIndex);
         });
     connect(input, &ruwa::ui::widgets::FontDropdownSelector::familyPreviewed, this,
         [this, familyIndex](const QString& family) {
@@ -618,8 +617,7 @@ ruwa::ui::widgets::FontDropdownSelector* ThemeEditorTab::createFontFamilyInput(
             if (m_syncingFontInputs || m_fontPreviewOriginalFamilies[familyIndex].isEmpty()) {
                 return;
             }
-            fontFamilyAt(m_editingTheme, familyIndex)
-                = m_fontPreviewOriginalFamilies[familyIndex];
+            fontFamilyAt(m_editingTheme, familyIndex) = m_fontPreviewOriginalFamilies[familyIndex];
             refreshPreviews();
         });
     connect(input, &ruwa::ui::widgets::FontDropdownSelector::activated, this,
@@ -795,9 +793,8 @@ QString ThemeEditorTab::fontSizeFieldLabel(std::size_t sizeIndex) const
 {
     Q_ASSERT(sizeIndex < FontSizeFieldCount);
     const std::array<QString, FontSizeFieldCount> labels { tr("Display"), tr("H0"), tr("H1"),
-        tr("H2"), tr("H3"), tr("H4"), tr("H5"), tr("H6"), tr("Subtitle"),
-        tr("Body Large"), tr("Label"), tr("Body"), tr("Small"), tr("Caption"), tr("Micro"),
-        tr("Code") };
+        tr("H2"), tr("H3"), tr("H4"), tr("H5"), tr("H6"), tr("Subtitle"), tr("Body Large"),
+        tr("Label"), tr("Body"), tr("Small"), tr("Caption"), tr("Micro"), tr("Code") };
     return labels[sizeIndex];
 }
 
@@ -810,9 +807,8 @@ QString ThemeEditorTab::animationCategoryTitle(std::size_t categoryIndex) const
 QString ThemeEditorTab::animationSettingLabel(std::size_t settingIndex) const
 {
     Q_ASSERT(settingIndex < AnimationSettingCount);
-    const std::array<QString, AnimationSettingCount> labels {
-        tr("Interface animations"), tr("Canvas animations"), tr("Speed multiplier")
-    };
+    const std::array<QString, AnimationSettingCount> labels { tr("Interface animations"),
+        tr("Canvas animations"), tr("Speed multiplier") };
     return labels[settingIndex];
 }
 
@@ -963,10 +959,8 @@ void ThemeEditorTab::updateDirtyState()
     }
     if (!dirty) {
         dirty = m_editingTheme.animations.enabled != m_savedTheme.animations.enabled
-            || m_editingTheme.animations.canvasEnabled
-                != m_savedTheme.animations.canvasEnabled
-            || !qFuzzyCompare(
-                m_editingTheme.animations.speed, m_savedTheme.animations.speed);
+            || m_editingTheme.animations.canvasEnabled != m_savedTheme.animations.canvasEnabled
+            || !qFuzzyCompare(m_editingTheme.animations.speed, m_savedTheme.animations.speed);
     }
     setDirtyState(dirty);
 }

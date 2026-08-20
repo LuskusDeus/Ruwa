@@ -397,8 +397,8 @@ Rect layoutText(QTextLayout& layout, const TextLayerData& textData)
         y += spaceBefore;
         // Justified lines were already spread to the box by Qt; re-placing them
         // by their natural width would undo exactly that.
-        const qreal x = justify ? 0.0 : alignedLineX(textData.alignment, line.naturalTextWidth(),
-                            boxWidth);
+        const qreal x
+            = justify ? 0.0 : alignedLineX(textData.alignment, line.naturalTextWidth(), boxWidth);
         line.setPosition(QPointF(x, y));
         y += line.height() * lineHeightScale + spaceAfter;
         expandRect(bounds, lineVisualRect(line));
@@ -526,13 +526,12 @@ QString textRetainedPayloadKey(
 
     // Every field the layout reads has to be in the key: the payload cache is
     // keyed on it alone, so a value missing here shows as stale glyphs.
-    const QString paragraphKey
-        = QStringLiteral("|p:%1,%2|c:%3,%4,%5")
-              .arg(QString::number(textData->spaceBefore, 'f', 3),
-                  QString::number(textData->spaceAfter, 'f', 3),
-                  QString::number(textData->strikethrough ? 1 : 0),
-                  QString::number(textData->tracking, 'f', 3),
-                  QString::number(static_cast<int>(textData->caps)));
+    const QString paragraphKey = QStringLiteral("|p:%1,%2|c:%3,%4,%5")
+                                     .arg(QString::number(textData->spaceBefore, 'f', 3),
+                                         QString::number(textData->spaceAfter, 'f', 3),
+                                         QString::number(textData->strikethrough ? 1 : 0),
+                                         QString::number(textData->tracking, 'f', 3),
+                                         QString::number(static_cast<int>(textData->caps)));
 
     return QStringLiteral("text-v3|%1|%2|%3|%4|%5|%6%7%8|%9")
         .arg(textData->text, textData->fontFamily, QString::number(textData->fontSize, 'f', 3),
@@ -613,8 +612,8 @@ Rect computeTextCaretSourceRect(const TextLayerData& textData, int cursorPositio
         }
 
         const qreal x = line.cursorToX(std::clamp(pos, lineStart, lineEnd));
-        return { static_cast<float>(x),
-            static_cast<float>(line.position().y()), 1.5f, static_cast<float>(line.height()) };
+        return { static_cast<float>(x), static_cast<float>(line.position().y()), 1.5f,
+            static_cast<float>(line.height()) };
     }
     return {};
 }
@@ -641,8 +640,8 @@ int textCursorPositionAtSourcePoint(const TextLayerData& textData, const Vector2
 
         // xToCursor() is the inverse of cursorToX() and takes the same layout
         // space, so the line's own x must not be subtracted first.
-        const int textCursor = std::clamp(
-            line.xToCursor(sourcePoint.x), 0, static_cast<int>(textData.text.size()));
+        const int textCursor
+            = std::clamp(line.xToCursor(sourcePoint.x), 0, static_cast<int>(textData.text.size()));
         bestPosition = textCursor;
         bestDistance = dy;
     }

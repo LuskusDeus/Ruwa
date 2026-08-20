@@ -49,7 +49,6 @@ constexpr int kTriggerHoverAnimationMs = 170;
 constexpr int kTriggerArrowAnimationMs = 160;
 } // namespace
 
-
 namespace {
 
 constexpr int kTriggerHeight = 28;

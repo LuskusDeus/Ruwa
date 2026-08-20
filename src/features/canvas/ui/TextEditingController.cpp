@@ -704,9 +704,9 @@ void TextEditingController::pushExistingTextCommand(const QString& newText)
         return;
     }
     if (auto* undo = m_panel->undoManagerOrNull()) {
-        auto command = std::make_unique<aether::TextLayerContentCommand>(m_panel->m_layerModel,
-            m_layerId, m_oldText, newText, m_oldStyleRuns, layer->textData->styleRuns,
-            m_oldTransform, layer->textData->transform,
+        auto command = std::make_unique<aether::TextLayerContentCommand>(
+            m_panel->m_layerModel, m_layerId, m_oldText, newText, m_oldStyleRuns,
+            layer->textData->styleRuns, m_oldTransform, layer->textData->transform,
             [panel = m_panel]() { panel->requestRender(); },
             [panel = m_panel]() { panel->notifyContentChanged(); });
         command->setTypography(
@@ -783,9 +783,6 @@ bool TextEditingController::selectedEffectEnabled(ruwa::core::layers::TextStyleE
         *layer->textData, cursor.selectionStart(), cursor.selectionEnd(), effect);
 }
 
-
-
-
 void TextEditingController::invalidateActiveTextLayer()
 {
     if (!m_panel || !m_panel->m_layerModel) {
@@ -842,10 +839,6 @@ void TextEditingController::clearOverlay()
     aether::TextEditOverlayState state;
     m_panel->m_glWidget->setTextEditOverlayState(state);
 }
-
-
-
-
 
 aether::TransformState TextEditingController::normalizedTextTransform(
     const ruwa::core::layers::LayerData* layer) const
@@ -924,7 +917,8 @@ bool TextEditingController::eventFilter(QObject* watched, QEvent* event)
         QWidget* focusWidget = QApplication::focusWidget();
         if (m_panel
             && (focusWidget == m_panel || focusWidget == m_panel->m_contentWidget
-                || focusWidget == m_panel->m_glWidget || m_panel->isTextEditingFocusExclusion(focusWidget))) {
+                || focusWidget == m_panel->m_glWidget
+                || m_panel->isTextEditingFocusExclusion(focusWidget))) {
             return QObject::eventFilter(watched, event);
         }
         commit();

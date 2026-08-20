@@ -84,11 +84,14 @@ LayerTextParagraphEditor::LayerTextParagraphEditor(QWidget* parent)
 
     // Leading is a percentage in the field and a multiplier in the document, so
     // it is the one field with a display scale.
-    bindNumericField(m_leadingInput, TextLayerEdit::Property::LineHeight, m_leadingDirty,
+    bindNumericField(
+        m_leadingInput, TextLayerEdit::Property::LineHeight, m_leadingDirty,
         [this]() { return m_state.lineHeight; }, 100.0);
-    bindNumericField(m_spaceBeforeInput, TextLayerEdit::Property::SpaceBefore, m_spaceBeforeDirty,
+    bindNumericField(
+        m_spaceBeforeInput, TextLayerEdit::Property::SpaceBefore, m_spaceBeforeDirty,
         [this]() { return m_state.spaceBefore; }, 1.0);
-    bindNumericField(m_spaceAfterInput, TextLayerEdit::Property::SpaceAfter, m_spaceAfterDirty,
+    bindNumericField(
+        m_spaceAfterInput, TextLayerEdit::Property::SpaceAfter, m_spaceAfterDirty,
         [this]() { return m_state.spaceAfter; }, 1.0);
 
     applyTheme();

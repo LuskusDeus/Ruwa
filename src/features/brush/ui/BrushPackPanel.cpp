@@ -43,7 +43,6 @@ constexpr int kRowHoverAnimationMs = 150;
 constexpr int kRowActiveAnimationMs = 200;
 } // namespace
 
-
 using namespace ruwa::ui::core;
 
 namespace {
@@ -919,7 +918,7 @@ void BrushPresetPage::applyTypography()
     }
     for (QLabel* label : m_categoryLabels) {
         if (label) {
-        label->setFont(theme.font(ThemeFontRole::Small, QFont::DemiBold));
+            label->setFont(theme.font(ThemeFontRole::Small, QFont::DemiBold));
         }
     }
 }

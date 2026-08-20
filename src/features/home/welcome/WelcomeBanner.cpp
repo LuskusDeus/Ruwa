@@ -436,8 +436,8 @@ void WelcomeBanner::setupUI()
 
     m_subtitleLabel = new QLabel(tr("Free, open-source, and limitless."), this);
     m_subtitleLabel->setAttribute(Qt::WA_TranslucentBackground);
-    m_subtitleLabel->setFont(theme.font(ruwa::ui::core::ThemeFontRole::H5,
-        ruwa::ui::core::ThemeFontFamilyRole::Ui));
+    m_subtitleLabel->setFont(
+        theme.font(ruwa::ui::core::ThemeFontRole::H5, ruwa::ui::core::ThemeFontFamilyRole::Ui));
     m_mainLayout->addWidget(m_subtitleLabel);
 
     m_mainLayout->addStretch();
@@ -528,8 +528,8 @@ void WelcomeBanner::updateScaledSizes()
     }
 
     if (m_subtitleLabel) {
-        m_subtitleLabel->setFont(theme.font(ruwa::ui::core::ThemeFontRole::H5,
-            ruwa::ui::core::ThemeFontFamilyRole::Ui));
+        m_subtitleLabel->setFont(
+            theme.font(ruwa::ui::core::ThemeFontRole::H5, ruwa::ui::core::ThemeFontFamilyRole::Ui));
     }
 
     updateSplitLayout();

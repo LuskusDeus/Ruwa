@@ -26,7 +26,7 @@ struct ThemePreset;
 namespace ruwa::ui::workspace {
 class LayerEffectsPanel;
 class LayersPanel;
-}
+} // namespace ruwa::ui::workspace
 
 namespace ruwa::ui::widgets {
 

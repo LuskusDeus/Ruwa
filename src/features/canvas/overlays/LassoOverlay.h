@@ -34,8 +34,7 @@ public:
     void shutdown();
 
     void render(const Viewport& viewport, const std::vector<Vector2>& activePath, bool activeClosed,
-        const std::vector<LassoEdgeSegment>& edges, uint64_t edgesRevision,
-        float edgesAlpha = 0.9f,
+        const std::vector<LassoEdgeSegment>& edges, uint64_t edgesRevision, float edgesAlpha = 0.9f,
         GLuint addPathMaskTexture = 0, float maskAtlasOriginX = 0.0f, float maskAtlasOriginY = 0.0f,
         float maskAtlasWidth = 0.0f, float maskAtlasHeight = 0.0f, float pathAlphaInsideMask = 0.2f,
         float pathAlphaOutsideMask = 1.0f,
@@ -59,8 +58,8 @@ private:
         float alphaOutside);
     void updateEdgeInstances(
         const std::vector<LassoEdgeSegment>& edges, uint64_t edgesRevision, float zoom);
-    void drawEdgeInstances(const std::array<float, 16>& vpMatrix, float zoom, float timeSec,
-        float baseAlpha);
+    void drawEdgeInstances(
+        const std::array<float, 16>& vpMatrix, float zoom, float timeSec, float baseAlpha);
     static int edgeLodForZoom(float zoom);
 
     float elapsedSeconds() const;

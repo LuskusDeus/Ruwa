@@ -458,8 +458,8 @@ void LassoOverlay::updateEdgeInstances(
     m_cachedEdgeLod = lod;
 }
 
-void LassoOverlay::drawEdgeInstances(const std::array<float, 16>& vpMatrix, float zoom,
-    float timeSec, float baseAlpha)
+void LassoOverlay::drawEdgeInstances(
+    const std::array<float, 16>& vpMatrix, float zoom, float timeSec, float baseAlpha)
 {
     if (m_edgeInstanceCount <= 0)
         return;

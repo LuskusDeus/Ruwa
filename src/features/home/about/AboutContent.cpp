@@ -45,8 +45,8 @@
 
 namespace ruwa::ui::widgets {
 
-using ruwa::ui::core::ThemeFontRole;
 using ruwa::ui::core::ThemeFontFamilyRole;
+using ruwa::ui::core::ThemeFontRole;
 
 namespace {
 
@@ -748,8 +748,7 @@ void AboutContent::updateScaledSizes()
 
     m_titleLabel->setFont(theme.font(ThemeFontRole::H1, QFont::Bold));
     m_productTitleLabel->setFont(theme.font(ThemeFontRole::H0, QFont::Bold));
-    m_productSubtitleLabel->setFont(
-        theme.font(ThemeFontRole::H6, ThemeFontFamilyRole::Ui));
+    m_productSubtitleLabel->setFont(theme.font(ThemeFontRole::H6, ThemeFontFamilyRole::Ui));
     m_programInfoTitleLabel->setFont(theme.font(ThemeFontRole::H3, QFont::Bold));
 
     if (auto* programInfoLayout = qobject_cast<QVBoxLayout*>(m_programInfoContainer->layout())) {
@@ -805,12 +804,10 @@ void AboutContent::updateScaledSizes()
     m_developerAvatarLabel->setPixmap(
         createCircularPixmap(QStringLiteral(":/icons/MyPFP"), QString(), avatarSize));
 
-    QFont developerNameFont
-        = theme.font(ThemeFontRole::H6, ThemeFontFamilyRole::Ui, QFont::Bold);
+    QFont developerNameFont = theme.font(ThemeFontRole::H6, ThemeFontFamilyRole::Ui, QFont::Bold);
     m_developerNameLabel->setFont(developerNameFont);
     m_developerDescriptionLabel->setFont(theme.font(ThemeFontRole::Label));
-    QFont testersTitleFont
-        = theme.font(ThemeFontRole::H6, ThemeFontFamilyRole::Ui, QFont::Bold);
+    QFont testersTitleFont = theme.font(ThemeFontRole::H6, ThemeFontFamilyRole::Ui, QFont::Bold);
     m_developerSectionTitleLabel->setFont(testersTitleFont);
     m_testersTitleLabel->setFont(testersTitleFont);
 

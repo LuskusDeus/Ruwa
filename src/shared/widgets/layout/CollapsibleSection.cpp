@@ -53,8 +53,8 @@ CollapsibleSection::CollapsibleSection(const QString& title, QWidget* parent)
     m_expandAnimation->setEasingCurve(QEasingCurve::InOutCubic);
 
     m_header->setExpanded(m_expanded, false);
-    connect(m_header, &QAbstractButton::clicked, this,
-        [this]() { setExpanded(!m_expanded, true); });
+    connect(
+        m_header, &QAbstractButton::clicked, this, [this]() { setExpanded(!m_expanded, true); });
 }
 
 void CollapsibleSection::setTitle(const QString& title)
@@ -190,12 +190,11 @@ void CollapsibleSection::layoutContent()
 
     auto& tm = ThemeManager::instance();
     const int innerWidth = contentAreaWidth();
-    const int innerHeight = m_content->hasHeightForWidth()
-        ? m_content->heightForWidth(innerWidth)
-        : m_content->sizeHint().height();
+    const int innerHeight = m_content->hasHeightForWidth() ? m_content->heightForWidth(innerWidth)
+                                                           : m_content->sizeHint().height();
 
-    m_content->setGeometry(tm.scaled(m_margins.left()), tm.scaled(m_margins.top()), innerWidth,
-        qMax(0, innerHeight));
+    m_content->setGeometry(
+        tm.scaled(m_margins.left()), tm.scaled(m_margins.top()), innerWidth, qMax(0, innerHeight));
 }
 
 int CollapsibleSection::expandedContentHeight() const
@@ -206,9 +205,8 @@ int CollapsibleSection::expandedContentHeight() const
 
     auto& tm = ThemeManager::instance();
     const int innerWidth = contentAreaWidth();
-    const int innerHeight = m_content->hasHeightForWidth()
-        ? m_content->heightForWidth(innerWidth)
-        : m_content->sizeHint().height();
+    const int innerHeight = m_content->hasHeightForWidth() ? m_content->heightForWidth(innerWidth)
+                                                           : m_content->sizeHint().height();
 
     return qMax(0, innerHeight) + tm.scaled(m_margins.top()) + tm.scaled(m_margins.bottom());
 }

@@ -56,7 +56,8 @@ void applyCharacterEdit(TextLayerData& textData, const TextLayerEdit& edit, int 
     case TextLayerEdit::Property::Italic:
     case TextLayerEdit::Property::Underline:
     case TextLayerEdit::Property::Strikethrough:
-        applyTextEffectToRange(textData, from, to, effectForProperty(edit.property), edit.boolValue);
+        applyTextEffectToRange(
+            textData, from, to, effectForProperty(edit.property), edit.boolValue);
         return;
     default:
         break;

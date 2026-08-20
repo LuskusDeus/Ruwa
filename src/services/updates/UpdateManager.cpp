@@ -429,8 +429,8 @@ void UpdateManager::onCheckReply()
         const bool packageReady = verifyExistingPendingArchive();
         logInstallerEvent(QStringLiteral("Update check: %1 is available (running %2), already "
                                          "downloaded package: %3")
-                              .arg(manifest->version, QCoreApplication::applicationVersion(),
-                                  packageReady ? QStringLiteral("yes") : QStringLiteral("no")));
+                .arg(manifest->version, QCoreApplication::applicationVersion(),
+                    packageReady ? QStringLiteral("yes") : QStringLiteral("no")));
     }
     finishUpdateCheck(true, hasUpdate, manifest->version);
 }
@@ -494,8 +494,7 @@ void UpdateManager::downloadUpdate()
     m_downloadBytes = 0;
     m_downloadFailure.clear();
     m_downloadVerified = false;
-    logInstallerEvent(
-        QStringLiteral("Downloading %1 from %2 to %3")
+    logInstallerEvent(QStringLiteral("Downloading %1 from %2 to %3")
             .arg(m_latestManifest.version, m_latestDownloadUrl, m_downloadTargetPath));
 
     QNetworkRequest request { QUrl(m_latestDownloadUrl) };
@@ -628,7 +627,7 @@ void UpdateManager::onDownloadFinished()
     }
     m_downloadVerified = true;
     logInstallerEvent(QStringLiteral("Download verified: %1 bytes, SHA-256 matches the manifest")
-                          .arg(m_downloadBytes));
+            .arg(m_downloadBytes));
     emit downloadProgress(100);
     emit downloadFinished(true, m_downloadTargetPath);
 }
@@ -741,7 +740,7 @@ bool UpdateManager::applyUpdateAndRestart(QString* errorMessage)
     }
     if (!hasPendingDownloadedUpdate()) {
         return fail(QStringLiteral("there is no update package ready to install: %1")
-                        .arg(pendingDownloadObstacle()));
+                .arg(pendingDownloadObstacle()));
     }
 
 #if defined(Q_OS_WIN)
@@ -760,17 +759,17 @@ bool UpdateManager::applyUpdateAndRestart(QString* errorMessage)
         = QFileInfo(QCoreApplication::applicationFilePath()).absolutePath();
     const bool requireElevation = !installParentIsWritable();
     logInstallerEvent(QStringLiteral("Installing %1 over %2")
-                          .arg(m_latestManifest.version, QCoreApplication::applicationVersion()));
+            .arg(m_latestManifest.version, QCoreApplication::applicationVersion()));
     logInstallerEvent(QStringLiteral("Install directory: ") + installDirectory);
     logInstallerEvent(QStringLiteral("Package: %1 (%2 bytes)")
-                          .arg(m_downloadTargetPath)
-                          .arg(m_latestManifest.archiveSize));
+            .arg(m_downloadTargetPath)
+            .arg(m_latestManifest.archiveSize));
     logInstallerEvent(QStringLiteral("Elevation required: %1")
-                          .arg(requireElevation ? QStringLiteral("yes (the installation directory "
-                                                                 "is not writable, Windows will "
-                                                                 "show a User Account Control "
-                                                                 "prompt)")
-                                                : QStringLiteral("no")));
+            .arg(requireElevation ? QStringLiteral("yes (the installation directory "
+                                                   "is not writable, Windows will "
+                                                   "show a User Account Control "
+                                                   "prompt)")
+                                  : QStringLiteral("no")));
     const QJsonObject configuration {
         { QStringLiteral("pid"), static_cast<double>(GetCurrentProcessId()) },
         { QStringLiteral("archivePath"), m_downloadTargetPath },
@@ -796,8 +795,8 @@ bool UpdateManager::applyUpdateAndRestart(QString* errorMessage)
         = QDir(storageDirectory).absoluteFilePath(QStringLiteral("pending-installer.ps1"));
     const QByteArray installerScriptBytes = script.toUtf8();
     if (!writeAtomically(installerScriptPath, installerScriptBytes)) {
-        return fail(QStringLiteral("the installer script could not be written to ")
-            + installerScriptPath);
+        return fail(
+            QStringLiteral("the installer script could not be written to ") + installerScriptPath);
     }
     const QString scriptPathBase64 = QString::fromLatin1(installerScriptPath.toUtf8().toBase64());
     const QString scriptSha256 = QString::fromLatin1(
@@ -818,7 +817,7 @@ bool UpdateManager::applyUpdateAndRestart(QString* errorMessage)
     if (encodedCommand.size() > kMaximumEncodedCommandCharacters) {
         QFile::remove(installerScriptPath);
         return fail(QStringLiteral("the installer command line is too long (%1 characters)")
-                        .arg(encodedCommand.size()));
+                .arg(encodedCommand.size()));
     }
 
     const QStringList arguments { QStringLiteral("-NoProfile"), QStringLiteral("-NonInteractive"),
@@ -871,8 +870,8 @@ void UpdateManager::acknowledgeSuccessfulUpdateStartup()
     instance()->logInstallerEvent(
         QStringLiteral("Startup health check: this build reports version %1, marker %2")
             .arg(QCoreApplication::applicationVersion(),
-                written ? QStringLiteral("written") : QStringLiteral("could not be written to ")
-                        + markerPath));
+                written ? QStringLiteral("written")
+                        : QStringLiteral("could not be written to ") + markerPath));
 }
 
 QString UpdateManager::updateStorageDirectory() const

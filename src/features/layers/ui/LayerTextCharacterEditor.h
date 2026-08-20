@@ -88,7 +88,8 @@ private:
     /// button reporting it as a user toggle.
     void syncToggle(AssetToggleButton* button, bool on);
     /// Reflects @p value in @p field, blanking it when the characters disagree.
-    void setFieldValue(NumericInputField* field, const std::optional<qreal>& value, bool& dirtyFlag);
+    void setFieldValue(
+        NumericInputField* field, const std::optional<qreal>& value, bool& dirtyFlag);
 
 private:
     std::unique_ptr<PropertyRowLayout> m_rows;

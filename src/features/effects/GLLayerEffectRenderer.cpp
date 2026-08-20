@@ -480,13 +480,12 @@ GLuint GLLayerEffectRenderer::applyEffectsNeighborhoodBlock(uint32_t tileSize, u
     m_activeWholePool = nullptr;
     frame->extraCursor = 0;
     frame->extraCursorF16 = 0;
-    const GLuint effected
-        = runEffectChain(padSourceTexture, paddedSize, paddedSize, frame->scratch[0],
-            frame->scratch[1], effects, space, realtimeOnly, backdropTexture,
-            /*finalTargetTexture=*/0,
-            /*spaceScale=*/1.0f, paddedRegion,
-            /*finalRoi=*/QRect(padI, padI, static_cast<int>(blockPx), static_cast<int>(blockPx)),
-            /*wholeLayerSource=*/false, liveEditedEffectId, liveEditSourceVariant);
+    const GLuint effected = runEffectChain(padSourceTexture, paddedSize, paddedSize,
+        frame->scratch[0], frame->scratch[1], effects, space, realtimeOnly, backdropTexture,
+        /*finalTargetTexture=*/0,
+        /*spaceScale=*/1.0f, paddedRegion,
+        /*finalRoi=*/QRect(padI, padI, static_cast<int>(blockPx), static_cast<int>(blockPx)),
+        /*wholeLayerSource=*/false, liveEditedEffectId, liveEditSourceVariant);
     m_activePadFrame = savedPadFrame;
     m_activeWholePool = savedWholePool;
 

@@ -771,8 +771,8 @@ GLuint GLCompositor::compositeLayerStack(const TileKey& key,
                 }
             }
 
-            const bool usedAsClipBase = !layer.clippedToBelow
-                && hasRenderedClippedFollower(layers, idx, parentOpacity);
+            const bool usedAsClipBase
+                = !layer.clippedToBelow && hasRenderedClippedFollower(layers, idx, parentOpacity);
             const bool groupHasEffects = m_effectRenderer
                 && m_effectRenderer->hasRenderableEffects(
                     layer.effects, ruwa::core::effects::EffectEvaluationSpace::DocumentTile, false);
@@ -932,7 +932,7 @@ GLuint GLCompositor::compositeLayerStack(const TileKey& key,
                     GLuint centreTex = 0;
                     effectedGroupResult = applyGroupNeighborhoodEffects(key, layer, tileRenderer,
                         groupPad, groupResult, /*allowCachedPaths=*/true,
-                        /*passThroughTileTexture=*/{}, GroupEffectSlot::IsolatedResult,
+                        /*passThroughTileTexture=*/ {}, GroupEffectSlot::IsolatedResult,
                         /*liveEditSourceVariant=*/0, &centreTex);
                     if (effectedGroupResult && centreTex) {
                         groupClipBaseTex = centreTex;

@@ -6395,9 +6395,8 @@ bool OpenGLCanvasWidget::startAnimatedSelectionFlip(bool flipHorizontal, bool fl
 
     // Mirrors the transform's own scale animation, which rides the canvas
     // animation policy — this wait has to shrink with it.
-    const int flipSettleMs = anim::canvasEnabled()
-        ? qMax(1, qRound(kAutoFlipAnimationDurationMs / anim::speed()))
-        : 0;
+    const int flipSettleMs
+        = anim::canvasEnabled() ? qMax(1, qRound(kAutoFlipAnimationDurationMs / anim::speed())) : 0;
     QTimer::singleShot(flipSettleMs, this, [this, sequence]() {
         if (!m_autoApplyingTransform || sequence != m_autoApplyTransformSequence) {
             return;

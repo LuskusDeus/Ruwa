@@ -33,7 +33,7 @@ class DockGroupHeader;
 namespace ruwa::ui::workspace {
 class BrushSettingsPanel;
 class BrushesPanel;
-}
+} // namespace ruwa::ui::workspace
 
 namespace ruwa::ui::widgets {
 

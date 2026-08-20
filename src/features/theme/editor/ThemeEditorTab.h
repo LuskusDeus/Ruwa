@@ -67,12 +67,7 @@ protected:
     void resizeEvent(QResizeEvent* event) override;
 
 private:
-    enum class SettingsPage {
-        ThemeColors,
-        ThemeFont,
-        Animations,
-        Count
-    };
+    enum class SettingsPage { ThemeColors, ThemeFont, Animations, Count };
 
     enum class ColorField {
         Primary,
@@ -110,8 +105,7 @@ private:
     };
 
     static constexpr std::size_t SectionCount = 2;
-    static constexpr std::size_t SettingsPageCount
-        = static_cast<std::size_t>(SettingsPage::Count);
+    static constexpr std::size_t SettingsPageCount = static_cast<std::size_t>(SettingsPage::Count);
     static constexpr std::size_t ColorFieldCount = static_cast<std::size_t>(ColorField::Count);
     static constexpr std::size_t ColorCategoryCount = 3;
     static constexpr std::size_t FontFamilyCount = 2;
@@ -123,8 +117,8 @@ private:
     void setupUi();
     QWidget* createThemesPreviewPage(QWidget* parent);
     QWidget* createAnimationsPreviewPage(QWidget* parent);
-    QWidget* createSettingsSection(const SettingsSectionDefinition& definition,
-        std::size_t sectionIndex, QWidget* parent);
+    QWidget* createSettingsSection(
+        const SettingsSectionDefinition& definition, std::size_t sectionIndex, QWidget* parent);
     QWidget* createSettingsPlaceholder(SettingsPage settingsPage, QWidget* parent);
     QWidget* createColorsSettingsPage(QWidget* parent);
     QWidget* createFontSettingsPage(QWidget* parent);

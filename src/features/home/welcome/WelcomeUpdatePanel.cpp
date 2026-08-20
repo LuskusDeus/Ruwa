@@ -120,8 +120,8 @@ void WelcomeUpdatePanel::setupUI()
     m_descriptionLabel = new QLabel(this);
     m_descriptionLabel->setAttribute(Qt::WA_TranslucentBackground);
     m_descriptionLabel->setWordWrap(true);
-    m_descriptionLabel->setFont(theme.font(ruwa::ui::core::ThemeFontRole::H6,
-        ruwa::ui::core::ThemeFontFamilyRole::Ui));
+    m_descriptionLabel->setFont(
+        theme.font(ruwa::ui::core::ThemeFontRole::H6, ruwa::ui::core::ThemeFontFamilyRole::Ui));
     m_mainLayout->addWidget(m_descriptionLabel);
 
     m_mainLayout->addStretch();
@@ -258,8 +258,8 @@ void WelcomeUpdatePanel::updateScaledSizes()
         m_titleLabel->setFont(theme.font(ruwa::ui::core::ThemeFontRole::H3, QFont::Bold));
     }
     if (m_descriptionLabel) {
-        m_descriptionLabel->setFont(theme.font(ruwa::ui::core::ThemeFontRole::H6,
-            ruwa::ui::core::ThemeFontFamilyRole::Ui));
+        m_descriptionLabel->setFont(
+            theme.font(ruwa::ui::core::ThemeFontRole::H6, ruwa::ui::core::ThemeFontFamilyRole::Ui));
     }
 }
 

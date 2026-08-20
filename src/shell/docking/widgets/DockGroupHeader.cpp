@@ -1049,8 +1049,8 @@ void DockGroupHeader::startCloseRevealAnimation(int index, bool reveal)
     item.closeRevealAnim->stop();
     item.closeRevealAnim->setStartValue(item.closeRevealProgress);
     item.closeRevealAnim->setEndValue(reveal ? 1.0 : 0.0);
-    item.closeRevealAnim->setDuration(anim::duration(
-        anim::duration(reveal ? kCloseRevealInMs : kCloseRevealOutMs)));
+    item.closeRevealAnim->setDuration(
+        anim::duration(anim::duration(reveal ? kCloseRevealInMs : kCloseRevealOutMs)));
     item.closeRevealAnim->setEasingCurve(reveal ? QEasingCurve::OutCubic : QEasingCurve::InCubic);
     anim::start(item.closeRevealAnim);
 }

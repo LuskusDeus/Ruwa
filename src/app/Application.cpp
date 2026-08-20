@@ -463,7 +463,7 @@ bool Application::restartWithUpdate(QString* errorMessage)
     updateManager->logInstallerEvent(QStringLiteral("Restart and install requested"));
     if (!updateManager->hasPendingDownloadedUpdate()) {
         return fail(QStringLiteral("there is no update package ready to install: %1")
-                        .arg(updateManager->pendingDownloadObstacle()));
+                .arg(updateManager->pendingDownloadObstacle()));
     }
 
     QWidget* windowToClose = QApplication::activeWindow();
@@ -482,10 +482,9 @@ bool Application::restartWithUpdate(QString* errorMessage)
     }
 
     if (windowToClose) {
-        const QString windowDescription = QStringLiteral("%1 (%2)")
-                                              .arg(QString::fromUtf8(
-                                                       windowToClose->metaObject()->className()),
-                                                  windowToClose->windowTitle());
+        const QString windowDescription = QStringLiteral("%1 (%2)").arg(
+            QString::fromUtf8(windowToClose->metaObject()->className()),
+            windowToClose->windowTitle());
         updateManager->logInstallerEvent(QStringLiteral("Closing window ") + windowDescription);
         QPointer<QWidget> guard = windowToClose;
         windowToClose->close();
@@ -495,7 +494,7 @@ bool Application::restartWithUpdate(QString* errorMessage)
             return fail(QStringLiteral("the window %1 stayed open, so the installer was not "
                                        "started (an unsaved project confirmation was dismissed, or "
                                        "a tab is still closing)")
-                            .arg(windowDescription));
+                    .arg(windowDescription));
         }
     } else {
         updateManager->logInstallerEvent(

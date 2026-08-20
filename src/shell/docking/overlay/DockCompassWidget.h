@@ -14,6 +14,7 @@
 
 namespace ruwa::ui::docking {
 
+// clang-format off
 /**
  * @brief Compass-style widget for selecting drop zones
  *
@@ -34,6 +35,7 @@ namespace ruwa::ui::docking {
  * - Smooth hover animations
  * - No border
  */
+// clang-format on
 class DockCompassWidget : public QWidget {
     Q_OBJECT
 

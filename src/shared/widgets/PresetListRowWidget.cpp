@@ -488,17 +488,16 @@ void PresetListRowWidget::updateInlineActionHover(const QPoint& pos)
     const int extraIndex = hitExtraIndex(pos);
     bool changed = (renameHovered != m_renameHovered) || (deleteHovered != m_deleteHovered);
 
-    const auto animateHover
-        = [](QPropertyAnimation* hoverAnim, qreal current, bool hovered) {
-              if (!hoverAnim) {
-                  return;
-              }
-              hoverAnim->stop();
-              hoverAnim->setDuration(anim::duration(kActionHoverAnimationMs));
-              hoverAnim->setStartValue(current);
-              hoverAnim->setEndValue(hovered ? 1.0 : 0.0);
-              anim::start(hoverAnim);
-          };
+    const auto animateHover = [](QPropertyAnimation* hoverAnim, qreal current, bool hovered) {
+        if (!hoverAnim) {
+            return;
+        }
+        hoverAnim->stop();
+        hoverAnim->setDuration(anim::duration(kActionHoverAnimationMs));
+        hoverAnim->setStartValue(current);
+        hoverAnim->setEndValue(hovered ? 1.0 : 0.0);
+        anim::start(hoverAnim);
+    };
 
     if (renameHovered != m_renameHovered) {
         animateHover(m_renameHoverAnimation, m_renameHoverProgress, renameHovered);
@@ -957,8 +956,7 @@ void PresetListRowWidget::paintEvent(QPaintEvent* event)
 
     if (!m_isEditing) {
         QFont titleFont = theme.font(
-            ruwa::ui::core::ThemeFontRole::Label,
-            m_isSelected ? QFont::DemiBold : QFont::Medium);
+            ruwa::ui::core::ThemeFontRole::Label, m_isSelected ? QFont::DemiBold : QFont::Medium);
         painter.setFont(titleFont);
         painter.setPen(titleColor);
 

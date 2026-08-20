@@ -22,11 +22,7 @@ class ThemeEditorSidebar final : public QWidget {
     Q_OBJECT
 
 public:
-    enum class Section {
-        None,
-        Themes,
-        Animations
-    };
+    enum class Section { None, Themes, Animations };
 
     explicit ThemeEditorSidebar(QWidget* parent = nullptr);
     ~ThemeEditorSidebar() override = default;
@@ -35,8 +31,7 @@ public:
     Section activeSection() const { return m_activeSection; }
     bool setEditingThemeById(const QUuid& id);
     const ruwa::ui::core::ThemePreset& editingTheme() const;
-    ruwa::ui::core::ThemePreset saveEditingTheme(
-        const ruwa::ui::core::ThemePreset& preset);
+    ruwa::ui::core::ThemePreset saveEditingTheme(const ruwa::ui::core::ThemePreset& preset);
 
     static int sectionToIndex(Section section);
 

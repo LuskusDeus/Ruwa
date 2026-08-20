@@ -284,8 +284,7 @@ void ShortcutManagerTab::createLayout()
 
     auto makeSectionHeader = [&](const QString& text) {
         auto* label = new QLabel(text, this);
-        label->setFont(
-            theme.font(ThemeFontRole::H6, ThemeFontFamilyRole::Ui, QFont::DemiBold));
+        label->setFont(theme.font(ThemeFontRole::H6, ThemeFontFamilyRole::Ui, QFont::DemiBold));
         label->setStyleSheet(QString("QLabel { color: %1; }").arg(colors.text.name()));
         return label;
     };

@@ -84,8 +84,7 @@ QPointF anchoredOrigin(int index, const aether::Rect& bounds, const QSize& canva
         }
         return cell == 1 ? freeSpace * 0.5 : freeSpace;
     };
-    return QPointF(
-        axisOrigin(index % 3, canvasSize.width() - static_cast<double>(bounds.width)),
+    return QPointF(axisOrigin(index % 3, canvasSize.width() - static_cast<double>(bounds.width)),
         axisOrigin(index / 3, canvasSize.height() - static_cast<double>(bounds.height)));
 }
 
@@ -392,8 +391,8 @@ void LayerPropertiesPanel::refreshTextGroups()
     // caret, so they describe the layer.
     const std::optional<std::pair<int, int>> selection
         = m_textSelectionProvider ? m_textSelectionProvider() : std::nullopt;
-    const std::pair<int, int> range = selection.value_or(
-        std::pair<int, int> { 0, static_cast<int>(textData.text.size()) });
+    const std::pair<int, int> range
+        = selection.value_or(std::pair<int, int> { 0, static_cast<int>(textData.text.size()) });
 
     LayerTextCharacterEditor::State state;
     const auto uniform = [&](auto reader) {
@@ -405,8 +404,7 @@ void LayerPropertiesPanel::refreshTextGroups()
     state.bold = uniform([](const TextCharStyle& style) { return style.bold; });
     state.italic = uniform([](const TextCharStyle& style) { return style.italic; });
     state.underline = uniform([](const TextCharStyle& style) { return style.underline; });
-    state.strikethrough
-        = uniform([](const TextCharStyle& style) { return style.strikethrough; });
+    state.strikethrough = uniform([](const TextCharStyle& style) { return style.strikethrough; });
     state.tracking = uniform([](const TextCharStyle& style) { return style.tracking; });
     if (const auto caps = uniform([](const TextCharStyle& style) { return style.caps; })) {
         state.caps = static_cast<int>(*caps);
@@ -455,9 +453,8 @@ void LayerPropertiesPanel::syncPositionFromContent(bool force)
     // arbitrary position matches none of the nine, and the grid says so.
     const std::optional<QSize> canvasSize
         = m_canvasSizeProvider ? m_canvasSizeProvider() : std::nullopt;
-    m_positionEditor->setAnchorIndex(canvasSize.has_value()
-            ? anchorIndexForOrigin(origin, *bounds, *canvasSize)
-            : -1);
+    m_positionEditor->setAnchorIndex(
+        canvasSize.has_value() ? anchorIndexForOrigin(origin, *bounds, *canvasSize) : -1);
 
     const bool moved = !m_hasShownContentOrigin || origin != m_shownContentOrigin;
 
