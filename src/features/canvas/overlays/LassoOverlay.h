@@ -56,11 +56,9 @@ private:
     void flushBatchWithMask(const std::array<float, 16>& vpMatrix, GLuint maskTexture,
         float maskOriginX, float maskOriginY, float maskWidth, float maskHeight, float alphaInside,
         float alphaOutside);
-    void updateEdgeInstances(
-        const std::vector<LassoEdgeSegment>& edges, uint64_t edgesRevision, float zoom);
+    void updateEdgeInstances(const std::vector<LassoEdgeSegment>& edges, uint64_t edgesRevision);
     void drawEdgeInstances(
         const std::array<float, 16>& vpMatrix, float zoom, float timeSec, float baseAlpha);
-    static int edgeLodForZoom(float zoom);
 
     float elapsedSeconds() const;
 
@@ -96,7 +94,6 @@ private:
     std::vector<float> m_pathBatchVertices;
     std::vector<float> m_edgeInstances;
     uint64_t m_cachedEdgesRevision = 0;
-    int m_cachedEdgeLod = std::numeric_limits<int>::min();
     GLsizei m_edgeInstanceCount = 0;
 };
 

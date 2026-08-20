@@ -264,7 +264,6 @@ void LassoOverlay::shutdown()
 
     m_edgeInstances.clear();
     m_cachedEdgesRevision = 0;
-    m_cachedEdgeLod = std::numeric_limits<int>::min();
     m_edgeInstanceCount = 0;
 
     m_initialized = false;
@@ -284,7 +283,7 @@ void LassoOverlay::render(const Viewport& viewport, const std::vector<Vector2>& 
         return;
 
     const float zoom = viewport.camera().zoom();
-    updateEdgeInstances(edges, edgesRevision, zoom);
+    updateEdgeInstances(edges, edgesRevision);
 
     const bool hasActive = activePath.size() >= 2;
     const bool hasEdges = m_edgeInstanceCount > 0;
@@ -391,56 +390,36 @@ void LassoOverlay::batchPath(const std::vector<Vector2>& points, bool closed, fl
     }
 }
 
-int LassoOverlay::edgeLodForZoom(float zoom)
-{
-    if (zoom <= 0.0f)
-        return 30;
-
-    // A segment shorter than roughly one screen pixel cannot form a stable
-    // contour after minification. Quantizing the cutoff to powers of two keeps
-    // the cached GPU instance buffer valid throughout most zoom gestures.
-    constexpr float kMinimumVisibleLengthPx = 0.9f;
-    const float minimumLengthWorld = kMinimumVisibleLengthPx / zoom;
-    if (minimumLengthWorld <= 1.0f)
-        return 0;
-    return std::clamp(static_cast<int>(std::ceil(std::log2(minimumLengthWorld))), 0, 30);
-}
-
 void LassoOverlay::updateEdgeInstances(
-    const std::vector<LassoEdgeSegment>& edges, uint64_t edgesRevision, float zoom)
+    const std::vector<LassoEdgeSegment>& edges, uint64_t edgesRevision)
 {
-    const int lod = edgeLodForZoom(zoom);
-    if (edgesRevision != 0 && m_cachedEdgesRevision == edgesRevision && m_cachedEdgeLod == lod) {
+    if (edgesRevision != 0 && m_cachedEdgesRevision == edgesRevision) {
         return;
     }
 
+    // Every edge is kept regardless of zoom. A length threshold looks like a
+    // cheap level of detail, but the contour is a pixel staircase: an
+    // axis-aligned boundary merges into one long run while a slanted one stays
+    // a chain of one-pixel steps, so any such filter erases exactly the
+    // diagonal outlines and leaves the horizontal and vertical ones behind.
+    // The instance buffer is rebuilt only when the selection itself changes, so
+    // keeping the full contour costs one upload per mutation, not per frame.
     m_edgeInstances.clear();
-    if (lod == 0) {
-        m_edgeInstances.reserve(edges.size() * 5);
-    } else {
-        // At a distant zoom most micro-edges are rejected. Do not reserve for
-        // the unfiltered count or a pathological selection would still pay the
-        // full CPU-memory cost before producing a tiny (often empty) batch.
-        constexpr size_t kInitialLodEdgeCapacity = 4096;
-        m_edgeInstances.reserve(std::min(edges.size(), kInitialLodEdgeCapacity) * 5);
-    }
+    m_edgeInstances.reserve(edges.size() * 5);
 
-    const float minimumLength = lod > 0 ? std::ldexp(1.0f, lod) : 0.0f;
     float accumulated = 0.0f;
     for (const auto& seg : edges) {
         const float dx = seg.b.x - seg.a.x;
         const float dy = seg.b.y - seg.a.y;
         const float length = std::sqrt(dx * dx + dy * dy);
 
-        if (length >= std::max(0.0001f, minimumLength)) {
+        if (length >= 0.0001f) {
             m_edgeInstances.push_back(seg.a.x);
             m_edgeInstances.push_back(seg.a.y);
             m_edgeInstances.push_back(seg.b.x);
             m_edgeInstances.push_back(seg.b.y);
             m_edgeInstances.push_back(accumulated);
         }
-        // Keep the animation phase stable when a short segment disappears at a
-        // coarser LOD; longer surviving contours do not jump along their path.
         accumulated += length;
     }
 
@@ -455,7 +434,6 @@ void LassoOverlay::updateEdgeInstances(
     m_gl->glBindBuffer(GL_ARRAY_BUFFER, 0);
 
     m_cachedEdgesRevision = edgesRevision;
-    m_cachedEdgeLod = lod;
 }
 
 void LassoOverlay::drawEdgeInstances(
