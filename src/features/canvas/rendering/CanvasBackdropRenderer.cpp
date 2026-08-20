@@ -38,20 +38,20 @@ Result<void> CanvasBackdropRenderer::initialize(const QString& shaderDir)
         return { ErrorCode::InvalidArgument, "CanvasBackdropRenderer: null GL functions" };
     }
 
-    m_blurProgram = std::make_unique<GLShaderProgram>(m_gl);
-    auto blurResult = m_blurProgram->loadFromFiles(
-        shaderDir + "/composite.vert.glsl", shaderDir + "/backdrop_blur.frag.glsl");
-    if (!blurResult) {
+    m_downsampleProgram = std::make_unique<GLShaderProgram>(m_gl);
+    auto downsampleResult = m_downsampleProgram->loadFromFiles(
+        shaderDir + "/composite.vert.glsl", shaderDir + "/backdrop_downsample.frag.glsl");
+    if (!downsampleResult) {
         shutdown();
-        return blurResult;
+        return downsampleResult;
     }
 
-    m_refractProgram = std::make_unique<GLShaderProgram>(m_gl);
-    auto refractResult = m_refractProgram->loadFromFiles(
-        shaderDir + "/composite.vert.glsl", shaderDir + "/backdrop_refract.frag.glsl");
-    if (!refractResult) {
+    m_upsampleProgram = std::make_unique<GLShaderProgram>(m_gl);
+    auto upsampleResult = m_upsampleProgram->loadFromFiles(
+        shaderDir + "/composite.vert.glsl", shaderDir + "/backdrop_upsample.frag.glsl");
+    if (!upsampleResult) {
         shutdown();
-        return refractResult;
+        return upsampleResult;
     }
 
     m_compositeProgram = std::make_unique<GLShaderProgram>(m_gl);
@@ -87,18 +87,20 @@ void CanvasBackdropRenderer::shutdown()
         m_gl->glDeleteVertexArrays(1, &m_vao);
         m_vao = 0;
     }
-    m_blurProgram.reset();
-    m_refractProgram.reset();
+    m_downsampleProgram.reset();
+    m_upsampleProgram.reset();
     m_compositeProgram.reset();
     m_initialized = false;
 }
 
-bool CanvasBackdropRenderer::createColorTarget(int width, int height, GLuint& fbo, GLuint& texture)
+bool CanvasBackdropRenderer::createColorTarget(
+    int width, int height, GLenum internalFormat, GLuint& fbo, GLuint& texture)
 {
     m_gl->glGenTextures(1, &texture);
     m_gl->glBindTexture(GL_TEXTURE_2D, texture);
-    m_gl->glTexImage2D(
-        GL_TEXTURE_2D, 0, GL_RGBA8, width, height, 0, GL_RGBA, GL_UNSIGNED_BYTE, nullptr);
+    // Immutable storage: every one of these is reallocated wholesale when the
+    // region outgrows it, never respecified in place.
+    m_gl->glTexStorage2D(GL_TEXTURE_2D, 1, internalFormat, width, height);
     m_gl->glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
     m_gl->glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
     m_gl->glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
@@ -125,43 +127,47 @@ void CanvasBackdropRenderer::releaseTarget(RegionTarget& target)
         }
     };
     releasePair(target.halfFbo, target.halfTexture);
-    releasePair(target.refractFbo, target.refractTexture);
-    releasePair(target.blurAFbo, target.blurATexture);
-    releasePair(target.blurBFbo, target.blurBTexture);
+    for (int level = 0; level < kBlurLevels; ++level) {
+        releasePair(target.levelFbo[level], target.levelTexture[level]);
+    }
     target = {};
 }
 
 bool CanvasBackdropRenderer::ensureTarget(RegionTarget& target, int captureWidth, int captureHeight)
 {
-    const int requiredBlurWidth
-        = roundedCapacity((captureWidth + kDownsampleScale - 1) / kDownsampleScale);
-    const int requiredBlurHeight
-        = roundedCapacity((captureHeight + kDownsampleScale - 1) / kDownsampleScale);
-    if (target.blurAFbo && requiredBlurWidth <= target.blurWidth
-        && requiredBlurHeight <= target.blurHeight) {
+    // roundedCapacity() buckets to multiples of eight, so every level of the
+    // pyramid below stays an even number of texels down to the last one. With
+    // the frost off there is no pyramid and the capture is kept whole.
+    const auto reduced = [](int extent) {
+        return roundedCapacity((extent + kDownsampleScale - 1) / kDownsampleScale);
+    };
+    const int requiredHalfWidth
+        = kFrostEnabled ? reduced(captureWidth) * 2 : roundedCapacity(captureWidth);
+    const int requiredHalfHeight
+        = kFrostEnabled ? reduced(captureHeight) * 2 : roundedCapacity(captureHeight);
+    if (target.halfFbo && requiredHalfWidth <= target.halfWidth
+        && requiredHalfHeight <= target.halfHeight) {
         return true;
     }
 
-    const int blurWidth = std::max(requiredBlurWidth, target.blurWidth);
-    const int blurHeight = std::max(requiredBlurHeight, target.blurHeight);
+    target.halfWidth = std::max(requiredHalfWidth, target.halfWidth);
+    target.halfHeight = std::max(requiredHalfHeight, target.halfHeight);
+    const int halfWidth = target.halfWidth;
+    const int halfHeight = target.halfHeight;
     releaseTarget(target);
+    target.halfWidth = halfWidth;
+    target.halfHeight = halfHeight;
 
-    target.blurWidth = blurWidth;
-    target.blurHeight = blurHeight;
-    target.halfWidth = blurWidth * 2;
-    target.halfHeight = blurHeight * 2;
-
+    // The capture arrives sRGB encoded straight out of the framebuffer blit;
+    // whoever reads it first decodes it, and everything past that is linear.
     bool ok = createColorTarget(
-        target.halfWidth, target.halfHeight, target.halfFbo, target.halfTexture);
-    ok = ok
-        && createColorTarget(
-            target.halfWidth, target.halfHeight, target.refractFbo, target.refractTexture);
-    ok = ok
-        && createColorTarget(
-            target.blurWidth, target.blurHeight, target.blurAFbo, target.blurATexture);
-    ok = ok
-        && createColorTarget(
-            target.blurWidth, target.blurHeight, target.blurBFbo, target.blurBTexture);
+        target.halfWidth, target.halfHeight, GL_RGBA8, target.halfFbo, target.halfTexture);
+    for (int level = 0; ok && kFrostEnabled && level < kBlurLevels; ++level) {
+        target.levelWidth[level] = std::max(1, (target.halfWidth / 2) >> level);
+        target.levelHeight[level] = std::max(1, (target.halfHeight / 2) >> level);
+        ok = createColorTarget(target.levelWidth[level], target.levelHeight[level],
+            kLinearTargetFormat, target.levelFbo[level], target.levelTexture[level]);
+    }
     if (!ok) {
         releaseTarget(target);
     }
@@ -187,6 +193,12 @@ bool CanvasBackdropRenderer::render(GLuint sourceFbo, GLuint defaultFbo, int sur
     prepared.reserve(regions.size());
     m_targets.resize(std::max(m_targets.size(), regions.size()));
     const QRect surfaceRect(0, 0, surfaceWidth, surfaceHeight);
+    const float deviceScale
+        = static_cast<float>(std::min<qreal>(logicalToSurfaceScaleX, logicalToSurfaceScaleY));
+    const float shadowFalloff = kShadowFalloffLogicalPx * deviceScale;
+    const float shadowOffsetY = kShadowOffsetYLogicalPx * deviceScale;
+    const int shadowPadding = static_cast<int>(
+        std::ceil(shadowFalloff * kShadowReachInFalloffRadii + std::abs(shadowOffsetY)));
 
     for (const CanvasBackdropRegion& region : regions) {
         if (region.rect.isEmpty() || region.opacity <= 0.001) {
@@ -204,6 +216,10 @@ bool CanvasBackdropRenderer::render(GLuint sourceFbo, GLuint defaultFbo, int sur
         if (clippedTarget.isEmpty()) {
             continue;
         }
+        const QRect compositeRect = targetRect
+                                        .adjusted(-shadowPadding, -shadowPadding, shadowPadding,
+                                            shadowPadding)
+                                        .intersected(surfaceRect);
 
         const QRect captureRect = targetRect
                                       .adjusted(-kCapturePaddingDevicePx, -kCapturePaddingDevicePx,
@@ -217,7 +233,8 @@ bool CanvasBackdropRenderer::render(GLuint sourceFbo, GLuint defaultFbo, int sur
 
         PreparedRegion item;
         item.captureRect = captureRect;
-        item.targetRect = clippedTarget;
+        item.targetRect = targetRect;
+        item.compositeRect = compositeRect;
         const qreal cornerScale = std::min(logicalToSurfaceScaleX, logicalToSurfaceScaleY);
         item.cornerRadius
             = static_cast<float>(std::max<qreal>(0.0, region.cornerRadius * cornerScale));
@@ -232,15 +249,15 @@ bool CanvasBackdropRenderer::render(GLuint sourceFbo, GLuint defaultFbo, int sur
 
         const float captureWidth = static_cast<float>(captureRect.width());
         const float captureHeight = static_cast<float>(captureRect.height());
-        item.sourceUvMinX = static_cast<float>(clippedTarget.x() - captureRect.x()) / captureWidth;
+        item.sourceUvMinX = static_cast<float>(targetRect.x() - captureRect.x()) / captureWidth;
         item.sourceUvMaxX
-            = static_cast<float>(clippedTarget.x() + clippedTarget.width() - captureRect.x())
+            = static_cast<float>(targetRect.x() + targetRect.width() - captureRect.x())
             / captureWidth;
         item.sourceUvMinY = static_cast<float>(captureRect.y() + captureRect.height()
-                                - clippedTarget.y() - clippedTarget.height())
+                                - targetRect.y() - targetRect.height())
             / captureHeight;
         item.sourceUvMaxY
-            = static_cast<float>(captureRect.y() + captureRect.height() - clippedTarget.y())
+            = static_cast<float>(captureRect.y() + captureRect.height() - targetRect.y())
             / captureHeight;
         prepared.push_back(item);
     }
@@ -254,18 +271,14 @@ bool CanvasBackdropRenderer::render(GLuint sourceFbo, GLuint defaultFbo, int sur
     m_gl->glDisable(GL_SCISSOR_TEST);
     m_gl->glColorMask(GL_TRUE, GL_TRUE, GL_TRUE, GL_TRUE);
 
-    const float deviceScale
-        = static_cast<float>(std::min<qreal>(logicalToSurfaceScaleX, logicalToSurfaceScaleY));
-    const float refractionWidth
-        = static_cast<float>(ruwa::shared::rendering::kGlassRefractionWidthPx) * deviceScale;
-    const float refractionShift = std::min(
-        static_cast<float>(ruwa::shared::rendering::kGlassRefractionShiftPx) * deviceScale,
-        static_cast<float>(ruwa::shared::rendering::kGlassMaxRefractionShiftDevicePx));
+    const float refractionDepth = kRefractionDepthLogicalPx * deviceScale;
+    const float refractionShift
+        = std::min(kRefractionShiftLogicalPx * deviceScale, kMaxRefractionShiftDevicePx);
 
     m_gl->glActiveTexture(GL_TEXTURE0);
 
-    // Capture, refract and reduce every source region before compositing any
-    // result back into the default framebuffer. This prevents overlap feedback.
+    // Capture every source region before compositing any result back into the
+    // default framebuffer. This prevents overlap feedback.
     for (const PreparedRegion& item : prepared) {
         RegionTarget& target = m_targets[item.targetIndex];
         const int sourceBottom = surfaceHeight - item.captureRect.y() - item.captureRect.height();
@@ -276,77 +289,100 @@ bool CanvasBackdropRenderer::render(GLuint sourceFbo, GLuint defaultFbo, int sur
         m_gl->glBlitFramebuffer(item.captureRect.x(), sourceBottom,
             item.captureRect.x() + item.captureRect.width(), sourceTop, 0, 0, target.halfWidth,
             target.halfHeight, GL_COLOR_BUFFER_BIT, GL_LINEAR);
-
-        // Bend first, frost second: the blur below runs on the refracted image,
-        // so the two effects stop fighting over the rim.
-        m_gl->glBindFramebuffer(GL_FRAMEBUFFER, target.refractFbo);
-        m_gl->glViewport(0, 0, target.halfWidth, target.halfHeight);
-        m_refractProgram->use();
-        m_refractProgram->setUniform("uSource", 0);
-        m_refractProgram->setUniform("uSourceUvMin", item.sourceUvMinX, item.sourceUvMinY);
-        m_refractProgram->setUniform("uSourceUvMax", item.sourceUvMaxX, item.sourceUvMaxY);
-        m_refractProgram->setUniform("uRectSize", static_cast<float>(item.targetRect.width()),
-            static_cast<float>(item.targetRect.height()));
-        m_refractProgram->setUniform("uCornerRadius", item.cornerRadius);
-        m_refractProgram->setUniform("uRefractionWidth", refractionWidth);
-        m_refractProgram->setUniform("uRefractionShift", refractionShift);
-        m_gl->glBindTextureUnit(0, target.halfTexture);
-        drawFullscreen();
-
-        m_gl->glBindFramebuffer(GL_READ_FRAMEBUFFER, target.refractFbo);
-        m_gl->glBindFramebuffer(GL_DRAW_FRAMEBUFFER, target.blurAFbo);
-        m_gl->glBlitFramebuffer(0, 0, target.halfWidth, target.halfHeight, 0, 0, target.blurWidth,
-            target.blurHeight, GL_COLOR_BUFFER_BIT, GL_LINEAR);
     }
 
     for (const PreparedRegion& item : prepared) {
         RegionTarget& target = m_targets[item.targetIndex];
-        const float horizontalStep = static_cast<float>(kKernelReachDevicePx)
-            / (4.0f * static_cast<float>(item.captureRect.width()));
-        const float verticalStep = static_cast<float>(kKernelReachDevicePx)
-            / (4.0f * static_cast<float>(item.captureRect.height()));
 
-        m_gl->glBindFramebuffer(GL_FRAMEBUFFER, target.blurBFbo);
-        m_gl->glViewport(0, 0, target.blurWidth, target.blurHeight);
-        m_blurProgram->use();
-        m_blurProgram->setUniform("uSource", 0);
-        m_blurProgram->setUniform("uDither", 0);
-        m_blurProgram->setUniform("uTexelStep", horizontalStep, 0.0f);
-        m_gl->glBindTexture(GL_TEXTURE_2D, target.blurATexture);
-        drawFullscreen();
+        if (kFrostEnabled) {
+            // Contracting half of the dual filter. Step 0 reads the captured half
+            // and decodes it out of sRGB; every step after that reads the level
+            // above it, already linear, at five taps.
+            m_downsampleProgram->use();
+            m_downsampleProgram->setUniform("uSource", 0);
+            m_downsampleProgram->setUniform("uOffset", kBlurSampleOffset);
+            for (int level = 0; level < kBlurLevels; ++level) {
+                const bool fromCapture = level == 0;
+                const GLuint sourceTexture
+                    = fromCapture ? target.halfTexture : target.levelTexture[level - 1];
+                const int sourceWidth
+                    = fromCapture ? target.halfWidth : target.levelWidth[level - 1];
+                const int sourceHeight
+                    = fromCapture ? target.halfHeight : target.levelHeight[level - 1];
 
-        m_gl->glBindFramebuffer(GL_FRAMEBUFFER, target.blurAFbo);
-        m_blurProgram->setUniform("uDither", 1);
-        m_blurProgram->setUniform("uTexelStep", 0.0f, verticalStep);
-        m_gl->glBindTexture(GL_TEXTURE_2D, target.blurBTexture);
-        drawFullscreen();
+                m_gl->glBindFramebuffer(GL_FRAMEBUFFER, target.levelFbo[level]);
+                m_gl->glViewport(0, 0, target.levelWidth[level], target.levelHeight[level]);
+                m_downsampleProgram->setUniform("uDecodeSrgb", fromCapture ? 1 : 0);
+                m_downsampleProgram->setUniform("uHalfPixel",
+                    0.5f / static_cast<float>(sourceWidth),
+                    0.5f / static_cast<float>(sourceHeight));
+                m_gl->glBindTextureUnit(0, sourceTexture);
+                drawFullscreen();
+            }
+
+            // Expanding half, back down the same ladder. Writing into level-1 is
+            // safe: its contracted content has already been consumed by the step
+            // that produced level, so no target is ever read and written at once.
+            m_upsampleProgram->use();
+            m_upsampleProgram->setUniform("uSource", 0);
+            m_upsampleProgram->setUniform("uOffset", kBlurSampleOffset);
+            for (int level = kBlurLevels - 1; level > 0; --level) {
+                m_gl->glBindFramebuffer(GL_FRAMEBUFFER, target.levelFbo[level - 1]);
+                m_gl->glViewport(0, 0, target.levelWidth[level - 1], target.levelHeight[level - 1]);
+                m_upsampleProgram->setUniform("uHalfPixel",
+                    0.5f / static_cast<float>(target.levelWidth[level]),
+                    0.5f / static_cast<float>(target.levelHeight[level]));
+                m_gl->glBindTextureUnit(0, target.levelTexture[level]);
+                drawFullscreen();
+            }
+        }
 
         const int destinationBottom
-            = surfaceHeight - item.targetRect.y() - item.targetRect.height();
+            = surfaceHeight - item.compositeRect.y() - item.compositeRect.height();
         m_gl->glBindFramebuffer(GL_FRAMEBUFFER, defaultFbo);
-        m_gl->glViewport(item.targetRect.x(), destinationBottom, item.targetRect.width(),
-            item.targetRect.height());
+        m_gl->glViewport(item.compositeRect.x(), destinationBottom, item.compositeRect.width(),
+            item.compositeRect.height());
         m_gl->glEnable(GL_BLEND);
         m_gl->glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
         m_compositeProgram->use();
         m_compositeProgram->setUniform("uSource", 0);
         m_compositeProgram->setUniform("uSurfaceTint", item.tintR, item.tintG, item.tintB);
         m_compositeProgram->setUniform("uSurfaceTintAmount", item.tintAmount);
-        m_compositeProgram->setUniform("uRefractionWidth", refractionWidth);
+        m_compositeProgram->setUniform("uRefractionDepth", refractionDepth);
+        m_compositeProgram->setUniform("uRefractionShift", refractionShift);
+        m_compositeProgram->setUniform("uMaxTilt", kMaxSurfaceTilt);
+        m_compositeProgram->setUniform("uDispersion", kChromaticDispersion);
+        m_compositeProgram->setUniform("uSplay", kSplay);
+        m_compositeProgram->setUniform("uMaxSplayShift", kMaxSplayShiftDevicePx);
+        // With the frost off the composite reads the capture itself, which is
+        // still sRGB encoded - the pyramid pass that would have decoded it did
+        // not run.
+        m_compositeProgram->setUniform("uDecodeSrgb", kFrostEnabled ? 0 : 1);
         m_compositeProgram->setUniform("uEdgeInset", kSilhouetteInsetLogicalPx * deviceScale);
-        m_compositeProgram->setUniform("uBevelShade", kBevelShadeAmount);
         m_compositeProgram->setUniform("uSourceUvMin", item.sourceUvMinX, item.sourceUvMinY);
         m_compositeProgram->setUniform("uSourceUvMax", item.sourceUvMaxX, item.sourceUvMaxY);
+        m_compositeProgram->setUniform("uCompositeSize",
+            static_cast<float>(item.compositeRect.width()),
+            static_cast<float>(item.compositeRect.height()));
+        const float rectOffsetX
+            = static_cast<float>(item.targetRect.x() - item.compositeRect.x());
+        const float rectOffsetY = static_cast<float>(item.compositeRect.y()
+            + item.compositeRect.height() - item.targetRect.y() - item.targetRect.height());
+        m_compositeProgram->setUniform("uRectOffset", rectOffsetX, rectOffsetY);
         m_compositeProgram->setUniform("uRectSize", static_cast<float>(item.targetRect.width()),
             static_cast<float>(item.targetRect.height()));
         m_compositeProgram->setUniform("uCornerRadius", item.cornerRadius);
         m_compositeProgram->setUniform("uOpacity", item.opacity);
-        m_gl->glBindTextureUnit(0, target.blurATexture);
+        m_compositeProgram->setUniform("uShadowOffset", 0.0f, -shadowOffsetY);
+        m_compositeProgram->setUniform("uShadowFalloff", shadowFalloff);
+        m_compositeProgram->setUniform("uShadowOpacity", kShadowOpacity);
+        m_compositeProgram->setUniform("uShadowReach", kShadowReachInFalloffRadii);
+        m_gl->glBindTextureUnit(0, kFrostEnabled ? target.levelTexture[0] : target.halfTexture);
         drawFullscreen();
         m_gl->glDisable(GL_BLEND);
     }
 
-    m_gl->glBindTexture(GL_TEXTURE_2D, 0);
+    m_gl->glBindTextureUnit(0, 0);
     m_gl->glBindVertexArray(0);
     m_gl->glBindFramebuffer(GL_FRAMEBUFFER, defaultFbo);
     m_gl->glViewport(0, 0, surfaceWidth, surfaceHeight);

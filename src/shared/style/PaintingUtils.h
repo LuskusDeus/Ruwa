@@ -28,8 +28,10 @@
 
 namespace ruwa::ui::painting {
 
-/// Alpha of the theme surface tint painted over canvas backdrop blur.
-inline constexpr int kBackdropTintAlpha = 112;
+/// Alpha of the theme surface tint painted over canvas backdrop blur. Zeroed
+/// while kGlassBareOpticsMode is on: the point of that mode is to leave nothing
+/// on screen but the refraction, and this layer would wash it out on its own.
+inline constexpr int kBackdropTintAlpha = ruwa::shared::rendering::kGlassBareOpticsMode ? 0 : 112;
 
 /// Shape of the glass in a backdrop-blurred overlay: the widget rect pulled in
 /// to where the GPU pass ends its own silhouette (see kGlassSilhouetteInsetPx).

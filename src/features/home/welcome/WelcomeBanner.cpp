@@ -112,7 +112,7 @@ bool isLightBannerForKey(const QString& key, const QPixmap& pm)
     return n > 0 && (sum / n) > 180;
 }
 
-// Raster counterpart of backdrop_refract.frag.glsl. WelcomeBanner is a regular
+// Raster counterpart of the refraction in backdrop_composite.frag.glsl. WelcomeBanner is a regular
 // QWidget, so it cannot join the canvas OpenGL pass, but it deliberately uses
 // the same signed-distance shape, Snell profile and chromatic dispersion.
 qreal roundedRectDistance(const QPointF& pixelPos, const QSizeF& rectSize, qreal radius)
@@ -198,20 +198,21 @@ QRgb sampleBilinear(const QImage& source, qreal x, qreal y)
         interpolate(qAlpha(p00), qAlpha(p10), qAlpha(p01), qAlpha(p11)));
 }
 
-QImage refractGlassBackdrop(const QImage& source, const QRectF& plateRect, qreal cornerRadius,
-    qreal refractionWidth, qreal refractionShift)
+QImage refractGlassBackdrop(
+    const QImage& source, const QRectF& plateRect, qreal cornerRadius, qreal maxRefractionShift)
 {
     using namespace ruwa::shared::rendering;
-    if (source.isNull() || !plateRect.isValid() || refractionWidth <= 0.0
-        || refractionShift <= 0.0) {
+    if (source.isNull() || !plateRect.isValid() || maxRefractionShift <= 0.0) {
         return source;
     }
 
     QImage refracted = source.copy();
     const QSizeF plateSize = plateRect.size();
-    const qreal bevelWidth = qMax<qreal>(
-        qMin(refractionWidth, qMin(plateSize.width(), plateSize.height()) * 0.5), 1.0);
-    const qreal outerFade = qMax<qreal>(bevelWidth * 0.35, 2.0);
+    // Same lens as the canvas glass: the height field spans the whole plate, so
+    // the loop below covers its area rather than a ring around its edge.
+    const qreal lensDepth = glassLensDepth(qMin(plateSize.width(), plateSize.height()));
+    const qreal refractionShift = glassRefractionShift(lensDepth, maxRefractionShift);
+    const qreal outerFade = qMax<qreal>(lensDepth * 0.35, 2.0);
     const QRect effectBounds = plateRect.adjusted(-outerFade, -outerFade, outerFade, outerFade)
                                    .toAlignedRect()
                                    .intersected(source.rect());
@@ -220,15 +221,19 @@ QImage refractGlassBackdrop(const QImage& source, const QRectF& plateRect, qreal
         for (int x = effectBounds.left(); x <= effectBounds.right(); ++x) {
             const QPointF pixelPos(x + 0.5 - plateRect.left(), y + 0.5 - plateRect.top());
             const qreal distance = roundedRectDistance(pixelPos, plateSize, cornerRadius);
-            if (distance < -bevelWidth || distance > outerFade) {
+            if (distance < -lensDepth || distance > outerFade) {
                 continue;
             }
 
-            const qreal rim = distance <= 0.0 ? qBound<qreal>(0.0, 1.0 + distance / bevelWidth, 1.0)
+            const qreal rim = distance <= 0.0 ? qBound<qreal>(0.0, 1.0 + distance / lensDepth, 1.0)
                                               : qBound<qreal>(0.0, 1.0 - distance / outerFade, 1.0);
-            const qreal shape = rim * rim * (3.0 - 2.0 * rim);
+            // Clamped short of the tangent, like the GPU path: an unbounded
+            // deviation at the rim stops being an image of anything.
+            const qreal shape = qMin(std::pow(rim, kGlassLensFalloff), kGlassMaxTilt);
+            // Direction follows kGlassGatherInward; see the discussion there.
             const QPointF normal = roundedRectNormal(pixelPos, plateSize, cornerRadius);
-            const qreal bend = bevelRefraction(shape) * refractionShift;
+            const qreal bend
+                = bevelRefraction(shape) * refractionShift * (kGlassGatherInward ? -1.0 : 1.0);
             const QPointF offset = normal * bend;
             const QPointF spread = offset * kGlassChromaticDispersion;
 
@@ -246,8 +251,8 @@ QImage refractGlassBackdrop(const QImage& source, const QRectF& plateRect, qreal
 }
 
 void drawRefractedBlurredTintedPlate(QImage& target, const QWidget* targetWidget,
-    const QWidget* sourceWidget, int blurPad, qreal refractionWidth, qreal refractionShift,
-    const QColor& tintTop, const QColor& tintBottom)
+    const QWidget* sourceWidget, int blurPad, qreal maxRefractionShift, const QColor& tintTop,
+    const QColor& tintBottom)
 {
     if (!targetWidget || !sourceWidget || !sourceWidget->isVisible() || target.isNull()) {
         return;
@@ -259,7 +264,8 @@ void drawRefractedBlurredTintedPlate(QImage& target, const QWidget* targetWidget
         return;
     }
 
-    const int refractionPad = qCeil(refractionShift * 1.2) + 2;
+    const int refractionPad
+        = qCeil(maxRefractionShift * ruwa::shared::rendering::kGlassSampleReachFactor) + 2;
     const int capturePad = blurPad + refractionPad;
     const QRect sampledRect = plateRect.adjusted(-capturePad, -capturePad, capturePad, capturePad)
                                   .intersected(targetBounds);
@@ -270,8 +276,8 @@ void drawRefractedBlurredTintedPlate(QImage& target, const QWidget* targetWidget
     const QImage sampled = target.copy(sampledRect);
     const QRectF localPlateRect(plateRect.translated(-sampledRect.topLeft()));
     const qreal cornerRadius = plateRect.height() * 0.5;
-    const QImage refracted = refractGlassBackdrop(
-        sampled, localPlateRect, cornerRadius, refractionWidth, refractionShift);
+    const QImage refracted
+        = refractGlassBackdrop(sampled, localPlateRect, cornerRadius, maxRefractionShift);
     const QSize blurSize(qMax(1, sampled.width() / OPEN_BUTTON_BLUR_DOWNSCALE),
         qMax(1, sampled.height() / OPEN_BUTTON_BLUR_DOWNSCALE));
     const QImage blurred
@@ -714,15 +720,13 @@ void WelcomeBanner::paintEvent(QPaintEvent* event)
     }
 
     const int blurPad = theme.scaled(BASE_OPEN_BUTTON_BLUR_PAD);
-    const qreal refractionWidth = theme.scaled(ruwa::shared::rendering::kGlassRefractionWidthPx);
-    const qreal refractionShift
-        = qMin<qreal>(theme.scaled(ruwa::shared::rendering::kGlassRefractionShiftPx),
-            ruwa::shared::rendering::kGlassMaxRefractionShiftDevicePx);
+    // The lens sizes itself off the plate, so only the ceiling is a length.
+    const qreal maxRefractionShift = ruwa::shared::rendering::kGlassMaxRefractionShiftDevicePx;
     const bool lightUi = effectiveLightBannerUi();
     const QColor tintTop = lightUi ? QColor(255, 255, 255, 25) : QColor(24, 34, 58, 70);
     const QColor tintBottom = lightUi ? QColor(255, 255, 255, 25) : QColor(8, 13, 28, 70);
     drawRefractedBlurredTintedPlate(
-        card, this, m_openButton, blurPad, refractionWidth, refractionShift, tintTop, tintBottom);
+        card, this, m_openButton, blurPad, maxRefractionShift, tintTop, tintBottom);
 
     // Round the card with a smooth alpha mask (no clipping artifacts).
     QImage maskBuffer(card.size(), QImage::Format_ARGB32_Premultiplied);
