@@ -134,6 +134,7 @@ private:
     ruwa::ui::widgets::ColorInputButton* createColorInput(ColorField field, QWidget* parent);
     QWidget* createFontCategory(std::size_t categoryIndex, QWidget* parent);
     QWidget* createAnimationCategory(std::size_t categoryIndex, QWidget* parent);
+    void alignAnimationPropertyColumns();
     ruwa::ui::widgets::FontDropdownSelector* createFontFamilyInput(
         std::size_t familyIndex, QWidget* parent);
     ruwa::ui::widgets::NumericInputField* createFontSizeInput(

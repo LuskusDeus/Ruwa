@@ -67,6 +67,25 @@ int contentSideMarginForSize(const QSize& size)
     return size.width() > targetWidth ? (size.width() - targetWidth) / 2 : 0;
 }
 
+// A property row hands its editor column to the field, and a grid centres a
+// field that cannot grow — which left the fixed-size switches floating in the
+// middle of their column instead of lining up with the other editors. Wrapping
+// the switch in a stretch keeps it flush with the right edge of the column, so
+// every row in the page ends on the same x.
+QWidget* wrapToggleInRow(ruwa::ui::widgets::ToggleSwitch* toggle, QWidget* parent)
+{
+    auto* row = new QWidget(parent);
+    row->setAttribute(Qt::WA_TranslucentBackground);
+    row->setSizePolicy(QSizePolicy::Expanding, QSizePolicy::Fixed);
+    auto* layout = new QHBoxLayout(row);
+    layout->setContentsMargins(0, 0, 0, 0);
+    layout->setSpacing(0);
+    layout->addStretch(1);
+    toggle->setParent(row);
+    layout->addWidget(toggle);
+    return row;
+}
+
 } // namespace
 
 ThemeEditorTab::ThemeEditorTab(QWidget* parent)
@@ -438,9 +457,24 @@ QWidget* ThemeEditorTab::createAnimationsSettingsPage(QWidget* parent)
     for (std::size_t index = 0; index < AnimationCategoryCount; ++index) {
         columnsLayout->addWidget(createAnimationCategory(index, content), 1);
     }
+    alignAnimationPropertyColumns();
 
     scrollArea->setWidget(content);
     return scrollArea;
+}
+
+void ThemeEditorTab::alignAnimationPropertyColumns()
+{
+    QList<ruwa::ui::widgets::PropertyRowLayout*> layouts;
+    for (auto& rows : m_animationPropertyLayouts) {
+        if (rows) {
+            layouts.append(rows.get());
+        }
+    }
+    // The two categories sit side by side, so their captions must share one
+    // width or the switch in the right column lands at a different x than the
+    // one in the left.
+    ruwa::ui::widgets::alignPropertyColumns(layouts);
 }
 
 QWidget* ThemeEditorTab::createAnimationCategory(std::size_t categoryIndex, QWidget* parent)
@@ -466,7 +500,8 @@ QWidget* ThemeEditorTab::createAnimationCategory(std::size_t categoryIndex, QWid
 
     if (categoryIndex == 0) {
         m_animationsToggle = new ruwa::ui::widgets::ToggleSwitch(rowsHost);
-        m_animationSettingLabels[0] = rows->addRow(QString(), m_animationsToggle);
+        m_animationSettingLabels[0]
+            = rows->addRow(QString(), wrapToggleInRow(m_animationsToggle, rowsHost));
         connect(m_animationsToggle, &ruwa::ui::widgets::ToggleSwitch::toggled, this,
             [this](bool enabled) {
                 if (m_syncingAnimationInputs) {
@@ -496,7 +531,8 @@ QWidget* ThemeEditorTab::createAnimationCategory(std::size_t categoryIndex, QWid
             });
     } else {
         m_canvasAnimationsToggle = new ruwa::ui::widgets::ToggleSwitch(rowsHost);
-        m_animationSettingLabels[1] = rows->addRow(QString(), m_canvasAnimationsToggle);
+        m_animationSettingLabels[1]
+            = rows->addRow(QString(), wrapToggleInRow(m_canvasAnimationsToggle, rowsHost));
         connect(m_canvasAnimationsToggle, &ruwa::ui::widgets::ToggleSwitch::toggled, this,
             [this](bool enabled) {
                 if (m_syncingAnimationInputs) {
@@ -1021,11 +1057,7 @@ void ThemeEditorTab::retranslateUi()
             m_animationSettingLabels[index]->setText(animationSettingLabel(index));
         }
     }
-    for (auto& rows : m_animationPropertyLayouts) {
-        if (rows) {
-            rows->refreshLabelMetrics();
-        }
-    }
+    alignAnimationPropertyColumns();
     for (auto& rows : m_fontPropertyLayouts) {
         if (rows) {
             rows->refreshLabelMetrics();
@@ -1199,11 +1231,7 @@ void ThemeEditorTab::updateScaledSizes()
             label->setFont(theme.font(ruwa::ui::core::ThemeFontRole::Body));
         }
     }
-    for (auto& rows : m_animationPropertyLayouts) {
-        if (rows) {
-            rows->refreshLabelMetrics();
-        }
-    }
+    alignAnimationPropertyColumns();
 
     for (auto& section : m_settingsSections) {
         if (section.container && section.container->layout()) {
