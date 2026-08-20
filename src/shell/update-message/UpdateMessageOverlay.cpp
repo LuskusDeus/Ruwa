@@ -765,7 +765,8 @@ void UpdateMessageOverlay::setupUI()
 
     auto* heroTitleLabel = new WrappedTextLabel(heroText);
     heroTitleLabel->setText(QCoreApplication::translate("UpdateMessageOverlay",
-        "A radial menu, real selection commands, and cursors drawn on the canvas."));
+        "Themes you can build, motion you can dial, and a Layer Properties panel with real "
+        "controls."));
     heroTitleLabel->setFont(theme.font(ruwa::ui::core::ThemeFontRole::H3, QFont::DemiBold));
     heroTitleLabel->setStyleSheet(
         QStringLiteral("QLabel { background: transparent; color: %1; }").arg(colors.text.name()));
@@ -780,9 +781,9 @@ void UpdateMessageOverlay::setupUI()
 
     auto* descriptionLabel = new WrappedTextLabel(leftWidget);
     descriptionLabel->setText(QCoreApplication::translate("UpdateMessageOverlay",
-        "Right-clicking the canvas opens a configurable radial menu, the selection operations "
-        "became commands with a home in the Edit menu, and the cursor is now drawn by the canvas "
-        "itself."));
+        "A theme is now something you make rather than something you pick — its colours, its "
+        "fonts and how the application animates. The Layer Properties panel was rebuilt around "
+        "per-layer groups, and scrolling runs on a new continuous engine."));
     descriptionLabel->setFont(theme.font(ruwa::ui::core::ThemeFontRole::Label));
     descriptionLabel->setStyleSheet(QStringLiteral("QLabel { background: transparent; color: %1; }")
             .arg(colors.textMuted.name()));
@@ -797,22 +798,22 @@ void UpdateMessageOverlay::setupUI()
 
     addReleaseHighlightRow(highlightsWidget, highlightsLayout, colors, theme, ChangelogBadge::New,
         QCoreApplication::translate("UpdateMessageOverlay",
-            "A configurable radial menu opens on canvas right-click, with pages of commands "
-            "around a hub."));
+            "Build your own theme: colours, fonts, and animations you can slow down or turn "
+            "off."));
     addReleaseHighlightRow(highlightsWidget, highlightsLayout, colors, theme,
         ChangelogBadge::Updated,
         QCoreApplication::translate("UpdateMessageOverlay",
-            "Select All, Invert and Reselect, and a Selection submenu in Edit for the rest."));
+            "Layer Properties is a panel of per-layer groups, with full text formatting."));
     addReleaseHighlightRow(highlightsWidget, highlightsLayout, colors, theme,
         ChangelogBadge::Improved,
         QCoreApplication::translate("UpdateMessageOverlay",
-            "The canvas draws its own cursors, and the overlay glass refracts what is behind "
-            "it."));
+            "Scrolling runs on a continuous engine, and a numeric field can be scrubbed by "
+            "dragging."));
     addReleaseHighlightRow(highlightsWidget, highlightsLayout, colors, theme,
         ChangelogBadge::BugFix,
         QCoreApplication::translate("UpdateMessageOverlay",
-            "No more ghost tiles after undo, and a shortcut bound under a Cyrillic layout finally "
-            "fires."));
+            "No more corrupted canvas from an adjustment layer, and a resting pen keeps its hands "
+            "off the cursor."));
 
     enableHeightForWidth(highlightsWidget);
     leftLayout->addWidget(highlightsWidget);

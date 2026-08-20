@@ -56,6 +56,10 @@ locked features.
   and references close. Tool and layer buttons reorder by drag and drop, and
   unused ones can be hidden. A configurable radial menu opens on canvas
   right-click, with pages of commands around a hub.
+- **Themes you can build.** Colours, fonts, and motion are part of the theme
+  preset. Edit one live with a preview beside every page, scale the animation
+  speed or switch interface and canvas motion off, and duplicate, import, or
+  export a theme as JSON.
 - **Precise placement.** Auto snapping aligns moves and transforms to the canvas,
   to other layers, and to equal spacing between neighbours, with live guides and
   measurements.
@@ -68,7 +72,7 @@ locked features.
 
 | Item | Detail |
 | --- | --- |
-| Current release | `0.3.1-alpha` |
+| Current release | `0.3.2-alpha` |
 | Primary platform | Windows 10/11 x64 |
 | Graphics requirement | OpenGL 4.5 |
 | Technology | C++23, Qt 6, CMake |

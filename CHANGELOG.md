@@ -15,6 +15,113 @@ a release.
 
 ## [Unreleased]
 
+## [0.3.2-alpha] — 2026-08-20 — "Themes you can build, motion you can dial, and a Layer Properties panel with real controls"
+
+A theme is now something you make rather than something you pick. The theme
+editor edits a preset live — its fourteen semantic colours, the two font
+families and every size in the typographic scale, and how the application
+animates — with a preview beside each page showing real widgets responding to
+the values being edited, before Apply. Motion itself became a setting: every UI
+animation now runs through one policy, so it can be turned off or scaled between
+half and double speed, with the canvas kept separate from the interface. Themes
+can be created, duplicated, imported and exported as JSON.
+
+The Layer Properties panel was rebuilt around collapsible per-type groups and
+docks in the base workspace beside Layer Effects. It replaces the floating text
+formatting popup and reaches the parts of the text model no UI ever did — font
+size, alignment, leading — while adding strikethrough, tracking, caps and
+paragraph spacing. Scrolling was rebuilt on a continuous damping loop that runs
+at the display refresh rate, document tabs and dock group tabs reorder with
+animation, and a numeric field can be scrubbed by dragging across it.
+
+Underneath: a resting pen no longer steals the cursor from the mouse, a stroke
+no longer accumulates a second of input backlog on the native WinTab backend,
+and an adjustment layer carrying a blur, glow or shadow no longer corrupts the
+canvas.
+
+### Added
+- The theme editor is a real editor. A preset picker lists the built-in and
+  custom themes with search, and can create a new theme, duplicate the current
+  one, delete a custom one, and import or export a theme as JSON. Colors, Font
+  and Animations are separate pages, each with its own Apply, and each edits the
+  preset being worked on rather than the applied theme.
+- Every theme carries font settings: a heading family, an interface family, and
+  the sixteen sizes of the typographic scale (Display through Micro, plus Code).
+  The scale is semantic now — a role rather than a pixel size — so changing one
+  size reaches every widget that asked for that role.
+- Every theme carries animation settings: interface animations and canvas
+  animations toggle independently, and a speed multiplier from 0.5x to 2x scales
+  what remains. Ambient motion (the marching ants, the canvas corner effect, the
+  message popup glow) and anything whose duration is a timeout rather than an
+  effect (loading indicators, progress bars, auto-hide timebars) stays outside
+  the policy on purpose.
+- The Colors, Font and Animations pages each preview themselves. The Animations
+  banner is a live scene built from the real widgets — a sidebar walked by a
+  synthetic cursor, a docked panel group sliding its members past each other, a
+  settings column operating its own dropdown, toggle and switcher — driven by
+  the preset being edited, so the pending speed and master switch are visible
+  before Apply.
+- The Layer Properties panel is a scrollable column of collapsible groups: an
+  identity header with inline rename, a shared Position group, and groups that
+  appear only for the layer type they describe. Position reads the top-left of
+  what the layer actually draws and moves it the way the Move tool does, with a
+  reusable anchor grid. The base workspace docks the panel beside Layer Effects
+  as a tab group under Layers.
+- Character and Paragraph groups replace the on-canvas text formatting popup and
+  go well past what a floating strip could hold. Font size, alignment — justify
+  included — and leading are reachable for the first time, and strikethrough,
+  tracking, caps and paragraph spacing are new in the model, the renderer and
+  the file format (`.rwf` v33). Every one of them is undoable, the typography
+  travelling in the text command beside the style runs. Edits stream live and
+  collapse into one undo step per interaction, so dragging a value or previewing
+  a font on hover costs one entry rather than one per frame, and abandoning a
+  preview puts the layer back. Which characters an edit lands on follows
+  Photoshop: a selection scopes it, anything else means the whole layer.
+- New Project has a Recent tab. It keeps the configurations actually used — size,
+  canvas bounds, colour mode, background, tile format — one card per
+  configuration: recreating the same setup floats its card to the front and
+  bumps a use count rather than adding another. A card carries its custom name,
+  or borrows the name of the built-in preset whose size it matches, and the
+  list is capped at twelve.
+- Dragging horizontally across a numeric field scrubs its value, counting up to
+  the right and down to the left. Every field built on `NumericInputField` gains
+  it: the theme editor's font sizes and animation speed, layer position and text
+  metrics, and effect parameters that opted into the number editor. A whole
+  sweep commits once on release, so a listener that turns one into an undo step
+  records a single entry.
+- Document tabs reorder by dragging, animated, and the dock compass gained an
+  explicit button for dropping a panel into a tab group rather than relying on
+  the centre of the panel alone.
+- About shows the lifetime time spent in the application. The total is folded
+  into the settings once a minute and on quit, so a crash costs at most one
+  interval, and a settings reset keeps it — it is a statistic, not a preference.
+
+### Improved
+- Scrolling is one continuous motion instead of a series of shoves. Wheel,
+  stylus inertia, scrollbar steps and track jumps share a frame-driven loop that
+  eases a sub-pixel position toward an accumulating target, so an impulse
+  arriving mid-flight raises the velocity rather than restarting a curve. The
+  driving timer runs at the display refresh interval, which is visibly smoother
+  above 60 Hz; rates are per input path, so a precision wheel or trackpad tracks
+  nearly 1:1 while a notched wheel glides and repeated notches accelerate.
+  Releasing a stylus swipe hands its velocity to the same loop with no seam at
+  the release, and a pen that had come to rest no longer flings. The font
+  dropdown scrolls this way too.
+- The selection's marching ants are drawn from a cached instance buffer rebuilt
+  only when the selection changes, with a level of detail chosen by zoom,
+  instead of re-batching and culling every edge on the CPU each frame.
+- The zoom info overlay joined the rest of the on-canvas glass: the same frosted
+  backdrop, silhouette and border treatment, with the frost kept in step with
+  the overlay's own fade in and out.
+- The GL tool and eyedropper cursors no longer route the whole scene through an
+  offscreen render and a full-surface blit. Each overlay reports the rectangle
+  it covers and the frame copies only those pixels.
+- Duplicating an already-duplicated layer numbers the copy instead of stacking
+  suffixes: "Layer (copy)", "Layer (copy 2)", and so on, rather than
+  "Layer (copy) (copy)".
+- The colour input button was restyled, and the About page scrolls only its left
+  column, so the Build Details panel stays put beside it.
+
 ### Fixed
 - An adjustment layer with a blur, glow or shadow above other effect-carrying
   layers no longer paints a shrunken copy of the whole picture into the corner
@@ -26,6 +133,77 @@ a release.
   is safe however deep it goes. The corruption only surfaced once the nested
   effect actually re-ran instead of answering from its cache, which is why
   expanding or collapsing a group — a full recomposite — appeared to trigger it.
+- A document holding even one clipping layer — a hidden one counted — made every
+  bounds-expanding effect on an adjustment layer render as a hard 256px tile
+  grid. Each re-entrant isolated composite owned one fixed texture pair and so
+  could not nest, and the adjustment path answered that by refusing any stack
+  below it that held a clipped layer, a nested adjustment or a bounds-expanding
+  group — a refusal that dropped the padded-neighbour pipeline entirely.
+  Isolation frames are handed out per nesting depth now, so nothing has to be
+  refused: nested clip groups no longer clobber each other, an adjustment used
+  as a clip base keeps its chain, an adjustment inside a clip group can rebuild
+  its source at the neighbouring tiles, and the viewport preview no longer runs
+  the adjustment over a background-baked source.
+- A pen left resting inside the tablet's hover range no longer takes the system
+  cursor away from the mouse — on one Huion driver, warping it to the top-left
+  corner of the screen. Ownership was granted on any packet whose position
+  differed from where the last stroke ended, a value that stays frozen while the
+  mouse owns the pointer. The pen has to earn it back now: a button transition
+  still grants it immediately, but otherwise the pen must travel 12 px and hold
+  a coherent path for three consecutive packets, and packets sitting on the
+  output origin with no pressure and no buttons are dropped before they can
+  become a position. An opt-in WinTab trace (`RUWA_WINTAB_TRACE=1`, off by
+  default) records the granted context, proximity, filtered packets, ownership
+  changes and every cursor warp, since this class of fault reproduces only on
+  particular driver builds.
+- Dabs no longer land up to a second late on the native WinTab backend at 0%
+  stabilization. The input queue capped the work a tick could do and left
+  latency unbounded, so a device producing faster than the brush rasterizes
+  built a backlog that grew with drawing time; the zero timer meant to run those
+  ticks never fired under a 200-266 Hz packet stream, and what actually paced
+  the queue was the repaint each batch asked for. A tick empties the queue now,
+  decimating by significance (position, pressure and timing error) when what is
+  queued exceeds what the tick can afford — which does not thin the stroke,
+  since dabs are placed along arc length — and it is serviced from the frame it
+  is scheduled against. Any non-zero stabilization used to mask this, because
+  the stabilizer's catch-up timer drained the queue as a side effect.
+- Lasso, lasso fill and the shape selections no longer drag a second, lagging
+  cursor across the canvas. Those tools grab the mouse on the canvas panel,
+  which is the GL widget's parent rather than a descendant, so the tablet filter
+  read the grabber as ordinary UI and re-synthesized every stylus packet as a
+  mouse event, pushing the panel's arrow over the canvas cursor as an
+  application override. Packets now go to the grabbing panel's tablet handler,
+  gated on an interaction actually running, and a selection drag counts as
+  owning the pen.
+- The tool cursor no longer freezes while undo is held. A held undo drains
+  through posted events, which Windows serves ahead of queued mouse input, so no
+  MouseMove arrived to carry a new position or to ask for the frame that would
+  draw it. The pointer is sampled in `paintGL` now, a moved pointer asks for one
+  more frame, and frames keep coming for 250 ms after each undo or redo.
+  Overlays with an animation of their own — the marching ants, the brush
+  ring — hid this completely.
+- Dropping layers into a group is undoable. The drop went straight to the model
+  without pushing anything, so the next undo reached past it to whatever created
+  the group and removed the whole subtree, taking the dropped layers with it,
+  while redo restored the empty clone captured when the group was created.
+- Reordering tabs inside a dock group works: the group header owns that drag now
+  instead of the panel title bar.
+- The update installer keeps a readable log. The script opened it with
+  `Set-Content`, so every attempt wiped the previous one and a failed update
+  left no trace. The log is append-only now, shared by the application and the
+  script and rotated at 512 KB, and it records the check, the download, the
+  install plan and every reason the installer refused to start. "Restart and
+  install" no longer fails silently either: a dismissed UAC prompt, a window
+  that refused to close or a package that was never verified in this session now
+  reaches a popup that can open the log folder. A rollback that had already
+  succeeded is no longer hidden by an exception thrown while restarting the
+  previous version.
+- Closing a tab no longer risks a crash while its canvas is still handing out
+  providers during teardown.
+
+### Removed
+- The on-canvas text formatting popup, replaced by the Character and Paragraph
+  groups in the Layer Properties panel.
 
 ## [0.3.1-alpha] — 2026-08-13 — "A radial menu, real selection commands, and cursors drawn on the canvas"
 
