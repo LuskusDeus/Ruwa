@@ -9,9 +9,11 @@
 #include "features/theme/manager/ThemeManager.h"
 #include "features/theme/manager/ThemeColors.h"
 #include "shared/rendering/CanvasBackdropSource.h"
+#include "shared/rendering/OffscreenGlassRenderer.h"
 #include "shared/resources/IconProvider.h"
 #include "shared/resources/ResourceManager.h"
 #include "shared/style/AnimationPolicy.h"
+#include "shared/style/PaintingUtils.h"
 
 #include <QCoreApplication>
 #include <QEasingCurve>
@@ -29,6 +31,7 @@
 #include <QLinearGradient>
 #include <QPainter>
 #include <QPainterPath>
+#include <QStringList>
 #include <QtMath>
 
 #include <cmath>
@@ -45,6 +48,14 @@ const int BASE_LAYOUT_SPACING = 16;
 const int BASE_BUTTON_SPACING = 12;
 const int BASE_BORDER_RADIUS = 12;
 const int BASE_OPEN_BUTTON_BLUR_PAD = 10;
+/// Frost pyramid levels under the Open button. One below the renderer's
+/// default, which halves the reach of the blur; see CanvasBackdropRegion.
+const int kBannerFrostLevels = 1;
+/// How hard the plate under the Open button bends the artwork, against the
+/// canvas glass. A quarter weaker: the banner image is the thing being looked
+/// at, and the same lens that reads as material over a drawing reads as a
+/// smear over a photograph.
+const qreal kBannerRefractionStrength = 0.75;
 const int OPEN_BUTTON_BLUR_DOWNSCALE = 4;
 
 // Update-panel split
@@ -250,16 +261,15 @@ QImage refractGlassBackdrop(
     return refracted;
 }
 
-void drawRefractedBlurredTintedPlate(QImage& target, const QWidget* targetWidget,
-    const QWidget* sourceWidget, int blurPad, qreal maxRefractionShift, const QColor& tintTop,
-    const QColor& tintBottom)
+/// Raster fallback, used only where the GPU glass cannot run.
+void drawRefractedBlurredTintedPlate(QImage& target, const QRect& plateRect, int blurPad,
+    qreal maxRefractionShift, const QColor& tintTop, const QColor& tintBottom)
 {
-    if (!targetWidget || !sourceWidget || !sourceWidget->isVisible() || target.isNull()) {
+    if (target.isNull() || plateRect.isEmpty()) {
         return;
     }
 
     const QRect targetBounds(QPoint(0, 0), target.size());
-    const QRect plateRect(sourceWidget->mapTo(targetWidget, QPoint(0, 0)), sourceWidget->size());
     if (!targetBounds.intersects(plateRect)) {
         return;
     }
@@ -301,6 +311,61 @@ void drawRefractedBlurredTintedPlate(QImage& target, const QWidget* targetWidget
     tint.setColorAt(0.0, tintTop);
     tint.setColorAt(1.0, tintBottom);
     painter.fillPath(clipPath, tint);
+}
+
+/// Lays the canvas glass over the banner card with the GPU pass, off screen.
+///
+/// The banner composes its own backdrop into an image before anything is drawn
+/// on top of it, so it can hand that image to the same renderer the on-canvas
+/// overlays use instead of approximating it on the CPU: the frost pyramid, the
+/// splay and the spectral fringe all come from the shader, and the banner only
+/// paints the tint on top - exactly as an overlay does. What it does not take
+/// from the overlays is the drop shadow; see below.
+///
+/// Returns false when the GPU path is unavailable, which is the signal to fall
+/// back to the raster plate above.
+bool drawGpuGlassPlate(QImage& target, const QRect& plateRect, qreal deviceScale,
+    const QColor& frostTint, const QColor& tintTop, const QColor& tintBottom)
+{
+    if (target.isNull() || plateRect.isEmpty()) {
+        return false;
+    }
+    const QRect targetBounds(QPoint(0, 0), target.size());
+    if (!targetBounds.intersects(plateRect)) {
+        return false;
+    }
+
+    ruwa::shared::rendering::GlassPlate plate;
+    plate.rect = QRectF(plateRect);
+    plate.cornerRadius = plateRect.height() * 0.5;
+    plate.surfaceTint = frostTint;
+    // The banner plate is not lifted off its background the way an on-canvas
+    // overlay is: it sits IN the artwork, and a drop shadow under it reads as
+    // a sticker rather than as glass.
+    plate.shadowStrength = 0.0;
+    // Half the frost of the canvas glass - one level short of the full
+    // pyramid. The button is small and the artwork behind it is the point.
+    plate.frostLevels = kBannerFrostLevels;
+    plate.refractionStrength = kBannerRefractionStrength;
+    if (!ruwa::shared::rendering::OffscreenGlassRenderer::instance().composeInPlace(
+            target, deviceScale, { plate })) {
+        return false;
+    }
+
+    // The tint is the widget's own layer and stops on the GPU silhouette, not
+    // on the widget rect; see kGlassSilhouetteInsetPx.
+    const QRectF silhouette = ruwa::ui::painting::glassSilhouetteRect(QRectF(plateRect));
+    const qreal radius = ruwa::ui::painting::glassSilhouetteRadius(plateRect.height() * 0.5);
+    QPainterPath clipPath;
+    clipPath.addRoundedRect(silhouette, radius, radius);
+
+    QPainter painter(&target);
+    painter.setRenderHint(QPainter::Antialiasing);
+    QLinearGradient tint(silhouette.topLeft(), silhouette.bottomLeft());
+    tint.setColorAt(0.0, tintTop);
+    tint.setColorAt(1.0, tintBottom);
+    painter.fillPath(clipPath, tint);
+    return true;
 }
 } // namespace
 
@@ -664,26 +729,17 @@ void WelcomeBanner::hideEvent(QHideEvent* event)
     }
 }
 
-void WelcomeBanner::paintEvent(QPaintEvent* event)
+QImage WelcomeBanner::composeBannerCard(int cardWidth, const QRect& plateRect, bool lightUi) const
 {
-    Q_UNUSED(event);
-
     const auto& theme = ruwa::ui::core::ThemeManager::instance();
     const auto& colors = theme.colors();
     const int borderRadius = theme.scaled(BASE_BORDER_RADIUS);
     const QSize sz = size();
-    const int cardW = qMax(1, bannerCardWidth());
-
-    // Opaque base across the whole widget. When the panel is open, the area to
-    // the right of the banner card (gap + panel backdrop) stays plain background
-    // so it blends with the host page — only the left card is rounded.
-    QImage finalImg(sz, QImage::Format_ARGB32_Premultiplied);
-    finalImg.fill(colors.background.rgba());
 
     // Banner card layer (left region). The background image is always scaled to
     // the full banner size and anchored to its right edge, so shrinking the card
     // crops the image from the right rather than rescaling it.
-    QImage card(QSize(cardW, sz.height()), QImage::Format_ARGB32_Premultiplied);
+    QImage card(QSize(cardWidth, sz.height()), QImage::Format_ARGB32_Premultiplied);
     card.fill(colors.background.rgba());
     {
         QPainter cardPainter(&card);
@@ -719,14 +775,22 @@ void WelcomeBanner::paintEvent(QPaintEvent* event)
         cardPainter.end();
     }
 
-    const int blurPad = theme.scaled(BASE_OPEN_BUTTON_BLUR_PAD);
-    // The lens sizes itself off the plate, so only the ceiling is a length.
-    const qreal maxRefractionShift = ruwa::shared::rendering::kGlassMaxRefractionShiftDevicePx;
-    const bool lightUi = effectiveLightBannerUi();
-    const QColor tintTop = lightUi ? QColor(255, 255, 255, 25) : QColor(24, 34, 58, 70);
-    const QColor tintBottom = lightUi ? QColor(255, 255, 255, 25) : QColor(8, 13, 28, 70);
-    drawRefractedBlurredTintedPlate(
-        card, this, m_openButton, blurPad, maxRefractionShift, tintTop, tintBottom);
+    if (!plateRect.isEmpty()) {
+        const QColor tintTop = lightUi ? QColor(255, 255, 255, 25) : QColor(24, 34, 58, 70);
+        const QColor tintBottom = lightUi ? QColor(255, 255, 255, 25) : QColor(8, 13, 28, 70);
+        // What the frost is pulled towards inside the shader, before the tint
+        // above it. The theme surface on a dark banner, plain white on a bright
+        // one, so the plate keeps a predictable value over any artwork.
+        const QColor frostTint = lightUi ? QColor(255, 255, 255) : colors.surface;
+        if (!drawGpuGlassPlate(card, plateRect, theme.scale(), frostTint, tintTop, tintBottom)) {
+            const int blurPad = theme.scaled(BASE_OPEN_BUTTON_BLUR_PAD);
+            // The lens sizes itself off the plate, so only the ceiling is a length.
+            const qreal maxRefractionShift
+                = ruwa::shared::rendering::kGlassMaxRefractionShiftDevicePx;
+            drawRefractedBlurredTintedPlate(
+                card, plateRect, blurPad, maxRefractionShift, tintTop, tintBottom);
+        }
+    }
 
     // Round the card with a smooth alpha mask (no clipping artifacts).
     QImage maskBuffer(card.size(), QImage::Format_ARGB32_Premultiplied);
@@ -735,7 +799,7 @@ void WelcomeBanner::paintEvent(QPaintEvent* event)
         QPainter maskPainter(&maskBuffer);
         maskPainter.setRenderHint(QPainter::Antialiasing);
         QPainterPath maskPath;
-        maskPath.addRoundedRect(QRectF(0, 0, cardW, sz.height()), borderRadius, borderRadius);
+        maskPath.addRoundedRect(QRectF(0, 0, cardWidth, sz.height()), borderRadius, borderRadius);
         maskPainter.fillPath(maskPath, Qt::white);
     }
     {
@@ -744,15 +808,49 @@ void WelcomeBanner::paintEvent(QPaintEvent* event)
         cardPainter.drawImage(0, 0, maskBuffer);
     }
 
-    {
-        QPainter finalPainter(&finalImg);
-        finalPainter.drawImage(0, 0, card);
+    return card;
+}
+
+void WelcomeBanner::paintEvent(QPaintEvent* event)
+{
+    Q_UNUSED(event);
+
+    const auto& theme = ruwa::ui::core::ThemeManager::instance();
+    const auto& colors = theme.colors();
+    const QSize sz = size();
+    const int cardW = qMax(1, bannerCardWidth());
+    const bool lightUi = effectiveLightBannerUi();
+    const QRect plateRect = m_openButton && m_openButton->isVisible()
+        ? QRect(m_openButton->mapTo(this, QPoint(0, 0)), m_openButton->size())
+        : QRect();
+
+    // The glass costs a GPU round trip, and Qt repaints this widget underneath
+    // its half-transparent buttons on every hover frame - none of which changes
+    // the card. Everything the card is made of goes into the key; anything not
+    // listed here cannot change it.
+    const QString cardKey = QStringList { QString::number(cardW), QString::number(sz.width()),
+        QString::number(sz.height()), QString::number(colors.background.rgba()),
+        QString::number(colors.surface.rgba()), QString::number(lightUi ? 1 : 0),
+        QString::number(theme.scale()), QString::number(plateRect.x()),
+        QString::number(plateRect.y()), QString::number(plateRect.width()),
+        QString::number(plateRect.height()), QString::number(m_backgroundImage.cacheKey()),
+        QString::number(m_backgroundCropNorm.x()), QString::number(m_backgroundCropNorm.y()),
+        QString::number(m_backgroundCropNorm.width()),
+        QString::number(m_backgroundCropNorm.height()) }
+                                .join(QLatin1Char('|'));
+    if (m_cardCacheKey != cardKey || m_cardCache.isNull()) {
+        m_cardCache = composeBannerCard(cardW, plateRect, lightUi);
+        m_cardCacheKey = cardKey;
     }
 
+    // Opaque base across the whole widget. When the panel is open, the area to
+    // the right of the banner card (gap + panel backdrop) stays plain background
+    // so it blends with the host page - only the left card is rounded.
     QPainter painter(this);
     painter.setRenderHint(QPainter::Antialiasing);
     painter.setRenderHint(QPainter::SmoothPixmapTransform);
-    painter.drawImage(0, 0, finalImg);
+    painter.fillRect(QRect(QPoint(0, 0), sz), colors.background);
+    painter.drawImage(0, 0, m_cardCache);
 }
 
 void WelcomeBanner::applyBannerLabelColors()

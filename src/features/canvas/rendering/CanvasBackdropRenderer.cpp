@@ -216,9 +216,15 @@ bool CanvasBackdropRenderer::render(GLuint sourceFbo, GLuint defaultFbo, int sur
         if (clippedTarget.isEmpty()) {
             continue;
         }
+        const float regionShadowOpacity = static_cast<float>(
+            kShadowOpacity * std::clamp<qreal>(region.shadowStrength, 0.0, 1.0));
+        // A region without a shadow needs no room outside itself for one, and
+        // the composite is the most expensive pass here: skip the padding
+        // rather than shading five falloff radii of fully transparent pixels.
+        const int regionShadowPadding = regionShadowOpacity > 0.0f ? shadowPadding : 0;
         const QRect compositeRect = targetRect
-                                        .adjusted(-shadowPadding, -shadowPadding, shadowPadding,
-                                            shadowPadding)
+                                        .adjusted(-regionShadowPadding, -regionShadowPadding,
+                                            regionShadowPadding, regionShadowPadding)
                                         .intersected(surfaceRect);
 
         const QRect captureRect = targetRect
@@ -239,6 +245,12 @@ bool CanvasBackdropRenderer::render(GLuint sourceFbo, GLuint defaultFbo, int sur
         item.cornerRadius
             = static_cast<float>(std::max<qreal>(0.0, region.cornerRadius * cornerScale));
         item.opacity = static_cast<float>(std::clamp<qreal>(region.opacity, 0.0, 1.0));
+        item.shadowOpacity = regionShadowOpacity;
+        item.refractionStrength
+            = static_cast<float>(std::max<qreal>(0.0, region.refractionStrength));
+        item.frostLevels = kFrostEnabled
+            ? std::clamp(region.frostLevels < 0 ? kBlurLevels : region.frostLevels, 0, kBlurLevels)
+            : 0;
         item.targetIndex = targetIndex;
         if (region.surfaceTint.isValid()) {
             item.tintR = static_cast<float>(region.surfaceTint.redF());
@@ -294,14 +306,14 @@ bool CanvasBackdropRenderer::render(GLuint sourceFbo, GLuint defaultFbo, int sur
     for (const PreparedRegion& item : prepared) {
         RegionTarget& target = m_targets[item.targetIndex];
 
-        if (kFrostEnabled) {
+        if (item.frostLevels > 0) {
             // Contracting half of the dual filter. Step 0 reads the captured half
             // and decodes it out of sRGB; every step after that reads the level
             // above it, already linear, at five taps.
             m_downsampleProgram->use();
             m_downsampleProgram->setUniform("uSource", 0);
             m_downsampleProgram->setUniform("uOffset", kBlurSampleOffset);
-            for (int level = 0; level < kBlurLevels; ++level) {
+            for (int level = 0; level < item.frostLevels; ++level) {
                 const bool fromCapture = level == 0;
                 const GLuint sourceTexture
                     = fromCapture ? target.halfTexture : target.levelTexture[level - 1];
@@ -326,7 +338,7 @@ bool CanvasBackdropRenderer::render(GLuint sourceFbo, GLuint defaultFbo, int sur
             m_upsampleProgram->use();
             m_upsampleProgram->setUniform("uSource", 0);
             m_upsampleProgram->setUniform("uOffset", kBlurSampleOffset);
-            for (int level = kBlurLevels - 1; level > 0; --level) {
+            for (int level = item.frostLevels - 1; level > 0; --level) {
                 m_gl->glBindFramebuffer(GL_FRAMEBUFFER, target.levelFbo[level - 1]);
                 m_gl->glViewport(0, 0, target.levelWidth[level - 1], target.levelHeight[level - 1]);
                 m_upsampleProgram->setUniform("uHalfPixel",
@@ -349,15 +361,15 @@ bool CanvasBackdropRenderer::render(GLuint sourceFbo, GLuint defaultFbo, int sur
         m_compositeProgram->setUniform("uSurfaceTint", item.tintR, item.tintG, item.tintB);
         m_compositeProgram->setUniform("uSurfaceTintAmount", item.tintAmount);
         m_compositeProgram->setUniform("uRefractionDepth", refractionDepth);
-        m_compositeProgram->setUniform("uRefractionShift", refractionShift);
+        m_compositeProgram->setUniform(
+            "uRefractionShift", refractionShift * item.refractionStrength);
         m_compositeProgram->setUniform("uMaxTilt", kMaxSurfaceTilt);
         m_compositeProgram->setUniform("uDispersion", kChromaticDispersion);
-        m_compositeProgram->setUniform("uSplay", kSplay);
+        m_compositeProgram->setUniform("uSplay", kSplay * item.refractionStrength);
         m_compositeProgram->setUniform("uMaxSplayShift", kMaxSplayShiftDevicePx);
-        // With the frost off the composite reads the capture itself, which is
-        // still sRGB encoded - the pyramid pass that would have decoded it did
-        // not run.
-        m_compositeProgram->setUniform("uDecodeSrgb", kFrostEnabled ? 0 : 1);
+        // With no pyramid the composite reads the capture itself, which is
+        // still sRGB encoded - the pass that would have decoded it did not run.
+        m_compositeProgram->setUniform("uDecodeSrgb", item.frostLevels > 0 ? 0 : 1);
         m_compositeProgram->setUniform("uEdgeInset", kSilhouetteInsetLogicalPx * deviceScale);
         m_compositeProgram->setUniform("uSourceUvMin", item.sourceUvMinX, item.sourceUvMinY);
         m_compositeProgram->setUniform("uSourceUvMax", item.sourceUvMaxX, item.sourceUvMaxY);
@@ -375,9 +387,10 @@ bool CanvasBackdropRenderer::render(GLuint sourceFbo, GLuint defaultFbo, int sur
         m_compositeProgram->setUniform("uOpacity", item.opacity);
         m_compositeProgram->setUniform("uShadowOffset", 0.0f, -shadowOffsetY);
         m_compositeProgram->setUniform("uShadowFalloff", shadowFalloff);
-        m_compositeProgram->setUniform("uShadowOpacity", kShadowOpacity);
+        m_compositeProgram->setUniform("uShadowOpacity", item.shadowOpacity);
         m_compositeProgram->setUniform("uShadowReach", kShadowReachInFalloffRadii);
-        m_gl->glBindTextureUnit(0, kFrostEnabled ? target.levelTexture[0] : target.halfTexture);
+        m_gl->glBindTextureUnit(
+            0, item.frostLevels > 0 ? target.levelTexture[0] : target.halfTexture);
         drawFullscreen();
         m_gl->glDisable(GL_BLEND);
     }

@@ -28,6 +28,21 @@ struct CanvasBackdropRegion {
     qreal opacity = 1.0;
     /// Theme surface the frost is tinted towards. Invalid leaves it untinted.
     QColor surfaceTint;
+    /// Levels of the frost pyramid to run, clamped to the renderer's own
+    /// maximum; negative takes that maximum. The reach is dominated by how far
+    /// down the pyramid goes, so one level below the default reads as roughly
+    /// half the blur. Zero skips the pyramid and leaves the region on the
+    /// captured half, which is a mild reduction rather than none at all.
+    int frostLevels = -1;
+    /// Multiplier on the analytic drop shadow. Zero removes the shadow, and
+    /// with it the composite padding it needed.
+    qreal shadowStrength = 1.0;
+    /// Multiplier on how hard the lens bends what is behind it: it scales the
+    /// optical thickness and the screen-space splay together, so the plate
+    /// stays the same shape and only distorts less. The lens DEPTH is not
+    /// scaled - that is how wide the curved edge is, not how strong it is, and
+    /// moving it would change the silhouette the tint has to match.
+    qreal refractionStrength = 1.0;
 };
 
 /// Composites same-frame backdrop-blur regions directly into the canvas target.
@@ -165,6 +180,9 @@ private:
         float tintG = 0.0f;
         float tintB = 0.0f;
         float tintAmount = 0.0f;
+        int frostLevels = 0;
+        float shadowOpacity = 0.0f;
+        float refractionStrength = 1.0f;
         float sourceUvMinX = 0.0f;
         float sourceUvMinY = 0.0f;
         float sourceUvMaxX = 1.0f;

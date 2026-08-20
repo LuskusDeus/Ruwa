@@ -5,8 +5,10 @@
 #define RUWA_UI_WIDGETS_HOMEPAGE_CONTENT_WELCOME_WELCOMEBANNER_H
 
 #include <QWidget>
+#include <QImage>
 #include <QPixmap>
 #include <QRectF>
+#include <QString>
 
 class QLabel;
 class QEvent;
@@ -81,6 +83,10 @@ private:
     int bannerCardWidth() const;
     /// Start the split animation toward @p target (0 = hidden, 1 = revealed).
     void animateSplitTo(qreal target);
+    /// Draws the banner card: background image, the glass plate under the Open
+    /// button, and the rounded mask. @p plateRect is the button in card
+    /// coordinates, empty when there is no button to put glass under.
+    QImage composeBannerCard(int cardWidth, const QRect& plateRect, bool lightUi) const;
     /// (Re)start the delayed reveal countdown, anchored to the current on-screen show.
     void startRevealCountdown();
 
@@ -109,6 +115,11 @@ private:
     bool m_updatePanelRequested { false };
     /// True once the reveal has actually fired; stops it from replaying on re-show.
     bool m_updatePanelRevealed { false };
+    /// Last composed card and the key describing what it was composed from.
+    /// The glass is a GPU round trip, so repaints that change none of those
+    /// inputs - every hover frame of the buttons drawn on top of it - reuse it.
+    QImage m_cardCache;
+    QString m_cardCacheKey;
 };
 
 } // namespace ruwa::ui::widgets
