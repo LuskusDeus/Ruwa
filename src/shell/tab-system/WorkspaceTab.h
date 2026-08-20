@@ -127,7 +127,7 @@ public:
             = ruwa::core::canvas::CanvasBoundsMode::Bounded;
         ruwa::core::serialization::ProjectData::ExportFrame exportFrame;
         QString templateType;
-        QColor backgroundColor = Qt::white;
+        QColor backgroundColor { 0xD9, 0xD9, 0xD9 };
         /// Per-document tile pixel storage format chosen at New Project (8/16/32-bit).
         /// Slice 1: captured + serialized; grid storage still follows the global knob.
         aether::TilePixelFormat tileFormat = aether::kDefaultTileFormat;

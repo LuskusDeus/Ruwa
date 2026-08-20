@@ -145,7 +145,7 @@ private:
     QSpacerItem* m_lockColumnTopSpacer { nullptr };
     qreal m_lockedAspectRatio { 0.0 };
     bool m_syncingLockedDimensions { false };
-    QColor m_backgroundColor { Qt::white };
+    QColor m_backgroundColor { 0xD9, 0xD9, 0xD9 };
 };
 
 } // namespace ruwa::ui::widgets
