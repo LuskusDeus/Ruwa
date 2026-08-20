@@ -5,6 +5,7 @@
 #define RUWA_CORE_LAYERS_LAYERDATA_H
 
 #include <QString>
+#include <QRegularExpression>
 #include <QUuid>
 #include <QPixmap>
 #include <QColor>
@@ -604,11 +605,29 @@ struct LayerData : public std::enable_shared_from_this<LayerData> {
 
     static QString clampedName(const QString& name) { return name.left(kMaxNameLength); }
 
+    // Copying a copy bumps the counter instead of stacking suffixes:
+    // "Layer" -> "Layer (copy)" -> "Layer (copy 2)" -> "Layer (copy 3)".
     static QString copiedName(const QString& sourceName)
     {
-        const QString suffix = QStringLiteral(" (copy)");
+        static const QRegularExpression copySuffix(
+            QStringLiteral(R"(\s*\(copy(?:\s+(\d+))?\)$)"),
+            QRegularExpression::CaseInsensitiveOption);
+
+        QString base = sourceName;
+        int nextIndex = 1;
+        const QRegularExpressionMatch match = copySuffix.match(sourceName);
+        if (match.hasMatch()) {
+            base = sourceName.left(match.capturedStart());
+            const int current = match.captured(1).isEmpty() ? 1 : match.captured(1).toInt();
+            // A truncated name may have lost its digits; never go backwards.
+            nextIndex = qMax(2, current + 1);
+        }
+
+        const QString suffix = (nextIndex <= 1)
+            ? QStringLiteral(" (copy)")
+            : QStringLiteral(" (copy %1)").arg(nextIndex);
         const int baseLimit = qMax(0, kMaxNameLength - suffix.size());
-        return clampedName(sourceName.left(baseLimit) + suffix);
+        return clampedName(base.left(baseLimit) + suffix);
     }
 
     static std::shared_ptr<LayerData> createLayer(const QString& name = "Layer")
