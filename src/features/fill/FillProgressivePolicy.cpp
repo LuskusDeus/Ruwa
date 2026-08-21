@@ -190,22 +190,61 @@ void showFillRadiusLimitPopup(
 
 void writeProgressiveFillPixel(const aether::FloodFillResult::RawTileMap& sourceTiles,
     aether::FloodFillResult& result, int x, int y, uint8_t fillR, uint8_t fillG, uint8_t fillB,
-    uint8_t fillA, bool preserveSourceEdge, aether::TilePixelFormat contentFormat)
+    uint8_t fillA, bool preserveSourceEdge, uint8_t capAlpha,
+    aether::TilePixelFormat contentFormat)
 {
+    if (capAlpha == 0) {
+        return;
+    }
+
     const aether::TileKey key { x / static_cast<int>(aether::TILE_SIZE),
         y / static_cast<int>(aether::TILE_SIZE) };
     const uint32_t localX = static_cast<uint32_t>(x % static_cast<int>(aether::TILE_SIZE));
     const uint32_t localY = static_cast<uint32_t>(y % static_cast<int>(aether::TILE_SIZE));
 
-    std::vector<uint8_t>& resultTile
-        = aether::ensureResultTile(sourceTiles, result, key, contentFormat);
     aether::PremultPixel out;
     if (preserveSourceEdge) {
         const aether::PremultPixel src = aether::sampleRawPixel(sourceTiles, x, y, contentFormat);
         out = progressiveCompositeOver(src, fillR, fillG, fillB, fillA);
     } else {
-        out = aether::PremultPixel { fillR, fillG, fillB, fillA };
+        // Premultiplied storage: a straight write of the fill color would show
+        // the preview brighter than the committed result for a partly
+        // transparent fill.
+        out = aether::PremultPixel {
+            static_cast<uint8_t>((static_cast<uint32_t>(fillR) * fillA + 127u) / 255u),
+            static_cast<uint8_t>((static_cast<uint32_t>(fillG) * fillA + 127u) / 255u),
+            static_cast<uint8_t>((static_cast<uint32_t>(fillB) * fillA + 127u) / 255u), fillA
+        };
     }
+
+    if (capAlpha != 255) {
+        // Partially selected pixel: preview exactly what the commit will write —
+        // the fill composited over the source at its selection strength, then
+        // clamped to the coverage ceiling (FloodFill.cpp ::
+        // applyMaskTileToMutation).
+        const aether::PremultPixel src = aether::sampleRawPixel(sourceTiles, x, y, contentFormat);
+        if (!preserveSourceEdge) {
+            const uint32_t strength = aether::fillSelectionSourceStrength(capAlpha, src.a);
+            const int sourceFillA
+                = static_cast<int>((static_cast<uint32_t>(fillA) * strength + 127u) / 255u);
+            const int invFillA = 255 - sourceFillA;
+            auto over = [&](uint8_t fillChannel, uint8_t srcChannel) -> uint8_t {
+                const int premul = (static_cast<int>(fillChannel) * sourceFillA + 127) / 255;
+                return static_cast<uint8_t>(std::clamp(
+                    premul + ((static_cast<int>(srcChannel) * invFillA + 127) / 255), 0, 255));
+            };
+            out.r = over(fillR, src.r);
+            out.g = over(fillG, src.g);
+            out.b = over(fillB, src.b);
+            out.a = static_cast<uint8_t>(std::clamp(
+                sourceFillA + ((static_cast<int>(src.a) * invFillA + 127) / 255), 0, 255));
+        }
+        aether::fillApplySelectionAlphaCap(out.r, out.g, out.b, out.a,
+            aether::fillSelectionAlphaCeiling(capAlpha, src.a, fillA));
+    }
+
+    std::vector<uint8_t>& resultTile
+        = aether::ensureResultTile(sourceTiles, result, key, contentFormat);
     aether::setRawPixel(resultTile, localX, localY, out.r, out.g, out.b, out.a, contentFormat);
     aether::writeMaskPixel(result.fillMaskTiles, key, localX, localY);
     ++result.pixelsFilled;

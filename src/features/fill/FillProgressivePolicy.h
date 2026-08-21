@@ -145,9 +145,13 @@ float estimateFillRadiusFromSeed(const TileGrid* sourceGrid, const TileGrid* sel
     float radiusLimit);
 void showFillRadiusLimitPopup(
     QWidget* context, OpenGLCanvasWidget::FillAlgorithm algorithm, float estimatedRadius);
+/// `capAlpha` is the selection coverage at (x, y) — a per-pixel alpha ceiling
+/// on the previewed pixel, so the progressive preview shows the same soft edge
+/// the commit produces. 255 = fully selected / no selection.
 void writeProgressiveFillPixel(const FloodFillResult::RawTileMap& sourceTiles,
     FloodFillResult& result, int x, int y, uint8_t fillR, uint8_t fillG, uint8_t fillB,
-    uint8_t fillA, bool preserveSourceEdge, TilePixelFormat contentFormat = kDefaultTileFormat);
+    uint8_t fillA, bool preserveSourceEdge, uint8_t capAlpha = 255,
+    TilePixelFormat contentFormat = kDefaultTileFormat);
 bool progressiveBoundsFromKeys(const std::unordered_set<TileKey, TileKeyHash>& keys, int& minTileX,
     int& minTileY, int& maxTileX, int& maxTileY);
 bool progressiveBoundsFromKeys(

@@ -65,6 +65,96 @@ inline uint8_t fillMaskAlphaAt(const TileGrid* grid, int32_t x, int32_t y)
     return tile->pixels()[idx + 3];
 }
 
+/// Selection coverage acts as a per-pixel **alpha ceiling** on every fill
+/// result (the same rule the brush commit uses for soft selections, see
+/// composite.frag.glsl :: uClipMaskAsAlphaCap). Clamps a premultiplied result
+/// to `capAlpha`, scaling RGB proportionally so the unmultiplied color stays
+/// stable. `capAlpha == 255` is a no-op.
+///
+/// Callers pass `fillSelectionAlphaCeiling(coverage, destinationAlpha,
+/// fillAlpha)`, not the raw coverage: the ceiling stops a fill from *adding*
+/// alpha beyond what the selection covers, it never *reduces* alpha that was
+/// already there.
+inline void fillApplySelectionAlphaCap(
+    uint8_t& r, uint8_t& g, uint8_t& b, uint8_t& a, uint8_t capAlpha)
+{
+    if (a <= capAlpha)
+        return;
+    if (a == 0) {
+        r = g = b = 0;
+        return;
+    }
+    const uint32_t num = static_cast<uint32_t>(capAlpha);
+    const uint32_t den = static_cast<uint32_t>(a);
+    r = static_cast<uint8_t>(static_cast<uint32_t>(r) * num / den);
+    g = static_cast<uint8_t>(static_cast<uint32_t>(g) * num / den);
+    b = static_cast<uint8_t>(static_cast<uint32_t>(b) * num / den);
+    a = capAlpha;
+}
+
+/// Strength (0..255) the fill source is applied with at a partially selected
+/// pixel: `min(1, coverage / destinationAlpha)`.
+///
+/// Two different jobs hide behind one coverage value. Where coverage reaches
+/// the destination's own alpha, the selection describes the *shape* being
+/// filled (a content selection traces the layer's own soft alpha; an empty
+/// pixel inside a feathered edge has nothing to protect) — the fill goes down
+/// at full strength and the ceiling below trims its alpha, reproducing the
+/// silhouette in the new color instead of stacking a second layer of alpha on
+/// top of it. Where the destination is denser than the coverage, the selection
+/// describes an *edge* across existing content (the antialiased rim of a lasso
+/// over an opaque area) — the fill is scaled down so the boundary blends
+/// instead of cutting a hard step.
+///
+/// The ratio matters, not a branch between the two: a selection mask is a
+/// quantized copy of the coverage it describes, so `coverage` and
+/// `destinationAlpha` cross each other back and forth all along a soft
+/// gradient. Switching behaviour on that comparison posterized the fill into
+/// visible contour bands, one per quantization step. As a ratio the two cases
+/// meet continuously at coverage == destinationAlpha, where both give 255.
+///
+/// Fully covered pixels always return 255, so hard selections keep plain
+/// src-over.
+inline uint8_t fillSelectionSourceStrength(uint8_t coverage, uint8_t destinationAlpha)
+{
+    if (destinationAlpha == 0 || coverage >= destinationAlpha) {
+        return 255;
+    }
+    const uint32_t scaled = (static_cast<uint32_t>(coverage) * 255u
+                                + static_cast<uint32_t>(destinationAlpha) / 2u)
+        / static_cast<uint32_t>(destinationAlpha);
+    return static_cast<uint8_t>(std::min<uint32_t>(scaled, 255u));
+}
+
+/// Per-pixel alpha ceiling for a fill:
+///
+///     ceiling = destinationAlpha + fillAlpha * max(0, coverage - destinationAlpha)
+///
+/// i.e. the fill may pull a pixel's alpha from where it is towards the
+/// selection's coverage, in proportion to its own alpha, and only upwards. A
+/// pixel selected at 50% that already holds opaque content keeps its alpha and
+/// merely takes the fill color; a pixel selected at 50% and filled with a 50%
+/// color lands at 25%, so feathered edges still fade out.
+///
+/// Two invariants this has to satisfy, both verified in the fill tests:
+///   * `coverage == 255` reproduces the plain src-over alpha exactly (integer
+///     arithmetic included), so hard selections never enter the clamp at all.
+///   * repeated fills converge instead of stacking, which is the bug the
+///     ceiling exists for.
+inline uint8_t fillSelectionAlphaCeiling(
+    uint8_t coverage, uint8_t destinationAlpha, uint8_t fillAlpha)
+{
+    if (coverage <= destinationAlpha) {
+        return destinationAlpha;
+    }
+    const uint32_t gain = (static_cast<uint32_t>(fillAlpha)
+                                  * static_cast<uint32_t>(coverage - destinationAlpha)
+                              + 127u)
+        / 255u;
+    return static_cast<uint8_t>(
+        std::min<uint32_t>(static_cast<uint32_t>(destinationAlpha) + gain, 255u));
+}
+
 /// Sample pixel from grid at (x, y). Returns false if outside bounds.
 /// If tile is missing, returns true with r=g=b=a=0 (transparent).
 inline bool samplePixelAt(

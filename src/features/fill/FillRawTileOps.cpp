@@ -392,9 +392,26 @@ void clipFloodFillResultToSelectionMask(const aether::FloodFillResult::RawTileMa
                 if (maskTile[idx + 3] == 0) {
                     continue;
                 }
-                if (!selectionTile || (*selectionTile)[idx + 3] == 0) {
+                if (!selectionTile) {
                     continue;
                 }
+                // Selection coverage is a per-pixel alpha CEILING, not a binary
+                // gate (same rule as FloodFill.cpp :: applyMaskTileToMutation):
+                // clipping on `!= 0` alone stamped the fill at full strength
+                // over soft selection edges.
+                const uint8_t coverage = (*selectionTile)[idx + 3];
+                if (coverage == 0) {
+                    continue;
+                }
+
+                float sourcePx[4] = { 0.0f, 0.0f, 0.0f, 0.0f };
+                if (sourceTile) {
+                    readTilePixelF(sourceTile->data(), fmt, localX, localY, sourcePx);
+                }
+                const uint8_t sourceAlpha = fillQuantizeChannel(sourcePx[3]);
+                const float strength
+                    = static_cast<float>(fillSelectionSourceStrength(coverage, sourceAlpha))
+                    / 255.0f;
 
                 tileHasSelectedChanges = true;
                 if (tileRemovedByFill) {
@@ -402,9 +419,28 @@ void clipFloodFillResultToSelectionMask(const aether::FloodFillResult::RawTileMa
                 } else if (filledAfterTile) {
                     float f[4];
                     readTilePixelF(filledAfterTile->data(), fmt, localX, localY, f);
-                    setRawPixel(clippedAfterTile, localX, localY, fillQuantizeChannel(f[0]),
-                        fillQuantizeChannel(f[1]), fillQuantizeChannel(f[2]),
-                        fillQuantizeChannel(f[3]), fmt);
+                    // The fill was computed unclipped (source + full-strength
+                    // fill). Applying it at `strength` is exactly the linear
+                    // interpolation between the source and that result, both
+                    // being premultiplied.
+                    uint8_t r = fillQuantizeChannel(sourcePx[0] + (f[0] - sourcePx[0]) * strength);
+                    uint8_t g = fillQuantizeChannel(sourcePx[1] + (f[1] - sourcePx[1]) * strength);
+                    uint8_t b = fillQuantizeChannel(sourcePx[2] + (f[2] - sourcePx[2]) * strength);
+                    uint8_t a = fillQuantizeChannel(sourcePx[3] + (f[3] - sourcePx[3]) * strength);
+                    // This pass never sees the fill color, only the result of
+                    // applying it, so the ceiling's `fillAlpha` term is
+                    // recovered from the alpha the fill added at full coverage:
+                    // f.a - s.a == fillAlpha * (1 - s.a).
+                    uint8_t capAlpha = sourceAlpha;
+                    if (coverage > sourceAlpha && sourcePx[3] < 1.0f) {
+                        const float added = std::max(0.0f, f[3] - sourcePx[3]);
+                        const float coverageF = static_cast<float>(coverage) / 255.0f;
+                        capAlpha = fillQuantizeChannel(sourcePx[3]
+                            + added * (coverageF - sourcePx[3]) / (1.0f - sourcePx[3]));
+                        capAlpha = std::max(capAlpha, sourceAlpha);
+                    }
+                    fillApplySelectionAlphaCap(r, g, b, a, capAlpha);
+                    setRawPixel(clippedAfterTile, localX, localY, r, g, b, a, fmt);
                 }
 
                 writeMaskPixel(tileMaskTiles, key, localX, localY);

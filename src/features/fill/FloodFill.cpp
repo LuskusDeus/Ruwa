@@ -136,20 +136,8 @@ inline uint8_t selectionAlphaAtLocal(
 
 inline PremultPixel applyFillAlphaCap(const PremultPixel& blended, uint8_t capAlpha)
 {
-    if (blended.a <= capAlpha) {
-        return blended;
-    }
-    PremultPixel out;
-    out.a = capAlpha;
-    if (blended.a == 0) {
-        out.r = out.g = out.b = 0;
-        return out;
-    }
-    const uint32_t num = static_cast<uint32_t>(capAlpha);
-    const uint32_t den = static_cast<uint32_t>(blended.a);
-    out.r = static_cast<uint8_t>(static_cast<uint32_t>(blended.r) * num / den);
-    out.g = static_cast<uint8_t>(static_cast<uint32_t>(blended.g) * num / den);
-    out.b = static_cast<uint8_t>(static_cast<uint32_t>(blended.b) * num / den);
+    PremultPixel out = blended;
+    fillApplySelectionAlphaCap(out.r, out.g, out.b, out.a, capAlpha);
     return out;
 }
 
@@ -547,17 +535,17 @@ inline void applyMaskTileToMutation(TileFillMutation& mutation,
 
             const PremultPixel originalPx = samplePixel(
                 mutation.hasBefore ? &mutation.beforeTile : nullptr, localX, localY, fmt);
-            const uint8_t capAlpha
+            const uint8_t coverage
                 = selectionClipping ? selectionAlphaAtLocal(selectionTile, localX, localY) : 255;
-            if (!preserveDestinationAlpha && selectionClipping && originalPx.a > capAlpha) {
-                // Pre-existing alpha already above the soft-mask cap; never reduce.
+            if (selectionClipping && coverage == 0) {
                 continue;
             }
+            const uint8_t capAlpha = fillSelectionAlphaCeiling(coverage, originalPx.a, fillA);
 
             PremultPixel blendedPx;
             if (preserveDestinationAlpha) {
                 const uint8_t effectiveFillA = selectionClipping
-                    ? static_cast<uint8_t>((static_cast<uint32_t>(fillA) * capAlpha + 127u) / 255u)
+                    ? static_cast<uint8_t>((static_cast<uint32_t>(fillA) * coverage + 127u) / 255u)
                     : fillA;
                 if (originalPx.a == 0 || effectiveFillA == 0) {
                     continue;
@@ -565,9 +553,13 @@ inline void applyMaskTileToMutation(TileFillMutation& mutation,
                 blendedPx
                     = compositeOverPreservingAlpha(originalPx, fillR, fillG, fillB, effectiveFillA);
             } else {
+                const uint32_t strength = fillSelectionSourceStrength(coverage, originalPx.a);
+                const uint8_t sourceFillA = selectionClipping
+                    ? static_cast<uint8_t>((static_cast<uint32_t>(fillA) * strength + 127u) / 255u)
+                    : fillA;
                 blendedPx = (fillMode == FillSemanticMode::Exterior)
-                    ? compositeUnder(originalPx, fillR, fillG, fillB, fillA)
-                    : compositeOver(originalPx, fillR, fillG, fillB, fillA);
+                    ? compositeUnder(originalPx, fillR, fillG, fillB, sourceFillA)
+                    : compositeOver(originalPx, fillR, fillG, fillB, sourceFillA);
                 if (selectionClipping) {
                     blendedPx = applyFillAlphaCap(blendedPx, capAlpha);
                 }

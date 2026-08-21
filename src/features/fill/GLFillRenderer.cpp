@@ -226,6 +226,28 @@ inline PremultPixel compositeUnder(
     return out;
 }
 
+// Fill alpha scaled by the strength a partially selected pixel takes the fill
+// source at (FloodFill.h :: fillSelectionSourceStrength).
+inline uint8_t scaledFillAlpha(uint8_t fillA, uint8_t coverage, uint8_t destinationAlpha)
+{
+    const uint32_t strength = fillSelectionSourceStrength(coverage, destinationAlpha);
+    return static_cast<uint8_t>((static_cast<uint32_t>(fillA) * strength + 127u) / 255u);
+}
+
+// Partial application of a RECOLOR (which keeps the source coverage) has to be
+// an interpolation towards the recolored pixel — scaling the fill alpha there
+// would eat into the alpha the recolor is supposed to preserve.
+inline PremultPixel mixPixel(const PremultPixel& from, const PremultPixel& to, uint32_t strength)
+{
+    auto mix = [strength](uint8_t a, uint8_t b) -> uint8_t {
+        return static_cast<uint8_t>((static_cast<uint32_t>(a) * (255u - strength)
+                                        + static_cast<uint32_t>(b) * strength + 127u)
+            / 255u);
+    };
+    return PremultPixel { mix(from.r, to.r), mix(from.g, to.g), mix(from.b, to.b),
+        mix(from.a, to.a) };
+}
+
 inline PremultPixel recolorWithCoverage(
     const PremultPixel& src, uint8_t fillR, uint8_t fillG, uint8_t fillB, uint8_t fillA)
 {
@@ -1640,10 +1662,37 @@ GpuFillResult GLFillRenderer::fillInternal(TileGrid& layerGrid, GLTileRenderer* 
         return result;
     }
 
+    // Selection coverage is a per-pixel alpha CEILING on the fill result, not a
+    // binary gate: the compute pass only decides WHERE the fill may spread
+    // (alpha > 0), so partially selected pixels must still be composited at
+    // their coverage here — same rule as the CPU fill path
+    // (FloodFill.cpp :: applyMaskTileToMutation).
+    const TileGrid* capMask = useSelectionMask ? selectionMask : nullptr;
+    // A tile that does not exist yet is not necessarily empty: mask grids carry
+    // a default fill (opaque black = hide-all), and getOrCreateTile below hands
+    // back exactly that. Blending against a zeroed pixel there would ignore it.
+    PremultPixel gridDefaultPx;
+    layerGrid.defaultFill(gridDefaultPx.r, gridDefaultPx.g, gridDefaultPx.b, gridDefaultPx.a);
+
     for (const TileKey& key : result.affectedTiles) {
         const std::vector<uint8_t>* directTile = nullptr;
         const std::vector<uint8_t>* preservedTile = nullptr;
         const std::vector<uint8_t>* sourceTile = nullptr;
+        // Selection mask tiles are always RGBA8 coverage.
+        const TileData* capTile = capMask ? capMask->getTile(key) : nullptr;
+        auto sampleSource = [&](uint32_t localX, uint32_t localY) -> PremultPixel {
+            return sourceTile ? samplePixel(sourceTile, localX, localY, contentFormat)
+                              : gridDefaultPx;
+        };
+        auto capAt = [&](uint32_t localX, uint32_t localY) -> uint8_t {
+            if (!capMask) {
+                return 255;
+            }
+            if (!capTile) {
+                return 0;
+            }
+            return capTile->pixels()[(localY * TILE_SIZE + localX) * TILE_CHANNELS + 3];
+        };
 
         if (auto it = directMaskTiles.find(key); it != directMaskTiles.end()) {
             directTile = &it->second;
@@ -1681,7 +1730,24 @@ GpuFillResult GLFillRenderer::fillInternal(TileGrid& layerGrid, GLTileRenderer* 
                         continue;
                     }
 
-                    writeContentPixelTile(tile, localX, localY, fillR, fillG, fillB, fillA);
+                    const uint8_t cap = capAt(localX, localY);
+                    if (cap == 0) {
+                        continue;
+                    }
+                    // Opaque fill over a fully selected pixel: the composite
+                    // below provably reduces to the fill color, so keep the
+                    // straight write (it is the hot path for big regions).
+                    if (cap == 255 && fillA == 255) {
+                        writeContentPixelTile(tile, localX, localY, fillR, fillG, fillB, 255);
+                    } else {
+                        const PremultPixel originalPx = sampleSource(localX, localY);
+                        PremultPixel blendedPx = compositeOver(originalPx, fillR, fillG, fillB,
+                            scaledFillAlpha(fillA, cap, originalPx.a));
+                        fillApplySelectionAlphaCap(blendedPx.r, blendedPx.g, blendedPx.b,
+                            blendedPx.a, fillSelectionAlphaCeiling(cap, originalPx.a, fillA));
+                        writeContentPixelTile(tile, localX, localY, blendedPx.r, blendedPx.g,
+                            blendedPx.b, blendedPx.a);
+                    }
                     writeMaskPixel(result, key, localX, localY);
                     ++result.pixelsFilled;
                 }
@@ -1693,11 +1759,19 @@ GpuFillResult GLFillRenderer::fillInternal(TileGrid& layerGrid, GLTileRenderer* 
                         continue;
                     }
 
-                    const PremultPixel originalPx
-                        = samplePixel(sourceTile, localX, localY, contentFormat);
-                    const PremultPixel blendedPx = (fillMode == FillSemanticMode::Stroke)
-                        ? recolorWithCoverage(originalPx, fillR, fillG, fillB, fillA)
-                        : compositeUnder(originalPx, fillR, fillG, fillB, fillA);
+                    const uint8_t cap = capAt(localX, localY);
+                    if (cap == 0) {
+                        continue;
+                    }
+                    const PremultPixel originalPx = sampleSource(localX, localY);
+                    PremultPixel blendedPx = (fillMode == FillSemanticMode::Stroke)
+                        ? mixPixel(originalPx,
+                              recolorWithCoverage(originalPx, fillR, fillG, fillB, fillA),
+                              fillSelectionSourceStrength(cap, originalPx.a))
+                        : compositeUnder(originalPx, fillR, fillG, fillB,
+                              scaledFillAlpha(fillA, cap, originalPx.a));
+                    fillApplySelectionAlphaCap(blendedPx.r, blendedPx.g, blendedPx.b, blendedPx.a,
+                        fillSelectionAlphaCeiling(cap, originalPx.a, fillA));
                     writeContentPixelTile(
                         tile, localX, localY, blendedPx.r, blendedPx.g, blendedPx.b, blendedPx.a);
                     writeMaskPixel(result, key, localX, localY);
@@ -1734,8 +1808,22 @@ GpuFillResult GLFillRenderer::fillInternal(TileGrid& layerGrid, GLTileRenderer* 
                     continue;
                 }
 
-                writeContentPixelRaw(
-                    previewTile, localX, localY, fillR, fillG, fillB, fillA, contentFormat);
+                const uint8_t cap = capAt(localX, localY);
+                if (cap == 0) {
+                    continue;
+                }
+                if (cap == 255 && fillA == 255) {
+                    writeContentPixelRaw(
+                        previewTile, localX, localY, fillR, fillG, fillB, 255, contentFormat);
+                } else {
+                    const PremultPixel originalPx = sampleSource(localX, localY);
+                    PremultPixel blendedPx = compositeOver(originalPx, fillR, fillG, fillB,
+                        scaledFillAlpha(fillA, cap, originalPx.a));
+                    fillApplySelectionAlphaCap(blendedPx.r, blendedPx.g, blendedPx.b, blendedPx.a,
+                        fillSelectionAlphaCeiling(cap, originalPx.a, fillA));
+                    writeContentPixelRaw(previewTile, localX, localY, blendedPx.r, blendedPx.g,
+                        blendedPx.b, blendedPx.a, contentFormat);
+                }
                 writeMaskPixel(result, key, localX, localY);
                 ++result.pixelsFilled;
             }
@@ -1747,11 +1835,19 @@ GpuFillResult GLFillRenderer::fillInternal(TileGrid& layerGrid, GLTileRenderer* 
                     continue;
                 }
 
-                const PremultPixel originalPx
-                    = samplePixel(sourceTile, localX, localY, contentFormat);
-                const PremultPixel blendedPx = (fillMode == FillSemanticMode::Stroke)
-                    ? recolorWithCoverage(originalPx, fillR, fillG, fillB, fillA)
-                    : compositeUnder(originalPx, fillR, fillG, fillB, fillA);
+                const uint8_t cap = capAt(localX, localY);
+                if (cap == 0) {
+                    continue;
+                }
+                const PremultPixel originalPx = sampleSource(localX, localY);
+                PremultPixel blendedPx = (fillMode == FillSemanticMode::Stroke)
+                    ? mixPixel(originalPx,
+                          recolorWithCoverage(originalPx, fillR, fillG, fillB, fillA),
+                          fillSelectionSourceStrength(cap, originalPx.a))
+                    : compositeUnder(originalPx, fillR, fillG, fillB,
+                          scaledFillAlpha(fillA, cap, originalPx.a));
+                fillApplySelectionAlphaCap(blendedPx.r, blendedPx.g, blendedPx.b, blendedPx.a,
+                    fillSelectionAlphaCeiling(cap, originalPx.a, fillA));
                 writeContentPixelRaw(previewTile, localX, localY, blendedPx.r, blendedPx.g,
                     blendedPx.b, blendedPx.a, contentFormat);
                 writeMaskPixel(result, key, localX, localY);

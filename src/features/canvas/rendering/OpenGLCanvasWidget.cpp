@@ -5196,6 +5196,23 @@ bool OpenGLCanvasWidget::doFillSelectionWithColor(const QColor& color)
     const float fillPRF = static_cast<float>(fillPR) / 255.0f;
     const float fillPGF = static_cast<float>(fillPG) / 255.0f;
     const float fillPBF = static_cast<float>(fillPB) / 255.0f;
+    // Straight (unpremultiplied) fill color for the alpha-locked path, which
+    // recolors existing pixels instead of compositing new coverage on top.
+    const float fillRF = static_cast<float>(fillR) / 255.0f;
+    const float fillGF = static_cast<float>(fillG) / 255.0f;
+    const float fillBF = static_cast<float>(fillB) / 255.0f;
+    // Alpha lock applies to the layer's pixels only; a mask target has none.
+    // (A mask's alpha is its own painted coverage, not a silhouette.)
+    const bool preserveDestinationAlpha = !maskTarget && layer->alphaLock;
+    // Partial selection coverage is not a plain opacity multiplier: it is the
+    // fill's per-pixel alpha CEILING, and the source strength depends on what
+    // is underneath (FloodFill.h :: fillSelectionSourceStrength /
+    // fillSelectionAlphaCeiling, the same rule the fill tools and the brush
+    // commit use). Multiplying the fill by coverage on its own is what made a
+    // fill through a content-derived selection stack a second layer of alpha
+    // over the very pixels whose coverage defined that selection. Fully covered
+    // pixels are untouched by all of this, so hard selections keep plain
+    // src-over.
     const size_t contentTileBytes = aether::tileByteSize(targetGrid->format());
     constexpr float kFillEps = 0.5f / 255.0f; // ~half an 8-bit step = "unchanged"
     const bool clipToCanvas = hasFiniteDocumentBounds();
@@ -5229,13 +5246,45 @@ bool OpenGLCanvasWidget::doFillSelectionWithColor(const QColor& color)
                     continue;
 
                 const float cov = static_cast<float>(maskA) / 255.0f;
-                const float srcA = fillAF * cov; // masked source alpha (premult)
-                if (!dstTile && srcA <= 0.0f)
+                if (!dstTile && (fillA == 0 || preserveDestinationAlpha))
                     continue;
                 if (!dstTile) {
                     dstTile = &targetGrid->getOrCreateTile(key);
                     snapshot.createdTiles.insert(key);
                 }
+
+                float d[4];
+                aether::readTilePixelF(*dstTile, localX, localY, d);
+                if (preserveDestinationAlpha && d[3] <= 0.0f)
+                    continue;
+
+                // Source strength = min(1, coverage / destination alpha), see
+                // FloodFill.h :: fillSelectionSourceStrength. Where the
+                // destination is denser than the selection, coverage describes
+                // an EDGE across existing content and scales the fill down so
+                // the boundary blends; where it is not (an empty pixel, or a
+                // content selection tracing this layer's own soft alpha) the
+                // fill goes down at full strength and the ceiling below trims
+                // it back to the selected coverage. Deliberately a ratio and
+                // not a branch on `d[3] > cov`: the mask is a quantized copy of
+                // the alpha it traces, so the two cross repeatedly along a soft
+                // gradient and a branch posterizes the fill into contour bands.
+                float strength = 1.0f;
+                if (preserveDestinationAlpha) {
+                    // Alpha lock keeps the silhouette, so coverage is free to
+                    // act as a plain opacity on the recolor (matching
+                    // FloodFill.cpp's alpha-locked fill).
+                    strength = cov;
+                } else if (d[3] > cov && d[3] > 0.0f) {
+                    strength = std::min(1.0f, cov / d[3]);
+                }
+                const float srcA = fillAF * strength;
+                // Ceiling: the fill may pull alpha from where it is towards the
+                // coverage, by its own alpha, and only upwards. With an opaque
+                // fill that is max(cov, d), and with coverage 1 it is exactly
+                // the plain src-over alpha, so the clamp cannot fire on a hard
+                // selection. See FloodFill.h :: fillSelectionAlphaCeiling.
+                const float alphaCeiling = d[3] + fillAF * std::max(0.0f, cov - d[3]);
 
                 if (!capturedBefore && hadTile) {
                     auto& before = snapshot.beforeTiles[key];
@@ -5244,14 +5293,31 @@ bool OpenGLCanvasWidget::doFillSelectionWithColor(const QColor& color)
                     capturedBefore = true;
                 }
 
-                float d[4];
-                aether::readTilePixelF(*dstTile, localX, localY, d);
-                const float srcPR = fillPRF * cov;
-                const float srcPG = fillPGF * cov;
-                const float srcPB = fillPBF * cov;
                 const float inv = 1.0f - srcA;
-                const float out[4] = { srcPR + d[0] * inv, srcPG + d[1] * inv, srcPB + d[2] * inv,
-                    srcA + d[3] * inv };
+                float out[4];
+                if (preserveDestinationAlpha) {
+                    // Alpha lock: recolor what is already there, leave the
+                    // silhouette untouched. Premultiplied storage, so the mixed
+                    // straight color is re-multiplied by the kept alpha.
+                    out[0] = fillRF * srcA * d[3] + d[0] * inv;
+                    out[1] = fillGF * srcA * d[3] + d[1] * inv;
+                    out[2] = fillBF * srcA * d[3] + d[2] * inv;
+                    out[3] = d[3];
+                } else {
+                    out[0] = fillPRF * strength + d[0] * inv;
+                    out[1] = fillPGF * strength + d[1] * inv;
+                    out[2] = fillPBF * strength + d[2] * inv;
+                    out[3] = srcA + d[3] * inv;
+                    if (out[3] > alphaCeiling + kFillEps) {
+                        // Clamp to the coverage ceiling, scaling RGB so the
+                        // visible color stays stable under premultiplied storage.
+                        const float scale = (out[3] > 0.0f) ? (alphaCeiling / out[3]) : 0.0f;
+                        out[0] *= scale;
+                        out[1] *= scale;
+                        out[2] *= scale;
+                        out[3] = alphaCeiling;
+                    }
+                }
 
                 if (std::abs(out[0] - d[0]) < kFillEps && std::abs(out[1] - d[1]) < kFillEps
                     && std::abs(out[2] - d[2]) < kFillEps && std::abs(out[3] - d[3]) < kFillEps) {
@@ -6994,8 +7060,14 @@ void OpenGLCanvasWidget::startAsyncFillSession(const QUuid& layerId, FillAlgorit
                             continue;
                         }
 
+                        // Selection coverage caps the previewed pixel so the
+                        // progressive preview matches the capped commit.
+                        const uint8_t previewCap = selectionMaskTiles.empty()
+                            ? 255
+                            : aether::sampleRawAlpha(selectionMaskTiles, x, seedY,
+                                  aether::TilePixelFormat::RGBA8);
                         aether::writeProgressiveFillPixel(layerSnapshotTiles, previewInteriorResult,
-                            x, seedY, fillR, fillG, fillB, fillA, false, contentFormat);
+                            x, seedY, fillR, fillG, fillB, fillA, false, previewCap, contentFormat);
 
                         ringTouchedKeys.insert(TileKey {
                             x / static_cast<int>(TILE_SIZE), seedY / static_cast<int>(TILE_SIZE) });
