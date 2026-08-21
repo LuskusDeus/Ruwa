@@ -8,6 +8,7 @@
 #include "features/theme/manager/ThemeColors.h"
 #include "features/theme/manager/ThemeManager.h"
 #include "shared/resources/IconProvider.h"
+#include "shared/style/GlassPanel.h"
 #include "shared/style/PaintingUtils.h"
 #include "shared/style/AnimationPolicy.h"
 #include "shared/style/WidgetStyleManager.h"
@@ -54,14 +55,15 @@ constexpr int kInfoMaxWidth = 300;
 constexpr int kCheckerSize = 8;
 constexpr int kAnchorGap = 10;
 constexpr int kScreenMargin = 8;
-constexpr int kBlurRadius = 26;
+/// Only reached when the GPU glass is unavailable; the plate is captured and
+/// refracted on the GPU otherwise.
+constexpr int kFallbackBlurRadius = 26;
 constexpr int kShowDurationMs = 165;
 constexpr int kHideDurationMs = 115;
 constexpr int kMoveDurationMs = 190;
 constexpr int kContentFadeDurationMs = 170;
 constexpr qreal kInitialScale = 0.955;
 constexpr int kInitialSlideDistance = 7;
-constexpr qreal kPanelEdgeInset = 0.75;
 constexpr qreal kMinPreviewAspect = 0.35;
 constexpr qreal kMaxPreviewAspect = 3.0;
 
@@ -424,27 +426,11 @@ QRect LayerPreviewPopup::placePanel(
 
 void LayerPreviewPopup::captureBackdrop(QWidget* source, const QRect& globalPanelRect)
 {
-    m_backdrop = {};
-    if (!source) {
-        return;
-    }
-    QWidget* window = source->window();
-    if (!window) {
-        return;
-    }
-
-    const QPoint localTopLeft = window->mapFromGlobal(globalPanelRect.topLeft());
-    const QRect grabRect(localTopLeft, globalPanelRect.size());
-    if (!QRect(QPoint(0, 0), window->size()).contains(grabRect)) {
-        return;
-    }
-
-    const QPixmap snapshot = window->grab(grabRect);
-    if (snapshot.isNull()) {
-        return;
-    }
-    m_backdrop = ruwa::ui::painting::blurSnapshotPixmap(
-        snapshot, ThemeManager::instance().scaled(kBlurRadius));
+    ruwa::ui::painting::GlassPanelOptics optics;
+    optics.surfaceTint = ThemeManager::instance().colors().surfaceElevated();
+    optics.fallbackBlurRadius = kFallbackBlurRadius;
+    m_backdrop = ruwa::ui::painting::captureGlassBackdrop(
+        source, globalPanelRect, ThemeManager::instance().scaled(kPanelRadius), optics);
 }
 
 // ============================================================================
@@ -783,13 +769,11 @@ void LayerPreviewPopup::paintEvent(QPaintEvent* event)
     painter.save();
     painter.translate(panelRect.topLeft());
 
-    const QRectF localPanel
-        = QRectF(QPointF(0, 0), panelRect.size())
-              .adjusted(kPanelEdgeInset, kPanelEdgeInset, -kPanelEdgeInset, -kPanelEdgeInset);
-
-    ruwa::ui::painting::drawTonedGlassPanel(painter, localPanel, theme.scaled(kPanelRadius),
-        panelRect.size(), m_backdrop, colors.surfaceElevated(), colors.primary, colors.isDark,
-        colors.borderSubtleHover(), colors.borderSubtle(), 1.0, false);
+    // The panel rect, not an inset one: drawGlassSurface applies the silhouette
+    // inset itself, on the same line the shader ends its coverage on.
+    ruwa::ui::painting::drawGlassSurface(painter, QRectF(QPointF(0, 0), panelRect.size()),
+        theme.scaled(kPanelRadius), m_backdrop, colors.surfaceElevated(), colors.primary,
+        colors.borderSubtleHover(), colors.borderSubtle());
 
     // The preview bleeds into the panel's left corners, so the content must be
     // clipped by the panel shape — during the resize morph the two cross-fading

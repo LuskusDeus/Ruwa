@@ -9,6 +9,7 @@
 #include "shared/widgets/layout/SmoothScrollArea.h"
 #include "features/theme/manager/ThemeManager.h"
 #include "features/theme/manager/ThemeColors.h"
+#include "shared/style/GlassPanel.h"
 #include "shared/style/PaintingUtils.h"
 
 #include <QAbstractButton>
@@ -50,6 +51,11 @@ constexpr int kBaseScrollMinHeight = 120;
 /// Taller list chrome in floating popup mode (e.g. layout presets).
 constexpr int kBasePopupScrollMinHeight = 320;
 constexpr int kPanelRadius = 18;
+/// Inset of the popup panel inside the widget rect: the 1.5px border needs the
+/// room, and the capture has to use the same line as the paint.
+constexpr qreal kPanelBorderInset = 1.25;
+/// Only reached when the GPU glass is unavailable.
+constexpr int kFallbackBlurRadius = 38;
 constexpr int kBaseHeaderButtonSize = 32;
 constexpr int kBaseHeaderButtonIconSize = 14;
 constexpr int kBaseDividerActionButtonSize = 18;
@@ -846,31 +852,28 @@ void PresetMenuListWidget::setEmbeddedChromeTransparent(bool transparent)
     update();
 }
 
+QRectF PresetMenuListWidget::glassPanelRect() const
+{
+    return QRectF(rect()).adjusted(
+        kPanelBorderInset, kPanelBorderInset, -kPanelBorderInset, -kPanelBorderInset);
+}
+
 void PresetMenuListWidget::refreshGlassBackdropFrom(QWidget* source)
 {
+    m_glassBackdrop = {};
     if (!m_popupStyle || !m_popupPanelPainted || !source || rect().isEmpty()) {
-        m_glassBackdrop = {};
-        update();
-        return;
-    }
-
-    QWidget* window = source->window();
-    if (!window) {
-        m_glassBackdrop = {};
-        update();
-        return;
-    }
-
-    const QPoint topLeftInWindow = mapTo(window, QPoint(0, 0));
-    QPixmap snapshot = window->grab(QRect(topLeftInWindow, size()));
-    if (snapshot.isNull()) {
-        m_glassBackdrop = {};
         update();
         return;
     }
 
     const auto& theme = ThemeManager::instance();
-    m_glassBackdrop = ruwa::ui::painting::blurSnapshotPixmap(snapshot, theme.scaled(38));
+    ruwa::ui::painting::GlassPanelOptics optics;
+    optics.surfaceTint = theme.colors().surfaceElevated();
+    optics.fallbackBlurRadius = kFallbackBlurRadius;
+
+    const QRect panel = glassPanelRect().toAlignedRect();
+    m_glassBackdrop = ruwa::ui::painting::captureGlassBackdrop(source,
+        QRect(mapToGlobal(panel.topLeft()), panel.size()), theme.scaled(kPanelRadius), optics);
     update();
 }
 
@@ -1634,15 +1637,14 @@ void PresetMenuListWidget::paintEvent(QPaintEvent* event)
 
     const auto& colors = ThemeManager::instance().colors();
 
-    QRectF rect = this->rect().adjusted(1.25, 1.25, -1.25, -1.25);
+    const QRectF panel = glassPanelRect();
     const qreal radius = ThemeManager::instance().scaled(kPanelRadius);
     QColor borderTop = colors.border;
     borderTop.setAlpha(colors.isDark ? 132 : 118);
     QColor borderBottom = colors.borderDark();
     borderBottom.setAlpha(colors.isDark ? 92 : 78);
-    ruwa::ui::painting::drawTonedGlassPanel(painter, rect, radius, QSizeF(size()), m_glassBackdrop,
-        colors.surfaceElevated(), colors.primary, colors.isDark, borderTop, borderBottom, 1.5,
-        false);
+    ruwa::ui::painting::drawGlassSurface(painter, panel, radius, m_glassBackdrop,
+        colors.surfaceElevated(), colors.primary, borderTop, borderBottom, 1.5);
 }
 
 void PresetMenuListWidget::changeEvent(QEvent* event)

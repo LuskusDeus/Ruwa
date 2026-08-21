@@ -12,6 +12,7 @@
 #include "commands/ShortcutManager.h"
 #include "features/project/RecentProjectsManager.h"
 #include "features/theme/manager/ThemeManager.h"
+#include "shared/style/GlassPanel.h"
 #include "shared/style/PaintingUtils.h"
 #include "shared/widgets/SmoothScrollbar.h"
 #include "shared/widgets/ShortcutKeycapRenderer.h"
@@ -225,34 +226,53 @@ void CommandPalette::focusSearchBar()
     }
 }
 
+void CommandPalette::setBackdropWash(const QColor& wash)
+{
+    if (m_backdropWash == wash) {
+        return;
+    }
+    m_backdropWash = wash;
+    if (m_glassBackdropSource) {
+        refreshGlassBackdropFrom(m_glassBackdropSource);
+    }
+}
+
 void CommandPalette::refreshGlassBackdropFrom(QWidget* source)
 {
     m_glassBackdropSource = source;
+    m_searchBarGlass = {};
+    m_listGlass = {};
     if (!source || rect().isEmpty()) {
-        m_glassBackdrop = {};
-        update();
-        return;
-    }
-
-    QWidget* window = source->window();
-    if (!window) {
-        m_glassBackdrop = {};
-        update();
-        return;
-    }
-
-    const QPoint topLeftInWindow = mapTo(window, QPoint(0, 0));
-    const QRect grabRect(topLeftInWindow, size());
-    QPixmap snapshot = window->grab(grabRect);
-    if (snapshot.isNull()) {
-        m_glassBackdrop = {};
         update();
         return;
     }
 
     const auto& theme = ThemeManager::instance();
-    m_glassBackdrop
-        = ruwa::ui::painting::blurSnapshotPixmap(snapshot, theme.scaled(GlassBlurRadius));
+    ruwa::ui::painting::GlassPanelOptics optics;
+    optics.surfaceTint = theme.colors().surface;
+    optics.fallbackBlurRadius = GlassFallbackBlurRadius;
+    optics.backdropOverlay = m_backdropWash;
+
+    const int searchHeight = theme.scaled(SearchBarHeight);
+    const QPoint origin = mapToGlobal(QPoint(0, 0));
+
+    ruwa::ui::painting::GlassPanelPlate searchPlate;
+    searchPlate.globalRect = QRect(origin, QSize(width(), searchHeight));
+    searchPlate.cornerRadius = searchHeight / 2.0;
+    searchPlate.optics = optics;
+
+    const QRect list = listRect().toAlignedRect();
+    ruwa::ui::painting::GlassPanelPlate listPlate;
+    listPlate.globalRect = QRect(origin + list.topLeft(), list.size());
+    listPlate.cornerRadius = theme.scaled(ListRadius);
+    listPlate.optics = optics;
+
+    // One grab and one GPU pass for both panes; the list plate comes back null
+    // on its own if the palette is taller than the window it sits in.
+    const QList<QPixmap> glass
+        = ruwa::ui::painting::captureGlassBackdrops(source, { searchPlate, listPlate });
+    m_searchBarGlass = glass.value(0);
+    m_listGlass = glass.value(1);
     update();
 }
 
@@ -888,7 +908,7 @@ void CommandPalette::drawSearchBarBackground(QPainter& painter)
     int radius = searchH / 2;
 
     QRectF rect(0, 0, width(), searchH);
-    drawGlassPanel(painter, rect, radius, true);
+    drawGlassPanel(painter, rect, radius, m_searchBarGlass, true);
 }
 
 void CommandPalette::drawList(QPainter& painter)
@@ -922,22 +942,17 @@ void CommandPalette::drawListBackground(QPainter& painter, const QRectF& rect)
     const auto& theme = ThemeManager::instance();
     int radius = theme.scaled(ListRadius);
 
-    drawGlassPanel(painter, rect, radius, false);
+    drawGlassPanel(painter, rect, radius, m_listGlass, false);
 }
 
 void CommandPalette::drawGlassPanel(
-    QPainter& painter, const QRectF& rect, int radius, bool hoverBorder)
+    QPainter& painter, const QRectF& rect, int radius, const QPixmap& backdrop, bool hoverBorder)
 {
     const auto& colors = ThemeManager::instance().colors();
     const QColor borderTop = hoverBorder ? colors.borderSubtleHover() : colors.borderSubtle();
-    QSizeF backdropSize(size());
-    if (!m_glassBackdrop.isNull()) {
-        const qreal dpr = m_glassBackdrop.devicePixelRatio();
-        backdropSize = QSizeF(m_glassBackdrop.width() / dpr, m_glassBackdrop.height() / dpr);
-    }
 
-    ruwa::ui::painting::drawTonedGlassPanel(painter, rect, radius, backdropSize, m_glassBackdrop,
-        colors.surface, colors.primary, colors.isDark, borderTop,
+    ruwa::ui::painting::drawGlassSurface(painter, rect, radius, backdrop, colors.surface,
+        colors.primary, borderTop,
         ThemeColors::withAlpha(colors.borderSubtle(), colors.borderSubtle().alpha() / 2));
 }
 

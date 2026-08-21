@@ -49,6 +49,9 @@ public:
     void setEmbeddedChromeTransparent(bool transparent);
     bool embeddedChromeTransparent() const { return m_embeddedChromeTransparent; }
     void refreshGlassBackdropFrom(QWidget* source);
+    /// The glass plate inside the widget rect: the popup border sits on it, so
+    /// the capture and the paint have to agree on it to the pixel.
+    QRectF glassPanelRect() const;
 
     /// Optional heading above the toolbar (hidden when empty).
     void setTitleText(const QString& text);

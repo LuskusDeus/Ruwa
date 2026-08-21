@@ -3,15 +3,12 @@
 // DropZoneIndicator.cpp
 #include "DropZoneIndicator.h"
 #include "shared/style/AnimationPolicy.h"
+#include "shared/style/GlassPanel.h"
 
 #include <QPainter>
 #include <QPainterPath>
 #include <QVariantAnimation>
 #include <QEasingCurve>
-#include <QGraphicsBlurEffect>
-#include <QGraphicsPixmapItem>
-#include <QGraphicsScene>
-#include <QImage>
 #include <QtMath>
 
 namespace anim = ruwa::ui::core::anim;
@@ -20,74 +17,13 @@ namespace ruwa::ui::docking {
 
 namespace {
 
-constexpr int kGlassBlurRadius = 24;
+/// Only reached when the GPU glass is unavailable.
+constexpr int kFallbackBlurRadius = 24;
 constexpr int kGlassCornerRadius = 8;
 
 /// Group previews grow from this fraction of the cell instead of wiping in from
 /// an edge — there is no edge to come from when the drop lands on top.
 constexpr qreal kGroupPreviewMinScale = 0.8;
-
-QPixmap blurPixmapForGlass(const QPixmap& source, int radius)
-{
-    if (source.isNull() || radius <= 0) {
-        return source;
-    }
-
-    const qreal dpr = source.devicePixelRatio();
-    const QSize logicalSize(
-        qMax(1, qRound(source.width() / dpr)), qMax(1, qRound(source.height() / dpr)));
-    constexpr int downsample = 2;
-    const QSize smallLogical(
-        qMax(1, logicalSize.width() / downsample), qMax(1, logicalSize.height() / downsample));
-    const QSize smallDevice(
-        qMax(1, qRound(smallLogical.width() * dpr)), qMax(1, qRound(smallLogical.height() * dpr)));
-
-    QImage downscaled = source.toImage()
-                            .convertToFormat(QImage::Format_ARGB32_Premultiplied)
-                            .scaled(smallDevice, Qt::IgnoreAspectRatio, Qt::SmoothTransformation);
-    downscaled.setDevicePixelRatio(1.0);
-
-    const qreal effectiveRadius = qMax(1.0, qreal(radius) / downsample);
-    const int pad = qBound(2, qCeil(effectiveRadius * 2.0), 64);
-    const QSize paddedSize(smallDevice.width() + pad * 2, smallDevice.height() + pad * 2);
-
-    QImage padded(paddedSize, QImage::Format_ARGB32_Premultiplied);
-    padded.fill(Qt::transparent);
-    {
-        QPainter p(&padded);
-        p.setRenderHint(QPainter::SmoothPixmapTransform);
-        // Tile the source so edges blur into similar content instead of
-        // bleeding to transparent.
-        p.drawImage(QRect(QPoint(0, 0), paddedSize), downscaled);
-        p.drawImage(QPoint(pad, pad), downscaled);
-    }
-
-    QGraphicsScene scene;
-    auto* item = new QGraphicsPixmapItem(QPixmap::fromImage(std::move(padded)));
-    auto* effect = new QGraphicsBlurEffect;
-    effect->setBlurRadius(effectiveRadius);
-    effect->setBlurHints(QGraphicsBlurEffect::QualityHint);
-    item->setGraphicsEffect(effect);
-    scene.addItem(item);
-
-    // Render the blurred scene directly into the final upscaled image, sampling
-    // only the unpadded interior. This fuses the previous crop+upscale steps
-    // and eliminates one full-frame intermediate allocation per backdrop refresh.
-    const QSize finalDevice(qRound(logicalSize.width() * dpr), qRound(logicalSize.height() * dpr));
-    QImage upscaled(finalDevice, QImage::Format_ARGB32_Premultiplied);
-    upscaled.fill(Qt::transparent);
-    {
-        QPainter p(&upscaled);
-        p.setRenderHint(QPainter::SmoothPixmapTransform);
-        const QRectF dstRect(0, 0, finalDevice.width(), finalDevice.height());
-        const QRectF srcRect(pad, pad, smallDevice.width(), smallDevice.height());
-        scene.render(&p, dstRect, srcRect);
-    }
-
-    QPixmap result = QPixmap::fromImage(std::move(upscaled));
-    result.setDevicePixelRatio(dpr);
-    return result;
-}
 
 } // namespace
 
@@ -334,24 +270,19 @@ void DropZoneIndicator::captureGlassBackdrop()
     if (!parent) {
         return;
     }
-    QWidget* window = parent->window();
-    if (!window) {
-        return;
+    // The capture is taken from the window the indicator lives in, so it holds
+    // whatever was painted under it - including the dragged floating panel if
+    // it overlaps - which is the desired backdrop.
+    ruwa::ui::painting::GlassPanelOptics optics;
+    // No frost pull: the accent tint painted over this plate is heavy enough
+    // that a second one towards the theme surface would only mute it.
+    optics.fallbackBlurRadius = kFallbackBlurRadius;
+    m_glassBackdrop = ruwa::ui::painting::captureGlassBackdrop(parent,
+        QRect(parent->mapToGlobal(m_targetRect.topLeft()), m_targetRect.size()), kGlassCornerRadius,
+        optics);
+    if (!m_glassBackdrop.isNull()) {
+        m_glassBackdropRect = m_targetRect;
     }
-
-    // Map the final target rect (in parent overlay coordinates) into window
-    // coordinates so we can grab the corresponding window region. The grab
-    // captures whatever was painted under the indicator - including the
-    // dragged floating panel if it overlaps - which is the desired backdrop.
-    const QPoint topLeftInWindow = parent->mapTo(window, m_targetRect.topLeft());
-    const QRect grabRect(topLeftInWindow, m_targetRect.size());
-    QPixmap snapshot = window->grab(grabRect);
-    if (snapshot.isNull()) {
-        return;
-    }
-
-    m_glassBackdrop = blurPixmapForGlass(snapshot, kGlassBlurRadius);
-    m_glassBackdropRect = m_targetRect;
 }
 
 QRect DropZoneIndicator::calculateAnimatedRect(qreal progress) const

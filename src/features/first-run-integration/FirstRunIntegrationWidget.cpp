@@ -11,6 +11,7 @@
 #include "features/theme/manager/ThemeManager.h"
 #include "shared/i18n/TranslationManager.h"
 #include "shared/resources/IconProvider.h"
+#include "shared/style/GlassPanel.h"
 #include "shared/style/PaintingUtils.h"
 #include "shared/widgets/layout/SmoothScrollArea.h"
 #include "shared/widgets/overlays/WidgetFadeInOverlay.h"
@@ -52,7 +53,8 @@ constexpr int kAppearanceRetryIntervalMs = 16;
 constexpr int kImageSectionMargin = 15;
 constexpr qreal kImageSectionCornerRadius = 20.0;
 constexpr int kHeroLogoSize = 72;
-constexpr int kHeroGlassBlurRadius = 10;
+/// Only reached when the GPU glass is unavailable.
+constexpr int kHeroGlassFallbackBlurRadius = 10;
 constexpr qreal kHeroGlassCornerRadius = 24.0;
 constexpr int kCustomizationScrollDurationMs = 900;
 
@@ -100,7 +102,10 @@ public:
         setAttribute(Qt::WA_OpaquePaintEvent);
     }
 
-    QPixmap createBlurredBackdrop(const QRect& area, int blurRadius) const
+    /// The hero's own background over @p area, in hero coordinates. The glass
+    /// panel over it composes its backdrop from this rather than asking Qt to
+    /// render the window again: the section draws it in one call anyway.
+    QPixmap renderBackdrop(const QRect& area) const
     {
         if (area.isEmpty()) {
             return {};
@@ -118,7 +123,7 @@ public:
         drawBackground(painter);
         painter.end();
 
-        return ruwa::ui::painting::blurSnapshotPixmap(snapshot, blurRadius);
+        return snapshot;
     }
 
 protected:
@@ -193,7 +198,7 @@ protected:
     {
         if (event->type() == QEvent::Move || event->type() == QEvent::Resize
             || event->type() == QEvent::Show || event->type() == QEvent::DevicePixelRatioChange) {
-            m_blurredBackdrop = {};
+            m_glass = {};
         }
         return QWidget::event(event);
     }
@@ -209,9 +214,9 @@ protected:
         QPainter painter(this);
         painter.setRenderHint(QPainter::Antialiasing);
 
-        ruwa::ui::painting::drawTonedGlassPanel(painter, QRectF(rect()),
-            theme.scaled(kHeroGlassCornerRadius), QSizeF(size()), m_blurredBackdrop, colors.surface,
-            colors.primary, colors.isDark, colors.borderSubtleHover(),
+        ruwa::ui::painting::drawGlassSurface(painter, QRectF(rect()),
+            theme.scaled(kHeroGlassCornerRadius), m_glass, colors.surface, colors.primary,
+            colors.borderSubtleHover(),
             ruwa::ui::core::ThemeColors::withAlpha(
                 colors.borderSubtle(), colors.borderSubtle().alpha() / 2),
             0.0);
@@ -222,7 +227,7 @@ protected:
         if (watched == m_hero
             && (event->type() == QEvent::Resize || event->type() == QEvent::StyleChange
                 || event->type() == QEvent::PaletteChange)) {
-            m_blurredBackdrop = {};
+            m_glass = {};
             update();
         }
         return QWidget::eventFilter(watched, event);
@@ -232,7 +237,7 @@ private:
     void ensureBackdrop()
     {
         if (!m_hero) {
-            m_blurredBackdrop = {};
+            m_glass = {};
             return;
         }
 
@@ -240,7 +245,7 @@ private:
         const QRect sampleGeometry = geometry();
         const QRgb backgroundRgba = theme.colors().background.rgba();
         const qreal dpr = devicePixelRatioF();
-        if (!m_blurredBackdrop.isNull() && m_cachedHeroSize == m_hero->size()
+        if (!m_glass.isNull() && m_cachedHeroSize == m_hero->size()
             && m_cachedGeometry == sampleGeometry && m_cachedBackgroundRgba == backgroundRgba
             && qFuzzyCompare(m_cachedDpr, dpr)) {
             return;
@@ -250,13 +255,24 @@ private:
         m_cachedGeometry = sampleGeometry;
         m_cachedBackgroundRgba = backgroundRgba;
         m_cachedDpr = dpr;
-        m_blurredBackdrop
-            = m_hero->createBlurredBackdrop(sampleGeometry, theme.scaled(kHeroGlassBlurRadius));
+
+        // The refraction samples outside the panel, so the hero has to draw
+        // more than the panel covers. Clamped to the hero: past its edge there
+        // is nothing to draw, and a transparent margin would refract as a hole.
+        const int margin = ruwa::ui::painting::glassCaptureMarginPx(dpr);
+        const QRect area
+            = sampleGeometry.adjusted(-margin, -margin, margin, margin).intersected(m_hero->rect());
+        ruwa::ui::painting::GlassPanelOptics optics;
+        optics.surfaceTint = theme.colors().surface;
+        optics.fallbackBlurRadius = kHeroGlassFallbackBlurRadius;
+        m_glass = ruwa::ui::painting::renderGlassBackdrop(m_hero->renderBackdrop(area),
+            sampleGeometry.translated(-area.topLeft()), theme.scaled(kHeroGlassCornerRadius),
+            optics);
     }
 
 private:
     FirstRunIntegrationImageSection* m_hero { nullptr };
-    QPixmap m_blurredBackdrop;
+    QPixmap m_glass;
     QSize m_cachedHeroSize;
     QRect m_cachedGeometry;
     QRgb m_cachedBackgroundRgba { 0 };

@@ -94,6 +94,10 @@ void CommandPaletteOverlay::showPalette()
     // Show palette
     m_palette->showAnimated();
     updatePalettePosition();
+    // The capture below is taken through an overlay that has not dimmed yet,
+    // and it cannot wait for the animation: by then the palette is painted and
+    // the grab would include it. Hand it the dim to apply itself.
+    m_palette->setBackdropWash(QColor(0, 0, 0, static_cast<int>(MaxDimOpacity * 255)));
     m_palette->refreshGlassBackdropFrom(parentWidget());
 
     // The dim animation owns the completion (it emits shown()), so start it

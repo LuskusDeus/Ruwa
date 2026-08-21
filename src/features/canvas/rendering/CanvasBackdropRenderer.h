@@ -63,6 +63,16 @@ public:
         qreal logicalToSurfaceScaleX, qreal logicalToSurfaceScaleY,
         const std::vector<CanvasBackdropRegion>& regions);
 
+    /// Device-pixel margin this pass needs around a region at @p deviceScale:
+    /// enough captured backdrop for the refraction and the frost to sample,
+    /// and - unless @p withShadow is false - enough room outside the region
+    /// for the analytic shadow to fade out in.
+    ///
+    /// A caller that hands the renderer a cropped backdrop has to leave at
+    /// least this much of it around the region, or the frost reads clamped
+    /// edge texels and the shadow ends on a straight line.
+    static int requiredMarginDevicePx(qreal deviceScale, bool withShadow = true);
+
 private:
     /// Two blits reach this, so it must stay at or below 4 or the reduction
     /// would drop more than half per step and alias.
@@ -144,6 +154,10 @@ private:
     static constexpr float kShadowOffsetYLogicalPx = 4.0f;
     static constexpr float kShadowOpacity = 0.12f;
     static constexpr float kShadowReachInFalloffRadii = 5.0f;
+    /// Room the shadow needs outside its region, in device pixels. Shared by
+    /// the composite viewport and requiredMarginDevicePx() so a caller cannot
+    /// be told a smaller number than the pass actually paints into.
+    static int shadowPaddingDevicePx(float deviceScale);
     /// The optical shift is a conservative upper bound on the actual Snell
     /// displacement, so adding it whole leaves room for refraction, dispersion
     /// and the blur footprint without coupling this GPU path to QWidget optics.

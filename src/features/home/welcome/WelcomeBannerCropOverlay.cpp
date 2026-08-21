@@ -8,6 +8,7 @@
 #include "features/theme/manager/ThemeManager.h"
 #include "shared/style/AnimationPolicy.h"
 #include "features/theme/manager/ThemeColors.h"
+#include "shared/style/GlassPanel.h"
 #include "shared/style/PaintingUtils.h"
 
 #include <QCoreApplication>
@@ -434,7 +435,7 @@ private:
 };
 
 namespace {
-/// Card background: app-style toned glass panel + gradient border.
+/// Card background: app-style glass surface + gradient border.
 class CropCardFrame : public QWidget {
 public:
     explicit CropCardFrame(QWidget* parent = nullptr)
@@ -453,8 +454,12 @@ protected:
         QPainter painter(this);
         painter.setRenderHint(QPainter::Antialiasing);
 
-        ruwa::ui::painting::drawTonedGlassPanel(painter, QRectF(rect()), radius, QSizeF(size()),
-            QPixmap(), colors.surface, colors.primary, colors.isDark, colors.borderSubtleHover(),
+        // No backdrop is captured here: the card sits on the overlay's own dim,
+        // and grabbing the window it lives in would grab the card itself. The
+        // glass surface then falls back to its solid fill, which is what this
+        // card has always painted.
+        ruwa::ui::painting::drawGlassSurface(painter, QRectF(rect()), radius, QPixmap(),
+            colors.surface, colors.primary, colors.borderSubtleHover(),
             ruwa::ui::core::ThemeColors::withAlpha(
                 colors.borderSubtle(), colors.borderSubtle().alpha() / 2));
     }

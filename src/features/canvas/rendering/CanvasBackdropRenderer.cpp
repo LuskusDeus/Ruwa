@@ -174,6 +174,19 @@ bool CanvasBackdropRenderer::ensureTarget(RegionTarget& target, int captureWidth
     return ok;
 }
 
+int CanvasBackdropRenderer::shadowPaddingDevicePx(float deviceScale)
+{
+    const float falloff = kShadowFalloffLogicalPx * deviceScale;
+    const float offsetY = kShadowOffsetYLogicalPx * deviceScale;
+    return static_cast<int>(std::ceil(falloff * kShadowReachInFalloffRadii + std::abs(offsetY)));
+}
+
+int CanvasBackdropRenderer::requiredMarginDevicePx(qreal deviceScale, bool withShadow)
+{
+    const int shadow = withShadow ? shadowPaddingDevicePx(static_cast<float>(deviceScale)) : 0;
+    return std::max(kCapturePaddingDevicePx, shadow);
+}
+
 void CanvasBackdropRenderer::drawFullscreen()
 {
     m_gl->glBindVertexArray(m_vao);
@@ -197,8 +210,7 @@ bool CanvasBackdropRenderer::render(GLuint sourceFbo, GLuint defaultFbo, int sur
         = static_cast<float>(std::min<qreal>(logicalToSurfaceScaleX, logicalToSurfaceScaleY));
     const float shadowFalloff = kShadowFalloffLogicalPx * deviceScale;
     const float shadowOffsetY = kShadowOffsetYLogicalPx * deviceScale;
-    const int shadowPadding = static_cast<int>(
-        std::ceil(shadowFalloff * kShadowReachInFalloffRadii + std::abs(shadowOffsetY)));
+    const int shadowPadding = shadowPaddingDevicePx(deviceScale);
 
     for (const CanvasBackdropRegion& region : regions) {
         if (region.rect.isEmpty() || region.opacity <= 0.001) {
@@ -376,8 +388,7 @@ bool CanvasBackdropRenderer::render(GLuint sourceFbo, GLuint defaultFbo, int sur
         m_compositeProgram->setUniform("uCompositeSize",
             static_cast<float>(item.compositeRect.width()),
             static_cast<float>(item.compositeRect.height()));
-        const float rectOffsetX
-            = static_cast<float>(item.targetRect.x() - item.compositeRect.x());
+        const float rectOffsetX = static_cast<float>(item.targetRect.x() - item.compositeRect.x());
         const float rectOffsetY = static_cast<float>(item.compositeRect.y()
             + item.compositeRect.height() - item.targetRect.y() - item.targetRect.height());
         m_compositeProgram->setUniform("uRectOffset", rectOffsetX, rectOffsetY);

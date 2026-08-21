@@ -5,6 +5,7 @@
 
 #include "commands/ShortcutManager.h"
 #include "features/theme/manager/ThemeManager.h"
+#include "shared/style/GlassPanel.h"
 #include "shared/style/PaintingUtils.h"
 #include "shared/widgets/ShortcutKeycapRenderer.h"
 #include "shared/style/WidgetStyleManager.h"
@@ -40,14 +41,14 @@ constexpr int kVerticalPadding = 7;
 constexpr int kShadowMargin = 8;
 constexpr int kMaximumTextWidth = 360;
 constexpr int kMinimumTextWidth = 48;
-constexpr int kBlurRadius = 24;
+/// Only reached when the GPU glass is unavailable.
+constexpr int kFallbackBlurRadius = 24;
 constexpr int kPanelGapX = 8;
 constexpr int kPanelGapY = 10;
 constexpr int kPlacementMargin = 6;
 constexpr int kShowDurationMs = 155;
 constexpr int kHideDurationMs = 110;
 constexpr qreal kInitialScale = 0.965;
-constexpr qreal kPanelEdgeInset = 0.75;
 constexpr int kInitialSlideDistance = 3;
 constexpr int kDefaultVisibleDurationMs = 10000;
 constexpr int kMaximumVisibleDurationMs = 30000;
@@ -284,21 +285,18 @@ protected:
 
         painter.save();
         painter.translate(m_panelRect.topLeft());
-        // Keep the antialiased outer coverage inside the raster bounds. Drawing
-        // directly on the integer edge can clip the last coverage sample and
-        // make an otherwise rounded corner read as a sharp half-pixel fringe.
-        const QRectF localPanel
-            = QRectF(QPointF(0, 0), m_panelRect.size())
-                  .adjusted(kPanelEdgeInset, kPanelEdgeInset, -kPanelEdgeInset, -kPanelEdgeInset);
 
         QColor borderTop = colors.borderLight();
         borderTop.setAlpha(colors.isDark ? 118 : 132);
         QColor borderBottom = colors.borderDark();
         borderBottom.setAlpha(colors.isDark ? 82 : 96);
 
-        ruwa::ui::painting::drawTonedGlassPanel(painter, localPanel, theme.scaled(kCornerRadius),
-            m_panelRect.size(), m_glassBackdrop, colors.surfaceElevated(), colors.primary,
-            colors.isDark, borderTop, borderBottom, 1.0, false);
+        // The panel rect itself: drawGlassSurface insets the glass to the
+        // silhouette the shader ends on, which is what the hand-rolled inset
+        // here used to approximate.
+        ruwa::ui::painting::drawGlassSurface(painter, QRectF(QPointF(0, 0), m_panelRect.size()),
+            theme.scaled(kCornerRadius), m_glassBackdrop, colors.surfaceElevated(), colors.primary,
+            borderTop, borderBottom);
 
         painter.save();
         painter.translate(m_documentOrigin);
@@ -483,19 +481,12 @@ void ToolTipController::showFor(QWidget* eventTarget, const QHelpEvent& event)
     desired.setY(boundedCoordinate(
         desired.y(), tipSize.height(), placementBounds.top(), placementBounds.bottom()));
 
-    m_toolTip->setGlassBackdrop({});
     const QRect globalPanel(desired + localPanel.topLeft(), localPanel.size());
-    if (sourceWindow) {
-        const QPoint localTopLeft = sourceWindow->mapFromGlobal(globalPanel.topLeft());
-        const QRect grabRect(localTopLeft, globalPanel.size());
-        if (QRect(QPoint(0, 0), sourceWindow->size()).contains(grabRect)) {
-            const QPixmap snapshot = sourceWindow->grab(grabRect);
-            if (!snapshot.isNull()) {
-                m_toolTip->setGlassBackdrop(
-                    ruwa::ui::painting::blurSnapshotPixmap(snapshot, theme.scaled(kBlurRadius)));
-            }
-        }
-    }
+    ruwa::ui::painting::GlassPanelOptics optics;
+    optics.surfaceTint = theme.colors().surfaceElevated();
+    optics.fallbackBlurRadius = kFallbackBlurRadius;
+    m_toolTip->setGlassBackdrop(ruwa::ui::painting::captureGlassBackdrop(
+        source, globalPanel, theme.scaled(kCornerRadius), optics));
 
     if (m_source != source) {
         QObject::disconnect(m_sourceDestroyedConnection);

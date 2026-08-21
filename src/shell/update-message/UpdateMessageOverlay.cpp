@@ -8,6 +8,7 @@
 #include "features/theme/manager/ThemeColors.h"
 #include "shared/style/AnimationPolicy.h"
 #include "shared/resources/ResourceManager.h"
+#include "shared/style/GlassPanel.h"
 #include "shared/style/PaintingUtils.h"
 #include "RuwaBuildConfig.h"
 
@@ -21,9 +22,6 @@
 #include <QEvent>
 #include <QResizeEvent>
 #include <QGraphicsOpacityEffect>
-#include <QGraphicsBlurEffect>
-#include <QGraphicsScene>
-#include <QGraphicsPixmapItem>
 #include <QVBoxLayout>
 #include <QHBoxLayout>
 #include <QLabel>
@@ -65,7 +63,8 @@ constexpr int TextAreaPadding = 32;
 // two constants really fix.
 constexpr int ImageAreaWidth = 380; // 3:4 for height 506 (380 = 506*3/4)
 constexpr int ImagePadding = 8;
-constexpr int GlassBlurRadius = 45;
+/// Only reached when the GPU glass is unavailable.
+constexpr int GlassFallbackBlurRadius = 45;
 constexpr int BadgeMinWidth = 76;
 constexpr int BadgePaddingH = 8;
 constexpr int BadgeColumnExtraWidth = 4;
@@ -154,81 +153,6 @@ int releaseBadgeColumnWidth(const ruwa::ui::core::ThemeManager& theme)
     return qMax(theme.scaled(BadgeMinWidth), badgeWidth);
 }
 
-QPixmap blurSnapshotPixmap(const QPixmap& source, int radius)
-{
-    if (source.isNull() || radius <= 0) {
-        return source;
-    }
-
-    const qreal dpr = source.devicePixelRatio();
-    const QSize logicalSize(
-        qMax(1, qRound(source.width() / dpr)), qMax(1, qRound(source.height() / dpr)));
-
-    // Mild downscale to make QGraphicsBlurEffect cheap and to soften the result
-    // a little extra. Aggressive downsampling (the previous approach) destroys
-    // detail and produces colour-averaged smears when parts of the snapshot are
-    // transparent.
-    constexpr int downsample = 2;
-    const QSize smallLogical(
-        qMax(1, logicalSize.width() / downsample), qMax(1, logicalSize.height() / downsample));
-    const QSize smallDevice(smallLogical.width() * dpr, smallLogical.height() * dpr);
-
-    QImage downscaled = source.toImage()
-                            .convertToFormat(QImage::Format_ARGB32_Premultiplied)
-                            .scaled(smallDevice, Qt::IgnoreAspectRatio, Qt::SmoothTransformation);
-    downscaled.setDevicePixelRatio(1.0);
-
-    // Pad by edge replication so QGraphicsBlurEffect doesn't darken the border:
-    // the effect samples beyond the pixmap and treats those pixels as
-    // transparent, producing a dark fringe. We render edge slices around the
-    // padded image, blur the larger image, then crop the inner region.
-    const qreal effectiveRadius = qMax(1.0, qreal(radius) / downsample);
-    const int pad = qBound(2, qCeil(effectiveRadius * 2.0), 64);
-    const QSize paddedSize(smallDevice.width() + pad * 2, smallDevice.height() + pad * 2);
-
-    QImage padded(paddedSize, QImage::Format_ARGB32_Premultiplied);
-    padded.fill(Qt::transparent);
-    {
-        QPainter p(&padded);
-        p.setRenderHint(QPainter::SmoothPixmapTransform);
-        // Stretch the downscaled image to fill the padded canvas first — gives
-        // a soft, colour-matched background everywhere, including the pad.
-        p.drawImage(QRect(QPoint(0, 0), paddedSize), downscaled);
-        // Then draw the sharp copy at the centre so the inner area is correct.
-        p.drawImage(QPoint(pad, pad), downscaled);
-    }
-
-    QGraphicsScene scene;
-    auto* item = new QGraphicsPixmapItem(QPixmap::fromImage(padded));
-    auto* effect = new QGraphicsBlurEffect;
-    effect->setBlurRadius(effectiveRadius);
-    effect->setBlurHints(QGraphicsBlurEffect::QualityHint);
-    item->setGraphicsEffect(effect);
-    scene.addItem(item);
-
-    QImage blurredPadded(paddedSize, QImage::Format_ARGB32_Premultiplied);
-    blurredPadded.fill(Qt::transparent);
-    {
-        QPainter p(&blurredPadded);
-        p.setRenderHint(QPainter::SmoothPixmapTransform);
-        const QRectF target(0, 0, paddedSize.width(), paddedSize.height());
-        scene.render(&p, target, target);
-    }
-
-    QImage cropped = blurredPadded.copy(pad, pad, smallDevice.width(), smallDevice.height());
-
-    QImage upscaled = cropped.scaled(QSize(logicalSize.width() * dpr, logicalSize.height() * dpr),
-        Qt::IgnoreAspectRatio, Qt::SmoothTransformation);
-
-    QPixmap result = QPixmap::fromImage(upscaled);
-    result.setDevicePixelRatio(dpr);
-    return result;
-}
-
-// Apply an antialiased rounded-rect clip to a pixmap. We do this once per
-// snapshot refresh instead of using QWidget::setMask on the card: setMask
-// uses a 1-bit QRegion which produces visibly stair-stepped corners, while
-// painter-based clipping with the Antialiasing hint gives smooth edges.
 QPixmap applyRoundedCornerMask(const QPixmap& source, int radius)
 {
     if (source.isNull() || radius <= 0) {
@@ -590,38 +514,30 @@ public:
         m_tintLayer->raise();
     }
 
-    void refreshBackdropFrom(QWidget* source, const QRect& sourceRect)
+    /// @p wash is the overlay dim this card floats above. The capture is taken
+    /// before the overlay is even shown - it has to be, or the grab would
+    /// include the card itself - so the dim is applied to the glass afterwards
+    /// instead of being captured with the rest of the window.
+    void refreshBackdropFrom(QWidget* source, const QRect& sourceRect, const QColor& wash)
     {
         if (!source || sourceRect.isEmpty()) {
             m_snapshotLabel->clear();
             return;
         }
 
-        QWidget* window = source->window();
-        if (!window) {
-            m_snapshotLabel->clear();
-            return;
-        }
-
-        // Grabbing the top-level window (rather than calling render() on the
-        // intermediate widget) is what makes this work in practice: Qt has a
-        // dedicated path for QWidget::grab() on a top-level window that
-        // composites every QOpenGLWidget child's framebuffer into the result.
-        // Plain QWidget::render() on a non-window widget skips that step, so
-        // the canvas comes back transparent and the blur ends up being
-        // applied to a mostly-empty image.
-        const QPoint topLeftInWindow = source->mapTo(window, sourceRect.topLeft());
-        const QRect grabRect(topLeftInWindow, sourceRect.size());
-
-        QPixmap snapshot = window->grab(grabRect);
-        if (snapshot.isNull()) {
-            m_snapshotLabel->clear();
-            return;
-        }
-
         const auto& theme = ruwa::ui::core::ThemeManager::instance();
-        QPixmap blurred = blurSnapshotPixmap(snapshot, theme.scaled(GlassBlurRadius));
-        m_snapshotLabel->setPixmap(applyRoundedCornerMask(blurred, theme.scaled(CardRadius)));
+        ruwa::ui::painting::GlassPanelOptics optics;
+        optics.surfaceTint = theme.colors().surface;
+        optics.fallbackBlurRadius = GlassFallbackBlurRadius;
+        optics.backdropOverlay = wash;
+        const QPixmap glass = ruwa::ui::painting::captureGlassBackdrop(source,
+            QRect(source->mapToGlobal(sourceRect.topLeft()), sourceRect.size()),
+            theme.scaled(CardRadius), optics);
+        if (glass.isNull()) {
+            m_snapshotLabel->clear();
+            return;
+        }
+        m_snapshotLabel->setPixmap(applyRoundedCornerMask(glass, theme.scaled(CardRadius)));
     }
 
 protected:
@@ -1112,7 +1028,8 @@ void UpdateMessageOverlay::refreshCardBackdrop()
         m_card->hide();
     }
 
-    static_cast<UpdateMessageCard*>(m_card)->refreshBackdropFrom(source, m_card->geometry());
+    static_cast<UpdateMessageCard*>(m_card)->refreshBackdropFrom(
+        source, m_card->geometry(), QColor(0, 0, 0, static_cast<int>(MaxDimOpacity * 255)));
 
     if (cardWasVisible) {
         m_card->show();

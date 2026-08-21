@@ -33,6 +33,18 @@ namespace ruwa::ui::painting {
 /// on screen but the refraction, and this layer would wash it out on its own.
 inline constexpr int kBackdropTintAlpha = ruwa::shared::rendering::kGlassBareOpticsMode ? 0 : 112;
 
+/// The same tint for a glass panel that carries body text - a menu, a tooltip,
+/// the command palette - rather than the short labels the canvas overlays show.
+///
+/// Higher than kBackdropTintAlpha, and not as a matter of taste: the muted text
+/// tone is defined against a flat theme surface, and at the overlay's opacity
+/// the artwork underneath keeps enough of its own value that grey text lands
+/// somewhere inside the backdrop's range instead of above it. White text
+/// survives either way, which is why the shortfall shows up on secondary text
+/// first. Raising this trades some of the refraction for the contrast the text
+/// was designed against; the two cannot both be maximal on the same surface.
+inline constexpr int kGlassPanelTintAlpha = ruwa::shared::rendering::kGlassBareOpticsMode ? 0 : 160;
+
 /// Shape of the glass in a backdrop-blurred overlay: the widget rect pulled in
 /// to where the GPU pass ends its own silhouette (see kGlassSilhouetteInsetPx).
 /// Everything painted *as glass* - the tint, the inner shadow - has to use it,
@@ -645,6 +657,11 @@ inline bool drawBackdropBlurTint(QPainter& painter, QWidget* widget,
     return true;
 }
 
+/// Gaussian blur of a snapshot on the CPU.
+///
+/// Two callers left, and neither is a glass panel: WelcomeUpdatePanel blurs an
+/// image as decoration, and GlassPanel.cpp uses this as its fallback when the
+/// GPU glass cannot run. Panels themselves go through captureGlassBackdrop().
 inline QPixmap blurSnapshotPixmap(const QPixmap& source, int radius)
 {
     if (source.isNull() || radius <= 0) {
@@ -700,91 +717,6 @@ inline QPixmap blurSnapshotPixmap(const QPixmap& source, int radius)
     QPixmap result = QPixmap::fromImage(upscaled);
     result.setDevicePixelRatio(dpr);
     return result;
-}
-
-inline void drawTonedGlassPanel(QPainter& painter, const QRectF& rect, qreal radius,
-    const QSizeF& panelSize, const QPixmap& backdrop, const QColor& surface, const QColor& primary,
-    bool darkTheme, const QColor& borderTop, const QColor& borderBottom, qreal borderWidth = 1.0,
-    bool darkenEdges = true)
-{
-    QPainterPath clipPath;
-    clipPath.addRoundedRect(rect, radius, radius);
-
-    painter.save();
-    painter.setClipPath(clipPath);
-
-    if (!backdrop.isNull()) {
-        const qreal backdropDpr = backdrop.devicePixelRatio();
-        const QRectF sourceRect(
-            QPointF(0, 0), QSizeF(backdrop.width() / backdropDpr, backdrop.height() / backdropDpr));
-        painter.drawPixmap(QRectF(QPointF(0, 0), panelSize), backdrop, sourceRect);
-    } else {
-        painter.fillRect(rect, surface);
-    }
-
-    QColor baseTint = darkTheme ? QColor(2, 3, 5, 198) : QColor(240, 244, 250, 188);
-    QColor accentTint = primary;
-    accentTint.setAlpha(darkTheme ? 22 : 32);
-
-    const qreal dpr = painter.device() ? painter.device()->devicePixelRatioF() : qreal(1);
-    const QSize devSize(qMax(1, qRound(rect.width() * dpr)), qMax(1, qRound(rect.height() * dpr)));
-
-    QImage hiPrec(devSize, QImage::Format_RGBA64_Premultiplied);
-    hiPrec.setDevicePixelRatio(dpr);
-    hiPrec.fill(Qt::transparent);
-    {
-        QPainter p(&hiPrec);
-        p.setRenderHint(QPainter::Antialiasing, true);
-        p.translate(-rect.topLeft());
-
-        QPainterPath tintClip;
-        tintClip.addRoundedRect(rect, radius, radius);
-        p.setClipPath(tintClip);
-
-        p.fillRect(rect, detail::withAlpha(surface, darkTheme ? 92 : 118));
-        p.fillRect(rect, baseTint);
-
-        QLinearGradient sheen(rect.topLeft(), rect.bottomRight());
-        sheen.setColorAt(0.0, accentTint);
-        sheen.setColorAt(0.50, QColor(255, 255, 255, darkTheme ? 10 : 28));
-        sheen.setColorAt(1.0,
-            darkenEdges ? QColor(0, 0, 0, darkTheme ? 44 : 18)
-                        : QColor(128, 128, 128, darkTheme ? 10 : 8));
-        p.fillRect(rect, sheen);
-
-        QRadialGradient vignette(rect.center(), qMax(rect.width(), rect.height()) * 0.72);
-        vignette.setColorAt(0.0, QColor(255, 255, 255, darkTheme ? 3 : 13));
-        vignette.setColorAt(1.0,
-            darkenEdges ? QColor(0, 0, 0, darkTheme ? 82 : 38)
-                        : QColor(128, 128, 128, darkTheme ? 12 : 8));
-        p.fillRect(rect, vignette);
-    }
-
-    QImage dithered(devSize, QImage::Format_ARGB32_Premultiplied);
-    dithered.setDevicePixelRatio(dpr);
-    const int W = devSize.width();
-    const int H = devSize.height();
-    for (int y = 0; y < H; ++y) {
-        const QRgba64* src = reinterpret_cast<const QRgba64*>(hiPrec.constScanLine(y));
-        QRgb* dst = reinterpret_cast<QRgb*>(dithered.scanLine(y));
-        const int* bayerRow = detail::kBayer4[y & 3];
-        for (int x = 0; x < W; ++x) {
-            const int off = bayerRow[x & 3] * 16;
-            const QRgba64 s = src[x];
-            const int r = qMin(255, (int(s.red()) + off) / 257);
-            const int g = qMin(255, (int(s.green()) + off) / 257);
-            const int b = qMin(255, (int(s.blue()) + off) / 257);
-            const int a = qMin(255, (int(s.alpha()) + off) / 257);
-            dst[x] = qRgba(r, g, b, a);
-        }
-    }
-
-    painter.drawImage(rect.topLeft(), dithered);
-    painter.restore();
-
-    if (borderWidth > 0.0) {
-        drawGradientBorder(painter, rect, radius, borderTop, borderBottom, borderWidth);
-    }
 }
 
 } // namespace ruwa::ui::painting

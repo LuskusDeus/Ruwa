@@ -10,6 +10,7 @@
 #include <QHash>
 #include <QTimer>
 #include <QVariantMap>
+#include <QColor>
 #include <QPixmap>
 #include <QPointer>
 
@@ -67,6 +68,11 @@ public:
 
     /// Refresh blurred glass backdrop from a widget behind the overlay
     void refreshGlassBackdropFrom(QWidget* source);
+    /// Wash the host overlay puts between the window and this palette. The
+    /// capture is taken before that overlay has animated in - it cannot be
+    /// taken afterwards, because by then the palette is on screen and would
+    /// grab itself - so the palette applies it to its own glass instead.
+    void setBackdropWash(const QColor& wash);
 
     /// Check if visible/animating
     bool isActive() const;
@@ -130,7 +136,8 @@ private:
     void drawList(QPainter& painter);
     void drawListBackground(QPainter& painter, const QRectF& rect);
     void drawItem(QPainter& painter, int index, const QRectF& rect);
-    void drawGlassPanel(QPainter& painter, const QRectF& rect, int radius, bool hoverBorder);
+    void drawGlassPanel(QPainter& painter, const QRectF& rect, int radius, const QPixmap& backdrop,
+        bool hoverBorder);
     void drawSelectionHighlight(QPainter& painter, const QRectF& rect, qreal selectionProgress);
 
 private:
@@ -138,7 +145,12 @@ private:
     SearchBar* m_searchBar = nullptr;
     SmoothScrollBar* m_scrollBar = nullptr;
     QPointer<QWidget> m_glassBackdropSource;
-    QPixmap m_glassBackdrop;
+    QColor m_backdropWash;
+    /// Glass for the two panes, cut from one capture of the window behind
+    /// them. Each pane refracts its own shape, so they cannot share a pixmap
+    /// the way a plain blur could.
+    QPixmap m_searchBarGlass;
+    QPixmap m_listGlass;
 
     // Items
     QVector<CommandItem> m_items;
@@ -185,7 +197,8 @@ private:
     static constexpr int ScrollDuration = 120;
     static constexpr int WheelItemsPerStep = 9;
     static constexpr qreal WheelPixelMultiplier = 1.67;
-    static constexpr int GlassBlurRadius = 38;
+    /// Only reached when the GPU glass is unavailable.
+    static constexpr int GlassFallbackBlurRadius = 38;
     static constexpr qreal SelectionSelectStep = 0.16;
     static constexpr qreal SelectionUnselectStep = 0.12;
 };
