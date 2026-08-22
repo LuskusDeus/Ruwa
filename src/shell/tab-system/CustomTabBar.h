@@ -11,6 +11,7 @@
 #include <QIcon>
 #include <QPointer>
 #include <QString>
+#include <QTimer>
 #include <QUuid>
 #include <QVariantAnimation>
 #include "shell/context-menu/IContextMenuProvider.h"
@@ -160,6 +161,10 @@ private:
     void cancelTabDragCandidate();
     void resetTabDragState();
     QPoint ghostTargetPosition(const QPoint& globalPos) const;
+    void applyHoverAtPosition(const QPointF& pos);
+    void clearHoverState();
+    void updateHoverWatchdog();
+    void refreshHoverFromCursor();
     void startHoverAnimation(int index, bool hovering);
     void startCloseRevealAnimation(int index, bool reveal);
     void startFadeInAnimation(int index);
@@ -178,6 +183,8 @@ private:
     QHash<QUuid, int> m_indexById;
     QUuid m_activeId;
     int m_hoveredIndex = -1;
+    /// Backstop for a lost enter/leave: re-reads the real cursor while a tab is lit.
+    QTimer m_hoverWatchdog;
 
     /// documentTabId -> the smart object currently drawn in its breadcrumb slot.
     QHash<QUuid, QUuid> m_shownSmartByParent;

@@ -68,6 +68,11 @@ constexpr int kTabHoverAnimationMs = 200;
 constexpr int kStripAlignAnimMs = 280;
 constexpr int kCloseRevealInMs = 170;
 constexpr int kCloseRevealOutMs = 150;
+
+bool isAnimationRunning(const QAbstractAnimation* animation)
+{
+    return animation && animation->state() == QAbstractAnimation::Running;
+}
 } // namespace
 
 CustomTabBar::CustomTabBar(QWidget* parent)
@@ -75,6 +80,9 @@ CustomTabBar::CustomTabBar(QWidget* parent)
 {
     setMouseTracking(true);
     setSizePolicy(QSizePolicy::Expanding, QSizePolicy::Fixed);
+
+    m_hoverWatchdog.setInterval(150);
+    connect(&m_hoverWatchdog, &QTimer::timeout, this, &CustomTabBar::refreshHoverFromCursor);
 
     m_layoutSlideAnim = new QVariantAnimation(this);
     m_layoutSlideAnim->setDuration(anim::duration(240));
@@ -1061,7 +1069,7 @@ void CustomTabBar::applyVisibleRootOrder(const QList<QUuid>& rootOrder, bool ani
         }
     }
 
-    m_hoveredIndex = -1;
+    clearHoverState();
     if (animated && anyShift && m_layoutSlideAnim) {
         m_layoutSlideAnim->setStartValue(1.0);
         m_layoutSlideAnim->setEndValue(0.0);
@@ -1376,8 +1384,23 @@ void CustomTabBar::mouseMoveEvent(QMouseEvent* event)
         return;
     }
 
-    int oldHovered = m_hoveredIndex;
-    m_hoveredIndex = tabIndexAt(event->pos());
+    // A move that arrives after the leave it belongs behind would light the strip
+    // back up with nobody over it, and nothing would take that hover away again.
+    if (!underMouse() && !event->buttons()) {
+        clearHoverState();
+        QWidget::mouseMoveEvent(event);
+        return;
+    }
+
+    applyHoverAtPosition(event->position());
+
+    QWidget::mouseMoveEvent(event);
+}
+
+void CustomTabBar::applyHoverAtPosition(const QPointF& pos)
+{
+    const int oldHovered = m_hoveredIndex;
+    m_hoveredIndex = tabIndexAt(pos);
 
     // Update cursor based on position
     if (m_hoveredIndex >= 0) {
@@ -1393,7 +1416,7 @@ void CustomTabBar::mouseMoveEvent(QMouseEvent* event)
         const TabItem& hi = m_items[i];
         const bool overClose = (i == m_hoveredIndex)
             && hi.closeRect.translated(hi.slideOffsetX + hi.enterOffsetX, hi.verticalOffset)
-                   .contains(event->pos());
+                   .contains(pos);
         if (m_items[i].closeHovered != overClose) {
             m_items[i].closeHovered = overClose;
             needPaint = true;
@@ -1417,7 +1440,79 @@ void CustomTabBar::mouseMoveEvent(QMouseEvent* event)
         update();
     }
 
-    QWidget::mouseMoveEvent(event);
+    updateHoverWatchdog();
+}
+
+void CustomTabBar::clearHoverState()
+{
+    // Walk the items rather than only the hovered index: the index is dropped
+    // outright whenever the strip is rebuilt or re-ordered, which used to strand
+    // a lit tab (or a revealed ×) with nothing left pointing at it.
+    bool needPaint = false;
+    for (int i = 0; i < m_items.size(); ++i) {
+        TabItem& item = m_items[i];
+        if (item.closeHovered) {
+            item.closeHovered = false;
+            needPaint = true;
+        }
+        // An animation that is still running counts as lit even while its
+        // progress reads zero: it is on its way up, not settled at the bottom.
+        if (item.hoverProgress > 0.0 || isAnimationRunning(item.hoverAnim)) {
+            startHoverAnimation(i, false);
+            needPaint = true;
+        }
+        if (item.closeRevealProgress > 0.0 || isAnimationRunning(item.closeRevealAnim)) {
+            startCloseRevealAnimation(i, false);
+            needPaint = true;
+        }
+    }
+    m_hoveredIndex = -1;
+    unsetCursor();
+    m_hoverWatchdog.stop();
+    if (needPaint) {
+        update();
+    }
+}
+
+void CustomTabBar::updateHoverWatchdog()
+{
+    // Enter/leave can be lost — a move buffered behind a leave, a grab taken by
+    // another widget, a tab sliding out from under a cursor that never moves —
+    // and every one of those leaves a tab lit with no event coming to undo it.
+    // This is the backstop: while anything is lit, the real cursor is re-read.
+    bool live = m_hoveredIndex >= 0;
+    for (const TabItem& item : m_items) {
+        live = live || item.hoverProgress > 0.0 || item.closeRevealProgress > 0.0
+            || isAnimationRunning(item.hoverAnim) || isAnimationRunning(item.closeRevealAnim);
+        if (live) {
+            break;
+        }
+    }
+    if (live) {
+        if (!m_hoverWatchdog.isActive()) {
+            m_hoverWatchdog.start();
+        }
+    } else {
+        m_hoverWatchdog.stop();
+    }
+}
+
+void CustomTabBar::refreshHoverFromCursor()
+{
+    if (!isVisible() || m_dragActive) {
+        return;
+    }
+    const QWidget* topLevel = window();
+    if (!topLevel || !topLevel->isActiveWindow()) {
+        clearHoverState();
+        return;
+    }
+    const QPointF localPos = mapFromGlobal(QCursor::pos());
+    if (!rect().contains(localPos.toPoint())) {
+        clearHoverState();
+        return;
+    }
+    applyHoverAtPosition(localPos);
 }
 
 bool CustomTabBar::eventFilter(QObject* watched, QEvent* event)
@@ -1458,19 +1553,10 @@ bool CustomTabBar::eventFilter(QObject* watched, QEvent* event)
 
 void CustomTabBar::leaveEvent(QEvent* event)
 {
-    const int wasHovered = m_hoveredIndex;
-    for (int i = 0; i < m_items.size(); ++i) {
-        m_items[i].closeHovered = false;
-    }
-    m_hoveredIndex = -1;
-    // Only the tab that was hovered may have hoverProgress > 0 — animating all tabs backward
-    // restarts every QVariantAnimation and causes a brief false “hover” flash on everyone.
-    if (wasHovered >= 0 && wasHovered < m_items.size()) {
-        startHoverAnimation(wasHovered, false);
-        startCloseRevealAnimation(wasHovered, false);
-    }
-    unsetCursor();
-    update();
+    // Only a tab that carries progress is animated backward — running every tab
+    // back restarts each QVariantAnimation and flashes a false “hover” on all of
+    // them; clearHoverState() keeps that rule while covering the strays too.
+    clearHoverState();
     QWidget::leaveEvent(event);
 }
 
@@ -1509,9 +1595,20 @@ void CustomTabBar::startHoverAnimation(int index, bool hovering)
     if (!hoverAnim)
         return;
 
-    hoverAnim->stop();
+    const auto direction
+        = hovering ? QAbstractAnimation::Forward : QAbstractAnimation::Backward;
+
+    // Turning a running animation around keeps its current time, which is the
+    // progress already on screen. Stopping it first would not: Qt rewinds a
+    // stopped animation to whichever end its new direction starts from, so a tab
+    // brushed past at speed jumped to a full hover before fading out.
+    if (hoverAnim->state() == QAbstractAnimation::Running) {
+        hoverAnim->setDirection(direction);
+        return;
+    }
+
     hoverAnim->setDuration(anim::duration(kTabHoverAnimationMs));
-    hoverAnim->setDirection(hovering ? QAbstractAnimation::Forward : QAbstractAnimation::Backward);
+    hoverAnim->setDirection(direction);
     anim::start(hoverAnim);
 }
 
@@ -1525,9 +1622,14 @@ void CustomTabBar::startCloseRevealAnimation(int index, bool reveal)
     if (!revealAnim)
         return;
 
-    if (reveal && qFuzzyCompare(item.closeRevealProgress, 1.0))
+    // Only a settled reveal may be skipped. A pass fast enough to leave the tab
+    // before the first animation tick lands has a running reveal sitting at
+    // exactly 0, and bailing out there let the × keep rising with the cursor
+    // already gone — it then stayed lit until that same tab was hovered again.
+    const bool animating = revealAnim->state() == QAbstractAnimation::Running;
+    if (!animating && reveal && qFuzzyCompare(item.closeRevealProgress, 1.0))
         return;
-    if (!reveal && qFuzzyIsNull(item.closeRevealProgress))
+    if (!animating && !reveal && qFuzzyIsNull(item.closeRevealProgress))
         return;
 
     revealAnim->stop();
