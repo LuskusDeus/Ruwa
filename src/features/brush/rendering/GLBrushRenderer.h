@@ -198,6 +198,9 @@ private:
     // RGBA8 selection-mask snapshot scratch (separate format from the content
     // blur scratch). Used by the smudge/liquify mask-snapshot paths.
     bool ensureMaskScratchSize(GLsizei width, GLsizei height);
+    // Numerator/denominator ROI textures for the blur brush's coverage-weighted
+    // (normalized) pyramid — allocated only while a selection is active.
+    bool ensureBlurNormalizeTextures(GLsizei width, GLsizei height, GLsizei levels);
     GLuint ensureProceduralTextureTile(const TileKey& key, const TileBrush& brush);
 
     QOpenGLFunctions_4_5_Core* m_gl = nullptr;
@@ -206,6 +209,12 @@ private:
     // Halves the blur brush's ROI into the next mip level of the scratch
     // texture, building the pyramid the apply program samples per pixel.
     std::unique_ptr<GLShaderProgram> m_blurDownsampleProgram;
+    // Same halving step for the selection-aware path, run on the numerator
+    // (colour * coverage) and the denominator (coverage) at once.
+    std::unique_ptr<GLShaderProgram> m_blurDownsampleMaskedProgram;
+    // Splits the ROI snapshot into that numerator/denominator pair — level 0 of
+    // the normalized pyramid.
+    std::unique_ptr<GLShaderProgram> m_blurPremaskProgram;
     std::unique_ptr<GLShaderProgram> m_blurProgram;
     std::unique_ptr<GLShaderProgram> m_smudgeProgram;
     std::unique_ptr<GLShaderProgram> m_smudgeBatchProgram;
@@ -257,6 +266,20 @@ private:
     GLuint m_maskScratchTex = 0;
     GLsizei m_maskScratchWidth = 0;
     GLsizei m_maskScratchHeight = 0;
+
+    // Normalized-convolution pair for the blur brush under a selection. A plain
+    // pyramid averages selected and unselected pixels together, so content that
+    // ends exactly ON the selection border loses alpha to the empty side (a
+    // translucent fringe). Weighting every tap by the selection coverage and
+    // dividing by the summed coverage turns the border into a wall: only
+    // selected pixels contribute, and a fully covered neighbourhood reproduces
+    // the plain blur exactly. Float storage because the division amplifies the
+    // quantization an 8-bit numerator would carry at low coverage.
+    GLuint m_blurWeightedTex = 0; // RGBA16F, colour * coverage, mip pyramid
+    GLuint m_blurCoverageTex = 0; // R16F, coverage, same mip layout
+    GLsizei m_blurNormalizeWidth = 0;
+    GLsizei m_blurNormalizeHeight = 0;
+    GLsizei m_blurNormalizeLevels = 1;
 
     // Smudge and Wet share the travelling reservoir geometry, but not its
     // color interpretation. Wet uses all four PigmentModel latent planes;

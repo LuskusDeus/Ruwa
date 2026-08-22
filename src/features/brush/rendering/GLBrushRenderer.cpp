@@ -507,6 +507,50 @@ const QString kBlurDownsampleFrag
                      "    outColor = c * (1.0 / 16.0);\n"
                      "}\n");
 
+// Level 0 of the selection-aware pyramid: split the ROI snapshot into the
+// coverage-weighted colour and the coverage itself. Everything the selection
+// excludes enters both sums as zero, so it can never dilute a tap.
+const QString kBlurPremaskFrag
+    = QStringLiteral("#version 450 core\n"
+                     "uniform sampler2D uSourceTexture;\n"
+                     "uniform sampler2D uMaskTexture;\n"
+                     "in vec2 fragTexCoord;\n"
+                     "layout(location = 0) out vec4 outWeighted;\n"
+                     "layout(location = 1) out float outCoverage;\n"
+                     "void main() {\n"
+                     "    float coverage = texture(uMaskTexture, fragTexCoord).a;\n"
+                     "    outWeighted = textureLod(uSourceTexture, fragTexCoord, 0.0) * coverage;\n"
+                     "    outCoverage = coverage;\n"
+                     "}\n");
+
+// Same 4x4 tent as kBlurDownsampleFrag, carried on both halves of the ratio at
+// once so numerator and denominator stay built from identical taps.
+const QString kBlurDownsampleMaskedFrag
+    = QStringLiteral("#version 450 core\n"
+                     "uniform sampler2D uSourceTexture;\n"
+                     "uniform sampler2D uCoverageTexture;\n"
+                     "uniform vec2 uInvParentSize;\n"
+                     "in vec2 fragTexCoord;\n"
+                     "layout(location = 0) out vec4 outWeighted;\n"
+                     "layout(location = 1) out float outCoverage;\n"
+                     "void main() {\n"
+                     "    vec2 o = uInvParentSize;\n"
+                     "    vec2 taps[9] = vec2[](vec2(0.0), vec2(o.x, 0.0), vec2(-o.x, 0.0),\n"
+                     "        vec2(0.0, o.y), vec2(0.0, -o.y), vec2(o.x, o.y), vec2(o.x, -o.y),\n"
+                     "        vec2(-o.x, o.y), vec2(-o.x, -o.y));\n"
+                     "    float weights[9] = float[](4.0, 2.0, 2.0, 2.0, 2.0, 1.0, 1.0, 1.0, "
+                     "1.0);\n"
+                     "    vec4 c = vec4(0.0);\n"
+                     "    float m = 0.0;\n"
+                     "    for (int i = 0; i < 9; ++i) {\n"
+                     "        vec2 uv = fragTexCoord + taps[i];\n"
+                     "        c += textureLod(uSourceTexture, uv, 0.0) * weights[i];\n"
+                     "        m += textureLod(uCoverageTexture, uv, 0.0).r * weights[i];\n"
+                     "    }\n"
+                     "    outWeighted = c * (1.0 / 16.0);\n"
+                     "    outCoverage = m * (1.0 / 16.0);\n"
+                     "}\n");
+
 // The dab profile drives the blur SIGMA, not a cross-fade towards the sharp
 // original. Mixing `original` with a fixed-sigma blur is not the same thing as
 // a weaker blur: it leaves the full sharp image underneath at (1-k) weight, so
@@ -523,8 +567,10 @@ const QString kBlurApplyFrag = QStringLiteral(
     "uniform float uBrushAngleRad;\n"
     "uniform sampler2D uOriginalTexture;\n"
     "uniform sampler2D uBlurPyramid;\n"
+    "uniform sampler2D uCoveragePyramid;\n"
     "uniform sampler2D uMaskTexture;\n"
     "uniform int   uUseMask;\n"
+    "uniform int   uNormalized;\n"
     "uniform float uPeakSigma;\n"
     "uniform float uMaxLod;\n"
     "uniform vec2  uInvTileSize;\n"
@@ -544,16 +590,16 @@ const QString kBlurApplyFrag = QStringLiteral(
     // 3x3 tent around uv at `lod`, taps `offset` uv apart. Level lod already
     // carries sigma 0.5*sqrt(4^lod - 1); the tent adds offsetPx/sqrt(2) on top,
     // and the caller sizes the offset so the two compose to exactly `sigma`.
-    "vec4 tentSample(vec2 uv, float lod, vec2 offset) {\n"
-    "    vec4 c = textureLod(uBlurPyramid, uv, lod) * 4.0;\n"
-    "    c += (textureLod(uBlurPyramid, uv + vec2(offset.x, 0.0), lod)\n"
-    "        + textureLod(uBlurPyramid, uv - vec2(offset.x, 0.0), lod)\n"
-    "        + textureLod(uBlurPyramid, uv + vec2(0.0, offset.y), lod)\n"
-    "        + textureLod(uBlurPyramid, uv - vec2(0.0, offset.y), lod)) * 2.0;\n"
-    "    c += textureLod(uBlurPyramid, uv + offset, lod)\n"
-    "        + textureLod(uBlurPyramid, uv + vec2(offset.x, -offset.y), lod)\n"
-    "        + textureLod(uBlurPyramid, uv + vec2(-offset.x, offset.y), lod)\n"
-    "        + textureLod(uBlurPyramid, uv - offset, lod);\n"
+    "vec4 tentSample(sampler2D tex, vec2 uv, float lod, vec2 offset) {\n"
+    "    vec4 c = textureLod(tex, uv, lod) * 4.0;\n"
+    "    c += (textureLod(tex, uv + vec2(offset.x, 0.0), lod)\n"
+    "        + textureLod(tex, uv - vec2(offset.x, 0.0), lod)\n"
+    "        + textureLod(tex, uv + vec2(0.0, offset.y), lod)\n"
+    "        + textureLod(tex, uv - vec2(0.0, offset.y), lod)) * 2.0;\n"
+    "    c += textureLod(tex, uv + offset, lod)\n"
+    "        + textureLod(tex, uv + vec2(offset.x, -offset.y), lod)\n"
+    "        + textureLod(tex, uv + vec2(-offset.x, offset.y), lod)\n"
+    "        + textureLod(tex, uv - offset, lod);\n"
     "    return c * (1.0 / 16.0);\n"
     "}\n"
     "void main() {\n"
@@ -590,7 +636,18 @@ const QString kBlurApplyFrag = QStringLiteral(
     "    float levelSigma = 0.5 * sqrt(max(exp2(2.0 * lod) - 1.0, 0.0));\n"
     "    float tentSigma = sqrt(max(sigma * sigma - levelSigma * levelSigma, 0.0));\n"
     "    vec2 offset = uInvRoiSize * (tentSigma * 1.41421356);\n"
-    "    vec4 blurred = tentSample(sourceUv, lod, offset);\n"
+    "    vec4 blurred;\n"
+    "    if (uNormalized != 0) {\n"
+    // Normalized convolution: the pyramid holds colour * coverage and the
+    // coverage itself, so dividing the two sums renormalizes the kernel over
+    // the selected pixels alone. An edge that runs along the selection border
+    // therefore keeps its alpha instead of averaging with the empty outside.
+    "        vec4 weighted = tentSample(uBlurPyramid, sourceUv, lod, offset);\n"
+    "        float coverage = tentSample(uCoveragePyramid, sourceUv, lod, offset).r;\n"
+    "        blurred = coverage > 1e-4 ? weighted / coverage : original;\n"
+    "    } else {\n"
+    "        blurred = tentSample(uBlurPyramid, sourceUv, lod, offset);\n"
+    "    }\n"
     "    outColor = mix(original, blurred, maskScale);\n"
     "    if (outColor.a > 0.0 && outColor.a < 1.0) {\n"
     "        float dither = stableDither(worldPixelCoord) / 255.0;\n"
@@ -1451,6 +1508,20 @@ Result<void> GLBrushRenderer::initialize(const QString& shaderDir)
         return blurPassResult;
     }
 
+    m_blurPremaskProgram = std::make_unique<GLShaderProgram>(m_gl);
+    auto blurPremaskResult
+        = m_blurPremaskProgram->loadFromSource(kBlurDownsampleVert, kBlurPremaskFrag);
+    if (!blurPremaskResult) {
+        return blurPremaskResult;
+    }
+
+    m_blurDownsampleMaskedProgram = std::make_unique<GLShaderProgram>(m_gl);
+    auto blurMaskedPassResult = m_blurDownsampleMaskedProgram->loadFromSource(
+        kBlurDownsampleVert, kBlurDownsampleMaskedFrag);
+    if (!blurMaskedPassResult) {
+        return blurMaskedPassResult;
+    }
+
     m_blurProgram = std::make_unique<GLShaderProgram>(m_gl);
     auto blurResult = m_blurProgram->loadFromSource(kBrushStampVert, kBlurApplyFrag);
     if (!blurResult) {
@@ -1773,6 +1844,8 @@ Result<void> GLBrushRenderer::initialize(const QString& shaderDir)
             m_blurPyramidSampler = 0;
         }
         deleteTexture(m_gl, m_blurScratchSourceTex);
+        deleteTexture(m_gl, m_blurWeightedTex);
+        deleteTexture(m_gl, m_blurCoverageTex);
         deleteTexture(m_gl, m_blurReadTex);
         deleteTexture(m_gl, m_pigmentLutTex[0]);
         deleteTexture(m_gl, m_pigmentLutTex[1]);
@@ -1893,6 +1966,8 @@ void GLBrushRenderer::shutdown()
     m_wetApplyBatchProgram.reset();
     m_liquifyFieldProgram.reset();
     m_liquifyResolveProgram.reset();
+    m_blurPremaskProgram.reset();
+    m_blurDownsampleMaskedProgram.reset();
     m_formatCopyProgram.reset();
     m_rebuildBatchProgram.reset();
     m_flattenProgram.reset();
@@ -1907,6 +1982,11 @@ void GLBrushRenderer::shutdown()
 
     deleteTexture(m_gl, m_blurReadTex);
     deleteTexture(m_gl, m_blurScratchSourceTex);
+    deleteTexture(m_gl, m_blurWeightedTex);
+    deleteTexture(m_gl, m_blurCoverageTex);
+    m_blurNormalizeWidth = 0;
+    m_blurNormalizeHeight = 0;
+    m_blurNormalizeLevels = 1;
     deleteTexture(m_gl, m_maskScratchTex);
     deleteTexture(m_gl, m_pigmentLutTex[0]);
     deleteTexture(m_gl, m_pigmentLutTex[1]);
@@ -2178,6 +2258,46 @@ void GLBrushRenderer::stampGPU(TileGrid& strokeBuffer, GLTileRenderer* tileRende
             }
         }
 
+        // Under a selection the blur must not average across its border: a shape
+        // whose edge runs exactly ALONG the border would otherwise mix with the
+        // unselected side and come out translucent there. Snapshot the selection
+        // coverage over the whole ROI (the same trick liquify uses for its field)
+        // and run the pyramid on the coverage-weighted pair instead, so every tap
+        // outside the selection contributes nothing to either sum.
+        const bool normalized = useSelectionMask && m_blurPremaskProgram
+            && m_blurDownsampleMaskedProgram && ensureMaskScratchSize(roiWidth, roiHeight)
+            && ensureBlurNormalizeTextures(roiWidth, roiHeight, m_blurScratchLevels);
+        if (normalized) {
+            clearTexture(m_maskScratchTex);
+            for (int32_t srcTy = srcMinTileY; srcTy <= srcMaxTileY; ++srcTy) {
+                for (int32_t srcTx = srcMinTileX; srcTx <= srcMaxTileX; ++srcTx) {
+                    TileData* maskTile = selectionMask->getTile(TileKey { srcTx, srcTy });
+                    if (!maskTile) {
+                        continue;
+                    }
+                    ensureUploadedTileTexture(maskTile);
+                    if (!maskTile->hasTexture()) {
+                        continue;
+                    }
+                    const int32_t tileMinX = srcTx * static_cast<int32_t>(TILE_SIZE);
+                    const int32_t tileMinY = srcTy * static_cast<int32_t>(TILE_SIZE);
+                    const int32_t copyMinX = std::max(roiMinX, tileMinX);
+                    const int32_t copyMinY = std::max(roiMinY, tileMinY);
+                    const int32_t copyMaxX
+                        = std::min(roiMaxX, tileMinX + static_cast<int32_t>(TILE_SIZE));
+                    const int32_t copyMaxY
+                        = std::min(roiMaxY, tileMinY + static_cast<int32_t>(TILE_SIZE));
+                    if (copyMaxX <= copyMinX || copyMaxY <= copyMinY) {
+                        continue;
+                    }
+                    m_gl->glCopyImageSubData(maskTile->textureId(), GL_TEXTURE_2D, 0,
+                        copyMinX - tileMinX, copyMinY - tileMinY, 0, m_maskScratchTex,
+                        GL_TEXTURE_2D, 0, copyMinX - roiMinX, copyMinY - roiMinY, 0,
+                        copyMaxX - copyMinX, copyMaxY - copyMinY, 1);
+                }
+            }
+        }
+
         // Build the blur pyramid in the ROI texture's own mip levels: level 0 is
         // the untouched source (sigma 0), each further level halves the ROI with
         // a 4x4 tent. Only the levels the peak sigma can actually reach are
@@ -2191,7 +2311,73 @@ void GLBrushRenderer::stampGPU(TileGrid& strokeBuffer, GLTileRenderer* tileRende
             = std::clamp(static_cast<int>(std::ceil(std::log2(std::max(peakOffsetPx, 1.0f)))), 0,
                 std::max(maxUsefulLevel, 0));
 
-        if (pyramidLevels > 0) {
+        if (normalized) {
+            // Level 0 of the normalized pyramid: colour * coverage, and coverage.
+            constexpr GLenum kNormalizeDrawBuffers[2]
+                = { GL_COLOR_ATTACHMENT0, GL_COLOR_ATTACHMENT1 };
+            m_blurPremaskProgram->use();
+            m_blurPremaskProgram->setUniform("uSourceTexture", 0);
+            m_blurPremaskProgram->setUniform("uMaskTexture", 2);
+            m_gl->glBindTextureUnit(0, m_blurScratchSourceTex);
+            m_gl->glBindTextureUnit(2, m_maskScratchTex);
+            m_gl->glFramebufferTexture2D(
+                GL_FRAMEBUFFER, GL_COLOR_ATTACHMENT0, GL_TEXTURE_2D, m_blurWeightedTex, 0);
+            m_gl->glFramebufferTexture2D(
+                GL_FRAMEBUFFER, GL_COLOR_ATTACHMENT1, GL_TEXTURE_2D, m_blurCoverageTex, 0);
+            m_gl->glDrawBuffers(2, kNormalizeDrawBuffers);
+            m_gl->glViewport(0, 0, roiWidth, roiHeight);
+            m_gl->glDrawArrays(GL_TRIANGLES, 0, 6);
+            ++m_drawCallEstimate;
+
+            if (pyramidLevels > 0) {
+                m_blurDownsampleMaskedProgram->use();
+                m_blurDownsampleMaskedProgram->setUniform("uSourceTexture", 0);
+                m_blurDownsampleMaskedProgram->setUniform("uCoverageTexture", 1);
+                m_gl->glBindTextureUnit(0, m_blurWeightedTex);
+                m_gl->glBindTextureUnit(1, m_blurCoverageTex);
+                if (m_blurPyramidSampler) {
+                    m_gl->glBindSampler(0, m_blurPyramidSampler);
+                    m_gl->glBindSampler(1, m_blurPyramidSampler);
+                }
+
+                for (int level = 1; level <= pyramidLevels; ++level) {
+                    const GLsizei parentW = std::max<GLsizei>(roiWidth >> (level - 1), 1);
+                    const GLsizei parentH = std::max<GLsizei>(roiHeight >> (level - 1), 1);
+                    const GLsizei levelW = std::max<GLsizei>(roiWidth >> level, 1);
+                    const GLsizei levelH = std::max<GLsizei>(roiHeight >> level, 1);
+
+                    // Same read-while-write rule as the plain pyramid: pin the
+                    // readable range to the parent of the level being written.
+                    for (const GLuint texture : { m_blurWeightedTex, m_blurCoverageTex }) {
+                        m_gl->glTextureParameteri(texture, GL_TEXTURE_BASE_LEVEL, level - 1);
+                        m_gl->glTextureParameteri(texture, GL_TEXTURE_MAX_LEVEL, level - 1);
+                    }
+                    m_gl->glFramebufferTexture2D(GL_FRAMEBUFFER, GL_COLOR_ATTACHMENT0,
+                        GL_TEXTURE_2D, m_blurWeightedTex, level);
+                    m_gl->glFramebufferTexture2D(GL_FRAMEBUFFER, GL_COLOR_ATTACHMENT1,
+                        GL_TEXTURE_2D, m_blurCoverageTex, level);
+                    m_gl->glViewport(0, 0, levelW, levelH);
+                    m_blurDownsampleMaskedProgram->setUniform("uInvParentSize",
+                        1.0f / static_cast<float>(parentW), 1.0f / static_cast<float>(parentH));
+
+                    m_gl->glDrawArrays(GL_TRIANGLES, 0, 6);
+                    ++m_drawCallEstimate;
+                }
+
+                for (const GLuint texture : { m_blurWeightedTex, m_blurCoverageTex }) {
+                    m_gl->glTextureParameteri(texture, GL_TEXTURE_BASE_LEVEL, 0);
+                    m_gl->glTextureParameteri(
+                        texture, GL_TEXTURE_MAX_LEVEL, m_blurNormalizeLevels - 1);
+                }
+                if (m_blurPyramidSampler) {
+                    m_gl->glBindSampler(0, 0);
+                    m_gl->glBindSampler(1, 0);
+                }
+                m_gl->glBindTextureUnit(1, 0);
+            }
+            m_gl->glBindTextureUnit(2, 0);
+            restoreSingleColorTarget(m_gl);
+        } else if (pyramidLevels > 0) {
             m_blurDownsampleProgram->use();
             m_blurDownsampleProgram->setUniform("uSourceTexture", 0);
             m_gl->glBindTextureUnit(0, m_blurScratchSourceTex);
@@ -2232,7 +2418,9 @@ void GLBrushRenderer::stampGPU(TileGrid& strokeBuffer, GLTileRenderer* tileRende
         m_blurProgram->setUniform("uOriginalTexture", 0);
         m_blurProgram->setUniform("uBlurPyramid", 1);
         m_blurProgram->setUniform("uMaskTexture", 2);
+        m_blurProgram->setUniform("uCoveragePyramid", 4);
         m_blurProgram->setUniform("uUseMask", useSelectionMask ? 1 : 0);
+        m_blurProgram->setUniform("uNormalized", normalized ? 1 : 0);
         m_blurProgram->setUniform("uBrushRadius", radius);
         m_blurProgram->setUniform("uBrushHardness", hardness);
         m_blurProgram->setUniform("uBrushRoundness", std::clamp(roundness, 0.0f, 1.0f));
@@ -2248,10 +2436,18 @@ void GLBrushRenderer::stampGPU(TileGrid& strokeBuffer, GLTileRenderer* tileRende
             1.0f / static_cast<float>(roiHeight));
 
         // Unit 0 keeps the texture's own NEAREST filtering for the untouched
-        // original; unit 1 is the same texture read trilinearly as the pyramid.
-        m_gl->glBindTextureUnit(1, m_blurScratchSourceTex);
+        // original; unit 1 is the pyramid read trilinearly — the same texture in
+        // the plain case, the coverage-weighted numerator under a selection.
+        const GLuint pyramidTex = normalized ? m_blurWeightedTex : m_blurScratchSourceTex;
+        m_gl->glBindTextureUnit(1, pyramidTex);
         if (m_blurPyramidSampler) {
             m_gl->glBindSampler(1, m_blurPyramidSampler);
+        }
+        if (normalized) {
+            m_gl->glBindTextureUnit(4, m_blurCoverageTex);
+            if (m_blurPyramidSampler) {
+                m_gl->glBindSampler(4, m_blurPyramidSampler);
+            }
         }
 
         m_gl->glViewport(0, 0, TILE_SIZE, TILE_SIZE);
@@ -2345,7 +2541,7 @@ void GLBrushRenderer::stampGPU(TileGrid& strokeBuffer, GLTileRenderer* tileRende
                 m_blurProgram->setUniform("uQuadMax", quadMaxX, quadMaxY);
 
                 m_gl->glBindTextureUnit(0, m_blurScratchSourceTex);
-                m_gl->glBindTextureUnit(1, m_blurScratchSourceTex);
+                m_gl->glBindTextureUnit(1, pyramidTex);
 
                 m_gl->glDrawArrays(GL_TRIANGLES, 0, 6);
                 ++m_drawCallEstimate;
@@ -2358,6 +2554,12 @@ void GLBrushRenderer::stampGPU(TileGrid& strokeBuffer, GLTileRenderer* tileRende
         m_gl->glBindTextureUnit(1, 0);
         if (m_blurPyramidSampler) {
             m_gl->glBindSampler(1, 0);
+        }
+        if (normalized) {
+            m_gl->glBindTextureUnit(4, 0);
+            if (m_blurPyramidSampler) {
+                m_gl->glBindSampler(4, 0);
+            }
         }
         if (useSelectionMask) {
             m_gl->glBindTextureUnit(2, 0);
@@ -4539,6 +4741,39 @@ bool GLBrushRenderer::ensureMaskScratchSize(GLsizei width, GLsizei height)
     recreateTexture2D(m_gl, m_maskScratchTex, width, height,
         tileTextureParams(TilePixelFormat::RGBA8, GL_NEAREST, GL_NEAREST));
     return m_maskScratchTex != 0;
+}
+
+bool GLBrushRenderer::ensureBlurNormalizeTextures(GLsizei width, GLsizei height, GLsizei levels)
+{
+    if (width <= 0 || height <= 0 || levels <= 0) {
+        return false;
+    }
+    if (m_blurWeightedTex != 0 && m_blurCoverageTex != 0 && width == m_blurNormalizeWidth
+        && height == m_blurNormalizeHeight && levels == m_blurNormalizeLevels) {
+        return true;
+    }
+
+    m_blurNormalizeWidth = width;
+    m_blurNormalizeHeight = height;
+    m_blurNormalizeLevels = levels;
+
+    // Both halves of the ratio carry the same mip layout as the content scratch,
+    // so one lod feeds identical taps into the numerator and the denominator.
+    TextureParams weightedParams;
+    weightedParams.minFilter = GL_LINEAR_MIPMAP_LINEAR;
+    weightedParams.magFilter = GL_LINEAR;
+    weightedParams.internalFormat = GL_RGBA16F;
+    weightedParams.pixelFormat = GL_RGBA;
+    weightedParams.pixelType = GL_HALF_FLOAT;
+    weightedParams.levels = levels;
+    recreateTexture2D(m_gl, m_blurWeightedTex, width, height, weightedParams);
+
+    TextureParams coverageParams = weightedParams;
+    coverageParams.internalFormat = GL_R16F;
+    coverageParams.pixelFormat = GL_RED;
+    recreateTexture2D(m_gl, m_blurCoverageTex, width, height, coverageParams);
+
+    return m_blurWeightedTex != 0 && m_blurCoverageTex != 0;
 }
 
 namespace {
