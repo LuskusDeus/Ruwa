@@ -223,6 +223,7 @@ bool CanvasMouseInputHandler::beginBrushSizeAdjust(QMouseEvent* event)
     // stop following the pointer with it.
     gl->setCursorPositionPinned(true);
     m_brushSizeAnchorGlobal = globalPos;
+    m_brushSizeLastGlobal = globalPos;
     m_brushSizeAnchorVx = static_cast<float>(static_cast<qreal>(localPos.x()) * scaleX);
     m_brushSizeAnchorVy = static_cast<float>(static_cast<qreal>(localPos.y()) * scaleY);
     m_brushSizeCursorScale = static_cast<float>((scaleX + scaleY) * 0.5);
@@ -253,6 +254,7 @@ void CanvasMouseInputHandler::updateBrushSizeAdjust(const QPoint& globalPos)
     if (!m_brushSizeAdjust || !m_panel || !gl) {
         return;
     }
+    m_brushSizeLastGlobal = globalPos;
 
     // Horizontal drag only: the radius grows to the right and shrinks to the
     // left, starting from the size the brush had when the drag began. The ring

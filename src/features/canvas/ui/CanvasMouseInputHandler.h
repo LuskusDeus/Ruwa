@@ -39,6 +39,12 @@ public:
     bool handleMouseRelease(QMouseEvent* event);
     bool handleMouseDoubleClick(QMouseEvent* event);
 
+    /// True while a Shift+Alt brush-size drag owns the on-canvas ring.
+    bool isBrushSizeAdjustActive() const { return m_brushSizeAdjust; }
+    /// Re-run that drag against the zoom of the current frame: the pointer
+    /// offset is screen-space, so a zoom under it changes the size it means.
+    void refreshBrushSizeAdjust() { updateBrushSizeAdjust(m_brushSizeLastGlobal); }
+
 private:
     /// Recovered WM_MOUSEMOVE samples + current event (same idea as brush continueStroke).
     void dispatchUncoalescedWorldMoves(
@@ -77,6 +83,7 @@ private:
     float m_brushSizeAnchorVy = 0.0f;
     float m_brushSizeCursorScale = 1.0f;
     float m_brushSizeStartRadius = 0.0f;
+    QPoint m_brushSizeLastGlobal;
 };
 
 } // namespace ruwa::ui::workspace

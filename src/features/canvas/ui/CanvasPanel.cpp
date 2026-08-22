@@ -3365,8 +3365,9 @@ bool CanvasPanel::handleWheelZoom(QWheelEvent* event)
     if (m_cursorManager) {
         // The application-level input arbiter has selected the wheel's mouse
         // source before this handler runs. Refresh the custom cursor immediately
-        // so it cannot remain at the previous direct-WinTab sample.
-        m_cursorManager->refreshCursorPosition();
+        // so it cannot remain at the previous direct-WinTab sample. Goes through
+        // the overlay helper so a Shift+Alt size drag keeps its parked ring.
+        updateBrushCursorOverlayRadius();
     }
     return m_viewController && m_viewController->handleWheelZoom(event);
 }
@@ -4509,6 +4510,15 @@ std::optional<Qt::CursorShape> CanvasPanel::resolveCursorForPosition(const QPoin
 
 void CanvasPanel::updateBrushCursorOverlayRadius()
 {
+    // A Shift+Alt size drag owns the ring: it parks it on the anchor and keeps
+    // the cursor manager suppressed, so handing this to the manager would only
+    // clear the ring on every frame of a running zoom animation. Re-run the
+    // drag here instead: its pointer offset is screen-space, so the size it
+    // stands for follows the zoom even while the pointer sits still.
+    if (m_mouseHandler && m_mouseHandler->isBrushSizeAdjustActive()) {
+        m_mouseHandler->refreshBrushSizeAdjust();
+        return;
+    }
     if (m_cursorManager) {
         m_cursorManager->refreshCursorPosition();
     }
