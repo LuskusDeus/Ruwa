@@ -344,6 +344,12 @@ public:
     void setColorPanelVisible(bool visible);
     void setNavigatorPanelVisible(bool visible);
 
+    /// The input the shared colour picker is currently serving, or null when it
+    /// closed. Only the text colour matters here: while its picker is up, the
+    /// canvas drops the inverted selection highlight so the colour being
+    /// previewed is the colour the user sees.
+    void setColorPickerTarget(QWidget* sourceButton);
+
     /// Set canvas widgets visibility (called from View → Canvas widgets menu)
     void setCanvasWidgetVisible(ruwa::ui::CanvasWidget widget, bool visible);
 

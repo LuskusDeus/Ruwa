@@ -374,6 +374,11 @@ void LayerPropertiesPanel::setTextSelectionProvider(
 //   T E X T   G R O U P S
 // ============================================================================
 
+bool LayerPropertiesPanel::ownsTextColorInput(const QWidget* widget) const
+{
+    return m_characterEditor && m_characterEditor->ownsColorInput(widget);
+}
+
 void LayerPropertiesPanel::refreshTextGroups()
 {
     if (!m_characterEditor || !m_paragraphEditor) {

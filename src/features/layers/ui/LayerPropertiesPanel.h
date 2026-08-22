@@ -54,6 +54,9 @@ public:
     /// is what makes the Character group show the whole layer instead.
     void setTextSelectionProvider(std::function<std::optional<std::pair<int, int>>()> provider);
 
+    /// True when @p widget is the Character group's colour swatch.
+    bool ownsTextColorInput(const QWidget* widget) const;
+
 protected:
     QWidget* createContent() override;
     void onThemeChanged() override;

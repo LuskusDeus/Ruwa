@@ -662,6 +662,14 @@ void MainWindow::connectSignals()
         [this](const QColor& color, QWidget* button) {
             m_overlayCoordinator->showColorPicker(color, button);
         });
+    // The workspace has previews of its own that the picker's target competes
+    // with, so it is told which input the picker is serving, and when it closed.
+    connect(m_overlayCoordinator, &OverlayCoordinator::colorPickerTargetChanged, this,
+        [this](QWidget* button) {
+            if (auto* ws = activeWorkspaceTab()) {
+                ws->setColorPickerTarget(button);
+            }
+        });
 
     // Menu actions (most items call CommandExecutor directly in TopBar; only custom handlers here)
     connect(m_topBar, &widgets::TopBar::fileImportImagesRequested, this,

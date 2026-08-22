@@ -61,6 +61,10 @@ public:
     /// half-typed value alone when the document reports new ones.
     bool isEditingValue() const;
 
+    /// True when @p widget is this group's colour swatch — the input a colour
+    /// picker opened from here is serving.
+    bool ownsColorInput(const QWidget* widget) const;
+
     void applyTheme();
     /// The group's two-column row layout, so the owning panel can line its
     /// caption column up with the other groups'.

@@ -53,6 +53,10 @@ public:
     /// The caret, the selection or the session itself moved: tells the panel to
     /// re-read the character attributes it is showing.
     void notifyFormattingStateChanged();
+    /// Hides the selection highlight without touching the selection itself, for
+    /// as long as something else is previewing on those characters.
+    void setSelectionHighlightSuppressed(bool suppressed);
+
     /// Selected characters as [from, to). Equal values mean a bare caret.
     std::pair<int, int> selectionRange() const;
     void toggleSelectedEffect(ruwa::core::layers::TextStyleEffect effect);
@@ -113,6 +117,7 @@ private:
     bool m_applyingEditorText = false;
     bool m_shortcutsBlocked = false;
     bool m_caretVisible = true;
+    bool m_selectionHighlightSuppressed = false;
     /// Set while the session itself is writing to the model, so its own
     /// notifications do not come back in as an external change.
     bool m_ignoreModelSignals = false;

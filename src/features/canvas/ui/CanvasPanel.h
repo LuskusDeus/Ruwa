@@ -246,6 +246,10 @@ public:
     /// difference matters: a caret edits the defaults, no session edits the
     /// whole layer.
     std::optional<std::pair<int, int>> textEditingSelection() const;
+
+    /// Drops the inverted selection highlight of an open text session while
+    /// something else is previewing on those characters (the colour picker).
+    void setTextSelectionHighlightSuppressed(bool suppressed);
     /// Perform one Character / Paragraph panel edit on @p id as a single undo
     /// step. Honours the open editing session's selection when there is one.
     bool applyTextLayerEdit(

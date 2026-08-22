@@ -42,6 +42,10 @@ public:
 
 signals:
     void firstLaunchUpdateMessageDismissed();
+    /// The shared colour picker opened over @p sourceButton, or closed
+    /// (@p sourceButton null). Editors whose preview the picker is competing
+    /// with — the inverted text selection, for one — listen for this.
+    void colorPickerTargetChanged(QWidget* sourceButton);
 
 private:
     void ensureUpdateMessageOverlay();

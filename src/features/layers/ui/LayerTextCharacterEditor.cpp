@@ -306,6 +306,11 @@ PropertyRowLayout* LayerTextCharacterEditor::rowLayout() const
     return m_rows.get();
 }
 
+bool LayerTextCharacterEditor::ownsColorInput(const QWidget* widget) const
+{
+    return widget && widget == static_cast<const QWidget*>(m_colorInput);
+}
+
 void LayerTextCharacterEditor::applyTheme()
 {
     auto& tm = ThemeManager::instance();

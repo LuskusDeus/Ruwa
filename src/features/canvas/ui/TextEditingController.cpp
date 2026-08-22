@@ -527,6 +527,17 @@ void TextEditingController::notifyFormattingStateChanged()
     }
 }
 
+void TextEditingController::setSelectionHighlightSuppressed(bool suppressed)
+{
+    if (m_selectionHighlightSuppressed == suppressed) {
+        return;
+    }
+    m_selectionHighlightSuppressed = suppressed;
+    // Geometry only: the selection is unchanged, so nothing has to re-read the
+    // formatting state — and the control doing the previewing keeps its focus.
+    pushOverlayState();
+}
+
 std::pair<int, int> TextEditingController::selectionRange() const
 {
     if (!m_active || !m_editor) {
@@ -820,6 +831,7 @@ void TextEditingController::resetSessionState()
     m_layerId = QUuid();
     m_parentId = QUuid();
     m_insertIndex = -1;
+    m_selectionHighlightSuppressed = false;
 }
 
 void TextEditingController::discardSession()
@@ -1061,7 +1073,7 @@ void TextEditingController::pushOverlayState()
     state.sourceBounds = state.transform.contentBounds;
     state.caretVisible = m_caretVisible && !cursor.hasSelection();
     state.caretSourceRect = aether::computeTextCaretSourceRect(*layer->textData, cursor.position());
-    if (cursor.hasSelection()) {
+    if (cursor.hasSelection() && !m_selectionHighlightSuppressed) {
         state.selectionSourceRects = aether::computeTextSelectionSourceRects(
             *layer->textData, cursor.selectionStart(), cursor.selectionEnd());
     }

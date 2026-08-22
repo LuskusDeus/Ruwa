@@ -2265,6 +2265,13 @@ std::optional<std::pair<int, int>> CanvasPanel::textEditingSelection() const
     return m_textEditingController->selectionRange();
 }
 
+void CanvasPanel::setTextSelectionHighlightSuppressed(bool suppressed)
+{
+    if (m_textEditingController) {
+        m_textEditingController->setSelectionHighlightSuppressed(suppressed);
+    }
+}
+
 bool CanvasPanel::applyTextLayerEdit(
     const ruwa::core::layers::LayerId& id, const ruwa::core::layers::TextLayerEdit& edit)
 {

@@ -43,8 +43,10 @@ void OverlayCoordinator::initialize(
                 }
             });
 
-        connect(m_colorPickerOverlay, &widgets::ColorPickerOverlay::hidden, this,
-            [this]() { m_activeColorButton = nullptr; });
+        connect(m_colorPickerOverlay, &widgets::ColorPickerOverlay::hidden, this, [this]() {
+            m_activeColorButton = nullptr;
+            emit colorPickerTargetChanged(nullptr);
+        });
     }
 }
 
@@ -117,6 +119,7 @@ void OverlayCoordinator::showColorPicker(const QColor& initialColor, QWidget* so
     }
 
     m_colorPickerOverlay->showPicker(initialColor, sourceButton);
+    emit colorPickerTargetChanged(sourceButton);
 }
 
 } // namespace ruwa::ui::windows

@@ -4711,6 +4711,18 @@ void WorkspaceTab::setLayersPanelVisible(bool visible)
     }
 }
 
+void WorkspaceTab::setColorPickerTarget(QWidget* sourceButton)
+{
+    if (!m_canvasPanel) {
+        return;
+    }
+    // The selection highlight inverts the scene under it, so a colour being
+    // previewed on selected characters would be shown as its own inverse. The
+    // highlight steps aside until the picker closes.
+    m_canvasPanel->setTextSelectionHighlightSuppressed(
+        m_layerPropertiesPanel && m_layerPropertiesPanel->ownsTextColorInput(sourceButton));
+}
+
 void WorkspaceTab::setLayerPropertiesPanelVisible(bool visible)
 {
     if (!m_layerPropertiesPanel || !m_dockManager)
