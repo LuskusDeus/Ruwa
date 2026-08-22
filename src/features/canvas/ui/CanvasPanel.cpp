@@ -1086,6 +1086,123 @@ bool CanvasPanel::moveSelectedContentBy(const QPointF& delta)
     return true;
 }
 
+bool CanvasPanel::handleTransformArrowNudge(QKeyEvent* event)
+{
+    if (!event || !m_glWidget || !m_glWidget->isTransformActive()) {
+        return false;
+    }
+    // A drag owns the transform while it runs; a key nudge in the middle of it
+    // would fight the pointer for the same state.
+    if (m_glWidget->transformController().isDragging()) {
+        return false;
+    }
+    if (m_textEditingController && m_textEditingController->isEditing()) {
+        return false;
+    }
+    // Ctrl snaps to the anchor grid and Shift is the step multiplier; every
+    // other modifier belongs to someone else, so those combinations travel on
+    // untouched. Keypad arrows carry Qt::KeypadModifier and are the same
+    // arrows to the user.
+    const auto foreignModifiers = event->modifiers() & (Qt::AltModifier | Qt::MetaModifier);
+    if (foreignModifiers != Qt::NoModifier) {
+        return false;
+    }
+
+    QPointF direction;
+    switch (event->key()) {
+    case Qt::Key_Left:
+        direction = { -1.0, 0.0 };
+        break;
+    case Qt::Key_Right:
+        direction = { 1.0, 0.0 };
+        break;
+    case Qt::Key_Up:
+        direction = { 0.0, -1.0 };
+        break;
+    case Qt::Key_Down:
+        direction = { 0.0, 1.0 };
+        break;
+    default:
+        return false;
+    }
+
+    // Ctrl outranks Shift: an anchor is a place, not a distance, so there is
+    // nothing for a multiplier to scale.
+    QPointF delta;
+    if (event->modifiers().testFlag(Qt::ControlModifier)) {
+        if (!transformAnchorSnapDelta(direction, delta)) {
+            // Already flush against the last cell in that direction. The key is
+            // still the transform's, so nothing else gets to act on it.
+            return true;
+        }
+    } else {
+        delta = direction * (event->modifiers().testFlag(Qt::ShiftModifier) ? 10.0 : 1.0);
+    }
+    moveSelectedContentBy(delta);
+    // The key belongs to the transform whether or not the move went through:
+    // letting a rejected nudge fall through would move focus off the canvas.
+    return true;
+}
+
+bool CanvasPanel::transformAnchorSnapDelta(const QPointF& direction, QPointF& delta) const
+{
+    // An infinite canvas has no box to align against, exactly as the Position
+    // group's anchor grid has none there.
+    if (!m_glWidget || isInfiniteCanvas()) {
+        return false;
+    }
+    const QSize canvas = canvasSize();
+    if (canvas.isEmpty()) {
+        return false;
+    }
+
+    const aether::Rect box = m_glWidget->transformController().state().transformedAABB();
+    const bool horizontal = !qFuzzyIsNull(direction.x());
+    const double freeSpace = horizontal
+        ? canvas.width() - static_cast<double>(box.width)
+        : canvas.height() - static_cast<double>(box.height);
+    const double origin = horizontal ? static_cast<double>(box.left())
+                                     : static_cast<double>(box.top());
+
+    // The three cells of the anchor grid along this axis: flush against either
+    // document edge, or centred between them. Sorted because content wider
+    // than the canvas makes the free space negative, which puts the edges the
+    // other way round.
+    std::array<double, 3> cells { 0.0, freeSpace * 0.5, freeSpace };
+    std::sort(cells.begin(), cells.end());
+
+    // Half a pixel of slack, the same the anchor grid uses to recognise a cell:
+    // centring on an odd amount of free space lands on a half-pixel, and
+    // without the slack the content would stall on the cell it already fills.
+    constexpr double kTolerance = 0.5;
+    const bool forward = direction.x() > 0.0 || direction.y() > 0.0;
+    std::optional<double> target;
+    for (const double cell : cells) {
+        if (forward && cell > origin + kTolerance) {
+            target = cell; // nearest cell ahead
+            break;
+        }
+        if (!forward && cell < origin - kTolerance) {
+            target = cell; // keeps overwriting, so the last one is the nearest
+        }
+    }
+    if (!target.has_value()) {
+        return false;
+    }
+
+    // Land on a whole pixel. Centring on an odd amount of free space asks for
+    // half of one, and a fractional translation makes the apply resample the
+    // content bilinearly: the edge pixels bleed one further out, which widens
+    // the pixel-tight bounds the Position group measures and leaves the content
+    // sitting outside the very cell it was sent to. Rounding keeps the apply on
+    // its integer path, and the result is inside the half-pixel slack the grid
+    // recognises a cell by. The tolerance above guarantees the target is more
+    // than half a pixel away, so rounding can never cancel the move.
+    const double offset = std::round(*target) - origin;
+    delta = horizontal ? QPointF(offset, 0.0) : QPointF(0.0, offset);
+    return true;
+}
+
 void CanvasPanel::setContentMovePreviewActive(bool active)
 {
     if (!m_glWidget) {
@@ -3434,6 +3551,10 @@ void CanvasPanel::keyPressEvent(QKeyEvent* event)
             event->accept();
             return;
         }
+        if (handleTransformArrowNudge(event)) {
+            event->accept();
+            return;
+        }
     }
     DockPanel::keyPressEvent(event);
 }
@@ -3664,6 +3785,13 @@ bool CanvasPanel::eventFilter(QObject* watched, QEvent* event)
         } else {
             m_textEditingController->ensureEditorHasFocus();
         }
+        return true;
+    } else if (isInteractionEnabled() && event->type() == QEvent::KeyPress
+        && (canvasInputTarget || watched == this)
+        && handleTransformArrowNudge(static_cast<QKeyEvent*>(event))) {
+        // Arrow nudges are claimed here as well as in keyPressEvent: the key
+        // reaches the panel only if the focused canvas widget lets it through,
+        // and the arrows would otherwise walk the focus chain on the way.
         return true;
     } else if (isInteractionEnabled() && m_keyHandler
         && m_keyHandler->handleEvent(watched, event)) {

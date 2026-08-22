@@ -661,6 +661,29 @@ struct TransformState {
         }
     }
 
+    /// Move the whole transform by a document-space delta. A free quad and a
+    /// deform mesh carry absolute points and ignore `translation`, so each live
+    /// representation has to be shifted on its own terms.
+    void translateBy(float dx, float dy)
+    {
+        if (deformMesh.has_value()) {
+            for (auto& vertex : deformMesh->vertices) {
+                vertex.target.x += dx;
+                vertex.target.y += dy;
+            }
+            return;
+        }
+        if (freeCorners.has_value()) {
+            for (auto& corner : *freeCorners) {
+                corner.x += dx;
+                corner.y += dy;
+            }
+            return;
+        }
+        translation.x += dx;
+        translation.y += dy;
+    }
+
     bool hasFreeQuad() const { return freeCorners.has_value(); }
     bool hasDeformMesh() const { return deformMesh.has_value(); }
 

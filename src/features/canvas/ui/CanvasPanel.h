@@ -392,6 +392,16 @@ public:
     /// single undoable step (the Move tool's path, driven programmatically).
     /// Returns false when nothing could move right now.
     bool moveSelectedContentBy(const QPointF& delta);
+    /// Nudge an open transform with the arrow keys: one document pixel per
+    /// press, ten with Shift, or a jump to the next cell of the Position
+    /// group's anchor grid with Ctrl. Returns false when the key is not a plain
+    /// arrow or no transform is open, so the event keeps travelling.
+    bool handleTransformArrowNudge(QKeyEvent* event);
+    /// Distance from the transform's current place to the next anchor-grid cell
+    /// along @p direction — the same nine cells the Position group aligns to.
+    /// False when there is no cell left that way, or no document box to align
+    /// against.
+    bool transformAnchorSnapDelta(const QPointF& direction, QPointF& delta) const;
     /// Brackets a run of moveSelectedContentBy() calls that belong to one
     /// gesture (dragging a coordinate field): the content follows every delta
     /// on screen, and the whole run lands in history as a single move.

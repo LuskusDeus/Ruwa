@@ -9920,8 +9920,7 @@ bool OpenGLCanvasWidget::moveSelectedContentBy(const Vector2& delta)
     }
 
     const auto applyDelta = [this, &delta]() {
-        m_transformController.state().translation.x += delta.x;
-        m_transformController.state().translation.y += delta.y;
+        m_transformController.state().translateBy(delta.x, delta.y);
     };
 
     // A transform the user already has open is nudged in place and recorded as
