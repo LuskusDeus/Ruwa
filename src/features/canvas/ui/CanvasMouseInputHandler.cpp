@@ -151,8 +151,8 @@ void CanvasMouseInputHandler::handleTextToolPress(const aether::Vector2& worldPo
     m_textSelecting = false;
 
     if (auto* hit = controller->hitTextLayerAt(worldPos)) {
-        controller->startExistingLayer(hit->id, worldPos);
-        m_textSelecting = true;
+        // Only a session that actually opened can be drag-selected in.
+        m_textSelecting = controller->startExistingLayer(hit->id, worldPos);
         return;
     }
 
@@ -160,8 +160,7 @@ void CanvasMouseInputHandler::handleTextToolPress(const aether::Vector2& worldPo
         controller->commit();
         return;
     }
-    controller->startNewLayerAt(worldPos);
-    m_textSelecting = true;
+    m_textSelecting = controller->startNewLayerAt(worldPos);
 }
 
 void CanvasMouseInputHandler::dispatchUncoalescedWorldMoves(

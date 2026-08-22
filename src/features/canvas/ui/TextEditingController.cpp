@@ -14,6 +14,7 @@
 
 #include <QKeyEvent>
 #include <QApplication>
+#include <QFocusEvent>
 #include <QClipboard>
 #include <QFrame>
 #include <QPlainTextEdit>
@@ -158,18 +159,135 @@ TextEditingController::TextEditingController(CanvasPanel* panel)
     m_caretBlinkTimer->setInterval(500);
     connect(m_caretBlinkTimer, &QTimer::timeout, this, [this]() {
         if (!m_active) {
+            m_caretBlinkTimer->stop();
             return;
         }
         m_caretVisible = !m_caretVisible;
-        updateOverlayState();
+        // A blink has nothing new to say about the formatting state, so it only
+        // moves the overlay.
+        pushOverlayState();
     });
-    m_caretBlinkTimer->start();
 }
 
 TextEditingController::~TextEditingController()
 {
     releaseShortcuts();
     clearOverlay();
+}
+
+ruwa::core::layers::LayerModel* TextEditingController::layerModel() const
+{
+    return m_panel ? m_panel->m_layerModel : nullptr;
+}
+
+void TextEditingController::attachLayerModel(ruwa::core::layers::LayerModel* model)
+{
+    if (m_connectedModel == model) {
+        return;
+    }
+    if (m_connectedModel) {
+        disconnect(m_connectedModel, nullptr, this, nullptr);
+    }
+    // The session belongs to the document that is going away: its layer lives in
+    // the old model, so there is nothing left to commit into.
+    discardSession();
+    m_connectedModel = model;
+    if (!m_connectedModel) {
+        return;
+    }
+    connect(m_connectedModel, &ruwa::core::layers::LayerModel::selectionChanged, this,
+        &TextEditingController::onLayerSelectionChanged);
+    connect(m_connectedModel, &ruwa::core::layers::LayerModel::layerDataChanged, this,
+        &TextEditingController::onLayerDataChanged);
+    connect(m_connectedModel, &ruwa::core::layers::LayerModel::layersChanged, this,
+        &TextEditingController::onLayerStructureChanged);
+    connect(m_connectedModel, &ruwa::core::layers::LayerModel::layerAboutToBeRemoved, this,
+        &TextEditingController::onLayerAboutToBeRemoved);
+}
+
+bool TextEditingController::sessionLayerIsAncestorOf(const ruwa::core::layers::LayerId& id) const
+{
+    auto* model = layerModel();
+    auto* layer = model ? model->layerById(m_layerId) : nullptr;
+    if (!layer) {
+        return false;
+    }
+    for (auto* parent = layer->parent; parent; parent = parent->parent) {
+        if (parent->id == id) {
+            return true;
+        }
+    }
+    return false;
+}
+
+void TextEditingController::onLayerSelectionChanged(const ruwa::core::layers::LayerId& id)
+{
+    if (!m_active || m_finishing || id == m_layerId) {
+        return;
+    }
+    // Another layer is the one being worked on now; the session has no business
+    // still holding the keyboard and blinking a caret over the old one.
+    commit();
+}
+
+void TextEditingController::onLayerDataChanged(const ruwa::core::layers::LayerId& id)
+{
+    if (!m_active || m_finishing || m_ignoreModelSignals || id != m_layerId) {
+        return;
+    }
+    auto* model = layerModel();
+    auto* layer = model ? model->layerById(m_layerId) : nullptr;
+    if (!layer || !layer->isText() || !layer->textData) {
+        discardSession();
+        return;
+    }
+    if (!isTextLayerEditable(layer) || layer->maskIsEditTarget()) {
+        // Hidden, locked, or the mask took the edit focus: nothing to type into.
+        commit();
+        return;
+    }
+
+    // Whatever moved the text — a font size, a transform, an undone edit — the
+    // caret and the selection follow it in this frame instead of at the next blink.
+    // The guard holds across the refresh, since telling the panel to re-read the
+    // formatting state can land right back here.
+    m_ignoreModelSignals = true;
+    syncEditorTextFromLayer(*layer);
+    showCaret();
+    m_ignoreModelSignals = false;
+}
+
+void TextEditingController::onLayerStructureChanged()
+{
+    if (!m_active || m_finishing || m_ignoreModelSignals) {
+        return;
+    }
+    auto* model = layerModel();
+    auto* layer = model ? model->layerById(m_layerId) : nullptr;
+    if (!layer || !layer->isText() || !layer->textData) {
+        discardSession();
+        return;
+    }
+    if (!isTextLayerEditable(layer)) {
+        commit();
+        return;
+    }
+    // A reorder or a reparent can move the text; the selection itself is watched
+    // by onLayerSelectionChanged, which already ends the session.
+    pushOverlayState();
+}
+
+void TextEditingController::onLayerAboutToBeRemoved(const ruwa::core::layers::LayerId& id)
+{
+    if (!m_active || m_finishing) {
+        return;
+    }
+    if (id != m_layerId && !sessionLayerIsAncestorOf(id)) {
+        return;
+    }
+    // The removal can be an undo step running right now, so the session leaves
+    // without pushing anything of its own onto the stack.
+    discardSession();
 }
 
 bool TextEditingController::isEditorEventTarget(QObject* watched) const
@@ -219,7 +337,7 @@ bool TextEditingController::startExistingLayer(
     commit();
     m_panel->m_layerModel->setSelectedLayer(layerId);
     beginSession(layerId, false, layer->textData->text, cursorWorldPos);
-    return true;
+    return m_active;
 }
 
 bool TextEditingController::startExistingLayer(const ruwa::core::layers::LayerId& layerId)
@@ -293,6 +411,14 @@ bool TextEditingController::startNewLayerAt(const aether::Vector2& worldPos)
     m_panel->requestRender();
     m_panel->notifyContentChanged();
     beginSession(layerId, true, layer->textData->text, worldPos);
+    if (!m_active || !m_editor) {
+        // The session could not open: the layer just added has nothing editing
+        // it, so it does not stay behind.
+        m_panel->m_layerModel->removeLayer(layerId);
+        m_panel->requestRender();
+        m_panel->notifyContentChanged();
+        return false;
+    }
 
     QTextCursor cursor = m_editor->textCursor();
     cursor.select(QTextCursor::Document);
@@ -322,6 +448,7 @@ void TextEditingController::beginSession(const ruwa::core::layers::LayerId& laye
     m_oldTypography = ruwa::core::layers::captureTextTypography(*layer->textData);
     m_oldTransform = layer->textData->transform;
     m_caretVisible = true;
+    setCaretBlinkRunning(true);
     blockShortcuts();
 
     m_applyingEditorText = true;
@@ -598,7 +725,11 @@ void TextEditingController::applyLiveText(const QString& text)
         layer->textData->transform, aether::computeTextLayoutSourceBounds(*layer->textData));
     layer->runtimeRetainedPayload.reset();
     layer->runtimeRetainedPayloadKey.clear();
+    // The session is the author of this change: it refreshes the overlay itself
+    // below, and does not need its own notification handed back to it.
+    m_ignoreModelSignals = true;
     m_panel->m_layerModel->notifyLayerDataChanged(m_layerId);
+    m_ignoreModelSignals = false;
     m_panel->requestRender();
     m_panel->notifyContentChanged();
     updateOverlayState();
@@ -615,13 +746,11 @@ void TextEditingController::commit()
     const bool wasProvisional = m_provisional;
     const QString newText = m_editor ? m_editor->toPlainText() : QString();
 
-    if (m_editor) {
-        m_editor->clearFocus();
-        m_editor->hide();
-    }
+    releaseEditorFocus();
     m_active = false;
     m_provisional = false;
     releaseShortcuts();
+    setCaretBlinkRunning(false);
     clearOverlay();
 
     auto* layer
@@ -652,14 +781,9 @@ void TextEditingController::commit()
         }
     }
 
-    m_oldText.clear();
-    m_oldStyleRuns.clear();
-    m_oldTypography = {};
-    m_oldTransform = {};
-    m_layerId = QUuid();
-    m_parentId = QUuid();
-    m_insertIndex = -1;
+    resetSessionState();
     m_finishing = false;
+    notifyFormattingStateChanged();
 }
 
 void TextEditingController::cancel()
@@ -669,10 +793,7 @@ void TextEditingController::cancel()
     }
     m_finishing = true;
 
-    if (m_editor) {
-        m_editor->clearFocus();
-        m_editor->hide();
-    }
+    releaseEditorFocus();
 
     if (m_provisional) {
         removeProvisionalLayer();
@@ -683,6 +804,15 @@ void TextEditingController::cancel()
     m_active = false;
     m_provisional = false;
     releaseShortcuts();
+    setCaretBlinkRunning(false);
+    resetSessionState();
+    clearOverlay();
+    m_finishing = false;
+    notifyFormattingStateChanged();
+}
+
+void TextEditingController::resetSessionState()
+{
     m_oldText.clear();
     m_oldStyleRuns.clear();
     m_oldTypography = {};
@@ -690,8 +820,49 @@ void TextEditingController::cancel()
     m_layerId = QUuid();
     m_parentId = QUuid();
     m_insertIndex = -1;
+}
+
+void TextEditingController::discardSession()
+{
+    if (!m_active || m_finishing) {
+        return;
+    }
+    m_finishing = true;
+    releaseEditorFocus();
+    m_active = false;
+    m_provisional = false;
+    releaseShortcuts();
+    setCaretBlinkRunning(false);
+    resetSessionState();
     clearOverlay();
     m_finishing = false;
+    notifyFormattingStateChanged();
+}
+
+void TextEditingController::syncEditorTextFromLayer(const ruwa::core::layers::LayerData& layer)
+{
+    if (!m_editor || !layer.textData || m_applyingEditorText) {
+        return;
+    }
+    const QString layerText = layer.textData->text;
+    if (m_editor->toPlainText() == layerText) {
+        return;
+    }
+
+    // Something outside the session rewrote the characters (an undone style run,
+    // a panel edit). The document the caret indexes into has to follow, or the
+    // next keystroke would push the stale copy back over it.
+    const QTextCursor cursor = m_editor->textCursor();
+    const int anchor = std::clamp(cursor.anchor(), 0, static_cast<int>(layerText.size()));
+    const int position = std::clamp(cursor.position(), 0, static_cast<int>(layerText.size()));
+
+    m_applyingEditorText = true;
+    m_editor->setPlainText(layerText);
+    QTextCursor restored = m_editor->textCursor();
+    restored.setPosition(anchor);
+    restored.setPosition(position, QTextCursor::KeepAnchor);
+    m_editor->setTextCursor(restored);
+    m_applyingEditorText = false;
 }
 
 void TextEditingController::pushExistingTextCommand(const QString& newText)
@@ -825,10 +996,22 @@ void TextEditingController::showCaret()
         return;
     }
     m_caretVisible = true;
-    if (m_caretBlinkTimer) {
-        m_caretBlinkTimer->start();
-    }
+    setCaretBlinkRunning(true);
     updateOverlayState();
+}
+
+void TextEditingController::setCaretBlinkRunning(bool running)
+{
+    if (!m_caretBlinkTimer) {
+        return;
+    }
+    if (running) {
+        // Restarting resets the phase, so the caret stays solid for a full
+        // interval after every edit instead of blinking out mid-keystroke.
+        m_caretBlinkTimer->start();
+    } else {
+        m_caretBlinkTimer->stop();
+    }
 }
 
 void TextEditingController::clearOverlay()
@@ -854,6 +1037,14 @@ aether::TransformState TextEditingController::normalizedTextTransform(
 
 void TextEditingController::updateOverlayState()
 {
+    pushOverlayState();
+    if (m_active) {
+        notifyFormattingStateChanged();
+    }
+}
+
+void TextEditingController::pushOverlayState()
+{
     if (!m_active || !m_panel || !m_panel->m_layerModel || !m_panel->m_glWidget || !m_editor) {
         return;
     }
@@ -875,7 +1066,6 @@ void TextEditingController::updateOverlayState()
             *layer->textData, cursor.selectionStart(), cursor.selectionEnd());
     }
     m_panel->m_glWidget->setTextEditOverlayState(state);
-    notifyFormattingStateChanged();
 }
 
 ruwa::core::layers::LayerData* TextEditingController::hitTextLayerAt(
@@ -897,6 +1087,46 @@ ruwa::core::layers::LayerData* TextEditingController::hitTextLayerAt(
     return nullptr;
 }
 
+void TextEditingController::releaseEditorFocus()
+{
+    if (!m_editor) {
+        return;
+    }
+    const bool heldFocus = QApplication::focusWidget() == m_editor;
+    m_editor->clearFocus();
+    m_editor->hide();
+    // Only when the editor was the one holding it: a session ended by a click
+    // elsewhere has already given the keyboard to whatever was clicked.
+    if (heldFocus && m_panel && m_panel->isVisible()) {
+        m_panel->setFocus(Qt::OtherFocusReason);
+    }
+}
+
+bool TextEditingController::handleEditorFocusOut(QFocusEvent* event)
+{
+    const Qt::FocusReason reason = event ? event->reason() : Qt::OtherFocusReason;
+
+    // A popup (context menu, colour picker, combo list) and another window
+    // taking focus are both temporary: the session outlives them. The caret
+    // stops blinking while the window is in the background, the way every other
+    // text field on the desktop behaves, and comes back on FocusIn.
+    if (reason == Qt::PopupFocusReason) {
+        return true;
+    }
+    if (reason == Qt::ActiveWindowFocusReason) {
+        m_caretVisible = false;
+        setCaretBlinkRunning(false);
+        pushOverlayState();
+        return true;
+    }
+
+    QWidget* focusWidget = QApplication::focusWidget();
+    return m_panel
+        && (focusWidget == m_panel || focusWidget == m_panel->m_contentWidget
+            || focusWidget == m_panel->m_glWidget
+            || m_panel->isTextEditingFocusExclusion(focusWidget));
+}
+
 bool TextEditingController::eventFilter(QObject* watched, QEvent* event)
 {
     if (!isEditorEventTarget(watched)) {
@@ -914,14 +1144,12 @@ bool TextEditingController::eventFilter(QObject* watched, QEvent* event)
             return true;
         }
     } else if (event->type() == QEvent::FocusOut && !m_finishing) {
-        QWidget* focusWidget = QApplication::focusWidget();
-        if (m_panel
-            && (focusWidget == m_panel || focusWidget == m_panel->m_contentWidget
-                || focusWidget == m_panel->m_glWidget
-                || m_panel->isTextEditingFocusExclusion(focusWidget))) {
+        if (handleEditorFocusOut(static_cast<QFocusEvent*>(event))) {
             return QObject::eventFilter(watched, event);
         }
         commit();
+    } else if (event->type() == QEvent::FocusIn && m_active) {
+        showCaret();
     }
     return QObject::eventFilter(watched, event);
 }

@@ -14,10 +14,15 @@
 #include <utility>
 
 class QEvent;
+class QFocusEvent;
 class QKeyEvent;
 class QPlainTextEdit;
 class QTimer;
 class QWidget;
+
+namespace ruwa::core::layers {
+class LayerModel;
+}
 
 namespace ruwa::ui::workspace {
 
@@ -31,6 +36,11 @@ public:
     bool isEditing() const { return m_active; }
     ruwa::core::layers::LayerId activeLayerId() const { return m_layerId; }
     bool isEditorEventTarget(QObject* watched) const;
+
+    /// Watches the document the session lives in: a selection change, a hidden
+    /// or removed layer, or a layer moved out of reach all end the session, and
+    /// any change to the edited layer moves the caret in the same frame.
+    void attachLayerModel(ruwa::core::layers::LayerModel* model);
 
     bool startExistingLayer(
         const ruwa::core::layers::LayerId& layerId, const aether::Vector2& cursorWorldPos);
@@ -58,6 +68,21 @@ protected:
 
 private:
     void ensureEditor();
+    void onLayerSelectionChanged(const ruwa::core::layers::LayerId& id);
+    void onLayerDataChanged(const ruwa::core::layers::LayerId& id);
+    void onLayerStructureChanged();
+    void onLayerAboutToBeRemoved(const ruwa::core::layers::LayerId& id);
+    bool sessionLayerIsAncestorOf(const ruwa::core::layers::LayerId& id) const;
+    ruwa::core::layers::LayerModel* layerModel() const;
+    /// Ends the session without writing to the model or the undo stack, for
+    /// when the layer under it is already gone.
+    void discardSession();
+    void resetSessionState();
+    void syncEditorTextFromLayer(const ruwa::core::layers::LayerData& layer);
+    bool handleEditorFocusOut(QFocusEvent* event);
+    /// Hides the off-screen editor and, if it still held the keyboard, hands it
+    /// back to the canvas instead of leaving the window with no focus at all.
+    void releaseEditorFocus();
     void beginSession(const ruwa::core::layers::LayerId& layerId, bool provisional,
         const QString& oldText, const aether::Vector2& cursorWorldPos);
     void onEditorTextChanged();
@@ -72,6 +97,10 @@ private:
     void blockShortcuts();
     void releaseShortcuts();
     void showCaret();
+    void setCaretBlinkRunning(bool running);
+    /// Pushes the overlay geometry without telling the panel to re-read the
+    /// formatting state; the blink tick has nothing new to tell it.
+    void pushOverlayState();
     aether::TransformState normalizedTextTransform(
         const ruwa::core::layers::LayerData* layer) const;
 
@@ -84,6 +113,10 @@ private:
     bool m_applyingEditorText = false;
     bool m_shortcutsBlocked = false;
     bool m_caretVisible = true;
+    /// Set while the session itself is writing to the model, so its own
+    /// notifications do not come back in as an external change.
+    bool m_ignoreModelSignals = false;
+    ruwa::core::layers::LayerModel* m_connectedModel = nullptr;
     ruwa::core::layers::LayerId m_layerId;
     ruwa::core::layers::LayerId m_parentId;
     int m_insertIndex = -1;

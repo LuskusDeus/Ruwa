@@ -717,6 +717,9 @@ private:
     void activateApplicationEventFilter();
     void deactivateApplicationEventFilter();
     bool isActiveCanvasPanel() const;
+    /// Ends an open text session on this panel, for when it stops being the
+    /// canvas the user is working on (hidden, or another tab took over).
+    void endTextEditingSession();
 
     aether::Vector2 mapToWorld(const QPoint& globalPos) const;
     aether::Vector2 mapToWorld(const QPointF& globalPos) const;

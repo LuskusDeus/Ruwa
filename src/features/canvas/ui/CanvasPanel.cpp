@@ -390,6 +390,9 @@ void CanvasPanel::activateApplicationEventFilter()
     }
 
     if (g_activeCanvasPanel && g_activeCanvasPanel != this) {
+        // Another canvas takes over (tab switch): the one losing it must not
+        // keep a text session holding the keyboard and blinking a caret.
+        g_activeCanvasPanel->endTextEditingSession();
         g_activeCanvasPanel->deactivateApplicationEventFilter();
     }
 
@@ -413,6 +416,13 @@ void CanvasPanel::deactivateApplicationEventFilter()
 bool CanvasPanel::isActiveCanvasPanel() const
 {
     return g_activeCanvasPanel == this;
+}
+
+void CanvasPanel::endTextEditingSession()
+{
+    if (m_textEditingController && m_textEditingController->isEditing()) {
+        m_textEditingController->commit();
+    }
 }
 
 void CanvasPanel::loadGlobalToolState()
@@ -877,8 +887,9 @@ void CanvasPanel::setToolMode(ToolId tool)
         cancelPositionPicking();
     }
 
-    if (m_textEditingController && m_textEditingController->isEditing()
-        && currentTool == ToolId::Text && tool != ToolId::Text) {
+    // Any tool other than Text ends the session, whatever the tool the session
+    // was started from: there is no tool but Text that types into a layer.
+    if (m_textEditingController && m_textEditingController->isEditing() && tool != ToolId::Text) {
         m_textEditingController->commit();
     }
     logStep("text-edit-commit");
@@ -2122,6 +2133,9 @@ void CanvasPanel::setLayerModel(ruwa::core::layers::LayerModel* model)
     if (m_glWidget) {
         m_glWidget->setLayerModel(model);
     }
+    if (m_textEditingController) {
+        m_textEditingController->attachLayerModel(model);
+    }
     if (m_layerModel) {
         connect(m_layerModel, &ruwa::core::layers::LayerModel::layersChanged, this, [this]() {
             publishEffectiveExportFrameIfChanged();
@@ -3015,6 +3029,9 @@ void CanvasPanel::showEvent(QShowEvent* event)
 
 void CanvasPanel::hideEvent(QHideEvent* event)
 {
+    // The panel is going away (closed, reparented): a text session left open
+    // here would keep the keyboard and blink a caret nobody can see.
+    endTextEditingSession();
     deactivateApplicationEventFilter();
     DockPanel::hideEvent(event);
 }
