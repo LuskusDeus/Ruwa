@@ -2892,16 +2892,9 @@ void WorkspaceTab::connectPanelSignals()
             m_canvasPanel->applyTextLayerEdit(m_layersPanel->layerModel()->selectedLayerId(), edit);
         });
     connect(m_canvasPanel, &workspace::CanvasPanel::textEditingStateChanged, m_layerPropertiesPanel,
-        [this, wasEditing = false]() mutable {
-            const bool editing = m_canvasPanel && m_canvasPanel->isTextEditingActive();
-            // Opening a text layer for editing has to put the formatting
-            // controls in front of the user, the way the on-canvas popup used
-            // to. Only on the transition, so closing the panel mid-session
-            // stays closed.
-            if (editing && !wasEditing && !isLayerPropertiesPanelVisible()) {
-                setLayerPropertiesPanelVisible(true);
-            }
-            wasEditing = editing;
+        [this]() {
+            // The panel only follows the text session; it never opens itself.
+            // The docked layout is the user's, not ours to rearrange.
             m_layerPropertiesPanel->refreshTextGroups();
         });
     // Clicking one of those controls must not read as focus leaving the text,
