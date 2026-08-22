@@ -654,8 +654,13 @@ BrushPackListSection::BrushPackListSection(QWidget* parent)
 
     connect(m_expandAnimation, &QPropertyAnimation::valueChanged, this,
         [this](const QVariant&) { emit contentGeometryChanged(); });
-    connect(m_headerButton, &QAbstractButton::clicked, this,
-        [this]() { setExpanded(!m_expanded, true); });
+    connect(m_headerButton, &QAbstractButton::clicked, this, [this]() {
+        // Only a click reports a toggle: setExpanded() stays silent so that
+        // building a section never looks like a user choice to the panel.
+        const bool expanded = !m_expanded;
+        setExpanded(expanded, true);
+        emit toggled(m_pack.id, expanded);
+    });
 }
 
 BrushPackListSection::~BrushPackListSection()
@@ -714,7 +719,6 @@ void BrushPackListSection::setExpanded(bool expanded, bool animated)
 
     m_expanded = expanded;
     updateExpandedVisualState(animated);
-    emit toggled(m_pack.id, m_expanded);
 }
 
 void BrushPackListSection::setSelectedBrushId(const QString& brushId)

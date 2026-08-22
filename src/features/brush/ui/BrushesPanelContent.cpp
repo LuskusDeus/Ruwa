@@ -29,15 +29,21 @@ using ruwa::core::brushes::BrushManager;
 using ruwa::core::brushes::BrushPresetData;
 
 namespace {
-constexpr int kPanelStateVersion = 2;
+constexpr int kPanelStateVersion = 3;
 constexpr auto kFavoritesSectionId = "__brush_favorites__";
 constexpr auto kFavoritesPageKey = "__favorites_filter__";
 constexpr auto kAllPageKey = "__all_filter__";
 } // namespace
 
+QSet<QString> BrushesPanelContent::s_collapsedPackIds;
+QVector<BrushesPanelContent*> BrushesPanelContent::s_instances;
+bool BrushesPanelContent::s_collapsedStateLoaded = false;
+
 BrushesPanelContent::BrushesPanelContent(QWidget* parent)
     : QWidget(parent)
 {
+    s_instances.append(this);
+
     setAttribute(Qt::WA_StyledBackground, false);
     setAttribute(Qt::WA_TranslucentBackground, true);
     setAutoFillBackground(false);
@@ -164,7 +170,10 @@ BrushesPanelContent::BrushesPanelContent(QWidget* parent)
     reloadFromManager();
 }
 
-BrushesPanelContent::~BrushesPanelContent() = default;
+BrushesPanelContent::~BrushesPanelContent()
+{
+    s_instances.removeAll(this);
+}
 
 void BrushesPanelContent::setCanvasPanel(CanvasPanel* canvasPanel)
 {
@@ -197,19 +206,16 @@ void BrushesPanelContent::reloadFromManager()
     for (const BrushListPackData& pack : m_packs) {
         validPackIds.insert(pack.id);
     }
-    m_expandedPackIds.intersect(validPackIds);
+    // s_collapsedPackIds is deliberately NOT pruned against the current packs:
+    // a reload that runs while the manager is mid-reset would otherwise drop
+    // entries permanently, and a stale id is inert (it only matters if a pack
+    // with that id comes back, in which case the user's choice still applies).
     if (m_viewMode == ViewMode::Pack && !validPackIds.contains(m_viewPackId)) {
         m_viewMode = ViewMode::All;
         m_viewPackId.clear();
     }
 
     ensureSelection();
-
-    if (!m_hasExplicitExpandedState) {
-        for (const BrushListPackData& pack : m_packs) {
-            m_expandedPackIds.insert(pack.id);
-        }
-    }
 
     syncFilterPages();
     rebuildBuiltPages();
@@ -296,12 +302,12 @@ QJsonObject BrushesPanelContent::saveState() const
 {
     QJsonObject state;
     state["version"] = kPanelStateVersion;
-    QJsonArray expandedPacks;
-    for (auto it = m_expandedPackIds.begin(); it != m_expandedPackIds.end(); ++it) {
-        expandedPacks.append(*it);
+    QJsonArray collapsedPacks;
+    for (auto it = s_collapsedPackIds.cbegin(); it != s_collapsedPackIds.cend(); ++it) {
+        collapsedPacks.append(*it);
     }
 
-    state["expandedPacks"] = expandedPacks;
+    state["collapsedPacks"] = collapsedPacks;
     QJsonObject scrollValues;
     for (auto it = m_pageScrollValues.cbegin(); it != m_pageScrollValues.cend(); ++it) {
         scrollValues[it.key()] = qMax(0, it.value());
@@ -324,24 +330,27 @@ void BrushesPanelContent::restoreState(const QJsonObject& state)
     m_restoringState = true;
 
     const int stateVersion = state["version"].toInt(0);
-    if (stateVersion < 1) {
-        // Earlier versions defaulted to collapsed packs and persisted that
-        // default as an explicit empty list. Migrate it once to the new
-        // all-expanded default; subsequent user choices are versioned below.
-        m_expandedPackIds.clear();
-        m_hasExplicitExpandedState = false;
-    } else if (state.contains("expandedPacks")) {
-        QSet<QString> expandedPackIds;
-        const QJsonArray expandedPacks = state["expandedPacks"].toArray();
-        for (const QJsonValue& value : expandedPacks) {
-            const QString packId = value.toString();
-            if (!packId.isEmpty()) {
-                expandedPackIds.insert(packId);
+    // Only the first restore of a session seeds the shared set. A tab opened
+    // later — or a dock layout preset — carries whatever QSettings held when it
+    // was written, which may already be older than the live state.
+    if (!s_collapsedStateLoaded) {
+        s_collapsedStateLoaded = true;
+        s_collapsedPackIds.clear();
+
+        // Every version below 3 stored the *expanded* packs, a list that
+        // building a page could rewrite on its own (sections reported a
+        // programmatic expand as a user toggle). Such a state cannot be told
+        // apart from a real one, so it is dropped once in favour of the
+        // all-expanded default; from here on only clicks are recorded.
+        if (stateVersion >= 3) {
+            const QJsonArray collapsedPacks = state["collapsedPacks"].toArray();
+            for (const QJsonValue& value : collapsedPacks) {
+                const QString packId = value.toString();
+                if (!packId.isEmpty()) {
+                    s_collapsedPackIds.insert(packId);
+                }
             }
         }
-
-        m_expandedPackIds = expandedPackIds;
-        m_hasExplicitExpandedState = true;
     }
 
     m_pageScrollValues.clear();
@@ -356,11 +365,14 @@ void BrushesPanelContent::restoreState(const QJsonObject& state)
     }
 
     reloadFromManager();
-    if (m_pendingScrollRestoreKeys.contains(currentPageKey())) {
-        scheduleScrollRestore(currentPageKey());
-    } else {
-        m_restoringState = false;
-    }
+    scheduleScrollRestore(currentPageKey());
+
+    // The guard covers this synchronous restore only. It must never outlive it:
+    // the scroll position lands asynchronously and may never land at all (a
+    // hidden panel gets no geometry, the current page can change first), and a
+    // guard stuck on would silently swallow every later state change. The
+    // pending-restore key set — not this flag — protects the scroll values.
+    m_restoringState = false;
 }
 
 void BrushesPanelContent::onManagerBrushRenamed(const QString& brushId, const QString& newName)
@@ -445,21 +457,17 @@ void BrushesPanelContent::onSectionToggled(const QString& packId, bool expanded)
         return;
     }
 
-    if (expanded) {
-        m_expandedPackIds.insert(packId);
-    } else {
-        m_expandedPackIds.remove(packId);
-    }
-    m_hasExplicitExpandedState = true;
+    setPackCollapsed(packId, !expanded);
     refreshAllScrollGeometry();
     notifyStateChanged();
 }
 
 void BrushesPanelContent::onBrushActivated(const QString& packId, const QString& brushId)
 {
-    const bool expandedStateChanged = !m_expandedPackIds.contains(packId);
-    m_expandedPackIds.insert(packId);
-    m_hasExplicitExpandedState = true;
+    const bool expandedStateChanged = s_collapsedPackIds.contains(packId);
+    if (expandedStateChanged) {
+        setPackCollapsed(packId, false);
+    }
 
     for (FilterPage& page : m_filterPages) {
         if (auto* section = page.sections.value(packId, nullptr);
@@ -516,17 +524,10 @@ void BrushesPanelContent::syncSelectionFromCanvas()
         return;
     }
 
+    // Note: the owning pack is not force-expanded here. This runs on startup
+    // and on every tool switch, so doing so would silently re-open a pack the
+    // user collapsed. Only an explicit activation (onBrushActivated) opens one.
     m_selectedBrushId = m_canvasPanel->selectedBrushIdForCurrentContext();
-    if (!m_selectedBrushId.isEmpty()) {
-        for (const BrushListPackData& pack : m_packs) {
-            for (const BrushListBrushData& brush : pack.brushes) {
-                if (brush.id == m_selectedBrushId) {
-                    m_expandedPackIds.insert(pack.id);
-                    break;
-                }
-            }
-        }
-    }
 
     ensureSelection();
     syncSelectionToSections();
@@ -762,7 +763,10 @@ void BrushesPanelContent::rebuildPage(const QString& pageKey)
     }
 
     FilterPage& page = pageIt.value();
-    if (page.scrollArea && !m_restoringState) {
+    // Only snapshot a scroll position that is actually the user's: while a
+    // restore for this page is still pending the area sits at 0, and storing
+    // that would erase the value we are about to apply.
+    if (page.scrollArea && !m_pendingScrollRestoreKeys.contains(pageKey)) {
         m_pageScrollValues.insert(pageKey, page.scrollArea->scrollValue());
     }
     m_pendingScrollRestoreKeys.insert(pageKey);
@@ -826,7 +830,7 @@ void BrushesPanelContent::addPackSection(
 {
     auto* section = new BrushPackListSection(page.scrollContent);
     section->setPackData(pack);
-    section->setExpanded(forceExpanded || m_expandedPackIds.contains(pack.id), false);
+    section->setExpanded(forceExpanded || !s_collapsedPackIds.contains(pack.id), false);
     section->setSelectedBrushId(m_selectedBrushId);
 
     connect(section, &BrushPackListSection::toggled, this, &BrushesPanelContent::onSectionToggled);
@@ -946,9 +950,6 @@ void BrushesPanelContent::applyPendingScrollRestore(const QString& pageKey)
     refreshScrollGeometry(pageKey);
     pageIt->scrollArea->setScrollValue(qMax(0, m_pageScrollValues.value(pageKey, 0)));
     m_pendingScrollRestoreKeys.remove(pageKey);
-    if (pageKey == currentPageKey()) {
-        m_restoringState = false;
-    }
 }
 
 void BrushesPanelContent::openBrushEditor(const QString& packId, const QString& brushId)
@@ -1007,6 +1008,47 @@ QString BrushesPanelContent::brushNameForSelection(
         return {};
     }
     return {};
+}
+
+void BrushesPanelContent::setPackCollapsed(const QString& packId, bool collapsed)
+{
+    if (collapsed) {
+        s_collapsedPackIds.insert(packId);
+    } else {
+        s_collapsedPackIds.remove(packId);
+    }
+    s_collapsedStateLoaded = true;
+
+    // Mirror the choice onto the other tabs' panels right away. They persist
+    // into the same settings key, so leaving them stale would let whichever
+    // tab saves last undo this toggle.
+    for (BrushesPanelContent* instance : std::as_const(s_instances)) {
+        if (instance != this) {
+            instance->applySharedCollapsedState();
+        }
+    }
+}
+
+void BrushesPanelContent::applySharedCollapsedState()
+{
+    for (auto pageIt = m_filterPages.begin(); pageIt != m_filterPages.end(); ++pageIt) {
+        const QString& pageKey = pageIt.key();
+        const QHash<QString, BrushPackListSection*>& sections = pageIt->sections;
+        for (auto it = sections.cbegin(); it != sections.cend(); ++it) {
+            BrushPackListSection* section = it.value();
+            if (!section || it.key() == QLatin1String(kFavoritesSectionId)) {
+                continue;
+            }
+            // A single-pack page shows its own pack open, exactly as a rebuild
+            // through addPackSection() would.
+            const bool forceExpanded = pageKey == it.key();
+            const bool expanded = forceExpanded || !s_collapsedPackIds.contains(it.key());
+            if (section->isExpanded() != expanded) {
+                section->setExpanded(expanded, false);
+            }
+        }
+    }
+    refreshAllScrollGeometry();
 }
 
 void BrushesPanelContent::notifyStateChanged()

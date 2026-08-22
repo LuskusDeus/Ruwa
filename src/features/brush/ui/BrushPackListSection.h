@@ -56,6 +56,9 @@ public:
     /// rows and their previews are untouched).
     void updatePackName(const QString& newName);
 
+    /// Programmatic expand/collapse. Does NOT emit toggled() — that signal
+    /// reports a user click only, so restoring or rebuilding a section never
+    /// rewrites the panel's persisted expansion state.
     void setExpanded(bool expanded, bool animated = true);
     bool isExpanded() const { return m_expanded; }
 
@@ -78,6 +81,7 @@ public:
     bool visiblePreviewsReady(QWidget* viewport) const;
 
 signals:
+    /// Emitted only when the user clicks the section header.
     void toggled(const QString& packId, bool expanded);
     void brushActivated(const QString& packId, const QString& brushId);
     void brushEditorRequested(const QString& packId, const QString& brushId);

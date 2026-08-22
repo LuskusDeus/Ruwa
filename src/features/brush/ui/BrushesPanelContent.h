@@ -110,6 +110,10 @@ private:
     void applyPendingScrollRestore(const QString& pageKey);
     void notifyStateChanged();
     QString brushNameForSelection(const QString& packId, const QString& brushId) const;
+    /// Push the shared collapsed set onto this instance's live sections.
+    void applySharedCollapsedState();
+    /// Record a user toggle and mirror it onto every other panel instance.
+    void setPackCollapsed(const QString& packId, bool collapsed);
 
 private:
     widgets::AnimatedStackedWidget* m_pageStack = nullptr;
@@ -122,13 +126,26 @@ private:
     QSet<QString> m_pendingScrollRestoreKeys;
     QSet<QString> m_queuedScrollRestoreKeys;
     QPointer<ruwa::ui::windows::BrushEditorWindow> m_brushEditorWindow;
-    QSet<QString> m_expandedPackIds;
     QString m_selectedBrushId;
     bool m_reloadQueued = false;
-    bool m_hasExplicitExpandedState = false;
     bool m_restoringState = false;
     ViewMode m_viewMode = ViewMode::All;
     QString m_viewPackId;
+
+    /// Packs the user explicitly collapsed. Absence means expanded, so a pack
+    /// the panel has never seen (first run, a freshly created or imported pack)
+    /// opens by default and no reload can silently forget an expanded pack.
+    ///
+    /// Shared by every instance: each workspace tab owns its own panel, yet all
+    /// of them persist into one settings key. Per-instance sets would make the
+    /// last tab to save overwrite the choice made in another one.
+    static QSet<QString> s_collapsedPackIds;
+    /// Live instances, so a toggle in one tab reaches the sections of the rest.
+    static QVector<BrushesPanelContent*> s_instances;
+    /// The first restore of a session seeds the shared set from settings; later
+    /// ones (a tab opened afterwards, a dock layout preset) must not push a
+    /// stale on-disk value over the live state.
+    static bool s_collapsedStateLoaded;
 };
 
 } // namespace ruwa::ui::workspace
