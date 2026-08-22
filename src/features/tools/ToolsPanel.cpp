@@ -43,14 +43,21 @@ namespace ruwa::ui::workspace {
 using namespace ruwa::ui::core;
 
 namespace {
-const int BASE_PANEL_MIN_WIDTH = 56;
-const int BASE_PANEL_MIN_HEIGHT = 56; // content: 1 row + margins
 const int BASE_PANEL_HEADER_HEIGHT = 19; // DockPanelTitleBar default
 // Mirrors DockPanel::contentPadding(): the sides sit a step under the top so
 // they do not read wider than the band under the title bar's fillets.
 const int BASE_MARGIN_V = 8;
 const int BASE_MARGIN_H = 6;
 const int BASE_SPACING = 6;
+const int BASE_TOOL_BUTTON_SIZE = 36; // ToolButton's default square
+const int BASE_PANEL_EDGE_SLACK = 4; // panel inset + border, both sides
+// One button plus its margins, so the smallest panel is exactly one column
+// (or one row) wide. Derived rather than written out: the margins moved once
+// already, and a stale literal here would leave dead space beside the column.
+const int BASE_PANEL_MIN_WIDTH
+    = BASE_TOOL_BUTTON_SIZE + (BASE_MARGIN_H * 2) + BASE_PANEL_EDGE_SLACK;
+const int BASE_PANEL_MIN_HEIGHT
+    = BASE_TOOL_BUTTON_SIZE + (BASE_MARGIN_V * 2) + BASE_PANEL_EDGE_SLACK;
 const int GROUP_HOLD_DELAY_MS = 350;
 const int PANEL_STATE_VERSION = 2;
 
@@ -412,7 +419,7 @@ ToolsPanel::ToolsPanel(QWidget* parent)
     int minWidth = mgr.scaled(BASE_PANEL_MIN_WIDTH);
     int minHeight = mgr.scaled(BASE_PANEL_MIN_HEIGHT) + mgr.scaled(BASE_PANEL_HEADER_HEIGHT);
     setMinimumPanelSize(minWidth, minHeight);
-    setPreferredPanelSize(mgr.scaled(56), mgr.scaled(250));
+    setPreferredPanelSize(mgr.scaled(BASE_PANEL_MIN_WIDTH), mgr.scaled(250));
 
     setClosable(false);
     setFloatable(true);
