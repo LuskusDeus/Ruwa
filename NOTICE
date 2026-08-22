@@ -36,7 +36,12 @@ Release requirements
 licensed under a general Ruwa asset licence; see ASSET_POLICY.md and
 `LICENSES/LicenseRef-Ruwa-MyPFP.txt`.
 
-Except for Ruwa's project-created marks, RGB/HSV mode icons, and the documented
+The tab identity glyphs under `resources/icons/tab-glyphs` were drawn by medomij
+and are included with their permission, copyright medomij, under MPL-2.0 as
+application assets; see THIRD_PARTY_NOTICES.md and ASSET_POLICY.md.
+
+Except for Ruwa's project-created marks, RGB/HSV mode icons, the medomij tab
+glyphs, and the documented
 `MyPFP.jpg` exception, the raster icons under `resources/icons` are drawn from
 the Lucide (ISC, with MIT portions from Feather) and Tabler Icons (MIT)
 open-source sets. Both licences are permissive and require no per-icon

@@ -19,7 +19,7 @@ rightsholder can do so.
 Current locations include:
 
 - `resources/brushes/`
-- `resources/Layouts/`
+- `resources/layouts/`
 - `resources/pigments/`
 - `resources/icons/RGB.png`
 - `resources/icons/HSV.png`
@@ -60,12 +60,21 @@ Copyright permission does not grant permission to use Ruwa's name or marks in
 a way that suggests an official or endorsed build. See
 [`TRADEMARKS.md`](TRADEMARKS.md) for the separate trademark policy.
 
+## Contributed tab glyphs
+
+The tab identity glyphs under `resources/icons/tab-glyphs/` were drawn by
+**medomij** and are included with their permission. They are distributed under
+MPL-2.0 as application assets; the copyright holder is medomij, not the Ruwa
+project. Keep the attribution in
+[`THIRD_PARTY_NOTICES.md`](THIRD_PARTY_NOTICES.md) and the SPDX entry in
+[`REUSE.toml`](REUSE.toml) intact when redistributing them.
+
 ## Third-party assets
 
 Third-party files remain under their upstream licences and are not relicensed
 by this policy. This currently includes the Lucide and Tabler-derived icons
-other than Ruwa's project-created marks and RGB/HSV mode icons, plus the bundled
-OFL-1.1 fonts. Exact copyright notices, licence texts, and provenance are
+other than Ruwa's project-created marks, RGB/HSV mode icons, and the medomij tab
+glyphs, plus the bundled OFL-1.1 fonts. Exact copyright notices, licence texts, and provenance are
 documented in
 [`THIRD_PARTY_NOTICES.md`](THIRD_PARTY_NOTICES.md), [`LICENSES/`](LICENSES), and
 [`third-party/notices/`](third-party/notices).

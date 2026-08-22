@@ -69,7 +69,7 @@ SPDX-License-Identifier = "MIT"
 # Functional assets are deliberately frictionless for forks and reuse.
 [[annotations]]
 path = [
-    "resources/Layouts/**",
+    "resources/layouts/**",
     "resources/brushes/**",
     "resources/pigments/**",
 ]
@@ -94,6 +94,13 @@ path = [
 ]
 precedence = "override"
 SPDX-FileCopyrightText = "2026 Ruwa contributors"
+SPDX-License-Identifier = "MPL-2.0"
+
+# Tab identity glyphs contributed by medomij, licensed with the application.
+[[annotations]]
+path = "resources/icons/tab-glyphs/**"
+precedence = "override"
+SPDX-FileCopyrightText = "2026 medomij"
 SPDX-License-Identifier = "MPL-2.0"
 
 # The UI icon directory combines Lucide (ISC, including MIT-derived Feather

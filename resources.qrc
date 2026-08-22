@@ -109,7 +109,7 @@
         <file alias="Link">resources/icons/Link.png</file>
         <file alias="FlipVertical">resources/icons/FlipVertical.png</file>
         <file alias="FlipHorizontal">resources/icons/FlipHorizontal.png</file>
-        <file alias="DockLayout">resources/icons/Dock-layout.png</file>
+        <file alias="DockLayout">resources/icons/DockLayout.png</file>
         <file alias="LayoutSwitch">resources/icons/LayoutSwitch.png</file>
         <file alias="DetachPanel">resources/icons/DetachPanel.png</file>
         <file alias="AddTab">resources/icons/AddTab.png</file>
@@ -127,8 +127,8 @@
         <file alias="Warning">resources/icons/Warning.png</file>
         <file alias="Liquify">resources/icons/Liquify.png</file>
         <file alias="LiquifyPush">resources/icons/LiquifyPush.png</file>
-        <file alias="LiquifyTwirlCW">resources/icons/LiquifyTwirl_cw.png</file>
-        <file alias="LiquifyTwirlCCW">resources/icons/LiquifyTwirl_ccw.png</file>
+        <file alias="LiquifyTwirlCW">resources/icons/LiquifyTwirlCW.png</file>
+        <file alias="LiquifyTwirlCCW">resources/icons/LiquifyTwirlCCW.png</file>
         <file alias="LiquifyGrow">resources/icons/LiquifyGrow.png</file>
         <file alias="LiquifyShrink">resources/icons/LiquifyShrink.png</file>
         <file alias="LayerMask">resources/icons/LayerMask.png</file>
@@ -144,6 +144,15 @@
         <file alias="LayerEffectsPanel">resources/icons/LayerEffectsPanel.png</file>
         <file alias="LayersPanel">resources/icons/LayersPanel.png</file>
         <file alias="ToolsPanel">resources/icons/ToolsPanel.png</file>
+
+        <!-- Tab identity glyphs (see resources/icons/tab-glyphs). -->
+        <file alias="TabGlyphFrame">resources/icons/tab-glyphs/Frame.png</file>
+        <file alias="TabGlyphHeart">resources/icons/tab-glyphs/Heart.png</file>
+        <file alias="TabGlyphLeaf">resources/icons/tab-glyphs/Leaf.png</file>
+        <file alias="TabGlyphSpider">resources/icons/tab-glyphs/Spider.png</file>
+        <file alias="TabGlyphCat">resources/icons/tab-glyphs/Cat.png</file>
+        <file alias="TabGlyphBow">resources/icons/tab-glyphs/Bow.png</file>
+        <file alias="TabGlyphFire">resources/icons/tab-glyphs/Fire.png</file>
     </qresource>
     <qresource prefix="/images">
         <file alias="FirstIntegrationBottom">resources/pictures/FirstIntegrationBottom.png</file>
@@ -166,17 +175,17 @@
         <file alias="5">resources/brushes/5.png</file>
     </qresource>
     <qresource prefix="/standard_brushes">
-        <file alias="Classic Brushes/Classic Brushes.rbf">resources/brushes/StandardBrushes/Classic Brushes.rbf</file>
-        <file alias="Experimental Brushes/Experimental Brushes.rbf">resources/brushes/StandardBrushes/Experimental Brushes.rbf</file>
-        <file alias="Lineart Brushes/Lineart Brushes.rbf">resources/brushes/StandardBrushes/Lineart Brushes.rbf</file>
-        <file alias="Stylized Brushes/Stylized Brushes.rbf">resources/brushes/StandardBrushes/Stylized Brushes.rbf</file>
-        <file alias="Wet Brushes/Wet Brushes.rbf">resources/brushes/StandardBrushes/Wet Brushes.rbf</file>
+        <file alias="Classic Brushes/Classic Brushes.rbf">resources/brushes/standard/Classic Brushes.rbf</file>
+        <file alias="Experimental Brushes/Experimental Brushes.rbf">resources/brushes/standard/Experimental Brushes.rbf</file>
+        <file alias="Lineart Brushes/Lineart Brushes.rbf">resources/brushes/standard/Lineart Brushes.rbf</file>
+        <file alias="Stylized Brushes/Stylized Brushes.rbf">resources/brushes/standard/Stylized Brushes.rbf</file>
+        <file alias="Wet Brushes/Wet Brushes.rbf">resources/brushes/standard/Wet Brushes.rbf</file>
     </qresource>
     <qresource prefix="/pigments">
         <file alias="ruwa-pigments-v1.lut">resources/pigments/ruwa-pigments-v1.lut</file>
     </qresource>
     <qresource prefix="/layouts">
-        <file alias="Base.json">resources/Layouts/Base.json</file>
+        <file alias="Base.json">resources/layouts/Base.json</file>
     </qresource>
     <qresource prefix="/i18n">
         <file alias="commands_ru.json">translations/commands_ru.json</file>

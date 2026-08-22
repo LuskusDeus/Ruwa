@@ -20,6 +20,7 @@ document.
 | Catch2 3.8.1 | Test framework fetched when `BUILD_TESTING=ON` | BSL-1.0 | Test-only; exact licence and provenance are included under `third-party/notices/catch2/`. |
 | Lucide icons | Raster icons under `resources/icons` | ISC (with MIT portions from Feather) | Include ISC/MIT text; no per-icon attribution required. |
 | Tabler Icons | Raster icons under `resources/icons` | MIT | Include MIT text; no per-icon attribution required. |
+| medomij tab glyphs | `resources/icons/tab-glyphs/` | MPL-2.0 (© medomij) | Contributed with permission; keep the attribution in this file. |
 | Discord Rich Presence | First-party Ruwa code in `src/services/discord` (Qt IPC) | MPL-2.0 (Ruwa) | No third-party Discord SDK or binary is used. |
 | Windows runtime redistributables | Deployed into binary packages (MinGW GCC runtime, winpthreads, Mesa `opengl32sw.dll`) | GCC Runtime Library Exception / permissive / MIT and BSL-1.0 | Ship each runtime's exact licence text with binary packages. |
 | Comfortaa | `resources/fonts/Comfortaa-*.ttf` | SIL Open Font License 1.1 | Include OFL-1.1 text and attribution. |
@@ -228,6 +229,19 @@ created for Ruwa. This includes the five built-in dab-shape PNGs, the standard
 brush packs, their preset data, previews, and embedded custom-dab images. These
 functional assets are distributed under CC0-1.0.
 
+### Contributed tab glyphs
+
+The seven tab identity glyphs under `resources/icons/tab-glyphs/` — `Frame.png`,
+`Heart.png`, `Leaf.png`, `Spider.png`, `Cat.png`, `Bow.png`, and `Fire.png` —
+were drawn by **medomij** and are included in Ruwa with their permission. They
+are offered on the tab context menu so tabs can be told apart at a glance.
+
+Copyright is held by medomij, not by the Ruwa project. The files are
+distributed under MPL-2.0 as application assets, and are recorded as such in
+[`REUSE.toml`](REUSE.toml).
+
+Release status: **cleared** (contributed with permission, attribution recorded).
+
 ### Project-created artwork
 
 The project owner states that the following onboarding artwork was drawn
@@ -266,7 +280,8 @@ Upstream:
 ### Lucide and Tabler icons
 
 All remaining raster icons under `resources/icons`, except the project-created
-marks and RGB/HSV mode icons listed above and `MyPFP.jpg`, are drawn from the
+marks and RGB/HSV mode icons listed above, the medomij tab glyphs, and
+`MyPFP.jpg`, are drawn from the
 **Lucide** and **Tabler Icons** open-source icon sets (rendered to PNG for Ruwa).
 
 Both licences are permissive and do **not** require per-icon attribution or a

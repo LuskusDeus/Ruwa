@@ -16,6 +16,8 @@
 #include <QTimer>
 #include <QVBoxLayout>
 
+#include <iterator>
+
 namespace ruwa::ui::widgets {
 
 namespace {
@@ -27,9 +29,32 @@ struct TabActionDef {
     ruwa::ui::core::IconProvider::StandardIcon icon;
 };
 
-static const QStringList kTabIcons
-    = { "Home", "BasicFile", "OpenedFolder", "Edit", "NewFile", "Brush", "Eyedropper", "Text",
-          "Zoom", "Find", "List", "Settings", "Appearance", "Performance" };
+struct TabIconDef {
+    const char* alias;
+    const char* label;
+};
+
+// Two rows of seven. The first is drawn from the regular UI set and reads as
+// "what this tab is for"; the second is the decorative tab-glyph set, there to
+// tell otherwise identical tabs apart at a glance.
+static const TabIconDef kTabIcons[] = {
+    // Row one: regular UI glyphs, for tabs named after what they hold.
+    { "Home", "Home" },
+    { "BasicFile", "File" },
+    { "OpenedFolder", "Folder" },
+    { "NewFile", "New File" },
+    { "Brush", "Brush" },
+    { "Pencil", "Pencil" },
+    { "Camera", "Camera" },
+    // Row two: decorative marks, for telling look-alike tabs apart.
+    { "TabGlyphFrame", "Frame" },
+    { "TabGlyphHeart", "Heart" },
+    { "TabGlyphLeaf", "Leaf" },
+    { "TabGlyphSpider", "Spider" },
+    { "TabGlyphCat", "Cat" },
+    { "TabGlyphBow", "Bow" },
+    { "TabGlyphFire", "Fire" },
+};
 
 static const TabActionDef kActions[] = {
     { 0, "Close Tab", false, ruwa::ui::core::IconProvider::StandardIcon::Close },
@@ -80,8 +105,8 @@ void TabContextMenu::buildUi()
     iconGrid->setVerticalSpacing(theme.scaled(4));
     contentLayout()->addWidget(m_iconWidget);
 
-    for (int i = 0; i < kTabIcons.size(); ++i) {
-        const QString alias = kTabIcons[i];
+    for (int i = 0; i < static_cast<int>(std::size(kTabIcons)); ++i) {
+        const QString alias = QString::fromLatin1(kTabIcons[i].alias);
         auto style = ruwa::ui::core::WidgetStyle::defaultButtonStyle();
         style.name = QStringLiteral("TabMenuIconButton");
         style.metrics.fixedWidth = true;
@@ -104,7 +129,7 @@ void TabContextMenu::buildUi()
 
         auto* button = new BaseStyledWidget(style, m_iconWidget);
         button->setIcon(ruwa::ui::core::IconProvider::instance().getIcon(alias));
-        button->setToolTip(alias);
+        button->setToolTip(QString::fromLatin1(kTabIcons[i].label));
 
         const int row = i / IconsPerRow;
         const int col = i % IconsPerRow;

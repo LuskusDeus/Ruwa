@@ -15,6 +15,26 @@ a release.
 
 ## [Unreleased]
 
+### Changed
+- The tab context menu offers a different set of icons. The first row keeps the
+  workspace glyphs that say what a tab holds — home, file, folder, new file,
+  brush, pencil, camera — and the second row is now a set of seven decorative
+  marks (frame, heart, leaf, spider, cat, bow, fire) for telling look-alike tabs
+  apart. Hovering an icon names it instead of showing its resource alias. Tabs
+  already carrying one of the removed icons keep it; the icon simply no longer
+  appears in the grid.
+- Asset directories follow one naming convention: `resources/Layouts` is now
+  `resources/layouts`, `resources/brushes/StandardBrushes` is now
+  `resources/brushes/standard`, and the three icon files whose names drifted
+  from the set (`Dock-layout.png`, `LiquifyTwirl_cw.png`, `LiquifyTwirl_ccw.png`)
+  match their resource aliases. Resource aliases are unchanged, so nothing that
+  reads an icon or a layout by name is affected.
+
+### Added
+- The decorative tab glyphs were drawn by medomij and are included with their
+  permission. Attribution and licensing are recorded in `THIRD_PARTY_NOTICES.md`,
+  `ASSET_POLICY.md`, `NOTICE`, and `REUSE.toml`.
+
 ## [0.3.2-alpha] — 2026-08-20 — "Themes you can build, motion you can dial, and a Layer Properties panel with real controls"
 
 A theme is now something you make rather than something you pick. The theme
