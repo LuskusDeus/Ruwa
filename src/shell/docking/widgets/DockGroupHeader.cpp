@@ -678,12 +678,9 @@ void DockGroupHeader::mousePressEvent(QMouseEvent* event)
         return;
     }
 
-    // Activate on press (not release): selecting a tab should feel immediate,
-    // and reordering starts from the tab the user just selected.
-    if (DockPanel* panel = m_items[index].panel.data()) {
-        emit panelActivationRequested(panel);
-    }
-
+    // Activate on release, not on press: a press only arms the reorder drag, so
+    // grabbing an inactive tab must not swap the group's content the instant it
+    // starts to move.
     m_dragStartIndex = index;
     m_pressedPanel = m_items[index].panel.data();
     m_pressStartGlobal = event->globalPosition().toPoint();
@@ -698,6 +695,8 @@ void DockGroupHeader::mouseMoveEvent(QMouseEvent* event)
 
     if (!m_pressedPanel.isNull() && (event->buttons() & Qt::LeftButton)) {
         if (!m_dragging && (globalPos - m_pressStartGlobal).manhattanLength() >= kDragThreshold) {
+            // Once the press turns into a drag it stops being a click: dropping the
+            // tab only reorders it, and selecting it takes a later plain click.
             m_dragging = true;
         }
         if (m_dragging) {
@@ -715,8 +714,17 @@ void DockGroupHeader::mouseReleaseEvent(QMouseEvent* event)
         updateDraggedTab(event->globalPosition().toPoint());
         finishTabDrag();
     } else if (event->button() == Qt::LeftButton) {
+        DockPanel* pressed = m_pressedPanel.data();
         m_pressedPanel = nullptr;
         m_dragStartIndex = -1;
+
+        // A click counts only while it ends on the tab it started on — the same
+        // rule a push button follows.
+        const int index = tabIndexAt(event->position());
+        if (pressed && index >= 0 && m_items[index].panel.data() == pressed
+            && !isCloseButtonAt(index, event->position())) {
+            emit panelActivationRequested(pressed);
+        }
     }
 
     m_dragging = false;

@@ -193,6 +193,7 @@ private:
     QVariantAnimation* m_stripAlignAnim = nullptr;
     bool m_initialAlignDone = false;
 
+    QUuid m_pressedTabId;
     QUuid m_dragCandidateRootId;
     QUuid m_draggedRootId;
     QList<QUuid> m_dragStartRootOrder;

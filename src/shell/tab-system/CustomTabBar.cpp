@@ -1109,12 +1109,25 @@ void CustomTabBar::startTabDrag(const QUuid& rootTabId, const QPoint& globalPos)
         cancelTabDragCandidate();
         return;
     }
-    const QPixmap snapshot = grab(snapshotRect);
+    // grab() would hand back an uninitialised (black) pixmap here: the strip paints
+    // no background of its own, so the ghost has to be rendered onto transparency
+    // for its frosted backdrop to show through — the same way the reorderable lists
+    // build their ghosts.
+    const qreal dpr = devicePixelRatioF();
+    QPixmap snapshot(snapshotRect.size() * dpr);
     if (snapshot.isNull()) {
         cancelTabDragCandidate();
         return;
     }
+    snapshot.setDevicePixelRatio(dpr);
+    snapshot.fill(Qt::transparent);
+    // The source region already lands at the pixmap's origin, so the target offset
+    // stays zero — shifting it by the region's own top-left pushes the tabs out.
+    render(&snapshot, QPoint(), QRegion(snapshotRect), QWidget::DrawChildren);
 
+    // Once the press turns into a drag it stops being a click: dropping the group
+    // reorders it and nothing more, so the tab is switched by a later plain click.
+    m_pressedTabId = QUuid();
     m_dragActive = true;
     m_draggedRootId = rootTabId;
     m_dragStartRootOrder = visibleRootOrder();
@@ -1243,6 +1256,7 @@ void CustomTabBar::resetTabDragState()
     m_dragSettling = false;
     m_draggedRootId = QUuid();
     m_dragStartRootOrder.clear();
+    m_pressedTabId = QUuid();
     cancelTabDragCandidate();
 }
 
@@ -1267,6 +1281,8 @@ void CustomTabBar::mousePressEvent(QMouseEvent* event)
         QWidget::mousePressEvent(event);
         return;
     }
+
+    m_pressedTabId = QUuid();
 
     int idx = tabIndexAt(event->pos());
 
@@ -1298,16 +1314,30 @@ void CustomTabBar::mousePressEvent(QMouseEvent* event)
         }
         m_tabManager->requestCloseTab(item.id);
     } else {
+        // The press only arms the drag; the switch happens on release, so grabbing
+        // an inactive tab to reorder it does not swap documents the instant it moves.
         m_dragCandidateRootId = rootTabIdForItem(idx);
         m_dragPressGlobalPosition = event->globalPosition().toPoint();
-        m_tabManager->activateTab(item.id);
+        m_pressedTabId = item.id;
     }
 }
 
 void CustomTabBar::mouseReleaseEvent(QMouseEvent* event)
 {
     if (event->button() == Qt::LeftButton) {
+        const QUuid pressedId = m_pressedTabId;
+        m_pressedTabId = QUuid();
         cancelTabDragCandidate();
+
+        // A click only counts while it ends on the tab it started on — the same
+        // rule a push button follows.
+        if (!pressedId.isNull() && m_tabManager) {
+            const int idx = tabIndexAt(event->pos());
+            if (idx >= 0 && idx < m_items.size() && m_items[idx].id == pressedId
+                && !isCloseButtonAt(idx, event->pos())) {
+                m_tabManager->activateTab(pressedId);
+            }
+        }
     }
     QWidget::mouseReleaseEvent(event);
 }
