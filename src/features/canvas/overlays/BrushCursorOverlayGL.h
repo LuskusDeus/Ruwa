@@ -37,13 +37,21 @@ public:
 
     /// Render brush cursor. Position in widget pixels (origin top-left).
     /// Radius in screen pixels. Requires sceneTextureId for inversion.
+    /// \p uiScale is the device pixel ratio, so the fixed-size fallback marker
+    /// keeps its apparent size on a hi-DPI display.
     void render(float centerX, float centerY, float radiusPx, int viewportWidth, int viewportHeight,
-        GLuint sceneTextureId, float rotationRadians = 0.0f);
+        GLuint sceneTextureId, float rotationRadians = 0.0f, float uiScale = 1.0f);
 
     /// Set custom stamp contours (normalized to [-1,1], centered around the
     /// brush center). One entry per outer or inner boundary loop of the dab;
     /// pass an empty list to fall back to a plain circle.
     void setStampContours(const std::vector<std::vector<Vector2>>& contours);
+
+    /// Half-extent, in surface pixels, of the fixed-size plus drawn in place of
+    /// a brush ring that has become too small to see. Callers sizing a scene
+    /// capture around the cursor need it, because the plus can be wider than
+    /// the ring it stands in for.
+    static float fallbackMarkerExtentPx(float uiScale = 1.0f);
 
     bool isInitialized() const { return m_initialized; }
 
@@ -52,6 +60,8 @@ private:
         const std::array<float, 16>& mvp, GLuint sceneTextureId, float vpW, float vpH);
     void drawRing(float cx, float cy, float outerRadius, float innerRadius, int segments,
         const std::array<float, 16>& mvp, GLuint sceneTextureId, float vpW, float vpH);
+    void drawPlus(float cx, float cy, float uiScale, const std::array<float, 16>& mvp,
+        GLuint sceneTextureId, float vpW, float vpH);
     void drawPolygonStroke(float cx, float cy, float scale, float strokeWidth,
         const std::vector<Vector2>& contour, float rotationCos, float rotationSin,
         const std::array<float, 16>& mvp, GLuint sceneTextureId, float vpW, float vpH);
@@ -77,6 +87,10 @@ private:
 
     std::vector<std::vector<Vector2>> m_stampContours;
     static constexpr float kStrokeWidth = 2.0f;
+    // Below this screen radius the ring collapses into an unreadable blob, so
+    // the cursor falls back to a plus of its own fixed size.
+    static constexpr float kMinRingRadiusPx = 3.5f;
+    static constexpr float kPlusArmLengthPx = 5.0f;
 };
 
 } // namespace aether

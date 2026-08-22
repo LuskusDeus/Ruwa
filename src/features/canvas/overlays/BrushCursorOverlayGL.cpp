@@ -186,9 +186,9 @@ void BrushCursorOverlayGL::setStampContours(const std::vector<std::vector<Vector
 }
 
 void BrushCursorOverlayGL::render(float centerX, float centerY, float radiusPx, int viewportWidth,
-    int viewportHeight, GLuint sceneTextureId, float rotationRadians)
+    int viewportHeight, GLuint sceneTextureId, float rotationRadians, float uiScale)
 {
-    if (!m_initialized || !sceneTextureId || radiusPx < 0.5f)
+    if (!m_initialized || !sceneTextureId || radiusPx < 0.0f)
         return;
     const float rotCos = std::cos(rotationRadians);
     const float rotSin = std::sin(rotationRadians);
@@ -207,6 +207,15 @@ void BrushCursorOverlayGL::render(float centerX, float centerY, float radiusPx, 
 
     const float vpW = static_cast<float>(viewportWidth);
     const float vpH = static_cast<float>(viewportHeight);
+
+    // Zoomed far out, or with a one-pixel brush, the outline shrinks below the
+    // point where it reads as a shape at all. Stand a plus in for it — sized in
+    // screen pixels, so it stays legible whatever the zoom does.
+    if (radiusPx < kMinRingRadiusPx * std::max(1.0f, uiScale)) {
+        drawPlus(centerX, centerY, uiScale, mvpArr, sceneTextureId, vpW, vpH);
+        m_gl->glDisable(GL_BLEND);
+        return;
+    }
 
     if (!m_stampContours.empty()) {
         for (const auto& contour : m_stampContours) {
@@ -253,6 +262,48 @@ void BrushCursorOverlayGL::drawCircle(float cx, float cy, float radius, int segm
     m_gl->glBufferSubData(GL_ARRAY_BUFFER, 0,
         static_cast<GLsizeiptr>(vertices.size() * sizeof(float)), vertices.data());
     m_gl->glDrawArrays(GL_TRIANGLE_FAN, 0, vertCount);
+    m_gl->glBindVertexArray(0);
+}
+
+float BrushCursorOverlayGL::fallbackMarkerExtentPx(float uiScale)
+{
+    const float scale = std::max(1.0f, uiScale);
+    return (kPlusArmLengthPx + kStrokeWidth * 0.5f) * scale;
+}
+
+void BrushCursorOverlayGL::drawPlus(float cx, float cy, float uiScale,
+    const std::array<float, 16>& mvp, GLuint sceneTextureId, float vpW, float vpH)
+{
+    const float scale = std::max(1.0f, uiScale);
+    const float halfWidth = std::max(0.5f, kStrokeWidth * 0.5f * scale);
+    const float arm = kPlusArmLengthPx * scale;
+
+    std::vector<float> vertices;
+    vertices.reserve(18 * 2);
+
+    // The bars are cut so they never overlap: inverting the same pixel twice
+    // would undo the inversion and punch a hole through the middle.
+    const auto appendRect = [&vertices](float x0, float y0, float x1, float y1) {
+        const float quad[12] = { x0, y0, x1, y0, x1, y1, x0, y0, x1, y1, x0, y1 };
+        vertices.insert(vertices.end(), std::begin(quad), std::end(quad));
+    };
+
+    appendRect(cx - arm, cy - halfWidth, cx + arm, cy + halfWidth);
+    appendRect(cx - halfWidth, cy - arm, cx + halfWidth, cy - halfWidth);
+    appendRect(cx - halfWidth, cy + halfWidth, cx + halfWidth, cy + arm);
+
+    m_gl->glUseProgram(m_invertProgram);
+    m_gl->glUniformMatrix4fv(m_locInvertMVP, 1, GL_FALSE, mvp.data());
+    m_gl->glUniform4f(m_locInvertColor, 0, 0, 0, 0.95f);
+    m_gl->glBindTextureUnit(0, sceneTextureId);
+    m_gl->glUniform1i(m_locInvertSceneTexture, 0);
+    m_gl->glUniform2f(m_locInvertViewportSize, vpW, vpH);
+
+    m_gl->glBindVertexArray(m_vao);
+    m_gl->glBindBuffer(GL_ARRAY_BUFFER, m_vbo);
+    m_gl->glBufferSubData(GL_ARRAY_BUFFER, 0,
+        static_cast<GLsizeiptr>(vertices.size() * sizeof(float)), vertices.data());
+    m_gl->glDrawArrays(GL_TRIANGLES, 0, static_cast<GLsizei>(vertices.size() / 2));
     m_gl->glBindVertexArray(0);
 }
 

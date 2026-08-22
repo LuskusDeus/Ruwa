@@ -11420,8 +11420,10 @@ void OpenGLCanvasWidget::paintGL_renderCursorOverlays()
     auto* eyedropperCursorOverlay = m_overlayManager->eyedropperCursorOverlay();
     auto* toolCursorOverlay = m_overlayManager->toolCursorOverlay();
 
+    // A radius too small to draw a ring is not a reason to skip the cursor: the
+    // overlay stands a fixed-size plus in for it.
     const bool wantBrushCursor = brushCursorOverlay && m_cursorOverlayState.brushVisible
-        && m_cursorOverlayState.brushRadius > 0.5f;
+        && m_cursorOverlayState.brushRadius >= 0.0f;
     const bool wantEyedropperCursor
         = eyedropperCursorOverlay && m_cursorOverlayState.eyedropperVisible;
     const bool wantToolCursor = toolCursorOverlay && m_cursorOverlayState.toolCursorVisible;
@@ -11440,7 +11442,8 @@ void OpenGLCanvasWidget::paintGL_renderCursorOverlays()
         const float cursorRotation = m_brush ? m_brush->previewDabRotationDeltaRadians() : 0.0f;
         brushCursorOverlay->render(m_cursorOverlayState.brushCenterX,
             m_cursorOverlayState.brushCenterY, m_cursorOverlayState.brushRadius, surfaceWidth,
-            surfaceHeight, m_sceneFboManager.sceneTexture(), cursorRotation);
+            surfaceHeight, m_sceneFboManager.sceneTexture(), cursorRotation,
+            static_cast<float>(devicePixelRatioF()));
     }
     if (wantEyedropperCursor && eyedropperCursorOverlay->isInitialized()) {
         const QColor selectedColor = QColor::fromRgbF(m_cursorOverlayState.eyedropperSelectedR,
@@ -13116,7 +13119,7 @@ void OpenGLCanvasWidget::paintGL()
     auto* toolCursorOverlay = m_overlayManager ? m_overlayManager->toolCursorOverlay() : nullptr;
     auto* textEditOverlay = m_overlayManager ? m_overlayManager->textEditOverlay() : nullptr;
     const bool wantBrushCursor = !m_skipCursorOverlays && brushCursorOverlay
-        && m_cursorOverlayState.brushVisible && m_cursorOverlayState.brushRadius > 0.5f;
+        && m_cursorOverlayState.brushVisible && m_cursorOverlayState.brushRadius >= 0.0f;
     const bool wantEyedropperCursor = !m_skipCursorOverlays && eyedropperCursorOverlay
         && m_cursorOverlayState.eyedropperVisible;
     const bool wantToolCursor
@@ -13165,7 +13168,12 @@ void OpenGLCanvasWidget::paintGL()
             // pixels wide. Keep a small guard band so edge texels never sample
             // stale content from outside the copied rectangle.
             constexpr float kCursorCapturePaddingPx = 3.0f;
-            const float r = m_cursorOverlayState.brushRadius + kCursorCapturePaddingPx;
+            // A tiny brush is drawn as a fixed-size plus, which reaches further
+            // than its own radius does.
+            const float r = std::max(m_cursorOverlayState.brushRadius,
+                                BrushCursorOverlayGL::fallbackMarkerExtentPx(
+                                    static_cast<float>(devicePixelRatioF())))
+                + kCursorCapturePaddingPx;
             cursorCaptureRects[cursorCaptureRectCount++]
                 = CursorCaptureRect { m_cursorOverlayState.brushCenterX - r,
                       m_cursorOverlayState.brushCenterY - r, m_cursorOverlayState.brushCenterX + r,
