@@ -1480,7 +1480,6 @@ public:
     void cancelPointerInteraction()
     {
         setDown(false);
-        m_isPressed = false;
         setHovered(rect().contains(mapFromGlobal(QCursor::pos())));
         update();
     }

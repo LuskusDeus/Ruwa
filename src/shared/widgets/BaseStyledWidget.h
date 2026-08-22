@@ -87,9 +87,6 @@ public:
     void setActive(bool active, bool animated = true);
     bool isActive() const { return m_isActive; }
 
-    /// Check if currently pressed
-    bool isPressed() const { return m_isPressed; }
-
     // ========================================================================
     // Animation Properties
     // ========================================================================
@@ -192,7 +189,6 @@ private:
 
     // State
     bool m_isActive = false;
-    bool m_isPressed = false;
 
     // Animation progress values
     qreal m_hoverProgress = 0.0;

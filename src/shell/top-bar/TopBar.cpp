@@ -199,12 +199,8 @@ void WindowControlButton::paintEvent(QPaintEvent* event)
     painter.setPen(Qt::NoPen);
 
     if (m_type == Type::Close) {
-        const QColor red(232, 17, 35);
         const QColor redHover(232, 17, 35, 230);
-        if (isPressed()) {
-            painter.setBrush(red);
-            painter.drawRoundedRect(r, radius, radius);
-        } else if (hp > 0.001) {
+        if (hp > 0.001) {
             QColor c = redHover;
             c.setAlphaF(c.alphaF() * hp);
             painter.setBrush(c);
@@ -212,21 +208,15 @@ void WindowControlButton::paintEvent(QPaintEvent* event)
         }
     } else {
         const QColor hoverOverlay = colors.overlay(0.06);
-        const QColor pressedOverlay = colors.overlay(0.10);
         if (hp > 0.001) {
             QColor h = hoverOverlay;
             h.setAlphaF(h.alphaF() * hp);
             painter.setBrush(h);
             painter.drawRoundedRect(r, radius, radius);
         }
-        if (isPressed()) {
-            painter.setBrush(pressedOverlay);
-            painter.drawRoundedRect(r, radius, radius);
-        }
     }
 
-    const qreal closeHot
-        = (m_type == Type::Close) ? qBound(0.0, qMax(hp, isPressed() ? 1.0 : 0.0), 1.0) : 0.0;
+    const qreal closeHot = (m_type == Type::Close) ? qBound(0.0, hp, 1.0) : 0.0;
     QColor iconColor = colors.textMuted;
     if (closeHot > 0.001) {
         iconColor = QColor(qRound(iconColor.red() * (1.0 - closeHot) + 255 * closeHot),

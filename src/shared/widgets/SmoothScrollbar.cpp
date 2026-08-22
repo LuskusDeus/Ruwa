@@ -252,8 +252,7 @@ QRect SmoothScrollBar::getDownButtonRect() const
     }
 }
 
-void SmoothScrollBar::drawArrowButton(
-    QPainter& painter, const QRect& rect, bool isUp, bool isPressed)
+void SmoothScrollBar::drawArrowButton(QPainter& painter, const QRect& rect, bool isUp)
 {
     // Only draw arrows when hovering (no circles)
     if (m_hoverProgress <= 0.3) {
@@ -263,10 +262,7 @@ void SmoothScrollBar::drawArrowButton(
     painter.save();
 
     // Draw arrow directly - no circle background
-    qreal arrowOpacity = (m_hoverProgress - 0.3) / 0.7; // Fade in from 0.3 to 1.0
-    if (isPressed) {
-        arrowOpacity = qMin(1.0, arrowOpacity * 1.5);
-    }
+    const qreal arrowOpacity = (m_hoverProgress - 0.3) / 0.7; // Fade in from 0.3 to 1.0
 
     const auto& colors = ruwa::ui::core::ThemeManager::instance().colors();
     painter.setPen(QPen(colors.overlay(arrowOpacity * 0.71), 1.5));
@@ -331,8 +327,8 @@ void SmoothScrollBar::paintEvent(QPaintEvent* event)
         }
 
         // Arrow buttons only make sense while scrolling is possible.
-        drawArrowButton(painter, getUpButtonRect(), true, m_upButtonPressed);
-        drawArrowButton(painter, getDownButtonRect(), false, m_downButtonPressed);
+        drawArrowButton(painter, getUpButtonRect(), true);
+        drawArrowButton(painter, getDownButtonRect(), false);
     } else {
         handleRect = m_cachedHandleRect;
     }

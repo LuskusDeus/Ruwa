@@ -36,6 +36,7 @@ signals:
 protected:
     void paintEvent(QPaintEvent* event) override;
     void mousePressEvent(QMouseEvent* event) override;
+    void mouseReleaseEvent(QMouseEvent* event) override;
 
 private:
     void drawCheckerboard(QPainter& painter, const QRect& rect);
@@ -43,6 +44,7 @@ private:
     QColor m_color = Qt::black;
     bool m_active = false;
     bool m_isForeground = false;
+    bool m_pressLatched = false;
 };
 
 /**

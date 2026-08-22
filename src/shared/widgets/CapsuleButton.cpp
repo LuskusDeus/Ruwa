@@ -398,7 +398,6 @@ void CapsuleButton::paintEvent(QPaintEvent*)
     const auto& colors = theme.colors();
     const bool enabled = isEnabled();
     const qreal hover = enabled ? m_hoverProgress : 0.0;
-    const bool pressed = enabled && isDown();
     const QColor disabledText = m_disabledTextTone == DisabledTextTone::Dark
         ? TC::interpolate(colors.textOnPrimary(), colors.textMuted, 0.5)
         : colors.textDisabled();
@@ -462,12 +461,6 @@ void CapsuleButton::paintEvent(QPaintEvent*)
                 ruwa::ui::painting::drawGradientBorder(
                     p, r.adjusted(0.5, 0.5, -0.5, -0.5), pillR, borderTop, borderBottom);
             }
-
-            if (pressed) {
-                p.setPen(Qt::NoPen);
-                p.setBrush(colors.shadow(25));
-                p.drawRoundedRect(primaryFillRect, primaryFillR, primaryFillR);
-            }
         } else {
             if (enabled && m_secondaryRestingFillAlt) {
                 // Filled input-field plate (matches the Color-panel hex input).
@@ -515,12 +508,6 @@ void CapsuleButton::paintEvent(QPaintEvent*)
             }
             ruwa::ui::painting::drawGradientBorder(
                 p, r.adjusted(0.5, 0.5, -0.5, -0.5), pillR, borderTop, borderBottom);
-
-            if (pressed) {
-                p.setPen(Qt::NoPen);
-                p.setBrush(colors.shadow(20));
-                p.drawRoundedRect(fillRect, fillR, fillR);
-            }
 
             textPen = !enabled
                 ? disabledText

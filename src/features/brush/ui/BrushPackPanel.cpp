@@ -177,13 +177,6 @@ protected:
         QRect textRect(textStartX, 0, width() - textStartX - sidePad, height());
         painter.drawText(textRect, Qt::AlignLeft | Qt::AlignVCenter,
             painter.fontMetrics().elidedText(textValue, Qt::ElideRight, textRect.width()));
-
-        if (enabled && isPressed()) {
-            painter.setPen(Qt::NoPen);
-            QColor overlay = colors.overlay(0.04);
-            painter.setBrush(overlay);
-            painter.drawRoundedRect(r, radius, radius);
-        }
     }
 
 private:
@@ -474,14 +467,6 @@ void BrushItem::paintEvent(QPaintEvent* event)
 
         painter.restore();
     }
-
-    // === Press darkening ===
-    if (m_pressed) {
-        QColor pressOverlay = colors.overlay(0.06);
-        painter.setPen(Qt::NoPen);
-        painter.setBrush(pressOverlay);
-        painter.drawRoundedRect(outerRect, radius, radius);
-    }
 }
 
 void BrushItem::enterEvent(QEnterEvent* event)
@@ -732,13 +717,6 @@ void PresetButton::paintEvent(QPaintEvent* event)
         painter.drawText(textRect, Qt::AlignHCenter | Qt::AlignTop,
             painter.fontMetrics().elidedText(
                 shortName, Qt::ElideRight, static_cast<int>(textRect.width())));
-    }
-
-    // Press overlay
-    if (isPressed()) {
-        painter.setPen(Qt::NoPen);
-        painter.setBrush(colors.overlay(0.05));
-        painter.drawRoundedRect(r, radius, radius);
     }
 }
 
@@ -1646,7 +1624,6 @@ void BrushPackPanel::addControlButtons()
                                 "  padding: 4px 8px;"
                                 "}"
                                 "QPushButton:hover { background: rgba(120,120,120,0.22); }"
-                                "QPushButton:pressed { background: rgba(120,120,120,0.30); }"
                                 "QPushButton:disabled { color: rgba(180,180,180,0.5); "
                                 "border-color: rgba(255,255,255,0.1); }";
 

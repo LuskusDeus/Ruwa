@@ -103,13 +103,10 @@ protected:
 
         if (m_primaryFilled) {
             QColor bg = colors.primary;
-            if (hoverProgress() > 0.0 && !isPressed()) {
+            if (hoverProgress() > 0.0) {
                 bg = ThemeColors::adjustBrightness(colors.primary, 1.0 + hoverProgress() * 0.08);
             }
             bg.setAlpha(255);
-            if (isPressed()) {
-                bg = colors.primaryPressed();
-            }
 
             painter.setPen(Qt::NoPen);
             painter.setBrush(bg);
@@ -118,12 +115,6 @@ protected:
             ruwa::ui::painting::drawGradientBorder(painter, rect, radius,
                 ThemeColors::adjustBrightness(colors.primary, colors.isDark ? 1.2 : 0.9),
                 ThemeColors::adjustBrightness(colors.primary, colors.isDark ? 1.1 : 0.95));
-
-            if (isPressed()) {
-                painter.setPen(Qt::NoPen);
-                painter.setBrush(colors.shadow(25));
-                painter.drawRoundedRect(rect, radius, radius);
-            }
 
             paintIcon(painter, tm, colors.textOnPrimary());
         } else {
@@ -138,13 +129,6 @@ protected:
                 hover.setAlphaF(hover.alphaF() * hoverProgress());
                 painter.setPen(Qt::NoPen);
                 painter.setBrush(hover);
-                painter.drawRoundedRect(innerRect, innerRadius, innerRadius);
-            }
-            if (isPressed()) {
-                QColor press = colors.primaryPressed();
-                press.setAlphaF(0.35);
-                painter.setPen(Qt::NoPen);
-                painter.setBrush(press);
                 painter.drawRoundedRect(innerRect, innerRadius, innerRadius);
             }
 
@@ -513,12 +497,11 @@ private:
             const int radius = qMax(4, ThemeManager::instance().scaled(6));
             const qreal hp = hoverProgress();
 
-            if (hp > 0.0 || isPressed()) {
+            if (hp > 0.0) {
                 painter.setPen(Qt::NoPen);
-                QColor fill = m_dangerHover ? ThemeColors::withAlpha(colors.error,
-                                                  isPressed() ? 42 : static_cast<int>(30 * hp))
-                                            : ThemeColors::withAlpha(colors.surfaceHover(),
-                                                  isPressed() ? 110 : static_cast<int>(80 * hp));
+                QColor fill = m_dangerHover
+                    ? ThemeColors::withAlpha(colors.error, static_cast<int>(30 * hp))
+                    : ThemeColors::withAlpha(colors.surfaceHover(), static_cast<int>(80 * hp));
                 painter.setBrush(fill);
                 painter.drawRoundedRect(rect, radius, radius);
             }
@@ -612,9 +595,6 @@ protected:
 
         QColor bg = colors.primary;
         bg = ThemeColors::adjustBrightness(bg, 1.0 + hoverProgress() * 0.08);
-        if (isPressed()) {
-            bg = colors.primaryPressed();
-        }
 
         painter.setPen(Qt::NoPen);
         painter.setBrush(bg);

@@ -4,6 +4,7 @@
 #ifndef RUWA_UI_TABS_CONTENT_PRESETITEMWIDGET_H
 #define RUWA_UI_TABS_CONTENT_PRESETITEMWIDGET_H
 
+#include <QPoint>
 #include <QRect>
 #include <QString>
 #include <QWidget>
@@ -62,6 +63,7 @@ signals:
 protected:
     void paintEvent(QPaintEvent* event) override;
     void mousePressEvent(QMouseEvent* event) override;
+    void mouseReleaseEvent(QMouseEvent* event) override;
     void mouseMoveEvent(QMouseEvent* event) override;
     void enterEvent(QEnterEvent* event) override;
     void leaveEvent(QEvent* event) override;
@@ -87,6 +89,8 @@ private:
     Kind m_kind { Kind::BuiltIn };
 
     bool m_selected { false };
+    bool m_pressLatched { false };
+    QPoint m_pressPos;
     qreal m_hoverProgress { 0.0 };
     qreal m_selectionProgress { 0.0 };
 

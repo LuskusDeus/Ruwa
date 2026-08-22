@@ -81,9 +81,6 @@ void MenuButton::paintEvent(QPaintEvent* event)
     if (m_menuActive) {
         painter.setBrush(colors.surfaceElevated());
         painter.drawRoundedRect(bgRect, bgRad, bgRad);
-    } else if (isPressed()) {
-        painter.setBrush(colors.overlay(0.10));
-        painter.drawRoundedRect(bgRect, bgRad, bgRad);
     } else if (hoverProgress() > 0.001) {
         QColor hover = colors.overlay(0.06);
         hover.setAlphaF(hover.alphaF() * hoverProgress());

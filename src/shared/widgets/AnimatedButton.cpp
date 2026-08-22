@@ -69,14 +69,6 @@ void AnimatedButton::paintEvent(QPaintEvent* event)
         ruwa::ui::core::ThemeColors::adjustBrightness(colors.primary, colors.isDark ? 1.2 : 0.9),
         ruwa::ui::core::ThemeColors::adjustBrightness(colors.primary, colors.isDark ? 1.1 : 0.95));
 
-    // Press effect
-    if (isPressed()) {
-        painter.setPen(Qt::NoPen);
-        QColor pressOverlay = colors.shadow(25);
-        painter.setBrush(pressOverlay);
-        painter.drawRoundedRect(rect, borderRadius, borderRadius);
-    }
-
     // Text
     painter.setPen(colors.textOnPrimary());
     painter.setFont(font());

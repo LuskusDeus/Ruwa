@@ -64,8 +64,9 @@ protected:
     /// Custom content: draws the thumb circle
     void drawContentLayer(QPainter& painter, const QRectF& rect) override;
 
-    /// Override click to toggle state
+    /// Override click to toggle state on release
     void mousePressEvent(QMouseEvent* event) override;
+    void mouseReleaseEvent(QMouseEvent* event) override;
     void changeEvent(QEvent* event) override;
 
 private:
@@ -74,6 +75,7 @@ private:
 
 private:
     qreal m_thumbPosition = 0.0; // 0 = off (left), 1 = on (right)
+    bool m_pressLatched = false;
     QPropertyAnimation* m_thumbAnimation = nullptr;
 };
 

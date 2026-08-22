@@ -193,12 +193,32 @@ void ToggleSwitch::mousePressEvent(QMouseEvent* event)
         return;
     }
 
+    // The press only arms the switch; the thumb travels on release.
     if (event->button() == Qt::LeftButton) {
-        toggle();
+        m_pressLatched = true;
         event->accept();
         return;
     }
     BaseStyledWidget::mousePressEvent(event);
+}
+
+void ToggleSwitch::mouseReleaseEvent(QMouseEvent* event)
+{
+    if (!isEnabled()) {
+        m_pressLatched = false;
+        event->ignore();
+        return;
+    }
+
+    if (event->button() == Qt::LeftButton && m_pressLatched) {
+        m_pressLatched = false;
+        if (rect().contains(event->pos())) {
+            toggle();
+        }
+        event->accept();
+        return;
+    }
+    BaseStyledWidget::mouseReleaseEvent(event);
 }
 
 void ToggleSwitch::changeEvent(QEvent* event)

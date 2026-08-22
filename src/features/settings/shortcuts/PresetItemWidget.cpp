@@ -269,29 +269,53 @@ void PresetItemWidget::mouseMoveEvent(QMouseEvent* event)
 
 void PresetItemWidget::mousePressEvent(QMouseEvent* event)
 {
+    // The press only arms the click; the row and its action buttons answer on
+    // release, and only when press and release land in the same zone.
     if (event->button() == Qt::LeftButton) {
-        if (m_kind == Kind::Custom) {
-            if (editButtonRect().contains(event->pos())) {
-                startRenameEditing();
-                event->accept();
-                return;
-            }
-            if (exportButtonRect().contains(event->pos())) {
-                emit exportRequested();
-                event->accept();
-                return;
-            }
-            if (deleteButtonRect().contains(event->pos())) {
-                emit deleteRequested();
-                event->accept();
-                return;
-            }
-        }
-        emit clicked();
+        m_pressLatched = true;
+        m_pressPos = event->pos();
         event->accept();
         return;
     }
     QWidget::mousePressEvent(event);
+}
+
+void PresetItemWidget::mouseReleaseEvent(QMouseEvent* event)
+{
+    if (event->button() != Qt::LeftButton || !m_pressLatched) {
+        QWidget::mouseReleaseEvent(event);
+        return;
+    }
+
+    m_pressLatched = false;
+    const QPoint pos = event->pos();
+    event->accept();
+
+    if (m_kind == Kind::Custom) {
+        const QRect edit = editButtonRect();
+        const QRect exportRect = exportButtonRect();
+        const QRect del = deleteButtonRect();
+
+        if (edit.contains(m_pressPos) || exportRect.contains(m_pressPos)
+            || del.contains(m_pressPos)) {
+            if (edit.contains(m_pressPos) && edit.contains(pos)) {
+                startRenameEditing();
+            } else if (exportRect.contains(m_pressPos) && exportRect.contains(pos)) {
+                emit exportRequested();
+            } else if (del.contains(m_pressPos) && del.contains(pos)) {
+                emit deleteRequested();
+            }
+            return;
+        }
+
+        if (edit.contains(pos) || exportRect.contains(pos) || del.contains(pos)) {
+            return;
+        }
+    }
+
+    if (rect().contains(pos)) {
+        emit clicked();
+    }
 }
 
 void PresetItemWidget::resizeEvent(QResizeEvent* event)

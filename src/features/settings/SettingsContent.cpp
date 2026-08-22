@@ -115,13 +115,6 @@ protected:
                 ruwa::ui::core::ThemeColors::withAlpha(borderTop, borderTop.alpha() / 2));
         }
 
-        if (isPressed()) {
-            painter.setPen(Qt::NoPen);
-            QColor pressOverlay = colors.shadow(20);
-            painter.setBrush(pressOverlay);
-            painter.drawRoundedRect(fillRect, fillR, fillR);
-        }
-
         QColor textColor = ruwa::ui::core::ThemeColors::interpolate(
             colors.textMuted, colors.text, hoverProgress());
 

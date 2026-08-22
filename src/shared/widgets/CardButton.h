@@ -35,7 +35,6 @@ private:
     LayoutVariant m_layoutVariant;
     int m_baseCornerRadius { 6 };
     int m_hoverPlateAlpha { 90 };
-    int m_pressShadowAlpha { 20 };
 };
 
 } // namespace ruwa::ui::widgets

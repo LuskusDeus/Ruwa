@@ -768,7 +768,6 @@ void ThemeManager::generateStyleSheet()
             padding: 2px;
         }
         QMenuBar::item:selected { background-color: palette(link); }
-        QMenuBar::item:pressed { background-color: palette(link-visited); }
         QMenu {
             background-color: palette(button);
             color: palette(button-text);
@@ -782,7 +781,6 @@ void ThemeManager::generateStyleSheet()
             border-top: 1px solid palette(mid);
         }
         QToolButton:hover { background-color: palette(link); border-color: palette(mid); }
-        QToolButton:pressed { background-color: palette(link-visited); }
         QToolButton:checked { background-color: palette(highlight); border-color: palette(highlight); }
         QScrollBar:vertical {
             background-color: palette(button);
@@ -835,9 +833,6 @@ void ThemeManager::generateStyleSheet()
         QPushButton:hover {
             background-color: palette(link);
             border-color: palette(mid);
-        }
-        QPushButton:pressed {
-            background-color: palette(link-visited);
         }
         QPushButton:disabled {
             background-color: palette(base);

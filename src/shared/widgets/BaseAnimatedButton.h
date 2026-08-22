@@ -45,8 +45,6 @@ public:
     void setActiveImmediate(bool active);
     bool isActive() const { return m_isActive; }
 
-    /// Check if button is currently pressed
-    bool isPressed() const { return m_isPressed; }
     bool isHovered() const { return m_isHovered; }
 
     // Animation properties
@@ -83,7 +81,6 @@ protected:
 
     /// State flags accessible by derived classes
     bool m_isActive { false };
-    bool m_isPressed { false };
     bool m_isHovered { false };
 
 private:

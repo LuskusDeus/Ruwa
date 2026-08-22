@@ -58,12 +58,6 @@ void CardButton::drawButtonChrome(QPainter& painter, const QRectF& rect)
         painter.setBrush(plate);
         painter.drawRoundedRect(rect, borderRadius, borderRadius);
     }
-
-    if (isPressed()) {
-        painter.setPen(Qt::NoPen);
-        painter.setBrush(colors.shadow(m_pressShadowAlpha));
-        painter.drawRoundedRect(rect, borderRadius, borderRadius);
-    }
 }
 
 QColor CardButton::currentPrimaryTextColor() const

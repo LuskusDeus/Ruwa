@@ -117,15 +117,6 @@ protected:
             p.setBrush(hover);
             p.drawRoundedRect(r.adjusted(1, 1, -1, -1), radius - 0.5, radius - 0.5);
         }
-        // Press overlay
-        if (isPressed()) {
-            QColor press = c.primaryPressed();
-            press.setAlphaF(0.35);
-            p.setPen(Qt::NoPen);
-            p.setBrush(press);
-            p.drawRoundedRect(r.adjusted(1, 1, -1, -1), radius - 0.5, radius - 0.5);
-        }
-
         // Icon
         QColor iconColor
             = ruwa::ui::core::ThemeColors::interpolate(c.textMuted, c.text, hoverProgress());

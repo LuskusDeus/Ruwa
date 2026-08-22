@@ -150,12 +150,26 @@ void CategoryItemWidget::leaveEvent(QEvent* event)
 
 void CategoryItemWidget::mousePressEvent(QMouseEvent* event)
 {
+    // The press only arms the click; the row answers on release.
     if (event->button() == Qt::LeftButton) {
-        emit clicked();
+        m_pressLatched = true;
         event->accept();
         return;
     }
     QWidget::mousePressEvent(event);
+}
+
+void CategoryItemWidget::mouseReleaseEvent(QMouseEvent* event)
+{
+    if (event->button() == Qt::LeftButton && m_pressLatched) {
+        m_pressLatched = false;
+        if (rect().contains(event->pos())) {
+            emit clicked();
+        }
+        event->accept();
+        return;
+    }
+    QWidget::mouseReleaseEvent(event);
 }
 
 void CategoryItemWidget::paintEvent(QPaintEvent* /*event*/)

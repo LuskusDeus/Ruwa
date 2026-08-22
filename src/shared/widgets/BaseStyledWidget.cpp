@@ -262,7 +262,6 @@ void BaseStyledWidget::changeEvent(QEvent* event)
 {
     if (event->type() == QEvent::EnabledChange) {
         if (!isEnabled()) {
-            m_isPressed = false;
             m_hoverAnimation->stop();
             m_glowAnimation->stop();
             m_hoverProgress = 0.0;
@@ -296,29 +295,17 @@ void BaseStyledWidget::leaveEvent(QEvent* event)
     animateGlow(false);
 }
 
+// The press itself paints nothing: the widget answers a click through its hover
+// and active animations only. A press wash lands in one frame and reads as a
+// hard flash against those eased transitions.
+
 void BaseStyledWidget::mousePressEvent(QMouseEvent* event)
 {
-    if (!isEnabled()) {
-        QPushButton::mousePressEvent(event);
-        return;
-    }
-    if (event->button() == Qt::LeftButton) {
-        m_isPressed = true;
-        update();
-    }
     QPushButton::mousePressEvent(event);
 }
 
 void BaseStyledWidget::mouseReleaseEvent(QMouseEvent* event)
 {
-    if (!isEnabled()) {
-        QPushButton::mouseReleaseEvent(event);
-        return;
-    }
-    if (event->button() == Qt::LeftButton) {
-        m_isPressed = false;
-        update();
-    }
     QPushButton::mouseReleaseEvent(event);
 }
 
@@ -436,14 +423,6 @@ void BaseStyledWidget::paintEvent(QPaintEvent* event)
     drawHoverGlowLayer(painter, rect);
     // Border drawn last so content doesn't cover it at edges
 
-    // Press effect for inactive state
-    if (m_isPressed && m_style.press.enabled) {
-        auto& mgr = WidgetStyleManager::instance();
-        painter.setPen(Qt::NoPen);
-        painter.setBrush(mgr.resolveColor(m_style.press.color));
-        painter.drawRoundedRect(rect, cornerRadius(), cornerRadius());
-    }
-
     painter.restore();
 
     // Active layers (opacity = activeProgress)
@@ -457,14 +436,6 @@ void BaseStyledWidget::paintEvent(QPaintEvent* event)
         drawHoverGlowLayer(painter, rect); // Will use activeProgress to adjust colors
     }
     // Active border drawn last
-
-    // Press effect for active state
-    if (m_isPressed && m_style.press.enabled) {
-        auto& mgr = WidgetStyleManager::instance();
-        painter.setPen(Qt::NoPen);
-        painter.setBrush(mgr.resolveColor(m_style.press.activeColor));
-        painter.drawRoundedRect(rect, cornerRadius(), cornerRadius());
-    }
 
     painter.restore();
 

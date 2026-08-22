@@ -264,7 +264,7 @@ void CommandInputWidget::drawContentLayer(QPainter& painter, const QRectF& rect)
     const QRectF groupRect
         = keyGroupRect(rect).adjusted(-outerPadding, -hoverPaddingV, outerPadding, hoverPaddingV);
     const bool pointerOverGroup = hitButton(mapFromGlobal(QCursor::pos()));
-    const qreal hover = pointerOverGroup ? qMax(hoverProgress(), isPressed() ? 1.0 : 0.0) : 0.0;
+    const qreal hover = pointerOverGroup ? hoverProgress() : 0.0;
     if (hover > 0.001 || m_recording) {
         QColor hoverBg = m_recording ? colors.primary : QColor(255, 255, 255);
         hoverBg.setAlpha(m_recording ? 36 : qRound((colors.isDark ? 23 : 31) * hover));

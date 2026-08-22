@@ -66,7 +66,7 @@ private:
     int getHandleSize() const;
     QRect getUpButtonRect() const;
     QRect getDownButtonRect() const;
-    void drawArrowButton(QPainter& painter, const QRect& rect, bool isUp, bool isPressed);
+    void drawArrowButton(QPainter& painter, const QRect& rect, bool isUp);
     void requestRepaint();
 
 private:

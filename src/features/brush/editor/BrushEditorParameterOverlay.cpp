@@ -70,15 +70,9 @@ protected:
 
         QColor fill = ThemeColors::withAlpha(colors.surfaceElevated(), 0);
         fill = ThemeColors::interpolate(fill, colors.overlayHover(), hoverProgress());
-        if (isPressed()) {
-            fill = colors.overlay(0.14);
-        }
 
         QColor iconColor
             = ThemeColors::interpolate(colors.textDisabled(), colors.text, hoverProgress());
-        if (isPressed()) {
-            iconColor = colors.text;
-        }
 
         QPainter painter(this);
         painter.setRenderHint(QPainter::Antialiasing);

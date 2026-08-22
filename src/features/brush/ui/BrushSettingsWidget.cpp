@@ -1073,10 +1073,8 @@ void BrushSettingsWidget::applyDynamicsButtonStyle(QPushButton* button)
     button->setIconSize(QSize(iconSize, iconSize));
     button->setStyleSheet(QStringLiteral(
         "QPushButton { border: none; background: transparent; color: %1; padding: 0; }"
-        "QPushButton:hover { color: %2; }"
-        "QPushButton:pressed { color: %3; }")
-            .arg(normalColor.name(QColor::HexArgb), hoverColor.name(QColor::HexArgb),
-                pressedColor.name(QColor::HexArgb)));
+        "QPushButton:hover { color: %2; }")
+            .arg(normalColor.name(QColor::HexArgb), hoverColor.name(QColor::HexArgb)));
 }
 
 } // namespace ruwa::ui::widgets

@@ -107,10 +107,22 @@ void ColorPreviewWidget::paintEvent(QPaintEvent* event)
 
 void ColorPreviewWidget::mousePressEvent(QMouseEvent* event)
 {
+    // The press only arms the click; the swatch answers on release.
     if (event->button() == Qt::LeftButton) {
-        emit clicked(m_isForeground);
+        m_pressLatched = true;
     }
     QWidget::mousePressEvent(event);
+}
+
+void ColorPreviewWidget::mouseReleaseEvent(QMouseEvent* event)
+{
+    if (event->button() == Qt::LeftButton && m_pressLatched) {
+        m_pressLatched = false;
+        if (rect().contains(event->pos())) {
+            emit clicked(m_isForeground);
+        }
+    }
+    QWidget::mouseReleaseEvent(event);
 }
 
 void ColorPreviewWidget::drawCheckerboard(QPainter& painter, const QRect& rect)

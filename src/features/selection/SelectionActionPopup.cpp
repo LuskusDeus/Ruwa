@@ -64,7 +64,6 @@ protected:
         const QRectF r = rect().adjusted(0.5, 0.5, -0.5, -0.5);
 
         const QColor hoverOverlay = colors.overlay(0.08);
-        const QColor pressedOverlay = colors.overlay(0.12);
         const qreal hover = hoverProgress();
         const qreal radius = 4.0;
 
@@ -87,11 +86,6 @@ protected:
             hoverColor.setAlphaF(hoverColor.alphaF() * hover);
             p.setPen(Qt::NoPen);
             p.setBrush(hoverColor);
-            p.drawRoundedRect(r, radius, radius);
-        }
-        if (isPressed()) {
-            p.setPen(Qt::NoPen);
-            p.setBrush(pressedOverlay);
             p.drawRoundedRect(r, radius, radius);
         }
 

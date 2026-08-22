@@ -164,10 +164,6 @@ void MenuItemWidget::paintEvent(QPaintEvent* event)
     // Background
     if (!m_item.enabled) {
         // Disabled - no background
-    } else if (m_isPressed) {
-        painter.setPen(Qt::NoPen);
-        painter.setBrush(colors.overlay(0.12));
-        painter.drawRoundedRect(rect, 4, 4);
     } else if (m_isHovered) {
         painter.setPen(Qt::NoPen);
         painter.setBrush(colors.overlay(0.08));

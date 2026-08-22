@@ -51,12 +51,12 @@ void DockPanelCloseButton::paintEvent(QPaintEvent* /*event*/)
     auto& theme = ruwa::ui::core::ThemeManager::instance();
     const auto& colors = theme.colors();
 
-    const qreal hot = qBound(0.0, qMax(hoverProgress(), isPressed() ? 1.0 : 0.0), 1.0);
+    const qreal hot = qBound(0.0, hoverProgress(), 1.0);
 
     if (hot > 0.001) {
         const qreal radius = theme.scaled(kBaseCornerRadius);
         painter.setPen(Qt::NoPen);
-        painter.setBrush(colors.overlay((isPressed() ? 0.14 : 0.09) * hot));
+        painter.setBrush(colors.overlay(0.09 * hot));
         painter.drawRoundedRect(QRectF(rect()), radius, radius);
     }
 

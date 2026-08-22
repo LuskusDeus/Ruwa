@@ -134,21 +134,17 @@ void BaseAnimatedButton::leaveEvent(QEvent* event)
     reconcileHoverStateLater(this);
 }
 
+// The press itself paints nothing: the button answers a click through its hover
+// and active animations only. A press wash lands in one frame and reads as a
+// hard flash against those eased transitions.
+
 void BaseAnimatedButton::mousePressEvent(QMouseEvent* event)
 {
-    if (event->button() == Qt::LeftButton) {
-        m_isPressed = true;
-        update();
-    }
     QPushButton::mousePressEvent(event);
 }
 
 void BaseAnimatedButton::mouseReleaseEvent(QMouseEvent* event)
 {
-    if (event->button() == Qt::LeftButton) {
-        m_isPressed = false;
-        update();
-    }
     QPushButton::mouseReleaseEvent(event);
 
     if (event->button() == Qt::LeftButton) {
@@ -161,7 +157,6 @@ void BaseAnimatedButton::changeEvent(QEvent* event)
     if (event->type() == QEvent::EnabledChange) {
         setCursor(isEnabled() ? Qt::PointingHandCursor : Qt::ArrowCursor);
         if (!isEnabled()) {
-            m_isPressed = false;
             m_isHovered = false;
             m_hoverAnimation->stop();
             setHoverProgress(0.0);

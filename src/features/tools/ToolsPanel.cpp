@@ -273,7 +273,6 @@ protected:
             if (m_popupTriggered) {
                 m_popupTriggered = false;
                 setDown(false);
-                m_isPressed = false;
                 setHovered(rect().contains(mapFromGlobal(QCursor::pos())));
                 update();
                 event->accept();
@@ -290,7 +289,6 @@ protected:
             m_holdTimer.stop();
             m_popupTriggered = true;
             setDown(false);
-            m_isPressed = false;
             update();
             if (m_popupCallback) {
                 m_popupCallback();
@@ -313,7 +311,6 @@ protected:
         m_holdTimer.stop();
         m_popupTriggered = true;
         setDown(false);
-        m_isPressed = false;
         update();
         if (m_popupCallback) {
             m_popupCallback();

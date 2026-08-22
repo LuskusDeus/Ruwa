@@ -47,6 +47,7 @@ signals:
 protected:
     void paintEvent(QPaintEvent* event) override;
     void mousePressEvent(QMouseEvent* event) override;
+    void mouseReleaseEvent(QMouseEvent* event) override;
     void enterEvent(QEnterEvent* event) override;
     void leaveEvent(QEvent* event) override;
 
@@ -60,6 +61,7 @@ private:
     QIcon m_icon;
 
     bool m_selected { false };
+    bool m_pressLatched { false };
     qreal m_hoverProgress { 0.0 };
     qreal m_selectionProgress { 0.0 };
 

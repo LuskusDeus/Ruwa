@@ -173,7 +173,6 @@ void ToolButton::setHasGroupIndicator(bool hasGroupIndicator)
 void ToolButton::cancelPointerInteraction()
 {
     setDown(false);
-    m_isPressed = false;
     setHovered(rect().contains(mapFromGlobal(QCursor::pos())));
     update();
 }

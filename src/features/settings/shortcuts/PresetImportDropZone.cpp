@@ -113,12 +113,26 @@ void PresetImportDropZone::leaveEvent(QEvent* event)
 
 void PresetImportDropZone::mousePressEvent(QMouseEvent* event)
 {
+    // The press only arms the click; the zone answers on release.
     if (event->button() == Qt::LeftButton) {
-        emit clicked();
+        m_pressLatched = true;
         event->accept();
         return;
     }
     QWidget::mousePressEvent(event);
+}
+
+void PresetImportDropZone::mouseReleaseEvent(QMouseEvent* event)
+{
+    if (event->button() == Qt::LeftButton && m_pressLatched) {
+        m_pressLatched = false;
+        if (rect().contains(event->pos())) {
+            emit clicked();
+        }
+        event->accept();
+        return;
+    }
+    QWidget::mouseReleaseEvent(event);
 }
 
 QString PresetImportDropZone::extractDroppedJsonPath(const QDropEvent* event)
