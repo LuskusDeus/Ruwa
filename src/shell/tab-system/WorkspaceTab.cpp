@@ -4716,11 +4716,22 @@ void WorkspaceTab::setColorPickerTarget(QWidget* sourceButton)
     if (!m_canvasPanel) {
         return;
     }
-    // The selection highlight inverts the scene under it, so a colour being
-    // previewed on selected characters would be shown as its own inverse. The
-    // highlight steps aside until the picker closes.
-    m_canvasPanel->setTextSelectionHighlightSuppressed(
-        m_layerPropertiesPanel && m_layerPropertiesPanel->ownsTextColorInput(sourceButton));
+    const bool overTextColor
+        = m_layerPropertiesPanel && m_layerPropertiesPanel->ownsTextColorInput(sourceButton);
+
+    if (m_layerPropertiesPanel) {
+        m_layerPropertiesPanel->setTextColorPickerOpen(overTextColor);
+    }
+    // While it is up the picker owns the preview: the selection highlight
+    // stands down (it draws by inverting the scene, which is the one thing the
+    // picker is open to judge) and the focus it takes is not the user leaving
+    // the text.
+    m_canvasPanel->setTextColorPickerActive(overTextColor);
+    if (!overTextColor) {
+        // Whatever the picker streamed lands as one undo step, from the colour
+        // the text had when it opened to the colour it was left at.
+        m_canvasPanel->flushTextEditInteraction();
+    }
 }
 
 void WorkspaceTab::setLayerPropertiesPanelVisible(bool visible)

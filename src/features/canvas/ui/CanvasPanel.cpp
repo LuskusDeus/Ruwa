@@ -2265,10 +2265,10 @@ std::optional<std::pair<int, int>> CanvasPanel::textEditingSelection() const
     return m_textEditingController->selectionRange();
 }
 
-void CanvasPanel::setTextSelectionHighlightSuppressed(bool suppressed)
+void CanvasPanel::setTextColorPickerActive(bool active)
 {
     if (m_textEditingController) {
-        m_textEditingController->setSelectionHighlightSuppressed(suppressed);
+        m_textEditingController->setColorPickerActive(active);
     }
 }
 

@@ -527,12 +527,12 @@ void TextEditingController::notifyFormattingStateChanged()
     }
 }
 
-void TextEditingController::setSelectionHighlightSuppressed(bool suppressed)
+void TextEditingController::setColorPickerActive(bool active)
 {
-    if (m_selectionHighlightSuppressed == suppressed) {
+    if (m_colorPickerActive == active) {
         return;
     }
-    m_selectionHighlightSuppressed = suppressed;
+    m_colorPickerActive = active;
     // Geometry only: the selection is unchanged, so nothing has to re-read the
     // formatting state — and the control doing the previewing keeps its focus.
     pushOverlayState();
@@ -831,7 +831,7 @@ void TextEditingController::resetSessionState()
     m_layerId = QUuid();
     m_parentId = QUuid();
     m_insertIndex = -1;
-    m_selectionHighlightSuppressed = false;
+    m_colorPickerActive = false;
 }
 
 void TextEditingController::discardSession()
@@ -1073,7 +1073,7 @@ void TextEditingController::pushOverlayState()
     state.sourceBounds = state.transform.contentBounds;
     state.caretVisible = m_caretVisible && !cursor.hasSelection();
     state.caretSourceRect = aether::computeTextCaretSourceRect(*layer->textData, cursor.position());
-    if (cursor.hasSelection() && !m_selectionHighlightSuppressed) {
+    if (cursor.hasSelection() && !m_colorPickerActive) {
         state.selectionSourceRects = aether::computeTextSelectionSourceRects(
             *layer->textData, cursor.selectionStart(), cursor.selectionEnd());
     }
@@ -1118,10 +1118,10 @@ bool TextEditingController::handleEditorFocusOut(QFocusEvent* event)
 {
     const Qt::FocusReason reason = event ? event->reason() : Qt::OtherFocusReason;
 
-    // A popup (context menu, colour picker, combo list) and another window
-    // taking focus are both temporary: the session outlives them. The caret
-    // stops blinking while the window is in the background, the way every other
-    // text field on the desktop behaves, and comes back on FocusIn.
+    // A popup (context menu, combo list) and another window taking focus are
+    // both temporary: the session outlives them. The caret stops blinking while
+    // the window is in the background, the way every other text field on the
+    // desktop behaves, and comes back on FocusIn.
     if (reason == Qt::PopupFocusReason) {
         return true;
     }
@@ -1129,6 +1129,12 @@ bool TextEditingController::handleEditorFocusOut(QFocusEvent* event)
         m_caretVisible = false;
         setCaretBlinkRunning(false);
         pushOverlayState();
+        return true;
+    }
+    // The colour picker is a plain child widget rather than a popup window, so
+    // it arrives here as an ordinary focus change — but it is editing this very
+    // text, and committing under it would close the session it is previewing on.
+    if (m_colorPickerActive) {
         return true;
     }
 

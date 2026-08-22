@@ -112,6 +112,10 @@ LayerTextCharacterEditor::LayerTextCharacterEditor(QWidget* parent)
         }
         TextLayerEdit edit;
         edit.property = TextLayerEdit::Property::Color;
+        // The picker streams while it is dragged. Those are previews of one
+        // choice, not a choice each, and the host lands them as a single step
+        // when the picker closes.
+        edit.phase = m_colorPickerOpen ? TextLayerEdit::Phase::Live : TextLayerEdit::Phase::Commit;
         edit.colorValue = color;
         emit editRequested(edit);
     });
@@ -309,6 +313,11 @@ PropertyRowLayout* LayerTextCharacterEditor::rowLayout() const
 bool LayerTextCharacterEditor::ownsColorInput(const QWidget* widget) const
 {
     return widget && widget == static_cast<const QWidget*>(m_colorInput);
+}
+
+void LayerTextCharacterEditor::setColorPickerOpen(bool open)
+{
+    m_colorPickerOpen = open;
 }
 
 void LayerTextCharacterEditor::applyTheme()

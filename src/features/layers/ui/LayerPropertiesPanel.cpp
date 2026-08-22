@@ -379,6 +379,13 @@ bool LayerPropertiesPanel::ownsTextColorInput(const QWidget* widget) const
     return m_characterEditor && m_characterEditor->ownsColorInput(widget);
 }
 
+void LayerPropertiesPanel::setTextColorPickerOpen(bool open)
+{
+    if (m_characterEditor) {
+        m_characterEditor->setColorPickerOpen(open);
+    }
+}
+
 void LayerPropertiesPanel::refreshTextGroups()
 {
     if (!m_characterEditor || !m_paragraphEditor) {

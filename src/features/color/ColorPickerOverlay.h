@@ -10,6 +10,7 @@
 #include <QPointer>
 #include <QString>
 
+class QTimer;
 class QWidget;
 
 namespace ruwa::ui::widgets {
@@ -32,7 +33,6 @@ public:
 
     void showPicker(const QColor& initialColor = Qt::white, QWidget* sourceButton = nullptr);
     void hidePicker();
-    void forceHide();
     bool isActive() const;
 
     ColorPicker* picker() const { return m_picker; }
@@ -54,6 +54,15 @@ private slots:
     void onPickerCanceled();
 
 private:
+    /// Silent teardown of a show or hide still in flight, so a restart can take
+    /// over cleanly. It is not a close: `hidden` belongs to hidePicker(), which
+    /// is the one path that ends a picker session.
+    void forceHide();
+    /// Ends the show, the hide and the focus grab still pending, if any.
+    void stopPendingTransitions();
+    void finishShow();
+    void finishHide();
+    void takePickerFocus();
     void setupPicker();
     void setupAnimations();
     QPoint calculatePickerPosition(QWidget* sourceButton) const;
@@ -70,11 +79,22 @@ private:
     bool m_isShowing = false;
     bool m_isHiding = false;
 
+    // The show and hide animations finish on a timer. They are members rather
+    // than singleShot calls so a reopen can cancel the tail of the close it
+    // interrupted: a stale one would announce a close over an open picker, or
+    // pull focus back into one already gone.
+    QTimer* m_showFinishTimer = nullptr;
+    QTimer* m_hideFinishTimer = nullptr;
+    QTimer* m_focusTimer = nullptr;
+
     QPropertyAnimation* m_posAnimation = nullptr;
 
     static constexpr int OffsetFromButton = 8;
     static constexpr int SlideOffset = 20;
     static constexpr int PositionAnimationDuration = 200;
+    /// The picker takes the keyboard once it is actually up, not while it is
+    /// still sliding in over the widget the click came from.
+    static constexpr int FocusDelay = 50;
 };
 
 } // namespace ruwa::ui::widgets

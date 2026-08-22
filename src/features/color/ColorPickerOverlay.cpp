@@ -45,6 +45,43 @@ void ColorPickerOverlay::setupAnimations()
 {
     m_posAnimation = new QPropertyAnimation(this, "pickerPos", this);
     m_posAnimation->setEasingCurve(QEasingCurve::OutCubic);
+
+    const auto makeTimer = [this](void (ColorPickerOverlay::*slot)()) {
+        auto* timer = new QTimer(this);
+        timer->setSingleShot(true);
+        connect(timer, &QTimer::timeout, this, slot);
+        return timer;
+    };
+    m_showFinishTimer = makeTimer(&ColorPickerOverlay::finishShow);
+    m_hideFinishTimer = makeTimer(&ColorPickerOverlay::finishHide);
+    m_focusTimer = makeTimer(&ColorPickerOverlay::takePickerFocus);
+}
+
+void ColorPickerOverlay::finishShow()
+{
+    m_isShowing = false;
+    emit shown();
+}
+
+void ColorPickerOverlay::finishHide()
+{
+    m_isHiding = false;
+    m_sourceButton = nullptr;
+    emit hidden();
+}
+
+void ColorPickerOverlay::takePickerFocus()
+{
+    if (m_picker && m_picker->isVisible()) {
+        m_picker->setFocus();
+    }
+}
+
+void ColorPickerOverlay::stopPendingTransitions()
+{
+    m_showFinishTimer->stop();
+    m_hideFinishTimer->stop();
+    m_focusTimer->stop();
 }
 
 QPoint ColorPickerOverlay::pickerPos() const
@@ -120,16 +157,8 @@ void ColorPickerOverlay::showPicker(const QColor& initialColor, QWidget* sourceB
     animatePickerTo(targetPos);
     m_picker->showAnimated();
 
-    QTimer::singleShot(anim::duration(PositionAnimationDuration), this, [this]() {
-        m_isShowing = false;
-        emit shown();
-    });
-
-    QTimer::singleShot(50, this, [this]() {
-        if (m_picker && m_picker->isVisible()) {
-            m_picker->setFocus();
-        }
-    });
+    m_showFinishTimer->start(anim::duration(PositionAnimationDuration));
+    m_focusTimer->start(FocusDelay);
 }
 
 void ColorPickerOverlay::hidePicker()
@@ -138,6 +167,7 @@ void ColorPickerOverlay::hidePicker()
         return;
     }
 
+    stopPendingTransitions();
     m_isHiding = true;
     m_isShowing = false;
 
@@ -169,16 +199,13 @@ void ColorPickerOverlay::hidePicker()
 
     m_picker->hideAnimated();
 
-    QTimer::singleShot(anim::duration(PositionAnimationDuration), this, [this]() {
-        m_isHiding = false;
-        m_sourceButton = nullptr;
-        emit hidden();
-    });
+    m_hideFinishTimer->start(anim::duration(PositionAnimationDuration));
 }
 
 void ColorPickerOverlay::forceHide()
 {
     qApp->removeEventFilter(this);
+    stopPendingTransitions();
 
     if (m_picker) {
         m_picker->hide();

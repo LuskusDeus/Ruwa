@@ -65,6 +65,12 @@ public:
     /// picker opened from here is serving.
     bool ownsColorInput(const QWidget* widget) const;
 
+    /// Whether the shared colour picker is currently open over that swatch. The
+    /// picker streams a colour per frame while it is dragged, so those values go
+    /// out as one live run rather than as an undo step each; the host closes the
+    /// run when the picker goes away.
+    void setColorPickerOpen(bool open);
+
     void applyTheme();
     /// The group's two-column row layout, so the owning panel can line its
     /// caption column up with the other groups'.
@@ -101,6 +107,7 @@ private:
     NumericInputField* m_sizeInput = nullptr;
     NumericInputField* m_trackingInput = nullptr;
     ColorInputButton* m_colorInput = nullptr;
+    bool m_colorPickerOpen = false;
     AssetToggleButton* m_boldButton = nullptr;
     AssetToggleButton* m_italicButton = nullptr;
     AssetToggleButton* m_underlineButton = nullptr;

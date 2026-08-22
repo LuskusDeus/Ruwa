@@ -56,6 +56,9 @@ public:
 
     /// True when @p widget is the Character group's colour swatch.
     bool ownsTextColorInput(const QWidget* widget) const;
+    /// Tells the Character group whether the colour picker over its swatch is
+    /// open, which decides whether its colours stream as a live run.
+    void setTextColorPickerOpen(bool open);
 
 protected:
     QWidget* createContent() override;

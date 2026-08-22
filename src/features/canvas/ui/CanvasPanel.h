@@ -247,22 +247,23 @@ public:
     /// whole layer.
     std::optional<std::pair<int, int>> textEditingSelection() const;
 
-    /// Drops the inverted selection highlight of an open text session while
-    /// something else is previewing on those characters (the colour picker).
-    void setTextSelectionHighlightSuppressed(bool suppressed);
+    /// A colour picker is up over the text colour of an open session: it owns
+    /// the preview until it closes, so the selection highlight stands down and
+    /// the focus it takes does not end the session.
+    void setTextColorPickerActive(bool active);
     /// Perform one Character / Paragraph panel edit on @p id as a single undo
     /// step. Honours the open editing session's selection when there is one.
     bool applyTextLayerEdit(
         const ruwa::core::layers::LayerId& id, const ruwa::core::layers::TextLayerEdit& edit);
-    /// Widgets that may take focus without ending an open text session — the
-    /// Layer Properties panel's Character and Paragraph controls, which stand
-    /// in for the formatting popup that used to live on the canvas.
     /// Ends any open live text interaction, landing it as one undo step. Called
     /// when the run closes, and whenever something else is about to take over
     /// the document.
     void flushTextEditInteraction();
     /// Abandons an open live run on @p id, restoring the state it began at.
     bool cancelTextEditInteraction(const ruwa::core::layers::LayerId& id);
+    /// Widgets that may take focus without ending an open text session — the
+    /// Layer Properties panel's Character and Paragraph controls, which stand
+    /// in for the formatting popup that used to live on the canvas.
     void addTextEditingFocusExclusion(QWidget* widget);
     bool isTextEditingFocusExclusion(const QWidget* widget) const;
     /// Clear raster layer pixels (GL). No-op if GL not ready or layer not editable.
