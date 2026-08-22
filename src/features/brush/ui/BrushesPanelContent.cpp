@@ -13,6 +13,7 @@
 #include "features/theme/manager/ThemeManager.h"
 #include "shared/widgets/layout/AnimatedStackedWidget.h"
 #include "shared/widgets/layout/SmoothScrollArea.h"
+#include "shell/docking/widgets/DockPanel.h"
 
 #include <QEvent>
 #include <QJsonArray>
@@ -505,13 +506,13 @@ void BrushesPanelContent::onBrushDeleteRequested(const QString& packId, const QS
 
 void BrushesPanelContent::onThemeChanged()
 {
-    const int outerMargin = ruwa::ui::core::ThemeManager::instance().scaled(8);
+    const QMargins outerMargins = ruwa::ui::docking::DockPanel::contentPadding();
     const int spacing = ruwa::ui::core::ThemeManager::instance().scaled(8);
     for (FilterPage& page : m_filterPages) {
         if (!page.scrollLayout) {
             continue;
         }
-        page.scrollLayout->setContentsMargins(outerMargin, outerMargin, outerMargin, outerMargin);
+        page.scrollLayout->setContentsMargins(outerMargins);
         page.scrollLayout->setSpacing(spacing);
     }
 
@@ -678,8 +679,7 @@ void BrushesPanelContent::createFilterPage(const QString& pageKey, int stackInde
     page.scrollContent->setAutoFillBackground(false);
     page.scrollContent->setStyleSheet(QStringLiteral("background: transparent;"));
     page.scrollLayout = new QVBoxLayout(page.scrollContent);
-    const int outerMargin = ruwa::ui::core::ThemeManager::instance().scaled(8);
-    page.scrollLayout->setContentsMargins(outerMargin, outerMargin, outerMargin, outerMargin);
+    page.scrollLayout->setContentsMargins(ruwa::ui::docking::DockPanel::contentPadding());
     page.scrollLayout->setSpacing(ruwa::ui::core::ThemeManager::instance().scaled(8));
     page.scrollArea->setWidget(page.scrollContent);
 

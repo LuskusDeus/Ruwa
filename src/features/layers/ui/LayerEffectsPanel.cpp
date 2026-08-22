@@ -99,7 +99,7 @@ QWidget* LayerEffectsPanel::createContent()
 {
     m_contentWidget = new QWidget();
     auto* rootLayout = new QVBoxLayout(m_contentWidget);
-    rootLayout->setContentsMargins(10, 10, 10, 10);
+    rootLayout->setContentsMargins(contentPadding());
     rootLayout->setSpacing(10);
 
     // --- Subtitle: Add button ---

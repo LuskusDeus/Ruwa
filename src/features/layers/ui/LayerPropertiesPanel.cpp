@@ -190,7 +190,7 @@ QWidget* LayerPropertiesPanel::createContent()
     m_contentWidget->setAutoFillBackground(false);
 
     m_contentLayout = new QVBoxLayout(m_contentWidget);
-    m_contentLayout->setContentsMargins(10, 10, 10, 10);
+    m_contentLayout->setContentsMargins(contentPadding());
     m_contentLayout->setSpacing(6);
     m_scrollArea->setWidget(m_contentWidget);
 

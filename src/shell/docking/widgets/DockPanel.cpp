@@ -30,6 +30,11 @@ constexpr qreal kDockPanelBorderWidth = 1.0;
 constexpr qreal kDockPanelOuterInset = 0.5;
 constexpr int kDockPanelContentInset = 1;
 
+// Base (unscaled) content padding. See DockPanel::contentPadding() for why the
+// sides sit a step below the top.
+constexpr int kDockPanelContentPaddingTop = 8;
+constexpr int kDockPanelContentPaddingSide = 6;
+
 QPainterPath buildRoundedPanelPath(const QRectF& rect, const DockPanel::CornerRadii& radii)
 {
     if (rect.isEmpty()) {
@@ -811,6 +816,22 @@ void DockPanel::updatePanelStyle()
     }
     update();
     updateOverlayVisibility();
+}
+
+QMargins DockPanel::contentPadding()
+{
+    const int side = contentSidePadding();
+    return QMargins(side, contentTopPadding(), side, side);
+}
+
+int DockPanel::contentSidePadding()
+{
+    return ruwa::ui::core::ThemeManager::instance().scaled(kDockPanelContentPaddingSide);
+}
+
+int DockPanel::contentTopPadding()
+{
+    return ruwa::ui::core::ThemeManager::instance().scaled(kDockPanelContentPaddingTop);
 }
 
 void DockPanel::updateCornerRadii()

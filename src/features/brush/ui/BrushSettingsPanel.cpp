@@ -189,8 +189,7 @@ QWidget* BrushSettingsPanel::createContent()
     m_contentWidget->setAttribute(Qt::WA_TranslucentBackground);
 
     auto* rootLayout = new QVBoxLayout(m_contentWidget);
-    rootLayout->setContentsMargins(
-        theme.scaled(10), theme.scaled(8), theme.scaled(10), theme.scaled(10));
+    rootLayout->setContentsMargins(contentPadding());
     rootLayout->setSpacing(theme.scaled(6));
 
     m_headerCard = new BaseStyledPanel(QStringLiteral("SettingsPanel"), m_contentWidget);
@@ -279,8 +278,7 @@ void BrushSettingsPanel::onThemeChanged()
 
     auto& theme = ThemeManager::instance();
     if (auto* layout = qobject_cast<QVBoxLayout*>(m_contentWidget->layout())) {
-        layout->setContentsMargins(
-            theme.scaled(10), theme.scaled(8), theme.scaled(10), theme.scaled(10));
+        layout->setContentsMargins(contentPadding());
         layout->setSpacing(theme.scaled(6));
     }
     if (m_headerCard) {

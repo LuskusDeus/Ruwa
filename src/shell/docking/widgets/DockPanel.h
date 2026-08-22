@@ -214,6 +214,30 @@ public:
     virtual QJsonObject savePanelState() const;
     virtual void restorePanelState(const QJsonObject& state);
 
+    // === Content Padding ===
+
+    /**
+     * @brief Gap a panel's content should keep from the body edges.
+     *
+     * The sides are one step tighter than the top, and that is deliberate.
+     * The title bar ends in two inverted fillets (baseCornerRadius + 6) that
+     * sweep down into the content area and eat into the gap under the title,
+     * so that band reads tighter than its number, while the side gaps — which
+     * carry the panel's own 1px content inset on top of the margin — read at
+     * full value. Matching the raw numbers therefore makes the sides look
+     * wider than the top. At the values below the content edge also lands
+     * exactly on the title label's left edge (kTitleSidePadding + inset).
+     *
+     * Values are theme-scaled; re-query them from onThemeChanged().
+     */
+    static QMargins contentPadding();
+
+    /// Horizontal/bottom component of contentPadding(), theme-scaled.
+    static int contentSidePadding();
+
+    /// Top component of contentPadding(), theme-scaled.
+    static int contentTopPadding();
+
     // === Corner Radius ===
 
     /// Structure holding radius for each corner

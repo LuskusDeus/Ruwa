@@ -46,8 +46,10 @@ namespace {
 const int BASE_PANEL_MIN_WIDTH = 56;
 const int BASE_PANEL_MIN_HEIGHT = 56; // content: 1 row + margins
 const int BASE_PANEL_HEADER_HEIGHT = 19; // DockPanelTitleBar default
+// Mirrors DockPanel::contentPadding(): the sides sit a step under the top so
+// they do not read wider than the band under the title bar's fillets.
 const int BASE_MARGIN_V = 8;
-const int BASE_MARGIN_H = 8;
+const int BASE_MARGIN_H = 6;
 const int BASE_SPACING = 6;
 const int GROUP_HOLD_DELAY_MS = 350;
 const int PANEL_STATE_VERSION = 2;
