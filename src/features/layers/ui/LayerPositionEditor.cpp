@@ -95,6 +95,38 @@ LayerPositionEditor::LayerPositionEditor(QWidget* parent)
     connect(m_xInput, &QLineEdit::editingFinished, this, onCoordinateCommitted);
     connect(m_yInput, &QLineEdit::editingFinished, this, onCoordinateCommitted);
 
+    // Dragging a coordinate is the one gesture where waiting for the commit
+    // reads as broken: the user is pointing at where the content should go, so
+    // it has to follow the pointer. Every drag step is therefore reported at
+    // once, bracketed by positionDragChanged() so the host can still record the
+    // whole gesture as a single undo step. Typing keeps the commit-on-Enter
+    // contract — a half-typed "12" on the way to "1200" must move nothing.
+    const auto onCoordinateDragged = [this]() {
+        if (m_syncingFields || !m_dragging) {
+            return;
+        }
+        const QPointF edited = position();
+        if (edited == m_committedPosition) {
+            return;
+        }
+        m_committedPosition = edited;
+        emit positionEdited(edited);
+    };
+    connect(m_xInput, &NumericInputField::valueChanged, this, onCoordinateDragged);
+    connect(m_yInput, &NumericInputField::valueChanged, this, onCoordinateDragged);
+
+    // endScrub() emits scrubbingChanged(false) and then editingFinished(), so
+    // the trailing commit finds the position already reported and stays quiet.
+    const auto onScrubbingChanged = [this](bool scrubbing) {
+        if (m_dragging == scrubbing) {
+            return;
+        }
+        m_dragging = scrubbing;
+        emit positionDragChanged(scrubbing);
+    };
+    connect(m_xInput, &NumericInputField::scrubbingChanged, this, onScrubbingChanged);
+    connect(m_yInput, &NumericInputField::scrubbingChanged, this, onScrubbingChanged);
+
     applyTheme();
     syncInputsToAxis();
 }

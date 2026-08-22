@@ -400,6 +400,22 @@ public:
     /// path. Returns false when nothing could move (no eligible selection, or a
     /// stroke/transform readback owns the pixels right now).
     bool moveSelectedContentBy(const Vector2& delta);
+    /// Opens a live move session: while it is running, moveSelectedContentBy()
+    /// only nudges the transform preview, so a dragged coordinate field shows
+    /// the content following the pointer instead of baking a step per pixel.
+    /// Pair every call with endInteractiveContentMove().
+    void beginInteractiveContentMove();
+    /// Closes the live move session and records it as one undo step: the
+    /// pixels are baked when the session opened its own move-only transform,
+    /// or folded into the transform the user already had open.
+    void endInteractiveContentMove();
+    bool isInteractiveContentMoveActive() const { return m_interactiveContentMove; }
+    /// True while the live move session is the owner of the open transform,
+    /// i.e. ending it will bake the pixels and leave transform mode.
+    bool isInteractiveContentMoveOwnedSession() const
+    {
+        return m_interactiveContentMoveOwnsSession;
+    }
     void confirmTransform();
     /// @param moveOnlyStateForOverlay When set (e.g. confirmTransform after clearing the flag),
     /// used for overlay exit animation.
@@ -858,6 +874,12 @@ private:
     std::optional<TransformState> m_transformUndoStepBefore;
     std::optional<TransformInteractionMode> m_transformUndoStepBeforeMode;
     bool m_moveOnlyTransform = false; // Move tool: transform without overlay
+    /// Set between beginInteractiveContentMove() and endInteractiveContentMove().
+    bool m_interactiveContentMove = false;
+    /// True when the live move session is the thing that opened the transform,
+    /// i.e. closing it must bake the pixels rather than leave the user's own
+    /// transform session standing.
+    bool m_interactiveContentMoveOwnsSession = false;
     // Active transform session is editing the selected layer's mask grid (the
     // mask is warped, the layer pixels stay fixed) rather than its content.
     // Set on entry when the target layer has maskEditActive; consumed by the

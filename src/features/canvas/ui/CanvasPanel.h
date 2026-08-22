@@ -392,6 +392,10 @@ public:
     /// single undoable step (the Move tool's path, driven programmatically).
     /// Returns false when nothing could move right now.
     bool moveSelectedContentBy(const QPointF& delta);
+    /// Brackets a run of moveSelectedContentBy() calls that belong to one
+    /// gesture (dragging a coordinate field): the content follows every delta
+    /// on screen, and the whole run lands in history as a single move.
+    void setContentMovePreviewActive(bool active);
     /// Commit transform and synchronously finish deferred GPU readback before
     /// an operation mutates layer content, structure, selection, or canvas geometry.
     void commitTransformBeforeDocumentMutation();

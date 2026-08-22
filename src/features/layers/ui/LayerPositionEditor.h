@@ -62,8 +62,13 @@ signals:
     /// An anchor cell was clicked: align the layer's content to @p anchorIndex
     /// (see AnchorGridSelector) along @p axis.
     void anchorApplied(int anchorIndex, Axis axis);
-    /// The user typed or nudged a coordinate.
+    /// The user typed, nudged or dragged a coordinate. While a drag is running
+    /// this fires on every step of it, so the host can show the move live.
     void positionEdited(const QPointF& position);
+    /// A coordinate drag started (true) or let go (false). Between the two the
+    /// positionEdited() stream is a preview of one gesture, which the host is
+    /// expected to fold into a single undo step.
+    void positionDragChanged(bool dragging);
 
 private:
     void syncInputsToAxis();
@@ -77,6 +82,9 @@ private:
     /// Set while pushing a position into the fields, so their own signals are
     /// not mistaken for user edits.
     bool m_syncingFields = false;
+    /// Set while a coordinate field is being scrubbed, which is what turns the
+    /// per-keystroke value stream into live edits.
+    bool m_dragging = false;
     bool m_contentAvailable = true;
     /// Last position the fields were known to agree with, so a focus-out that
     /// changed nothing does not read as an edit.

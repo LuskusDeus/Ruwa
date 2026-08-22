@@ -203,6 +203,8 @@ QWidget* LayerPropertiesPanel::createContent()
     m_positionEditor = new LayerPositionEditor();
     connect(m_positionEditor, &LayerPositionEditor::positionEdited, this,
         &LayerPropertiesPanel::onPositionEdited);
+    connect(m_positionEditor, &LayerPositionEditor::positionDragChanged, this,
+        &LayerPropertiesPanel::onPositionDragChanged);
     connect(m_positionEditor, &LayerPositionEditor::anchorApplied, this,
         &LayerPropertiesPanel::onAnchorApplied);
     m_positionGroup = addGroup(tr("Position"), m_positionEditor);
@@ -442,6 +444,13 @@ void LayerPropertiesPanel::syncPositionFromContent(bool force)
         return;
     }
 
+    if (m_positionDragActive) {
+        // Mid-drag the fields are the source of truth: the document is showing
+        // a preview whose bounds have not moved yet, so reading them back would
+        // yank the number the user is dragging back to where it started.
+        return;
+    }
+
     auto* selected = m_layerModel ? m_layerModel->selectedLayer() : nullptr;
     const LayerId selectedId = selected ? selected->id : LayerId();
     if (m_shownContentOriginLayer != selectedId) {
@@ -496,6 +505,9 @@ void LayerPropertiesPanel::requestMove(const QPointF& delta)
         return;
     }
     emit moveContentRequested(delta);
+    if (m_positionDragActive) {
+        return; // the drag re-reads the document once, when it lets go
+    }
     // Whatever the document made of the request is the truth; re-read it even
     // if a field still has focus, so the display cannot keep a value that was
     // clamped or refused.
@@ -507,7 +519,34 @@ void LayerPropertiesPanel::onPositionEdited(const QPointF& origin)
     if (!m_hasShownContentOrigin) {
         return; // nothing on this layer to measure a move against
     }
-    requestMove(origin - m_shownContentOrigin);
+    // Each step of a drag moves the preview on from where the previous one left
+    // it; a committed edit measures against the document, which is up to date.
+    const QPointF from = m_positionDragActive ? m_positionDragOrigin : m_shownContentOrigin;
+    if (m_positionDragActive) {
+        m_positionDragOrigin = origin;
+    }
+    requestMove(origin - from);
+}
+
+void LayerPropertiesPanel::onPositionDragChanged(bool dragging)
+{
+    if (m_positionDragActive == dragging) {
+        return;
+    }
+    if (dragging && !m_hasShownContentOrigin) {
+        return; // nothing to move: leave the field a plain number editor
+    }
+
+    m_positionDragActive = dragging;
+    if (dragging) {
+        m_positionDragOrigin = m_shownContentOrigin;
+        emit moveContentPreviewChanged(true);
+        return;
+    }
+    // The host bakes the gesture here, so the bounds are only worth reading
+    // afterwards — and then they are the last word on where the content landed.
+    emit moveContentPreviewChanged(false);
+    syncPositionFromContent(/*force=*/true);
 }
 
 void LayerPropertiesPanel::onAnchorApplied(int anchorIndex, LayerPositionEditor::Axis axis)

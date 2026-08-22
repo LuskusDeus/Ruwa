@@ -2882,6 +2882,14 @@ void WorkspaceTab::connectPanelSignals()
                 m_canvasPanel->moveSelectedContentBy(delta);
             }
         });
+    // Dragging a coordinate field: the canvas keeps the move on the GPU and
+    // follows the pointer, then bakes the whole gesture as one undo step.
+    connect(m_layerPropertiesPanel, &workspace::LayerPropertiesPanel::moveContentPreviewChanged,
+        this, [this](bool active) {
+            if (m_canvasPanel) {
+                m_canvasPanel->setContentMovePreviewActive(active);
+            }
+        });
     // The Character and Paragraph groups replace the on-canvas formatting popup,
     // so the canvas performs their edits and owns the undo step for them.
     connect(m_layerPropertiesPanel, &workspace::LayerPropertiesPanel::textLayerEditRequested, this,

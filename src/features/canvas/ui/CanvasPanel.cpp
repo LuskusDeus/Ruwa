@@ -1068,15 +1068,47 @@ bool CanvasPanel::moveSelectedContentBy(const QPointF& delta)
     }
 
     // A move that opened and closed its own transform session leaves that mode
-    // again; the chrome has to follow, exactly as confirmTransform() does.
-    if (!wasTransformActive) {
+    // again; the chrome has to follow, exactly as confirmTransform() does. A
+    // live move keeps its session open until the gesture ends, so the chrome
+    // waits for setContentMovePreviewActive(false) instead.
+    if (!wasTransformActive && !m_glWidget->isInteractiveContentMoveActive()) {
+        updateCursorManagerOverlay();
+        emit transformModeChanged(false);
+        syncToolStateOverlayContent();
+        updateSelectionActionPopup();
+    }
+    // A live move has changed nothing in the document yet — the pixels are
+    // still a preview — so the listeners that re-read content wait for the end
+    // of the gesture rather than running once per pointer move.
+    if (!m_glWidget->isInteractiveContentMoveActive()) {
+        emit canvasContentChanged();
+    }
+    return true;
+}
+
+void CanvasPanel::setContentMovePreviewActive(bool active)
+{
+    if (!m_glWidget) {
+        return;
+    }
+    if (active) {
+        m_glWidget->beginInteractiveContentMove();
+        return;
+    }
+    const bool wasTransformActive = m_glWidget->isTransformActive();
+    const bool ownedSession = m_glWidget->isInteractiveContentMoveOwnedSession();
+    m_glWidget->endInteractiveContentMove();
+
+    // Same chrome update a self-contained move does, deferred to the end of the
+    // gesture — but only when the session the drag opened is the one that just
+    // closed; a transform the user already had open stays open.
+    if (wasTransformActive && ownedSession) {
         updateCursorManagerOverlay();
         emit transformModeChanged(false);
         syncToolStateOverlayContent();
         updateSelectionActionPopup();
     }
     emit canvasContentChanged();
-    return true;
 }
 
 void CanvasPanel::commitTransformBeforeDocumentMutation()

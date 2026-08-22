@@ -9866,6 +9866,45 @@ bool OpenGLCanvasWidget::enterMoveOnlyTransformMode()
     return enterSelectedTransformMode(true);
 }
 
+void OpenGLCanvasWidget::beginInteractiveContentMove()
+{
+    if (m_interactiveContentMove) {
+        return;
+    }
+    m_interactiveContentMove = true;
+    // The session is not opened here: whether one is needed at all depends on
+    // the first delta actually arriving, and entering move-only mode on an
+    // empty layer would fail for a gesture that may never move anything.
+    m_interactiveContentMoveOwnsSession = false;
+}
+
+void OpenGLCanvasWidget::endInteractiveContentMove()
+{
+    if (!m_interactiveContentMove) {
+        return;
+    }
+    const bool ownedSession = m_interactiveContentMoveOwnsSession;
+    m_interactiveContentMove = false;
+    m_interactiveContentMoveOwnsSession = false;
+
+    if (!m_transformController.isActive()) {
+        return; // the drag never moved anything
+    }
+    if (ownedSession) {
+        // Bakes the pixels and pushes the ordinary transform undo command, so
+        // the whole drag lands in history as one move.
+        confirmTransform();
+        return;
+    }
+    // The user's own transform session stays open; the drag is recorded as a
+    // single step inside it, the way one nudge would have been.
+    commitTransformUndoStep();
+    m_prevTransformDirtyValid = false;
+    invalidateTransformViewportPreviewTransform();
+    m_canvas.dirtyManager().onStructureChanged();
+    requestRender();
+}
+
 bool OpenGLCanvasWidget::moveSelectedContentBy(const Vector2& delta)
 {
     if (qAbs(delta.x) < 1e-4f && qAbs(delta.y) < 1e-4f) {
@@ -9892,9 +9931,18 @@ bool OpenGLCanvasWidget::moveSelectedContentBy(const Vector2& delta)
         if (m_transformController.isDragging()) {
             return false;
         }
-        beginTransformUndoStep();
+        // A live move session records one step for the whole gesture, opened on
+        // its first delta and closed by endInteractiveContentMove().
+        const bool liveMove = m_interactiveContentMove;
+        if (!liveMove) {
+            beginTransformUndoStep();
+        } else if (!m_interactiveContentMoveOwnsSession && !m_transformUndoStepBefore.has_value()) {
+            beginTransformUndoStep();
+        }
         applyDelta();
-        commitTransformUndoStep();
+        if (!liveMove) {
+            commitTransformUndoStep();
+        }
 
         m_prevTransformDirtyValid = false;
         invalidateTransformViewportPreviewTransform();
@@ -9907,6 +9955,17 @@ bool OpenGLCanvasWidget::moveSelectedContentBy(const Vector2& delta)
         return false;
     }
     applyDelta();
+    if (m_interactiveContentMove) {
+        // The pixels stay on the GPU as a transform preview until the gesture
+        // ends: baking every intermediate delta would cost a readback per
+        // mouse move and fill the history with them.
+        m_interactiveContentMoveOwnsSession = true;
+        m_prevTransformDirtyValid = false;
+        invalidateTransformViewportPreviewTransform();
+        m_canvas.dirtyManager().onStructureChanged();
+        requestRender();
+        return true;
+    }
     // Bakes the pixels and pushes the ordinary transform undo command, so the
     // move lands in history looking like any other move.
     confirmTransform();

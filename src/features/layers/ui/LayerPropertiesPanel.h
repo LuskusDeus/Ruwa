@@ -80,6 +80,7 @@ private slots:
     void onTransparentToggled(bool checked);
     void onHeaderRenameRequested(const ruwa::core::layers::LayerId& id, const QString& name);
     void onPositionEdited(const QPointF& origin);
+    void onPositionDragChanged(bool dragging);
     void onAnchorApplied(int anchorIndex, ruwa::ui::widgets::LayerPositionEditor::Axis axis);
 
 signals:
@@ -89,6 +90,10 @@ signals:
     /// and the panel waits to be told the result — the same contract the
     /// identity header uses for renames.
     void moveContentRequested(const QPointF& delta);
+    /// Brackets the stream of moveContentRequested() a coordinate drag emits.
+    /// The host shows every one of them live and folds the whole run into one
+    /// undo step, rather than baking pixels once per pointer move.
+    void moveContentPreviewChanged(bool active);
     /// One Character / Paragraph edit; the host performs it on the canvas so
     /// the panel stays out of the document, exactly like a move.
     void textLayerEditRequested(const ruwa::core::layers::TextLayerEdit& edit);
@@ -129,6 +134,13 @@ private:
     /// Layer the shown origin belongs to; a switch invalidates the cache even
     /// when the new layer happens to sit at the same coordinates.
     ruwa::core::layers::LayerId m_shownContentOriginLayer;
+    /// Set while a coordinate field is being dragged. The document does not
+    /// bake the move until the drag ends, so its bounds still report the
+    /// starting position: the fields lead and the panel must not restate them.
+    bool m_positionDragActive = false;
+    /// Origin the last live move was measured from — the fields' own previous
+    /// value, since the content bounds stand still for the whole drag.
+    QPointF m_positionDragOrigin;
     std::function<std::optional<QSize>()> m_canvasSizeProvider;
     ruwa::ui::widgets::ColorInputButton* m_backgroundColorInput = nullptr;
     ruwa::ui::widgets::ToggleSwitch* m_transparentSwitch = nullptr;
