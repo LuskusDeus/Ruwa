@@ -55,6 +55,14 @@ static bool isTextInputEventTarget(const QObject* watched)
     return isTextInputWidget(targetWidget) || isTextInputWidget(QApplication::focusWidget());
 }
 
+// The painting tools whose brush size can be dragged with Shift+<eyedropper
+// key>+left button (see CanvasMouseInputHandler::isPaintingLikeTool).
+static bool isBrushSizeDragTool(ToolId tool)
+{
+    return tool == ToolId::Brush || tool == ToolId::Eraser || tool == ToolId::Blur
+        || tool == ToolId::Smudge || tool == ToolId::Liquify;
+}
+
 static bool isBrushAdjustmentCommand(const QString& commandId)
 {
     return commandId == QLatin1String("tools.brushSizeDecrease")
@@ -131,6 +139,18 @@ bool CanvasKeyEventHandler::handleEvent(QObject* watched, QEvent* event)
         }
         if (ke->key() == Qt::Key_Alt && !ke->isAutoRepeat()) {
             m_host->setAltModifierPressed(true);
+        }
+        if (ke->key() == Qt::Key_Shift && !ke->isAutoRepeat()
+            && m_host->temporaryToolHoldActive()) {
+            // The other order of the same combo: the eyedropper key went down
+            // first. Drop its hold so Shift+<key>+drag is the size gesture on
+            // the real painting tool instead of an eyedropper drag.
+            const int eyedropperKey = canvasShortcuts.keyFor(CanvasModifierAction::Eyedropper);
+            if (canvasShortcuts.actionForKey(eyedropperKey) == CanvasModifierAction::Eyedropper
+                && m_host->temporaryToolHeldKeyIs(eyedropperKey)
+                && !m_host->isInputDrawingActive()) {
+                m_host->finalizeTemporaryToolHoldForKeyRelease(eyedropperKey);
+            }
         }
 
         const bool paletteBlocksKeys = !ruwa::core::ShortcutManager::instance().shortcutsEnabled();
@@ -223,10 +243,16 @@ bool CanvasKeyEventHandler::handleEvent(QObject* watched, QEvent* event)
                 && m_host->isTransformInputActive();
             const bool blockTempEyedropperForTool
                 = modifierAction == CanvasModifierAction::Eyedropper && blocksTemporaryEyedropper;
+            // Shift+<eyedropper key> is the brush-size drag on the painting
+            // tools, so the temporary eyedropper must not steal the tool out
+            // from under it.
+            const bool blockTempEyedropperForSizeDrag
+                = modifierAction == CanvasModifierAction::Eyedropper
+                && ke->modifiers().testFlag(Qt::ShiftModifier) && isBrushSizeDragTool(currentTool);
             if (isTempToolKey && !ke->isAutoRepeat() && !blockTempHandInSelectionInteraction
                 && !blockTempEyedropperInTransform && !blockTempEyedropperForTool
-                && !m_host->temporaryToolHoldActive() && m_host->inputGlWidget()
-                && m_host->hasInputFocusOrCursorOverCanvas()) {
+                && !blockTempEyedropperForSizeDrag && !m_host->temporaryToolHoldActive()
+                && m_host->inputGlWidget() && m_host->hasInputFocusOrCursorOverCanvas()) {
                 auto toolOpt = m_host->inputToolModeForKey(ke->key());
                 if (toolOpt && *toolOpt != currentTool) {
                     m_host->setPendingTemporaryToolKey(ke->key(), true);

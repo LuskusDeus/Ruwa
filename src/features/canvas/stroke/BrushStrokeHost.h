@@ -100,8 +100,11 @@ public:
     bool hasPendingFinalization() const { return m_pending.active; }
     std::pair<float, float> lastStrokePosition() const { return { m_lastStrokeX, m_lastStrokeY }; }
 
+    /// axisConstraint mirrors the Shift hold: the stroke picks a single axis
+    /// (horizontal or vertical) from its first real movement and stays on it
+    /// for the rest of the stroke, even after Shift is released.
     void beginStroke(float worldX, float worldY, float pressure = 1.0f,
-        StrokeInputDevice inputDevice = StrokeInputDevice::Stylus);
+        StrokeInputDevice inputDevice = StrokeInputDevice::Stylus, bool axisConstraint = false);
     void continueStroke(float worldX, float worldY, float pressure = 1.0f,
         StrokeInputDevice inputDevice = StrokeInputDevice::Stylus);
     /// Variant that records the sample with an explicit elapsed time (in
@@ -252,6 +255,11 @@ private:
     float pressureSmoothingWindowWorldPx() const;
     bool tryFinalizeStroke(bool forceWait);
     void clearStrokeRuntimeState();
+    // Projects an incoming raw sample onto the locked axis, choosing the axis
+    // on the first sample that has moved far enough from the stroke origin.
+    // Runs before the stabilizer so every downstream consumer (dabs, liquify
+    // deltas, catch-up ticks) already sees constrained coordinates.
+    void applyStrokeAxisConstraint(float& worldX, float& worldY);
 
     Callbacks m_callbacks;
 
@@ -275,6 +283,14 @@ private:
     float m_lastStrokeInputElapsedSeconds = 0.0f;
     QElapsedTimer m_strokeElapsedTimer;
     StrokeInputDevice m_strokeInputDevice = StrokeInputDevice::Stylus;
+
+    // Shift axis constraint. Armed at beginStroke and resolved once, on the
+    // first sample far enough from the origin to have an unambiguous dominant
+    // direction; releasing Shift mid-stroke does not clear it.
+    enum class StrokeAxisConstraint { Off, Pending, Horizontal, Vertical };
+    StrokeAxisConstraint m_strokeAxisConstraint = StrokeAxisConstraint::Off;
+    float m_strokeAxisOriginX = 0.0f;
+    float m_strokeAxisOriginY = 0.0f;
     bool m_autoInputSmoothingValid = false;
     Vector2 m_autoInputSmoothingPoint {};
 

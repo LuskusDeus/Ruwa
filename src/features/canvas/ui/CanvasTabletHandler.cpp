@@ -258,7 +258,9 @@ void CanvasTabletHandler::handleTabletEvent(QTabletEvent* event)
                 aether::Vector2 worldPos = m_host->mapInputToViewportWorld(globalPosF);
                 m_strokeTimestampBaseMs = event->timestamp();
                 m_lastTabletElapsedSec = 0.0f;
-                m_host->inputGlWidget()->beginStroke(worldPos.x, worldPos.y, pressure);
+                m_host->inputGlWidget()->beginStroke(worldPos.x, worldPos.y, pressure,
+                    aether::BrushStrokeHost::StrokeInputDevice::Stylus,
+                    event->modifiers().testFlag(Qt::ShiftModifier));
                 m_host->setInputDrawingActive(m_host->inputGlWidget()->isDrawing());
                 if (!m_host->isInputDrawingActive()) {
                     m_host->showBlockedDrawMessageForSelectedLayer();
@@ -289,7 +291,9 @@ void CanvasTabletHandler::handleTabletEvent(QTabletEvent* event)
                 aether::Vector2 worldPos = m_host->mapInputToViewportWorld(globalPosF);
                 m_strokeTimestampBaseMs = event->timestamp();
                 m_lastTabletElapsedSec = 0.0f;
-                m_host->inputGlWidget()->beginStroke(worldPos.x, worldPos.y, pressure);
+                m_host->inputGlWidget()->beginStroke(worldPos.x, worldPos.y, pressure,
+                    aether::BrushStrokeHost::StrokeInputDevice::Stylus,
+                    event->modifiers().testFlag(Qt::ShiftModifier));
                 m_host->setInputDrawingActive(m_host->inputGlWidget()->isDrawing());
                 if (!m_host->isInputDrawingActive()) {
                     m_host->showBlockedDrawMessageForSelectedLayer();

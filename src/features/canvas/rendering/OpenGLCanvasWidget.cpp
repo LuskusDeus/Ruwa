@@ -4321,8 +4321,8 @@ void OpenGLCanvasWidget::buildAlphaLockCombinedMask(
     }
 }
 
-void OpenGLCanvasWidget::beginStroke(
-    float worldX, float worldY, float pressure, BrushStrokeHost::StrokeInputDevice inputDevice)
+void OpenGLCanvasWidget::beginStroke(float worldX, float worldY, float pressure,
+    BrushStrokeHost::StrokeInputDevice inputDevice, bool axisConstraint)
 {
     if (m_transformController.isActive())
         return;
@@ -4334,7 +4334,7 @@ void OpenGLCanvasWidget::beginStroke(
         return;
 
     if (m_strokeHost) {
-        m_strokeHost->beginStroke(worldX, worldY, pressure, inputDevice);
+        m_strokeHost->beginStroke(worldX, worldY, pressure, inputDevice, axisConstraint);
     }
 }
 

@@ -338,8 +338,11 @@ bool CanvasMouseInputHandler::handleMousePress(QMouseEvent* event)
         return true;
     }
 
+    // Shift+Alt drags the brush size; plain Shift is the stroke axis lock, so
+    // the size gesture needs both modifiers to stay out of its way.
     if (event->button() == Qt::LeftButton && event->modifiers().testFlag(Qt::ShiftModifier)
-        && !m_brushSizeAdjust && !m_host->isInputDrawingActive() && !m_panel->m_tabletActive
+        && event->modifiers().testFlag(Qt::AltModifier) && !m_brushSizeAdjust
+        && !m_host->isInputDrawingActive() && !m_panel->m_tabletActive
         && !glWidget->isTransformActive() && isPaintingLikeTool()) {
         return beginBrushSizeAdjust(event);
     }
@@ -731,7 +734,8 @@ bool CanvasMouseInputHandler::handleMousePress(QMouseEvent* event)
             ruwa::services::input::StylusInputManager::resetMouseMoveHistory();
             aether::Vector2 worldPos = m_panel->mapToViewportWorld(event->globalPosition());
             glWidget->beginStroke(worldPos.x, worldPos.y, pointerSample.pressure,
-                strokeInputDeviceForSample(pointerSample));
+                strokeInputDeviceForSample(pointerSample),
+                event->modifiers().testFlag(Qt::ShiftModifier));
             // Seed the recovered-point pressure interpolation from the click
             // sample so the very first coalesced batch lerps from real data.
             m_lastRealStrokePressure = pointerSample.pressure;

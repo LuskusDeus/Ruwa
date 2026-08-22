@@ -312,7 +312,7 @@ BrushStrokeHost::activeStrokeReplayData() const
 }
 
 void BrushStrokeHost::beginStroke(
-    float worldX, float worldY, float pressure, StrokeInputDevice inputDevice)
+    float worldX, float worldY, float pressure, StrokeInputDevice inputDevice, bool axisConstraint)
 {
     flushPendingFinalization();
     if (auto* quickShape = quickShapeMorph()) {
@@ -333,6 +333,12 @@ void BrushStrokeHost::beginStroke(
 
     m_isDrawing = true;
     m_strokeInputDevice = inputDevice;
+    // The axis is decided from the first movement, not from the press, so the
+    // origin is the raw press point and the axis itself stays Pending.
+    m_strokeAxisConstraint
+        = axisConstraint ? StrokeAxisConstraint::Pending : StrokeAxisConstraint::Off;
+    m_strokeAxisOriginX = worldX;
+    m_strokeAxisOriginY = worldY;
     m_strokeInputTimer.stop();
     m_processingQueuedStrokeInput = false;
     m_queuedSamplesSinceCompaction = 0;
@@ -540,12 +546,63 @@ void BrushStrokeHost::queueStrokeAtElapsed(float worldX, float worldY, float pre
     addStrokeSampleAtElapsed(worldX, worldY, pressure, strokeElapsedSeconds, inputDevice, false);
 }
 
+void BrushStrokeHost::applyStrokeAxisConstraint(float& worldX, float& worldY)
+{
+    if (m_strokeAxisConstraint == StrokeAxisConstraint::Off) {
+        return;
+    }
+
+    const float dx = worldX - m_strokeAxisOriginX;
+    const float dy = worldY - m_strokeAxisOriginY;
+
+    if (m_strokeAxisConstraint == StrokeAxisConstraint::Pending) {
+        // The axis is read from the displacement off the press point, which
+        // integrates the movement and so is far steadier than any single
+        // packet. Two gates keep a jittery hand from naming the wrong one:
+        // the travel must be long enough to mean something, and one component
+        // must clearly dominate the other. Thresholds are screen-space so the
+        // gesture feels the same at every zoom level.
+        constexpr float kAxisPickScreenPx = 10.0f;
+        constexpr float kAxisForceScreenPx = 28.0f;
+        constexpr float kAxisDominance = 1.6f;
+        const float zoom = std::max(viewportZoom(), 0.05f);
+        const float pickWorldPx = kAxisPickScreenPx / zoom;
+        const float forceWorldPx = kAxisForceScreenPx / zoom;
+
+        const float absDx = std::abs(dx);
+        const float absDy = std::abs(dy);
+        const float travel = std::sqrt(dx * dx + dy * dy);
+        const bool longEnough = travel >= pickWorldPx;
+        const bool decisive = absDx >= absDy * kAxisDominance || absDy >= absDx * kAxisDominance;
+        // A diagonal drag never becomes decisive, so past the far gate the
+        // dominant component wins outright rather than blocking the stroke.
+        if (!longEnough || (!decisive && travel < forceWorldPx)) {
+            // Still undecided: hold the sample on the origin so nothing is
+            // painted off-axis before the axis exists. The segment from the
+            // origin is drawn in one piece as soon as the axis resolves.
+            worldX = m_strokeAxisOriginX;
+            worldY = m_strokeAxisOriginY;
+            return;
+        }
+        m_strokeAxisConstraint
+            = absDx >= absDy ? StrokeAxisConstraint::Horizontal : StrokeAxisConstraint::Vertical;
+    }
+
+    if (m_strokeAxisConstraint == StrokeAxisConstraint::Horizontal) {
+        worldY = m_strokeAxisOriginY;
+    } else {
+        worldX = m_strokeAxisOriginX;
+    }
+}
+
 void BrushStrokeHost::addStrokeSampleAtElapsed(float worldX, float worldY, float pressure,
     float strokeElapsedSeconds, StrokeInputDevice inputDevice, bool processImmediately)
 {
     if (!m_isDrawing) {
         return;
     }
+
+    applyStrokeAxisConstraint(worldX, worldY);
 
     if (!std::isfinite(strokeElapsedSeconds)) {
         strokeElapsedSeconds = elapsedSeconds(m_strokeElapsedTimer);
@@ -1375,6 +1432,11 @@ void BrushStrokeHost::translateActiveStroke(float dx, float dy)
     }
 
     flushQueuedStrokeInput();
+
+    // The whole stroke moves with the canvas grab, so the axis line it is
+    // pinned to has to move with it.
+    m_strokeAxisOriginX += dx;
+    m_strokeAxisOriginY += dy;
 
     TileBrush* currentBrush = brush();
     TileGrid* grid = activeLayerTileGrid();

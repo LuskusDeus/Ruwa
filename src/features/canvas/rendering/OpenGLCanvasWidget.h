@@ -186,9 +186,11 @@ public:
     {
         return m_quickShapeMorph && m_quickShapeMorph->isActive();
     }
+    /// axisConstraint = Shift was held when the stroke started: the stroke is
+    /// locked to one axis for its whole life (see BrushStrokeHost::beginStroke).
     void beginStroke(float worldX, float worldY, float pressure = 1.0f,
-        BrushStrokeHost::StrokeInputDevice inputDevice
-        = BrushStrokeHost::StrokeInputDevice::Stylus);
+        BrushStrokeHost::StrokeInputDevice inputDevice = BrushStrokeHost::StrokeInputDevice::Stylus,
+        bool axisConstraint = false);
     void continueStroke(float worldX, float worldY, float pressure = 1.0f,
         BrushStrokeHost::StrokeInputDevice inputDevice
         = BrushStrokeHost::StrokeInputDevice::Stylus);
