@@ -226,6 +226,7 @@ bool CanvasMouseInputHandler::beginBrushSizeAdjust(QMouseEvent* event)
     m_brushSizeAnchorVx = static_cast<float>(static_cast<qreal>(localPos.x()) * scaleX);
     m_brushSizeAnchorVy = static_cast<float>(static_cast<qreal>(localPos.y()) * scaleY);
     m_brushSizeCursorScale = static_cast<float>((scaleX + scaleY) * 0.5);
+    m_brushSizeStartRadius = gl->brush().radius();
 
     // Suppress the cursor manager so it stops moving the brush ring with the
     // mouse; then force the OS cursor to a horizontal resize arrow on top of
@@ -253,12 +254,14 @@ void CanvasMouseInputHandler::updateBrushSizeAdjust(const QPoint& globalPos)
         return;
     }
 
+    // Horizontal drag only: the radius grows to the right and shrinks to the
+    // left, starting from the size the brush had when the drag began. The ring
+    // stays centred on the anchor, so the pointer is a slider, not a rim grip.
     const float dx = static_cast<float>(globalPos.x() - m_brushSizeAnchorGlobal.x());
-    const float dy = static_cast<float>(globalPos.y() - m_brushSizeAnchorGlobal.y());
-    const float distancePx = std::sqrt(dx * dx + dy * dy);
 
     const float zoom = gl->viewport().camera().zoom();
-    const float worldRadius = (zoom > 0.0f) ? (distancePx / zoom) : distancePx;
+    const float deltaWorld = (zoom > 0.0f) ? (dx / zoom) : dx;
+    const float worldRadius = std::max(0.0f, m_brushSizeStartRadius + deltaWorld);
 
     const QSize canvas = m_panel->canvasSize();
     const qreal normalized = ruwa::ui::widgets::normalizedSizeFromRadiusPxForCanvasMode(

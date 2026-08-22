@@ -76,6 +76,7 @@ private:
     float m_brushSizeAnchorVx = 0.0f;
     float m_brushSizeAnchorVy = 0.0f;
     float m_brushSizeCursorScale = 1.0f;
+    float m_brushSizeStartRadius = 0.0f;
 };
 
 } // namespace ruwa::ui::workspace
