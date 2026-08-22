@@ -3541,7 +3541,7 @@ void LayersPanel::onLayerDeleteRequested(const LayerId& id)
     }
     m_layerModel.setSelectedLayer(id);
     syncLayerControls();
-    deleteSelectedLayers();
+    deleteSelectedLayersOrMask();
 }
 
 void LayersPanel::onLayerQuickClippingMaskRequested(const LayerId& id)
@@ -4796,6 +4796,18 @@ bool LayersPanel::selectedLayerMaskIsPaintTarget() const
     return layer && layer->hasMask() && layer->maskEditActive;
 }
 
+bool LayersPanel::deleteSelectedLayersOrMask()
+{
+    // Selecting a layer's mask thumbnail makes the mask the thing the panel acts
+    // on, so "delete" drops the mask and leaves the layer standing. Only the
+    // single-layer case can have a mask target; a multi-selection always deletes
+    // the layers.
+    if (selectedLayerMaskIsPaintTarget()) {
+        return deleteSelectedLayerMask();
+    }
+    return deleteSelectedLayers();
+}
+
 bool LayersPanel::copySelectedLayerMask()
 {
     auto* layer = m_layerModel.selectedLayer();
@@ -4887,7 +4899,7 @@ void LayersPanel::addAdjustmentLayer()
 
 void LayersPanel::onDeleteLayer()
 {
-    deleteSelectedLayers();
+    deleteSelectedLayersOrMask();
 }
 
 void LayersPanel::onLayerAlphaLockClicked(const LayerId& id)
@@ -5230,6 +5242,11 @@ void LayersPanel::syncLayerControls()
 
     if (m_btnDelete) {
         m_btnDelete->setEnabled(canModifyLayerEntry);
+        // The button follows the panel's delete target: with the mask thumbnail
+        // active it drops the mask, not the layer (see deleteSelectedLayersOrMask).
+        m_btnDelete->setToolTip(hasLayer && layer->hasMask() && layer->maskEditActive
+                ? tr("Delete Mask")
+                : tr("Delete Layer"));
     }
 
     if (m_btnMergeDown) {

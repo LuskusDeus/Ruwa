@@ -411,7 +411,9 @@ bool ContextMenuSystem::eventFilter(QObject* watched, QEvent* event)
 
     if (providerWidget) {
         if (auto* layerRow = qobject_cast<LayerRowWidget*>(providerWidget)) {
-            layerRow->prepareContextMenuInteraction();
+            // The row needs the click position: which of its two previews was hit
+            // decides whether the menu acts on the layer's pixels or on its mask.
+            layerRow->prepareContextMenuInteraction(layerRow->mapFromGlobal(globalPos));
         }
 
         auto* provider = dynamic_cast<IContextMenuProvider*>(providerWidget);

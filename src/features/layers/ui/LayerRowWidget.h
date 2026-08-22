@@ -208,7 +208,10 @@ public:
 
     /// Select this row as if left-clicked (no modifiers) before showing the context
     /// menu — unless the row already belongs to a multi-selection, which is kept.
-    void prepareContextMenuInteraction();
+    /// @p pos is the right-click position in row coordinates: landing on either
+    /// preview also makes that preview the paint target, so the menu acts on the
+    /// thing that was clicked (layer pixels vs mask).
+    void prepareContextMenuInteraction(const QPoint& pos);
 
     /// True while this row is part of a multi-selection, i.e. its context menu
     /// acts on every selected layer instead of this one.

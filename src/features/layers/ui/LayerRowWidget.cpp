@@ -3032,7 +3032,7 @@ bool LayerRowWidget::contextMenuTargetsSelection() const
     return model && model->selectionCount() > 1 && model->isSelected(m_data->id);
 }
 
-void LayerRowWidget::prepareContextMenuInteraction()
+void LayerRowWidget::prepareContextMenuInteraction(const QPoint& pos)
 {
     if (!m_data) {
         return;
@@ -3041,6 +3041,15 @@ void LayerRowWidget::prepareContextMenuInteraction()
     // follows acts on every selected layer. Everywhere else the click selects
     // the row first, the way a left click would.
     if (contextMenuTargetsSelection()) {
+        return;
+    }
+    // On a masked row the two previews are two different targets, so a right
+    // click picks one exactly like a left click does: on the layer preview the
+    // menu (and its Delete) acts on the layer, on the mask preview it acts on
+    // the mask. A click anywhere else leaves the current target alone.
+    const HitZone zone = hitTest(pos);
+    if (hasMaskThumbnail() && (zone == HitZone::Thumbnail || zone == HitZone::MaskThumbnail)) {
+        emit paintTargetClicked(m_data->id, zone == HitZone::MaskThumbnail, Qt::NoModifier);
         return;
     }
     emit clicked(m_data->id, Qt::NoModifier);
@@ -3086,9 +3095,14 @@ QVariantMap LayerRowWidget::contextMenuContext() const
             static_cast<int>(IconProvider::StandardIcon::Duplicate));
         actions.append(dup);
 
+        // With the row's mask thumbnail as the active paint target the whole
+        // panel acts on the mask, so this entry drops the mask and keeps the
+        // layer (LayersPanel::deleteSelectedLayersOrMask does the routing).
+        const bool deletesMask = m_data->hasMask() && m_data->maskEditActive;
+
         QVariantMap del;
         del.insert(QStringLiteral("id"), CtxDelete);
-        del.insert(QStringLiteral("text"), tr("Delete"));
+        del.insert(QStringLiteral("text"), deletesMask ? tr("Delete mask") : tr("Delete"));
         del.insert(QStringLiteral("danger"), true);
         del.insert(
             QStringLiteral("standardIcon"), static_cast<int>(IconProvider::StandardIcon::Trash));

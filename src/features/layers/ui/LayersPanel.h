@@ -123,6 +123,11 @@ public:
     bool pasteLayerSnapshots(
         const QList<std::shared_ptr<ruwa::core::layers::LayerData>>& snapshots);
     bool deleteSelectedLayers();
+    /// Delete whatever the panel currently points at: the selected layer's mask
+    /// when that mask is the active paint target, the selected layers otherwise.
+    /// This is what every "delete" affordance in the panel (toolbar button, row
+    /// menu, context menu) goes through.
+    bool deleteSelectedLayersOrMask();
     /// Drop the selected layer's mask without baking it into the pixels (undoable).
     bool deleteSelectedLayerMask();
     /// Whether the selected layer's mask (not its pixels) is the active paint target.
