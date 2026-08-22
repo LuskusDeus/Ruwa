@@ -6,18 +6,23 @@
 #include "features/theme/manager/ThemeManager.h"
 #include "shared/style/PaintingUtils.h"
 
+#include <QCursor>
 #include <QDoubleValidator>
 #include <QEnterEvent>
-#include <QFontMetrics>
 #include <QFocusEvent>
+#include <QFontMetrics>
+#include <QGuiApplication>
 #include <QKeyEvent>
 #include <QMouseEvent>
 #include <QPainter>
 #include <QPainterPath>
+#include <QPointingDevice>
 #include <QPropertyAnimation>
 #include <QResizeEvent>
+#include <QScreen>
 #include <QSignalBlocker>
 #include <QWheelEvent>
+#include <QWindow>
 
 #include <cmath>
 
@@ -166,10 +171,83 @@ double NumericInputField::stepMultiplier(Qt::KeyboardModifiers modifiers)
     return 1.0;
 }
 
-void NumericInputField::beginScrub(int anchorX)
+bool NumericInputField::isRelativePointerEvent(const QMouseEvent* event)
+{
+    if (!event) {
+        return false;
+    }
+    if (event->source() != Qt::MouseEventNotSynthesized) {
+        return false; // synthesized from a tablet or touch contact
+    }
+    const auto deviceType = event->deviceType();
+    return deviceType == QInputDevice::DeviceType::Mouse
+        || deviceType == QInputDevice::DeviceType::TouchPad
+        || deviceType == QInputDevice::DeviceType::Unknown;
+}
+
+QRect NumericInputField::scrubWrapBounds() const
+{
+    // The window is the band the pointer wraps inside, but only the part of it
+    // that is actually on screen: warping into a half-offscreen window would
+    // put the pointer somewhere the compositor immediately clamps back.
+    QRect bounds;
+    if (const QWidget* top = window()) {
+        bounds = top->frameGeometry();
+    }
+
+    const QScreen* screen = nullptr;
+    if (const QWidget* top = window(); top && top->windowHandle()) {
+        screen = top->windowHandle()->screen();
+    }
+    if (!screen) {
+        screen = QGuiApplication::screenAt(bounds.isNull() ? QCursor::pos() : bounds.center());
+    }
+    if (!screen) {
+        screen = QGuiApplication::primaryScreen();
+    }
+    if (screen) {
+        const QRect available = screen->geometry();
+        bounds = bounds.isNull() ? available : bounds.intersected(available);
+    }
+    return bounds;
+}
+
+bool NumericInputField::wrapScrubPointer(int globalX, int globalY)
+{
+    if (!m_scrubbing || m_scrubWrapBounds.width() <= 4 * scrubWrapInset()) {
+        return false; // too narrow to wrap inside without fighting itself
+    }
+
+    const int inset = scrubWrapInset();
+    const int left = m_scrubWrapBounds.left();
+    const int right = m_scrubWrapBounds.right();
+
+    int wrappedX = globalX;
+    if (globalX <= left) {
+        wrappedX = right - inset;
+    } else if (globalX >= right) {
+        wrappedX = left + inset;
+    } else {
+        return false;
+    }
+
+    // The anchor moves with the pointer, so the teleport itself contributes no
+    // delta: the value keeps counting from exactly where the edge left it.
+    m_scrubLastGlobalX = wrappedX;
+    QCursor::setPos(wrappedX, qBound(m_scrubWrapBounds.top(), globalY, m_scrubWrapBounds.bottom()));
+    return true;
+}
+
+int NumericInputField::scrubWrapInset()
+{
+    return qMax(1, ruwa::ui::core::ThemeManager::instance().scaled(BaseScrubWrapInset));
+}
+
+void NumericInputField::beginScrub(int anchorGlobalX)
 {
     m_scrubbing = true;
-    m_scrubLastX = anchorX;
+    m_scrubLastGlobalX = anchorGlobalX;
+    m_scrubWrapBounds = scrubWrapBounds();
     // The drag owns the value from here on, so it starts from what the field
     // currently shows rather than from a stale accumulator.
     m_scrubValue = m_value;
@@ -219,7 +297,7 @@ void NumericInputField::mousePressEvent(QMouseEvent* event)
         m_scrubbing = false;
         m_pressTookFocus = tookFocus;
         m_pressPos = event->position().toPoint();
-        m_scrubLastX = m_pressPos.x();
+        m_scrubLastGlobalX = event->globalPosition().toPoint().x();
         m_scrubValue = m_value;
         event->accept();
         return;
@@ -236,6 +314,7 @@ void NumericInputField::mouseMoveEvent(QMouseEvent* event)
 
     auto& theme = ruwa::ui::core::ThemeManager::instance();
     const int x = event->position().toPoint().x();
+    const QPoint globalPos = event->globalPosition().toPoint();
 
     if (!m_scrubbing) {
         const int threshold = qMax(1, theme.scaled(BaseScrubThreshold));
@@ -246,13 +325,27 @@ void NumericInputField::mouseMoveEvent(QMouseEvent* event)
         }
         // Anchor on the point where the threshold was crossed, so crossing it
         // does not hand the value a free jump of one dead zone's worth.
-        beginScrub(m_pressPos.x() + (travel > 0 ? threshold : -threshold));
+        beginScrub(globalPos.x() - (travel > 0 ? travel - threshold : travel + threshold));
     }
 
     const double pixelsPerStep = qMax(1, theme.scaled(BaseScrubPixelsPerStep));
-    const double delta = static_cast<double>(x - m_scrubLastX) / pixelsPerStep * m_step
-        * stepMultiplier(event->modifiers());
-    m_scrubLastX = x;
+    const double travelled = static_cast<double>(globalPos.x() - m_scrubLastGlobalX);
+    // A move event queued before a wrap can still arrive after it, carrying the
+    // whole width of the window as one jump. Nothing a hand can do produces
+    // that, so it is read as the leftover of the teleport and dropped.
+    const bool wrapArtifact = m_scrubWrapBounds.width() > 0
+        && qAbs(travelled) > m_scrubWrapBounds.width() / 2.0;
+    const double delta = wrapArtifact
+        ? 0.0
+        : travelled / pixelsPerStep * m_step * stepMultiplier(event->modifiers());
+    m_scrubLastGlobalX = globalPos.x();
+    // Done after the delta is taken, so the pixel that reached the edge still
+    // counts before the pointer is put down on the far side. An absolute device
+    // is left alone: a pen reports where it physically is, so moving the cursor
+    // out from under it would be undone by its very next packet.
+    if (isRelativePointerEvent(event)) {
+        wrapScrubPointer(globalPos.x(), globalPos.y());
+    }
     // Clamped as it accumulates: dragging past an end must not build up slack
     // that the pointer has to travel back through before the value responds.
     m_scrubValue = qBound(m_minimum, m_scrubValue + delta, m_maximum);
