@@ -97,6 +97,17 @@ constexpr qreal kMinSelectProgress = 0.6;
 /// Ring radius factor at progress 0 — the menu grows out of the cursor.
 constexpr qreal kRingScaleStart = 0.82;
 
+/// How far past the painted ring a seat can still be picked, as a multiple of
+/// the ring's outer edge.
+constexpr qreal kPickRadiusFactor = 2.0;
+
+/// Slack around the menu's shape when it is turned into the widget mask: a
+/// hover grows the seat under the pointer and pushes its neighbours sideways.
+qreal maskPadding()
+{
+    return ThemeManager::instance().scaled(18);
+}
+
 QPainterPath wedgePath(
     const QPointF& center, qreal innerRadius, qreal outerRadius, qreal startDeg, qreal spanDeg)
 {
@@ -468,6 +479,14 @@ void RadialMenuWidget::rebuildMetrics()
     int halfWidth = half + qRound(metrics.sideGutter);
     int halfHeight = half + qRound(metrics.verticalGutter);
 
+    // Picking reaches past everything that is drawn, and a widget only receives
+    // the presses that land on it, so the box has to hold the whole masked pick
+    // disc — a press in a corner the mask trimmed away would fall through to
+    // the canvas and start a stroke.
+    const int pick = qCeil(pickRadius(1.0) + maskPadding());
+    halfWidth = qMax(halfWidth, pick);
+    halfHeight = qMax(halfHeight, pick);
+
     // The outgoing page is thrown outward and is usually laid out for a
     // different number of seats than the incoming one, so while a transition
     // runs the widget has to be big enough for both at their furthest.
@@ -636,10 +655,18 @@ qreal RadialMenuWidget::ringHitRadius(qreal ringScale) const
         + ThemeManager::instance().scaled(4);
 }
 
+qreal RadialMenuWidget::pickRadius(qreal ringScale) const
+{
+    // Picking reaches twice as far as the menu is drawn. A radial menu is aimed
+    // at, not clicked on: the direction of the flick is the whole gesture, and
+    // stopping the pick at the painted edge punishes overshoot for no reason.
+    return ringHitRadius(ringScale) * kPickRadiusFactor;
+}
+
 QRegion RadialMenuWidget::menuRegion(qreal padding) const
 {
     const QPointF c = center();
-    const qreal outer = ringHitRadius(1.0) + padding;
+    const qreal outer = pickRadius(1.0) + padding;
     QRegion region(QRectF(c.x() - outer, c.y() - outer, outer * 2.0, outer * 2.0).toAlignedRect(),
         QRegion::Ellipse);
 
@@ -669,24 +696,15 @@ QRegion RadialMenuWidget::menuRegion(qreal padding) const
 
 bool RadialMenuWidget::containsMenuPoint(const QPointF& pos) const
 {
+    // Exactly the area slotAtPosition() picks from — a label that pokes out of
+    // the pick disc is painted, not clickable.
     const QPointF offset = pos - center();
-    if (std::hypot(offset.x(), offset.y()) <= ringHitRadius(currentRingScale())) {
-        return true;
-    }
-    for (int index = 0; index < m_page.items.size(); ++index) {
-        if (labelRect(index, currentRingScale()).contains(pos)) {
-            return true;
-        }
-    }
-    return false;
+    return std::hypot(offset.x(), offset.y()) <= pickRadius(currentRingScale());
 }
 
 void RadialMenuWidget::updateMask()
 {
-    // The mask is built at rest, but a hover grows the seat under the pointer
-    // and pushes its neighbours sideways, so the padding has to cover both;
-    // the extra ring is dead space that slotAtPosition() rejects anyway.
-    setMask(menuRegion(ThemeManager::instance().scaled(18)));
+    setMask(menuRegion(maskPadding()));
 }
 
 int RadialMenuWidget::slotAtPosition(const QPointF& pos) const
@@ -700,19 +718,12 @@ int RadialMenuWidget::slotAtPosition(const QPointF& pos) const
 
     const qreal ringScale = currentRingScale();
 
-    // A label sits outside the band and belongs to its own seat, so it is
-    // matched by rect before the angular test runs.
-    for (int index = 0; index < count; ++index) {
-        if (!labelRect(index, ringScale).contains(pos)) {
-            continue;
-        }
-        const Slot& slot = m_page.items.at(index);
-        return (slot.empty || !slot.enabled) ? -1 : index;
-    }
-
+    // Angle alone decides which seat is meant: no per-seat rects, no label
+    // rects, just the sector the pointer falls in anywhere between the hub and
+    // the pick radius.
     const QPointF offset = pos - center();
     const qreal distance = std::hypot(offset.x(), offset.y());
-    if (distance <= m_metrics.hubRadius || distance > ringHitRadius(ringScale)) {
+    if (distance <= m_metrics.hubRadius || distance > pickRadius(ringScale)) {
         return -1;
     }
 

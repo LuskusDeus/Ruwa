@@ -201,22 +201,23 @@ private:
     /// Page-title pill under the ring (empty when the page has no title).
     QRectF titlePillRect() const;
 
-    /// Slot under @p pos, or -1. Selection is by angle, not by the icon disc:
-    /// anywhere in the ring band outside the hub counts (plus the seat's own
-    /// label), which is what makes a radial menu quick to hit. Points beyond
-    /// the band belong to the canvas, not to the seat that happens to share
-    /// their angle.
+    /// Slot under @p pos, or -1. Selection is purely by angle: every point
+    /// outside the hub and inside the pick radius belongs to the sector it
+    /// falls in, whatever is drawn there. Labels get no hit area of their own.
     int slotAtPosition(const QPointF& pos) const;
     bool isInHub(const QPointF& pos) const;
-    /// Outer edge of the clickable ring band.
+    /// Outer edge of the painted ring band.
     qreal ringHitRadius(qreal ringScale) const;
+    /// Outer edge of the *pickable* area: twice the painted ring, so a flick
+    /// well past the seats still lands on their sector.
+    qreal pickRadius(qreal ringScale) const;
     /// Ring scale currently being painted (the open/close animation).
     qreal currentRingScale() const;
 
-    /// The menu's actual shape: hub + ring band + label pills (+ the title
-    /// pill), padded by @p padding. Used both as the widget mask — so clicks
-    /// in the gaps reach the canvas instead of the bounding square — and as
-    /// the "is this point ours" test.
+    /// The menu's claimed shape: the pick disc plus the label pills (+ the
+    /// title pill) that reach past it, padded by @p padding. Used as the widget
+    /// mask, so presses outside it reach the canvas instead of the bounding
+    /// square.
     QRegion menuRegion(qreal padding) const;
     bool containsMenuPoint(const QPointF& pos) const;
     void updateMask();
