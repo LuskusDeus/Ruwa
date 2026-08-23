@@ -25,6 +25,7 @@ class QOpenGLWidget;
 class QDragEnterEvent;
 class QDragMoveEvent;
 class QDropEvent;
+class QMimeData;
 class QImage;
 class QNetworkAccessManager;
 class QUrl;
@@ -107,6 +108,12 @@ public:
 
     /// Get TabManager (for external access)
     ruwa::core::TabManager* tabManager() const;
+
+    /// Build tabs out of a MIME payload the Home tab can turn into projects
+    /// (project files, image files, a raw image, a remote image URL). Used by
+    /// the drop handler and by Ctrl+V while the Home tab is active.
+    /// Returns true when the payload was consumed.
+    bool createProjectFromMimeData(const QMimeData* mimeData);
 
     /// Get ContextMenuCoordinator (for external access)
     ContextMenuCoordinator* contextMenuCoordinator() const { return m_contextMenuCoordinator; }

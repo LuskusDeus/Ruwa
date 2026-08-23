@@ -868,7 +868,26 @@ void MainWindow::dropEvent(QDropEvent* event)
         return;
     }
 
-    const QStringList projectPaths = extractProjectFilePaths(event->mimeData());
+    if (createProjectFromMimeData(event->mimeData())) {
+        event->acceptProposedAction();
+        return;
+    }
+
+    QMainWindow::dropEvent(event);
+}
+
+/// Shared by the Home-tab drop handler and by Ctrl+V on the Home tab: turn
+/// whatever a MIME payload carries (project files, image files, a raw image, a
+/// remote image URL) into open tabs. Returns true when the payload was claimed.
+bool MainWindow::createProjectFromMimeData(const QMimeData* mimeData)
+{
+    if (!mimeData) {
+        return false;
+    }
+
+    auto* tm = tabManager();
+
+    const QStringList projectPaths = extractProjectFilePaths(mimeData);
     if (!projectPaths.isEmpty()) {
         bool handled = false;
         for (const QString& filePath : projectPaths) {
@@ -877,12 +896,11 @@ void MainWindow::dropEvent(QDropEvent* event)
                 || handled;
         }
         if (handled) {
-            event->acceptProposedAction();
-            return;
+            return true;
         }
     }
 
-    const QStringList filePaths = extractImportableImagePaths(event->mimeData());
+    const QStringList filePaths = extractImportableImagePaths(mimeData);
     if (!filePaths.isEmpty() && tm) {
         const QSize projectSize = resolveProjectSizeFromImages(filePaths);
         ruwa::ui::tabs::WorkspaceTab::ProjectSettings settings;
@@ -896,27 +914,24 @@ void MainWindow::dropEvent(QDropEvent* event)
         auto* workspaceTab = new ruwa::ui::tabs::WorkspaceTab(settings);
         workspaceTab->seedStartupImageImportPaths(filePaths);
         tm->addTab(workspaceTab);
-        event->acceptProposedAction();
-        return;
+        return true;
     }
 
     const auto directImage
-        = ruwa::ui::workspace::detail::extractImageFromMime(event->mimeData(), tr("Dropped image"));
+        = ruwa::ui::workspace::detail::extractImageFromMime(mimeData, tr("Dropped image"));
     if (directImage.isValid()) {
         createProjectFromDroppedImage(directImage.image, directImage.layerName);
-        event->acceptProposedAction();
-        return;
+        return true;
     }
 
     const QList<QUrl> remoteUrls
-        = ruwa::ui::workspace::detail::extractRemoteImageUrlsFromMime(event->mimeData());
+        = ruwa::ui::workspace::detail::extractRemoteImageUrlsFromMime(mimeData);
     if (!remoteUrls.isEmpty()) {
         downloadAndCreateProjectFromDroppedImage(remoteUrls.first());
-        event->acceptProposedAction();
-        return;
+        return true;
     }
 
-    QMainWindow::dropEvent(event);
+    return false;
 }
 
 void MainWindow::createProjectFromDroppedImage(const QImage& image, const QString& layerName)

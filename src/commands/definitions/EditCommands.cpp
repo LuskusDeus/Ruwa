@@ -10,7 +10,11 @@
 #include "shell/tab-system/WorkspaceTab.h"
 #include "features/canvas/ui/CanvasPanel.h"
 #include "features/layers/ui/LayersPanel.h"
+#include "shell/main-window/MainWindow.h"
+#include "features/canvas/ui/CanvasPanelHelpers.h"
 
+#include <QClipboard>
+#include <QGuiApplication>
 #include <QLineEdit>
 #include <QPlainTextEdit>
 #include <QTextEdit>
@@ -42,6 +46,17 @@ bool widgetIsTextInput(const QWidget* widget)
     return widget
         && (widget->inherits("QLineEdit") || widget->inherits("QAbstractSpinBox")
             || widget->inherits("QTextEdit") || widget->inherits("QPlainTextEdit"));
+}
+
+/// The clipboard payload the Home tab could turn into a new project.
+const QMimeData* projectCreatingClipboardMime()
+{
+    QClipboard* clipboard = QGuiApplication::clipboard();
+    const QMimeData* mimeData = clipboard ? clipboard->mimeData() : nullptr;
+    if (!mimeData || !ruwa::ui::workspace::detail::mayContainImportableImageFromMime(mimeData)) {
+        return nullptr;
+    }
+    return mimeData;
 }
 
 enum class ClipboardOp { Copy, Cut, Paste };
@@ -182,7 +197,16 @@ CommandInfo PasteCommand::info() const
 
 bool PasteCommand::canExecute(const CommandContext& ctx) const
 {
-    return ctx.activeWorkspaceTab() != nullptr;
+    if (ctx.activeWorkspaceTab()) {
+        return true;
+    }
+    // The keystroke belongs to whatever is being typed into.
+    if (widgetIsTextInput(ctx.focusWidget())) {
+        return true;
+    }
+    // No document open: a clipboard image is still pasteable — it becomes a new
+    // project, the same way dropping an image onto the Home tab does.
+    return ctx.mainWindow() != nullptr && projectCreatingClipboardMime() != nullptr;
 }
 
 void PasteCommand::execute(const CommandContext& ctx, const QVariantMap& args)
@@ -195,6 +219,9 @@ void PasteCommand::execute(const CommandContext& ctx, const QVariantMap& args)
 
     auto* workspaceTab = ctx.activeWorkspaceTab();
     if (!workspaceTab) {
+        if (auto* mainWindow = ctx.mainWindow()) {
+            mainWindow->createProjectFromMimeData(projectCreatingClipboardMime());
+        }
         return;
     }
     workspaceTab->handlePasteRequest();
