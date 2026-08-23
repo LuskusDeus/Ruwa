@@ -28,8 +28,6 @@ constexpr int kAnimationDurationMs = 400;
 constexpr qreal kExportPanelWidthRatio = 0.28; // 28% of host widget width
 constexpr int kMinExportPanelWidth = 280;
 constexpr int kMaxExportPanelWidth = 450;
-constexpr int kExportPanelAspectWidth = 3;
-constexpr int kExportPanelAspectHeight = 4;
 constexpr int kCanvasAreaColumns = 2;
 constexpr int kPanelAreaColumns = 1;
 constexpr float kExportZoomPadding = 80.0f; // Padding around canvas in export view
@@ -63,6 +61,12 @@ ExportModeController::ExportModeController(QWidget* hostWidget, CanvasPanel* can
 
     // Watch host widget for resize events to reposition export panel
     m_workspace->installEventFilter(this);
+
+    // A conditional row appearing or disappearing changes how tall the panel
+    // wants to be, and the panel is placed by geometry rather than by a layout,
+    // so nothing else would notice.
+    connect(m_exportPanel, &ExportSettingsPanel::preferredHeightChanged, this,
+        &ExportModeController::updateLayout);
 
     m_animation = new QVariantAnimation(this);
     m_animation->setEasingCurve(QEasingCurve::InOutCubic);
@@ -245,9 +249,11 @@ void ExportModeController::updateLayout()
     const int maxPanelBodyWidth = qMax(0, panelAreaWidth - 2 * kPanelMarginX);
     const int panelBodyWidth = qMin(exportPanelTargetWidth(), maxPanelBodyWidth);
     const int availablePanelHeight = qMax(0, totalHeight - 2 * kPanelMarginY);
-    const int targetPanelHeight = qRound(
-        panelBodyWidth * (static_cast<qreal>(kExportPanelAspectHeight) / kExportPanelAspectWidth));
-    const int panelHeight = qMin(availablePanelHeight, targetPanelHeight);
+    // The panel is as tall as its settings need, never taller than the window
+    // allows. It used to be a fixed 3:4 box, which stopped being tenable once
+    // the settings outgrew a single screenful — the content now scrolls inside
+    // whatever height is left instead of being clipped by a ratio.
+    const int panelHeight = qMin(availablePanelHeight, m_exportPanel->preferredHeight());
     const int visiblePanelX = panelAreaX + (panelAreaWidth - panelBodyWidth) / 2;
     const int panelY = kPanelMarginY + (availablePanelHeight - panelHeight) / 2;
 

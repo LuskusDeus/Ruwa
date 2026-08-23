@@ -108,4 +108,25 @@ QStringList getOpenFileNames(QWidget* parent, const QString& category, const QSt
     return paths;
 }
 
+QString getExistingDirectory(QWidget* parent, const QString& category, const QString& caption,
+    const QString& currentDirectory)
+{
+    QString initial = currentDirectory.trimmed();
+    if (initial.isEmpty() || !QDir(initial).exists()) {
+        initial = lastDirectory(category);
+    }
+
+    const QString path = QFileDialog::getExistingDirectory(parent, caption, initial,
+        QFileDialog::ShowDirsOnly | QFileDialog::DontResolveSymlinks);
+    if (path.isEmpty()) {
+        return {};
+    }
+
+    // rememberFromPath() would store the PARENT of what was chosen, which is
+    // right for a file and wrong for a folder.
+    QSettings settings(QCoreApplication::organizationName(), QCoreApplication::applicationName());
+    settings.setValue(settingsKey(category), path);
+    return path;
+}
+
 } // namespace ruwa::shared::filedialog

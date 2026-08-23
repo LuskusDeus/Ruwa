@@ -120,6 +120,7 @@
 #include <functional>
 #include <limits>
 #include <mutex>
+#include <new>
 #include <unordered_map>
 #include <unordered_set>
 #include <vector>
@@ -8877,47 +8878,90 @@ QImage OpenGLCanvasWidget::grabCanvasImage()
         QRect(0, 0, static_cast<int>(m_canvas.width()), static_cast<int>(m_canvas.height())));
 }
 
-QImage OpenGLCanvasWidget::grabCanvasImage(const QRect& worldRect)
+ruwa::shared::imaging::PixelSurface OpenGLCanvasWidget::captureCanvasSurface(
+    const QRect& worldRect, const CanvasCaptureOptions& options)
 {
+    using ruwa::shared::imaging::PixelAlpha;
+    using ruwa::shared::imaging::PixelStorage;
+    using ruwa::shared::imaging::PixelSurface;
+
     if (!m_initialized || !m_renderer) {
-        return QImage();
+        return {};
     }
 
-    const QRect normalizedRect = worldRect.normalized();
-    if (!normalizedRect.isValid() || normalizedRect.isEmpty()) {
-        return QImage();
+    const QRect region = worldRect.normalized();
+    if (!region.isValid() || region.isEmpty()) {
+        return {};
     }
 
-    const uint32_t cw = static_cast<uint32_t>(normalizedRect.width());
-    const uint32_t ch = static_cast<uint32_t>(normalizedRect.height());
-    if (cw == 0 || ch == 0) {
-        return QImage();
+    const int totalW = region.width();
+    const int totalH = region.height();
+
+    // The GPU writes PREMULTIPLIED color: the tile shader emits straight color
+    // and the tile blend (GL_SRC_ALPHA for color, GL_ONE for alpha) folds it to
+    // C*a while keeping alpha intact. Label the surface honestly and let the
+    // pipeline divide it back out once, at the very end.
+    const PixelStorage storage
+        = options.highPrecision ? PixelStorage::Float32 : PixelStorage::UInt8;
+    PixelSurface surface
+        = PixelSurface::create(totalW, totalH, storage, PixelAlpha::Premultiplied);
+    if (surface.isNull()) {
+        return {};
     }
 
     synchronizeCompositionForReadback();
 
-    // Create offscreen FBO for export
-    GLuint exportFbo = 0;
+    const GLenum internalFormat = options.highPrecision ? GL_RGBA32F : GL_RGBA8;
+    const GLenum readType = options.highPrecision ? GL_FLOAT : GL_UNSIGNED_BYTE;
+    const qsizetype bytesPerPixel = ruwa::shared::imaging::storageBytesPerPixel(storage);
+
+    // The region is rendered in CHUNKS through one small framebuffer. A single
+    // full-frame attachment would be the shorter code and an unusable exporter:
+    // an export frame dragged across an infinite canvas can ask for tens of
+    // gigabytes of texture, and 32-bit float would quadruple that. Chunking
+    // makes the GPU cost independent of the export size; only the destination
+    // CPU surface still scales with it.
+    constexpr qsizetype kChunkBudgetBytes = 32LL * 1024LL * 1024LL;
+    const int maxChunkSide = std::max(
+        256, static_cast<int>(std::sqrt(static_cast<double>(kChunkBudgetBytes) / bytesPerPixel)));
+    const int chunkW = std::min(totalW, maxChunkSide);
+    const int chunkH = std::min(totalH, maxChunkSide);
+
+    std::vector<uint8_t> staging;
+    try {
+        staging.resize(static_cast<size_t>(chunkW) * static_cast<size_t>(chunkH)
+            * static_cast<size_t>(bytesPerPixel));
+    } catch (const std::bad_alloc&) {
+        return {};
+    }
+
     GLuint exportTex = 0;
     glGenTextures(1, &exportTex);
     glBindTexture(GL_TEXTURE_2D, exportTex);
-    glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA8, static_cast<GLsizei>(cw), static_cast<GLsizei>(ch), 0,
-        GL_RGBA, GL_UNSIGNED_BYTE, nullptr);
+    glTexImage2D(GL_TEXTURE_2D, 0, static_cast<GLint>(internalFormat), chunkW, chunkH, 0, GL_RGBA,
+        readType, nullptr);
     glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
     glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
     glBindTexture(GL_TEXTURE_2D, 0);
 
+    GLint prevFbo = 0;
+    GLint prevViewport[4] = { 0, 0, 0, 0 };
+    glGetIntegerv(GL_FRAMEBUFFER_BINDING, &prevFbo);
+    glGetIntegerv(GL_VIEWPORT, prevViewport);
+
+    GLuint exportFbo = 0;
     glGenFramebuffers(1, &exportFbo);
     glBindFramebuffer(GL_FRAMEBUFFER, exportFbo);
     glFramebufferTexture2D(GL_FRAMEBUFFER, GL_COLOR_ATTACHMENT0, GL_TEXTURE_2D, exportTex, 0);
     if (glCheckFramebufferStatus(GL_FRAMEBUFFER) != GL_FRAMEBUFFER_COMPLETE) {
-        glBindFramebuffer(GL_FRAMEBUFFER, 0);
+        glBindFramebuffer(GL_FRAMEBUFFER, static_cast<GLuint>(prevFbo));
+        glViewport(prevViewport[0], prevViewport[1], prevViewport[2], prevViewport[3]);
         glDeleteFramebuffers(1, &exportFbo);
         glDeleteTextures(1, &exportTex);
-        return QImage();
+        return {};
     }
 
-    // Save viewport and camera state
+    // Save viewport and camera state.
     const uint32_t prevW = m_viewport.width();
     const uint32_t prevH = m_viewport.height();
     const Vector2 prevPos = m_viewport.camera().position();
@@ -8928,53 +8972,69 @@ QImage OpenGLCanvasWidget::grabCanvasImage(const QRect& worldRect)
     const bool prevFlipH = m_canvasContentFlipHorizontal;
     const bool prevFlipV = m_canvasContentFlipVertical;
 
-    // Set viewport for 1:1 canvas render. The interactive zoom limits are sized
-    // to the on-screen viewport: a SMALL document shown in a large window has a
-    // minimum zoom well above 1.0 (you cannot shrink a tiny canvas to nothing),
-    // so a bare setZoom(1.0) would be clamped UP and the readback would come out
-    // zoomed-in and cropped at the correct resolution. Relax the limits to admit
-    // 1:1 for the duration of the grab, then restore them.
-    m_viewport.resize(cw, ch);
-    m_viewport.camera().setZoomLimits(0.001f, std::max(prevMaxZoom, 1.0f));
-    m_viewport.camera().setPosition(
-        static_cast<float>(normalizedRect.x()) + static_cast<float>(normalizedRect.width()) * 0.5f,
-        static_cast<float>(normalizedRect.y())
-            + static_cast<float>(normalizedRect.height()) * 0.5f);
-    m_viewport.camera().setZoom(1.0f);
-    m_viewport.camera().setRotation(0.0f);
     m_canvasContentFlipHorizontal = false;
     m_canvasContentFlipVertical = false;
-
-    glViewport(0, 0, static_cast<GLsizei>(cw), static_cast<GLsizei>(ch));
-
-    // Render canvas to FBO. Strictly 1:1, so no minification and no pyramid.
-    m_renderer->beginFrame(cw, ch);
-
-    // Clear to transparent so hidden/transparent background exports correctly
-    glClearColor(0.0f, 0.0f, 0.0f, 0.0f);
-    glClear(GL_COLOR_BUFFER_BIT);
-
-    // Canvas background: only when visible and not fully transparent
-    Color canvasBg;
-    if (m_layerCompositingBuilder->resolveCanvasBackgroundColor(canvasBg)) {
-        glEnable(GL_BLEND);
-        glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
-        m_renderer->drawBackground(canvasBg);
-        m_renderer->drawCanvas(m_canvas, m_viewport, canvasBg, canvasBg, 1.0f);
-        glDisable(GL_BLEND);
-    }
-    // When false: background hidden or transparent â€” leave transparent, composition tiles only
 
     const bool clipTilesToDocumentBounds = hasFiniteDocumentBounds();
     const uint32_t tileClipWidth = clipTilesToDocumentBounds ? m_canvas.width() : 0u;
     const uint32_t tileClipHeight = clipTilesToDocumentBounds ? m_canvas.height() : 0u;
-    m_renderer->drawTiles(m_canvas.compositionGrid(), m_viewport, tileClipWidth, tileClipHeight);
-    m_renderer->endFrame();
 
-    // Read pixels (glReadPixels origin is bottom-left; QImage row 0 is top)
-    std::vector<uint8_t> pixels(static_cast<size_t>(cw) * ch * 4);
-    glReadPixels(0, 0, static_cast<GLsizei>(cw), static_cast<GLsizei>(ch), GL_RGBA,
-        GL_UNSIGNED_BYTE, pixels.data());
+    for (int chunkY = 0; chunkY < totalH; chunkY += chunkH) {
+        for (int chunkX = 0; chunkX < totalW; chunkX += chunkW) {
+            const int cw = std::min(chunkW, totalW - chunkX);
+            const int ch = std::min(chunkH, totalH - chunkY);
+
+            // Each chunk is an independent 1:1 render of its own sub-rect,
+            // using the same camera math the whole-frame path used. At zoom 1
+            // with an integer camera offset a chunk boundary lands on exactly
+            // the world coordinate a single large render would have put there.
+            m_viewport.resize(static_cast<uint32_t>(cw), static_cast<uint32_t>(ch));
+            // The interactive zoom limits are sized to the on-screen viewport: a
+            // SMALL document in a large window has a minimum zoom well above
+            // 1.0, so a bare setZoom(1.0) would be clamped UP and the readback
+            // would come out zoomed in and cropped. Relax the limits for the
+            // grab, and restore them afterwards.
+            m_viewport.camera().setZoomLimits(0.001f, std::max(prevMaxZoom, 1.0f));
+            m_viewport.camera().setPosition(
+                static_cast<float>(region.x() + chunkX) + static_cast<float>(cw) * 0.5f,
+                static_cast<float>(region.y() + chunkY) + static_cast<float>(ch) * 0.5f);
+            m_viewport.camera().setZoom(1.0f);
+            m_viewport.camera().setRotation(0.0f);
+
+            m_renderer->beginFrame(static_cast<uint32_t>(cw), static_cast<uint32_t>(ch));
+
+            // Clear to transparent so a hidden or transparent background
+            // exports as transparent rather than as the frame clear color.
+            glClearColor(0.0f, 0.0f, 0.0f, 0.0f);
+            glClear(GL_COLOR_BUFFER_BIT);
+
+            Color canvasBg;
+            if (options.includeCanvasBackground && m_layerCompositingBuilder
+                && m_layerCompositingBuilder->resolveCanvasBackgroundColor(canvasBg)) {
+                glEnable(GL_BLEND);
+                glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
+                m_renderer->drawBackground(canvasBg);
+                m_renderer->drawCanvas(m_canvas, m_viewport, canvasBg, canvasBg, 1.0f);
+                glDisable(GL_BLEND);
+            }
+
+            // Strictly 1:1, so no minification and no display pyramid.
+            m_renderer->drawTiles(
+                m_canvas.compositionGrid(), m_viewport, tileClipWidth, tileClipHeight);
+            m_renderer->endFrame();
+
+            glReadPixels(0, 0, cw, ch, GL_RGBA, readType, staging.data());
+
+            // glReadPixels origin is bottom-left; surface row 0 is the top.
+            const qsizetype chunkRowBytes = static_cast<qsizetype>(cw) * bytesPerPixel;
+            for (int row = 0; row < ch; ++row) {
+                const int sourceRow = ch - 1 - row;
+                std::memcpy(surface.scanLine(chunkY + row) + chunkX * bytesPerPixel,
+                    staging.data() + static_cast<size_t>(sourceRow) * chunkRowBytes,
+                    static_cast<size_t>(chunkRowBytes));
+            }
+        }
+    }
 
     // Restore viewport and camera (limits first, so prevZoom is not re-clamped).
     m_viewport.resize(prevW, prevH);
@@ -8985,25 +9045,34 @@ QImage OpenGLCanvasWidget::grabCanvasImage(const QRect& worldRect)
     m_canvasContentFlipHorizontal = prevFlipH;
     m_canvasContentFlipVertical = prevFlipV;
 
-    glBindFramebuffer(GL_FRAMEBUFFER, 0);
+    glBindFramebuffer(GL_FRAMEBUFFER, static_cast<GLuint>(prevFbo));
+    glViewport(prevViewport[0], prevViewport[1], prevViewport[2], prevViewport[3]);
     glDeleteFramebuffers(1, &exportFbo);
     glDeleteTextures(1, &exportTex);
 
-    // Build QImage (flip Y: glReadPixels row 0 = bottom, QImage row 0 = top).
-    // The export FBO accumulates PREMULTIPLIED alpha: the tile shader emits
-    // straight color, but the tile blend (GL_SRC_ALPHA / GL_ONE for alpha) folds
-    // color back to C*a while keeping alpha = a. Label the buffer accordingly and
-    // let Qt un-premultiply, otherwise semi-transparent pixels export too dark.
-    QImage image(static_cast<int>(cw), static_cast<int>(ch), QImage::Format_RGBA8888_Premultiplied);
-    const int bytesPerLine = static_cast<int>(cw) * 4;
-    for (int y = static_cast<int>(ch) - 1; y >= 0; --y) {
-        const int srcRow = static_cast<int>(ch) - 1 - y;
-        std::memcpy(image.scanLine(y), pixels.data() + srcRow * bytesPerLine,
-            static_cast<size_t>(bytesPerLine));
+    return surface;
+}
+
+QImage OpenGLCanvasWidget::grabCanvasImage(const QRect& worldRect)
+{
+    ruwa::shared::imaging::PixelSurface surface = captureCanvasSurface(worldRect, {});
+    if (surface.isNull()) {
+        return QImage();
     }
 
-    // Convert to straight alpha for export (PNG/JPEG/WebP store non-premultiplied).
-    return image.convertToFormat(QImage::Format_RGBA8888);
+    // Every caller of this overload (thumbnails, clipboard, fast export) wants
+    // a plain straight-alpha 8-bit image.
+    surface.convertAlphaMode(ruwa::shared::imaging::PixelAlpha::Straight);
+
+    QImage image(surface.width(), surface.height(), QImage::Format_RGBA8888);
+    if (image.isNull()) {
+        return QImage();
+    }
+    for (int y = 0; y < surface.height(); ++y) {
+        std::memcpy(
+            image.scanLine(y), surface.scanLine(y), static_cast<size_t>(surface.bytesPerLine()));
+    }
+    return image;
 }
 
 void OpenGLCanvasWidget::updateBrushCursorStamp()

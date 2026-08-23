@@ -28,7 +28,8 @@ PropertyRowLayout::PropertyRowLayout(QWidget* host)
     m_grid->setColumnStretch(1, 1);
 }
 
-QLabel* PropertyRowLayout::addRow(const QString& caption, QWidget* field)
+QLabel* PropertyRowLayout::addRow(
+    const QString& caption, QWidget* field, Qt::Alignment fieldAlignment)
 {
     auto* label = new QLabel(caption, m_host);
     // The caption column is sized by the group, not by the label, so the label
@@ -36,7 +37,7 @@ QLabel* PropertyRowLayout::addRow(const QString& caption, QWidget* field)
     label->setSizePolicy(QSizePolicy::Fixed, QSizePolicy::Preferred);
     label->setAlignment(Qt::AlignLeft | Qt::AlignVCenter);
     m_grid->addWidget(label, m_row, 0);
-    m_grid->addWidget(field, m_row, 1);
+    m_grid->addWidget(field, m_row, 1, fieldAlignment);
     ++m_row;
     m_labels.append(label);
     return label;

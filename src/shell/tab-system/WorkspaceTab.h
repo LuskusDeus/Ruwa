@@ -374,6 +374,9 @@ public:
     /// Fast export the canvas straight to a PNG file (single save dialog).
     /// Returns true if a file was written.
     bool fastExportPng();
+    /// File name (no extension) both export paths seed their name field from:
+    /// the saved project file name, falling back to the tab title.
+    QString exportBaseName() const;
 
 protected:
     void onInitialize() override;

@@ -9,6 +9,10 @@
 #include "features/canvas/rendering/OpenGLCanvasWidget.h"
 #include "features/export/ExportAreaController.h"
 #include "features/export/ExportModeController.h"
+#include "features/export/ExportService.h"
+#include "features/export/ExportSettingsPanel.h"
+#include "features/export/ExportSettings.h"
+#include "features/layers/model/LayerModel.h"
 #include "features/selection/SelectionActionPopup.h"
 #include "platform/Platform.h"
 #include "shared/utils/FileDialogMemory.h"
@@ -26,9 +30,13 @@
 #include <QString>
 #include <QWidget>
 
+#include <QDir>
+#include <QFileInfo>
+
 #include <algorithm>
 #include <cmath>
 #include <memory>
+#include <utility>
 
 namespace ruwa::ui::workspace {
 
@@ -111,6 +119,42 @@ void CanvasPanel::setExportFrame(const QRect& frame)
     applyZoomLimits();
     publishEffectiveExportFrameIfChanged();
     requestRender();
+}
+
+QRect CanvasPanel::defaultExportFrame() const
+{
+    if (hasFiniteDocumentBounds()) {
+        return documentBoundsRect();
+    }
+    return computedAutoExportFrame();
+}
+
+void CanvasPanel::resetExportFrameToDefault()
+{
+    if (!hasFiniteDocumentBounds()) {
+        // Hands the frame back to the content-bounds tracker, which the first
+        // user drag had switched off.
+        m_infiniteExportFrameUserDefined = false;
+        syncInfiniteExportFrameToContent(true);
+        applyZoomLimits();
+        publishEffectiveExportFrameIfChanged();
+        requestRender();
+        return;
+    }
+    setExportFrame(documentBoundsRect());
+}
+
+void CanvasPanel::resizeExportFrame(const QSize& size)
+{
+    if (size.width() <= 0 || size.height() <= 0) {
+        return;
+    }
+
+    // Anchored at the top-left corner: growing the frame from a numeric field
+    // should extend it down and to the right, the way a crop box behaves, not
+    // creep the origin around behind the user.
+    const QRect current = effectiveDisplayFrame();
+    setExportFrame(QRect(current.topLeft(), size));
 }
 
 QRect CanvasPanel::computedAutoExportFrame() const
@@ -333,6 +377,141 @@ QImage CanvasPanel::renderNavigatorOverviewTile(
         return QImage();
     }
     return m_glWidget->renderCompositedRegion(worldRect, targetSize);
+}
+
+namespace {
+
+/// Format a byte count the way a file manager would.
+QString formatByteSize(qint64 bytes)
+{
+    if (bytes < 1000) {
+        return QStringLiteral("%1 B").arg(bytes);
+    }
+    if (bytes < 1000 * 1000) {
+        return QStringLiteral("%1 KB").arg(QString::number(bytes / 1000.0, 'f', 1));
+    }
+    if (bytes < 1000LL * 1000LL * 1000LL) {
+        return QStringLiteral("%1 MB").arg(QString::number(bytes / 1000000.0, 'f', 1));
+    }
+    return QStringLiteral("%1 GB").arg(QString::number(bytes / 1000000000.0, 'f', 1));
+}
+
+} // anonymous namespace
+
+ruwa::core::exporting::ExportService* CanvasPanel::exportService()
+{
+    if (!m_exportService) {
+        m_exportService = new ruwa::core::exporting::ExportService(this);
+
+        connect(m_exportService, &ruwa::core::exporting::ExportService::started, this, [this]() {
+            if (m_exportPanel) {
+                m_exportPanel->setExportInProgress(true);
+            }
+        });
+
+        connect(m_exportService, &ruwa::core::exporting::ExportService::finished, this,
+            [this](const ruwa::core::exporting::ExportResult& result) {
+                if (m_exportPanel) {
+                    m_exportPanel->setExportInProgress(false);
+                }
+                if (result.cancelled) {
+                    return;
+                }
+
+                if (!result.ok) {
+                    ruwa::ui::widgets::MessagePopupManager::show(this,
+                        tr("Export failed: %1").arg(result.errorText),
+                        { { tr("OK"), false, []() {} } }, 380);
+                    return;
+                }
+
+                QString message = tr("Exported %1 (%2)")
+                                      .arg(QFileInfo(result.path).fileName(),
+                                          formatByteSize(result.fileSizeBytes));
+                if (!result.warnings.isEmpty()) {
+                    message += QStringLiteral("\n") + result.warnings.join(QStringLiteral("\n"));
+                }
+                ruwa::ui::widgets::MessagePopupManager::show(
+                    this, message, { { tr("OK"), false, []() {} } }, 380);
+            });
+    }
+    return m_exportService;
+}
+
+bool CanvasPanel::startExport(ruwa::core::exporting::ExportSettings& settings)
+{
+    namespace exporting = ruwa::core::exporting;
+
+    const auto reject = [this](const QString& message) {
+        ruwa::ui::widgets::MessagePopupManager::show(
+            this, message, { { tr("OK"), false, []() {} } }, 380);
+        return false;
+    };
+
+    if (!m_glWidget || !m_glWidget->isInitialized()) {
+        return reject(tr("The canvas is not ready to export yet."));
+    }
+
+    const QRect frame = effectiveDisplayFrame();
+    if (!frame.isValid() || frame.isEmpty()) {
+        return reject(tr("The export area is empty."));
+    }
+    if (settings.outputSize.isEmpty()) {
+        settings.outputSize = frame.size();
+    }
+
+    // The destination is a field in the panel now, not a save dialog, so the
+    // overwrite question is ours to ask — nothing else asks it any more. Asked
+    // before the capture, because capturing a large frame is expensive and
+    // discarding it on "no" would be work nobody requested.
+    const QString targetPath = settings.absolutePath();
+    if (!targetPath.isEmpty() && QFileInfo::exists(targetPath)) {
+        const bool overwrite = ruwa::ui::widgets::MessagePopupManager::showBlocking(this,
+            tr("\"%1\" already exists. Replace it?")
+                .arg(QFileInfo(targetPath).fileName()),
+            tr("Replace"), tr("Cancel"), 380);
+        if (!overwrite) {
+            return false;
+        }
+    }
+
+    // Capture in float only when something downstream can actually carry the
+    // extra bits: a 16-bit file, or a document whose tiles are deeper than 8
+    // bits (where an 8-bit readback would quantize before any resampling).
+    // An 8-bit document written to an 8-bit file has nothing more to give, and
+    // float would cost four times the memory for an identical result.
+    const bool deepDocument = m_layerModel
+        && m_layerModel->documentTileFormat() != aether::TilePixelFormat::RGBA8;
+    const bool wants16Bit = settings.bitDepth == exporting::ExportBitDepth::Bit16
+        && exporting::formatCapabilities(settings.format).supports16Bit;
+
+    aether::OpenGLCanvasWidget::CanvasCaptureOptions capture;
+    capture.includeCanvasBackground = settings.includeCanvasBackground;
+    capture.highPrecision = wants16Bit || deepDocument;
+
+    ruwa::shared::imaging::PixelSurface surface
+        = m_glWidget->captureCanvasSurface(frame, capture);
+    if (surface.isNull()) {
+        return reject(tr("Not enough memory to capture a %1 x %2 px image.")
+                          .arg(frame.width())
+                          .arg(frame.height()));
+    }
+
+    QString error;
+    if (!exportService()->start(std::move(surface), settings, &error)) {
+        if (m_exportPanel) {
+            m_exportPanel->setExportInProgress(false);
+        }
+        return reject(error);
+    }
+    return true;
+}
+
+void CanvasPanel::setExportBaseName(const QString& baseName)
+{
+    if (m_exportPanel) {
+        m_exportPanel->setSuggestedBaseName(baseName);
+    }
 }
 
 void CanvasPanel::toggleExportMode()

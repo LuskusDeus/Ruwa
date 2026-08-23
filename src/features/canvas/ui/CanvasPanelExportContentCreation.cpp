@@ -10,11 +10,10 @@
 #include "features/export/ExportModeController.h"
 #include "features/export/ExportSettingsPanel.h"
 #include "features/canvas/rendering/OpenGLCanvasWidget.h"
-#include "shared/utils/FileDialogMemory.h"
+#include "features/export/ExportSettings.h"
 
-#include <QImage>
-#include <QImageWriter>
 #include <QRect>
+#include <QSize>
 #include <QString>
 #include <QWidget>
 
@@ -35,8 +34,22 @@ void CanvasPanel::createExportModeContent()
     m_exportAreaController->setCallbacks(
         { [this](const QRect& frame) { setExportFrame(frame); }, [this]() { requestRender(); } });
 
-    // Keep panel export-size label in sync
+    // Keep the panel's frame fields in sync with the canvas handles.
     m_exportPanel->setExportFrame(effectiveDisplayFrame());
+    m_exportPanel->setDefaultExportFrame(defaultExportFrame());
+
+    // The width/height fields stop at the canvas edge. An infinite canvas has
+    // no edge, so it gets no limit rather than an arbitrary one.
+    const auto pushFrameSizeLimit = [this]() {
+        m_exportPanel->setFrameSizeLimit(hasFiniteDocumentBounds() ? m_canvasSize : QSize());
+    };
+    pushFrameSizeLimit();
+    connect(this, &CanvasPanel::canvasSizeChanged, m_exportPanel,
+        [this, pushFrameSizeLimit](const QSize&) { pushFrameSizeLimit(); });
+    connect(this, &CanvasPanel::canvasBoundsModeChanged, m_exportPanel,
+        [this, pushFrameSizeLimit](ruwa::core::canvas::CanvasBoundsMode) {
+            pushFrameSizeLimit();
+        });
     connect(this, &CanvasPanel::exportFrameChanged, m_exportPanel,
         &ExportSettingsPanel::setExportFrame);
     connect(this, &CanvasPanel::exportFrameChanged, this, [this](const QRect& frame) {
@@ -53,6 +66,13 @@ void CanvasPanel::createExportModeContent()
                 if (isInfiniteCanvas()) {
                     m_exportAreaController->setExportFrame(effectiveDisplayFrame());
                 }
+                if (m_exportPanel) {
+                    // The content bounds of an infinite canvas move as the user
+                    // paints, so what Reset restores is only knowable now.
+                    m_exportPanel->setDefaultExportFrame(defaultExportFrame());
+                    m_exportPanel->setFrameSizeLimit(
+                        hasFiniteDocumentBounds() ? m_canvasSize : QSize());
+                }
                 m_exportAreaController->enter();
                 updateExportAreaCursor();
             } else {
@@ -67,48 +87,27 @@ void CanvasPanel::createExportModeContent()
             }
         });
 
+    connect(m_exportPanel, &ExportSettingsPanel::colorPickerRequested, this,
+        &CanvasPanel::colorPickerRequested);
+
     // Exit button → leave export mode
     connect(m_exportPanel, &ExportSettingsPanel::exitRequested, m_exportController,
         &ExportModeController::exit);
 
-    // Export button → save file
+    // Width / height fields -> resize the frame, then let the change come back
+    // through exportFrameChanged. The panel never writes the frame itself, so
+    // the fields and the on-canvas handles cannot drift apart.
+    connect(m_exportPanel, &ExportSettingsPanel::exportFrameResizeRequested, this,
+        &CanvasPanel::resizeExportFrame);
+    connect(m_exportPanel, &ExportSettingsPanel::exportFrameResetRequested, this,
+        &CanvasPanel::resetExportFrameToDefault);
+
+    // Export button -> the panel hands over a finished settings object and the
+    // service does the rest. No dialog: the destination is a field in the panel.
     connect(m_exportPanel, &ExportSettingsPanel::exportRequested, this,
-        [this](const QString& format, int jpegQuality) {
-            const QImage image = exportCanvasImage();
-            if (image.isNull())
-                return;
-
-            QString filter;
-            QString defaultSuffix;
-            if (format == "JPEG") {
-                filter = tr("JPEG Image (*.jpg *.jpeg)");
-                defaultSuffix = "jpg";
-            } else if (format == "WEBP") {
-                filter = tr("WebP Image (*.webp)");
-                defaultSuffix = "webp";
-            } else {
-                filter = tr("PNG Image (*.png)");
-                defaultSuffix = "png";
-            }
-
-            QString path = ruwa::shared::filedialog::getSaveFileName(this,
-                ruwa::shared::filedialog::category::kCanvasExport, tr("Export Canvas"), QString(),
-                filter);
-            if (path.isEmpty())
-                return;
-
-            // Ensure correct extension
-            const QString lc = path.toLower();
-            if (!lc.endsWith("." + defaultSuffix)
-                && !(defaultSuffix == "jpg" && lc.endsWith(".jpeg"))) {
-                path += "." + defaultSuffix;
-            }
-
-            QImageWriter writer(path);
-            if (format == "JPEG") {
-                writer.setQuality(jpegQuality);
-            }
-            writer.write(image);
+        [this](const ruwa::core::exporting::ExportSettings& settings) {
+            ruwa::core::exporting::ExportSettings request = settings;
+            startExport(request);
         });
 }
 

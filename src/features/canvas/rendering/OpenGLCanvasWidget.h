@@ -30,6 +30,7 @@
 #include "features/fill/FloodFill.h"
 #include "features/fill/GLFillRenderer.h"
 #include "shared/rendering/CanvasBackdropSource.h"
+#include "shared/imaging/PixelSurface.h"
 
 #include <QOpenGLWidget>
 #include <QOpenGLFunctions_4_5_Core>
@@ -460,6 +461,30 @@ public:
     /// Sample color from the rendered scene texture at world position (what the user sees).
     /// Returns true if sampling succeeded and out is filled; false if scene FBO unavailable.
     bool sampleColorFromScene(float worldX, float worldY, QColor& out);
+
+    /// Options for a 1:1 offscreen capture of a document region.
+    struct CanvasCaptureOptions {
+        /// Draw the document background layer. When false the area behind the
+        /// content stays fully transparent regardless of the layer's own state.
+        bool includeCanvasBackground = true;
+        /// Render and read back in 32-bit float instead of 8-bit unsigned.
+        /// Costs 4x the memory and is only worth asking for when the result is
+        /// headed somewhere that can carry the extra precision — a 16-bit file,
+        /// or a resampling pass ahead of one.
+        bool highPrecision = false;
+    };
+
+    /// Capture a document region at 1:1 into a CPU surface.
+    ///
+    /// The region is rendered in CHUNKS through one small reusable framebuffer,
+    /// so GPU memory stays bounded no matter how large the requested region is;
+    /// only the destination CPU surface scales with it. Returns a null surface
+    /// when GL is not ready or the surface cannot be allocated.
+    /// No default argument on purpose: the nested struct's member initializers
+    /// are not usable inside the enclosing class body, so `= {}` here fails to
+    /// compile. Callers pass a value-initialized options object explicitly.
+    ruwa::shared::imaging::PixelSurface captureCanvasSurface(
+        const QRect& worldRect, const CanvasCaptureOptions& options);
 
     /// Render the full canvas to an image (for export). Returns null QImage if GL not ready.
     QImage grabCanvasImage();

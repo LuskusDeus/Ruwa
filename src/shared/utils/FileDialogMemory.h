@@ -55,6 +55,13 @@ QString getOpenFileName(QWidget* parent, const QString& category, const QString&
 QStringList getOpenFileNames(QWidget* parent, const QString& category, const QString& caption,
     const QString& filter, QString* selectedFilter = nullptr);
 
+// Folder picker. `currentDirectory` wins over the remembered one when it still
+// exists on disk — a field that already shows a folder should reopen there
+// rather than wherever the category was last used. Unlike the file wrappers,
+// the chosen path IS the directory, so it is remembered as-is.
+QString getExistingDirectory(QWidget* parent, const QString& category, const QString& caption,
+    const QString& currentDirectory = QString());
+
 } // namespace ruwa::shared::filedialog
 
 #endif // RUWA_SHARED_FILE_DIALOG_MEMORY_H

@@ -2912,6 +2912,10 @@ void WorkspaceTab::connectPanelSignals()
         [this](const QColor& color, QWidget* sourceButton) {
             emit colorPickerRequested(color, sourceButton);
         });
+    connect(m_canvasPanel, &workspace::CanvasPanel::colorPickerRequested, this,
+        [this](const QColor& color, QWidget* sourceButton) {
+            emit colorPickerRequested(color, sourceButton);
+        });
     connect(m_layerEffectsPanel, &workspace::LayerEffectsPanel::positionPickerRequested, this,
         [this](QWidget* sourceField, const QPointF& currentPosition) {
             auto* field = qobject_cast<ruwa::ui::widgets::PositionInputField*>(sourceField);
@@ -4915,9 +4919,27 @@ void WorkspaceTab::refreshToolbarState()
 
 void WorkspaceTab::toggleExportMode()
 {
-    if (m_canvasPanel) {
-        m_canvasPanel->toggleExportMode();
+    if (!m_canvasPanel) {
+        return;
     }
+
+    // Seeded on the way in rather than once at construction: the document can
+    // be saved under a new name between two visits to export mode.
+    m_canvasPanel->setExportBaseName(exportBaseName());
+    m_canvasPanel->toggleExportMode();
+}
+
+QString WorkspaceTab::exportBaseName() const
+{
+    // The project file name (if saved), else the tab title.
+    QString baseName;
+    if (hasFilePath()) {
+        baseName = QFileInfo(m_filePath).completeBaseName();
+    }
+    if (baseName.isEmpty()) {
+        baseName = baseTitle();
+    }
+    return baseName;
 }
 
 bool WorkspaceTab::isExportMode() const
@@ -4931,16 +4953,7 @@ bool WorkspaceTab::fastExportPng()
         return false;
     }
 
-    // Seed the file name from the project file (if saved) or the tab title.
-    QString baseName;
-    if (hasFilePath()) {
-        baseName = QFileInfo(m_filePath).completeBaseName();
-    }
-    if (baseName.isEmpty()) {
-        baseName = baseTitle();
-    }
-
-    return m_canvasPanel->fastExportPng(baseName);
+    return m_canvasPanel->fastExportPng(exportBaseName());
 }
 
 } // namespace ruwa::ui::tabs

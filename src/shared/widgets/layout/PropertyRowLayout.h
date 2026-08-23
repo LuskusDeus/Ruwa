@@ -6,6 +6,7 @@
 
 #include <QList>
 #include <QString>
+#include <Qt>
 
 class QGridLayout;
 class QLabel;
@@ -33,7 +34,15 @@ public:
     explicit PropertyRowLayout(QWidget* host);
 
     /// Caption + editor. Returns the caption label, for callers that restyle it.
-    QLabel* addRow(const QString& caption, QWidget* field);
+    ///
+    /// @param fieldAlignment how the editor sits in its cell. The default (a
+    /// null alignment) lets the editor fill the cell, which is what a field
+    /// that stretches wants. A fixed-size control — a toggle, a segmented
+    /// selector — would otherwise be CENTRED in the slack by QGridLayout, so
+    /// those rows pass Qt::AlignRight | Qt::AlignVCenter to sit against the
+    /// panel's right edge instead of floating in the middle of the row.
+    QLabel* addRow(const QString& caption, QWidget* field,
+        Qt::Alignment fieldAlignment = Qt::Alignment());
     /// A control that spans both columns (a dropdown, a swatch, a button row).
     void addFullWidthRow(QWidget* widget);
 

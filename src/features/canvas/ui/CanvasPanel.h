@@ -78,6 +78,12 @@ class DotGridLoadingIndicator;
 class CanvasPositionPickerOverlay;
 } // namespace ruwa::ui::widgets
 
+namespace ruwa::core::exporting {
+struct ExportSettings;
+struct ExportResult;
+class ExportService;
+} // namespace ruwa::core::exporting
+
 namespace ruwa::ui::workspace {
 
 class CanvasCursorManager;
@@ -140,6 +146,17 @@ public:
     QRect navigatorDisplayFrame() const;
     QRect exportPreviewCameraFrame() const;
     void setExportFrame(const QRect& frame);
+
+    /// Resize the export frame from a numeric edit, keeping its top-left corner
+    /// where it is. The result is clamped like any other frame change, so the
+    /// size that lands may be smaller than the one asked for.
+    void resizeExportFrame(const QSize& size);
+
+    /// The frame the export panel's Reset button restores: the document bounds
+    /// on a bounded canvas, the current content bounds on an infinite one.
+    QRect defaultExportFrame() const;
+    void resetExportFrameToDefault();
+
     void setCanvasBoundsMode(ruwa::core::canvas::CanvasBoundsMode mode);
     ruwa::core::canvas::CanvasBoundsMode canvasBoundsMode() const { return m_canvasBoundsMode; }
     bool isInfiniteCanvas() const
@@ -358,6 +375,26 @@ public:
     /// Returns true if a file was written.
     bool fastExportPng(const QString& suggestedBaseName = QString());
 
+    /// Seeds the export panel's file-name field. Ignored once the user has
+    /// typed a name of their own.
+    void setExportBaseName(const QString& baseName);
+
+    /// Capture the export frame and hand it to the export service.
+    ///
+    /// The capture is synchronous (it needs the GL context, which lives here);
+    /// everything after it — resampling, depth conversion, encoding, writing —
+    /// runs off the GUI thread and reports back through the service's signals.
+    /// Returns false when the request was rejected outright, having already
+    /// shown the reason; a true return means a job started, not that it
+    /// succeeded.
+    ///
+    /// @p settings is validated and clamped in place, so the caller can read
+    /// back what will actually be written.
+    bool startExport(ruwa::core::exporting::ExportSettings& settings);
+
+    /// Lazily created; owned by the panel so each document exports independently.
+    ruwa::core::exporting::ExportService* exportService();
+
     // Tools
     void setEraseMode(bool erase) override;
     /// Eraser-brush state of the Brush tool: erase with the brush's own tip.
@@ -504,6 +541,9 @@ signals:
     void zoomLimitsChanged(qreal minZoom, qreal maxZoom);
     void cursorPositionChanged(const QPoint& pos);
     void canvasSizeChanged(const QSize& size);
+    /// Forwarded from the export panel's matte swatch; the main window owns the
+    /// shared color picker.
+    void colorPickerRequested(const QColor& initialColor, QWidget* sourceButton);
     void exportFrameChanged(const QRect& frame);
     void canvasBoundsModeChanged(ruwa::core::canvas::CanvasBoundsMode mode);
     void canvasContentChanged();
@@ -947,6 +987,7 @@ private:
     // Export mode
     bool m_interactionEnabled = true;
     qreal m_exportModeOverlayProgress = 0.0;
+    ruwa::core::exporting::ExportService* m_exportService = nullptr;
     ExportSettingsPanel* m_exportPanel = nullptr;
     ExportModeController* m_exportController = nullptr;
     ExportAreaController* m_exportAreaController = nullptr;
