@@ -392,17 +392,21 @@ void AboutContent::setupContent()
         QStringLiteral("https://www.twitch.tv/mikko_el"), QStringLiteral("https://t.me/Hipa_aaH"),
         QString(), QStringLiteral("https://steamcommunity.com/profiles/76561199379952595/"),
         QStringLiteral("https://bsky.app/profile/kr0le.bsky.social"), QString(),
-        QStringLiteral("https://t.me/Enum_Nektovse") };
+        QStringLiteral("https://t.me/Enum_Nektovse"), QStringLiteral("https://t.me/Kea_Arts"),
+        QStringLiteral("https://t.me/peeepooo") };
 
+    // The cards follow the names in Credits::testers(); a tester without a link
+    // above simply gets a non-clickable capsule.
     constexpr int kTesterCardColumns = 3;
-    for (int i = 0; i < testerUrls.size(); ++i) {
+    const int testerCount = ui::core::Credits::testers().size();
+    for (int i = 0; i < testerCount; ++i) {
+        const QString testerUrl = i < testerUrls.size() ? testerUrls[i] : QString();
         auto* testerButton
             = new CapsuleButton(QString(), CapsuleButton::Variant::Tab, m_testersCardsContainer);
         testerButton->setSizePolicy(QSizePolicy::Expanding, QSizePolicy::Fixed);
-        testerButton->setCursor(testerUrls[i].isEmpty() ? Qt::ArrowCursor : Qt::PointingHandCursor);
+        testerButton->setCursor(testerUrl.isEmpty() ? Qt::ArrowCursor : Qt::PointingHandCursor);
         testerButton->setAutoExclusive(false);
-        if (!testerUrls[i].isEmpty()) {
-            const QString testerUrl = testerUrls[i];
+        if (!testerUrl.isEmpty()) {
             connect(testerButton, &QPushButton::clicked, this, [testerButton, testerUrl]() {
                 testerButton->setChecked(true);
                 QTimer::singleShot(
