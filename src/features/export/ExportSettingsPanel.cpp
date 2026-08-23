@@ -11,10 +11,12 @@
 #include "ExportSettingsPanel.h"
 #include "ExportSettingsPanelInternal.h"
 
+#include "features/export/ExportEncoder.h"
 #include "features/theme/manager/ThemeManager.h"
 #include "shared/resources/IconProvider.h"
 #include "shared/utils/FileDialogMemory.h"
 #include "shared/widgets/CapsuleButton.h"
+#include "shared/widgets/DotGridLoadingIndicator.h"
 #include "shared/widgets/SegmentedOptionSelector.h"
 #include "shared/widgets/inputs/AnimatedComboBox.h"
 #include "shared/widgets/inputs/ColorInputButton.h"
@@ -38,7 +40,10 @@
 #include <QRegion>
 #include <QStandardPaths>
 #include <QStringList>
+#include <QTimer>
 #include <QVBoxLayout>
+
+#include <QtConcurrent>
 
 #include <cmath>
 #include <utility>
@@ -94,6 +99,16 @@ ExportSettingsPanel::ExportSettingsPanel(QWidget* parent)
     setAttribute(Qt::WA_TranslucentBackground, true);
     setMouseTracking(true);
     setCursor(Qt::ArrowCursor);
+
+    // Trial encodes are debounced: dragging the scale slider fires this many
+    // times a second, and each measurement costs a real encode of the sample.
+    m_estimateTimer = new QTimer(this);
+    m_estimateTimer->setSingleShot(true);
+    m_estimateTimer->setInterval(300);
+    connect(m_estimateTimer, &QTimer::timeout, this, &ExportSettingsPanel::runEstimate);
+
+    connect(&m_estimateWatcher, &QFutureWatcher<EstimateResult>::finished, this,
+        &ExportSettingsPanel::onEstimateFinished);
 
     m_settings.loadPreferences();
     if (m_settings.directory.trimmed().isEmpty()) {
@@ -199,6 +214,19 @@ void ExportSettingsPanel::setExportInProgress(bool running)
     }
     m_exportButton->setEnabled(!running);
     m_exportButton->setTrailingLoadingVisible(running);
+}
+
+void ExportSettingsPanel::setExportContentSample(const QImage& sample)
+{
+    if (sample.isNull() || sample == m_contentSample) {
+        return;
+    }
+
+    m_contentSample = sample;
+    // The settings key does not know about the picture itself, so a new sample
+    // invalidates the cached measurement on its own.
+    m_completedEstimateKey.reset();
+    scheduleEstimate();
 }
 
 int ExportSettingsPanel::preferredHeight() const
@@ -450,9 +478,24 @@ void ExportSettingsPanel::updateDerivedLabels()
                       .arg(size.height()));
     }
 
-    if (m_estimatedSizeLabel) {
-        m_estimatedSizeLabel->setText(formatByteSize(estimatedExportByteSize()));
+    if (m_estimatedSizeLabel && m_estimatedSizeIndicator) {
+        if (m_hasMeasuredBytes) {
+            m_estimatedSizeLabel->setText(
+                QStringLiteral("~%1").arg(formatByteSize(m_measuredBytes)));
+            m_estimatedSizeLabel->setVisible(true);
+            setEstimateLoadingVisible(false);
+        } else {
+            // Nothing measured yet — the spinner stands in for the value
+            // instead of a content-blind guess that reads as an answer.
+            m_estimatedSizeLabel->setVisible(false);
+            setEstimateLoadingVisible(true);
+        }
     }
+
+    // Everything the estimate depends on (sample, format, quality, depth,
+    // matte, output size) funnels through here, so this is the one place that
+    // needs to ask for a re-measurement.
+    scheduleEstimate();
 }
 
 QString ExportSettingsPanel::resolvedBaseName() const
@@ -616,35 +659,6 @@ void ExportSettingsPanel::onExportClicked()
 //   D E R I V E D   V A L U E S
 // ---------------------------------------------------------------------------
 
-qint64 ExportSettingsPanel::estimatedExportByteSize() const
-{
-    const QSize size = m_settings.outputSize;
-    const qint64 pixels = qMax<qint64>(0, static_cast<qint64>(size.width()) * size.height());
-    if (pixels <= 0) {
-        return 0;
-    }
-
-    // A rough per-pixel figure, not a measurement. Real compressed size depends
-    // on the picture: a flat fill and a photograph at the same resolution can
-    // differ by an order of magnitude, and no formula over width/height/quality
-    // can know which one this is. The label is titled "EST." for that reason —
-    // an exact answer would require actually encoding the image.
-    double bytesPerPixel = 1.0;
-    switch (m_settings.format) {
-    case exporting::ExportFormat::Png:
-        bytesPerPixel = m_settings.bitDepth == exporting::ExportBitDepth::Bit16 ? 2.0 : 1.0;
-        break;
-    case exporting::ExportFormat::Jpeg:
-        bytesPerPixel = 0.16 + (qBound(1, m_settings.quality, 100) / 100.0) * 0.42;
-        break;
-    case exporting::ExportFormat::WebP:
-        bytesPerPixel = 0.10 + (qBound(1, m_settings.quality, 100) / 100.0) * 0.30;
-        break;
-    }
-
-    return qMax<qint64>(1, static_cast<qint64>(std::llround(pixels * bytesPerPixel)));
-}
-
 QString ExportSettingsPanel::formatByteSize(qint64 bytes)
 {
     if (bytes <= 0) {
@@ -660,6 +674,98 @@ QString ExportSettingsPanel::formatByteSize(qint64 bytes)
         return QStringLiteral("%1 MB").arg(QString::number(bytes / 1000000.0, 'f', 1));
     }
     return QStringLiteral("%1 GB").arg(QString::number(bytes / 1000000000.0, 'f', 1));
+}
+
+// ---------------------------------------------------------------------------
+//   S I Z E   E S T I M A T I O N
+// ---------------------------------------------------------------------------
+
+ExportSettingsPanel::EstimateKey ExportSettingsPanel::estimateKey() const
+{
+    return std::make_tuple(static_cast<int>(m_settings.format),
+        qBound(1, m_settings.quality, 100), static_cast<int>(m_settings.bitDepth),
+        m_settings.transparentBackground, m_settings.matteColor.rgba(),
+        m_settings.outputSize.width(), m_settings.outputSize.height());
+}
+
+void ExportSettingsPanel::scheduleEstimate()
+{
+    if (!m_estimateTimer) {
+        return;
+    }
+    if (m_contentSample.isNull() || m_settings.outputSize.isEmpty()) {
+        // Nothing to measure with; the fallback answer is already on screen.
+        m_estimateTimer->stop();
+        return;
+    }
+    if (m_hasMeasuredBytes && m_completedEstimateKey == estimateKey()) {
+        // Already measured against exactly these settings.
+        return;
+    }
+    m_estimateTimer->start();
+}
+
+void ExportSettingsPanel::runEstimate()
+{
+    if (m_contentSample.isNull() || m_settings.outputSize.isEmpty()) {
+        return;
+    }
+    const EstimateKey key = estimateKey();
+    if (m_hasMeasuredBytes && m_completedEstimateKey == key) {
+        return;
+    }
+
+    // Copies, not references: the job outlives any state change on `this`, and
+    // the generation count decides whether its result still matters.
+    const QImage sample = m_contentSample;
+    const exporting::ExportSettings snapshot = m_settings;
+    const QSize outputSize = m_settings.outputSize;
+    const quint64 generation = ++m_estimateGeneration;
+
+    QFuture<EstimateResult> future
+        = QtConcurrent::run([sample, snapshot, outputSize, generation, key]() {
+              const exporting::encoder::SizeEstimate estimate
+                  = exporting::encoder::estimateFileSize(sample, outputSize, snapshot);
+              return EstimateResult { generation,
+                  estimate.ok ? estimate.bytes : qint64(-1), key };
+          });
+    m_estimateWatcher.setFuture(future);
+}
+
+void ExportSettingsPanel::onEstimateFinished()
+{
+    if (m_estimateWatcher.isCanceled()) {
+        return;
+    }
+    const EstimateResult result = m_estimateWatcher.result();
+    if (result.generation != m_estimateGeneration) {
+        // A superseded run finishing late must not overwrite what a newer
+        // measurement already reported — and the spinner belongs to the
+        // newest run, so it stays up.
+        return;
+    }
+    if (result.bytes >= 0) {
+        m_measuredBytes = result.bytes;
+        m_hasMeasuredBytes = true;
+        m_completedEstimateKey = result.key;
+    }
+    // updateDerivedLabels() swaps the spinner out for the value (or back on,
+    // should the encode have failed and nothing measured exists yet).
+    updateDerivedLabels();
+}
+
+void ExportSettingsPanel::setEstimateLoadingVisible(bool visible)
+{
+    if (!m_estimatedSizeIndicator) {
+        return;
+    }
+    if (visible) {
+        m_estimatedSizeIndicator->show();
+        m_estimatedSizeIndicator->start();
+    } else {
+        m_estimatedSizeIndicator->stop();
+        m_estimatedSizeIndicator->hide();
+    }
 }
 
 // ---------------------------------------------------------------------------
@@ -694,6 +800,9 @@ void ExportSettingsPanel::onThemeChanged()
         m_estimatedSizeLabel->setFont(font);
         m_estimatedSizeLabel->setStyleSheet(
             QString("color: %1; background: transparent;").arg(colors.text.name()));
+    }
+    if (m_estimatedSizeIndicator) {
+        m_estimatedSizeIndicator->setAccentColor(colors.primary);
     }
 
     updateHeaderIcon();

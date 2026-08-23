@@ -6,9 +6,11 @@
 
 #include "features/export/ExportEncoder.h"
 
+#include <QBuffer>
 #include <QCoreApplication>
 #include <QFileInfo>
 #include <QImageWriter>
+#include <QPainter>
 #include <QSaveFile>
 
 #include <algorithm>
@@ -186,6 +188,84 @@ WriteOutcome writeImage(
     outcome.ok = true;
     outcome.fileSizeBytes = QFileInfo(absolutePath).size();
     return outcome;
+}
+
+namespace {
+
+// The sample is estimated through the same format decisions toQImage() makes
+// for the real export, so the encoder sees the same kind of input.
+QImage prepareEstimateImage(const QImage& sample, const ExportSettings& settings)
+{
+    const ExportFormatCapabilities caps = formatCapabilities(settings.format);
+    const bool keepAlpha = settings.transparentBackground && caps.supportsAlpha;
+    const bool deep = settings.bitDepth == ExportBitDepth::Bit16 && caps.supports16Bit;
+
+    if (deep) {
+        return sample.convertToFormat(
+            keepAlpha ? QImage::Format_RGBA64 : QImage::Format_RGBX64, Qt::ColorOnly);
+    }
+    if (keepAlpha) {
+        return sample.convertToFormat(QImage::Format_RGBA8888, Qt::ColorOnly);
+    }
+
+    // Straight alpha over an opaque matte — same compositing the real path
+    // performs per-row in toQImage().
+    QImage matted(sample.size(), QImage::Format_RGB888);
+    if (matted.isNull()) {
+        return {};
+    }
+    const QColor matte
+        = settings.matteColor.isValid() ? settings.matteColor : QColor(255, 255, 255);
+    QPainter painter(&matted);
+    painter.fillRect(matted.rect(), matte);
+    painter.drawImage(0, 0, sample);
+    painter.end();
+    return matted;
+}
+
+} // anonymous namespace
+
+SizeEstimate estimateFileSize(
+    const QImage& sample, const QSize& outputSize, const ExportSettings& settings)
+{
+    SizeEstimate result;
+
+    const qint64 outputPixels
+        = static_cast<qint64>(qMax(0, outputSize.width())) * qMax(0, outputSize.height());
+    if (sample.isNull() || outputPixels <= 0) {
+        return result;
+    }
+
+    const QImage prepared = prepareEstimateImage(sample, settings);
+    if (prepared.isNull() || prepared.size().isEmpty()) {
+        return result;
+    }
+
+    QByteArray encoded;
+    QBuffer buffer(&encoded);
+    buffer.open(QIODevice::WriteOnly);
+
+    const ExportFormatCapabilities caps = formatCapabilities(settings.format);
+    QImageWriter writer(&buffer, QByteArray(caps.imageWriterFormat));
+    if (caps.supportsQuality) {
+        writer.setQuality(settings.quality);
+    }
+    if (!writer.write(prepared)) {
+        return result;
+    }
+
+    // The sample carries the same picture at fewer pixels, so its measured
+    // bytes-per-pixel scales linearly. PNG is the least faithful format here —
+    // deflate exploits repeats a full-size image has and a minified one has
+    // not — but it stays within the "~" honesty of the label.
+    const qint64 samplePixels
+        = static_cast<qint64>(prepared.width()) * prepared.height();
+    result.bytes = qMax<qint64>(1,
+        static_cast<qint64>(std::llround(
+            static_cast<double>(encoded.size()) * static_cast<double>(outputPixels)
+            / static_cast<double>(samplePixels))));
+    result.ok = true;
+    return result;
 }
 
 } // namespace ruwa::core::exporting::encoder

@@ -15,6 +15,7 @@
 #include <QRect>
 #include <QSize>
 #include <QString>
+#include <QTimer>
 #include <QWidget>
 
 namespace ruwa::ui::workspace {
@@ -38,6 +39,16 @@ void CanvasPanel::createExportModeContent()
     m_exportPanel->setExportFrame(effectiveDisplayFrame());
     m_exportPanel->setDefaultExportFrame(defaultExportFrame());
 
+    // The size estimate is measured from a small render of the frame's
+    // content. Frame drags fire per pointer step, so re-sampling is debounced;
+    // the panel debounces the encode on top of this.
+    auto* sampleDebounce = new QTimer(this);
+    sampleDebounce->setSingleShot(true);
+    sampleDebounce->setInterval(200);
+    connect(sampleDebounce, &QTimer::timeout, this, &CanvasPanel::refreshExportPanelSample);
+    connect(this, &CanvasPanel::exportFrameChanged, this,
+        [this, sampleDebounce]() { sampleDebounce->start(); });
+
     // The width/height fields stop at the canvas edge. An infinite canvas has
     // no edge, so it gets no limit rather than an arbitrary one.
     const auto pushFrameSizeLimit = [this]() {
@@ -58,7 +69,8 @@ void CanvasPanel::createExportModeContent()
         }
     });
     connect(
-        m_exportController, &ExportModeController::exportModeChanged, this, [this](bool active) {
+        m_exportController, &ExportModeController::exportModeChanged, this,
+        [this, sampleDebounce](bool active) {
             if (!m_exportAreaController) {
                 return;
             }
@@ -73,6 +85,8 @@ void CanvasPanel::createExportModeContent()
                     m_exportPanel->setFrameSizeLimit(
                         hasFiniteDocumentBounds() ? m_canvasSize : QSize());
                 }
+                sampleDebounce->stop();
+                refreshExportPanelSample();
                 m_exportAreaController->enter();
                 updateExportAreaCursor();
             } else {

@@ -438,8 +438,34 @@ ruwa::core::exporting::ExportService* CanvasPanel::exportService()
     return m_exportService;
 }
 
-bool CanvasPanel::startExport(ruwa::core::exporting::ExportSettings& settings)
+void CanvasPanel::refreshExportPanelSample()
 {
+    if (!m_exportPanel || !m_glWidget || !m_glWidget->isInitialized()) {
+        return;
+    }
+    const QRect frame = effectiveDisplayFrame();
+    if (!frame.isValid() || frame.isEmpty()) {
+        return;
+    }
+
+    // Small on purpose: the panel's size estimate trial-encodes this sample
+    // and scales by pixel count, so the sample carries all the information
+    // that matters while keeping the GPU round trip and the encode cheap
+    // enough to run on every debounced frame change. 1024 per side is the
+    // sweet spot: minifying harder than that smooths out the brush-level
+    // detail deflate bills the user for, and the PNG estimate sags.
+    constexpr int kSampleMaxSide = 1024;
+    QSize target = frame.size().scaled(kSampleMaxSide, kSampleMaxSide, Qt::KeepAspectRatio);
+    target.setWidth(qMax(1, target.width()));
+    target.setHeight(qMax(1, target.height()));
+
+    const QImage sample = m_glWidget->renderCompositedRegion(frame, target);
+    if (!sample.isNull()) {
+        m_exportPanel->setExportContentSample(sample);
+    }
+}
+
+bool CanvasPanel::startExport(ruwa::core::exporting::ExportSettings& settings){
     namespace exporting = ruwa::core::exporting;
 
     const auto reject = [this](const QString& message) {

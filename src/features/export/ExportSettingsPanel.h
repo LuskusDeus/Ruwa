@@ -26,15 +26,21 @@
 #include "features/export/ExportSettings.h"
 
 #include <QColor>
+#include <QFutureWatcher>
+#include <QImage>
 #include <QList>
 #include <QRect>
 #include <QSize>
 #include <QString>
 #include <QWidget>
 
+#include <optional>
+#include <tuple>
+
 class QLabel;
 class QMouseEvent;
 class QPushButton;
+class QTimer;
 class QVBoxLayout;
 
 namespace ruwa::ui::widgets {
@@ -42,6 +48,7 @@ class AnimatedComboBox;
 class AnimatedStackedWidget;
 class CapsuleButton;
 class ColorInputButton;
+class DotGridLoadingIndicator;
 class NumericInputField;
 class PathInputField;
 class ProgressHandleSlider;
@@ -83,6 +90,13 @@ public:
     /// The panel does not know a job is running — the owner does — so this is
     /// told to it rather than discovered.
     void setExportInProgress(bool running);
+
+    /// Hands the panel a small preview of what is being exported (the export
+    /// frame's content, rendered at reduced resolution). The size estimate is
+    /// measured by trial-encoding this sample, so without it the label falls
+    /// back to a coarse per-pixel guess. Cheap to call often: the panel
+    /// debounces re-measurement itself.
+    void setExportContentSample(const QImage& sample);
 
     /// Height the content wants. The controller sizes the panel to this instead
     /// of a fixed aspect ratio, and the content scrolls when it does not fit.
@@ -180,8 +194,34 @@ private:
     // --- helpers ---
     void updateHeaderIcon();
     void updateExportButtonIcon();
-    [[nodiscard]] qint64 estimatedExportByteSize() const;
     [[nodiscard]] static QString formatByteSize(qint64 bytes);
+
+    // --- size estimation ---
+    /// Everything a trial encode depends on. A measurement is reused until
+    /// this changes.
+    using EstimateKey = std::tuple<int, int, int, bool, quint64, int, int>;
+    [[nodiscard]] EstimateKey estimateKey() const;
+
+    /// Restarts the debounce timer; call after any input the estimate depends
+    /// on has changed.
+    void scheduleEstimate();
+    /// Runs one trial encode of the sample off the GUI thread. Results from
+    /// superseded runs are discarded by generation count, not by cancelling —
+    /// QtConcurrent::run cannot be interrupted, only ignored.
+    void runEstimate();
+    void onEstimateFinished();
+    /// The spinner beside the size value. On while a measurement is in flight
+    /// and nothing measured exists to show yet.
+    void setEstimateLoadingVisible(bool visible);
+
+    /// What a trial-encode job reports back: its generation, so a stale run is
+    /// recognizable, the measured size (-1 when the encode failed), and the
+    /// settings key it was measured against.
+    struct EstimateResult {
+        quint64 generation = 0;
+        qint64 bytes = -1;
+        EstimateKey key;
+    };
 
     ruwa::core::exporting::ExportSettings m_settings;
     QRect m_exportFrame;
@@ -255,7 +295,22 @@ private:
 
     QLabel* m_estimatedSizeTitleLabel = nullptr;
     QLabel* m_estimatedSizeLabel = nullptr;
+    ruwa::ui::widgets::DotGridLoadingIndicator* m_estimatedSizeIndicator = nullptr;
     ruwa::ui::widgets::CapsuleButton* m_exportButton = nullptr;
+
+    // --- size estimation state ---
+    /// Reduced-resolution render of the export frame's content, owned by the
+    /// estimation job. Straight-alpha RGBA, exactly what the encoder sees.
+    QImage m_contentSample;
+    /// Last measured estimate (extrapolated to the current output size).
+    qint64 m_measuredBytes = 0;
+    bool m_hasMeasuredBytes = false;
+    /// Settings key the last accepted measurement was made against; empty
+    /// until then and whenever a new sample invalidates it.
+    std::optional<EstimateKey> m_completedEstimateKey;
+    QTimer* m_estimateTimer = nullptr;
+    QFutureWatcher<EstimateResult> m_estimateWatcher;
+    quint64 m_estimateGeneration = 0;
 };
 
 } // namespace ruwa::ui::workspace

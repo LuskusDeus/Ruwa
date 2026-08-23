@@ -58,6 +58,24 @@ struct WriteOutcome {
 [[nodiscard]] WriteOutcome writeImage(
     const QImage& image, const QString& absolutePath, const ExportSettings& settings);
 
+struct SizeEstimate {
+    bool ok = false;
+    qint64 bytes = 0; ///< Extrapolated size of the full-size encode.
+};
+
+/// Estimate the size the final file will have by actually encoding a small
+/// sample of the content and scaling the result up by pixel count.
+///
+/// `sample` is a straight-alpha RGBA preview of what is being exported (the
+/// same picture the encoder would see, only smaller); `outputSize` is the
+/// pixel size the real export will be written at. The sample goes through the
+/// same depth/matte decisions and the same QImageWriter configuration as
+/// writeImage(), so per-format behavior — quality, alpha handling, WebP's
+/// lossless ceiling — matches the real thing. Worker-thread safe: touches no
+/// GL state and no shared buffers.
+[[nodiscard]] SizeEstimate estimateFileSize(
+    const QImage& sample, const QSize& outputSize, const ExportSettings& settings);
+
 } // namespace ruwa::core::exporting::encoder
 
 #endif // RUWA_CORE_EXPORTING_EXPORTENCODER_H

@@ -392,6 +392,11 @@ public:
     /// back what will actually be written.
     bool startExport(ruwa::core::exporting::ExportSettings& settings);
 
+    /// Re-renders the export frame's content at reduced resolution straight on
+    /// the GPU and hands it to the export panel, whose size estimate is
+    /// measured from it. Cheap enough to run debounced on every frame drag.
+    void refreshExportPanelSample();
+
     /// Lazily created; owned by the panel so each document exports independently.
     ruwa::core::exporting::ExportService* exportService();
 

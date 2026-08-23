@@ -17,6 +17,7 @@
 #include "shared/resources/IconProvider.h"
 #include "shared/widgets/BaseAnimatedButton.h"
 #include "shared/widgets/CapsuleButton.h"
+#include "shared/widgets/DotGridLoadingIndicator.h"
 #include "shared/widgets/SegmentedOptionSelector.h"
 #include "shared/widgets/inputs/AnimatedComboBox.h"
 #include "shared/widgets/inputs/ColorInputButton.h"
@@ -550,7 +551,11 @@ QWidget* ExportSettingsPanel::buildOptionsSection(QWidget* parent)
     m_matteButton->setFixedWidth(
         ruwa::ui::core::ThemeManager::instance().scaled(metrics::kColorSwatchWidth));
     connect(m_matteButton, &ruwa::ui::widgets::ColorInputButton::colorChanged, this,
-        [this](const QColor& color) { m_settings.matteColor = color; });
+        [this](const QColor& color) {
+            m_settings.matteColor = color;
+            // The matte is part of what gets encoded, so it moves the estimate.
+            updateDerivedLabels();
+        });
     connect(m_matteButton, &ruwa::ui::widgets::ColorInputButton::colorPickerRequested, this,
         [this](const QColor& color) { emit colorPickerRequested(color, m_matteButton); });
     m_matteCaption = rows->addRow(tr("Matte"), m_matteButton, Qt::AlignRight | Qt::AlignVCenter);
@@ -619,6 +624,12 @@ QWidget* ExportSettingsPanel::buildFooter()
     m_estimatedSizeTitleLabel = makeSectionCaption(tr("EST. SIZE"), sizeBlock);
     m_sectionLabels.append(m_estimatedSizeTitleLabel);
 
+    // Value + spinner on one row: the spinner takes over while the very first
+    // measurement is still in flight, the label takes over the moment it lands.
+    auto* valueRow = new QHBoxLayout;
+    valueRow->setContentsMargins(0, 0, 0, 0);
+    valueRow->setSpacing(8);
+
     m_estimatedSizeLabel = new QLabel(QStringLiteral("--"), sizeBlock);
     QFont sizeFont = colors.fonts.getUIFont(theme.fontSize(ruwa::ui::core::ThemeFontRole::H5));
     sizeFont.setWeight(QFont::DemiBold);
@@ -626,8 +637,18 @@ QWidget* ExportSettingsPanel::buildFooter()
     m_estimatedSizeLabel->setStyleSheet(
         QString("color: %1; background: transparent;").arg(colors.text.name()));
 
+    m_estimatedSizeIndicator = new ruwa::ui::widgets::DotGridLoadingIndicator(sizeBlock);
+    const int indicatorSize = qMax(1, theme.scaled(14));
+    m_estimatedSizeIndicator->setFixedSize(indicatorSize, indicatorSize);
+    m_estimatedSizeIndicator->setAccentColor(colors.primary);
+    m_estimatedSizeIndicator->hide();
+
+    valueRow->addWidget(m_estimatedSizeLabel);
+    valueRow->addWidget(m_estimatedSizeIndicator, 0, Qt::AlignVCenter);
+    valueRow->addStretch(1);
+
     sizeLayout->addWidget(m_estimatedSizeTitleLabel);
-    sizeLayout->addWidget(m_estimatedSizeLabel);
+    sizeLayout->addLayout(valueRow);
 
     m_exportButton = new ruwa::ui::widgets::CapsuleButton(
         tr("Export"), ruwa::ui::widgets::CapsuleButton::Variant::Primary, footer);
