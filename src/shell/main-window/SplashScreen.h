@@ -12,6 +12,7 @@
 
 #include <QWidget>
 #include <QString>
+#include <QImage>
 #include <QPixmap>
 
 class QPropertyAnimation;
@@ -21,7 +22,7 @@ namespace ruwa::ui::windows {
 /**
  * @brief Splash screen shown during application startup
  *
- * Reference-style card: border, corner marks, Ruwa wordmark, primary version pill,
+ * Reference-style card: border, corner marks, wordmark, primary version pill,
  * status line, real loading progress bar. Foreground fades out before expand.
  */
 class SplashScreen : public QWidget {
@@ -66,16 +67,21 @@ protected:
 
 private:
     void updateColors();
+    void buildShadowImage();
+    void paintShadow(QPainter& painter, const QRectF& drawRect) const;
     void paintInterior(QPainter& painter) const;
+    void paintCardForeground(QPainter& painter, const QRectF& drawRect) const;
     void startRectExpansion(int durationMs);
 
 private:
+    QImage m_shadowImage;
+    QPixmap m_headerImage;
+    QPixmap m_logoPixmap;
+
     QString m_statusText;
     int m_targetProgress = 0;
     qreal m_progressDisplay = 0;
     QPropertyAnimation* m_progressAnim = nullptr;
-
-    QPixmap m_logoPixmap;
 
     qreal m_appearProgress = 0.0;
     bool m_isAppearing = false;
@@ -99,8 +105,8 @@ private:
     bool m_expandDeferred = false;
     int m_deferredExpandDurationMs = 500;
 
-    static constexpr int SPLASH_WIDTH = 520;
-    static constexpr int SPLASH_HEIGHT = 320;
+    static constexpr int SPLASH_WIDTH = 800;
+    static constexpr int SPLASH_HEIGHT = 500;
     static constexpr qreal APPEAR_START_SCALE = 0.92;
 };
 

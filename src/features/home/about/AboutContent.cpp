@@ -4,6 +4,7 @@
 
 #include "features/settings/UsageTracker.h"
 #include "features/theme/manager/ThemeManager.h"
+#include "shared/resources/Credits.h"
 #include "shared/resources/IconProvider.h"
 #include "shared/widgets/BaseStyledPanel.h"
 #include "shared/widgets/CapsuleButton.h"
@@ -622,15 +623,12 @@ void AboutContent::retranslateUi()
 
     m_creditsTitleLabel->setText(tr("Credits"));
     m_developerSectionTitleLabel->setText(tr("Developer"));
-    m_developerNameLabel->setText(QStringLiteral("Luskus Deus"));
+    m_developerNameLabel->setText(ui::core::Credits::Developer);
     m_developerDescriptionLabel->setText(
         tr("Solo developer responsible for UI, rendering, tools, and core systems."));
     m_testersTitleLabel->setText(tr("Testers"));
 
-    const QStringList testerNames = { QStringLiteral("kaixxxy"), QStringLiteral("Lozar"),
-        QStringLiteral("Mikko_el"), QStringLiteral("HipaaaH!~"), QStringLiteral("Ayami"),
-        QStringLiteral("Dgan"), QStringLiteral("KrOl"), QStringLiteral("KAMENOV PLUS"),
-        QStringLiteral("Enum Nektovse") };
+    const QStringList& testerNames = ui::core::Credits::testers();
 
     const int testerCount
         = qMin(static_cast<int>(m_testerButtons.size()), static_cast<int>(testerNames.size()));
