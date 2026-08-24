@@ -12,6 +12,7 @@
 #include <cstring>
 #include <limits>
 #include <new>
+#include <stdexcept>
 
 namespace ruwa::shared::imaging {
 
