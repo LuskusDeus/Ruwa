@@ -258,7 +258,6 @@ The artwork is offered under CC BY 4.0. Preferred attribution is defined in
 The project owner states that these banners were generated with OpenAI's
 ChatGPT Images 2.0 (the `gpt-image-2` model):
 
-- `resources/pictures/Banner1April.png`
 - `resources/pictures/UpdateBanner.png`
 - `resources/pictures/UpdateMessageBanner.png`
 - `resources/pictures/WelcomeBanner.png`

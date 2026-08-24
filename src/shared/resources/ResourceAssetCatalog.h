@@ -22,7 +22,6 @@ inline constexpr auto WelcomeBannerPrimary = "WelcomeBanner";
 inline constexpr auto WelcomeBannerSecondary = "WelcomeBanner2";
 inline constexpr auto UpdateBanner = "UpdateBanner";
 inline constexpr auto UpdateMessageBanner = "UpdateMessageBanner";
-inline constexpr auto BannerApril = "Banner1April";
 
 inline QString defaultWelcomeBannerPath()
 {
@@ -38,7 +37,6 @@ inline QStringList welcomeBannerBuiltInPaths()
         QStringLiteral(":/images/WelcomeBanner4"),
         QStringLiteral(":/images/WelcomeBanner5"),
         QStringLiteral(":/images/WelcomeBanner6"),
-        QStringLiteral(":/images/Banner1April"),
     };
 }
 

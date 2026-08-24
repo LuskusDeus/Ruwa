@@ -165,7 +165,6 @@
         <file alias="WelcomeBanner6">resources/pictures/WelcomeBanner6.png</file>
         <file alias="UpdateBanner">resources/pictures/UpdateBanner.png</file>
         <file alias="UpdateMessageBanner">resources/pictures/UpdateMessageBanner.png</file>
-        <file alias="Banner1April">resources/pictures/Banner1April.png</file>
         <file alias="SplashScreenImage">resources/pictures/SplashScreenImage.png</file>
     </qresource>
     <qresource prefix="/brushes">

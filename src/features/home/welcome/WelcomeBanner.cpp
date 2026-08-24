@@ -410,14 +410,7 @@ void WelcomeBanner::loadBackgroundImage()
 {
     const auto& app = ruwa::core::SettingsManager::instance().settings();
 
-    QStringList pool;
-    // Add built-in banners except hidden easter egg
-    const QStringList builtins = welcomeBannerBuiltinImageKeys();
-    for (const QString& key : builtins) {
-        if (key != QLatin1String(":/images/Banner1April")) {
-            pool.append(key);
-        }
-    }
+    QStringList pool = welcomeBannerBuiltinImageKeys();
 
     for (const QString& p : app.appearance.welcomeBannerCustomPaths) {
         if (p.startsWith(QLatin1String(":/"))) {
@@ -445,22 +438,16 @@ void WelcomeBanner::loadBackgroundImage()
         if (fixed.isEmpty()) {
             fixed = welcomeBannerDefaultFixedKey();
         }
-        // Easter egg banners are excluded from the pool but must still be loadable when fixed
-        const QStringList allBuiltins = welcomeBannerBuiltinImageKeys();
-        if (!pool.contains(fixed) && allBuiltins.contains(fixed)) {
-            chosen = fixed;
-        } else {
-            bool found = false;
-            for (const QString& k : pool) {
-                if (keysEqual(k, fixed)) {
-                    chosen = k;
-                    found = true;
-                    break;
-                }
+        bool found = false;
+        for (const QString& k : pool) {
+            if (keysEqual(k, fixed)) {
+                chosen = k;
+                found = true;
+                break;
             }
-            if (!found) {
-                chosen = pool.first();
-            }
+        }
+        if (!found) {
+            chosen = pool.first();
         }
     }
 

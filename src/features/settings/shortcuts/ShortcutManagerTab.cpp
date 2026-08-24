@@ -446,7 +446,6 @@ void ShortcutManagerTab::createCategories()
     auto& icons = ThemeManager::instance().icons();
 
     QStringList categoryNames = registry.categories();
-    categoryNames.removeAll(QStringLiteral("Easter Eggs"));
     categoryNames.sort(Qt::CaseInsensitive);
 
     // Menu-bar order rather than alphabet: a shortcut list reads best when it follows

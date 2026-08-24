@@ -97,35 +97,15 @@ QList<Command*> CommandRegistry::search(const QString& query, int maxResults) co
 
     // Score all commands
     QList<std::pair<Command*, int>> scored;
-    auto& loc = ruwa::i18n::CommandLocalization::instance();
-    const QString lowerQuery = query.trimmed().toLower();
-
-    for (const auto& [id, cmd] : m_commands) {
-        int score = 0;
-
-        // For hidden commands, check alias match first
+    for (const auto& commandEntry : m_commands) {
+        const auto& cmd = commandEntry.second;
         if (!cmd->showInPalette()) {
-            QStringList aliasesToCheck = loc.aliases(QString::fromStdString(id));
-            if (aliasesToCheck.isEmpty()) {
-                aliasesToCheck = cmd->info().aliases;
-            }
+            continue;
+        }
 
-            for (const QString& alias : aliasesToCheck) {
-                if (alias.toLower() == lowerQuery) {
-                    score = 1000; // High score for exact alias match
-                    break;
-                }
-            }
-
-            if (score <= 0) {
-                continue; // Skip hidden commands that don't match alias
-            }
-        } else {
-            // For visible commands, use normal scoring
-            score = calculateSearchScore(cmd.get(), query);
-            if (score <= 0) {
-                continue;
-            }
+        const int score = calculateSearchScore(cmd.get(), query);
+        if (score <= 0) {
+            continue;
         }
 
         scored.append({ cmd.get(), score });

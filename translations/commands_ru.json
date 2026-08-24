@@ -7,8 +7,7 @@
     "Layers": "Слои",
     "Tools": "Инструменты",
     "Transform": "Трансформация",
-    "Selection": "Выделение",
-    "Easter Eggs": "Пасхалки"
+    "Selection": "Выделение"
   },
   "file.new": {
     "title": "Новый проект",
@@ -972,15 +971,6 @@
       "foreground-background",
       "поменять-цвета",
       "обмен-цветов"
-    ]
-  },
-  "easter.meow": {
-    "title": "Мяу",
-    "category": "Пасхалки",
-    "description": "мяу~",
-    "aliases": [
-      "meow",
-      "мяу"
     ]
   }
 }

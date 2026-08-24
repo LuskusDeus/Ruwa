@@ -349,10 +349,6 @@ void WelcomeBannerSelectorWidget::rebuildPreviews()
 
     const QStringList builtins = welcomeBannerBuiltinImageKeys();
     for (const QString& key : builtins) {
-        // Skip hidden easter egg banner
-        if (key == QLatin1String(":/images/Banner1April")) {
-            continue;
-        }
         auto* preview = createPreview(key);
         m_previews.append(preview);
         m_previewLayout->addWidget(preview);
@@ -381,13 +377,7 @@ void WelcomeBannerSelectorWidget::rebuildPreviews()
 
 void WelcomeBannerSelectorWidget::syncPreviews(bool animate)
 {
-    QStringList targetKeys;
-    const QStringList builtins = welcomeBannerBuiltinImageKeys();
-    for (const QString& key : builtins) {
-        if (key != QLatin1String(":/images/Banner1April")) {
-            targetKeys.append(key);
-        }
-    }
+    QStringList targetKeys = welcomeBannerBuiltinImageKeys();
     targetKeys.append(m_customPaths);
 
     const auto previewsMatch
@@ -718,14 +708,7 @@ void WelcomeBannerSelectorWidget::loadFromSettings()
     m_randomize = app.appearance.welcomeBannerRandomize;
     m_textColorMode = app.appearance.welcomeBannerTextColorMode;
 
-    // Build pool of selectable banners, excluding hidden easter egg
-    QStringList pool;
-    const QStringList builtins = welcomeBannerBuiltinImageKeys();
-    for (const QString& key : builtins) {
-        if (key != QLatin1String(":/images/Banner1April")) {
-            pool.append(key);
-        }
-    }
+    QStringList pool = welcomeBannerBuiltinImageKeys();
     pool.append(m_customPaths);
 
     m_selectedKey = app.appearance.welcomeBannerFixedKey;

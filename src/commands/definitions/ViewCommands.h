@@ -130,19 +130,6 @@ public:
 };
 
 // ======================================================================================
-//   M E O W   ( H I D D E N   E A S T E R   E G G )
-// ======================================================================================
-
-class MeowCommand : public Command {
-public:
-    CommandInfo info() const override;
-    void execute(const CommandContext& ctx, const QVariantMap& args = {}) override;
-
-    /// Hidden easter egg — shouldn't appear in palette
-    bool showInPalette() const override { return false; }
-};
-
-// ======================================================================================
 //   R E G I S T R A T I O N
 // ======================================================================================
 

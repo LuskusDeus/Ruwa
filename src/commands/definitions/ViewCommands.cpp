@@ -10,7 +10,6 @@
 #include "shell/main-window/MainWindow.h"
 #include "shell/tab-system/WorkspaceTab.h"
 #include "features/canvas/ui/CanvasPanel.h"
-#include "features/settings/SettingsManager.h"
 #include <QMetaObject>
 
 namespace ruwa::core::commands {
@@ -346,30 +345,6 @@ void ToggleCanvasViewFlipVerticalCommand::execute(
 }
 
 // ======================================================================================
-//   M E O W   ( H I D D E N   E A S T E R   E G G )
-// ======================================================================================
-
-CommandInfo MeowCommand::info() const
-{
-    return CommandInfo { .id = "easter.meow",
-        .title = "Meow",
-        .category = "Easter Eggs",
-        .description = "meow~",
-        .aliases = { "meow" },
-        .defaultShortcut = QKeySequence(),
-        .icon = QIcon() };
-}
-
-void MeowCommand::execute(const CommandContext& ctx, const QVariantMap& args)
-{
-    Q_UNUSED(ctx);
-    Q_UNUSED(args);
-
-    ruwa::core::SettingsManager::instance().setWelcomeBannerFixedKeyDisablingRandomize(
-        ":/images/Banner1April");
-}
-
-// ======================================================================================
 //   R E G I S T R A T I O N
 // ======================================================================================
 
@@ -386,7 +361,6 @@ void registerViewCommands(CommandRegistry& registry)
     registry.registerCommand(std::make_unique<ToggleLayersPanelCommand>());
     registry.registerCommand(std::make_unique<ToggleCanvasViewFlipHorizontalCommand>());
     registry.registerCommand(std::make_unique<ToggleCanvasViewFlipVerticalCommand>());
-    registry.registerCommand(std::make_unique<MeowCommand>());
 }
 
 } // namespace ruwa::core::commands

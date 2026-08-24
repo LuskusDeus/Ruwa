@@ -139,7 +139,7 @@ void EmptyStateTab::onInitialize()
     m_hintLabel->setWordWrap(true);
     m_hintLabel->setAlignment(Qt::AlignCenter);
     m_hintLabel->setMaximumWidth(600);
-    m_hintLabel->setText(tr("Meow-meow, it seems you closed all tabs. "
+    m_hintLabel->setText(tr("It seems you closed all tabs. "
                             "Click on the Ruwa logo in the corner to open the home tab."));
     m_hintLabel->setFont(theme.font(ruwa::ui::core::ThemeFontRole::Label));
     m_hintLabel->setStyleSheet(QString("color: %1;").arg(colors.textMuted.name()));

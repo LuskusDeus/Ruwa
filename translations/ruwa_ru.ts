@@ -2196,8 +2196,8 @@ Rasterize the layer to transform the selection?</source>
     <name>ruwa::ui::tabs::EmptyStateTab</name>
     <message>
         <location filename="../src/shell/tab-system/EmptyStateTab.cpp" line="134"/>
-        <source>Meow-meow, it seems you closed all tabs. Click on the Ruwa logo in the corner to open the home tab.</source>
-        <translation>Мяу-мяу, кажется, вы закрыли все вкладки. Нажмите на логотип Ruwa в углу, чтобы открыть главную вкладку.</translation>
+        <source>It seems you closed all tabs. Click on the Ruwa logo in the corner to open the home tab.</source>
+        <translation>Кажется, вы закрыли все вкладки. Нажмите на логотип Ruwa в углу, чтобы открыть главную вкладку.</translation>
     </message>
 </context>
 <context>
