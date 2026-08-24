@@ -1595,8 +1595,7 @@ void CustomTabBar::startHoverAnimation(int index, bool hovering)
     if (!hoverAnim)
         return;
 
-    const auto direction
-        = hovering ? QAbstractAnimation::Forward : QAbstractAnimation::Backward;
+    const auto direction = hovering ? QAbstractAnimation::Forward : QAbstractAnimation::Backward;
 
     // Turning a running animation around keeps its current time, which is the
     // progress already on screen. Stopping it first would not: Qt rewinds a

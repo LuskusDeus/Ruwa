@@ -79,8 +79,7 @@ protected:
         }
 
         if (!m_icon.isNull()) {
-            const QPixmap pm
-                = m_icon.pixmap(QSize(metrics::kExitIconSize, metrics::kExitIconSize));
+            const QPixmap pm = m_icon.pixmap(QSize(metrics::kExitIconSize, metrics::kExitIconSize));
             p.drawPixmap(QPoint((width() - pm.width()) / 2, (height() - pm.height()) / 2), pm);
         }
     }
@@ -192,8 +191,8 @@ ExportSettingsPanel::~ExportSettingsPanel()
 void ExportSettingsPanel::buildUI()
 {
     auto* root = new QVBoxLayout(this);
-    root->setContentsMargins(metrics::kPanelPadding, metrics::kPanelPadding,
-        metrics::kPanelPadding, metrics::kPanelPadding);
+    root->setContentsMargins(metrics::kPanelPadding, metrics::kPanelPadding, metrics::kPanelPadding,
+        metrics::kPanelPadding);
     root->setSpacing(0);
 
     QWidget* header = buildHeader();
@@ -400,8 +399,7 @@ QWidget* ExportSettingsPanel::buildAreaSection(QWidget* parent)
     // valueChanged: that signal also fires per keystroke, so typing "1920"
     // would drag the frame down to 1 px on the first character.
     for (auto* field : { m_widthField, m_heightField }) {
-        connect(field, &QLineEdit::editingFinished, this,
-            &ExportSettingsPanel::onFrameFieldEdited);
+        connect(field, &QLineEdit::editingFinished, this, &ExportSettingsPanel::onFrameFieldEdited);
         connect(field, &ruwa::ui::widgets::NumericInputField::valueChanged, this, [this](double) {
             if ((m_widthField && m_widthField->isScrubbing())
                 || (m_heightField && m_heightField->isScrubbing())) {
@@ -516,8 +514,8 @@ QWidget* ExportSettingsPanel::buildOptionsSection(QWidget* parent)
     m_bitDepthSelector->addOption(tr("16-bit"));
     connect(m_bitDepthSelector, &ruwa::ui::widgets::SegmentedOptionSelector::selectionChanged, this,
         [this](int index) {
-            m_settings.bitDepth = index == 1 ? exporting::ExportBitDepth::Bit16
-                                             : exporting::ExportBitDepth::Bit8;
+            m_settings.bitDepth
+                = index == 1 ? exporting::ExportBitDepth::Bit16 : exporting::ExportBitDepth::Bit8;
             updateDerivedLabels();
         });
     // Fixed-size control: without an explicit alignment the grid centres it in
@@ -532,8 +530,8 @@ QWidget* ExportSettingsPanel::buildOptionsSection(QWidget* parent)
             m_settings.transparentBackground = checked;
             applyFormatCapabilities();
         });
-    m_sectionLabels.append(rows->addRow(
-        tr("Transparency"), m_transparencyToggle, Qt::AlignRight | Qt::AlignVCenter));
+    m_sectionLabels.append(
+        rows->addRow(tr("Transparency"), m_transparencyToggle, Qt::AlignRight | Qt::AlignVCenter));
 
     // Capsule swatch + hex, sized like the effect-panel colour editors. Left to
     // stretch across the whole row it drew a wide empty pill with the swatch and
@@ -582,8 +580,7 @@ QWidget* ExportSettingsPanel::buildDestinationSection(QWidget* parent)
     // panel's hex field carries "copy", so nothing has to be aligned next to it.
     m_destinationField = new ruwa::ui::widgets::PathInputField(section);
     m_destinationField->setLeadingIcon(ruwa::ui::core::IconProvider::StandardIcon::Folder);
-    m_destinationField->setActionIcon(
-        ruwa::ui::core::IconProvider::StandardIcon::OpenedFolder);
+    m_destinationField->setActionIcon(ruwa::ui::core::IconProvider::StandardIcon::OpenedFolder);
     m_destinationField->setActionToolTip(tr("Browse..."));
     m_destinationField->setPlaceholderText(tr("Choose where to save"));
     connect(m_destinationField, &QLineEdit::textChanged, this, [this](const QString& text) {

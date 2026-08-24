@@ -258,12 +258,10 @@ SizeEstimate estimateFileSize(
     // bytes-per-pixel scales linearly. PNG is the least faithful format here —
     // deflate exploits repeats a full-size image has and a minified one has
     // not — but it stays within the "~" honesty of the label.
-    const qint64 samplePixels
-        = static_cast<qint64>(prepared.width()) * prepared.height();
+    const qint64 samplePixels = static_cast<qint64>(prepared.width()) * prepared.height();
     result.bytes = qMax<qint64>(1,
-        static_cast<qint64>(std::llround(
-            static_cast<double>(encoded.size()) * static_cast<double>(outputPixels)
-            / static_cast<double>(samplePixels))));
+        static_cast<qint64>(std::llround(static_cast<double>(encoded.size())
+            * static_cast<double>(outputPixels) / static_cast<double>(samplePixels))));
     result.ok = true;
     return result;
 }

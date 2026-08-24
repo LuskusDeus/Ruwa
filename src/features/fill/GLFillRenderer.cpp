@@ -1817,8 +1817,8 @@ GpuFillResult GLFillRenderer::fillInternal(TileGrid& layerGrid, GLTileRenderer* 
                         previewTile, localX, localY, fillR, fillG, fillB, 255, contentFormat);
                 } else {
                     const PremultPixel originalPx = sampleSource(localX, localY);
-                    PremultPixel blendedPx = compositeOver(originalPx, fillR, fillG, fillB,
-                        scaledFillAlpha(fillA, cap, originalPx.a));
+                    PremultPixel blendedPx = compositeOver(
+                        originalPx, fillR, fillG, fillB, scaledFillAlpha(fillA, cap, originalPx.a));
                     fillApplySelectionAlphaCap(blendedPx.r, blendedPx.g, blendedPx.b, blendedPx.a,
                         fillSelectionAlphaCeiling(cap, originalPx.a, fillA));
                     writeContentPixelRaw(previewTile, localX, localY, blendedPx.r, blendedPx.g,

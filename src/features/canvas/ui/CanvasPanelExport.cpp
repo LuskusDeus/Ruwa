@@ -421,7 +421,7 @@ ruwa::core::exporting::ExportService* CanvasPanel::exportService()
                 if (!result.ok) {
                     ruwa::ui::widgets::MessagePopupManager::show(this,
                         tr("Export failed: %1").arg(result.errorText),
-                        { { tr("OK"), false, []() {} } }, 380);
+                        { { tr("OK"), false, []() { } } }, 380);
                     return;
                 }
 
@@ -432,7 +432,7 @@ ruwa::core::exporting::ExportService* CanvasPanel::exportService()
                     message += QStringLiteral("\n") + result.warnings.join(QStringLiteral("\n"));
                 }
                 ruwa::ui::widgets::MessagePopupManager::show(
-                    this, message, { { tr("OK"), false, []() {} } }, 380);
+                    this, message, { { tr("OK"), false, []() { } } }, 380);
             });
     }
     return m_exportService;
@@ -465,12 +465,13 @@ void CanvasPanel::refreshExportPanelSample()
     }
 }
 
-bool CanvasPanel::startExport(ruwa::core::exporting::ExportSettings& settings){
+bool CanvasPanel::startExport(ruwa::core::exporting::ExportSettings& settings)
+{
     namespace exporting = ruwa::core::exporting;
 
     const auto reject = [this](const QString& message) {
         ruwa::ui::widgets::MessagePopupManager::show(
-            this, message, { { tr("OK"), false, []() {} } }, 380);
+            this, message, { { tr("OK"), false, []() { } } }, 380);
         return false;
     };
 
@@ -493,8 +494,7 @@ bool CanvasPanel::startExport(ruwa::core::exporting::ExportSettings& settings){
     const QString targetPath = settings.absolutePath();
     if (!targetPath.isEmpty() && QFileInfo::exists(targetPath)) {
         const bool overwrite = ruwa::ui::widgets::MessagePopupManager::showBlocking(this,
-            tr("\"%1\" already exists. Replace it?")
-                .arg(QFileInfo(targetPath).fileName()),
+            tr("\"%1\" already exists. Replace it?").arg(QFileInfo(targetPath).fileName()),
             tr("Replace"), tr("Cancel"), 380);
         if (!overwrite) {
             return false;
@@ -506,8 +506,8 @@ bool CanvasPanel::startExport(ruwa::core::exporting::ExportSettings& settings){
     // bits (where an 8-bit readback would quantize before any resampling).
     // An 8-bit document written to an 8-bit file has nothing more to give, and
     // float would cost four times the memory for an identical result.
-    const bool deepDocument = m_layerModel
-        && m_layerModel->documentTileFormat() != aether::TilePixelFormat::RGBA8;
+    const bool deepDocument
+        = m_layerModel && m_layerModel->documentTileFormat() != aether::TilePixelFormat::RGBA8;
     const bool wants16Bit = settings.bitDepth == exporting::ExportBitDepth::Bit16
         && exporting::formatCapabilities(settings.format).supports16Bit;
 
@@ -515,12 +515,11 @@ bool CanvasPanel::startExport(ruwa::core::exporting::ExportSettings& settings){
     capture.includeCanvasBackground = settings.includeCanvasBackground;
     capture.highPrecision = wants16Bit || deepDocument;
 
-    ruwa::shared::imaging::PixelSurface surface
-        = m_glWidget->captureCanvasSurface(frame, capture);
+    ruwa::shared::imaging::PixelSurface surface = m_glWidget->captureCanvasSurface(frame, capture);
     if (surface.isNull()) {
         return reject(tr("Not enough memory to capture a %1 x %2 px image.")
-                          .arg(frame.width())
-                          .arg(frame.height()));
+                .arg(frame.width())
+                .arg(frame.height()));
     }
 
     QString error;

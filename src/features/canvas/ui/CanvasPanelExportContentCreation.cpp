@@ -58,9 +58,7 @@ void CanvasPanel::createExportModeContent()
     connect(this, &CanvasPanel::canvasSizeChanged, m_exportPanel,
         [this, pushFrameSizeLimit](const QSize&) { pushFrameSizeLimit(); });
     connect(this, &CanvasPanel::canvasBoundsModeChanged, m_exportPanel,
-        [this, pushFrameSizeLimit](ruwa::core::canvas::CanvasBoundsMode) {
-            pushFrameSizeLimit();
-        });
+        [this, pushFrameSizeLimit](ruwa::core::canvas::CanvasBoundsMode) { pushFrameSizeLimit(); });
     connect(this, &CanvasPanel::exportFrameChanged, m_exportPanel,
         &ExportSettingsPanel::setExportFrame);
     connect(this, &CanvasPanel::exportFrameChanged, this, [this](const QRect& frame) {
@@ -68,8 +66,7 @@ void CanvasPanel::createExportModeContent()
             m_exportAreaController->setExportFrame(frame);
         }
     });
-    connect(
-        m_exportController, &ExportModeController::exportModeChanged, this,
+    connect(m_exportController, &ExportModeController::exportModeChanged, this,
         [this, sampleDebounce](bool active) {
             if (!m_exportAreaController) {
                 return;

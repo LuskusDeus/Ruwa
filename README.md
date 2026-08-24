@@ -60,6 +60,9 @@ locked features.
   preset. Edit one live with a preview beside every page, scale the animation
   speed or switch interface and canvas motion off, and duplicate, import, or
   export a theme as JSON.
+- **Export built into the workspace.** Set a frame directly on the canvas,
+  choose PNG, JPEG, or WebP settings in a docked panel, and leave resampling,
+  encoding, and the file write to a dedicated background pipeline.
 - **Precise placement.** Auto snapping aligns moves and transforms to the canvas,
   to other layers, and to equal spacing between neighbours, with live guides and
   measurements.
@@ -72,7 +75,7 @@ locked features.
 
 | Item | Detail |
 | --- | --- |
-| Current release | `0.3.2-alpha` |
+| Current release | `0.3.3-alpha` |
 | Primary platform | Windows 10/11 x64 |
 | Graphics requirement | OpenGL 4.5 |
 | Technology | C++23, Qt 6, CMake |

@@ -435,8 +435,8 @@ void clipFloodFillResultToSelectionMask(const aether::FloodFillResult::RawTileMa
                     if (coverage > sourceAlpha && sourcePx[3] < 1.0f) {
                         const float added = std::max(0.0f, f[3] - sourcePx[3]);
                         const float coverageF = static_cast<float>(coverage) / 255.0f;
-                        capAlpha = fillQuantizeChannel(sourcePx[3]
-                            + added * (coverageF - sourcePx[3]) / (1.0f - sourcePx[3]));
+                        capAlpha = fillQuantizeChannel(
+                            sourcePx[3] + added * (coverageF - sourcePx[3]) / (1.0f - sourcePx[3]));
                         capAlpha = std::max(capAlpha, sourceAlpha);
                     }
                     fillApplySelectionAlphaCap(r, g, b, a, capAlpha);

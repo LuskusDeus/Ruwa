@@ -41,8 +41,8 @@ public:
     /// selector — would otherwise be CENTRED in the slack by QGridLayout, so
     /// those rows pass Qt::AlignRight | Qt::AlignVCenter to sit against the
     /// panel's right edge instead of floating in the middle of the row.
-    QLabel* addRow(const QString& caption, QWidget* field,
-        Qt::Alignment fieldAlignment = Qt::Alignment());
+    QLabel* addRow(
+        const QString& caption, QWidget* field, Qt::Alignment fieldAlignment = Qt::Alignment());
     /// A control that spans both columns (a dropdown, a swatch, a button row).
     void addFullWidthRow(QWidget* widget);
 

@@ -120,8 +120,8 @@ inline uint8_t fillSelectionSourceStrength(uint8_t coverage, uint8_t destination
     if (destinationAlpha == 0 || coverage >= destinationAlpha) {
         return 255;
     }
-    const uint32_t scaled = (static_cast<uint32_t>(coverage) * 255u
-                                + static_cast<uint32_t>(destinationAlpha) / 2u)
+    const uint32_t scaled
+        = (static_cast<uint32_t>(coverage) * 255u + static_cast<uint32_t>(destinationAlpha) / 2u)
         / static_cast<uint32_t>(destinationAlpha);
     return static_cast<uint8_t>(std::min<uint32_t>(scaled, 255u));
 }
@@ -147,9 +147,9 @@ inline uint8_t fillSelectionAlphaCeiling(
     if (coverage <= destinationAlpha) {
         return destinationAlpha;
     }
-    const uint32_t gain = (static_cast<uint32_t>(fillAlpha)
-                                  * static_cast<uint32_t>(coverage - destinationAlpha)
-                              + 127u)
+    const uint32_t gain
+        = (static_cast<uint32_t>(fillAlpha) * static_cast<uint32_t>(coverage - destinationAlpha)
+              + 127u)
         / 255u;
     return static_cast<uint8_t>(
         std::min<uint32_t>(static_cast<uint32_t>(destinationAlpha) + gain, 255u));

@@ -190,8 +190,7 @@ void showFillRadiusLimitPopup(
 
 void writeProgressiveFillPixel(const aether::FloodFillResult::RawTileMap& sourceTiles,
     aether::FloodFillResult& result, int x, int y, uint8_t fillR, uint8_t fillG, uint8_t fillB,
-    uint8_t fillA, bool preserveSourceEdge, uint8_t capAlpha,
-    aether::TilePixelFormat contentFormat)
+    uint8_t fillA, bool preserveSourceEdge, uint8_t capAlpha, aether::TilePixelFormat contentFormat)
 {
     if (capAlpha == 0) {
         return;
@@ -210,11 +209,10 @@ void writeProgressiveFillPixel(const aether::FloodFillResult::RawTileMap& source
         // Premultiplied storage: a straight write of the fill color would show
         // the preview brighter than the committed result for a partly
         // transparent fill.
-        out = aether::PremultPixel {
-            static_cast<uint8_t>((static_cast<uint32_t>(fillR) * fillA + 127u) / 255u),
+        out = aether::PremultPixel { static_cast<uint8_t>(
+                                         (static_cast<uint32_t>(fillR) * fillA + 127u) / 255u),
             static_cast<uint8_t>((static_cast<uint32_t>(fillG) * fillA + 127u) / 255u),
-            static_cast<uint8_t>((static_cast<uint32_t>(fillB) * fillA + 127u) / 255u), fillA
-        };
+            static_cast<uint8_t>((static_cast<uint32_t>(fillB) * fillA + 127u) / 255u), fillA };
     }
 
     if (capAlpha != 255) {
@@ -239,8 +237,8 @@ void writeProgressiveFillPixel(const aether::FloodFillResult::RawTileMap& source
             out.a = static_cast<uint8_t>(std::clamp(
                 sourceFillA + ((static_cast<int>(src.a) * invFillA + 127) / 255), 0, 255));
         }
-        aether::fillApplySelectionAlphaCap(out.r, out.g, out.b, out.a,
-            aether::fillSelectionAlphaCeiling(capAlpha, src.a, fillA));
+        aether::fillApplySelectionAlphaCap(
+            out.r, out.g, out.b, out.a, aether::fillSelectionAlphaCeiling(capAlpha, src.a, fillA));
     }
 
     std::vector<uint8_t>& resultTile

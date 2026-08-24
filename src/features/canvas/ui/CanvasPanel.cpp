@@ -1158,11 +1158,10 @@ bool CanvasPanel::transformAnchorSnapDelta(const QPointF& direction, QPointF& de
 
     const aether::Rect box = m_glWidget->transformController().state().transformedAABB();
     const bool horizontal = !qFuzzyIsNull(direction.x());
-    const double freeSpace = horizontal
-        ? canvas.width() - static_cast<double>(box.width)
-        : canvas.height() - static_cast<double>(box.height);
-    const double origin = horizontal ? static_cast<double>(box.left())
-                                     : static_cast<double>(box.top());
+    const double freeSpace = horizontal ? canvas.width() - static_cast<double>(box.width)
+                                        : canvas.height() - static_cast<double>(box.height);
+    const double origin
+        = horizontal ? static_cast<double>(box.left()) : static_cast<double>(box.top());
 
     // The three cells of the anchor grid along this axis: flush against either
     // document edge, or centred between them. Sorted because content wider

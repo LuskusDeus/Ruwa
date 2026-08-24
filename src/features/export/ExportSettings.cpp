@@ -134,7 +134,7 @@ void ExportSettings::loadPreferences()
     format = formatFromString(settings.value(settingsKey("format")).toString(), format);
     quality = settings.value(settingsKey("quality"), quality).toInt();
     bitDepth = settings.value(settingsKey("bitDepth"), 8).toInt() >= 16 ? ExportBitDepth::Bit16
-                                                                       : ExportBitDepth::Bit8;
+                                                                        : ExportBitDepth::Bit8;
     transparentBackground
         = settings.value(settingsKey("transparentBackground"), transparentBackground).toBool();
     includeCanvasBackground
@@ -145,9 +145,8 @@ void ExportSettings::loadPreferences()
         matteColor = storedMatte;
     }
 
-    const int filterValue = settings.value(settingsKey("resampleFilter"),
-                                        static_cast<int>(resampleFilter))
-                                .toInt();
+    const int filterValue
+        = settings.value(settingsKey("resampleFilter"), static_cast<int>(resampleFilter)).toInt();
     if (filterValue >= static_cast<int>(shared::imaging::ResampleFilter::Nearest)
         && filterValue <= static_cast<int>(shared::imaging::ResampleFilter::Lanczos3)) {
         resampleFilter = static_cast<shared::imaging::ResampleFilter>(filterValue);
@@ -190,8 +189,8 @@ ExportValidation validate(ExportSettings& settings)
 
     if (settings.bitDepth == ExportBitDepth::Bit16 && !caps.supports16Bit) {
         settings.bitDepth = ExportBitDepth::Bit8;
-        result.warnings << QCoreApplication::translate("ExportSettings",
-            "%1 cannot store 16 bits per channel — exported at 8 bits.")
+        result.warnings << QCoreApplication::translate(
+            "ExportSettings", "%1 cannot store 16 bits per channel — exported at 8 bits.")
                                .arg(formatDisplayName(settings.format));
     }
 
@@ -218,8 +217,8 @@ ExportValidation validate(ExportSettings& settings)
         return result;
     }
     if (size.width() > kMaxOutputDimension || size.height() > kMaxOutputDimension) {
-        result.error = QCoreApplication::translate("ExportSettings",
-            "The export size is %1 x %2 px. The largest side supported is %3 px.")
+        result.error = QCoreApplication::translate(
+            "ExportSettings", "The export size is %1 x %2 px. The largest side supported is %3 px.")
                            .arg(size.width())
                            .arg(size.height())
                            .arg(kMaxOutputDimension);

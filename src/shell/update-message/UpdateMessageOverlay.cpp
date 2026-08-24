@@ -681,8 +681,8 @@ void UpdateMessageOverlay::setupUI()
 
     auto* heroTitleLabel = new WrappedTextLabel(heroText);
     heroTitleLabel->setText(QCoreApplication::translate("UpdateMessageOverlay",
-        "Themes you can build, motion you can dial, and a Layer Properties panel with real "
-        "controls."));
+        "Six months of Ruwa: export rebuilt, axis-locked strokes, and glass across the "
+        "workspace."));
     heroTitleLabel->setFont(theme.font(ruwa::ui::core::ThemeFontRole::H3, QFont::DemiBold));
     heroTitleLabel->setStyleSheet(
         QStringLiteral("QLabel { background: transparent; color: %1; }").arg(colors.text.name()));
@@ -697,9 +697,9 @@ void UpdateMessageOverlay::setupUI()
 
     auto* descriptionLabel = new WrappedTextLabel(leftWidget);
     descriptionLabel->setText(QCoreApplication::translate("UpdateMessageOverlay",
-        "A theme is now something you make rather than something you pick — its colours, its "
-        "fonts and how the application animates. The Layer Properties panel was rebuilt around "
-        "per-layer groups, and scrolling runs on a new continuous engine."));
+        "Ruwa's first alpha was released six months ago today. Export as is now a workspace mode "
+        "with a settings panel, a frame on the canvas and a background pipeline. Painting gained "
+        "axis-locked strokes, and liquid glass now serves panels across the interface."));
     descriptionLabel->setFont(theme.font(ruwa::ui::core::ThemeFontRole::Label));
     descriptionLabel->setStyleSheet(QStringLiteral("QLabel { background: transparent; color: %1; }")
             .arg(colors.textMuted.name()));
@@ -714,22 +714,21 @@ void UpdateMessageOverlay::setupUI()
 
     addReleaseHighlightRow(highlightsWidget, highlightsLayout, colors, theme, ChangelogBadge::New,
         QCoreApplication::translate("UpdateMessageOverlay",
-            "Build your own theme: colours, fonts, and animations you can slow down or turn "
-            "off."));
+            "Export from a canvas frame with PNG, JPEG and WebP controls while encoding runs in "
+            "the background."));
     addReleaseHighlightRow(highlightsWidget, highlightsLayout, colors, theme,
         ChangelogBadge::Updated,
         QCoreApplication::translate("UpdateMessageOverlay",
-            "Layer Properties is a panel of per-layer groups, with full text formatting."));
+            "Hold Shift for an axis-locked stroke; use Shift+Alt to resize the brush sideways."));
     addReleaseHighlightRow(highlightsWidget, highlightsLayout, colors, theme,
         ChangelogBadge::Improved,
         QCoreApplication::translate("UpdateMessageOverlay",
-            "Scrolling runs on a continuous engine, and a numeric field can be scrubbed by "
-            "dragging."));
+            "GPU liquid glass reaches the command palette, tooltips, previews and update card."));
     addReleaseHighlightRow(highlightsWidget, highlightsLayout, colors, theme,
         ChangelogBadge::BugFix,
         QCoreApplication::translate("UpdateMessageOverlay",
-            "No more corrupted canvas from an adjustment layer, and a resting pen keeps its hands "
-            "off the cursor."));
+            "Soft selections fill consistently, blur stays inside the selection, and effect "
+            "strokes update below 100% zoom."));
 
     enableHeightForWidth(highlightsWidget);
     leftLayout->addWidget(highlightsWidget);

@@ -112,8 +112,7 @@ ExportSettingsPanel::ExportSettingsPanel(QWidget* parent)
 
     m_settings.loadPreferences();
     if (m_settings.directory.trimmed().isEmpty()) {
-        m_settings.directory
-            = QStandardPaths::writableLocation(QStandardPaths::PicturesLocation);
+        m_settings.directory = QStandardPaths::writableLocation(QStandardPaths::PicturesLocation);
     }
 
     buildUI();
@@ -180,12 +179,10 @@ void ExportSettingsPanel::applyFrameFieldRanges()
     // step, which reads as the number sticking.
     const int originX = qMax(0, m_exportFrame.x());
     const int originY = qMax(0, m_exportFrame.y());
-    const int maxWidth = m_frameSizeLimit.isEmpty()
-        ? exporting::kMaxOutputDimension
-        : qMax(1, m_frameSizeLimit.width() - originX);
-    const int maxHeight = m_frameSizeLimit.isEmpty()
-        ? exporting::kMaxOutputDimension
-        : qMax(1, m_frameSizeLimit.height() - originY);
+    const int maxWidth = m_frameSizeLimit.isEmpty() ? exporting::kMaxOutputDimension
+                                                    : qMax(1, m_frameSizeLimit.width() - originX);
+    const int maxHeight = m_frameSizeLimit.isEmpty() ? exporting::kMaxOutputDimension
+                                                     : qMax(1, m_frameSizeLimit.height() - originY);
 
     // setRange clamps the current value, which would otherwise be reported back
     // out as a fresh resize request.
@@ -292,9 +289,8 @@ void ExportSettingsPanel::recomputeOutputSize()
         // Rounded, never zero: a 1 px frame at 10% is still one pixel of image,
         // and an output size of 0 would be rejected downstream for a reason the
         // user could not act on.
-        m_settings.outputSize
-            = QSize(qMax(1, qRound(frameSize.width() * factor)),
-                qMax(1, qRound(frameSize.height() * factor)));
+        m_settings.outputSize = QSize(qMax(1, qRound(frameSize.width() * factor)),
+            qMax(1, qRound(frameSize.height() * factor)));
     }
 
     // Resampling only has meaning when the output differs from the source.
@@ -470,12 +466,11 @@ void ExportSettingsPanel::updateDerivedLabels()
 {
     if (m_outputSizeLabel) {
         const QSize size = m_settings.outputSize;
-        m_outputSizeLabel->setText(size.isEmpty()
-                ? QStringLiteral("--")
-                : QStringLiteral("%1 %2 %3 px")
-                      .arg(size.width())
-                      .arg(QChar(0x00D7))
-                      .arg(size.height()));
+        m_outputSizeLabel->setText(size.isEmpty() ? QStringLiteral("--")
+                                                  : QStringLiteral("%1 %2 %3 px")
+                                                        .arg(size.width())
+                                                        .arg(QChar(0x00D7))
+                                                        .arg(size.height()));
     }
 
     if (m_estimatedSizeLabel && m_estimatedSizeIndicator) {
@@ -555,8 +550,8 @@ void ExportSettingsPanel::onBrowseClicked()
 {
     exporting::ExportSettings probe = m_settings;
     probe.baseName = resolvedBaseName();
-    const QString suggested = probe.absolutePath().isEmpty() ? probe.fileName()
-                                                             : probe.absolutePath();
+    const QString suggested
+        = probe.absolutePath().isEmpty() ? probe.fileName() : probe.absolutePath();
 
     // A save dialog, not a folder picker: the field it fills holds the whole
     // path, and the dialog is the one place that offers both halves at once.
@@ -682,10 +677,10 @@ QString ExportSettingsPanel::formatByteSize(qint64 bytes)
 
 ExportSettingsPanel::EstimateKey ExportSettingsPanel::estimateKey() const
 {
-    return std::make_tuple(static_cast<int>(m_settings.format),
-        qBound(1, m_settings.quality, 100), static_cast<int>(m_settings.bitDepth),
-        m_settings.transparentBackground, m_settings.matteColor.rgba(),
-        m_settings.outputSize.width(), m_settings.outputSize.height());
+    return std::make_tuple(static_cast<int>(m_settings.format), qBound(1, m_settings.quality, 100),
+        static_cast<int>(m_settings.bitDepth), m_settings.transparentBackground,
+        m_settings.matteColor.rgba(), m_settings.outputSize.width(),
+        m_settings.outputSize.height());
 }
 
 void ExportSettingsPanel::scheduleEstimate()
@@ -726,8 +721,7 @@ void ExportSettingsPanel::runEstimate()
         = QtConcurrent::run([sample, snapshot, outputSize, generation, key]() {
               const exporting::encoder::SizeEstimate estimate
                   = exporting::encoder::estimateFileSize(sample, outputSize, snapshot);
-              return EstimateResult { generation,
-                  estimate.ok ? estimate.bytes : qint64(-1), key };
+              return EstimateResult { generation, estimate.ok ? estimate.bytes : qint64(-1), key };
           });
     m_estimateWatcher.setFuture(future);
 }
@@ -828,7 +822,8 @@ void ExportSettingsPanel::updateHeaderIcon()
     const auto& colors = ruwa::ui::core::ThemeManager::instance().colors();
     const QIcon icon = ruwa::ui::core::IconProvider::instance().getColoredIcon(
         ruwa::ui::core::IconProvider::StandardIcon::Export, colors.text);
-    m_titleIconLabel->setPixmap(icon.pixmap(panel_metrics::kTitleIconSize, panel_metrics::kTitleIconSize));
+    m_titleIconLabel->setPixmap(
+        icon.pixmap(panel_metrics::kTitleIconSize, panel_metrics::kTitleIconSize));
 }
 
 void ExportSettingsPanel::updateExportButtonIcon()

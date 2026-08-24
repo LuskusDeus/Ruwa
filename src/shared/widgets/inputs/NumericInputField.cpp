@@ -333,8 +333,8 @@ void NumericInputField::mouseMoveEvent(QMouseEvent* event)
     // A move event queued before a wrap can still arrive after it, carrying the
     // whole width of the window as one jump. Nothing a hand can do produces
     // that, so it is read as the leftover of the teleport and dropped.
-    const bool wrapArtifact = m_scrubWrapBounds.width() > 0
-        && qAbs(travelled) > m_scrubWrapBounds.width() / 2.0;
+    const bool wrapArtifact
+        = m_scrubWrapBounds.width() > 0 && qAbs(travelled) > m_scrubWrapBounds.width() / 2.0;
     const double delta = wrapArtifact
         ? 0.0
         : travelled / pixelsPerStep * m_step * stepMultiplier(event->modifiers());

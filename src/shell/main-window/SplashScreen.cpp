@@ -69,14 +69,70 @@ constexpr qreal kShadowAlpha = 0.22;
 /// visible concentric rings; jittering each pixel by a sub-step amount before
 /// it is quantised trades those rings for noise below the visible threshold.
 constexpr qreal kBayer8[64] = {
-    0 / 64.0, 32 / 64.0, 8 / 64.0, 40 / 64.0, 2 / 64.0, 34 / 64.0, 10 / 64.0, 42 / 64.0,
-    48 / 64.0, 16 / 64.0, 56 / 64.0, 24 / 64.0, 50 / 64.0, 18 / 64.0, 58 / 64.0, 26 / 64.0,
-    12 / 64.0, 44 / 64.0, 4 / 64.0, 36 / 64.0, 14 / 64.0, 46 / 64.0, 6 / 64.0, 38 / 64.0,
-    60 / 64.0, 28 / 64.0, 52 / 64.0, 20 / 64.0, 62 / 64.0, 30 / 64.0, 54 / 64.0, 22 / 64.0,
-    3 / 64.0, 35 / 64.0, 11 / 64.0, 43 / 64.0, 1 / 64.0, 33 / 64.0, 9 / 64.0, 41 / 64.0,
-    51 / 64.0, 19 / 64.0, 59 / 64.0, 27 / 64.0, 49 / 64.0, 17 / 64.0, 57 / 64.0, 25 / 64.0,
-    15 / 64.0, 47 / 64.0, 7 / 64.0, 39 / 64.0, 13 / 64.0, 45 / 64.0, 5 / 64.0, 37 / 64.0,
-    63 / 64.0, 31 / 64.0, 55 / 64.0, 23 / 64.0, 61 / 64.0, 29 / 64.0, 53 / 64.0, 21 / 64.0,
+    0 / 64.0,
+    32 / 64.0,
+    8 / 64.0,
+    40 / 64.0,
+    2 / 64.0,
+    34 / 64.0,
+    10 / 64.0,
+    42 / 64.0,
+    48 / 64.0,
+    16 / 64.0,
+    56 / 64.0,
+    24 / 64.0,
+    50 / 64.0,
+    18 / 64.0,
+    58 / 64.0,
+    26 / 64.0,
+    12 / 64.0,
+    44 / 64.0,
+    4 / 64.0,
+    36 / 64.0,
+    14 / 64.0,
+    46 / 64.0,
+    6 / 64.0,
+    38 / 64.0,
+    60 / 64.0,
+    28 / 64.0,
+    52 / 64.0,
+    20 / 64.0,
+    62 / 64.0,
+    30 / 64.0,
+    54 / 64.0,
+    22 / 64.0,
+    3 / 64.0,
+    35 / 64.0,
+    11 / 64.0,
+    43 / 64.0,
+    1 / 64.0,
+    33 / 64.0,
+    9 / 64.0,
+    41 / 64.0,
+    51 / 64.0,
+    19 / 64.0,
+    59 / 64.0,
+    27 / 64.0,
+    49 / 64.0,
+    17 / 64.0,
+    57 / 64.0,
+    25 / 64.0,
+    15 / 64.0,
+    47 / 64.0,
+    7 / 64.0,
+    39 / 64.0,
+    13 / 64.0,
+    45 / 64.0,
+    5 / 64.0,
+    37 / 64.0,
+    63 / 64.0,
+    31 / 64.0,
+    55 / 64.0,
+    23 / 64.0,
+    61 / 64.0,
+    29 / 64.0,
+    53 / 64.0,
+    21 / 64.0,
 };
 
 /// Paints `fn` into an offscreen layer covering `rect` and blits it once at `opacity`.
@@ -516,8 +572,8 @@ void SplashScreen::paintInterior(QPainter& painter) const
     const qreal badgePadH = 10;
     const qreal badgeW = badgeFm.horizontalAdvance(versionTag) + badgePadH * 2;
     const qreal badgeH = qMax(headerH, badgeFm.height() + 6);
-    const QRectF badgeRect(SPLASH_WIDTH - margin - badgeW, topMargin + (headerH - badgeH) / 2.0,
-        badgeW, badgeH);
+    const QRectF badgeRect(
+        SPLASH_WIDTH - margin - badgeW, topMargin + (headerH - badgeH) / 2.0, badgeW, badgeH);
 
     painter.setPen(Qt::NoPen);
     painter.setBrush(colors.primary);
@@ -550,10 +606,10 @@ void SplashScreen::paintInterior(QPainter& painter) const
 
     painter.setFont(titleFont);
     painter.setPen(colors.text);
-    const QString titleText = QFontMetricsF(titleFont).elidedText(wordmark, Qt::ElideRight,
-        static_cast<int>(titleAvail));
-    painter.drawText(QRectF(x, topMargin, titleAvail, headerH), Qt::AlignLeft | Qt::AlignVCenter,
-        titleText);
+    const QString titleText = QFontMetricsF(titleFont).elidedText(
+        wordmark, Qt::ElideRight, static_cast<int>(titleAvail));
+    painter.drawText(
+        QRectF(x, topMargin, titleAvail, headerH), Qt::AlignLeft | Qt::AlignVCenter, titleText);
 
     // --- credits, straight under the header ---------------------------------
     QFont creditsFont(ruwa::ui::core::FontFamilyNames::DMSans18pt, 9, QFont::Light);
@@ -588,8 +644,8 @@ void SplashScreen::paintInterior(QPainter& painter) const
     const qreal barH = 3;
     const qreal barR = barH / 2.0;
     const qreal barBottomPad = 30;
-    const QRectF trackRect(margin, SPLASH_HEIGHT - barBottomPad - barH, SPLASH_WIDTH - 2 * margin,
-        barH);
+    const QRectF trackRect(
+        margin, SPLASH_HEIGHT - barBottomPad - barH, SPLASH_WIDTH - 2 * margin, barH);
 
     const qreal rowH = qMax(statusFm.height(), percentFm.height());
     const QRectF textRow(margin, trackRect.top() - 12 - rowH, SPLASH_WIDTH - 2 * margin, rowH);

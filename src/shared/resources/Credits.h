@@ -20,8 +20,7 @@ inline const QStringList& testers()
     static const QStringList names = { QStringLiteral("kaixxxy"), QStringLiteral("Lozar"),
         QStringLiteral("Mikko_el"), QStringLiteral("HipaaaH!~"), QStringLiteral("Ayami"),
         QStringLiteral("Dgan"), QStringLiteral("KrOl"), QStringLiteral("KAMENOV PLUS"),
-        QStringLiteral("Enum Nektovse"), QStringLiteral("kira."),
-        QStringLiteral("medomij") };
+        QStringLiteral("Enum Nektovse"), QStringLiteral("kira."), QStringLiteral("medomij") };
     return names;
 }
 

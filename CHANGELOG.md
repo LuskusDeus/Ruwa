@@ -15,7 +15,67 @@ a release.
 
 ## [Unreleased]
 
+## [0.3.3-alpha] — 2026-08-24 — "Six months of Ruwa: export rebuilt, axis-locked strokes, and glass across the workspace"
+
+Ruwa's first alpha was released six months ago today. Export as is now a
+workspace mode with a settings panel, a frame on the canvas and a background
+pipeline for resampling, encoding and writing. Painting gained axis-locked
+strokes and a continuous brush-size drag, while the liquid-glass renderer now
+serves panels across the interface.
+
+The release also makes partial selections behave consistently across every fill
+path, keeps blur inside a selection boundary, and restores live effect previews
+below 100% zoom. Home can create a document from an image on the clipboard, the
+splash screen has been rebuilt, and text editing, tabs, brush-pack state and
+colour picking received focused fixes.
+
+### Added
+- Export as is a workspace mode instead of a file dialog. A docked settings
+  panel sits beside a draggable canvas frame and exposes the destination,
+  dimensions, scale, resampling filter, background handling and the options
+  supported by PNG, JPEG and WebP. PNG can write 8- or 16-bit channels; JPEG and
+  WebP expose quality, and formats without alpha use a chosen matte colour.
+- Export capture renders the requested region in bounded chunks on the GL
+  thread. Resampling, depth conversion, encoding and the atomic file write then
+  run on a dedicated worker thread, with progress and cancellation. A sampled
+  trial encode estimates the output size from the current canvas and settings.
+- Holding Shift during a painting stroke locks it to the first clear horizontal
+  or vertical direction. The projection happens before stabilization and
+  applies to the brush, eraser, blur, smudge and liquify tools. Shift+Alt now
+  resizes the brush by dragging sideways from its current size instead of
+  snapping the radius to the pointer.
+- When the brush ring becomes too small to read at the current zoom, the canvas
+  draws a fixed-size inverted plus cursor in its place.
+- Pasting an image while Home is active creates a project through the same
+  import path as dropping an image onto the tab. Paste remains available to a
+  focused text field.
+- Seven decorative tab glyphs by medomij — frame, heart, leaf, spider, cat, bow
+  and fire — are available for distinguishing similar tabs. Their permission,
+  attribution and licensing are recorded with the other bundled assets.
+
 ### Changed
+- The command palette, tooltips, layer preview, preset menu, first-run card,
+  docking drop indicator and update card now use the same GPU liquid-glass
+  renderer as the canvas overlays. Shared capture, padding, tint and fallback
+  rules replace the separate blur implementations, and the Welcome banner's
+  Open button uses the same renderer over its artwork.
+- The splash screen is now an 800 × 500 card with a header image, logo and
+  wordmark row, version pill, shared credits, status line and edge-aligned
+  progress value. Its chrome fades as one composited layer and the card uses a
+  dithered distance-field shadow instead of a border.
+- New projects start with a `#D9D9D9` canvas background. Stored presets,
+  restored sessions and older files keep their existing background or white
+  fallback.
+- Delete actions in Layers remove the mask when its thumbnail is the active
+  paint target and otherwise remove the layer. The toolbar, swipe action,
+  context menu and their labels all follow the same target, and right-clicking
+  a thumbnail selects the target it will act on.
+- A radial-menu seat is selected by its angular sector anywhere from the hub to
+  twice the visible ring radius, so an overshot flick still lands on the seat.
+- Tabs activate on release rather than press, and a reorder drag no longer also
+  switches documents or panels. Press flashes were removed across buttons,
+  rows, menus, sliders and switches; controls that act like buttons now commit
+  only when released over the same target.
 - The tab context menu offers a different set of icons. The first row keeps the
   workspace glyphs that say what a tab holds — home, file, folder, new file,
   brush, pencil, camera — and the second row is now a set of seven decorative
@@ -29,11 +89,62 @@ a release.
   from the set (`Dock-layout.png`, `LiquifyTwirl_cw.png`, `LiquifyTwirl_ccw.png`)
   match their resource aliases. Resource aliases are unchanged, so nothing that
   reads an icon or a layout by name is affected.
+- The tester list is shared by About and the splash screen. kira. and medomij
+  join the credits; testers without a profile URL remain visible as
+  non-clickable cards.
 
-### Added
-- The decorative tab glyphs were drawn by medomij and are included with their
-  permission. Attribution and licensing are recorded in `THIRD_PARTY_NOTICES.md`,
-  `ASSET_POLICY.md`, `NOTICE`, and `REUSE.toml`.
+### Improved
+- Dragging a Position coordinate moves the layer content live through one
+  transform preview and commits a single undo step. Numeric scrubbing can wrap
+  the mouse pointer from one window edge to the other, so a drag is not limited
+  by the available screen width.
+- Arrow keys move an active transform by one document pixel, or ten with Shift.
+  Ctrl+Arrow moves between cells of the Position anchor grid. The same path now
+  translates free quads and deform meshes, so typed coordinates and nudges also
+  work in Distort and Warp.
+- Brush-pack expansion records only the packs a user collapsed. New packs open
+  by default, programmatic rebuilds no longer overwrite the choice, and every
+  workspace tab shares the current state instead of saving competing copies.
+- Panel content uses one scaled padding rule, aligning the first control with
+  its title and balancing the side and top gaps. The Tools panel derives its
+  minimum width from the actual button and margin sizes.
+- Text selection highlighting steps aside while its colour is being previewed,
+  so the canvas shows the colour itself rather than its inverted selection
+  display. A whole colour-picker drag commits as one undo step.
+- The liquid-glass composite and frost pyramid were refined, and the display
+  pyramid gives the levels currently sampled on screen priority during a
+  stroke.
+
+### Fixed
+- Fills now use one coverage rule for soft selections across Edit → Fill, the
+  GPU bucket, clipped flood-fill results and the progressive preview. Repeated
+  fills converge on the selection coverage instead of becoming opaque; partial
+  fill colours stay premultiplied, and Fill Selection honours alpha lock.
+- The blur brush treats a selection border as a sampling wall. Colour and
+  coverage are filtered together, preventing transparent or unselected pixels
+  from being averaged into content along the edge while preserving feathered
+  selections.
+- Drawing on a layer with effects updates live below 100% zoom. Dirty-tile work
+  is budgeted per pyramid level, visible levels cannot be starved by the larger
+  lower levels, and effect coverage uses the real bounds expansion instead of a
+  square worst-case pad.
+- Diagonal marching-ants outlines remain visible when zoomed out. The lasso
+  overlay also validates the shaders currently bound before drawing.
+- Fast pointer movement no longer leaves a tab or its close button highlighted,
+  and the reorder ghost is rendered on transparency instead of as a black
+  rectangle. Dock-tab close animations apply the configured motion speed once.
+- A text session ends when its layer is deselected, hidden, locked, rasterized,
+  removed, switched away from or given a mask target. The caret follows external
+  text and transform changes in the same frame, and entering text no longer
+  forces the Layer Properties panel open.
+- Reopening the colour picker during its closing animation no longer lets a
+  stale timer close the new picker or steal focus. Live text-colour previews
+  keep their active target until the real close completes.
+- The brush-size ring survives a simultaneous zoom animation and continues to
+  recompute the drag from its anchored screen-space pointer.
+
+### Removed
+- The retired April Fools banner, command and settings entry have been removed.
 
 ## [0.3.2-alpha] — 2026-08-20 — "Themes you can build, motion you can dial, and a Layer Properties panel with real controls"
 

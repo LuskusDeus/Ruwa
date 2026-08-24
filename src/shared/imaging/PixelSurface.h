@@ -92,7 +92,10 @@ public:
 
     [[nodiscard]] uint8_t* bits() { return m_data.data(); }
     [[nodiscard]] uint8_t* scanLine(int y) { return m_data.data() + y * m_bytesPerLine; }
-    [[nodiscard]] const uint8_t* scanLine(int y) const { return m_data.data() + y * m_bytesPerLine; }
+    [[nodiscard]] const uint8_t* scanLine(int y) const
+    {
+        return m_data.data() + y * m_bytesPerLine;
+    }
 
     /// Row access in a storage-independent form. `dst` / `src` hold
     /// width() * 4 floats. UInt8 rows are normalized by 1/255 on read and

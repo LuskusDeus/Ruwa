@@ -7065,8 +7065,8 @@ void OpenGLCanvasWidget::startAsyncFillSession(const QUuid& layerId, FillAlgorit
                         // progressive preview matches the capped commit.
                         const uint8_t previewCap = selectionMaskTiles.empty()
                             ? 255
-                            : aether::sampleRawAlpha(selectionMaskTiles, x, seedY,
-                                  aether::TilePixelFormat::RGBA8);
+                            : aether::sampleRawAlpha(
+                                  selectionMaskTiles, x, seedY, aether::TilePixelFormat::RGBA8);
                         aether::writeProgressiveFillPixel(layerSnapshotTiles, previewInteriorResult,
                             x, seedY, fillR, fillG, fillB, fillA, false, previewCap, contentFormat);
 
@@ -8903,8 +8903,7 @@ ruwa::shared::imaging::PixelSurface OpenGLCanvasWidget::captureCanvasSurface(
     // pipeline divide it back out once, at the very end.
     const PixelStorage storage
         = options.highPrecision ? PixelStorage::Float32 : PixelStorage::UInt8;
-    PixelSurface surface
-        = PixelSurface::create(totalW, totalH, storage, PixelAlpha::Premultiplied);
+    PixelSurface surface = PixelSurface::create(totalW, totalH, storage, PixelAlpha::Premultiplied);
     if (surface.isNull()) {
         return {};
     }
@@ -9988,9 +9987,8 @@ bool OpenGLCanvasWidget::moveSelectedContentBy(const Vector2& delta)
         return false;
     }
 
-    const auto applyDelta = [this, &delta]() {
-        m_transformController.state().translateBy(delta.x, delta.y);
-    };
+    const auto applyDelta
+        = [this, &delta]() { m_transformController.state().translateBy(delta.x, delta.y); };
 
     // A transform the user already has open is nudged in place and recorded as
     // its own step, the way a mode switch or a flip is — closing their session

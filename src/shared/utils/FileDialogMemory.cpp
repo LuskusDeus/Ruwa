@@ -116,8 +116,8 @@ QString getExistingDirectory(QWidget* parent, const QString& category, const QSt
         initial = lastDirectory(category);
     }
 
-    const QString path = QFileDialog::getExistingDirectory(parent, caption, initial,
-        QFileDialog::ShowDirsOnly | QFileDialog::DontResolveSymlinks);
+    const QString path = QFileDialog::getExistingDirectory(
+        parent, caption, initial, QFileDialog::ShowDirsOnly | QFileDialog::DontResolveSymlinks);
     if (path.isEmpty()) {
         return {};
     }

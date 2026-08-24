@@ -37,8 +37,7 @@ qsizetype PixelSurface::byteSizeFor(int width, int height, PixelStorage storage)
     return bytesPerLine * static_cast<qsizetype>(height);
 }
 
-PixelSurface PixelSurface::create(
-    int width, int height, PixelStorage storage, PixelAlpha alpha)
+PixelSurface PixelSurface::create(int width, int height, PixelStorage storage, PixelAlpha alpha)
 {
     const qsizetype totalBytes = byteSizeFor(width, height, storage);
     if (totalBytes <= 0) {
