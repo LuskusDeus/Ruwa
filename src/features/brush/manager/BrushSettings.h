@@ -195,6 +195,16 @@ inline float brushInputSourceValue(const BrushInputContext& inputContext,
             *available = inputContext.strokeDirectionAvailable;
         }
         return inputContext.strokeDirectionAvailable ? clamp01(inputContext.strokeDirection) : 0.0f;
+    case BrushInputSourceKey::PenTilt:
+        if (available) {
+            *available = inputContext.penTiltAvailable;
+        }
+        return inputContext.penTiltAvailable ? clamp01(inputContext.penTilt) : 0.0f;
+    case BrushInputSourceKey::StrokeSpeed:
+        if (available) {
+            *available = inputContext.strokeSpeedAvailable;
+        }
+        return inputContext.strokeSpeedAvailable ? clamp01(inputContext.strokeSpeed) : 0.0f;
     case BrushInputSourceKey::None:
     case BrushInputSourceKey::Count:
         break;

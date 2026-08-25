@@ -31,6 +31,8 @@
 #include <QTabletEvent>
 #include <QWidget>
 
+#include <cmath>
+
 namespace ruwa::ui::workspace {
 namespace {
 
@@ -53,6 +55,59 @@ bool nearlySameScreenPoint(const QPointF& a, const QPointF& b)
     const qreal dx = a.x() - b.x();
     const qreal dy = a.y() - b.y();
     return dx * dx + dy * dy < 0.0001;
+}
+
+aether::BrushStrokeHost::BrushInputDynamics inputDynamicsFromScreenTilt(
+    const CanvasInputHost* host, const QPointF& globalPos, const QPointF& screenDirection)
+{
+    aether::BrushStrokeHost::BrushInputDynamics result;
+    if (!host || std::hypot(screenDirection.x(), screenDirection.y()) <= 0.000001) {
+        return result;
+    }
+
+    constexpr double kPi = 3.14159265358979323846;
+    const aether::Vector2 origin = host->mapInputToViewportWorld(globalPos);
+    const aether::Vector2 projected
+        = host->mapInputToViewportWorld(globalPos + screenDirection);
+    const float worldDx = projected.x - origin.x;
+    const float worldDy = projected.y - origin.y;
+    if (std::hypot(worldDx, worldDy) <= 0.000001f) {
+        return result;
+    }
+
+    float degrees = static_cast<float>(std::atan2(worldDy, worldDx) * 180.0 / kPi);
+    degrees = ruwa::core::brushes::normalizeAngleDegrees(degrees);
+    result.penTilt = degrees / 360.0f;
+    result.penTiltAvailable = true;
+    return result;
+}
+
+aether::BrushStrokeHost::BrushInputDynamics tabletInputDynamics(
+    const CanvasInputHost* host, const QTabletEvent* event, const QPointF& globalPos)
+{
+    if (!host || !event) {
+        return {};
+    }
+
+    // QTabletEvent reports angles in two perpendicular planes. Their tangents,
+    // not the angles themselves, are the components of the pen's projected
+    // direction. This remains geometrically correct at the large tilts where a
+    // direct atan2(yTilt, xTilt) is noticeably biased.
+    constexpr double kPi = 3.14159265358979323846;
+    const double tiltX = std::tan(static_cast<double>(event->xTilt()) * kPi / 180.0);
+    const double tiltY = std::tan(static_cast<double>(event->yTilt()) * kPi / 180.0);
+    const double projectedLength = std::hypot(tiltX, tiltY);
+    constexpr double kMinimumReliableTiltDegrees = 0.5;
+    if (!std::isfinite(projectedLength)
+        || projectedLength < std::tan(kMinimumReliableTiltDegrees * kPi / 180.0)) {
+        return {};
+    }
+
+    // Transform the direction through the same viewport mapping as the stroke.
+    // That makes tilt follow canvas rotation and mirror transforms instead of
+    // remaining incorrectly locked to the physical screen.
+    return inputDynamicsFromScreenTilt(
+        host, globalPos, QPointF(tiltX / projectedLength, tiltY / projectedLength));
 }
 
 } // namespace
@@ -90,6 +145,7 @@ void CanvasTabletHandler::handleTabletEvent(QTabletEvent* event)
     const QPointF globalPosF = event->globalPosition();
     const float pressure
         = ruwa::services::input::StylusInputManager::instance().effectivePressure(event);
+    const auto inputDynamics = tabletInputDynamics(m_host, event, globalPosF);
     ruwa::services::input::StylusDebugService::instance()->updateQtTabletState(
         static_cast<float>(event->pressure()), pressure, true, tabletEventTypeName(event->type()));
     const Qt::MouseButtons tabletButtons = event->buttons();
@@ -260,7 +316,7 @@ void CanvasTabletHandler::handleTabletEvent(QTabletEvent* event)
                 m_lastTabletElapsedSec = 0.0f;
                 m_host->inputGlWidget()->beginStroke(worldPos.x, worldPos.y, pressure,
                     aether::BrushStrokeHost::StrokeInputDevice::Stylus,
-                    event->modifiers().testFlag(Qt::ShiftModifier));
+                    event->modifiers().testFlag(Qt::ShiftModifier), inputDynamics);
                 m_host->setInputDrawingActive(m_host->inputGlWidget()->isDrawing());
                 if (!m_host->isInputDrawingActive()) {
                     m_host->showBlockedDrawMessageForSelectedLayer();
@@ -293,7 +349,7 @@ void CanvasTabletHandler::handleTabletEvent(QTabletEvent* event)
                 m_lastTabletElapsedSec = 0.0f;
                 m_host->inputGlWidget()->beginStroke(worldPos.x, worldPos.y, pressure,
                     aether::BrushStrokeHost::StrokeInputDevice::Stylus,
-                    event->modifiers().testFlag(Qt::ShiftModifier));
+                    event->modifiers().testFlag(Qt::ShiftModifier), inputDynamics);
                 m_host->setInputDrawingActive(m_host->inputGlWidget()->isDrawing());
                 if (!m_host->isInputDrawingActive()) {
                     m_host->showBlockedDrawMessageForSelectedLayer();
@@ -415,6 +471,10 @@ void CanvasTabletHandler::handleTabletEvent(QTabletEvent* event)
                         const aether::Vector2 wp = m_host->mapInputToViewportWorld(pkt.globalPos);
                         const float pktElapsed
                             = prevElapsed + span * (static_cast<float>(idx) / total);
+                        const auto packetInputDynamics = pkt.tiltAvailable
+                            ? inputDynamicsFromScreenTilt(
+                                  m_host, pkt.globalPos, pkt.tiltVector)
+                            : inputDynamics;
                         // Queued, not rasterized inline: this burst is however
                         // many packets the driver buffered since the last Qt
                         // move, so drawing it here would put device-rate work in
@@ -422,14 +482,17 @@ void CanvasTabletHandler::handleTabletEvent(QTabletEvent* event)
                         // the real sample below drains it in the same call, so
                         // nothing is postponed.
                         m_host->inputGlWidget()->queueStrokeAtElapsed(
-                            wp.x, wp.y, pkt.pressure, pktElapsed);
+                            wp.x, wp.y, pkt.pressure, pktElapsed,
+                            aether::BrushStrokeHost::StrokeInputDevice::Stylus,
+                            packetInputDynamics);
                     }
                 }
             }
 
             aether::Vector2 worldPos = m_host->mapInputToViewportWorld(globalPosF);
             m_host->inputGlWidget()->continueStrokeAtElapsed(
-                worldPos.x, worldPos.y, pressure, curElapsedSec);
+                worldPos.x, worldPos.y, pressure, curElapsedSec,
+                aether::BrushStrokeHost::StrokeInputDevice::Stylus, inputDynamics);
             m_lastTabletElapsedSec = curElapsedSec;
             m_host->notifyCanvasContentChanged();
             event->accept();

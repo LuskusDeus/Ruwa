@@ -631,6 +631,7 @@ private:
         point.baseWorldY = dab.baseWorldY;
         point.pressure = dab.pressure;
         point.strokeElapsedSeconds = dab.strokeElapsedSeconds;
+        point.inputDynamics = dab.inputDynamics;
         point.textureAmount = dab.textureAmount;
         point.textureScale = dab.textureScale;
         point.textureContrast = dab.textureContrast;
@@ -667,6 +668,7 @@ private:
         dab.baseWorldY = point.baseWorldY;
         dab.pressure = point.pressure;
         dab.strokeElapsedSeconds = point.strokeElapsedSeconds;
+        dab.inputDynamics = point.inputDynamics;
         dab.textureAmount = point.textureAmount;
         dab.textureScale = point.textureScale;
         dab.textureContrast = point.textureContrast;
@@ -849,9 +851,14 @@ QImage PixelBrushModule::renderPreview(const BrushPreviewRequest& request) const
         : std::max(96, static_cast<int>((request.width + request.height) * 0.2f));
     float prevPressure = pathPressure(0.0f);
     float prevElapsedSeconds = pathElapsedSeconds(0.0f);
+    BrushInputDynamics prevInputDynamics;
+    prevInputDynamics.strokeSpeed = 0.0f;
+    prevInputDynamics.strokeSpeedAvailable = true;
+    float filteredScreenSpeed = 0.0f;
     auto [startX, startY]
         = stabilizedPoint(pathX(0.0f), pathY(0.0f), prevPressure, prevElapsedSeconds, true);
     brush.setPressure(prevPressure);
+    brush.setInputDynamics(prevInputDynamics);
     brush.setStrokeElapsedSeconds(prevElapsedSeconds, true);
     brush.stamp(grid, startX, startY, nullptr);
 
@@ -861,12 +868,25 @@ QImage PixelBrushModule::renderPreview(const BrushPreviewRequest& request) const
         const float strokeElapsedSeconds = pathElapsedSeconds(t);
         auto [toX, toY]
             = stabilizedPoint(pathX(t), pathY(t), pressure, strokeElapsedSeconds, false);
+        BrushInputDynamics inputDynamics;
+        const float elapsedDelta = strokeElapsedSeconds - prevElapsedSeconds;
+        if (elapsedDelta > 0.000001f) {
+            const float instantScreenSpeed
+                = std::hypot(toX - startX, toY - startY) / elapsedDelta;
+            const float alpha
+                = 1.0f - std::exp(-elapsedDelta / kBrushStrokeSpeedFilterTimeSeconds);
+            filteredScreenSpeed += alpha * (instantScreenSpeed - filteredScreenSpeed);
+            inputDynamics.strokeSpeed = normalizeBrushStrokeSpeed(filteredScreenSpeed);
+            inputDynamics.strokeSpeedAvailable = true;
+        }
         brush.strokeToInterpolatedSize(grid, startX, startY, toX, toY, prevPressure, pressure,
-            nullptr, prevElapsedSeconds, strokeElapsedSeconds, true);
+            nullptr, prevElapsedSeconds, strokeElapsedSeconds, true, prevInputDynamics,
+            inputDynamics);
         startX = toX;
         startY = toY;
         prevPressure = pressure;
         prevElapsedSeconds = strokeElapsedSeconds;
+        prevInputDynamics = inputDynamics;
     }
 
     bool rebuildNeeded = false;

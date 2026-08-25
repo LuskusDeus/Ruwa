@@ -13,6 +13,7 @@
 #include <Qt>
 
 #include "shared/types/Types.h"
+#include "features/brush/manager/BrushDynamicsTypes.h"
 
 class QMouseEvent;
 class QPointF;
@@ -75,6 +76,7 @@ private:
     bool m_lastRealStrokeSampleValid = false;
     float m_lastRealStrokePressure = 1.0f;
     float m_lastRealStrokeElapsedSec = 0.0f;
+    ruwa::core::brushes::BrushInputDynamics m_lastRealStrokeInputDynamics {};
 
     // Shift+click brush-size resize (brush/eraser/blur/smudge).
     bool m_brushSizeAdjust = false;

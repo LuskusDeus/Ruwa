@@ -4323,7 +4323,8 @@ void OpenGLCanvasWidget::buildAlphaLockCombinedMask(
 }
 
 void OpenGLCanvasWidget::beginStroke(float worldX, float worldY, float pressure,
-    BrushStrokeHost::StrokeInputDevice inputDevice, bool axisConstraint)
+    BrushStrokeHost::StrokeInputDevice inputDevice, bool axisConstraint,
+    const BrushStrokeHost::BrushInputDynamics& inputDynamics)
 {
     if (m_transformController.isActive())
         return;
@@ -4335,33 +4336,37 @@ void OpenGLCanvasWidget::beginStroke(float worldX, float worldY, float pressure,
         return;
 
     if (m_strokeHost) {
-        m_strokeHost->beginStroke(worldX, worldY, pressure, inputDevice, axisConstraint);
+        m_strokeHost->beginStroke(
+            worldX, worldY, pressure, inputDevice, axisConstraint, inputDynamics);
     }
 }
 
 void OpenGLCanvasWidget::continueStroke(
-    float worldX, float worldY, float pressure, BrushStrokeHost::StrokeInputDevice inputDevice)
+    float worldX, float worldY, float pressure, BrushStrokeHost::StrokeInputDevice inputDevice,
+    const BrushStrokeHost::BrushInputDynamics& inputDynamics)
 {
     if (m_strokeHost) {
-        m_strokeHost->continueStroke(worldX, worldY, pressure, inputDevice);
+        m_strokeHost->continueStroke(worldX, worldY, pressure, inputDevice, inputDynamics);
     }
 }
 
 void OpenGLCanvasWidget::continueStrokeAtElapsed(float worldX, float worldY, float pressure,
-    float strokeElapsedSeconds, BrushStrokeHost::StrokeInputDevice inputDevice)
+    float strokeElapsedSeconds, BrushStrokeHost::StrokeInputDevice inputDevice,
+    const BrushStrokeHost::BrushInputDynamics& inputDynamics)
 {
     if (m_strokeHost) {
         m_strokeHost->continueStrokeAtElapsed(
-            worldX, worldY, pressure, strokeElapsedSeconds, inputDevice);
+            worldX, worldY, pressure, strokeElapsedSeconds, inputDevice, inputDynamics);
     }
 }
 
 void OpenGLCanvasWidget::queueStrokeAtElapsed(float worldX, float worldY, float pressure,
-    float strokeElapsedSeconds, BrushStrokeHost::StrokeInputDevice inputDevice)
+    float strokeElapsedSeconds, BrushStrokeHost::StrokeInputDevice inputDevice,
+    const BrushStrokeHost::BrushInputDynamics& inputDynamics)
 {
     if (m_strokeHost) {
         m_strokeHost->queueStrokeAtElapsed(
-            worldX, worldY, pressure, strokeElapsedSeconds, inputDevice);
+            worldX, worldY, pressure, strokeElapsedSeconds, inputDevice, inputDynamics);
     }
 }
 

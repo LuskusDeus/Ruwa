@@ -44,6 +44,7 @@ class BrushStrokeHost final : public QObject {
 
 public:
     using StrokeInputDevice = aether::StrokeInputDevice;
+    using BrushInputDynamics = ruwa::core::brushes::BrushInputDynamics;
 
     struct SyncCommit {
         StrokeSnapshot snapshot;
@@ -104,21 +105,25 @@ public:
     /// (horizontal or vertical) from its first real movement and stays on it
     /// for the rest of the stroke, even after Shift is released.
     void beginStroke(float worldX, float worldY, float pressure = 1.0f,
-        StrokeInputDevice inputDevice = StrokeInputDevice::Stylus, bool axisConstraint = false);
+        StrokeInputDevice inputDevice = StrokeInputDevice::Stylus, bool axisConstraint = false,
+        const BrushInputDynamics& inputDynamics = {});
     void continueStroke(float worldX, float worldY, float pressure = 1.0f,
-        StrokeInputDevice inputDevice = StrokeInputDevice::Stylus);
+        StrokeInputDevice inputDevice = StrokeInputDevice::Stylus,
+        const BrushInputDynamics& inputDynamics = {});
     /// Variant that records the sample with an explicit elapsed time (in
     /// seconds since stroke begin) instead of the wall-clock instant of
     /// the call. Used to feed history-recovered intermediate positions
     /// at their real WM_MOUSEMOVE timestamps so the stabilizer doesn't
     /// see them as a Δt≈0 burst.
     void continueStrokeAtElapsed(float worldX, float worldY, float pressure,
-        float strokeElapsedSeconds, StrokeInputDevice inputDevice = StrokeInputDevice::Stylus);
+        float strokeElapsedSeconds, StrokeInputDevice inputDevice = StrokeInputDevice::Stylus,
+        const BrushInputDynamics& inputDynamics = {});
     /// Adds a timestamped sample to the existing time-budgeted input queue.
     /// Used for recovered WinTab bursts so native event dispatch can finish
     /// before expensive brush rasterization begins.
     void queueStrokeAtElapsed(float worldX, float worldY, float pressure,
-        float strokeElapsedSeconds, StrokeInputDevice inputDevice = StrokeInputDevice::Stylus);
+        float strokeElapsedSeconds, StrokeInputDevice inputDevice = StrokeInputDevice::Stylus,
+        const BrushInputDynamics& inputDynamics = {});
     void translateActiveStroke(float dx, float dy);
     /// Frame tick for the input pump. Called once per rendered frame, before the
     /// layer stack is built, so everything the pen produced since the previous
@@ -142,6 +147,12 @@ private:
         Vector2 point {};
         float pressure = 1.0f;
         float strokeElapsedSeconds = 0.0f;
+        BrushInputDynamics inputDynamics {};
+    };
+
+    struct StrokeSpeedMeasurement {
+        double synthMs = 0.0;
+        double cumulativeScreenDistance = 0.0;
     };
 
     TileBrush* brush() const;
@@ -191,9 +202,11 @@ private:
     void updateStrokeInputTickCapacity(std::size_t processedSamples, double elapsedMs);
     void flushQueuedStrokeInput();
     void addStrokeSampleAtElapsed(float worldX, float worldY, float pressure,
-        float strokeElapsedSeconds, StrokeInputDevice inputDevice, bool processImmediately);
+        float strokeElapsedSeconds, StrokeInputDevice inputDevice,
+        const BrushInputDynamics& inputDynamics, bool processImmediately);
     void continueStrokeImmediate(float worldX, float worldY, float pressure,
-        float strokeElapsedSeconds, bool requestRenderAfterStep, bool isRealPenSample = true);
+        float strokeElapsedSeconds, const BrushInputDynamics& inputDynamics,
+        bool requestRenderAfterStep, bool isRealPenSample = true);
     // Advances the de-jittered synthetic clock and returns the nowMs to feed the
     // stabilizer. Real pen samples drive a windowed period estimate; catch-up
     // (idle) ticks pass through real time and reset-on-pause keeps it honest.
@@ -210,12 +223,13 @@ private:
     // dabElapsedSeconds is the DAB clock (stepDabDynamicsClock), not the raw
     // input clock — everything this writes ends up on a dab.
     void continueStrokeWithResolvedPoint(float worldX, float worldY, float pressure,
-        float dabElapsedSeconds, const Vector2& stabilizedPoint, bool requestRenderAfterStep,
-        bool updateCatchupTimer);
+        float dabElapsedSeconds, const BrushInputDynamics& inputDynamics,
+        const Vector2& stabilizedPoint, bool requestRenderAfterStep, bool updateCatchupTimer);
     void rasterizeStrokeSegment(TileGrid* grid, TileGrid* selectionMask,
         BrushExecutionBackend* brushExecutionBackend, float fromX, float fromY, float toX,
         float toY, float fromPressure, float toPressure, float fromStrokeElapsedSeconds,
-        float toStrokeElapsedSeconds);
+        float toStrokeElapsedSeconds, const BrushInputDynamics& fromInputDynamics = {},
+        const BrushInputDynamics& toInputDynamics = {});
     void rasterizeQuadraticStroke(TileGrid* grid, TileGrid* selectionMask,
         BrushExecutionBackend* brushExecutionBackend, const Vector2& start, const Vector2& control,
         const Vector2& end, float startPressure, float controlPressure, float endPressure,
@@ -227,7 +241,11 @@ private:
     void rasterizeCatmullRomStroke(TileGrid* grid, TileGrid* selectionMask,
         BrushExecutionBackend* brushExecutionBackend, const Vector2& p0, const Vector2& p1,
         const Vector2& p2, const Vector2& p3, float p1Pressure, float p2Pressure,
-        float p1StrokeElapsedSeconds, float p2StrokeElapsedSeconds);
+        float p1StrokeElapsedSeconds, float p2StrokeElapsedSeconds,
+        const BrushInputDynamics& p0InputDynamics = {},
+        const BrushInputDynamics& p1InputDynamics = {},
+        const BrushInputDynamics& p2InputDynamics = {},
+        const BrushInputDynamics& p3InputDynamics = {});
     bool rebuildStrokePreviewFromDabs(TileGrid* grid, TileGrid* selectionMask,
         BrushExecutionBackend* brushExecutionBackend, bool allowPreviewSampling,
         std::unordered_set<TileKey, TileKeyHash>* outRebuiltTiles = nullptr);
@@ -249,10 +267,12 @@ private:
     // keep applying even with no cursor movement). Push is movement-only.
     void emitLiquifyDwell();
     Vector2 smoothInputTargetForViewport(float worldX, float worldY);
-    // World-space window (px) for the input-pressure EMA, coupled to the brush
-    // base radius so the smoothing scale tracks dab spacing at any brush size /
-    // zoom. See continueStrokeAtElapsed for the rationale (huge-brush stepping).
-    float pressureSmoothingWindowWorldPx() const;
+    // World-space window (px) for continuous dynamics signals that can affect
+    // dab geometry. Coupled to the brush base radius so their rate of change
+    // stays smooth relative to dab spacing at any brush size / zoom.
+    float dynamicsSmoothingWindowWorldPx() const;
+    float sampleSmoothedStrokeSpeed(float worldX, float worldY, double synthMs);
+    void backfillDeferredStrokeSpeed(const BrushInputDynamics& seedInputDynamics);
     bool tryFinalizeStroke(bool forceWait);
     void clearStrokeRuntimeState();
     // Projects an incoming raw sample onto the locked axis, choosing the axis
@@ -268,6 +288,7 @@ private:
     float m_lastStrokeX = 0.0f;
     float m_lastStrokeY = 0.0f;
     float m_lastStrokePressure = 1.0f;
+    BrushInputDynamics m_lastStrokeInputDynamics {};
     // Anchors of the rasterized path. Their *ElapsedSeconds are in the DAB clock
     // domain (m_dabClock*), because that is what they are handed to the brush
     // as; only m_lastStrokeTargetElapsedSeconds tracks the raw input clock, which
@@ -276,13 +297,26 @@ private:
     float m_lastStrokeTargetX = 0.0f;
     float m_lastStrokeTargetY = 0.0f;
     float m_lastStrokeTargetPressure = 1.0f;
+    BrushInputDynamics m_lastStrokeTargetInputDynamics {};
     float m_lastStrokeTargetElapsedSeconds = 0.0f;
     float m_lastStrokeInputX = 0.0f;
     float m_lastStrokeInputY = 0.0f;
     float m_lastStrokeInputPressure = 1.0f;
+    BrushInputDynamics m_lastRawStrokeInputDynamics {};
     float m_lastStrokeInputElapsedSeconds = 0.0f;
     QElapsedTimer m_strokeElapsedTimer;
     StrokeInputDevice m_strokeInputDevice = StrokeInputDevice::Stylus;
+    // Stroke-speed estimation runs on the same de-jittered synthetic clock as
+    // stabilization. A trailing arc-length window rejects packet quantization;
+    // the shared radius-coupled dynamics follower then makes the result C1.
+    float m_strokeSpeedSampleX = 0.0f;
+    float m_strokeSpeedSampleY = 0.0f;
+    double m_strokeSpeedCumulativeScreenDistance = 0.0;
+    std::deque<StrokeSpeedMeasurement> m_strokeSpeedMeasurements;
+    float m_strokeSpeedFilteredScreenPxPerSecond = 0.0f;
+    float m_strokeSpeedFilterVelocity = 0.0f;
+    bool m_strokeSpeedFilterValid = false;
+    bool m_initialStrokeSpeedSeeded = false;
 
     // Shift axis constraint. Armed at beginStroke and resolved once, on the
     // first sample far enough from the origin to have an unambiguous dominant
@@ -296,11 +330,11 @@ private:
 
     // Critically-damped 2nd-order smoothing of the raw input pressure, run in
     // world-space arc length with a continuous time-domain fallback near rest
-    // (see continueStrokeAtElapsed). A 1st-order EMA only
+    // (see addStrokeSampleAtElapsed). A 1st-order EMA only
     // smooths the value, leaving a slope corner at each input sample that shows
     // up as a staircase on large size-pressure brushes; carrying a velocity
     // makes the output C1 and removes it. The smoothTime is coupled to the brush
-    // base radius (pressureSmoothingWindowWorldPx) so the easing scale matches
+    // base radius (dynamicsSmoothingWindowWorldPx) so the easing scale matches
     // the dab spacing at any brush size. The time fallback advances the same
     // follower rather than switching or snapping when the pen slows down.
     // Stroke ends are no longer post-processed (the velocity end taper was
@@ -336,6 +370,7 @@ private:
     // the incoming tangent for the Catmull-Rom curve emission so the silhouette
     // is curved between the de-jittered vertices rather than a polygon.
     Vector2 m_prevEmittedPoint {};
+    BrushInputDynamics m_prevEmittedInputDynamics {};
 
     ruwa::core::brushes::StrokeStabilizerState m_stabilizationState;
     // Pressure delayed in lockstep with the position stabilizer (2-stage EWMA,

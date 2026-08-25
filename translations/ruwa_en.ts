@@ -71,6 +71,14 @@
         <translation type="unfinished"></translation>
     </message>
     <message>
+        <source>Pen Tilt</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Stroke Speed</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
         <location filename="../src/features/brush/ui/BrushDynamicsEditorWidget.cpp" line="619"/>
         <source>Select</source>
         <translation type="unfinished"></translation>

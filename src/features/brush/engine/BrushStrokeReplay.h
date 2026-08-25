@@ -3,6 +3,7 @@
 #ifndef RUWA_CORE_BRUSHENGINE_BRUSHSTROKEREPLAY_H
 #define RUWA_CORE_BRUSHENGINE_BRUSHSTROKEREPLAY_H
 
+#include "features/brush/manager/BrushDynamicsTypes.h"
 #include "shared/tiles/TileTypes.h"
 
 #include <cstddef>
@@ -19,6 +20,7 @@ struct BrushStrokeReplayPoint {
     float baseWorldY = 0.0f;
     float pressure = 1.0f;
     float strokeElapsedSeconds = 0.0f;
+    BrushInputDynamics inputDynamics {};
     float textureAmount = 0.0f;
     float textureScale = 1.0f;
     float textureContrast = 0.5f;

@@ -191,18 +191,22 @@ public:
     /// locked to one axis for its whole life (see BrushStrokeHost::beginStroke).
     void beginStroke(float worldX, float worldY, float pressure = 1.0f,
         BrushStrokeHost::StrokeInputDevice inputDevice = BrushStrokeHost::StrokeInputDevice::Stylus,
-        bool axisConstraint = false);
+        bool axisConstraint = false,
+        const BrushStrokeHost::BrushInputDynamics& inputDynamics = {});
     void continueStroke(float worldX, float worldY, float pressure = 1.0f,
         BrushStrokeHost::StrokeInputDevice inputDevice
-        = BrushStrokeHost::StrokeInputDevice::Stylus);
+        = BrushStrokeHost::StrokeInputDevice::Stylus,
+        const BrushStrokeHost::BrushInputDynamics& inputDynamics = {});
     void continueStrokeAtElapsed(float worldX, float worldY, float pressure,
         float strokeElapsedSeconds,
         BrushStrokeHost::StrokeInputDevice inputDevice
-        = BrushStrokeHost::StrokeInputDevice::Stylus);
+        = BrushStrokeHost::StrokeInputDevice::Stylus,
+        const BrushStrokeHost::BrushInputDynamics& inputDynamics = {});
     void queueStrokeAtElapsed(float worldX, float worldY, float pressure,
         float strokeElapsedSeconds,
         BrushStrokeHost::StrokeInputDevice inputDevice
-        = BrushStrokeHost::StrokeInputDevice::Stylus);
+        = BrushStrokeHost::StrokeInputDevice::Stylus,
+        const BrushStrokeHost::BrushInputDynamics& inputDynamics = {});
     float strokeElapsedSecondsNow() const;
     void translateActiveStroke(float dx, float dy);
     void endStroke();

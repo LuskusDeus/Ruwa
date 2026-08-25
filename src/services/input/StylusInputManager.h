@@ -4,6 +4,7 @@
 #define RUWA_SERVICES_INPUT_STYLUSINPUTMANAGER_H
 
 #include <QPoint>
+#include <QPointF>
 #include <optional>
 #include <vector>
 
@@ -34,6 +35,9 @@ public:
     /// Consumes a delayed MouseMove known to have been posted by a native QCursor warp.
     bool consumeNativeCursorWarpAt(const QPoint& globalPos);
     float dispatchPressure() const;
+    /// Physical-screen tilt projection for the WinTab packet currently being
+    /// dispatched. Empty for mouse/Qt-tablet events and unsupported devices.
+    std::optional<QPointF> dispatchTiltVector() const;
     /// Hardware-timestamped elapsed time for the WinTab stroke currently being
     /// dispatched. Empty for ordinary mouse/Qt tablet input and for drivers
     /// that do not provide a usable PK_TIME stream.

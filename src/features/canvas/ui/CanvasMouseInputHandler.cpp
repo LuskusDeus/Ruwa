@@ -49,6 +49,8 @@ struct MousePointerSample {
     bool stylusLike = false;
     bool isEraser = false;
     float pressure = 1.0f;
+    QPointF tiltVector;
+    bool tiltAvailable = false;
 };
 
 QPoint panelLocalPos(const CanvasPanel* panel, const QMouseEvent* event)
@@ -106,6 +108,10 @@ MousePointerSample sampleMousePointer(aether::OpenGLCanvasWidget* canvasWidget, 
             // batch, causing pressure-driven size/opacity artifacts on all intermediate points.
             sample.stylusLike = true;
             sample.pressure = std::clamp(stylusInput.dispatchPressure(), 0.0f, 1.0f);
+            if (const auto tiltVector = stylusInput.dispatchTiltVector()) {
+                sample.tiltVector = *tiltVector;
+                sample.tiltAvailable = true;
+            }
         } else if (stylusInput.nativeCursorPosition()) {
             const auto snapshot = ruwa::services::input::StylusDebugService::instance()->snapshot();
             sample.stylusLike = true;
@@ -115,6 +121,29 @@ MousePointerSample sampleMousePointer(aether::OpenGLCanvasWidget* canvasWidget, 
 
     (void) canvasWidget;
     return sample;
+}
+
+aether::BrushStrokeHost::BrushInputDynamics pointerInputDynamics(const CanvasInputHost* host,
+    const QPointF& globalPos, const MousePointerSample& sample)
+{
+    aether::BrushStrokeHost::BrushInputDynamics result;
+    if (!host || !sample.tiltAvailable) {
+        return result;
+    }
+    const aether::Vector2 origin = host->mapInputToViewportWorld(globalPos);
+    const aether::Vector2 projected
+        = host->mapInputToViewportWorld(globalPos + sample.tiltVector);
+    const float dx = projected.x - origin.x;
+    const float dy = projected.y - origin.y;
+    if (std::hypot(dx, dy) <= 0.000001f) {
+        return result;
+    }
+    constexpr float kPi = 3.14159265358979323846f;
+    const float degrees = ruwa::core::brushes::normalizeAngleDegrees(
+        std::atan2(dy, dx) * 180.0f / kPi);
+    result.penTilt = degrees / 360.0f;
+    result.penTiltAvailable = true;
+    return result;
 }
 
 aether::BrushStrokeHost::StrokeInputDevice strokeInputDeviceForSample(
@@ -727,6 +756,8 @@ bool CanvasMouseInputHandler::handleMousePress(QMouseEvent* event)
                 }
             }
             const MousePointerSample pointerSample = sampleMousePointer(glWidget, event);
+            const auto inputDynamics
+                = pointerInputDynamics(m_panel, event->globalPosition(), pointerSample);
             if (m_panel->m_brushOverlay) {
                 if (auto* packOverlay = m_panel->m_brushOverlay->brushPackOverlay()) {
                     if (!packOverlay->isUserMoved()) {
@@ -740,11 +771,12 @@ bool CanvasMouseInputHandler::handleMousePress(QMouseEvent* event)
             aether::Vector2 worldPos = m_panel->mapToViewportWorld(event->globalPosition());
             glWidget->beginStroke(worldPos.x, worldPos.y, pointerSample.pressure,
                 strokeInputDeviceForSample(pointerSample),
-                event->modifiers().testFlag(Qt::ShiftModifier));
+                event->modifiers().testFlag(Qt::ShiftModifier), inputDynamics);
             // Seed the recovered-point pressure interpolation from the click
             // sample so the very first coalesced batch lerps from real data.
             m_lastRealStrokePressure = pointerSample.pressure;
             m_lastRealStrokeElapsedSec = glWidget->strokeElapsedSecondsNow();
+            m_lastRealStrokeInputDynamics = inputDynamics;
             m_lastRealStrokeSampleValid = true;
             m_panel->m_isDrawing = glWidget->isDrawing();
             if (!m_panel->m_isDrawing) {
@@ -1121,6 +1153,8 @@ bool CanvasMouseInputHandler::handleMouseMove(QMouseEvent* event)
         }
 
         const MousePointerSample pointerSample = sampleMousePointer(m_panel->m_glWidget, event);
+        const auto inputDynamics
+            = pointerInputDynamics(m_panel, event->globalPosition(), pointerSample);
         const bool nativeDispatch = stylusInput.isDispatchingNativeInput();
         const std::optional<float> nativeElapsed
             = nativeDispatch ? stylusInput.dispatchStrokeElapsedSeconds() : std::nullopt;
@@ -1181,6 +1215,11 @@ bool CanvasMouseInputHandler::handleMouseMove(QMouseEvent* event)
                                 / static_cast<float>(recoveredCount + 1);
                         const float recoveredPressure
                             = prevPressure + (pointerSample.pressure - prevPressure) * t;
+                        const auto recoveredInputDynamics
+                            = ruwa::core::brushes::interpolateBrushInputDynamics(
+                                m_lastRealStrokeSampleValid ? m_lastRealStrokeInputDynamics
+                                                            : inputDynamics,
+                                inputDynamics, t);
                         // Queued rather than rasterized on the spot: one
                         // GetMouseMovePointsEx batch can carry dozens of points,
                         // and rasterizing a burst inline puts work proportional
@@ -1189,7 +1228,8 @@ bool CanvasMouseInputHandler::handleMouseMove(QMouseEvent* event)
                         // native path gets, and the real sample below drains it
                         // immediately, so nothing is deferred by doing this.
                         m_panel->m_glWidget->queueStrokeAtElapsed(wp.x, wp.y, recoveredPressure,
-                            recoveredElapsedSec, strokeInputDeviceForSample(pointerSample));
+                            recoveredElapsedSec, strokeInputDeviceForSample(pointerSample),
+                            recoveredInputDynamics);
                     }
                 }
             }
@@ -1203,15 +1243,16 @@ bool CanvasMouseInputHandler::handleMouseMove(QMouseEvent* event)
             // interleave with rasterization.
             m_panel->m_glWidget->queueStrokeAtElapsed(worldPos.x, worldPos.y,
                 pointerSample.pressure, currentElapsedSec,
-                strokeInputDeviceForSample(pointerSample));
+                strokeInputDeviceForSample(pointerSample), inputDynamics);
         } else {
             m_panel->m_glWidget->continueStroke(worldPos.x, worldPos.y, pointerSample.pressure,
-                strokeInputDeviceForSample(pointerSample));
+                strokeInputDeviceForSample(pointerSample), inputDynamics);
         }
         // This real sample becomes the left anchor for the next batch's
         // pressure interpolation.
         m_lastRealStrokePressure = pointerSample.pressure;
         m_lastRealStrokeElapsedSec = currentElapsedSec;
+        m_lastRealStrokeInputDynamics = inputDynamics;
         m_lastRealStrokeSampleValid = true;
         m_panel->canvasContentChanged();
         event->accept();

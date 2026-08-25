@@ -7,6 +7,7 @@
 #include <algorithm>
 #include <cmath>
 #include <deque>
+#include <string_view>
 
 namespace {
 
@@ -121,6 +122,96 @@ TEST_CASE("stroke input queue preserves speed changes used by dynamics", "[brush
 
     CHECK_FALSE(
         aether::stroke_input_queue::canRemoveMiddleSample(first, middle, last, 1.0f, parameters));
+}
+
+TEST_CASE("stroke input queue preserves pen tilt dynamics", "[brush][input][dynamics]")
+{
+    const auto parameters = aether::stroke_input_queue::parametersForQueueAge(0.030f);
+    auto first = sample(0.0f, 0.0f, 0.5f, 0.000f);
+    auto middle = sample(5.0f, 0.0f, 0.5f, 0.005f);
+    auto last = sample(10.0f, 0.0f, 0.5f, 0.010f);
+    first.inputDynamics.penTiltAvailable = true;
+    middle.inputDynamics.penTiltAvailable = true;
+    last.inputDynamics.penTiltAvailable = true;
+    first.inputDynamics.penTilt = 0.0f;
+    middle.inputDynamics.penTilt = 0.25f;
+    last.inputDynamics.penTilt = 0.0f;
+
+    CHECK_FALSE(
+        aether::stroke_input_queue::canRemoveMiddleSample(first, middle, last, 1.0f, parameters));
+}
+
+TEST_CASE("stroke input queue preserves stroke speed dynamics", "[brush][input][dynamics]")
+{
+    const auto parameters = aether::stroke_input_queue::parametersForQueueAge(0.030f);
+    auto first = sample(0.0f, 0.0f, 0.5f, 0.000f);
+    auto middle = sample(5.0f, 0.0f, 0.5f, 0.005f);
+    auto last = sample(10.0f, 0.0f, 0.5f, 0.010f);
+    first.inputDynamics.strokeSpeedAvailable = true;
+    middle.inputDynamics.strokeSpeedAvailable = true;
+    last.inputDynamics.strokeSpeedAvailable = true;
+    first.inputDynamics.strokeSpeed = 0.1f;
+    middle.inputDynamics.strokeSpeed = 0.9f;
+    last.inputDynamics.strokeSpeed = 0.1f;
+
+    CHECK_FALSE(
+        aether::stroke_input_queue::canRemoveMiddleSample(first, middle, last, 1.0f, parameters));
+}
+
+TEST_CASE("pen tilt interpolation follows the shortest circular arc", "[brush][dynamics]")
+{
+    const float from = 350.0f / 360.0f;
+    const float to = 10.0f / 360.0f;
+    const float midpoint = ruwa::core::brushes::interpolateNormalizedAngle(from, to, 0.5f);
+
+    CHECK(std::min(std::abs(midpoint), std::abs(1.0f - midpoint)) < 0.000001f);
+}
+
+TEST_CASE("stroke speed interpolation carries a continuous spatial derivative",
+    "[brush][dynamics]")
+{
+    ruwa::core::brushes::BrushInputDynamics from;
+    from.strokeSpeed = 0.2f;
+    from.strokeSpeedAvailable = true;
+    from.strokeSpeedSpatialDerivative = 0.02f;
+    from.strokeSpeedSpatialDerivativeAvailable = true;
+    ruwa::core::brushes::BrushInputDynamics to;
+    to.strokeSpeed = 0.8f;
+    to.strokeSpeedAvailable = true;
+    to.strokeSpeedSpatialDerivative = 0.04f;
+    to.strokeSpeedSpatialDerivativeAvailable = true;
+
+    const auto start
+        = ruwa::core::brushes::interpolateBrushInputDynamics(from, to, 0.0f, 10.0f);
+    const auto midpoint
+        = ruwa::core::brushes::interpolateBrushInputDynamics(from, to, 0.5f, 10.0f);
+    const auto end
+        = ruwa::core::brushes::interpolateBrushInputDynamics(from, to, 1.0f, 10.0f);
+
+    CHECK(std::abs(start.strokeSpeed - from.strokeSpeed) < 0.000001f);
+    CHECK(std::abs(start.strokeSpeedSpatialDerivative - from.strokeSpeedSpatialDerivative)
+        < 0.000001f);
+    CHECK(midpoint.strokeSpeed > from.strokeSpeed);
+    CHECK(midpoint.strokeSpeed < to.strokeSpeed);
+    CHECK(std::abs(end.strokeSpeed - to.strokeSpeed) < 0.000001f);
+    CHECK(std::abs(end.strokeSpeedSpatialDerivative - to.strokeSpeedSpatialDerivative)
+        < 0.000001f);
+}
+
+TEST_CASE("new brush input sources retain stable serialization names", "[brush][dynamics]")
+{
+    using ruwa::core::brushes::BrushInputSourceKey;
+
+    CHECK(std::string_view(ruwa::core::brushes::brushInputSourceKeyName(
+              BrushInputSourceKey::PenTilt))
+        == "penTilt");
+    CHECK(std::string_view(ruwa::core::brushes::brushInputSourceKeyName(
+              BrushInputSourceKey::StrokeSpeed))
+        == "strokeSpeed");
+    CHECK(ruwa::core::brushes::brushInputSourceKeyFromName("penTilt")
+        == BrushInputSourceKey::PenTilt);
+    CHECK(ruwa::core::brushes::brushInputSourceKeyFromName("strokeSpeed")
+        == BrushInputSourceKey::StrokeSpeed);
 }
 
 TEST_CASE("stroke input queue preserves reversals", "[brush][input]")

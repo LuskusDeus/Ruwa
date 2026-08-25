@@ -58,7 +58,9 @@ public:
     bool strokeTo(TileBrush& brush, TileGrid& layerGrid, float fromX, float fromY, float toX,
         float toY, float fromPressure, float toPressure, TileGrid* selectionMask, bool preferGpu,
         float fromStrokeElapsedSeconds = 0.0f, float toStrokeElapsedSeconds = 0.0f,
-        bool strokeTimeAvailable = false);
+        bool strokeTimeAvailable = false,
+        const ruwa::core::brushes::BrushInputDynamics& fromInputDynamics = {},
+        const ruwa::core::brushes::BrushInputDynamics& toInputDynamics = {});
 
     /// Collect the dabs of several consecutive strokeTo() calls and stamp them
     /// in ONE GPU batch at endDabBatch().

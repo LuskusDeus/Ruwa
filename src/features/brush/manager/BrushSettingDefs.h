@@ -146,6 +146,24 @@ inline BrushDynamicTargetDef pressureTimeRandomDynamicsTarget(BrushDynamicsSetti
     }
 
     target.sources.append(direction);
+
+    BrushDynamicsSourceDef tilt;
+    tilt.source = BrushInputSourceKey::PenTilt;
+    tilt.available = true;
+    tilt.allowedBlendModes.reserve(static_cast<qsizetype>(allowedBlendModes.size()));
+    for (const auto mode : allowedBlendModes) {
+        tilt.allowedBlendModes.append(mode);
+    }
+    target.sources.append(tilt);
+
+    BrushDynamicsSourceDef speed;
+    speed.source = BrushInputSourceKey::StrokeSpeed;
+    speed.available = true;
+    speed.allowedBlendModes.reserve(static_cast<qsizetype>(allowedBlendModes.size()));
+    for (const auto mode : allowedBlendModes) {
+        speed.allowedBlendModes.append(mode);
+    }
+    target.sources.append(speed);
     return target;
 }
 

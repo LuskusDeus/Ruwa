@@ -3,6 +3,8 @@
 #ifndef RUWA_FEATURES_CANVAS_STROKE_STROKEINPUTQUEUE_H
 #define RUWA_FEATURES_CANVAS_STROKE_STROKEINPUTQUEUE_H
 
+#include "features/brush/manager/BrushDynamicsTypes.h"
+
 #include <algorithm>
 #include <cmath>
 #include <cstddef>
@@ -20,6 +22,7 @@ struct StrokeInputSample {
     float pressure = 1.0f;
     float strokeElapsedSeconds = 0.0f;
     StrokeInputDevice inputDevice = StrokeInputDevice::Stylus;
+    ruwa::core::brushes::BrushInputDynamics inputDynamics {};
 };
 
 namespace stroke_input_queue {
@@ -41,6 +44,16 @@ inline constexpr float kMaxRetainedIntervalSeconds = 0.016f;
 inline constexpr float kPressureSignificanceScreenPx = 24.0f;
 // One second of timing error is worth 240 px of positional error.
 inline constexpr float kTimingSignificanceScreenPxPerSecond = 240.0f;
+inline constexpr float kTiltTolerance = 1.0f / 360.0f;
+inline constexpr float kSpeedTolerance = 0.005f;
+inline constexpr float kTiltSignificanceScreenPx = 180.0f;
+inline constexpr float kSpeedSignificanceScreenPx = 32.0f;
+
+inline float normalizedAngleDistance(float first, float second)
+{
+    const float direct = std::abs(first - second);
+    return std::min(direct, 1.0f - direct);
+}
 
 struct ReductionParameters {
     float spatialToleranceScreenPx = kBaseSpatialToleranceScreenPx;
@@ -116,6 +129,30 @@ inline bool canRemoveMiddleSample(const StrokeInputSample& first, const StrokeIn
         = first.pressure + (last.pressure - first.pressure) * interpolation;
     if (std::abs(middle.pressure - expectedPressure) > parameters.pressureTolerance) {
         return false;
+    }
+
+    const auto& firstDynamics = first.inputDynamics;
+    const auto& middleDynamics = middle.inputDynamics;
+    const auto& lastDynamics = last.inputDynamics;
+    if (firstDynamics.penTiltAvailable != middleDynamics.penTiltAvailable
+        || middleDynamics.penTiltAvailable != lastDynamics.penTiltAvailable
+        || firstDynamics.strokeSpeedAvailable != middleDynamics.strokeSpeedAvailable
+        || middleDynamics.strokeSpeedAvailable != lastDynamics.strokeSpeedAvailable) {
+        return false;
+    }
+    if (middleDynamics.penTiltAvailable) {
+        const float expectedTilt = ruwa::core::brushes::interpolateNormalizedAngle(
+            firstDynamics.penTilt, lastDynamics.penTilt, interpolation);
+        if (normalizedAngleDistance(middleDynamics.penTilt, expectedTilt) > kTiltTolerance) {
+            return false;
+        }
+    }
+    if (middleDynamics.strokeSpeedAvailable) {
+        const float expectedSpeed = firstDynamics.strokeSpeed
+            + (lastDynamics.strokeSpeed - firstDynamics.strokeSpeed) * interpolation;
+        if (std::abs(middleDynamics.strokeSpeed - expectedSpeed) > kSpeedTolerance) {
+            return false;
+        }
     }
 
     // Preserve meaningful speed changes for Time/speed-driven brush dynamics.
@@ -226,7 +263,32 @@ inline std::size_t decimateToBudget(
         const float timingSignificance = std::abs(middle.strokeElapsedSeconds - lerpedElapsed)
             * kTimingSignificanceScreenPxPerSecond;
 
-        float result = std::max({ positionSignificance, pressureSignificance, timingSignificance });
+        float tiltSignificance = 0.0f;
+        float speedSignificance = 0.0f;
+        const auto& firstDynamics = first.inputDynamics;
+        const auto& middleDynamics = middle.inputDynamics;
+        const auto& lastDynamics = last.inputDynamics;
+        if (firstDynamics.penTiltAvailable != middleDynamics.penTiltAvailable
+            || middleDynamics.penTiltAvailable != lastDynamics.penTiltAvailable) {
+            tiltSignificance = kTiltSignificanceScreenPx;
+        } else if (middleDynamics.penTiltAvailable) {
+            const float expectedTilt = ruwa::core::brushes::interpolateNormalizedAngle(
+                firstDynamics.penTilt, lastDynamics.penTilt, spatialFraction);
+            tiltSignificance = normalizedAngleDistance(middleDynamics.penTilt, expectedTilt)
+                * kTiltSignificanceScreenPx;
+        }
+        if (firstDynamics.strokeSpeedAvailable != middleDynamics.strokeSpeedAvailable
+            || middleDynamics.strokeSpeedAvailable != lastDynamics.strokeSpeedAvailable) {
+            speedSignificance = kSpeedSignificanceScreenPx;
+        } else if (middleDynamics.strokeSpeedAvailable) {
+            const float expectedSpeed = firstDynamics.strokeSpeed
+                + (lastDynamics.strokeSpeed - firstDynamics.strokeSpeed) * spatialFraction;
+            speedSignificance
+                = std::abs(middleDynamics.strokeSpeed - expectedSpeed) * kSpeedSignificanceScreenPx;
+        }
+
+        float result = std::max({ positionSignificance, pressureSignificance, timingSignificance,
+            tiltSignificance, speedSignificance });
         if (!std::isfinite(result)) {
             result = 0.0f;
         }

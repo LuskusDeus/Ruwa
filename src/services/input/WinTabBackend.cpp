@@ -8,6 +8,7 @@
 #include <QPointF>
 
 #include <limits>
+#include <cmath>
 #include <unordered_map>
 
 #ifdef Q_OS_WIN
@@ -27,6 +28,16 @@ struct PressureRange {
     int maximum = 0;
 
     bool isValid() const { return maximum > minimum; }
+};
+
+struct OrientationResolution {
+    float azimuthUnitsPerDegree = 0.0f;
+    float altitudeUnitsPerDegree = 0.0f;
+
+    bool isValid() const
+    {
+        return azimuthUnitsPerDegree > 0.0f && altitudeUnitsPerDegree > 0.0f;
+    }
 };
 
 #ifdef Q_OS_WIN
@@ -50,6 +61,7 @@ constexpr UINT DVC_NAME = 1;
 constexpr UINT DVC_NCSRTYPES = 3;
 constexpr UINT DVC_FIRSTCSR = 4;
 constexpr UINT DVC_NPRESSURE = 15;
+constexpr UINT DVC_ORIENTATION = 17;
 
 constexpr UINT CXO_SYSTEM = 0x0001;
 constexpr UINT CXO_MESSAGES = 0x0004;
@@ -61,10 +73,13 @@ constexpr WTPKT PK_BUTTONS = 0x0040;
 constexpr WTPKT PK_X = 0x0080;
 constexpr WTPKT PK_Y = 0x0100;
 constexpr WTPKT PK_NORMAL_PRESSURE = 0x0400;
+constexpr WTPKT PK_ORIENTATION = 0x1000;
 
 constexpr WTPKT kExtendedPacketData
     = PK_STATUS | PK_TIME | PK_CURSOR | PK_BUTTONS | PK_X | PK_Y | PK_NORMAL_PRESSURE;
 constexpr WTPKT kExtendedPacketMoveMask = PK_CURSOR | PK_BUTTONS | PK_X | PK_Y | PK_NORMAL_PRESSURE;
+constexpr WTPKT kTiltPacketData = kExtendedPacketData | PK_ORIENTATION;
+constexpr WTPKT kTiltPacketMoveMask = kExtendedPacketMoveMask | PK_ORIENTATION;
 constexpr WTPKT kBasicPacketData = PK_BUTTONS | PK_X | PK_Y | PK_NORMAL_PRESSURE;
 constexpr UINT TPS_QUEUE_ERR = 0x0002;
 
@@ -122,6 +137,23 @@ struct Packet {
     UINT pkNormalPressure;
 };
 
+struct ORIENTATION {
+    int orAzimuth;
+    int orAltitude;
+    int orTwist;
+};
+
+struct TiltPacket {
+    UINT pkStatus;
+    DWORD pkTime;
+    UINT pkCursor;
+    DWORD pkButtons;
+    LONG pkX;
+    LONG pkY;
+    UINT pkNormalPressure;
+    ORIENTATION pkOrientation;
+};
+
 struct BasicPacket {
     DWORD pkButtons;
     LONG pkX;
@@ -131,6 +163,7 @@ struct BasicPacket {
 
 static_assert(sizeof(LOGCONTEXTA) == 172, "WinTab LOGCONTEXTA ABI mismatch");
 static_assert(sizeof(Packet) == 28, "WinTab PACKET ABI mismatch");
+static_assert(sizeof(TiltPacket) == 40, "WinTab tilt PACKET ABI mismatch");
 static_assert(sizeof(BasicPacket) == 16, "WinTab basic PACKET ABI mismatch");
 
 using WTInfoAFn = UINT(APIENTRY*)(UINT, UINT, LPVOID);
@@ -152,6 +185,13 @@ QPointF screenPointFromPacket(LONG x, LONG y)
         static_cast<qreal>(y) / static_cast<qreal>(kScreenCoordinateScale));
 }
 
+float fixed32ToFloat(FIX32 value)
+{
+    const auto integer = static_cast<float>(static_cast<WORD>(value >> 16));
+    const auto fraction = static_cast<float>(static_cast<WORD>(value & 0xFFFFu)) / 65536.0f;
+    return integer + fraction;
+}
+
 #endif
 
 } // namespace
@@ -171,6 +211,7 @@ struct WinTabBackend::Data {
     HCTX context = nullptr;
     HWND hwnd = nullptr;
     bool extendedPacketData = false;
+    bool tiltPacketData = false;
 #endif
     bool available = false;
     bool penDown = false;
@@ -180,6 +221,8 @@ struct WinTabBackend::Data {
     int rawPressure = 0;
     PressureRange fallbackPressure;
     std::unordered_map<quint32, PressureRange> pressureByCursor;
+    OrientationResolution fallbackOrientation;
+    std::unordered_map<quint32, OrientationResolution> orientationByCursor;
     QPointF globalPos;
     Qt::MouseButtons buttons = Qt::NoButton;
     bool inProximity = false;
@@ -285,11 +328,11 @@ bool WinTabBackend::attach(void* hwnd)
     // responsible for system-wide hover and button routing outside our HWND
     // (for example, the Windows taskbar).
     context.lcOptions |= CXO_MESSAGES | CXO_SYSTEM;
-    context.lcPktData = kExtendedPacketData;
+    context.lcPktData = kTiltPacketData;
     context.lcPktMode = 0;
     // PK_TIME changes for every hardware report and must not be in lcMoveMask:
     // including it turns stationary hover into an avoidable message-rate flood.
-    context.lcMoveMask = kExtendedPacketMoveMask;
+    context.lcMoveMask = kTiltPacketMoveMask;
     context.lcBtnUpMask = 0xFFFFFFFFu;
     context.lcBtnDnMask = 0xFFFFFFFFu;
     context.lcMsgBase = WT_DEFBASE;
@@ -299,15 +342,38 @@ bool WinTabBackend::attach(void* hwnd)
     context.lcOutExtY = -GetSystemMetrics(SM_CYVIRTUALSCREEN) * kScreenCoordinateScale;
 
     m_data->context = m_data->wtOpenA(window, &context, TRUE);
-    m_data->extendedPacketData = m_data->context != nullptr;
+    m_data->tiltPacketData = m_data->context != nullptr
+        && (context.lcPktData & kTiltPacketData) == kTiltPacketData;
+    m_data->extendedPacketData = m_data->tiltPacketData;
+    if (m_data->context && !m_data->tiltPacketData) {
+        // A context that silently grants a different field layout cannot be
+        // decoded with the requested PACKET struct. Reopen with a known layout.
+        m_data->wtClose(m_data->context);
+        m_data->context = nullptr;
+    }
+    if (!m_data->context) {
+        // Orientation is optional. Keep the existing metadata-rich packet
+        // contract when a driver cannot supply it.
+        context.lcPktData = kExtendedPacketData;
+        context.lcMoveMask = kExtendedPacketMoveMask;
+        m_data->context = m_data->wtOpenA(window, &context, TRUE);
+        m_data->extendedPacketData = m_data->context != nullptr
+            && (context.lcPktData & kExtendedPacketData) == kExtendedPacketData;
+        if (m_data->context && !m_data->extendedPacketData) {
+            m_data->wtClose(m_data->context);
+            m_data->context = nullptr;
+        }
+    }
     if (!m_data->context) {
         // PK_STATUS, PK_TIME and PK_CURSOR are standard WinTab fields, but
         // older or incomplete implementations can still reject a context that
         // requests them. Preserve drawing with the original minimum packet
-        // contract; only hardware timing and overflow diagnostics are lost.
+        // contract; only tilt, hardware timing and overflow diagnostics are lost.
         context.lcPktData = kBasicPacketData;
         context.lcMoveMask = kBasicPacketData;
         m_data->context = m_data->wtOpenA(window, &context, TRUE);
+        m_data->extendedPacketData = false;
+        m_data->tiltPacketData = false;
     }
     if (!m_data->context) {
         setDetails(QStringLiteral("WTOpenA failed"));
@@ -363,6 +429,8 @@ bool WinTabBackend::attach(void* hwnd)
 
     m_data->fallbackPressure = {};
     m_data->pressureByCursor.clear();
+    m_data->fallbackOrientation = {};
+    m_data->orientationByCursor.clear();
 
     const auto pressureRangeForDevice = [this](UINT device) -> PressureRange {
         AXIS pressureAxis {};
@@ -373,10 +441,26 @@ bool WinTabBackend::attach(void* hwnd)
             static_cast<int>(pressureAxis.axMax) };
         return range.isValid() ? range : PressureRange {};
     };
+    const auto orientationResolutionForDevice
+        = [this](UINT device) -> OrientationResolution {
+        AXIS orientationAxes[3] {};
+        if (m_data->wtInfoA(WTI_DEVICES + device, DVC_ORIENTATION, orientationAxes) == 0) {
+            return {};
+        }
+        // TU_CIRCLE resolution is expressed as raw increments per full turn,
+        // while ORIENTATION needs conversion to degrees.
+        constexpr float kDegreesPerCircle = 360.0f;
+        OrientationResolution resolution {
+            fixed32ToFloat(orientationAxes[0].axResolution) / kDegreesPerCircle,
+            fixed32ToFloat(orientationAxes[1].axResolution) / kDegreesPerCircle
+        };
+        return resolution.isValid() ? resolution : OrientationResolution {};
+    };
 
     const UINT virtualDevice = std::numeric_limits<UINT>::max();
     if (context.lcDevice != virtualDevice) {
         m_data->fallbackPressure = pressureRangeForDevice(context.lcDevice);
+        m_data->fallbackOrientation = orientationResolutionForDevice(context.lcDevice);
     } else {
         // The default system context is commonly a virtual device accepting
         // packets from every attached tablet. WTI_DEVICES + UINT(-1) is not a
@@ -387,11 +471,16 @@ bool WinTabBackend::attach(void* hwnd)
         if (m_data->wtInfoA(WTI_INTERFACE, IFC_NDEVICES, &deviceCount) > 0) {
             for (UINT device = 0; device < deviceCount; ++device) {
                 const PressureRange range = pressureRangeForDevice(device);
-                if (!range.isValid()) {
+                const OrientationResolution orientation
+                    = orientationResolutionForDevice(device);
+                if (!range.isValid() && !orientation.isValid()) {
                     continue;
                 }
-                if (!m_data->fallbackPressure.isValid()) {
+                if (!m_data->fallbackPressure.isValid() && range.isValid()) {
                     m_data->fallbackPressure = range;
+                }
+                if (!m_data->fallbackOrientation.isValid() && orientation.isValid()) {
+                    m_data->fallbackOrientation = orientation;
                 }
 
                 UINT firstCursor = 0;
@@ -401,7 +490,12 @@ bool WinTabBackend::attach(void* hwnd)
                     continue;
                 }
                 for (UINT offset = 0; offset < cursorCount; ++offset) {
-                    m_data->pressureByCursor[firstCursor + offset] = range;
+                    if (range.isValid()) {
+                        m_data->pressureByCursor[firstCursor + offset] = range;
+                    }
+                    if (orientation.isValid()) {
+                        m_data->orientationByCursor[firstCursor + offset] = orientation;
+                    }
                 }
             }
         }
@@ -445,8 +539,11 @@ bool WinTabBackend::attach(void* hwnd)
         trace::write(QStringLiteral("CONTEXT granted lcOptions=0x")
             + QString::number(context.lcOptions, 16) + QStringLiteral(" lcPktData=0x")
             + QString::number(context.lcPktData, 16) + QStringLiteral(" requestedPktData=0x")
-            + QString::number(
-                m_data->extendedPacketData ? kExtendedPacketData : kBasicPacketData, 16)
+            + QString::number(m_data->tiltPacketData ? kTiltPacketData
+                                                     : m_data->extendedPacketData
+                    ? kExtendedPacketData
+                    : kBasicPacketData,
+                16)
             + QStringLiteral(" lcMoveMask=0x") + QString::number(context.lcMoveMask, 16)
             + QStringLiteral(" lcDevice=") + QString::number(context.lcDevice));
 
@@ -498,6 +595,7 @@ void WinTabBackend::detach()
     m_data->context = nullptr;
     m_data->hwnd = nullptr;
     m_data->extendedPacketData = false;
+    m_data->tiltPacketData = false;
 #endif
     m_data->penDown = false;
     m_data->penEngaged = false;
@@ -509,7 +607,9 @@ void WinTabBackend::detach()
     m_data->queueOverflowCount = 0;
     m_data->rejectedOriginPackets = 0;
     m_data->pressureByCursor.clear();
+    m_data->orientationByCursor.clear();
     m_data->fallbackPressure = {};
+    m_data->fallbackOrientation = {};
     m_data->pendingPackets.clear();
     // A position carried across a detach would make the first packet of the next
     // context look like a jump in the trace.
@@ -533,7 +633,8 @@ bool WinTabBackend::handleNativeEvent(void* message)
         // be lost when WT_PACKET messages are dropped from the Windows message queue.
         constexpr int kDrainChunkSize = 64;
 
-        const auto processPacket = [this](const Packet& packet, bool hasMetadata) {
+        const auto processPacket
+            = [this](const Packet& packet, bool hasMetadata, const ORIENTATION* orientation) {
             // A packet sitting on the exact origin of the mapped output area while
             // reporting no contact and no buttons is not a position a user can aim
             // at. It is what some drivers emit for a cursor they have stopped
@@ -606,6 +707,32 @@ bool WinTabBackend::handleNativeEvent(void* message)
             PenSample sample;
             sample.globalPos = screenPointFromPacket(packet.pkX, packet.pkY);
             sample.pressure = pressure;
+            if (orientation && hasMetadata) {
+                const auto resolutionIt = m_data->orientationByCursor.find(packet.pkCursor);
+                const OrientationResolution& resolution
+                    = resolutionIt != m_data->orientationByCursor.end()
+                    ? resolutionIt->second
+                    : m_data->fallbackOrientation;
+                if (resolution.isValid()) {
+                    constexpr float kPi = 3.14159265358979323846f;
+                    const float azimuthDegrees = static_cast<float>(orientation->orAzimuth)
+                        / resolution.azimuthUnitsPerDegree;
+                    const float altitudeDegrees = static_cast<float>(orientation->orAltitude)
+                        / resolution.altitudeUnitsPerDegree;
+                    // WinTab azimuth is clockwise from screen-up. Convert it to
+                    // the x-right/y-down vector QTabletEvent semantics use.
+                    const float azimuthRadians = azimuthDegrees * (kPi / 180.0f);
+                    const float projectionMagnitude
+                        = std::abs(std::cos(altitudeDegrees * (kPi / 180.0f)));
+                    constexpr float kMinimumProjection = 0.008726535f; // sin(0.5°)
+                    if (std::isfinite(projectionMagnitude)
+                        && projectionMagnitude >= kMinimumProjection) {
+                        sample.tiltVector
+                            = QPointF(std::sin(azimuthRadians), -std::cos(azimuthRadians));
+                        sample.tiltAvailable = true;
+                    }
+                }
+            }
             sample.buttons = buttons;
             sample.packetTimeMs = static_cast<quint32>(packet.pkTime);
             sample.hasPacketTime = hasMetadata;
@@ -667,7 +794,18 @@ bool WinTabBackend::handleNativeEvent(void* message)
             packet.pkX = basicPacket.pkX;
             packet.pkY = basicPacket.pkY;
             packet.pkNormalPressure = basicPacket.pkNormalPressure;
-            processPacket(packet, false);
+            processPacket(packet, false, nullptr);
+        };
+        const auto processTiltPacket = [&processPacket](const TiltPacket& tiltPacket) {
+            Packet packet {};
+            packet.pkStatus = tiltPacket.pkStatus;
+            packet.pkTime = tiltPacket.pkTime;
+            packet.pkCursor = tiltPacket.pkCursor;
+            packet.pkButtons = tiltPacket.pkButtons;
+            packet.pkX = tiltPacket.pkX;
+            packet.pkY = tiltPacket.pkY;
+            packet.pkNormalPressure = tiltPacket.pkNormalPressure;
+            processPacket(packet, true, &tiltPacket.pkOrientation);
         };
 
         // The drain loop repeats while the driver keeps handing back full chunks,
@@ -680,7 +818,21 @@ bool WinTabBackend::handleNativeEvent(void* message)
             bool receivedPackets = false;
             int count = 0;
             int drained = 0;
-            if (m_data->extendedPacketData) {
+            if (m_data->tiltPacketData) {
+                do {
+                    TiltPacket packets[kDrainChunkSize];
+                    count = m_data->wtPacketsGet(m_data->context, kDrainChunkSize, packets);
+                    if (count <= 0) {
+                        break;
+                    }
+
+                    receivedPackets = true;
+                    drained += count;
+                    for (int i = 0; i < count; ++i) {
+                        processTiltPacket(packets[i]);
+                    }
+                } while (count == kDrainChunkSize && drained < kMaxDrainedPacketsPerMessage);
+            } else if (m_data->extendedPacketData) {
                 do {
                     Packet packets[kDrainChunkSize];
                     count = m_data->wtPacketsGet(m_data->context, kDrainChunkSize, packets);
@@ -691,7 +843,7 @@ bool WinTabBackend::handleNativeEvent(void* message)
                     receivedPackets = true;
                     drained += count;
                     for (int i = 0; i < count; ++i) {
-                        processPacket(packets[i], true);
+                        processPacket(packets[i], true, nullptr);
                     }
                 } while (count == kDrainChunkSize && drained < kMaxDrainedPacketsPerMessage);
             } else {
@@ -721,9 +873,11 @@ bool WinTabBackend::handleNativeEvent(void* message)
 
         // Fallback: WTPacketsGet not available — read the single packet by serial number
         Packet packet {};
+        TiltPacket tiltPacket {};
         BasicPacket basicPacket {};
-        void* packetData = m_data->extendedPacketData ? static_cast<void*>(&packet)
-                                                      : static_cast<void*>(&basicPacket);
+        void* packetData = m_data->tiltPacketData ? static_cast<void*>(&tiltPacket)
+            : m_data->extendedPacketData          ? static_cast<void*>(&packet)
+                                                  : static_cast<void*>(&basicPacket);
         if (!m_data->wtPacket(m_data->context, static_cast<UINT>(msg->wParam), packetData)) {
             // Expected for stale WT_PACKET messages after WTPacketsGet drained
             // the referenced serial and every older packet.
@@ -732,8 +886,10 @@ bool WinTabBackend::handleNativeEvent(void* message)
             }
             return false;
         }
-        if (m_data->extendedPacketData) {
-            processPacket(packet, true);
+        if (m_data->tiltPacketData) {
+            processTiltPacket(tiltPacket);
+        } else if (m_data->extendedPacketData) {
+            processPacket(packet, true, nullptr);
         } else {
             processBasicPacket(basicPacket);
         }

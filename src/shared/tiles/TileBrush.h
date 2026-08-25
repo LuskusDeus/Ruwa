@@ -40,6 +40,7 @@ public:
         float baseWorldY = 0.0f;
         float pressure = 1.0f;
         float strokeElapsedSeconds = 0.0f;
+        ruwa::core::brushes::BrushInputDynamics inputDynamics {};
         float textureAmount = 0.0f;
         float textureScale = 1.0f;
         float textureContrast = 0.5f;
@@ -439,6 +440,16 @@ public:
     // --- Pen pressure ---
     void setPressure(float pressure) { m_pressure = std::clamp(pressure, 0.0f, 1.0f); }
     float pressure() const { return m_pressure; }
+    void setInputDynamics(const ruwa::core::brushes::BrushInputDynamics& inputDynamics)
+    {
+        m_inputDynamics = inputDynamics;
+        m_inputDynamics.penTilt = std::clamp(m_inputDynamics.penTilt, 0.0f, 1.0f);
+        m_inputDynamics.strokeSpeed = std::clamp(m_inputDynamics.strokeSpeed, 0.0f, 1.0f);
+    }
+    const ruwa::core::brushes::BrushInputDynamics& inputDynamics() const
+    {
+        return m_inputDynamics;
+    }
     void setStrokeElapsedSeconds(float seconds, bool available = true)
     {
         if (!available || !std::isfinite(seconds)) {
@@ -889,6 +900,7 @@ public:
         m_strokeTravelTotal = 0.0f;
         m_strokeDirInitialized = false;
         clearStrokeTime();
+        m_inputDynamics = {};
         return affected;
     }
 
@@ -1307,6 +1319,7 @@ public:
         m_strokeTravelTotal = 0.0f;
         m_strokeDirInitialized = false;
         clearStrokeTime();
+        m_inputDynamics = {};
     }
 
     /// Capture brush parameters into an immutable dab point.
@@ -1349,6 +1362,7 @@ public:
         dab.baseWorldY = worldY;
         dab.pressure = m_pressure;
         dab.strokeElapsedSeconds = m_strokeElapsedSeconds;
+        dab.inputDynamics = m_inputDynamics;
         dab.strokeTimeAvailable = m_strokeTimeAvailable;
         dab.textureAmount = dynamicState.textureAmount;
         dab.textureScale = dynamicState.textureScale;
@@ -1432,7 +1446,9 @@ public:
     /// Stroke from pointA to pointB with spacing
     void strokeTo(TileGrid& grid, float fromX, float fromY, float toX, float toY,
         const TileGrid* selectionMask = nullptr, float fromStrokeElapsedSeconds = 0.0f,
-        float toStrokeElapsedSeconds = 0.0f, bool strokeTimeAvailable = false)
+        float toStrokeElapsedSeconds = 0.0f, bool strokeTimeAvailable = false,
+        const ruwa::core::brushes::BrushInputDynamics& fromInputDynamics = {},
+        const ruwa::core::brushes::BrushInputDynamics& toInputDynamics = {})
     {
         if (!strokeTimeAvailable && m_strokeTimeAvailable) {
             fromStrokeElapsedSeconds = m_strokeElapsedSeconds;
@@ -1441,7 +1457,8 @@ public:
         }
         std::vector<DabPoint> segmentDabs;
         appendInterpolatedStrokeDabs(fromX, fromY, toX, toY, m_pressure, m_pressure, segmentDabs,
-            fromStrokeElapsedSeconds, toStrokeElapsedSeconds, strokeTimeAvailable);
+            fromStrokeElapsedSeconds, toStrokeElapsedSeconds, strokeTimeAvailable,
+            fromInputDynamics, toInputDynamics);
         TileGrid& target = m_strokeActive ? m_strokeBuffer : grid;
         for (const DabPoint& dab : segmentDabs) {
             const bool maxBlend = m_strokeActive ? dab.useMaxBlend : false;
@@ -1453,7 +1470,9 @@ public:
     void strokeToInterpolatedSize(TileGrid& grid, float fromX, float fromY, float toX, float toY,
         float fromPressure, float toPressure, const TileGrid* selectionMask = nullptr,
         float fromStrokeElapsedSeconds = 0.0f, float toStrokeElapsedSeconds = 0.0f,
-        bool strokeTimeAvailable = false)
+        bool strokeTimeAvailable = false,
+        const ruwa::core::brushes::BrushInputDynamics& fromInputDynamics = {},
+        const ruwa::core::brushes::BrushInputDynamics& toInputDynamics = {})
     {
         if (!strokeTimeAvailable && m_strokeTimeAvailable) {
             fromStrokeElapsedSeconds = m_strokeElapsedSeconds;
@@ -1462,7 +1481,8 @@ public:
         }
         std::vector<DabPoint> segmentDabs;
         appendInterpolatedStrokeDabs(fromX, fromY, toX, toY, fromPressure, toPressure, segmentDabs,
-            fromStrokeElapsedSeconds, toStrokeElapsedSeconds, strokeTimeAvailable);
+            fromStrokeElapsedSeconds, toStrokeElapsedSeconds, strokeTimeAvailable,
+            fromInputDynamics, toInputDynamics);
         TileGrid& target = m_strokeActive ? m_strokeBuffer : grid;
         for (const DabPoint& dab : segmentDabs) {
             const bool maxBlend = m_strokeActive ? dab.useMaxBlend : false;
@@ -1475,7 +1495,9 @@ public:
     void appendInterpolatedStrokeDabs(float fromX, float fromY, float toX, float toY,
         float fromPressure, float toPressure, std::vector<DabPoint>& outDabs,
         float fromStrokeElapsedSeconds = 0.0f, float toStrokeElapsedSeconds = 0.0f,
-        bool strokeTimeAvailable = false)
+        bool strokeTimeAvailable = false,
+        const ruwa::core::brushes::BrushInputDynamics& fromInputDynamics = {},
+        const ruwa::core::brushes::BrushInputDynamics& toInputDynamics = {})
     {
         const float dx = toX - fromX;
         const float dy = toY - fromY;
@@ -1489,6 +1511,7 @@ public:
             if (m_liquifyMode && m_liquifyToolMode != 0) {
                 setPressure(toPressure);
                 setStrokeElapsedSeconds(toStrokeElapsedSeconds, strokeTimeAvailable);
+                setInputDynamics(toInputDynamics);
                 DabPoint dab = recordDabPoint(toX, toY);
                 if (dab.alpha != 0) {
                     outDabs.push_back(dab);
@@ -1618,6 +1641,8 @@ public:
         // spacing is required to produce a smooth drag instead of visible bands.
         const float minSpacingFactor = m_blurMode ? 0.35f : ruwa::core::brushes::kBrushSpacingMin;
         const auto spacingStepAt = [&](float t) {
+            setInputDynamics(ruwa::core::brushes::interpolateBrushInputDynamics(
+                fromInputDynamics, toInputDynamics, t, dist));
             const float pressure = fromPressure + (toPressure - fromPressure) * t;
             const float strokeElapsedSeconds = fromStrokeElapsedSeconds
                 + (toStrokeElapsedSeconds - fromStrokeElapsedSeconds) * t;
@@ -1654,6 +1679,7 @@ public:
             m_spacingDistanceSinceLastDab = 0.0f;
             setPressure(toPressure);
             setStrokeElapsedSeconds(toStrokeElapsedSeconds, strokeTimeAvailable);
+            setInputDynamics(toInputDynamics);
             return;
         }
 
@@ -1662,11 +1688,13 @@ public:
             // we've just exited deferral, so newAvail/newDir reflect a
             // settled direction; the dab here lands at the segment start
             // (a few pixels past the click point) but oriented correctly.
-            // For non-direction brushes the click-stamp normally already
-            // placed a dab, so this only fires on the rare path where stamp
-            // wasn't called.
+            // For brushes without a deferred dynamic input the click-stamp
+            // normally already placed a dab. Direction- and speed-driven
+            // strokes deliberately arrive here with an empty dab list so their
+            // first observable input can seed the stroke head consistently.
             setPressure(fromPressure);
             setStrokeElapsedSeconds(fromStrokeElapsedSeconds, strokeTimeAvailable);
+            setInputDynamics(fromInputDynamics);
             float dir0 = 0.0f;
             bool avail0 = false;
             directionAt(0.0f, &dir0, &avail0);
@@ -1691,6 +1719,8 @@ public:
 
             setPressure(pressure);
             setStrokeElapsedSeconds(strokeElapsedSeconds, strokeTimeAvailable);
+            setInputDynamics(ruwa::core::brushes::interpolateBrushInputDynamics(
+                fromInputDynamics, toInputDynamics, t, dist));
             float dirT = 0.0f;
             bool availT = false;
             directionAt(t, &dirT, &availT);
@@ -1710,6 +1740,7 @@ public:
         m_spacingDistanceSinceLastDab = sinceLast;
         setPressure(toPressure);
         setStrokeElapsedSeconds(toStrokeElapsedSeconds, strokeTimeAvailable);
+        setInputDynamics(toInputDynamics);
     }
 
     /// Rasterize an externally provided dab point.
@@ -1729,18 +1760,23 @@ public:
     /// whole batch, so per-dab texture dynamics still need the CPU replay path.
     bool hasDynamicsRequiringCpuReplay() const { return hasDynamicTextureBinding(); }
 
-    bool hasActiveStrokeDirectionDynamicsBinding() const
+    bool hasActiveDynamicsBinding(ruwa::core::brushes::BrushInputSourceKey source) const
     {
         if (!m_useBrushSettingsModel) {
             return false;
         }
         for (const auto& slot : m_brushSettingsModel.dynamics.settingSlots) {
-            if (slot.binding(ruwa::core::brushes::BrushInputSourceKey::StrokeDirection)
-                    .isActive()) {
+            if (slot.binding(source).isActive()) {
                 return true;
             }
         }
         return false;
+    }
+
+    bool hasActiveStrokeDirectionDynamicsBinding() const
+    {
+        return hasActiveDynamicsBinding(
+            ruwa::core::brushes::BrushInputSourceKey::StrokeDirection);
     }
 
     /// Narrower check: is the dab's shape-angle slot specifically driven by
@@ -2019,6 +2055,10 @@ private:
         inputContext.strokeProgress = std::clamp(strokeProgress, 0.0f, 1.0f);
         inputContext.strokeElapsedSeconds = m_strokeElapsedSeconds;
         inputContext.strokeTimeAvailable = m_strokeTimeAvailable;
+        inputContext.penTilt = m_inputDynamics.penTilt;
+        inputContext.penTiltAvailable = m_inputDynamics.penTiltAvailable;
+        inputContext.strokeSpeed = m_inputDynamics.strokeSpeed;
+        inputContext.strokeSpeedAvailable = m_inputDynamics.strokeSpeedAvailable;
         return inputContext;
     }
 
@@ -3467,6 +3507,7 @@ private:
 
     // Pen pressure state (updated per-event by CanvasPanel)
     float m_pressure = 1.0f; // 0..1, 1.0 = full pressure (mouse default)
+    ruwa::core::brushes::BrushInputDynamics m_inputDynamics {};
     float m_strokeElapsedSeconds = 0.0f;
     bool m_strokeTimeAvailable = false;
     bool m_sizePressureEnabled = false;

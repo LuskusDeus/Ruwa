@@ -949,6 +949,8 @@ void QuickShapeMorph::apply(float easedT, bool rebuildPreview)
         point.baseWorldX = point.worldX;
         point.baseWorldY = point.worldY;
         point.pressure = a.pressure + (b.pressure - a.pressure) * t;
+        point.inputDynamics = ruwa::core::brushes::interpolateBrushInputDynamics(
+            a.inputDynamics, b.inputDynamics, t);
         point.radius = a.radius + (b.radius - a.radius) * t;
         point.baseRadius = a.baseRadius + (b.baseRadius - a.baseRadius) * t;
         point.hardness = a.hardness + (b.hardness - a.hardness) * t;

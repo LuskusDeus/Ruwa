@@ -71,6 +71,14 @@
         <translation>Направление</translation>
     </message>
     <message>
+        <source>Pen Tilt</source>
+        <translation>Наклон пера</translation>
+    </message>
+    <message>
+        <source>Stroke Speed</source>
+        <translation>Скорость мазка</translation>
+    </message>
+    <message>
         <location filename="../src/features/brush/ui/BrushDynamicsEditorWidget.cpp" line="619"/>
         <source>Select</source>
         <translation>Выбрать</translation>

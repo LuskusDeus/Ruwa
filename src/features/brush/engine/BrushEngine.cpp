@@ -96,6 +96,7 @@ bool BrushExecutionBackend::stamp(TileBrush& brush, TileGrid& layerGrid, float w
 
         brush.setPressure(dab.pressure);
         brush.setStrokeElapsedSeconds(dab.strokeElapsedSeconds, dab.strokeTimeAvailable);
+        brush.setInputDynamics(dab.inputDynamics);
 
         // Liquify warps by the movement between consecutive dabs; a single
         // isolated stamp has no displacement, so the dab is recorded (for tile
@@ -126,12 +127,15 @@ bool BrushExecutionBackend::stamp(TileBrush& brush, TileGrid& layerGrid, float w
 bool BrushExecutionBackend::strokeTo(TileBrush& brush, TileGrid& layerGrid, float fromX,
     float fromY, float toX, float toY, float fromPressure, float toPressure,
     TileGrid* selectionMask, bool preferGpu, float fromStrokeElapsedSeconds,
-    float toStrokeElapsedSeconds, bool strokeTimeAvailable)
+    float toStrokeElapsedSeconds, bool strokeTimeAvailable,
+    const ruwa::core::brushes::BrushInputDynamics& fromInputDynamics,
+    const ruwa::core::brushes::BrushInputDynamics& toInputDynamics)
 {
     if (preferGpu && hasGpuBackend()) {
         std::vector<TileBrush::DabPoint> segmentDabs;
         brush.appendInterpolatedStrokeDabs(fromX, fromY, toX, toY, fromPressure, toPressure,
-            segmentDabs, fromStrokeElapsedSeconds, toStrokeElapsedSeconds, strokeTimeAvailable);
+            segmentDabs, fromStrokeElapsedSeconds, toStrokeElapsedSeconds, strokeTimeAvailable,
+            fromInputDynamics, toInputDynamics);
 
         TileGrid* blurLayerGrid = (brush.isBlurMode() || brush.isSmudgeMode() || brush.isWetMode()
                                       || brush.isLiquifyMode())
@@ -148,6 +152,7 @@ bool BrushExecutionBackend::strokeTo(TileBrush& brush, TileGrid& layerGrid, floa
             const auto& last = segmentDabs.back();
             brush.setPressure(last.pressure);
             brush.setStrokeElapsedSeconds(last.strokeElapsedSeconds, last.strokeTimeAvailable);
+            brush.setInputDynamics(last.inputDynamics);
             return true;
         }
 
@@ -164,6 +169,7 @@ bool BrushExecutionBackend::strokeTo(TileBrush& brush, TileGrid& layerGrid, floa
                     brush.setPressure(last.pressure);
                     brush.setStrokeElapsedSeconds(
                         last.strokeElapsedSeconds, last.strokeTimeAvailable);
+                    brush.setInputDynamics(last.inputDynamics);
                 }
                 return true;
             }
@@ -185,6 +191,7 @@ bool BrushExecutionBackend::strokeTo(TileBrush& brush, TileGrid& layerGrid, floa
                 const auto& last = segmentDabs.back();
                 brush.setPressure(last.pressure);
                 brush.setStrokeElapsedSeconds(last.strokeElapsedSeconds, last.strokeTimeAvailable);
+                brush.setInputDynamics(last.inputDynamics);
             }
             return true;
         }
@@ -196,6 +203,7 @@ bool BrushExecutionBackend::strokeTo(TileBrush& brush, TileGrid& layerGrid, floa
             const auto& last = segmentDabs.back();
             brush.setPressure(last.pressure);
             brush.setStrokeElapsedSeconds(last.strokeElapsedSeconds, last.strokeTimeAvailable);
+            brush.setInputDynamics(last.inputDynamics);
             return true;
         }
 
@@ -203,6 +211,7 @@ bool BrushExecutionBackend::strokeTo(TileBrush& brush, TileGrid& layerGrid, floa
         for (const auto& dab : segmentDabs) {
             brush.setPressure(dab.pressure);
             brush.setStrokeElapsedSeconds(dab.strokeElapsedSeconds, dab.strokeTimeAvailable);
+            brush.setInputDynamics(dab.inputDynamics);
             m_brushRenderer->stampGPU(brush.strokeBuffer(), m_tileRenderer, brush, dab.worldX,
                 dab.worldY, dab.radius, dab.hardness, dab.roundness, dab.angleDegrees,
                 dab.useMaxBlend, dab.colorR, dab.colorG, dab.colorB, dab.alpha, selectionMask,
@@ -217,7 +226,8 @@ bool BrushExecutionBackend::strokeTo(TileBrush& brush, TileGrid& layerGrid, floa
     }
 
     brush.strokeToInterpolatedSize(layerGrid, fromX, fromY, toX, toY, fromPressure, toPressure,
-        selectionMask, fromStrokeElapsedSeconds, toStrokeElapsedSeconds, strokeTimeAvailable);
+        selectionMask, fromStrokeElapsedSeconds, toStrokeElapsedSeconds, strokeTimeAvailable,
+        fromInputDynamics, toInputDynamics);
     return false;
 }
 
@@ -261,6 +271,7 @@ void BrushExecutionBackend::endDabBatch(TileBrush& brush, TileGrid* selectionMas
         for (const auto& dab : m_pendingBatchDabs) {
             brush.setPressure(dab.pressure);
             brush.setStrokeElapsedSeconds(dab.strokeElapsedSeconds, dab.strokeTimeAvailable);
+            brush.setInputDynamics(dab.inputDynamics);
             m_brushRenderer->stampGPU(brush.strokeBuffer(), m_tileRenderer, brush, dab.worldX,
                 dab.worldY, dab.radius, dab.hardness, dab.roundness, dab.angleDegrees,
                 dab.useMaxBlend, dab.colorR, dab.colorG, dab.colorB, dab.alpha, selectionMask,
@@ -272,6 +283,7 @@ void BrushExecutionBackend::endDabBatch(TileBrush& brush, TileGrid* selectionMas
         const auto& last = m_pendingBatchDabs.back();
         brush.setPressure(last.pressure);
         brush.setStrokeElapsedSeconds(last.strokeElapsedSeconds, last.strokeTimeAvailable);
+        brush.setInputDynamics(last.inputDynamics);
     }
 
     m_pendingBatchDabs.clear();

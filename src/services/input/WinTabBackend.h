@@ -17,6 +17,10 @@ public:
     struct PenSample {
         QPointF globalPos;
         float pressure = 0.0f;
+        /// Unit projection of the pen onto the physical screen. The canvas
+        /// transforms it into document space before exposing tilt dynamics.
+        QPointF tiltVector;
+        bool tiltAvailable = false;
         Qt::MouseButtons buttons = Qt::NoButton;
         quint32 packetTimeMs = 0;
         bool hasPacketTime = false;

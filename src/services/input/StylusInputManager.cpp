@@ -104,6 +104,8 @@ struct StylusInputManager::State {
     bool dispatchingToCanvas = false;
     bool dispatchingSyntheticMouseEvent = false;
     float currentDispatchPressure = 0.0f;
+    QPointF currentDispatchTiltVector;
+    bool currentDispatchHasTilt = false;
     float currentDispatchStrokeElapsedSeconds = 0.0f;
     bool currentDispatchHasStrokeElapsed = false;
     bool nativeStrokePacketClockActive = false;
@@ -427,6 +429,8 @@ void StylusInputManager::initialize(QApplication* application)
     m_state->dispatchingToCanvas = false;
     m_state->dispatchingSyntheticMouseEvent = false;
     m_state->currentDispatchPressure = 0.0f;
+    m_state->currentDispatchTiltVector = {};
+    m_state->currentDispatchHasTilt = false;
     m_state->currentDispatchStrokeElapsedSeconds = 0.0f;
     m_state->currentDispatchHasStrokeElapsed = false;
     m_state->nativeStrokePacketClockActive = false;
@@ -689,6 +693,8 @@ bool StylusInputManager::handleNativeEvent(void* message)
             // the correct pressure/time for this specific packet (not the snapshot).
             m_state->dispatchingToCanvas = true;
             m_state->currentDispatchPressure = pkt.pressure;
+            m_state->currentDispatchTiltVector = pkt.tiltVector;
+            m_state->currentDispatchHasTilt = pkt.tiltAvailable;
             m_state->currentDispatchHasStrokeElapsed = false;
 
             const bool leftPressedNow = currentButtons.testFlag(Qt::LeftButton);
@@ -1102,6 +1108,14 @@ float StylusInputManager::dispatchPressure() const
         return m_state->currentDispatchPressure;
     }
     return 0.0f;
+}
+
+std::optional<QPointF> StylusInputManager::dispatchTiltVector() const
+{
+    if (m_state && m_state->dispatchingToCanvas && m_state->currentDispatchHasTilt) {
+        return m_state->currentDispatchTiltVector;
+    }
+    return std::nullopt;
 }
 
 std::optional<float> StylusInputManager::dispatchStrokeElapsedSeconds() const

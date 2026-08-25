@@ -45,6 +45,14 @@ constexpr std::size_t kBrushDynamicsSettingKeyCount
 
 constexpr float kBrushSpacingMin = 0.005f;
 constexpr float kBrushSpacingMax = 5.0f;
+/// Upper end of the Stroke Speed curve in screen pixels per second. Keeping
+/// this in screen space makes a brush react to the same hand motion at every
+/// canvas zoom; faster input is intentionally saturated at the curve endpoint.
+constexpr float kBrushStrokeSpeedMaxScreenPxPerSecond = 4000.0f;
+/// Trailing arc-length measurement window for Stroke Speed. A window spanning
+/// several device packets measures the hand motion rather than packet-to-packet
+/// quantization, while remaining short enough for deliberate acceleration.
+constexpr float kBrushStrokeSpeedFilterTimeSeconds = 0.075f;
 
 enum class BrushInputSourceKey : uint8_t {
     None = 0,
@@ -53,6 +61,8 @@ enum class BrushInputSourceKey : uint8_t {
     StrokeProgress,
     Time,
     StrokeDirection,
+    PenTilt,
+    StrokeSpeed,
     Count
 };
 
@@ -62,6 +72,21 @@ constexpr std::size_t kBrushInputSourceKeyCount
 enum class BrushDynamicsBlendMode : uint8_t { Multiply = 0, Add, Override, Count };
 
 enum class BrushTimeEndAction : uint8_t { Stop = 0, Reverse, Restart, Count };
+
+/// Device/path signals that travel with one stroke sample. Values use the same
+/// normalized domain as curve x coordinates; availability is explicit because
+/// an upright pen has no meaningful azimuth and a press has no speed yet.
+struct BrushInputDynamics {
+    float penTilt = 0.0f;
+    bool penTiltAvailable = false;
+    float strokeSpeed = 0.0f;
+    bool strokeSpeedAvailable = false;
+    /// Derivative of normalized strokeSpeed over world-space path length. Live
+    /// stroke emission supplies it when neighbouring samples are available so
+    /// dab interpolation can remain C1 instead of forming linear-size facets.
+    float strokeSpeedSpatialDerivative = 0.0f;
+    bool strokeSpeedSpatialDerivativeAvailable = false;
+};
 
 struct BrushInputContext {
     float pressure = 1.0f;
@@ -73,6 +98,15 @@ struct BrushInputContext {
     bool strokeTimeAvailable = false;
     float strokeDirection = 0.0f;
     bool strokeDirectionAvailable = false;
+    /// Azimuth of the pen's projection onto the canvas, normalized from
+    /// [0, 360) degrees to [0, 1). Undefined for an upright pen or a device
+    /// without tilt support.
+    float penTilt = 0.0f;
+    bool penTiltAvailable = false;
+    /// Smoothed pointer velocity normalized against
+    /// kBrushStrokeSpeedMaxScreenPxPerSecond.
+    float strokeSpeed = 0.0f;
+    bool strokeSpeedAvailable = false;
 };
 
 inline float clamp01(float value)
@@ -113,6 +147,111 @@ inline float normalizeAngleDegrees(float value)
         normalized += 360.0f;
     }
     return normalized;
+}
+
+inline float normalizeBrushStrokeSpeed(float screenPixelsPerSecond)
+{
+    if (!std::isfinite(screenPixelsPerSecond) || screenPixelsPerSecond <= 0.0f) {
+        return 0.0f;
+    }
+    return clamp01(screenPixelsPerSecond / kBrushStrokeSpeedMaxScreenPxPerSecond);
+}
+
+inline float interpolateNormalizedAngle(float from, float to, float amount)
+{
+    from = clamp01(from);
+    to = clamp01(to);
+    amount = clamp01(amount);
+    float delta = to - from;
+    if (delta > 0.5f) {
+        delta -= 1.0f;
+    } else if (delta < -0.5f) {
+        delta += 1.0f;
+    }
+    float result = std::fmod(from + delta * amount, 1.0f);
+    if (result < 0.0f) {
+        result += 1.0f;
+    }
+    return result;
+}
+
+inline BrushInputDynamics interpolateBrushInputDynamics(
+    const BrushInputDynamics& from, const BrushInputDynamics& to, float amount,
+    float travelDistance = 0.0f)
+{
+    BrushInputDynamics result;
+    amount = clamp01(amount);
+    result.penTiltAvailable = from.penTiltAvailable || to.penTiltAvailable;
+    if (from.penTiltAvailable && to.penTiltAvailable) {
+        result.penTilt = interpolateNormalizedAngle(from.penTilt, to.penTilt, amount);
+    } else {
+        result.penTilt = to.penTiltAvailable ? clamp01(to.penTilt) : clamp01(from.penTilt);
+    }
+    result.strokeSpeedAvailable = from.strokeSpeedAvailable || to.strokeSpeedAvailable;
+    if (from.strokeSpeedAvailable && to.strokeSpeedAvailable) {
+        const bool cubicAvailable = from.strokeSpeedSpatialDerivativeAvailable
+            && to.strokeSpeedSpatialDerivativeAvailable && std::isfinite(travelDistance)
+            && std::isfinite(from.strokeSpeedSpatialDerivative)
+            && std::isfinite(to.strokeSpeedSpatialDerivative) && travelDistance > 0.000001f;
+        if (cubicAvailable) {
+            const float fromValue = clamp01(from.strokeSpeed);
+            const float toValue = clamp01(to.strokeSpeed);
+            const float delta = toValue - fromValue;
+            float fromTangent = from.strokeSpeedSpatialDerivative * travelDistance;
+            float toTangent = to.strokeSpeedSpatialDerivative * travelDistance;
+
+            // The live path supplies monotone PCHIP tangents. Keep endpoint
+            // tangents intact so adjacent segments remain C1; only reject a
+            // tangent that contradicts this segment or belongs to a flat span.
+            if (std::abs(delta) <= 0.000001f) {
+                fromTangent = 0.0f;
+                toTangent = 0.0f;
+            } else {
+                if (fromTangent * delta <= 0.0f) {
+                    fromTangent = 0.0f;
+                }
+                if (toTangent * delta <= 0.0f) {
+                    toTangent = 0.0f;
+                }
+            }
+
+            const float amount2 = amount * amount;
+            const float amount3 = amount2 * amount;
+            const float h00 = 2.0f * amount3 - 3.0f * amount2 + 1.0f;
+            const float h10 = amount3 - 2.0f * amount2 + amount;
+            const float h01 = -2.0f * amount3 + 3.0f * amount2;
+            const float h11 = amount3 - amount2;
+            result.strokeSpeed = clamp01(h00 * fromValue + h10 * fromTangent + h01 * toValue
+                + h11 * toTangent);
+
+            const float dh00 = 6.0f * amount2 - 6.0f * amount;
+            const float dh10 = 3.0f * amount2 - 4.0f * amount + 1.0f;
+            const float dh01 = -dh00;
+            const float dh11 = 3.0f * amount2 - 2.0f * amount;
+            result.strokeSpeedSpatialDerivative = (dh00 * fromValue + dh10 * fromTangent
+                + dh01 * toValue + dh11 * toTangent)
+                / travelDistance;
+            result.strokeSpeedSpatialDerivativeAvailable = true;
+        } else {
+            result.strokeSpeed
+                = clamp01(from.strokeSpeed + (to.strokeSpeed - from.strokeSpeed) * amount);
+            result.strokeSpeedSpatialDerivative = from.strokeSpeedSpatialDerivative
+                + (to.strokeSpeedSpatialDerivative - from.strokeSpeedSpatialDerivative) * amount;
+            result.strokeSpeedSpatialDerivativeAvailable
+                = from.strokeSpeedSpatialDerivativeAvailable
+                && to.strokeSpeedSpatialDerivativeAvailable;
+        }
+    } else {
+        result.strokeSpeed
+            = to.strokeSpeedAvailable ? clamp01(to.strokeSpeed) : clamp01(from.strokeSpeed);
+        result.strokeSpeedSpatialDerivative = to.strokeSpeedAvailable
+            ? to.strokeSpeedSpatialDerivative
+            : from.strokeSpeedSpatialDerivative;
+        result.strokeSpeedSpatialDerivativeAvailable = to.strokeSpeedAvailable
+            ? to.strokeSpeedSpatialDerivativeAvailable
+            : from.strokeSpeedSpatialDerivativeAvailable;
+    }
+    return result;
 }
 
 inline const char* brushDynamicsSettingKeyName(BrushDynamicsSettingKey setting)
@@ -184,6 +323,10 @@ inline const char* brushInputSourceKeyName(BrushInputSourceKey source)
         return "time";
     case BrushInputSourceKey::StrokeDirection:
         return "strokeDirection";
+    case BrushInputSourceKey::PenTilt:
+        return "penTilt";
+    case BrushInputSourceKey::StrokeSpeed:
+        return "strokeSpeed";
     case BrushInputSourceKey::None:
     case BrushInputSourceKey::Count:
         break;
@@ -313,6 +456,12 @@ inline BrushInputSourceKey brushInputSourceKeyFromName(std::string_view sourceNa
     }
     if (sourceName == std::string_view("strokeDirection")) {
         return BrushInputSourceKey::StrokeDirection;
+    }
+    if (sourceName == std::string_view("penTilt")) {
+        return BrushInputSourceKey::PenTilt;
+    }
+    if (sourceName == std::string_view("strokeSpeed")) {
+        return BrushInputSourceKey::StrokeSpeed;
     }
     return BrushInputSourceKey::None;
 }
@@ -456,7 +605,8 @@ inline BrushDynamicsBlendMode defaultBrushDynamicsBlendMode(
     }
     if ((setting == BrushDynamicsSettingKey::ShapeAngle
             || setting == BrushDynamicsSettingKey::ColorHue)
-        && source == BrushInputSourceKey::StrokeDirection) {
+        && (source == BrushInputSourceKey::StrokeDirection
+            || source == BrushInputSourceKey::PenTilt)) {
         return BrushDynamicsBlendMode::Override;
     }
     return defaultBrushDynamicsBlendMode(setting);
