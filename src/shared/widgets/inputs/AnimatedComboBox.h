@@ -117,6 +117,7 @@ protected:
     bool eventFilter(QObject* watched, QEvent* event) override;
 
 private:
+    void updateScaledSizes();
     AnimatedComboPopup* ensurePopup();
     void schedulePopupWarmUp();
     void warmUpPopup();

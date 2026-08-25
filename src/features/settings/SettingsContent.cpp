@@ -363,7 +363,7 @@ void SettingsContent::retranslateUi()
     if (m_uiScaleChoice) {
         m_uiScaleChoice->setLabel(tr("UI Scale"));
         m_uiScaleChoice->setDescription(tr("Adjust the size of UI elements"));
-        m_uiScaleChoice->setOptions({ QStringLiteral("75%"), QStringLiteral("100%"),
+    m_uiScaleChoice->setOptions({ QStringLiteral("85%"), QStringLiteral("100%"),
             QStringLiteral("125%"), QStringLiteral("175%"), QStringLiteral("225%") });
     }
     if (m_languageChoice) {
@@ -669,7 +669,7 @@ void SettingsContent::createAppearanceCategory()
     category->addSettingsWidget(m_welcomeBannerSelector);
 
     m_uiScaleChoice = new SettingsChoice(tr("UI Scale"), tr("Adjust the size of UI elements"),
-        { QStringLiteral("75%"), QStringLiteral("100%"), QStringLiteral("125%"),
+        { QStringLiteral("85%"), QStringLiteral("100%"), QStringLiteral("125%"),
             QStringLiteral("175%"), QStringLiteral("225%") },
         ruwa::core::kDefaultUiScaleIndex);
     connect(m_uiScaleChoice, &SettingsChoice::selectionChanged, this, [](int value) {

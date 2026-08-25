@@ -38,6 +38,8 @@ protected:
     void setupContent() override;
 
 private:
+    void updateScaledSizes();
+
     QStringList m_options;
     AnimatedComboBox* m_combo = nullptr;
 };

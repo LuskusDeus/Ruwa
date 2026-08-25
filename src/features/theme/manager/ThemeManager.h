@@ -96,16 +96,16 @@ public:
 
     // === UI Scale ===
 
-    /// Scale factor indices: 0=75%, 1=100%, 2=125%, 3=175%, 4=225%
+    /// Scale factor indices: 0=85%, 1=100%, 2=125%, 3=175%, 4=225%
     enum class ScalePreset { Percent75 = 0, Percent100, Percent125, Percent175, Percent225 };
 
-    /// Get current scale factor (0.75, 1.0, 1.25, 1.75, or 2.25)
+    /// Get current scale factor (0.85, 1.0, 1.25, 1.75, or 2.25)
     qreal scale() const { return m_scaleFactor; }
 
     /// Get current scale index (0 through 4)
     int scaleIndex() const { return m_scaleIndex; }
 
-    /// Set scale by index (0=75%, 1=100%, 2=125%, 3=175%, 4=225%)
+    /// Set scale by index (0=85%, 1=100%, 2=125%, 3=175%, 4=225%)
     void setScaleIndex(int index);
 
     /// Scale an integer value

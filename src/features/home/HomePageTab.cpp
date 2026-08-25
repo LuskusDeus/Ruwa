@@ -15,6 +15,7 @@
 #include "commands/CommandExecutor.h"
 
 #include <QHBoxLayout>
+#include <QEvent>
 #include <QPainter>
 #include <QPaintEvent>
 #include <QVBoxLayout>
@@ -45,12 +46,17 @@ public:
 
     void setTrackedChild(QWidget* child)
     {
+        if (m_child) {
+            m_child->removeEventFilter(this);
+        }
+
         m_child = child;
         if (m_child) {
             m_child->setParent(this);
             m_child->move(0, 0);
             m_child->show();
-            setFixedWidth(m_child->width() > 0 ? m_child->width() : m_child->sizeHint().width());
+            m_child->installEventFilter(this);
+            syncTrackedWidth();
         }
         updateChildGeometry();
     }
@@ -70,7 +76,28 @@ protected:
         updateChildGeometry();
     }
 
+    bool eventFilter(QObject* watched, QEvent* event) override
+    {
+        if (watched == m_child && event && event->type() == QEvent::Resize) {
+            syncTrackedWidth();
+        }
+        return QWidget::eventFilter(watched, event);
+    }
+
 private:
+    void syncTrackedWidth()
+    {
+        if (!m_child) {
+            return;
+        }
+
+        const int childWidth
+            = m_child->width() > 0 ? m_child->width() : m_child->sizeHint().width();
+        if (childWidth > 0 && width() != childWidth) {
+            setFixedWidth(childWidth);
+        }
+    }
+
     void updateChildGeometry()
     {
         if (!m_child) {
@@ -80,9 +107,7 @@ private:
         const int childWidth
             = m_child->width() > 0 ? m_child->width() : m_child->sizeHint().width();
         m_child->resize(childWidth, height());
-        if (width() <= 0 && childWidth > 0) {
-            setFixedWidth(childWidth);
-        }
+        syncTrackedWidth();
     }
 
     QWidget* m_child = nullptr;
@@ -182,10 +207,6 @@ void HomePageTab::setupHomeContent()
     m_sidebarClip = new SidebarClipWidget(m_homeContainer);
     m_sidebar = new ruwa::ui::widgets::HomePageSidebar(m_sidebarClip);
     static_cast<SidebarClipWidget*>(m_sidebarClip)->setTrackedChild(m_sidebar);
-    const int sidebarWidth = m_sidebar->width() > 0
-        ? m_sidebar->width()
-        : qMax(m_sidebar->minimumWidth(), m_sidebar->sizeHint().width());
-    m_sidebarClip->setFixedWidth(sidebarWidth);
     homeLayout->addWidget(m_sidebarClip);
 
     m_contentStack = new ruwa::ui::widgets::AnimatedStackedWidget(m_homeContainer);

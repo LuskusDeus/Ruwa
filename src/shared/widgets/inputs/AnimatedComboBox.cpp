@@ -43,6 +43,7 @@ constexpr int kTriggerArrowAnimationMs = 160;
 namespace {
 
 constexpr int kRowHeight = 28;
+constexpr int kTriggerHeight = 24;
 constexpr int kSeparatorHeight = 8;
 constexpr int kPopupPadding = 4;
 constexpr int kShowDurationMs = 120;
@@ -52,6 +53,16 @@ constexpr int kPopupOffset = 20;
 constexpr int kCornerRadius = 8;
 constexpr int kPopupMinVisibleHeight = 120;
 constexpr int kPreviewGridSpacing = 8;
+
+int scaledMetric(int value)
+{
+    return ruwa::ui::core::ThemeManager::instance().scaled(value);
+}
+
+qreal scaledMetric(qreal value)
+{
+    return ruwa::ui::core::ThemeManager::instance().scaled(value);
+}
 
 Qt::WindowFlags popupWindowFlags()
 {
@@ -83,7 +94,7 @@ public:
         : QWidget(parent)
         , m_text(text)
     {
-        setFixedHeight(18);
+        setFixedHeight(scaledMetric(18));
         setAttribute(Qt::WA_TransparentForMouseEvents);
         setAttribute(Qt::WA_OpaquePaintEvent);
     }
@@ -104,8 +115,8 @@ protected:
         QFont categoryFont = ruwa::ui::core::ThemeManager::instance().font(
             ruwa::ui::core::ThemeFontRole::Small, QFont::Bold);
         painter.setFont(categoryFont);
-        painter.drawText(
-            rect().adjusted(10, 0, -10, 0), Qt::AlignLeft | Qt::AlignVCenter, m_text.toUpper());
+        painter.drawText(rect().adjusted(scaledMetric(10), 0, -scaledMetric(10), 0),
+            Qt::AlignLeft | Qt::AlignVCenter, m_text.toUpper());
     }
 
 private:
@@ -117,7 +128,7 @@ public:
     explicit ComboPopupSeparatorWidget(QWidget* parent = nullptr)
         : QWidget(parent)
     {
-        setFixedHeight(kSeparatorHeight);
+        setFixedHeight(scaledMetric(kSeparatorHeight));
         setAttribute(Qt::WA_TransparentForMouseEvents);
         setAttribute(Qt::WA_OpaquePaintEvent);
     }
@@ -130,8 +141,10 @@ protected:
         QPainter painter(this);
         const auto& colors = ruwa::ui::core::ThemeManager::instance().colors();
         painter.fillRect(rect(), colors.surfaceElevated());
-        painter.fillRect(
-            QRect(10, rect().center().y(), qMax(0, width() - 20), 1), colors.borderSubtle());
+        const int sideInset = scaledMetric(10);
+        painter.fillRect(QRect(sideInset, rect().center().y(), qMax(0, width() - sideInset * 2),
+                             qMax(1, scaledMetric(1))),
+            colors.borderSubtle());
     }
 };
 
@@ -142,7 +155,7 @@ public:
         , m_item(item)
         , m_index(index)
     {
-        setFixedHeight(kRowHeight);
+        setFixedHeight(scaledMetric(kRowHeight));
         setEnabled(item.enabled);
         setCheckable(false);
         setCursor(item.enabled ? Qt::PointingHandCursor : Qt::ArrowCursor);
@@ -177,20 +190,22 @@ protected:
         p.setRenderHint(QPainter::SmoothPixmapTransform);
 
         const auto& colors = ruwa::ui::core::ThemeManager::instance().colors();
-        const QRectF r = rect().adjusted(2.0, 1.0, -2.0, -1.0);
+        const qreal rowRadius = scaledMetric(5.0);
+        const QRectF r = rect().adjusted(
+            scaledMetric(2.0), scaledMetric(1.0), -scaledMetric(2.0), -scaledMetric(1.0));
 
         // Keep each row fully painted to avoid transparent-to-black artifacts
         // when the popup fades with QGraphicsOpacityEffect.
         p.setPen(Qt::NoPen);
         p.setBrush(colors.surfaceElevated());
-        p.drawRoundedRect(r, 5, 5);
+        p.drawRoundedRect(r, rowRadius, rowRadius);
 
         if (hoverProgress() > 0.0) {
             QColor hover = colors.overlayHover();
             hover.setAlphaF(hover.alphaF() * hoverProgress());
             p.setPen(Qt::NoPen);
             p.setBrush(hover);
-            p.drawRoundedRect(r, 5, 5);
+            p.drawRoundedRect(r, rowRadius, rowRadius);
         }
         // No press wash on a row: hover already marks it, and the popup closes on
         // release, so the flash only ever shows as a blink on the way out.
@@ -198,15 +213,16 @@ protected:
             QColor active = colors.overlay(0.08);
             p.setPen(Qt::NoPen);
             p.setBrush(active);
-            p.drawRoundedRect(r, 5, 5);
+            p.drawRoundedRect(r, rowRadius, rowRadius);
         }
 
         // Keep text color stable to avoid a darkening flash when hover fades out.
         QColor textColor = isEnabled() ? colors.text : colors.textDisabled();
 
-        int x = 12;
+        int x = scaledMetric(12);
         if (!m_item.icon.isNull()) {
-            QPixmap src = m_item.icon.pixmap(14, 14);
+            const int iconSize = scaledMetric(14);
+            QPixmap src = m_item.icon.pixmap(iconSize, iconSize);
             if (!src.isNull()) {
                 QPixmap colored(src.size());
                 colored.fill(Qt::transparent);
@@ -215,25 +231,28 @@ protected:
                 iconPainter.setCompositionMode(QPainter::CompositionMode_SourceIn);
                 iconPainter.fillRect(colored.rect(), textColor);
                 iconPainter.end();
-                p.drawPixmap(x, (height() - 14) / 2, colored);
+                p.drawPixmap(x, (height() - iconSize) / 2, colored);
             }
-            x += 18;
+            x += scaledMetric(18);
         }
 
         QFont f
             = ruwa::ui::core::ThemeManager::instance().font(ruwa::ui::core::ThemeFontRole::Body);
         p.setFont(f);
         p.setPen(textColor);
-        p.drawText(
-            QRect(x, 0, width() - x - 24, height()), Qt::AlignVCenter | Qt::AlignLeft, m_item.text);
+        p.drawText(QRect(x, 0, width() - x - scaledMetric(24), height()),
+            Qt::AlignVCenter | Qt::AlignLeft, m_item.text);
 
         if (m_selected) {
-            QPen checkPen(colors.primary, 1.7, Qt::SolidLine, Qt::RoundCap, Qt::RoundJoin);
+            QPen checkPen(
+                colors.primary, scaledMetric(1.7), Qt::SolidLine, Qt::RoundCap, Qt::RoundJoin);
             p.setPen(checkPen);
-            const qreal cx = width() - 12;
+            const qreal cx = width() - scaledMetric(12.0);
             const qreal cy = height() * 0.5;
-            p.drawLine(QPointF(cx - 3.3, cy), QPointF(cx - 1.1, cy + 2.7));
-            p.drawLine(QPointF(cx - 1.1, cy + 2.7), QPointF(cx + 3.8, cy - 2.2));
+            p.drawLine(QPointF(cx - scaledMetric(3.3), cy),
+                QPointF(cx - scaledMetric(1.1), cy + scaledMetric(2.7)));
+            p.drawLine(QPointF(cx - scaledMetric(1.1), cy + scaledMetric(2.7)),
+                QPointF(cx + scaledMetric(3.8), cy - scaledMetric(2.2)));
         }
     }
 
@@ -367,7 +386,8 @@ public:
         hide();
 
         m_layout = new QVBoxLayout(this);
-        m_layout->setContentsMargins(kPopupPadding, kPopupPadding, kPopupPadding, kPopupPadding);
+        const int popupPadding = scaledMetric(kPopupPadding);
+        m_layout->setContentsMargins(popupPadding, popupPadding, popupPadding, popupPadding);
         m_layout->setSpacing(0);
 
         m_scrollArea = new SmoothScrollArea(this);
@@ -405,6 +425,8 @@ public:
         const QFont& comboFont, AnimatedComboBox::PopupPresentation presentation, int columns,
         const QSize& cardSize)
     {
+        const int popupPadding = scaledMetric(kPopupPadding);
+        m_layout->setContentsMargins(popupPadding, popupPadding, popupPadding, popupPadding);
         m_items = items;
         m_selectedIndex = selectedIndex;
         m_presentation = presentation;
@@ -427,8 +449,8 @@ public:
         } else {
             buildList(comboFont, minWidth);
         }
-        m_contentWidget->setFixedWidth(m_popupWidth - kPopupPadding * 2);
-        applyHeightConstraint(m_contentHeight + kPopupPadding * 2);
+        m_contentWidget->setFixedWidth(m_popupWidth - popupPadding * 2);
+        applyHeightConstraint(m_contentHeight + popupPadding * 2);
     }
 
     void setOnItemActivated(std::function<void(int)> cb) { m_onItemActivated = std::move(cb); }
@@ -451,13 +473,14 @@ public:
         update();
     }
 
-    int preferredHeight() const { return m_contentHeight + kPopupPadding * 2; }
+    int preferredHeight() const { return m_contentHeight + scaledMetric(kPopupPadding) * 2; }
 
     void applyHeightConstraint(int maxHeight)
     {
+        const int popupPadding = scaledMetric(kPopupPadding);
         const int targetHeight = qMax(
-            kPopupPadding * 2 + 1, qMin(preferredHeight(), qMax(maxHeight, kPopupPadding * 2 + 1)));
-        const int viewportHeight = qMax(1, targetHeight - kPopupPadding * 2);
+            popupPadding * 2 + 1, qMin(preferredHeight(), qMax(maxHeight, popupPadding * 2 + 1)));
+        const int viewportHeight = qMax(1, targetHeight - popupPadding * 2);
 
         auto applyGeometry = [this, targetHeight, viewportHeight](int popupWidth) {
             setFixedSize(popupWidth, targetHeight);
@@ -492,7 +515,7 @@ public:
         m_isHiding = false;
         disconnect(m_opacityAnim, &QVariantAnimation::finished, this, nullptr);
 
-        const QPoint startPos(targetPos.x(), targetPos.y() - kPopupOffset);
+        const QPoint startPos(targetPos.x(), targetPos.y() - scaledMetric(kPopupOffset));
         m_posAnim->stop();
         move(startPos);
         show();
@@ -536,7 +559,7 @@ public:
         m_opacityAnim->setEndValue(0.0);
 
         const QPoint currentPos = pos();
-        const QPoint hidePos(currentPos.x(), currentPos.y() - (kPopupOffset / 2));
+        const QPoint hidePos(currentPos.x(), currentPos.y() - (scaledMetric(kPopupOffset) / 2));
         m_posAnim->setDuration(anim::duration(kHideDurationMs));
         m_posAnim->setStartValue(currentPos);
         m_posAnim->setEndValue(hidePos);
@@ -638,11 +661,12 @@ protected:
         // BaseStyledPanel-like background/border to keep UI consistency.
         painter.setPen(Qt::NoPen);
         painter.setBrush(colors.surfaceElevated());
-        painter.drawRoundedRect(rect, kCornerRadius, kCornerRadius);
+        const qreal cornerRadius = scaledMetric(static_cast<qreal>(kCornerRadius));
+        painter.drawRoundedRect(rect, cornerRadius, cornerRadius);
 
         const QRectF borderRect = rect.adjusted(0.5, 0.5, -0.5, -0.5);
         QPainterPath borderPath;
-        borderPath.addRoundedRect(borderRect, kCornerRadius - 0.5, kCornerRadius - 0.5);
+        borderPath.addRoundedRect(borderRect, cornerRadius - 0.5, cornerRadius - 0.5);
 
         // Border: BorderSubtle / BorderSubtleAlpha50 (like BaseStyledPanel, no hover on popup
         // frame)
@@ -688,12 +712,12 @@ private:
             const AnimatedComboItem& item = m_items[i];
             if (item.separator) {
                 addSeparatorWidget();
-                heightHint += kSeparatorHeight;
+                heightHint += scaledMetric(kSeparatorHeight);
                 continue;
             }
             if (item.category) {
                 addCategoryWidget(item.text);
-                heightHint += 18;
+                heightHint += scaledMetric(18);
                 continue;
             }
 
@@ -710,22 +734,24 @@ private:
             m_contentLayout->addWidget(button);
             m_itemButtons.append(button);
 
-            const int contentWidth
-                = 20 + fontMetrics.horizontalAdvance(item.text) + (item.icon.isNull() ? 0 : 18);
-            widthHint = qMax(widthHint, contentWidth + 28);
-            heightHint += kRowHeight;
+            const int contentWidth = scaledMetric(20) + fontMetrics.horizontalAdvance(item.text)
+                + (item.icon.isNull() ? 0 : scaledMetric(18));
+            widthHint = qMax(widthHint, contentWidth + scaledMetric(28));
+            heightHint += scaledMetric(kRowHeight);
         }
 
         m_popupWidth = qMax(widthHint, minWidth);
-        m_contentHeight = qMax(20, heightHint);
+        m_contentHeight = qMax(scaledMetric(20), heightHint);
     }
 
     void buildPreviewGrid(const QFont& comboFont, int minWidth)
     {
-        m_contentLayout->setSpacing(6);
-        const int gridWidth
-            = m_columns * m_cardSize.width() + qMax(0, m_columns - 1) * kPreviewGridSpacing;
-        m_popupWidth = qMax(minWidth, gridWidth + kPopupPadding * 2);
+        const int contentSpacing = scaledMetric(6);
+        const int gridSpacing = scaledMetric(kPreviewGridSpacing);
+        const int popupPadding = scaledMetric(kPopupPadding);
+        m_contentLayout->setSpacing(contentSpacing);
+        const int gridWidth = m_columns * m_cardSize.width() + qMax(0, m_columns - 1) * gridSpacing;
+        m_popupWidth = qMax(minWidth, gridWidth + popupPadding * 2);
 
         QWidget* section = nullptr;
         FlowLayout* flowLayout = nullptr;
@@ -733,49 +759,50 @@ private:
         int contentBlockCount = 0;
         int contentHeight = 0;
 
-        auto accountForBlock = [&contentBlockCount, &contentHeight](int height) {
+        auto accountForBlock = [&contentBlockCount, &contentHeight, contentSpacing](int height) {
             if (contentBlockCount > 0) {
-                contentHeight += 6;
+                contentHeight += contentSpacing;
             }
             contentHeight += height;
             ++contentBlockCount;
         };
-        auto finishSection = [this, &section, &flowLayout, &sectionItemCount, &accountForBlock]() {
+        auto finishSection = [this, gridSpacing, &section, &flowLayout, &sectionItemCount,
+                                 &accountForBlock]() {
             if (!section) {
                 return;
             }
 
             const int rows = qMax(1, (sectionItemCount + m_columns - 1) / m_columns);
-            const int sectionHeight
-                = rows * m_cardSize.height() + qMax(0, rows - 1) * kPreviewGridSpacing;
+            const int sectionHeight = rows * m_cardSize.height() + qMax(0, rows - 1) * gridSpacing;
             section->setFixedHeight(sectionHeight);
             accountForBlock(sectionHeight);
             section = nullptr;
             flowLayout = nullptr;
             sectionItemCount = 0;
         };
-        auto beginSection = [this, gridWidth, &section, &flowLayout, &sectionItemCount]() {
-            section = new QWidget(m_contentWidget);
-            section->setAttribute(Qt::WA_TranslucentBackground);
-            section->setSizePolicy(QSizePolicy::Fixed, QSizePolicy::Fixed);
-            section->setFixedWidth(gridWidth);
-            flowLayout = new FlowLayout(section, 0, kPreviewGridSpacing, kPreviewGridSpacing);
-            m_contentLayout->addWidget(section, 0, Qt::AlignLeft | Qt::AlignTop);
-            sectionItemCount = 0;
-        };
+        auto beginSection
+            = [this, gridWidth, gridSpacing, &section, &flowLayout, &sectionItemCount]() {
+                  section = new QWidget(m_contentWidget);
+                  section->setAttribute(Qt::WA_TranslucentBackground);
+                  section->setSizePolicy(QSizePolicy::Fixed, QSizePolicy::Fixed);
+                  section->setFixedWidth(gridWidth);
+                  flowLayout = new FlowLayout(section, 0, gridSpacing, gridSpacing);
+                  m_contentLayout->addWidget(section, 0, Qt::AlignLeft | Qt::AlignTop);
+                  sectionItemCount = 0;
+              };
 
         for (int i = 0; i < m_items.size(); ++i) {
             const AnimatedComboItem& item = m_items[i];
             if (item.separator) {
                 finishSection();
                 addSeparatorWidget();
-                accountForBlock(kSeparatorHeight);
+                accountForBlock(scaledMetric(kSeparatorHeight));
                 continue;
             }
             if (item.category) {
                 finishSection();
                 addCategoryWidget(item.text);
-                accountForBlock(18);
+                accountForBlock(scaledMetric(18));
                 continue;
             }
             if (!flowLayout) {
@@ -799,7 +826,7 @@ private:
 
         finishSection();
         m_contentLayout->activate();
-        m_contentHeight = qMax(20, contentHeight);
+        m_contentHeight = qMax(scaledMetric(20), contentHeight);
     }
 
     void setHoveredIndex(int index)
@@ -889,7 +916,7 @@ AnimatedComboBox::AnimatedComboBox(QWidget* parent)
 {
     setFocusPolicy(Qt::StrongFocus);
     setMouseTracking(true);
-    setFixedHeight(24);
+    updateScaledSizes();
     setCursor(Qt::PointingHandCursor);
 
     // The popup is created on first use — see ensurePopup(). Building it here
@@ -903,6 +930,9 @@ AnimatedComboBox::AnimatedComboBox(QWidget* parent)
 
     m_arrowAnim = new QPropertyAnimation(this, "arrowProgress", this);
     m_arrowAnim->setEasingCurve(QEasingCurve::OutCubic);
+
+    connect(&ruwa::ui::core::ThemeManager::instance(), &ruwa::ui::core::ThemeManager::themeChanged,
+        this, &AnimatedComboBox::updateScaledSizes);
 }
 
 AnimatedComboBox::~AnimatedComboBox()
@@ -1049,7 +1079,7 @@ void AnimatedComboBox::setPlaceholderText(const QString& text)
 
 void AnimatedComboBox::setPopupMinWidth(int width)
 {
-    const int normalized = qMax(120, width);
+    const int normalized = qMax(scaledMetric(120), width);
     if (m_popupMinWidth == normalized) {
         return;
     }
@@ -1063,7 +1093,7 @@ void AnimatedComboBox::setPopupMinWidth(int width)
 
 void AnimatedComboBox::setPopupMaxHeight(int height)
 {
-    m_popupMaxHeight = qMax(kPopupMinVisibleHeight, height);
+    m_popupMaxHeight = qMax(scaledMetric(kPopupMinVisibleHeight), height);
     if (isPopupActive()) {
         updatePopupPosition();
     }
@@ -1099,7 +1129,8 @@ void AnimatedComboBox::setPopupColumns(int columns)
 
 void AnimatedComboBox::setPopupCardSize(const QSize& size)
 {
-    const QSize normalized(qMax(96, size.width()), qMax(80, size.height()));
+    const QSize normalized(
+        qMax(scaledMetric(96), size.width()), qMax(scaledMetric(80), size.height()));
     if (m_popupCardSize == normalized) {
         return;
     }
@@ -1174,6 +1205,19 @@ void AnimatedComboBox::setArrowProgress(qreal progress)
     update();
 }
 
+void AnimatedComboBox::updateScaledSizes()
+{
+    setFixedHeight(scaledMetric(kTriggerHeight));
+    markPopupContentDirty();
+    updateGeometry();
+    update();
+
+    if (isPopupActive()) {
+        syncPopupItems();
+        updatePopupPosition();
+    }
+}
+
 void AnimatedComboBox::paintEvent(QPaintEvent* event)
 {
     Q_UNUSED(event);
@@ -1183,13 +1227,15 @@ void AnimatedComboBox::paintEvent(QPaintEvent* event)
     p.setRenderHint(QPainter::TextAntialiasing);
     p.setRenderHint(QPainter::SmoothPixmapTransform);
 
-    const auto& colors = ruwa::ui::core::ThemeManager::instance().colors();
+    const auto& theme = ruwa::ui::core::ThemeManager::instance();
+    const auto& colors = theme.colors();
     const QRectF box = rect().adjusted(0.5, 0.5, -0.5, -0.5);
+    const qreal cornerRadius = scaledMetric(6.0);
 
     // Base: overlayBase (like ChoiceButton)
     p.setPen(Qt::NoPen);
     p.setBrush(colors.overlayBase());
-    p.drawRoundedRect(box, 6, 6);
+    p.drawRoundedRect(box, cornerRadius, cornerRadius);
 
     // Hover: very subtle brightening — base barely changes, border does the work (like typical
     // widgets)
@@ -1197,7 +1243,7 @@ void AnimatedComboBox::paintEvent(QPaintEvent* event)
         QColor hover = colors.overlayHover();
         hover.setAlphaF(hover.alphaF() * m_hoverProgress * 0.2);
         p.setBrush(hover);
-        p.drawRoundedRect(box, 6, 6);
+        p.drawRoundedRect(box, cornerRadius, cornerRadius);
     }
     // No press wash: the arrow flip and the popup opening carry the click, and a
     // separate darkening under them reads as a hard flash.
@@ -1209,7 +1255,7 @@ void AnimatedComboBox::paintEvent(QPaintEvent* event)
             colors.borderSubtle(), colors.borderSubtleHover(), m_hoverProgress);
         QColor bottom = colors.borderSubtle();
         bottom.setAlpha(bottom.alpha() / 2); // BorderSubtleAlpha50
-        ruwa::ui::painting::drawGradientBorder(p, box, 6, top, bottom);
+        ruwa::ui::painting::drawGradientBorder(p, box, cornerRadius, top, bottom);
     }
 
     QString text = m_currentIndex >= 0 && m_currentIndex < m_items.size()
@@ -1221,12 +1267,15 @@ void AnimatedComboBox::paintEvent(QPaintEvent* event)
     QColor textColor
         = ruwa::ui::core::ThemeColors::interpolate(textBase, textTarget, m_hoverProgress);
 
-    int textLeft = 10;
+    int textLeft = scaledMetric(10);
     if (hasValue && m_popupPresentation == PopupPresentation::PreviewGrid) {
-        const QRectF previewRect(8, 5, 22, height() - 10);
+        const int previewLeft = scaledMetric(8);
+        const int previewTop = scaledMetric(5);
+        const QRectF previewRect(
+            previewLeft, previewTop, scaledMetric(22), height() - previewTop * 2);
         p.setBrush(colors.surfaceElevated());
         p.setPen(Qt::NoPen);
-        p.drawRoundedRect(previewRect, 6, 6);
+        p.drawRoundedRect(previewRect, cornerRadius, cornerRadius);
         const QImage preview = tintedPreview(m_items[m_currentIndex], textColor);
         if (!preview.isNull()) {
             const QImage scaled = preview.scaled(
@@ -1235,25 +1284,25 @@ void AnimatedComboBox::paintEvent(QPaintEvent* event)
                             previewRect.center().y() - scaled.height() / 2.0),
                 scaled);
         }
-        textLeft = 36;
+        textLeft = scaledMetric(36);
     }
 
     p.setPen(textColor);
-    QFont f = ruwa::ui::core::ThemeManager::instance().font(ruwa::ui::core::ThemeFontRole::Body);
+    QFont f = theme.font(ruwa::ui::core::ThemeFontRole::Body);
     p.setFont(f);
-    p.drawText(QRect(textLeft, 0, width() - textLeft - 22, height()),
+    p.drawText(QRect(textLeft, 0, width() - textLeft - scaledMetric(22), height()),
         Qt::AlignVCenter | Qt::AlignLeft, text);
 
     p.save();
-    const qreal arrowX = width() - 13;
+    const qreal arrowX = width() - scaledMetric(13.0);
     const qreal arrowY = height() * 0.5;
     p.translate(arrowX, arrowY);
     p.rotate(180.0 * m_arrowProgress);
     QColor arrowColor = ruwa::ui::core::ThemeColors::interpolate(
         colors.textDisabled(), colors.text, m_hoverProgress);
-    p.setPen(QPen(arrowColor, 1.6, Qt::SolidLine, Qt::RoundCap, Qt::RoundJoin));
-    p.drawLine(QPointF(-3.5, -1.0), QPointF(0.0, 2.2));
-    p.drawLine(QPointF(0.0, 2.2), QPointF(3.5, -1.0));
+    p.setPen(QPen(arrowColor, scaledMetric(1.6), Qt::SolidLine, Qt::RoundCap, Qt::RoundJoin));
+    p.drawLine(QPointF(-scaledMetric(3.5), -scaledMetric(1.0)), QPointF(0.0, scaledMetric(2.2)));
+    p.drawLine(QPointF(0.0, scaledMetric(2.2)), QPointF(scaledMetric(3.5), -scaledMetric(1.0)));
     p.restore();
 }
 
@@ -1563,7 +1612,8 @@ void AnimatedComboBox::syncPopupItems()
     if (m_popupPresentation == PopupPresentation::PreviewGrid) {
         while (effectiveColumns > 1
             && effectiveColumns * m_popupCardSize.width()
-                    + (effectiveColumns - 1) * kPreviewGridSpacing + kPopupPadding * 2
+                    + (effectiveColumns - 1) * scaledMetric(kPreviewGridSpacing)
+                    + scaledMetric(kPopupPadding) * 2
                 > availableWidth) {
             --effectiveColumns;
         }
@@ -1571,7 +1621,9 @@ void AnimatedComboBox::syncPopupItems()
     const int popupMinimumWidth = m_popupPresentation == PopupPresentation::PreviewGrid
         ? qMin(m_popupMinWidth, availableWidth)
         : qMax(m_popupMinWidth, width());
-    m_popup->setItems(m_items, m_currentIndex, popupMinimumWidth, font(), m_popupPresentation,
+    const QFont comboFont
+        = ruwa::ui::core::ThemeManager::instance().font(ruwa::ui::core::ThemeFontRole::Body);
+    m_popup->setItems(m_items, m_currentIndex, popupMinimumWidth, comboFont, m_popupPresentation,
         effectiveColumns, m_popupCardSize);
     m_popup->setSelectedIndex(m_currentIndex);
 
@@ -1586,26 +1638,31 @@ void AnimatedComboBox::updatePopupPosition()
         return;
     }
 
-    const QRect windowBounds = window()->rect().adjusted(8, 8, -8, -8);
+    const int windowInset = scaledMetric(8);
+    const QRect windowBounds
+        = window()->rect().adjusted(windowInset, windowInset, -windowInset, -windowInset);
     if (!windowBounds.isValid()) {
         return;
     }
 
-    const QPoint belowAnchorGlobal = mapToGlobal(QPoint(0, height() + 2));
-    const QPoint aboveAnchorGlobal = mapToGlobal(QPoint(0, -2));
+    const int popupGap = scaledMetric(2);
+    const QPoint belowAnchorGlobal = mapToGlobal(QPoint(0, height() + popupGap));
+    const QPoint aboveAnchorGlobal = mapToGlobal(QPoint(0, -popupGap));
     const QPoint belowAnchorLocal = window()->mapFromGlobal(belowAnchorGlobal);
     const QPoint aboveAnchorLocal = window()->mapFromGlobal(aboveAnchorGlobal);
     const int popupPreferredHeight = m_popup->preferredHeight();
     const int preferredVisibleHeight = qMin(popupPreferredHeight, m_popupMaxHeight);
-    const int minimumVisibleHeight = qMin(preferredVisibleHeight, kPopupMinVisibleHeight);
+    const int popupMinVisibleHeight = scaledMetric(kPopupMinVisibleHeight);
+    const int minimumVisibleHeight = qMin(preferredVisibleHeight, popupMinVisibleHeight);
     const int availableBelow = qMax(0, windowBounds.bottom() - belowAnchorLocal.y() + 1);
     const int availableAbove = qMax(0, aboveAnchorLocal.y() - windowBounds.top());
     const bool placeBelow
         = (availableBelow >= minimumVisibleHeight) || (availableBelow >= availableAbove);
     const int availableHeight = placeBelow ? availableBelow : availableAbove;
-    const int constrainedHeight = qMax(kPopupPadding * 2 + 1,
+    const int popupPadding = scaledMetric(kPopupPadding);
+    const int constrainedHeight = qMax(popupPadding * 2 + 1,
         qMin(popupPreferredHeight,
-            qMin(qMax(availableHeight, kPopupMinVisibleHeight), m_popupMaxHeight)));
+            qMin(qMax(availableHeight, popupMinVisibleHeight), m_popupMaxHeight)));
 
     m_popup->applyHeightConstraint(constrainedHeight);
 

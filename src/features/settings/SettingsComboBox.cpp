@@ -2,6 +2,7 @@
 
 // SettingsComboBox.cpp
 #include "features/settings/SettingsComboBox.h"
+#include "features/theme/manager/ThemeManager.h"
 #include "shared/widgets/inputs/AnimatedComboBox.h"
 #include "shared/style/WidgetStyleManager.h"
 
@@ -12,7 +13,8 @@ namespace ruwa::ui::widgets {
 
 namespace {
 const int BASE_COMBO_MIN_WIDTH = 140;
-}
+const int BASE_COMBO_POPUP_MAX_HEIGHT = 360;
+} // namespace
 
 SettingsComboBox::SettingsComboBox(const QString& label, const QString& description,
     const QStringList& options, int defaultIndex, QWidget* parent)
@@ -21,6 +23,9 @@ SettingsComboBox::SettingsComboBox(const QString& label, const QString& descript
 {
     setupContent();
 
+    connect(&ruwa::ui::core::ThemeManager::instance(), &ruwa::ui::core::ThemeManager::themeChanged,
+        this, &SettingsComboBox::updateScaledSizes);
+
     if (defaultIndex >= 0 && defaultIndex < m_options.size()) {
         m_combo->setCurrentIndex(defaultIndex);
     }
@@ -28,12 +33,9 @@ SettingsComboBox::SettingsComboBox(const QString& label, const QString& descript
 
 void SettingsComboBox::setupContent()
 {
-    auto& mgr = ruwa::ui::core::WidgetStyleManager::instance();
-
     m_combo = new AnimatedComboBox(this);
     m_combo->setPlaceholderText(tr("Select"));
-    m_combo->setMinimumWidth(mgr.scaled(BASE_COMBO_MIN_WIDTH));
-    m_combo->setPopupMinWidth(mgr.scaled(BASE_COMBO_MIN_WIDTH));
+    updateScaledSizes();
 
     for (int i = 0; i < m_options.size(); ++i) {
         m_combo->addItem(m_options[i], i);
@@ -48,6 +50,22 @@ void SettingsComboBox::setupContent()
     row->addStretch();
     row->addWidget(m_combo);
     mainLayout()->addLayout(row);
+}
+
+void SettingsComboBox::updateScaledSizes()
+{
+    if (!m_combo) {
+        return;
+    }
+
+    const int comboMinWidth
+        = ruwa::ui::core::WidgetStyleManager::instance().scaled(BASE_COMBO_MIN_WIDTH);
+    m_combo->setMinimumWidth(comboMinWidth);
+    m_combo->setPopupMinWidth(comboMinWidth);
+    m_combo->setPopupMaxHeight(
+        ruwa::ui::core::WidgetStyleManager::instance().scaled(BASE_COMBO_POPUP_MAX_HEIGHT));
+    m_combo->updateGeometry();
+    refreshLayoutGeometry();
 }
 
 void SettingsComboBox::setSelectedIndex(int index)

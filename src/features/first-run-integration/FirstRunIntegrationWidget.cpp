@@ -489,7 +489,7 @@ void FirstRunIntegrationWidget::setupUi()
 
     m_uiScaleChoice = new ruwa::ui::widgets::SettingsChoice(tr("UI Scale"),
         tr("Adjust the size of UI elements"),
-        { QStringLiteral("75%"), QStringLiteral("100%"), QStringLiteral("125%"),
+        { QStringLiteral("85%"), QStringLiteral("100%"), QStringLiteral("125%"),
             QStringLiteral("175%"), QStringLiteral("225%") },
         ruwa::core::normalizedUiScaleIndex(appearanceSettings.uiScale), appearanceSection);
     connect(
@@ -657,7 +657,7 @@ void FirstRunIntegrationWidget::retranslateUi()
     m_skipCustomizationButton->syncSizeToText();
     m_appearanceTitle->setText(tr("Appearance settings"));
     m_uiScaleChoice->retranslateUi(tr("UI Scale"), tr("Adjust the size of UI elements"),
-        { QStringLiteral("75%"), QStringLiteral("100%"), QStringLiteral("125%"),
+        { QStringLiteral("85%"), QStringLiteral("100%"), QStringLiteral("125%"),
             QStringLiteral("175%"), QStringLiteral("225%") });
     m_topBarTabAlignmentChoice->retranslateUi(tr("Top bar tab alignment"),
         tr("Place the tab strip at the left of the title bar or centered in the free space"),

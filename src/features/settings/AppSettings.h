@@ -18,7 +18,7 @@
 
 namespace ruwa::core {
 
-inline constexpr std::array<qreal, 5> kUiScaleFactors { 0.75, 1.0, 1.25, 1.75, 2.25 };
+inline constexpr std::array<qreal, 5> kUiScaleFactors { 0.85, 1.0, 1.25, 1.75, 2.25 };
 inline constexpr int kDefaultUiScaleIndex = 1;
 
 constexpr int normalizedUiScaleIndex(int index)
@@ -42,7 +42,7 @@ struct AppSettings {
     // === APPEARANCE ===
     struct Appearance {
         QUuid themeId; // Selected theme ID
-        int uiScale = kDefaultUiScaleIndex; // 0=75%, 1=100%, 2=125%, 3=175%, 4=225%
+    int uiScale = kDefaultUiScaleIndex; // 0=85%, 1=100%, 2=125%, 3=175%, 4=225%
         QString language = "en"; // UI language: "en", "ru", etc.
         /// Tab strip in title bar: 0=left, 1=centered in available space
         int topBarTabAlignment = 0;
