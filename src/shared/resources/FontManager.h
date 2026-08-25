@@ -47,8 +47,8 @@ public:
     /// Set custom title font family
     void setTitleFontFamily(const QString& family);
 
-    /// Apply fonts to application (sets default application font)
-    void applyToApplication(int pointSize);
+    /// Apply fonts to application (sets default application font in UI pixels)
+    void applyToApplication(int pixelSize);
 
 signals:
     void fontsChanged();

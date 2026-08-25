@@ -60,9 +60,11 @@ void FontManager::setTitleFontFamily(const QString& family)
     }
 }
 
-void FontManager::applyToApplication(int pointSize)
+void FontManager::applyToApplication(int pixelSize)
 {
-    QApplication::setFont(QFont(m_uiFontFamily, pointSize));
+    QFont font(m_uiFontFamily);
+    font.setPixelSize(qMax(1, pixelSize));
+    QApplication::setFont(font);
 }
 
 bool FontManager::loadFont(const QString& resourcePath, QString& outFamily)

@@ -136,8 +136,7 @@ void RecentProjectCard::updateScaledSizes()
         m_thumbnailLabel->setStyleSheet(QString());
     } else {
         m_thumbnailLabel->setPixmap(QPixmap());
-        QFont thumbFont = m_thumbnailLabel->font();
-        thumbFont.setPointSize(theme.fontSize(ruwa::ui::core::ThemeFontRole::H0));
+        QFont thumbFont = theme.font(ruwa::ui::core::ThemeFontRole::H0);
         m_thumbnailLabel->setFont(thumbFont);
         m_thumbnailLabel->setText(QStringLiteral("\xF0\x9F\x93\x84"));
     }

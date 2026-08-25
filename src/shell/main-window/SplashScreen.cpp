@@ -565,7 +565,9 @@ void SplashScreen::paintInterior(QPainter& painter) const
     const QString versionTag
         = QStringLiteral("v%1").arg(QApplication::applicationVersion()).toUpper();
 
-    QFont badgeFont(ruwa::ui::core::FontFamilyNames::DMSans18pt, 10, QFont::DemiBold);
+    QFont badgeFont(ruwa::ui::core::FontFamilyNames::DMSans18pt);
+    badgeFont.setPixelSize(ruwa::ui::core::ThemeFontSizes::pixelSize(10));
+    badgeFont.setWeight(QFont::DemiBold);
     badgeFont.setLetterSpacing(QFont::AbsoluteSpacing, 1.0);
     const QFontMetricsF badgeFm(badgeFont);
 
@@ -594,11 +596,12 @@ void SplashScreen::paintInterior(QPainter& painter) const
     const QString wordmark = QStringLiteral("Accretion Ruwa");
     const qreal titleAvail = qMax(0.0, badgeRect.left() - 16 - x);
 
-    QFont titleFont(ruwa::ui::core::FontFamilyNames::InstrumentSerif, 21, QFont::Normal);
-    // The wordmark is longer than the old one-word title, so give the point size
+    QFont titleFont(ruwa::ui::core::FontFamilyNames::InstrumentSerif);
+    titleFont.setPixelSize(ruwa::ui::core::ThemeFontSizes::pixelSize(21));
+    // The wordmark is longer than the old one-word title, so give the font size
     // room to step down rather than letting the version pill collide with it.
     for (int pt = 21; pt > 12; --pt) {
-        titleFont.setPointSize(pt);
+        titleFont.setPixelSize(ruwa::ui::core::ThemeFontSizes::pixelSize(pt));
         if (QFontMetricsF(titleFont).horizontalAdvance(wordmark) <= titleAvail) {
             break;
         }
@@ -612,7 +615,9 @@ void SplashScreen::paintInterior(QPainter& painter) const
         QRectF(x, topMargin, titleAvail, headerH), Qt::AlignLeft | Qt::AlignVCenter, titleText);
 
     // --- credits, straight under the header ---------------------------------
-    QFont creditsFont(ruwa::ui::core::FontFamilyNames::DMSans18pt, 9, QFont::Light);
+    QFont creditsFont(ruwa::ui::core::FontFamilyNames::DMSans18pt);
+    creditsFont.setPixelSize(ruwa::ui::core::ThemeFontSizes::pixelSize(9));
+    creditsFont.setWeight(QFont::Light);
     const QFontMetricsF creditsFm(creditsFont);
 
     const QStringList creditLines = { tr("Developer: %1").arg(ui::core::Credits::Developer),
@@ -630,15 +635,20 @@ void SplashScreen::paintInterior(QPainter& painter) const
     }
 
     // --- status line, percentage and progress bar ---------------------------
-    QFont statusFont(ruwa::ui::core::FontFamilyNames::DMSans18pt, 11, QFont::Light);
+    QFont statusFont(ruwa::ui::core::FontFamilyNames::DMSans18pt);
+    statusFont.setPixelSize(ruwa::ui::core::ThemeFontSizes::pixelSize(11));
+    statusFont.setWeight(QFont::Light);
     const QFontMetricsF statusFm(statusFont);
 
-    // Digits sit on the cap height, so matching point sizes would make the
+    // Digits sit on the cap height, so matching font sizes would make the
     // percentage look bigger than the status line. Scale it down by the status
     // font's x-height/cap-height ratio instead, so the two read the same size.
-    QFont percentFont(ruwa::ui::core::FontFamilyNames::DMSans18pt, 11, QFont::DemiBold);
+    QFont percentFont(ruwa::ui::core::FontFamilyNames::DMSans18pt);
+    percentFont.setPixelSize(ruwa::ui::core::ThemeFontSizes::pixelSize(11));
+    percentFont.setWeight(QFont::DemiBold);
     const qreal capH = qMax(1.0, statusFm.capHeight());
-    percentFont.setPointSizeF(qMax(1.0, percentFont.pointSizeF() * (statusFm.xHeight() / capH)));
+    percentFont.setPixelSize(
+        qMax(1, qRound(percentFont.pixelSize() * (statusFm.xHeight() / capH))));
     const QFontMetricsF percentFm(percentFont);
 
     const qreal barH = 3;

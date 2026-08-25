@@ -13,9 +13,21 @@
 #include <QHash>
 #include <QRectF>
 #include <QSet>
+#include <array>
 #include <cstdint>
 
 namespace ruwa::core {
+
+inline constexpr std::array<qreal, 5> kUiScaleFactors { 0.75, 1.0, 1.25, 1.75, 2.25 };
+inline constexpr int kDefaultUiScaleIndex = 1;
+
+constexpr int normalizedUiScaleIndex(int index)
+{
+    return index < 0 ? 0
+                     : (index >= static_cast<int>(kUiScaleFactors.size())
+                             ? static_cast<int>(kUiScaleFactors.size()) - 1
+                             : index);
+}
 
 /**
  * @brief Structure holding all application settings
@@ -30,7 +42,7 @@ struct AppSettings {
     // === APPEARANCE ===
     struct Appearance {
         QUuid themeId; // Selected theme ID
-        int uiScale = 1; // 0=Small, 1=Medium, 2=Large
+        int uiScale = kDefaultUiScaleIndex; // 0=75%, 1=100%, 2=125%, 3=175%, 4=225%
         QString language = "en"; // UI language: "en", "ru", etc.
         /// Tab strip in title bar: 0=left, 1=centered in available space
         int topBarTabAlignment = 0;

@@ -76,6 +76,13 @@ struct ThemeFontSizes {
     int micro { 6 };
     int code { 9 };
 
+    /// Convert persisted reference point sizes to DPI-independent UI pixels.
+    /// 96 DPI preserves the visual size used when the theme scale was authored.
+    static int pixelSize(int referencePointSize)
+    {
+        return qMax(1, qRound(referencePointSize * (96.0 / 72.0)));
+    }
+
     static ThemeFontSizes fromLegacy(int uiSize, int codeSize, int titleSize)
     {
         ThemeFontSizes sizes;
@@ -273,22 +280,37 @@ struct ThemeFonts {
 
     QFont getFont(ThemeFontRole role, int size = -1) const
     {
-        return QFont(family(role), size > 0 ? size : sizes.value(role));
+        QFont font(family(role));
+        font.setPixelSize(ThemeFontSizes::pixelSize(size > 0 ? size : sizes.value(role)));
+        return font;
     }
 
     QFont getFont(ThemeFontRole sizeRole, ThemeFontFamilyRole familyRole, int size = -1) const
     {
-        return QFont(family(familyRole), size > 0 ? size : sizes.value(sizeRole));
+        QFont font(family(familyRole));
+        font.setPixelSize(ThemeFontSizes::pixelSize(size > 0 ? size : sizes.value(sizeRole)));
+        return font;
     }
 
     // Helper to create font instances
-    QFont getUIFont(int size = -1) const { return QFont(uiFont, size > 0 ? size : sizes.body); }
+    QFont getUIFont(int size = -1) const
+    {
+        QFont font(uiFont);
+        font.setPixelSize(ThemeFontSizes::pixelSize(size > 0 ? size : sizes.body));
+        return font;
+    }
 
-    QFont getCodeFont(int size = -1) const { return QFont(codeFont, size > 0 ? size : sizes.code); }
+    QFont getCodeFont(int size = -1) const
+    {
+        QFont font(codeFont);
+        font.setPixelSize(ThemeFontSizes::pixelSize(size > 0 ? size : sizes.code));
+        return font;
+    }
 
     QFont getTitleFont(int size = -1) const
     {
-        QFont f(titleFont, size > 0 ? size : sizes.h4);
+        QFont f(titleFont);
+        f.setPixelSize(ThemeFontSizes::pixelSize(size > 0 ? size : sizes.h4));
         f.setWeight(QFont::Bold);
         return f;
     }

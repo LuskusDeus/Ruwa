@@ -192,16 +192,16 @@ public:
         painter->setBrush(colors.overlayBase());
         painter->drawRoundedRect(QRectF(previewRect), 5, 5);
 
-        QFont previewFont(family);
-        previewFont.setPointSize(
-            ruwa::ui::core::ThemeManager::instance().fontSize(ruwa::ui::core::ThemeFontRole::H6));
+        QFont previewFont = ruwa::ui::core::ThemeManager::instance().font(
+            ruwa::ui::core::ThemeFontRole::H6);
+        previewFont.setFamily(family);
         painter->setFont(previewFont);
         painter->setPen(colors.text);
         painter->drawText(previewRect, Qt::AlignCenter, QStringLiteral("Aa"));
 
-        QFont nameFont(family);
-        nameFont.setPointSize(
-            ruwa::ui::core::ThemeManager::instance().fontSize(ruwa::ui::core::ThemeFontRole::Body));
+        QFont nameFont = ruwa::ui::core::ThemeManager::instance().font(
+            ruwa::ui::core::ThemeFontRole::Body);
+        nameFont.setFamily(family);
         painter->setFont(nameFont);
         painter->setPen(colors.text);
         const QRect nameRect(option.rect.left() + 74, option.rect.top(), option.rect.width() - 104,
@@ -881,9 +881,11 @@ void FontDropdownSelector::paintEvent(QPaintEvent* event)
     QColor textColor
         = ruwa::ui::core::ThemeColors::interpolate(textBase, textTarget, m_hoverProgress);
 
-    QFont textFont = hasValue ? QFont(m_currentFamily) : font();
-    textFont.setPointSize(
-        ruwa::ui::core::ThemeManager::instance().fontSize(ruwa::ui::core::ThemeFontRole::Body));
+    QFont textFont
+        = ruwa::ui::core::ThemeManager::instance().font(ruwa::ui::core::ThemeFontRole::Body);
+    if (hasValue) {
+        textFont.setFamily(m_currentFamily);
+    }
     p.setFont(textFont);
     p.setPen(textColor);
     p.drawText(QRect(10, 0, width() - 32, height()),

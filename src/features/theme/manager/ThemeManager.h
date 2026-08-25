@@ -96,16 +96,16 @@ public:
 
     // === UI Scale ===
 
-    /// Scale factor indices: 0=Small(0.85), 1=Medium(1.0), 2=Large(1.15)
-    enum class ScalePreset { Small = 0, Medium = 1, Large = 2 };
+    /// Scale factor indices: 0=75%, 1=100%, 2=125%, 3=175%, 4=225%
+    enum class ScalePreset { Percent75 = 0, Percent100, Percent125, Percent175, Percent225 };
 
-    /// Get current scale factor (0.85, 1.0, or 1.15)
+    /// Get current scale factor (0.75, 1.0, 1.25, 1.75, or 2.25)
     qreal scale() const { return m_scaleFactor; }
 
-    /// Get current scale index (0, 1, or 2)
+    /// Get current scale index (0 through 4)
     int scaleIndex() const { return m_scaleIndex; }
 
-    /// Set scale by index (0=Small, 1=Medium, 2=Large)
+    /// Set scale by index (0=75%, 1=100%, 2=125%, 3=175%, 4=225%)
     void setScaleIndex(int index);
 
     /// Scale an integer value
@@ -242,7 +242,7 @@ private:
 
     // UI Scale
     qreal m_scaleFactor { 1.0 }; ///< Current scale multiplier
-    int m_scaleIndex { 1 }; ///< Current scale index (0,1,2)
+    int m_scaleIndex { 1 }; ///< Current scale index (0 through 4)
 
     // Coalescing — multiple rapid applies collapse into one
     QTimer* m_coalesceTimer { nullptr };

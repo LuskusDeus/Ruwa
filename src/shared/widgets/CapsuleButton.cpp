@@ -236,8 +236,7 @@ void CapsuleButton::updateBannerScaledSizes()
     const auto& theme = ruwa::ui::core::ThemeManager::instance();
 
     QFont f = theme.font(ruwa::ui::core::ThemeFontRole::Label, QFont::Bold);
-    f.setPointSize(
-        qMax(1, qRound(theme.fontSize(ruwa::ui::core::ThemeFontRole::Label) * m_sizeScale)));
+    f.setPixelSize(qMax(1, qRound(f.pixelSize() * m_sizeScale)));
     setFont(f);
 
     const int baseH = m_bannerBaseHeight > 0 ? m_bannerBaseHeight : BASE_BANNER_HEIGHT;

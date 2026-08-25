@@ -128,7 +128,8 @@ EffectCard::EffectCard(
 
 void EffectCard::buildHeader(QVBoxLayout* root)
 {
-    const auto& c = ThemeManager::instance().colors();
+    const auto& theme = ThemeManager::instance();
+    const auto& c = theme.colors();
 
     auto* header = new QHBoxLayout();
     header->setContentsMargins(0, 0, 0, 0);
@@ -140,7 +141,7 @@ void EffectCard::buildHeader(QVBoxLayout* root)
 
     m_titleLabel = new QLabel(
         m_descriptor.displayName.isEmpty() ? m_descriptor.typeId : m_descriptor.displayName, this);
-    QFont titleFont = c.fonts.getUIFont();
+    QFont titleFont = theme.font(ruwa::ui::core::ThemeFontRole::Body);
     titleFont.setWeight(QFont::DemiBold);
     m_titleLabel->setFont(titleFont);
     header->addWidget(m_titleLabel, 1);

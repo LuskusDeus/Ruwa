@@ -120,7 +120,7 @@ protected:
 
         QColor textColor = m_implemented ? c.text : c.textDisabled();
         p.setPen(textColor);
-        QFont f = c.fonts.getUIFont();
+        QFont f = ThemeManager::instance().font(ruwa::ui::core::ThemeFontRole::Body);
         p.setFont(f);
         const QRect textRect = r.adjusted(20, 0, -8, 0);
         p.drawText(textRect, Qt::AlignVCenter | Qt::AlignLeft,
@@ -237,14 +237,14 @@ protected:
         p.drawPath(chevron);
         p.restore();
 
-        QFont f = c.fonts.getUIFont();
+        QFont f = ThemeManager::instance().font(ruwa::ui::core::ThemeFontRole::Body);
         f.setWeight(QFont::DemiBold);
         p.setFont(f);
         p.setPen(c.text);
         p.drawText(r.adjusted(24, 0, -30, 0), Qt::AlignVCenter | Qt::AlignLeft, m_name);
 
         p.setPen(c.textMuted);
-        p.setFont(c.fonts.getUIFont());
+        p.setFont(ThemeManager::instance().font(ruwa::ui::core::ThemeFontRole::Body));
         p.drawText(
             r.adjusted(0, 0, -8, 0), Qt::AlignVCenter | Qt::AlignRight, QString::number(m_count));
     }

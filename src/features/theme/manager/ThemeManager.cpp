@@ -130,9 +130,8 @@ void ThemeManager::initialize()
 
     // Load UI scale from settings
     const auto& settings = ruwa::core::SettingsManager::instance().settings();
-    m_scaleIndex = qBound(0, settings.appearance.uiScale, 2);
-    static const qreal scaleFactors[] = { 0.85, 1.0, 1.15 };
-    m_scaleFactor = scaleFactors[m_scaleIndex];
+    m_scaleIndex = ruwa::core::normalizedUiScaleIndex(settings.appearance.uiScale);
+    m_scaleFactor = ruwa::core::kUiScaleFactors[m_scaleIndex];
     // Connect to scale changes from SettingsManager
     connect(&ruwa::core::SettingsManager::instance(), &ruwa::core::SettingsManager::uiScaleChanged,
         this, &ThemeManager::setScaleIndex);
@@ -473,8 +472,7 @@ void ThemeManager::applyColorsFromPreset(const ThemePreset& preset)
     FontManager::instance().setUIFontFamily(m_colors.fonts.uiFont);
     FontManager::instance().setCodeFontFamily(m_colors.fonts.codeFont);
     FontManager::instance().setTitleFontFamily(m_colors.fonts.titleFont);
-    FontManager::instance().applyToApplication(
-        scaledFontSize(m_colors.fonts.sizes.value(ThemeFontRole::Body)));
+    FontManager::instance().applyToApplication(font(ThemeFontRole::Body).pixelSize());
 }
 
 ThemeColors ThemeManager::colorsForPreset(const ThemePreset& preset)
@@ -546,7 +544,7 @@ void ThemeManager::applyTheme()
 
 void ThemeManager::setScaleIndex(int index)
 {
-    index = qBound(0, index, 2);
+    index = ruwa::core::normalizedUiScaleIndex(index);
 
     if (m_scaleIndex == index) {
         return;
@@ -554,9 +552,8 @@ void ThemeManager::setScaleIndex(int index)
 
     m_scaleIndex = index;
 
-    static const qreal scaleFactors[] = { 0.85, 1.0, 1.15 };
-    m_scaleFactor = scaleFactors[index];
-    FontManager::instance().applyToApplication(fontSize(ThemeFontRole::Body));
+    m_scaleFactor = ruwa::core::kUiScaleFactors[index];
+    FontManager::instance().applyToApplication(font(ThemeFontRole::Body).pixelSize());
 
     // Scale affects per-tab layout/sizing too; route through the same per-tab
     // refresh path so background tabs defer + flush on activation.

@@ -785,7 +785,8 @@ void BrushPresetPage::setupUI()
     m_brushesHeaderLabel = new QLabel(tr("Brushes"), brushHeaderRow);
     m_brushesHeaderLabel->setStyleSheet(QStringLiteral("color: %1; background: transparent;")
             .arg(colors.text.name(QColor::HexArgb)));
-    QFont sectionHeaderFont(FontFamilyNames::InstrumentSerif, theme.fontSize(ThemeFontRole::H4));
+    QFont sectionHeaderFont = theme.font(ThemeFontRole::H4);
+    sectionHeaderFont.setFamily(FontFamilyNames::InstrumentSerif);
     sectionHeaderFont.setWeight(QFont::Normal);
     m_brushesHeaderLabel->setFont(sectionHeaderFont);
 
@@ -842,7 +843,8 @@ void BrushPresetPage::setupUI()
     m_settingsHeaderLabel = new QLabel(tr("Settings"), settingsHeaderRow);
     m_settingsHeaderLabel->setStyleSheet(QStringLiteral("color: %1; background: transparent;")
             .arg(colors.text.name(QColor::HexArgb)));
-    QFont hdrFont(FontFamilyNames::InstrumentSerif, theme.fontSize(ThemeFontRole::H4));
+    QFont hdrFont = theme.font(ThemeFontRole::H4);
+    hdrFont.setFamily(FontFamilyNames::InstrumentSerif);
     hdrFont.setWeight(QFont::Normal);
     m_settingsHeaderLabel->setFont(hdrFont);
 
@@ -886,7 +888,8 @@ void BrushPresetPage::setupUI()
 void BrushPresetPage::applyTypography()
 {
     const auto& theme = ThemeManager::instance();
-    QFont headerFont(FontFamilyNames::InstrumentSerif, theme.fontSize(ThemeFontRole::H4));
+    QFont headerFont = theme.font(ThemeFontRole::H4);
+    headerFont.setFamily(FontFamilyNames::InstrumentSerif);
     headerFont.setWeight(QFont::Normal);
     if (m_brushesHeaderLabel) {
         m_brushesHeaderLabel->setFont(headerFont);
