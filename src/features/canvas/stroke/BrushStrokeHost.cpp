@@ -370,6 +370,26 @@ float BrushStrokeHost::sampleSmoothedStrokeSpeed(float worldX, float worldY, dou
     m_strokeSpeedMeasurements.push_back(
         { synthMs, m_strokeSpeedCumulativeScreenDistance });
 
+    // A press and a stationary tablet packet are not motion samples. Remember
+    // the first point that actually travelled, then wait for a second travelled
+    // interval before declaring startup velocity observable. This prevents pen
+    // dwell/report-rate packets from accidentally validating a zero-speed head.
+    constexpr float kStartupMotionEpsilonScreenPx = 0.25f;
+    bool startupEstimateBecameReliable = false;
+    if (!m_initialStrokeSpeedSeeded && !m_strokeSpeedFirstMotionValid
+        && segmentScreenDistance > kStartupMotionEpsilonScreenPx) {
+        m_strokeSpeedFirstMotionSynthMs = synthMs;
+        m_strokeSpeedFirstMotionScreenDistance = m_strokeSpeedCumulativeScreenDistance;
+        m_strokeSpeedFirstMotionValid = true;
+    } else if (!m_initialStrokeSpeedSeeded && m_strokeSpeedFirstMotionValid
+        && !m_strokeSpeedStartupEstimateReliable
+        && m_strokeSpeedCumulativeScreenDistance - m_strokeSpeedFirstMotionScreenDistance
+            > kStartupMotionEpsilonScreenPx
+        && synthMs > m_strokeSpeedFirstMotionSynthMs) {
+        m_strokeSpeedStartupEstimateReliable = true;
+        startupEstimateBecameReliable = true;
+    }
+
     const double windowMs
         = static_cast<double>(ruwa::core::brushes::kBrushStrokeSpeedFilterTimeSeconds) * 1000.0;
     const double cutoffMs = synthMs - windowMs;
@@ -401,18 +421,17 @@ float BrushStrokeHost::sampleSmoothedStrokeSpeed(float worldX, float worldY, dou
             (m_strokeSpeedCumulativeScreenDistance - windowStartDistance) * 1000.0 / measuredMs);
     }
 
-    if (!m_initialStrokeSpeedSeeded && m_strokeSpeedMeasurements.size() >= 3) {
+    if (!m_initialStrokeSpeedSeeded && m_strokeSpeedStartupEstimateReliable) {
         // Pen-down is not a motion sample. In particular on the mouse path the
         // user may hold the button briefly before moving; treating the complete
         // press -> first-move interval as uniform motion makes every early speed
         // estimate too low. Once a second movement sample exists, measure from
         // the first observed move onward. The geometry look-ahead keeps these
         // samples unpainted until this estimate is available.
-        const StrokeSpeedMeasurement& firstMotion = m_strokeSpeedMeasurements[1];
-        const double motionMs = synthMs - firstMotion.synthMs;
+        const double motionMs = synthMs - m_strokeSpeedFirstMotionSynthMs;
         if (motionMs > 0.001) {
             measuredScreenSpeed = static_cast<float>(
-                (m_strokeSpeedCumulativeScreenDistance - firstMotion.cumulativeScreenDistance)
+                (m_strokeSpeedCumulativeScreenDistance - m_strokeSpeedFirstMotionScreenDistance)
                 * 1000.0 / motionMs);
         }
     }
@@ -436,13 +455,12 @@ float BrushStrokeHost::sampleSmoothedStrokeSpeed(float worldX, float worldY, dou
     const float virtualDistance
         = responseWindow * (timeStep / kTimeFallbackResponseSeconds) * timeWeight;
     const float filterStep = std::hypot(segmentScreenDistance / zoom, virtualDistance);
-    if (!m_strokeSpeedFilterValid || !m_initialStrokeSpeedSeeded) {
-        // Until the first dab is actually emitted the live path already gives us
-        // a small look-ahead buffer. Keep refining the startup estimate directly
-        // during that interval instead of committing the follower to the first
-        // mouse/tablet move. That first move often includes the pen-down/click
-        // latency and can be much slower than the following fast flick; easing
-        // from it produces a whole capsule of wrong-sized dabs at the head.
+    if (!m_strokeSpeedFilterValid || startupEstimateBecameReliable
+        || (!m_initialStrokeSpeedSeeded && !m_strokeSpeedStartupEstimateReliable)) {
+        // Before velocity is observable, keep the provisional value revisable.
+        // The moment a real motion interval appears, seed the follower exactly
+        // at that estimate; subsequent deferred samples then use the same C1
+        // smoothing as the rest of the stroke instead of bypassing the filter.
         m_strokeSpeedFilteredScreenPxPerSecond = measuredScreenSpeed;
         m_strokeSpeedFilterVelocity = 0.0f;
         m_strokeSpeedFilterValid = true;
@@ -469,21 +487,31 @@ void BrushStrokeHost::backfillDeferredStrokeSpeed(const BrushInputDynamics& seed
         return;
     }
 
-    // Nothing has reached the stroke buffer yet, so the samples held by the
-    // existing geometry look-ahead are still revisable. Give the complete
-    // deferred head one common boundary value: the newest measured speed. This
-    // makes the first emitted segment join the running filter without the
-    // zero/first-event plateau that otherwise becomes several overlapping dabs.
-    const auto seedSpeed = [&seedInputDynamics](BrushInputDynamics& dynamics) {
-        dynamics.strokeSpeed = seedInputDynamics.strokeSpeed;
+    // Pen-down has no velocity and the first move includes an arbitrary amount
+    // of press latency, so only the prefix before the first reliable motion
+    // interval needs correction. Later look-ahead points have already passed
+    // through the normal follower and must retain their distinct values;
+    // flattening all of them creates a long constant-radius startup capsule.
+    float boundarySpeed = seedInputDynamics.strokeSpeed;
+    size_t unreliablePointCount = m_liveStrokePoints.size();
+    for (size_t i = 0; i < m_liveStrokePoints.size(); ++i) {
+        if (m_liveStrokePoints[i].strokeSpeedReliable) {
+            boundarySpeed = m_liveStrokePoints[i].inputDynamics.strokeSpeed;
+            unreliablePointCount = i;
+            break;
+        }
+    }
+
+    const auto seedSpeed = [boundarySpeed](BrushInputDynamics& dynamics) {
+        dynamics.strokeSpeed = boundarySpeed;
         dynamics.strokeSpeedAvailable = true;
         dynamics.strokeSpeedSpatialDerivative = 0.0f;
         dynamics.strokeSpeedSpatialDerivativeAvailable = false;
     };
     seedSpeed(m_lastStrokeInputDynamics);
     seedSpeed(m_prevEmittedInputDynamics);
-    for (LiveStrokePoint& point : m_liveStrokePoints) {
-        seedSpeed(point.inputDynamics);
+    for (size_t i = 0; i < unreliablePointCount; ++i) {
+        seedSpeed(m_liveStrokePoints[i].inputDynamics);
     }
 }
 
@@ -594,9 +622,13 @@ void BrushStrokeHost::beginStroke(
     m_strokeSpeedCumulativeScreenDistance = 0.0;
     m_strokeSpeedMeasurements.clear();
     m_strokeSpeedMeasurements.push_back({ 0.0, 0.0 });
+    m_strokeSpeedFirstMotionSynthMs = 0.0;
+    m_strokeSpeedFirstMotionScreenDistance = 0.0;
     m_strokeSpeedFilteredScreenPxPerSecond = 0.0f;
     m_strokeSpeedFilterVelocity = 0.0f;
     m_strokeSpeedFilterValid = false;
+    m_strokeSpeedFirstMotionValid = false;
+    m_strokeSpeedStartupEstimateReliable = false;
     m_initialStrokeSpeedSeeded = false;
 
     currentBrush->beginStroke();
@@ -1446,10 +1478,13 @@ void BrushStrokeHost::continueStrokeWithResolvedPoint(float worldX, float worldY
     configureBrushSelectionMaskAlpha(*currentBrush, layer, paintMask);
     auto* executionBackend = brushExecutionBackend();
     const bool realtimeRebuild = strokeNeedsRealtimeRebuild();
+    const bool strokeSpeedBound = currentBrush->hasActiveDynamicsBinding(
+        ruwa::core::brushes::BrushInputSourceKey::StrokeSpeed);
     const bool deferInitialDabForDynamicInput = currentBrush->strokeDabs().empty()
-        && (currentBrush->hasActiveStrokeDirectionDynamicsBinding()
-            || currentBrush->hasActiveDynamicsBinding(
-                ruwa::core::brushes::BrushInputSourceKey::StrokeSpeed));
+        && (currentBrush->hasActiveStrokeDirectionDynamicsBinding() || strokeSpeedBound);
+    const bool deferRealtimeStrokeSpeedStartup = realtimeRebuild
+        && currentBrush->strokeDabs().empty() && strokeSpeedBound
+        && !m_strokeSpeedStartupEstimateReliable;
     std::unordered_set<TileKey, TileKeyHash> rebuiltTiles;
     bool previewUpdated = false;
     bool skippedDeferredInitialDab = false;
@@ -1467,6 +1502,8 @@ void BrushStrokeHost::continueStrokeWithResolvedPoint(float worldX, float worldY
                 m_liveStrokePoints.back().pressure = pressure;
                 m_liveStrokePoints.back().strokeElapsedSeconds = dabElapsedSeconds;
                 m_liveStrokePoints.back().inputDynamics = inputDynamics;
+                m_liveStrokePoints.back().strokeSpeedReliable
+                    = m_strokeSpeedStartupEstimateReliable || m_initialStrokeSpeedSeeded;
             }
             m_lastStrokeInputPressure = pressure;
             m_lastRawStrokeInputDynamics = inputDynamics;
@@ -1522,17 +1559,40 @@ void BrushStrokeHost::continueStrokeWithResolvedPoint(float worldX, float worldY
             m_lastStrokeInputDynamics = inputDynamics;
             m_lastStrokeElapsedSeconds = dabElapsedSeconds;
         }
+    } else if (deferRealtimeStrokeSpeedStartup) {
+        // Realtime taper replay normally bypasses the geometry look-ahead. Keep
+        // its startup points in that same existing buffer until velocity is
+        // observable, otherwise its very first segment would still be stamped
+        // with the provisional pen-down speed.
+        m_liveStrokePoints.push_back({ stabilizedPoint, pressure, dabElapsedSeconds, inputDynamics,
+            false });
+        skippedDeferredInitialDab = true;
     } else if (realtimeRebuild) {
         const bool strokeWasEmpty = currentBrush->strokeDabs().empty();
-        if (strokeWasEmpty) {
-            backfillDeferredStrokeSpeed(inputDynamics);
-        }
         ++m_realtimePreviewEventCount;
         currentBrush->setStrokeElapsedSeconds(dabElapsedSeconds, true);
         std::vector<TileBrush::DabPoint> segmentDabs;
-        currentBrush->appendInterpolatedStrokeDabs(prevX, prevY, stabilizedPoint.x,
-            stabilizedPoint.y, prevPressure, pressure, segmentDabs, m_lastStrokeElapsedSeconds,
-            dabElapsedSeconds, true, m_lastStrokeInputDynamics, inputDynamics);
+        if (strokeWasEmpty && strokeSpeedBound && m_liveStrokePoints.size() > 1) {
+            m_liveStrokePoints.push_back({ stabilizedPoint, pressure, dabElapsedSeconds,
+                inputDynamics, m_strokeSpeedStartupEstimateReliable });
+            backfillDeferredStrokeSpeed(m_liveStrokePoints.back().inputDynamics);
+            for (size_t i = 1; i < m_liveStrokePoints.size(); ++i) {
+                const LiveStrokePoint& from = m_liveStrokePoints[i - 1];
+                const LiveStrokePoint& to = m_liveStrokePoints[i];
+                currentBrush->appendInterpolatedStrokeDabs(from.point.x, from.point.y, to.point.x,
+                    to.point.y, from.pressure, to.pressure, segmentDabs,
+                    from.strokeElapsedSeconds, to.strokeElapsedSeconds, true, from.inputDynamics,
+                    to.inputDynamics);
+            }
+            m_liveStrokePoints.clear();
+        } else {
+            if (strokeWasEmpty) {
+                backfillDeferredStrokeSpeed(inputDynamics);
+            }
+            currentBrush->appendInterpolatedStrokeDabs(prevX, prevY, stabilizedPoint.x,
+                stabilizedPoint.y, prevPressure, pressure, segmentDabs, m_lastStrokeElapsedSeconds,
+                dabElapsedSeconds, true, m_lastStrokeInputDynamics, inputDynamics);
+        }
         if (strokeWasEmpty && !currentBrush->strokeDabs().empty()) {
             m_initialStrokeSpeedSeeded = true;
         }
@@ -1562,8 +1622,8 @@ void BrushStrokeHost::continueStrokeWithResolvedPoint(float worldX, float worldY
         // to several world pixels of zig-zag, so we apply much stronger
         // filtering there. At zoom >= 1 the filter degenerates to near
         // pass-through (single iteration, lag of 2 samples).
-        m_liveStrokePoints.push_back(
-            { stabilizedPoint, pressure, dabElapsedSeconds, inputDynamics });
+        m_liveStrokePoints.push_back({ stabilizedPoint, pressure, dabElapsedSeconds, inputDynamics,
+            m_strokeSpeedStartupEstimateReliable || m_initialStrokeSpeedSeeded });
 
         const float zoom = std::max(viewportZoom(), 0.05f);
         const float zoomInv = 1.0f / zoom;
@@ -1626,7 +1686,7 @@ void BrushStrokeHost::continueStrokeWithResolvedPoint(float worldX, float worldY
         }
     }
 
-    if (realtimeRebuild) {
+    if (realtimeRebuild && !skippedDeferredInitialDab) {
         m_lastStrokeX = stabilizedPoint.x;
         m_lastStrokeY = stabilizedPoint.y;
         m_lastStrokePressure = pressure;
@@ -2247,9 +2307,13 @@ void BrushStrokeHost::clearStrokeRuntimeState()
     m_strokeSpeedSampleY = 0.0f;
     m_strokeSpeedCumulativeScreenDistance = 0.0;
     m_strokeSpeedMeasurements.clear();
+    m_strokeSpeedFirstMotionSynthMs = 0.0;
+    m_strokeSpeedFirstMotionScreenDistance = 0.0;
     m_strokeSpeedFilteredScreenPxPerSecond = 0.0f;
     m_strokeSpeedFilterVelocity = 0.0f;
     m_strokeSpeedFilterValid = false;
+    m_strokeSpeedFirstMotionValid = false;
+    m_strokeSpeedStartupEstimateReliable = false;
     m_initialStrokeSpeedSeeded = false;
     m_strokeElapsedTimer.invalidate();
     m_stabilizerCatchupTimer.stop();
@@ -2436,10 +2500,10 @@ void BrushStrokeHost::rasterizeCatmullRomStroke(TileGrid* grid, TileGrid* select
 
     BrushInputDynamics p1SplineInputDynamics = p1InputDynamics;
     BrushInputDynamics p2SplineInputDynamics = p2InputDynamics;
+    const float segmentDistance = vectorLength({ p2.x - p1.x, p2.y - p1.y });
     if (p0InputDynamics.strokeSpeedAvailable && p1InputDynamics.strokeSpeedAvailable
         && p2InputDynamics.strokeSpeedAvailable && p3InputDynamics.strokeSpeedAvailable) {
         const float incomingDistance = vectorLength({ p1.x - p0.x, p1.y - p0.y });
-        const float segmentDistance = vectorLength({ p2.x - p1.x, p2.y - p1.y });
         const float outgoingDistance = vectorLength({ p3.x - p2.x, p3.y - p2.y });
         p1SplineInputDynamics.strokeSpeedSpatialDerivative = monotonePathDerivative(
             p0InputDynamics.strokeSpeed, p1InputDynamics.strokeSpeed,
@@ -2462,7 +2526,7 @@ void BrushStrokeHost::rasterizeCatmullRomStroke(TileGrid* grid, TileGrid* select
         const float nextElapsed = lerpScalar(p1StrokeElapsedSeconds, p2StrokeElapsedSeconds, t);
         const BrushInputDynamics nextInputDynamics
             = ruwa::core::brushes::interpolateBrushInputDynamics(
-                p1SplineInputDynamics, p2SplineInputDynamics, t, approxLength);
+                p1SplineInputDynamics, p2SplineInputDynamics, t, segmentDistance);
         rasterizeStrokeSegment(grid, selectionMask, executionBackend, prevPoint.x, prevPoint.y,
             nextPoint.x, nextPoint.y, prevPressure, nextPressure, prevElapsed, nextElapsed,
             prevInputDynamics, nextInputDynamics);

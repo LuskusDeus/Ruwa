@@ -148,6 +148,7 @@ private:
         float pressure = 1.0f;
         float strokeElapsedSeconds = 0.0f;
         BrushInputDynamics inputDynamics {};
+        bool strokeSpeedReliable = false;
     };
 
     struct StrokeSpeedMeasurement {
@@ -313,9 +314,13 @@ private:
     float m_strokeSpeedSampleY = 0.0f;
     double m_strokeSpeedCumulativeScreenDistance = 0.0;
     std::deque<StrokeSpeedMeasurement> m_strokeSpeedMeasurements;
+    double m_strokeSpeedFirstMotionSynthMs = 0.0;
+    double m_strokeSpeedFirstMotionScreenDistance = 0.0;
     float m_strokeSpeedFilteredScreenPxPerSecond = 0.0f;
     float m_strokeSpeedFilterVelocity = 0.0f;
     bool m_strokeSpeedFilterValid = false;
+    bool m_strokeSpeedFirstMotionValid = false;
+    bool m_strokeSpeedStartupEstimateReliable = false;
     bool m_initialStrokeSpeedSeeded = false;
 
     // Shift axis constraint. Armed at beginStroke and resolved once, on the
