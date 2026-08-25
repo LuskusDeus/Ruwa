@@ -158,6 +158,18 @@ TEST_CASE("stroke input queue preserves stroke speed dynamics", "[brush][input][
         aether::stroke_input_queue::canRemoveMiddleSample(first, middle, last, 1.0f, parameters));
 }
 
+TEST_CASE("stroke input queue preserves unreliable timestamp boundaries", "[brush][input]")
+{
+    const auto parameters = aether::stroke_input_queue::parametersForQueueAge(0.030f);
+    auto first = sample(0.0f, 0.0f, 0.5f, 0.0000f);
+    auto middle = sample(5.0f, 0.0f, 0.5f, 0.0005f);
+    auto last = sample(10.0f, 0.0f, 0.5f, 0.0100f);
+    middle.timestampReliable = false;
+
+    CHECK_FALSE(
+        aether::stroke_input_queue::canRemoveMiddleSample(first, middle, last, 1.0f, parameters));
+}
+
 TEST_CASE("pen tilt interpolation follows the shortest circular arc", "[brush][dynamics]")
 {
     const float from = 350.0f / 360.0f;

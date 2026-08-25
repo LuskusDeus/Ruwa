@@ -152,7 +152,7 @@ private:
     };
 
     struct StrokeSpeedMeasurement {
-        double synthMs = 0.0;
+        double sampleTimeMs = 0.0;
         double cumulativeScreenDistance = 0.0;
     };
 
@@ -207,11 +207,13 @@ private:
         const BrushInputDynamics& inputDynamics, bool processImmediately);
     void continueStrokeImmediate(float worldX, float worldY, float pressure,
         float strokeElapsedSeconds, const BrushInputDynamics& inputDynamics,
-        bool requestRenderAfterStep, bool isRealPenSample = true);
+        bool requestRenderAfterStep, bool isRealPenSample = true,
+        bool inputTimestampReliable = true);
     // Advances the de-jittered synthetic clock and returns the nowMs to feed the
     // stabilizer. Real pen samples drive a windowed period estimate; catch-up
     // (idle) ticks pass through real time and reset-on-pause keeps it honest.
-    double stepStabilizerClock(double realMs, bool isRealPenSample);
+    double stepStabilizerClock(
+        double realMs, bool isRealPenSample, bool inputTimestampReliable = true);
     // Stroke time carried by DABS (the `Time` dynamics input). Integrates the
     // forward motion of the synthetic clock above onto the stroke's own origin.
     // synthNowMs is a stepStabilizerClock result; realMs is the raw input clock,
@@ -272,7 +274,7 @@ private:
     // dab geometry. Coupled to the brush base radius so their rate of change
     // stays smooth relative to dab spacing at any brush size / zoom.
     float dynamicsSmoothingWindowWorldPx() const;
-    float sampleSmoothedStrokeSpeed(float worldX, float worldY, double synthMs);
+    float sampleSmoothedStrokeSpeed(float worldX, float worldY, double sampleTimeMs);
     void backfillDeferredStrokeSpeed(const BrushInputDynamics& seedInputDynamics);
     bool tryFinalizeStroke(bool forceWait);
     void clearStrokeRuntimeState();
@@ -307,14 +309,15 @@ private:
     float m_lastStrokeInputElapsedSeconds = 0.0f;
     QElapsedTimer m_strokeElapsedTimer;
     StrokeInputDevice m_strokeInputDevice = StrokeInputDevice::Stylus;
-    // Stroke-speed estimation runs on the same de-jittered synthetic clock as
-    // stabilization. A trailing arc-length window rejects packet quantization;
-    // the shared radius-coupled dynamics follower then makes the result C1.
+    // Stroke speed uses the same uniform sample clock as stabilization. Repeated
+    // input timestamps advance by the learned device period rather than their
+    // artificial ordering nudge. A trailing arc-length window rejects packet
+    // quantization; the shared radius-coupled dynamics follower makes it C1.
     float m_strokeSpeedSampleX = 0.0f;
     float m_strokeSpeedSampleY = 0.0f;
     double m_strokeSpeedCumulativeScreenDistance = 0.0;
     std::deque<StrokeSpeedMeasurement> m_strokeSpeedMeasurements;
-    double m_strokeSpeedFirstMotionSynthMs = 0.0;
+    double m_strokeSpeedFirstMotionSampleTimeMs = 0.0;
     double m_strokeSpeedFirstMotionScreenDistance = 0.0;
     float m_strokeSpeedFilteredScreenPxPerSecond = 0.0f;
     float m_strokeSpeedFilterVelocity = 0.0f;
@@ -397,9 +400,12 @@ private:
     // the estimate; a pause resets it so resume is clean. See
     // continueStrokeImmediate / stepStabilizerClock.
     static constexpr int kStabClockWindow = 8;
+    static constexpr double kStabClockInitialPeriodMs = 4.0;
     bool m_stabClockValid = false;
     double m_stabSynthMs = 0.0;
     double m_stabLastRealPenMs = 0.0;
+    double m_stabEstimatedPeriodMs = kStabClockInitialPeriodMs;
+    bool m_stabUnreliableTimestampRun = false;
     std::array<double, kStabClockWindow> m_stabRealWin {};
     int m_stabRealWinCount = 0;
     // Stroke time handed to the DABS, i.e. what the `Time` dynamics input reads

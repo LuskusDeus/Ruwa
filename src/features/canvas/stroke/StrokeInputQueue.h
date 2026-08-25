@@ -23,6 +23,10 @@ struct StrokeInputSample {
     float strokeElapsedSeconds = 0.0f;
     StrokeInputDevice inputDevice = StrokeInputDevice::Stylus;
     ruwa::core::brushes::BrushInputDynamics inputDynamics {};
+    /// False when the host had to manufacture ordering because the input clock
+    /// repeated or moved backwards. The geometry is valid, but the artificial
+    /// sub-millisecond delta must be replaced by the learned device period.
+    bool timestampReliable = true;
 };
 
 namespace stroke_input_queue {
@@ -48,6 +52,7 @@ inline constexpr float kTiltTolerance = 1.0f / 360.0f;
 inline constexpr float kSpeedTolerance = 0.005f;
 inline constexpr float kTiltSignificanceScreenPx = 180.0f;
 inline constexpr float kSpeedSignificanceScreenPx = 32.0f;
+inline constexpr float kTimestampReliabilitySignificanceScreenPx = 32.0f;
 
 inline float normalizedAngleDistance(float first, float second)
 {
@@ -88,6 +93,10 @@ inline bool canRemoveMiddleSample(const StrokeInputSample& first, const StrokeIn
     const StrokeInputSample& last, float viewportZoom, const ReductionParameters& parameters)
 {
     if (first.inputDevice != middle.inputDevice || middle.inputDevice != last.inputDevice) {
+        return false;
+    }
+    if (first.timestampReliable != middle.timestampReliable
+        || middle.timestampReliable != last.timestampReliable) {
         return false;
     }
 
@@ -265,6 +274,11 @@ inline std::size_t decimateToBudget(
 
         float tiltSignificance = 0.0f;
         float speedSignificance = 0.0f;
+        const float timestampReliabilitySignificance
+            = (first.timestampReliable != middle.timestampReliable
+                  || middle.timestampReliable != last.timestampReliable)
+            ? kTimestampReliabilitySignificanceScreenPx
+            : 0.0f;
         const auto& firstDynamics = first.inputDynamics;
         const auto& middleDynamics = middle.inputDynamics;
         const auto& lastDynamics = last.inputDynamics;
@@ -288,7 +302,7 @@ inline std::size_t decimateToBudget(
         }
 
         float result = std::max({ positionSignificance, pressureSignificance, timingSignificance,
-            tiltSignificance, speedSignificance });
+            tiltSignificance, speedSignificance, timestampReliabilitySignificance });
         if (!std::isfinite(result)) {
             result = 0.0f;
         }

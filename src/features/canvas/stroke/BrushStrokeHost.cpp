@@ -354,11 +354,11 @@ float BrushStrokeHost::dynamicsSmoothingWindowWorldPx() const
     return windowWorldPx;
 }
 
-float BrushStrokeHost::sampleSmoothedStrokeSpeed(float worldX, float worldY, double synthMs)
+float BrushStrokeHost::sampleSmoothedStrokeSpeed(float worldX, float worldY, double sampleTimeMs)
 {
-    if (!std::isfinite(worldX) || !std::isfinite(worldY) || !std::isfinite(synthMs)
+    if (!std::isfinite(worldX) || !std::isfinite(worldY) || !std::isfinite(sampleTimeMs)
         || m_strokeSpeedMeasurements.empty()
-        || synthMs <= m_strokeSpeedMeasurements.back().synthMs) {
+        || sampleTimeMs <= m_strokeSpeedMeasurements.back().sampleTimeMs) {
         return ruwa::core::brushes::normalizeBrushStrokeSpeed(
             m_strokeSpeedFilteredScreenPxPerSecond);
     }
@@ -368,7 +368,7 @@ float BrushStrokeHost::sampleSmoothedStrokeSpeed(float worldX, float worldY, dou
         = std::hypot(worldX - m_strokeSpeedSampleX, worldY - m_strokeSpeedSampleY) * zoom;
     m_strokeSpeedCumulativeScreenDistance += segmentScreenDistance;
     m_strokeSpeedMeasurements.push_back(
-        { synthMs, m_strokeSpeedCumulativeScreenDistance });
+        { sampleTimeMs, m_strokeSpeedCumulativeScreenDistance });
 
     // A press and a stationary tablet packet are not motion samples. Remember
     // the first point that actually travelled, then wait for a second travelled
@@ -378,34 +378,34 @@ float BrushStrokeHost::sampleSmoothedStrokeSpeed(float worldX, float worldY, dou
     bool startupEstimateBecameReliable = false;
     if (!m_initialStrokeSpeedSeeded && !m_strokeSpeedFirstMotionValid
         && segmentScreenDistance > kStartupMotionEpsilonScreenPx) {
-        m_strokeSpeedFirstMotionSynthMs = synthMs;
+        m_strokeSpeedFirstMotionSampleTimeMs = sampleTimeMs;
         m_strokeSpeedFirstMotionScreenDistance = m_strokeSpeedCumulativeScreenDistance;
         m_strokeSpeedFirstMotionValid = true;
     } else if (!m_initialStrokeSpeedSeeded && m_strokeSpeedFirstMotionValid
         && !m_strokeSpeedStartupEstimateReliable
         && m_strokeSpeedCumulativeScreenDistance - m_strokeSpeedFirstMotionScreenDistance
             > kStartupMotionEpsilonScreenPx
-        && synthMs > m_strokeSpeedFirstMotionSynthMs) {
+        && sampleTimeMs > m_strokeSpeedFirstMotionSampleTimeMs) {
         m_strokeSpeedStartupEstimateReliable = true;
         startupEstimateBecameReliable = true;
     }
 
     const double windowMs
         = static_cast<double>(ruwa::core::brushes::kBrushStrokeSpeedFilterTimeSeconds) * 1000.0;
-    const double cutoffMs = synthMs - windowMs;
+    const double cutoffMs = sampleTimeMs - windowMs;
     // Keep exactly one sample before the cutoff so distance at the window edge
     // can be interpolated instead of jumping whenever an old packet expires.
     while (m_strokeSpeedMeasurements.size() > 2
-        && m_strokeSpeedMeasurements[1].synthMs <= cutoffMs) {
+        && m_strokeSpeedMeasurements[1].sampleTimeMs <= cutoffMs) {
         m_strokeSpeedMeasurements.pop_front();
     }
 
-    double windowStartMs = m_strokeSpeedMeasurements.front().synthMs;
+    double windowStartMs = m_strokeSpeedMeasurements.front().sampleTimeMs;
     double windowStartDistance
         = m_strokeSpeedMeasurements.front().cumulativeScreenDistance;
     if (m_strokeSpeedMeasurements.size() >= 2 && windowStartMs < cutoffMs) {
         const auto& afterCutoff = m_strokeSpeedMeasurements[1];
-        const double intervalMs = afterCutoff.synthMs - windowStartMs;
+        const double intervalMs = afterCutoff.sampleTimeMs - windowStartMs;
         if (intervalMs > 0.0) {
             const double amount = std::clamp((cutoffMs - windowStartMs) / intervalMs, 0.0, 1.0);
             windowStartDistance += amount
@@ -414,7 +414,7 @@ float BrushStrokeHost::sampleSmoothedStrokeSpeed(float worldX, float worldY, dou
         }
     }
 
-    const double measuredMs = synthMs - windowStartMs;
+    const double measuredMs = sampleTimeMs - windowStartMs;
     float measuredScreenSpeed = 0.0f;
     if (measuredMs > 0.001) {
         measuredScreenSpeed = static_cast<float>(
@@ -428,7 +428,7 @@ float BrushStrokeHost::sampleSmoothedStrokeSpeed(float worldX, float worldY, dou
         // estimate too low. Once a second movement sample exists, measure from
         // the first observed move onward. The geometry look-ahead keeps these
         // samples unpainted until this estimate is available.
-        const double motionMs = synthMs - m_strokeSpeedFirstMotionSynthMs;
+        const double motionMs = sampleTimeMs - m_strokeSpeedFirstMotionSampleTimeMs;
         if (motionMs > 0.001) {
             measuredScreenSpeed = static_cast<float>(
                 (m_strokeSpeedCumulativeScreenDistance - m_strokeSpeedFirstMotionScreenDistance)
@@ -441,10 +441,10 @@ float BrushStrokeHost::sampleSmoothedStrokeSpeed(float worldX, float worldY, dou
     // change can alter radius too sharply between adjacent dabs on a large
     // brush. It is the same follower and response scale used by pressure.
     const float responseWindow = std::max(1.0f, dynamicsSmoothingWindowWorldPx());
-    const double previousSynthMs
-        = m_strokeSpeedMeasurements[m_strokeSpeedMeasurements.size() - 2].synthMs;
+    const double previousSampleTimeMs
+        = m_strokeSpeedMeasurements[m_strokeSpeedMeasurements.size() - 2].sampleTimeMs;
     const float elapsedSeconds
-        = static_cast<float>(std::max(0.0, synthMs - previousSynthMs) / 1000.0);
+        = static_cast<float>(std::max(0.0, sampleTimeMs - previousSampleTimeMs) / 1000.0);
     constexpr float kTimeFallbackResponseSeconds = 0.05f;
     constexpr float kTimeFallbackSpeedScreenPxPerSec = 24.0f;
     constexpr float kMaxTimeFallbackStepSeconds = 0.05f;
@@ -589,6 +589,8 @@ void BrushStrokeHost::beginStroke(
     m_stabPressureLastMs = 0.0;
     m_stabClockValid = false;
     m_stabRealWinCount = 0;
+    m_stabEstimatedPeriodMs = kStabClockInitialPeriodMs;
+    m_stabUnreliableTimestampRun = false;
     m_dabClockValid = false;
     m_dabClockPrevSynthMs = 0.0;
     m_dabClockElapsedMs = 0.0;
@@ -622,7 +624,7 @@ void BrushStrokeHost::beginStroke(
     m_strokeSpeedCumulativeScreenDistance = 0.0;
     m_strokeSpeedMeasurements.clear();
     m_strokeSpeedMeasurements.push_back({ 0.0, 0.0 });
-    m_strokeSpeedFirstMotionSynthMs = 0.0;
+    m_strokeSpeedFirstMotionSampleTimeMs = 0.0;
     m_strokeSpeedFirstMotionScreenDistance = 0.0;
     m_strokeSpeedFilteredScreenPxPerSecond = 0.0f;
     m_strokeSpeedFilterVelocity = 0.0f;
@@ -853,6 +855,7 @@ void BrushStrokeHost::addStrokeSampleAtElapsed(float worldX, float worldY, float
 
     applyStrokeAxisConstraint(worldX, worldY);
 
+    bool timestampReliable = true;
     if (!std::isfinite(strokeElapsedSeconds)) {
         strokeElapsedSeconds = elapsedSeconds(m_strokeElapsedTimer);
     }
@@ -867,6 +870,7 @@ void BrushStrokeHost::addStrokeSampleAtElapsed(float worldX, float worldY, float
     }
     if (strokeElapsedSeconds <= latestElapsed) {
         strokeElapsedSeconds = latestElapsed + kStrokeInputMonotonicNudgeSec;
+        timestampReliable = false;
     }
 
     // Timestamp of the latest REAL pen input (not catch-up). The stabilizer
@@ -962,7 +966,8 @@ void BrushStrokeHost::addStrokeSampleAtElapsed(float worldX, float worldY, float
     pressure = std::clamp(m_inputPressureSmoothed, 0.0f, 1.0f);
 
     m_queuedStrokeSamples.push_back(
-        { worldX, worldY, pressure, strokeElapsedSeconds, inputDevice, inputDynamics });
+        { worldX, worldY, pressure, strokeElapsedSeconds, inputDevice, inputDynamics,
+            timestampReliable });
     if (!processImmediately) {
         ++m_queuedSamplesSinceCompaction;
         const float queuedAge = stroke_input_queue::queuedAgeSeconds(m_queuedStrokeSamples);
@@ -1086,7 +1091,7 @@ void BrushStrokeHost::drainQueuedStrokeInput(
         m_strokeInputDevice = sample.inputDevice;
         continueStrokeImmediate(
             sample.worldX, sample.worldY, sample.pressure, sample.strokeElapsedSeconds,
-            sample.inputDynamics, false);
+            sample.inputDynamics, false, true, sample.timestampReliable);
         ++processedSamples;
     }
 
@@ -1173,7 +1178,8 @@ void BrushStrokeHost::flushQueuedStrokeInput()
     drainQueuedStrokeInput(StrokeInputDrainMode::Complete, true);
 }
 
-double BrushStrokeHost::stepStabilizerClock(double realMs, bool isRealPenSample)
+double BrushStrokeHost::stepStabilizerClock(
+    double realMs, bool isRealPenSample, bool inputTimestampReliable)
 {
     constexpr double kPauseGapMs = 40.0; // gap that counts as a stop → resync
     constexpr double kMinPeriodMs = 0.2;
@@ -1186,6 +1192,7 @@ double BrushStrokeHost::stepStabilizerClock(double realMs, bool isRealPenSample)
         m_stabLastRealPenMs = realMs;
         m_stabRealWin[0] = realMs;
         m_stabRealWinCount = 1;
+        m_stabUnreliableTimestampRun = !inputTimestampReliable;
         return m_stabSynthMs;
     }
 
@@ -1205,6 +1212,30 @@ double BrushStrokeHost::stepStabilizerClock(double realMs, bool isRealPenSample)
         m_stabSynthMs = realMs;
         m_stabRealWin[0] = realMs;
         m_stabRealWinCount = 1;
+        m_stabUnreliableTimestampRun = !inputTimestampReliable;
+        return m_stabSynthMs;
+    }
+
+    if (!inputTimestampReliable) {
+        // The queue's monotonic nudge orders packets that shared one OS/WinTab
+        // timestamp; it is not their physical report period. Advance by the
+        // period already learned from this device (4 ms is the cold-start value
+        // for the 200-266 Hz packet streams this path receives), so every packet
+        // still gets its own continuous position/dynamics sample without the
+        // false 0.5 ms velocity spike.
+        m_stabSynthMs += m_stabEstimatedPeriodMs;
+        m_stabUnreliableTimestampRun = true;
+        return m_stabSynthMs;
+    }
+
+    if (m_stabUnreliableTimestampRun) {
+        // The raw gap spans a run whose individual timestamps were unavailable,
+        // so it cannot update the device-period estimate. Re-anchor the window
+        // here and keep the reconstructed cadence continuous for this sample.
+        m_stabRealWin[0] = realMs;
+        m_stabRealWinCount = 1;
+        m_stabSynthMs += m_stabEstimatedPeriodMs;
+        m_stabUnreliableTimestampRun = false;
         return m_stabSynthMs;
     }
 
@@ -1226,11 +1257,14 @@ double BrushStrokeHost::stepStabilizerClock(double realMs, bool isRealPenSample)
             / static_cast<double>(m_stabRealWinCount - 1);
     }
     periodMs = std::clamp(periodMs, kMinPeriodMs, kMaxPeriodMs);
+    m_stabEstimatedPeriodMs = periodMs;
 
     m_stabSynthMs += periodMs;
-    // The synthetic clock may lead/lag within a burst but must not drift away
-    // from real time over the long run, or the lag would stop being τ.
-    if (std::abs(m_stabSynthMs - realMs) > kMaxDriftMs) {
+    // A recovered burst legitimately puts the reconstructed clock ahead of its
+    // collapsed dispatch timestamp. Never snap it backwards: that would freeze
+    // speed and time dynamics until wall time caught up. Only repair excessive
+    // lag, which is the direction that loses real elapsed time.
+    if (realMs - m_stabSynthMs > kMaxDriftMs) {
         m_stabSynthMs = realMs;
     }
     return m_stabSynthMs;
@@ -1248,13 +1282,10 @@ float BrushStrokeHost::stepDabDynamicsClock(double synthNowMs, double realMs)
         return static_cast<float>(m_dabClockElapsedMs / 1000.0);
     }
 
-    // Forward motion only. The synthetic clock snaps back to real time when a
-    // pause resets the period estimate or the drift clamp fires; a dynamics
-    // clock that stepped backwards would rewind hue (or size, or any other
-    // time-bound setting) in the middle of a stroke. A snap costs at most one
-    // sample of advance, whereas a genuine pause moves real time forward and is
-    // carried through in full — a time-driven brush keeps running while the pen
-    // rests, exactly as it does on the mouse path.
+    // Forward motion only. A discontinuous input clock must never rewind hue,
+    // size, or any other time-bound setting. A genuine pause moves real time
+    // forward and is carried through in full, so a time-driven brush keeps
+    // running while the pen rests exactly as it does on the mouse path.
     const double advanceMs = synthNowMs - m_dabClockPrevSynthMs;
     m_dabClockPrevSynthMs = synthNowMs;
     if (advanceMs > 0.0) {
@@ -1283,7 +1314,7 @@ float BrushStrokeHost::advanceDabDynamicsClockIdle(double realMs)
 
 void BrushStrokeHost::continueStrokeImmediate(float worldX, float worldY, float pressure,
     float strokeElapsedSeconds, const BrushInputDynamics& inputDynamics,
-    bool requestRenderAfterStep, bool isRealPenSample)
+    bool requestRenderAfterStep, bool isRealPenSample, bool inputTimestampReliable)
 {
     if (!m_isDrawing) {
         return;
@@ -1294,6 +1325,7 @@ void BrushStrokeHost::continueStrokeImmediate(float worldX, float worldY, float 
     }
     if (strokeElapsedSeconds <= m_lastStrokeTargetElapsedSeconds) {
         strokeElapsedSeconds = m_lastStrokeTargetElapsedSeconds + kStrokeInputMonotonicNudgeSec;
+        inputTimestampReliable = false;
     }
 
     const Vector2 smoothedTarget = smoothInputTargetForViewport(worldX, worldY);
@@ -1331,7 +1363,8 @@ void BrushStrokeHost::continueStrokeImmediate(float worldX, float worldY, float 
     // reads one clock. Quick-shape samples are ordinary real pen samples, so
     // feeding them to the period estimate keeps it honest.
     const double realMs = static_cast<double>(strokeElapsedSeconds) * 1000.0;
-    const double nowMs = stepStabilizerClock(realMs, isRealPenSample);
+    const double nowMs
+        = stepStabilizerClock(realMs, isRealPenSample, inputTimestampReliable);
     const float dabElapsedSeconds = stepDabDynamicsClock(nowMs, realMs);
 
     BrushInputDynamics sampledInputDynamics = inputDynamics;
@@ -1646,7 +1679,9 @@ void BrushStrokeHost::continueStrokeWithResolvedPoint(float worldX, float worldY
             }
         }
 
-        while (m_liveStrokePoints.size() > static_cast<size_t>(lagSamples) + 1) {
+        while (m_liveStrokePoints.size() > static_cast<size_t>(lagSamples) + 1
+            && (!strokeSpeedBound || m_strokeSpeedStartupEstimateReliable
+                || m_initialStrokeSpeedSeeded)) {
             const bool strokeWasEmpty = currentBrush->strokeDabs().empty();
             if (strokeWasEmpty) {
                 // Use the newest point in the look-ahead, not the first movement
@@ -2307,7 +2342,7 @@ void BrushStrokeHost::clearStrokeRuntimeState()
     m_strokeSpeedSampleY = 0.0f;
     m_strokeSpeedCumulativeScreenDistance = 0.0;
     m_strokeSpeedMeasurements.clear();
-    m_strokeSpeedFirstMotionSynthMs = 0.0;
+    m_strokeSpeedFirstMotionSampleTimeMs = 0.0;
     m_strokeSpeedFirstMotionScreenDistance = 0.0;
     m_strokeSpeedFilteredScreenPxPerSecond = 0.0f;
     m_strokeSpeedFilterVelocity = 0.0f;
