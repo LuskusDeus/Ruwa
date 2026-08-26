@@ -13,6 +13,10 @@
 #include "features/canvas/overlays/LassoOverlay.h"
 #include "features/canvas/overlays/LassoFillOverlay.h"
 #include "features/canvas/overlays/TextEditOverlayGL.h"
+
+#include <string>
+#include <utility>
+
 namespace aether {
 
 CanvasOverlayManager::CanvasOverlayManager() = default;
@@ -28,37 +32,60 @@ Result<void> CanvasOverlayManager::initialize(QOpenGLFunctions_4_5_Core* gl)
         return { ErrorCode::InvalidArgument, "CanvasOverlayManager: null GL context" };
     }
 
+    ErrorCode firstErrorCode = ErrorCode::None;
+    std::string errors;
+    const auto recordError
+        = [&firstErrorCode, &errors](const Result<void>& result, const char* overlayName) {
+              if (result) {
+                  return;
+              }
+              if (firstErrorCode == ErrorCode::None) {
+                  firstErrorCode = result.error().code == ErrorCode::None
+                      ? ErrorCode::ShaderCompilationFailed
+                      : result.error().code;
+              }
+              if (!errors.empty()) {
+                  errors += '\n';
+              }
+              errors += std::string("Failed to initialize ") + overlayName + ": "
+                  + result.error().message;
+          };
+
     m_transformOverlay = std::make_unique<TransformOverlay>(gl);
     auto overlayResult = m_transformOverlay->initialize();
-    if (!overlayResult) { }
+    recordError(overlayResult, "transform overlay");
 
     m_canvasResizeOverlay = std::make_unique<CanvasResizeOverlayGL>(gl);
     auto resizeOverlayResult = m_canvasResizeOverlay->initialize();
-    if (!resizeOverlayResult) { }
+    recordError(resizeOverlayResult, "canvas resize overlay");
 
     m_brushCursorOverlay = std::make_unique<BrushCursorOverlayGL>(gl);
     auto brushCursorResult = m_brushCursorOverlay->initialize();
-    if (!brushCursorResult) { }
+    recordError(brushCursorResult, "brush cursor overlay");
 
     m_eyedropperCursorOverlay = std::make_unique<EyedropperCursorOverlayGL>(gl);
     auto eyedropperResult = m_eyedropperCursorOverlay->initialize();
-    if (!eyedropperResult) { }
+    recordError(eyedropperResult, "eyedropper cursor overlay");
 
     m_toolCursorOverlay = std::make_unique<ToolCursorOverlayGL>(gl);
     auto toolCursorResult = m_toolCursorOverlay->initialize();
-    if (!toolCursorResult) { }
+    recordError(toolCursorResult, "tool cursor overlay");
 
     m_lassoOverlay = std::make_unique<LassoOverlay>(gl);
     auto lassoResult = m_lassoOverlay->initialize();
-    if (!lassoResult) { }
+    recordError(lassoResult, "lasso overlay");
 
     m_lassoFillOverlay = std::make_unique<LassoFillOverlay>(gl);
     auto lassoFillResult = m_lassoFillOverlay->initialize();
-    if (!lassoFillResult) { }
+    recordError(lassoFillResult, "lasso fill overlay");
 
     m_textEditOverlay = std::make_unique<TextEditOverlayGL>(gl);
     auto textEditResult = m_textEditOverlay->initialize();
-    if (!textEditResult) { }
+    recordError(textEditResult, "text edit overlay");
+
+    if (firstErrorCode != ErrorCode::None) {
+        return { firstErrorCode, std::move(errors) };
+    }
 
     return Result<void>::ok();
 }

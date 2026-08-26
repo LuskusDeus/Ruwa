@@ -10,7 +10,6 @@
 #include <QCryptographicHash>
 #include <QDataStream>
 #include <QDir>
-#include <QElapsedTimer>
 #include <QFile>
 #include <QFileInfo>
 #include <QSaveFile>
@@ -105,9 +104,6 @@ Result<GLuint> GLProgramBinaryCache::loadOrCreateGraphicsProgram(
     const QString filePath = cacheFilePath(cacheKey, QStringLiteral("graphics"),
         computeSourceFingerprint(QStringLiteral("graphics"), vertexSource, fragmentSource));
 
-    QElapsedTimer timer;
-    timer.start();
-
     if (isProgramBinarySupported()) {
         auto cachedProgram = tryLoadProgramBinary(cacheKey, filePath);
         if (cachedProgram) {
@@ -115,9 +111,7 @@ Result<GLuint> GLProgramBinaryCache::loadOrCreateGraphicsProgram(
         }
     }
 
-    auto createdProgram = createGraphicsProgram(cacheKey, filePath, vertexSource, fragmentSource);
-    if (createdProgram) { }
-    return createdProgram;
+    return createGraphicsProgram(cacheKey, filePath, vertexSource, fragmentSource);
 }
 
 Result<GLuint> GLProgramBinaryCache::loadOrCreateComputeProgram(
@@ -126,9 +120,6 @@ Result<GLuint> GLProgramBinaryCache::loadOrCreateComputeProgram(
     const QString filePath = cacheFilePath(cacheKey, QStringLiteral("compute"),
         computeSourceFingerprint(QStringLiteral("compute"), computeSource));
 
-    QElapsedTimer timer;
-    timer.start();
-
     if (isProgramBinarySupported()) {
         auto cachedProgram = tryLoadProgramBinary(cacheKey, filePath);
         if (cachedProgram) {
@@ -136,9 +127,7 @@ Result<GLuint> GLProgramBinaryCache::loadOrCreateComputeProgram(
         }
     }
 
-    auto createdProgram = createComputeProgram(cacheKey, filePath, computeSource);
-    if (createdProgram) { }
-    return createdProgram;
+    return createComputeProgram(cacheKey, filePath, computeSource);
 }
 
 QString GLProgramBinaryCache::cacheFilePath(
@@ -298,8 +287,7 @@ Result<GLuint> GLProgramBinaryCache::createGraphicsProgram(const QString& logLab
     }
 
     if (isProgramBinarySupported()) {
-        auto saveResult = saveProgramBinary(logLabel, filePath, linkedProgram.value());
-        if (!saveResult) { }
+        static_cast<void>(saveProgramBinary(logLabel, filePath, linkedProgram.value()));
     }
 
     return linkedProgram;
@@ -322,8 +310,7 @@ Result<GLuint> GLProgramBinaryCache::createComputeProgram(
     }
 
     if (isProgramBinarySupported()) {
-        auto saveResult = saveProgramBinary(logLabel, filePath, linkedProgram.value());
-        if (!saveResult) { }
+        static_cast<void>(saveProgramBinary(logLabel, filePath, linkedProgram.value()));
     }
 
     return linkedProgram;

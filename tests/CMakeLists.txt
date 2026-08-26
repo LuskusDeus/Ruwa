@@ -23,6 +23,7 @@ add_executable(RuwaTests
     pigment_lut_test.cpp
     pigment_model_test.cpp
     project_serializer_test.cpp
+    runtime_shader_catalog_test.cpp
     smoke_test.cpp
     stroke_input_queue_test.cpp
     taper_state_test.cpp
@@ -36,6 +37,9 @@ add_executable(RuwaTests
 )
 
 target_include_directories(RuwaTests PRIVATE ../src)
+target_compile_definitions(RuwaTests PRIVATE
+    RUWA_SOURCE_SHADER_DIR="${PROJECT_SOURCE_DIR}/src/shared/shaders"
+)
 # ProjectSerializer uses Qt Core; the TileBrush click-dab regression test also
 # includes LayerData and therefore needs Qt Gui for QPixmap. No Widgets or moc.
 target_link_libraries(RuwaTests PRIVATE Catch2::Catch2WithMain Qt6::Core Qt6::Gui)

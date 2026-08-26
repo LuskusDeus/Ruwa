@@ -250,9 +250,11 @@ target_compile_definitions(Ruwa PRIVATE
     RUWA_WITH_DISCORD=$<BOOL:${RUWA_WITH_DISCORD}>
 )
 
-# Copy shaders to build directory for runtime access (at build time, not just configure time)
+# Recreate the runtime shader directory so removed source shaders cannot survive
+# as stale build artifacts.
 file(GLOB SHADER_FILES CONFIGURE_DEPENDS "${SHADER_SOURCE_DIR}/*.glsl")
 add_custom_command(TARGET Ruwa POST_BUILD
+    COMMAND ${CMAKE_COMMAND} -E remove_directory "${CMAKE_CURRENT_BINARY_DIR}/shaders"
     COMMAND ${CMAKE_COMMAND} -E make_directory "${CMAKE_CURRENT_BINARY_DIR}/shaders"
     COMMAND ${CMAKE_COMMAND} -E copy_if_different ${SHADER_FILES} "${CMAKE_CURRENT_BINARY_DIR}/shaders"
     COMMENT "Copying shader files to build directory"

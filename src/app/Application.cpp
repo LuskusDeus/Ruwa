@@ -23,6 +23,7 @@
 #include "shared/rendering/GLShaderWarmup.h"
 #include "shared/widgets/overlays/ToolTipController.h"
 
+#include <QDebug>
 #include <QEventLoop>
 #include <QFileOpenEvent>
 #include <QSettings>
@@ -253,6 +254,8 @@ void Application::warmUpOpenGLShaders()
         });
 
     if (!warmupResult) {
+        qCritical().noquote() << "OpenGL shader warmup failed:"
+                              << QString::fromStdString(warmupResult.error().message);
         return;
     }
 

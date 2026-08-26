@@ -5,11 +5,13 @@
 // ==========================================================================
 
 #include "shared/rendering/ShaderDirectoryResolver.h"
+#include "shared/rendering/RuntimeShaderCatalog.h"
 
 #include <QCoreApplication>
 #include <QDir>
 #include <QFile>
 #include <QFileInfo>
+#include <QSet>
 
 namespace aether {
 
@@ -51,26 +53,21 @@ Result<QString> resolveRuntimeShaderDirectory()
     }
 
     const QDir shaderDir(finalShaderDir);
-    const QStringList requiredShaderFiles = {
-        QStringLiteral("background.vert.glsl"),
-        QStringLiteral("background.frag.glsl"),
-        QStringLiteral("brush_stamp.vert.glsl"),
-        QStringLiteral("brush_stamp.frag.glsl"),
-        QStringLiteral("canvas.vert.glsl"),
-        QStringLiteral("canvas.frag.glsl"),
-        QStringLiteral("composite.vert.glsl"),
-        QStringLiteral("composite.frag.glsl"),
-        QStringLiteral("fill_blit.vert.glsl"),
-        QStringLiteral("fill_blit.frag.glsl"),
-        QStringLiteral("fill_expand.comp.glsl"),
-        QStringLiteral("fill_init.comp.glsl"),
-        QStringLiteral("fill_prepare.comp.glsl"),
-        QStringLiteral("lasso_mask.vert.glsl"),
-        QStringLiteral("lasso_mask.frag.glsl"),
-        QStringLiteral("target_layer_preview.frag.glsl"),
-        QStringLiteral("tile.vert.glsl"),
-        QStringLiteral("tile.frag.glsl"),
-    };
+    QSet<QString> requiredShaderFileSet;
+    for (const auto& program : kRuntimeShaderPrograms) {
+        if (program.type == RuntimeShaderProgramType::Graphics) {
+            requiredShaderFileSet.insert(QString::fromUtf8(
+                program.vertexShader.data(), static_cast<qsizetype>(program.vertexShader.size())));
+            requiredShaderFileSet.insert(QString::fromUtf8(program.fragmentShader.data(),
+                static_cast<qsizetype>(program.fragmentShader.size())));
+        } else {
+            requiredShaderFileSet.insert(QString::fromUtf8(program.computeShader.data(),
+                static_cast<qsizetype>(program.computeShader.size())));
+        }
+    }
+
+    QStringList requiredShaderFiles = requiredShaderFileSet.values();
+    requiredShaderFiles.sort();
 
     QStringList missingShaderPaths;
     for (const auto& shaderFile : requiredShaderFiles) {

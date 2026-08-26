@@ -10817,13 +10817,25 @@ void OpenGLCanvasWidget::initializeGL()
     m_overlayManager = std::make_unique<CanvasOverlayManager>();
     auto overlayResult
         = m_overlayManager->initialize(static_cast<QOpenGLFunctions_4_5_Core*>(this));
-    if (!overlayResult) { }
+    if (!overlayResult) {
+        showShaderDirectoryError(QString::fromStdString(overlayResult.error().message));
+        m_overlayManager->shutdown();
+        m_overlayManager.reset();
+        return;
+    }
 
     // Initialize selection renderer (GPU mask)
     m_selectionRenderer
         = std::make_unique<GLSelectionRenderer>(static_cast<QOpenGLFunctions_4_5_Core*>(this));
     auto selResult = m_selectionRenderer->initialize();
-    if (!selResult) { }
+    if (!selResult) {
+        showShaderDirectoryError(QString::fromStdString(selResult.error().message));
+        m_selectionRenderer->shutdown();
+        m_selectionRenderer.reset();
+        m_overlayManager->shutdown();
+        m_overlayManager.reset();
+        return;
+    }
 
     initializeFillWorker();
     if (m_fillWorker) {
