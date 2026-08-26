@@ -2573,6 +2573,21 @@ Rasterize the layer to transform the selection?</source>
         <source>Theme Editor</source>
         <translation>Редактор тем</translation>
     </message>
+    <message>
+        <location filename="../src/features/theme/editor/ThemeEditorTab.cpp" line="981"/>
+        <source>Remove from favorites</source>
+        <translation>Убрать из избранного</translation>
+    </message>
+    <message>
+        <location filename="../src/features/theme/editor/ThemeEditorTab.cpp" line="981"/>
+        <source>Add to favorites</source>
+        <translation>Добавить в избранное</translation>
+    </message>
+    <message>
+        <location filename="../src/features/theme/editor/ThemeEditorTab.cpp" line="985"/>
+        <source>Theme name</source>
+        <translation>Название темы</translation>
+    </message>
 </context>
 <context>
     <name>ruwa::ui::tabs::WorkspaceTab</name>

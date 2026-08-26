@@ -28,6 +28,7 @@ public:
 
     bool setEditingThemeById(const QUuid& id);
     void setEditingTheme(const ruwa::ui::core::ThemePreset& preset);
+    void setEditingThemeFavorite(bool isFavorite);
     ruwa::ui::core::ThemePreset saveEditingTheme(const ruwa::ui::core::ThemePreset& preset);
 
 signals:

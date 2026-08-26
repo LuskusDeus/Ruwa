@@ -199,7 +199,7 @@ void ThemeManager::loadCustomPresets()
 
         ThemePreset preset;
         preset.id = QUuid::fromString(settings.value("id").toString());
-        preset.name = settings.value("name").toString();
+        preset.name = ThemePreset::clampedName(settings.value("name").toString().trimmed());
         preset.description = settings.value("description").toString();
         preset.isBuiltIn = false;
         preset.isDark = settings.value("isDark", true).toBool();
@@ -592,6 +592,7 @@ void ThemeManager::addCustomPreset(const ThemePreset& preset)
 
     ThemePreset newPreset = preset;
     newPreset.isBuiltIn = false;
+    newPreset.name = ThemePreset::clampedName(newPreset.name.trimmed());
     newPreset.fonts = normalizedThemeFonts(newPreset.fonts);
 
     m_presets.append(newPreset);
@@ -605,6 +606,7 @@ void ThemeManager::updateCustomPreset(const ThemePreset& preset)
     for (int i = 0; i < m_presets.size(); ++i) {
         if (m_presets[i].id == preset.id && !m_presets[i].isBuiltIn) {
             ThemePreset updatedPreset = preset;
+            updatedPreset.name = ThemePreset::clampedName(updatedPreset.name.trimmed());
             updatedPreset.fonts = normalizedThemeFonts(updatedPreset.fonts);
             m_presets[i] = updatedPreset;
             m_presets[i].isBuiltIn = false;

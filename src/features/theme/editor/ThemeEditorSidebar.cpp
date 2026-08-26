@@ -70,6 +70,13 @@ const ruwa::ui::core::ThemePreset& ThemeEditorSidebar::editingTheme() const
     return m_themeDropdown->editingTheme();
 }
 
+void ThemeEditorSidebar::setEditingThemeFavorite(bool isFavorite)
+{
+    if (m_themeDropdown) {
+        m_themeDropdown->setEditingThemeFavorite(isFavorite);
+    }
+}
+
 ruwa::ui::core::ThemePreset ThemeEditorSidebar::saveEditingTheme(
     const ruwa::ui::core::ThemePreset& preset)
 {

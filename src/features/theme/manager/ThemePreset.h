@@ -23,6 +23,8 @@ struct ThemeAnimations {
 };
 
 struct ThemePreset {
+    static constexpr int kMaxNameLength = 32;
+
     // === Identification ===
     QUuid id;
     QString name;
@@ -30,6 +32,8 @@ struct ThemePreset {
     bool isBuiltIn { true };
     bool isDark { true };
     bool isFavorite { false }; // Show in ThemeSelectorWidget
+
+    static QString clampedName(const QString& name) { return name.left(kMaxNameLength); }
 
     // === Fonts ===
     ThemeFonts fonts;

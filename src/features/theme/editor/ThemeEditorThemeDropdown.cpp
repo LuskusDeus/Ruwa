@@ -572,12 +572,37 @@ void ThemeEditorThemeDropdown::setEditingTheme(const ruwa::ui::core::ThemePreset
     setEditingThemeInternal(preset, true);
 }
 
+void ThemeEditorThemeDropdown::setEditingThemeFavorite(bool isFavorite)
+{
+    if (!m_hasEditingTheme || m_editingTheme.isFavorite == isFavorite) {
+        return;
+    }
+
+    // Favorites are persisted immediately, independently of unsaved editor changes. Keep the
+    // dropdown's working copy current and suppress its normal presetsChanged reload so toggling
+    // the star cannot discard edits that are still present in ThemeEditorTab.
+    m_editingTheme.isFavorite = isFavorite;
+    m_presetMutationInProgress = true;
+    ruwa::ui::core::ThemeManager::instance().updatePresetFavorite(m_editingTheme.id, isFavorite);
+    m_presetMutationInProgress = false;
+    update();
+}
+
 ruwa::ui::core::ThemePreset ThemeEditorThemeDropdown::saveEditingTheme(
     const ruwa::ui::core::ThemePreset& preset)
 {
     auto savedPreset = preset;
     if (savedPreset.isBuiltIn) {
         savedPreset = createThemeCopy(savedPreset);
+        const auto presets = ruwa::ui::core::ThemeManager::instance().allPresets();
+        for (const auto& sourcePreset : presets) {
+            if (sourcePreset.id == preset.id) {
+                if (sourcePreset.name != preset.name) {
+                    savedPreset.name = uniqueThemeName(preset.name);
+                }
+                break;
+            }
+        }
     }
 
     // Keep the dropdown's working copy in sync before ThemeManager emits
@@ -901,8 +926,9 @@ ruwa::ui::core::ThemePreset ThemeEditorThemeDropdown::createThemeCopy(
 
 QString ThemeEditorThemeDropdown::uniqueThemeName(const QString& requestedName) const
 {
-    const QString baseName
+    const QString requestedBase
         = requestedName.trimmed().isEmpty() ? tr("Theme") : requestedName.trimmed();
+    const QString baseName = ruwa::ui::core::ThemePreset::clampedName(requestedBase);
     QSet<QString> existingNames;
     for (const auto& preset : ruwa::ui::core::ThemeManager::instance().allPresets()) {
         existingNames.insert(preset.name.trimmed().toCaseFolded());
@@ -912,7 +938,10 @@ QString ThemeEditorThemeDropdown::uniqueThemeName(const QString& requestedName) 
     }
 
     for (int suffix = 2;; ++suffix) {
-        const QString candidate = QStringLiteral("%1 %2").arg(baseName).arg(suffix);
+        const QString suffixText = QStringLiteral(" %1").arg(suffix);
+        const int baseLength
+            = qMax(0, ruwa::ui::core::ThemePreset::kMaxNameLength - suffixText.size());
+        const QString candidate = baseName.left(baseLength) + suffixText;
         if (!existingNames.contains(candidate.toCaseFolded())) {
             return candidate;
         }

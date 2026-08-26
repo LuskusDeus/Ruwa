@@ -163,7 +163,8 @@ bool fromDocumentObject(const QJsonObject& document, ThemePreset& preset, QStrin
         return false;
     }
 
-    const QString name = object.value(QStringLiteral("name")).toString().trimmed();
+    const QString name
+        = ThemePreset::clampedName(object.value(QStringLiteral("name")).toString().trimmed());
     if (name.isEmpty()) {
         if (errorMessage) {
             *errorMessage = translated("Preset has no name.");

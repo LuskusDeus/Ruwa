@@ -17,6 +17,7 @@ class QButtonGroup;
 class QEvent;
 class QLabel;
 class QPaintEvent;
+class QPushButton;
 class QResizeEvent;
 
 namespace ruwa::ui::widgets {
@@ -26,6 +27,7 @@ class ColorInputButton;
 class FontDropdownSelector;
 class NumericInputField;
 class PropertyRowLayout;
+class StyledInputField;
 class ThemeEditorAnimationsPreview;
 class ThemeEditorSidebar;
 class ThemeEditorThemesPreview;
@@ -63,6 +65,7 @@ signals:
 protected:
     void onInitialize() override;
     void changeEvent(QEvent* event) override;
+    bool eventFilter(QObject* watched, QEvent* event) override;
     void paintEvent(QPaintEvent* event) override;
     void resizeEvent(QResizeEvent* event) override;
 
@@ -99,6 +102,8 @@ private:
         QButtonGroup* tabGroup { nullptr };
         ruwa::ui::widgets::AnimatedStackedWidget* contentStack { nullptr };
         QVector<ruwa::ui::widgets::CapsuleButton*> tabButtons;
+        QPushButton* favoriteButton { nullptr };
+        ruwa::ui::widgets::StyledInputField* nameInput { nullptr };
         ruwa::ui::widgets::CapsuleButton* applyButton { nullptr };
         ruwa::ui::widgets::CapsuleButton* saveButton { nullptr };
         QVector<SettingsPage> pages;
@@ -147,6 +152,7 @@ private:
     void syncColorInputs();
     void syncFontInputs();
     void syncAnimationInputs();
+    void syncThemeIdentityInputs();
     void refreshPreviews();
     void updateDirtyState();
     void setDirtyState(bool dirty);
@@ -189,6 +195,7 @@ private:
     bool m_syncingColorInputs { false };
     bool m_syncingFontInputs { false };
     bool m_syncingAnimationInputs { false };
+    bool m_syncingThemeIdentityInputs { false };
 };
 
 } // namespace ruwa::ui::tabs

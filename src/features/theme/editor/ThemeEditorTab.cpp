@@ -12,17 +12,22 @@
 #include "shared/widgets/inputs/ColorInputButton.h"
 #include "shared/widgets/inputs/FontDropdownSelector.h"
 #include "shared/widgets/inputs/NumericInputField.h"
+#include "shared/widgets/inputs/StyledInputField.h"
 #include "shared/widgets/inputs/ToggleSwitch.h"
 #include "shared/widgets/layout/AnimatedStackedWidget.h"
 #include "shared/widgets/layout/PropertyRowLayout.h"
 #include "shared/widgets/layout/SmoothScrollArea.h"
 
+#include <QApplication>
 #include <QButtonGroup>
 #include <QEvent>
 #include <QFontDatabase>
 #include <QHBoxLayout>
 #include <QLabel>
+#include <QLineEdit>
+#include <QMouseEvent>
 #include <QPainter>
+#include <QPushButton>
 #include <QResizeEvent>
 #include <QVBoxLayout>
 
@@ -93,7 +98,10 @@ ThemeEditorTab::ThemeEditorTab(QWidget* parent)
 {
 }
 
-ThemeEditorTab::~ThemeEditorTab() = default;
+ThemeEditorTab::~ThemeEditorTab()
+{
+    qApp->removeEventFilter(this);
+}
 
 void ThemeEditorTab::selectThemeById(const QUuid& id)
 {
@@ -108,6 +116,7 @@ void ThemeEditorTab::selectThemeById(const QUuid& id)
 void ThemeEditorTab::onInitialize()
 {
     setSizePolicy(QSizePolicy::Expanding, QSizePolicy::Expanding);
+    qApp->installEventFilter(this);
     setupUi();
 
     connect(&ruwa::ui::core::ThemeManager::instance(), &ruwa::ui::core::ThemeManager::themeChanged,
@@ -126,6 +135,27 @@ void ThemeEditorTab::changeEvent(QEvent* event)
     if (event->type() == QEvent::LanguageChange) {
         retranslateUi();
     }
+}
+
+bool ThemeEditorTab::eventFilter(QObject* watched, QEvent* event)
+{
+    if (event->type() == QEvent::MouseButtonPress) {
+        auto* clickedWidget = qobject_cast<QWidget*>(watched);
+        auto* mouseEvent = static_cast<QMouseEvent*>(event);
+        if (clickedWidget && (clickedWidget == this || isAncestorOf(clickedWidget))) {
+            const QPoint globalPosition = mouseEvent->globalPosition().toPoint();
+            for (auto& section : m_settingsSections) {
+                if (!section.nameInput) {
+                    continue;
+                }
+                const QPoint localPosition = section.nameInput->mapFromGlobal(globalPosition);
+                if (!section.nameInput->rect().contains(localPosition)) {
+                    section.nameInput->clearInputFocus();
+                }
+            }
+        }
+    }
+    return BaseTab::eventFilter(watched, event);
 }
 
 void ThemeEditorTab::paintEvent(QPaintEvent* event)
@@ -191,6 +221,7 @@ void ThemeEditorTab::setupUi()
             syncColorInputs();
             syncFontInputs();
             syncAnimationInputs();
+            syncThemeIdentityInputs();
             setDirtyState(false);
         });
 
@@ -199,6 +230,7 @@ void ThemeEditorTab::setupUi()
     syncColorInputs();
     syncFontInputs();
     syncAnimationInputs();
+    syncThemeIdentityInputs();
     if (!m_pendingThemeId.isNull()) {
         m_sidebar->setEditingThemeById(m_pendingThemeId);
         m_pendingThemeId = QUuid();
@@ -261,7 +293,73 @@ QWidget* ThemeEditorTab::createSettingsSection(
         headerLayout->setContentsMargins(0, 0, 0, 0);
         headerLayout->setSpacing(8);
 
-        sectionUi.tabsBar = new QWidget(sectionUi.headerRow);
+        sectionUi.favoriteButton = new QPushButton(QStringLiteral("\u2606"), sectionUi.headerRow);
+        sectionUi.favoriteButton->setCheckable(true);
+        sectionUi.favoriteButton->setCursor(Qt::PointingHandCursor);
+        sectionUi.favoriteButton->setFocusPolicy(Qt::NoFocus);
+
+        sectionUi.nameInput = new ruwa::ui::widgets::StyledInputField(
+            QString(), ruwa::ui::widgets::StyledInputField::FieldType::Text, sectionUi.headerRow);
+        sectionUi.nameInput->setLabel(QString());
+        sectionUi.nameInput->setMaxLength(ruwa::ui::core::ThemePreset::kMaxNameLength);
+        sectionUi.nameInput->setSizePolicy(QSizePolicy::Preferred, QSizePolicy::Fixed);
+
+        connect(sectionUi.favoriteButton, &QPushButton::toggled, this, [this](bool isFavorite) {
+            if (m_syncingThemeIdentityInputs || !m_sidebar || m_editingTheme.id.isNull()) {
+                return;
+            }
+            m_editingTheme.isFavorite = isFavorite;
+            m_savedTheme.isFavorite = isFavorite;
+            m_sidebar->setEditingThemeFavorite(isFavorite);
+            syncThemeIdentityInputs();
+        });
+        connect(sectionUi.nameInput, &ruwa::ui::widgets::StyledInputField::textChanged, this,
+            [this](const QString& name) {
+                if (m_syncingThemeIdentityInputs) {
+                    return;
+                }
+                m_editingTheme.name = name;
+                syncThemeIdentityInputs();
+                updateDirtyState();
+            });
+        if (auto* lineEdit = sectionUi.nameInput->findChild<QLineEdit*>()) {
+            connect(lineEdit, &QLineEdit::editingFinished, this, [this]() {
+                if (m_syncingThemeIdentityInputs) {
+                    return;
+                }
+                const QString trimmedName
+                    = ruwa::ui::core::ThemePreset::clampedName(m_editingTheme.name.trimmed());
+                m_editingTheme.name = trimmedName.isEmpty() ? m_savedTheme.name : trimmedName;
+                syncThemeIdentityInputs();
+                updateDirtyState();
+            });
+        }
+
+        sectionUi.applyButton = new ruwa::ui::widgets::CapsuleButton(
+            tr("Apply"), ruwa::ui::widgets::CapsuleButton::Variant::Secondary, sectionUi.headerRow);
+        sectionUi.applyButton->setBaseMinimumWidth(84);
+        sectionUi.applyButton->setBannerBaseHeight(36);
+        connect(
+            sectionUi.applyButton, &QPushButton::clicked, this, &ThemeEditorTab::applyEditingTheme);
+
+        sectionUi.saveButton = new ruwa::ui::widgets::CapsuleButton(saveButtonText(),
+            ruwa::ui::widgets::CapsuleButton::Variant::Primary, sectionUi.headerRow);
+        sectionUi.saveButton->setBaseMinimumWidth(84);
+        sectionUi.saveButton->setBannerBaseHeight(36);
+        sectionUi.saveButton->setDisabledTextTone(
+            ruwa::ui::widgets::CapsuleButton::DisabledTextTone::Dark);
+        sectionUi.saveButton->setEnabled(false);
+        connect(
+            sectionUi.saveButton, &QPushButton::clicked, this, &ThemeEditorTab::saveEditingTheme);
+
+        headerLayout->addWidget(sectionUi.favoriteButton);
+        headerLayout->addWidget(sectionUi.nameInput);
+        headerLayout->addStretch(1);
+        headerLayout->addWidget(sectionUi.applyButton);
+        headerLayout->addWidget(sectionUi.saveButton);
+        sectionLayout->addWidget(sectionUi.headerRow);
+
+        sectionUi.tabsBar = new QWidget(section);
         sectionUi.tabsBar->setAttribute(Qt::WA_TranslucentBackground);
         sectionUi.tabsBar->setSizePolicy(QSizePolicy::Expanding, QSizePolicy::Fixed);
         auto* tabsLayout = new QHBoxLayout(sectionUi.tabsBar);
@@ -285,28 +383,7 @@ QWidget* ThemeEditorTab::createSettingsSection(
         if (!sectionUi.tabButtons.isEmpty()) {
             sectionUi.tabButtons.first()->setChecked(true);
         }
-
-        sectionUi.applyButton = new ruwa::ui::widgets::CapsuleButton(
-            tr("Apply"), ruwa::ui::widgets::CapsuleButton::Variant::Secondary, sectionUi.headerRow);
-        sectionUi.applyButton->setBaseMinimumWidth(84);
-        sectionUi.applyButton->setBannerBaseHeight(36);
-        connect(
-            sectionUi.applyButton, &QPushButton::clicked, this, &ThemeEditorTab::applyEditingTheme);
-
-        sectionUi.saveButton = new ruwa::ui::widgets::CapsuleButton(saveButtonText(),
-            ruwa::ui::widgets::CapsuleButton::Variant::Primary, sectionUi.headerRow);
-        sectionUi.saveButton->setBaseMinimumWidth(84);
-        sectionUi.saveButton->setBannerBaseHeight(36);
-        sectionUi.saveButton->setDisabledTextTone(
-            ruwa::ui::widgets::CapsuleButton::DisabledTextTone::Dark);
-        sectionUi.saveButton->setEnabled(false);
-        connect(
-            sectionUi.saveButton, &QPushButton::clicked, this, &ThemeEditorTab::saveEditingTheme);
-
-        headerLayout->addWidget(sectionUi.tabsBar, 1);
-        headerLayout->addWidget(sectionUi.applyButton);
-        headerLayout->addWidget(sectionUi.saveButton);
-        sectionLayout->addWidget(sectionUi.headerRow);
+        sectionLayout->addWidget(sectionUi.tabsBar);
     }
 
     sectionUi.contentStack = new ruwa::ui::widgets::AnimatedStackedWidget(section);
@@ -931,6 +1008,29 @@ void ThemeEditorTab::syncAnimationInputs()
     m_syncingAnimationInputs = false;
 }
 
+void ThemeEditorTab::syncThemeIdentityInputs()
+{
+    m_syncingThemeIdentityInputs = true;
+    const QString displayName = ruwa::ui::core::ThemePreset::translatedDisplayName(m_editingTheme);
+    for (auto& section : m_settingsSections) {
+        if (section.favoriteButton) {
+            section.favoriteButton->setText(
+                m_editingTheme.isFavorite ? QStringLiteral("\u2605") : QStringLiteral("\u2606"));
+            section.favoriteButton->setChecked(m_editingTheme.isFavorite);
+            section.favoriteButton->setToolTip(
+                m_editingTheme.isFavorite ? tr("Remove from favorites") : tr("Add to favorites"));
+        }
+        if (section.nameInput) {
+            auto* lineEdit = section.nameInput->findChild<QLineEdit*>();
+            if (!lineEdit || !lineEdit->hasFocus()) {
+                section.nameInput->setText(displayName);
+            }
+            section.nameInput->setPlaceholder(tr("Theme name"));
+        }
+    }
+    m_syncingThemeIdentityInputs = false;
+}
+
 void ThemeEditorTab::refreshPreviews()
 {
     if (m_themesPreview) {
@@ -943,7 +1043,7 @@ void ThemeEditorTab::refreshPreviews()
 
 void ThemeEditorTab::updateDirtyState()
 {
-    bool dirty = false;
+    bool dirty = m_editingTheme.name != m_savedTheme.name;
     for (std::size_t index = 0; index < ColorFieldCount; ++index) {
         const auto field = static_cast<ColorField>(index);
         if (editingColor(field) != savedColor(field)) {
@@ -968,11 +1068,12 @@ void ThemeEditorTab::updateDirtyState()
 void ThemeEditorTab::setDirtyState(bool dirty)
 {
     setModified(dirty);
+    const bool canSave = dirty && !m_editingTheme.name.trimmed().isEmpty();
     for (auto& section : m_settingsSections) {
         if (section.saveButton) {
             section.saveButton->setText(saveButtonText());
             section.saveButton->syncSizeToText();
-            section.saveButton->setEnabled(dirty);
+            section.saveButton->setEnabled(canSave);
         }
     }
 }
@@ -989,9 +1090,11 @@ void ThemeEditorTab::applyEditingTheme()
 
 void ThemeEditorTab::saveEditingTheme()
 {
-    if (!isModified() || !m_sidebar || m_editingTheme.id.isNull()) {
+    if (!isModified() || !m_sidebar || m_editingTheme.id.isNull()
+        || m_editingTheme.name.trimmed().isEmpty()) {
         return;
     }
+    m_editingTheme.name = ruwa::ui::core::ThemePreset::clampedName(m_editingTheme.name.trimmed());
     m_sidebar->saveEditingTheme(m_editingTheme);
 }
 
@@ -1072,6 +1175,7 @@ void ThemeEditorTab::retranslateUi()
             section.saveButton->syncSizeToText();
         }
     }
+    syncThemeIdentityInputs();
 
     updateScaledSizes();
 }
@@ -1147,6 +1251,11 @@ void ThemeEditorTab::updateScaledSizes()
     Q_ASSERT(sidebarButtonStyle);
     const int settingsTabHeight
         = sidebarButtonStyle ? theme.scaled(sidebarButtonStyle->metrics.baseHeight) : 0;
+    int themeNameInputWidth = theme.scaled(204);
+    if (m_sidebar && m_sidebar->layout()) {
+        const QMargins sidebarMargins = m_sidebar->layout()->contentsMargins();
+        themeNameInputWidth = m_sidebar->width() - sidebarMargins.left() - sidebarMargins.right();
+    }
 
     const auto refreshPreviewPageMargins = [&theme](QWidget* preview) {
         if (!preview) {
@@ -1238,6 +1347,36 @@ void ThemeEditorTab::updateScaledSizes()
         }
         if (section.tabsBar && section.tabsBar->layout()) {
             section.tabsBar->layout()->setSpacing(theme.scaled(6));
+        }
+
+        if (section.nameInput) {
+            section.nameInput->setFixedWidth(themeNameInputWidth);
+            if (auto* lineEdit = section.nameInput->findChild<QLineEdit*>()) {
+                lineEdit->setFont(theme.font(ruwa::ui::core::ThemeFontRole::Small));
+                lineEdit->setFixedHeight(theme.scaled(20));
+                if (auto* inputContainer = lineEdit->parentWidget()) {
+                    inputContainer->setFixedHeight(theme.scaled(30));
+                    if (auto* inputLayout = qobject_cast<QVBoxLayout*>(inputContainer->layout())) {
+                        inputLayout->setContentsMargins(
+                            theme.scaled(12), theme.scaled(5), theme.scaled(12), theme.scaled(5));
+                        inputLayout->setSpacing(0);
+                    }
+                }
+                section.nameInput->setFixedHeight(theme.scaled(30));
+            }
+        }
+        if (section.favoriteButton) {
+            const auto& colors = ruwa::ui::core::WidgetStyleManager::instance().colors();
+            section.favoriteButton->setFont(theme.font(ruwa::ui::core::ThemeFontRole::BodyLarge));
+            section.favoriteButton->setFixedSize(theme.scaled(30), theme.scaled(30));
+            section.favoriteButton->setStyleSheet(QStringLiteral(
+                "QPushButton { border: none; background: transparent; color: %1; padding: 0; }"
+                "QPushButton:checked { color: %2; }"
+                "QPushButton:hover { color: %3; }"
+                "QPushButton:checked:hover { color: %2; }")
+                    .arg(colors.textDisabled().name(QColor::HexArgb),
+                        colors.primary.name(QColor::HexArgb),
+                        colors.textMuted.name(QColor::HexArgb)));
         }
 
         for (auto* button : section.tabButtons) {
