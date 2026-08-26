@@ -66,6 +66,7 @@ protected:
 private:
     void setupUI();
     void syncOverlayGeometry();
+    void refreshCardBackdrop();
     QPoint cardTargetPosition() const;
     void updateCardPosition();
     void animateIn();

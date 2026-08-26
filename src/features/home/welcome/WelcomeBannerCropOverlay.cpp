@@ -444,6 +444,26 @@ public:
         setAttribute(Qt::WA_TranslucentBackground);
     }
 
+    /// Capture before the overlay is shown so the card cannot appear in its own backdrop.
+    /// The wash represents the dim layer that will be animated over the window afterwards.
+    void refreshBackdropFrom(QWidget* source, const QRect& sourceRect, const QColor& wash)
+    {
+        if (!source || sourceRect.isEmpty()) {
+            m_backdrop = QPixmap();
+            update();
+            return;
+        }
+
+        const auto& theme = ruwa::ui::core::ThemeManager::instance();
+        ruwa::ui::painting::GlassPanelOptics optics;
+        optics.surfaceTint = theme.colors().surface;
+        optics.backdropOverlay = wash;
+        m_backdrop = ruwa::ui::painting::captureGlassBackdrop(source,
+            QRect(source->mapToGlobal(sourceRect.topLeft()), sourceRect.size()),
+            theme.scaled(CardRadius), optics);
+        update();
+    }
+
 protected:
     void paintEvent(QPaintEvent*) override
     {
@@ -454,15 +474,14 @@ protected:
         QPainter painter(this);
         painter.setRenderHint(QPainter::Antialiasing);
 
-        // No backdrop is captured here: the card sits on the overlay's own dim,
-        // and grabbing the window it lives in would grab the card itself. The
-        // glass surface then falls back to its solid fill, which is what this
-        // card has always painted.
-        ruwa::ui::painting::drawGlassSurface(painter, QRectF(rect()), radius, QPixmap(),
+        ruwa::ui::painting::drawGlassSurface(painter, QRectF(rect()), radius, m_backdrop,
             colors.surface, colors.primary, colors.borderSubtleHover(),
             ruwa::ui::core::ThemeColors::withAlpha(
                 colors.borderSubtle(), colors.borderSubtle().alpha() / 2));
     }
+
+private:
+    QPixmap m_backdrop;
 };
 } // namespace
 
@@ -592,6 +611,7 @@ void WelcomeBannerCropOverlay::showOverlay()
     }
 
     syncOverlayGeometry();
+    refreshCardBackdrop();
 
     QWidget::show();
     raise();
@@ -721,6 +741,16 @@ void WelcomeBannerCropOverlay::syncOverlayGeometry()
         setGeometry(parent->rect());
     }
     updateCardPosition();
+}
+
+void WelcomeBannerCropOverlay::refreshCardBackdrop()
+{
+    if (!m_card || !parentWidget()) {
+        return;
+    }
+
+    static_cast<CropCardFrame*>(m_card)->refreshBackdropFrom(
+        parentWidget(), m_card->geometry(), QColor(0, 0, 0, static_cast<int>(MaxDimOpacity * 255)));
 }
 
 void WelcomeBannerCropOverlay::resizeEvent(QResizeEvent* event)
