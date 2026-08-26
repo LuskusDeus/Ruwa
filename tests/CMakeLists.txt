@@ -4,6 +4,7 @@ add_executable(RuwaTests
     ../src/features/brush/color/PigmentLut.cpp
     ../src/features/brush/color/PigmentModel.cpp
     ../src/features/fill/FloodFill.cpp
+    ../src/features/layers/model/BlendModeUtils.cpp
     ../src/features/project/ProjectSerializer.cpp
     ../src/services/updates/SemanticVersion.cpp
     ../src/services/updates/UpdateManifest.cpp
@@ -15,6 +16,7 @@ add_executable(RuwaTests
     ../src/shell/docking/layout/DockLayoutCalculator.cpp
     ../src/shell/docking/layout/DockSplitNode.cpp
     camera_rotation_test.cpp
+    brush_click_dab_test.cpp
     dab_shape_falloff_test.cpp
     dock_split_push_drag_test.cpp
     flood_fill_alpha_lock_test.cpp
@@ -34,19 +36,19 @@ add_executable(RuwaTests
 )
 
 target_include_directories(RuwaTests PRIVATE ../src)
-# ProjectSerializer (and its untrusted-input tests) pull in Qt Core only —
-# QDataStream / QByteArray / QUuid / QSize etc. No Gui/Widgets, no moc.
-target_link_libraries(RuwaTests PRIVATE Catch2::Catch2WithMain Qt6::Core)
+# ProjectSerializer uses Qt Core; the TileBrush click-dab regression test also
+# includes LayerData and therefore needs Qt Gui for QPixmap. No Widgets or moc.
+target_link_libraries(RuwaTests PRIVATE Catch2::Catch2WithMain Qt6::Core Qt6::Gui)
 if (WIN32)
     target_link_libraries(RuwaTests PRIVATE crypt32)
 endif()
 
 include(Catch)
 
-# RuwaTests now links Qt6::Core, so the executable needs Qt6Core.dll (and the
-# MinGW runtime DLLs) on PATH when catch_discover_tests runs it to enumerate
-# tests at build time. Qt Creator's build-step environment does not add Qt's
-# bin dir to PATH, which made discovery fail with 0xc0000135 (DLL not found).
+# RuwaTests links Qt, so the executable needs the Qt DLLs (and the MinGW runtime
+# DLLs) on PATH when catch_discover_tests runs it to enumerate tests. Qt
+# Creator's build-step environment does not add Qt's bin dir to PATH, which
+# made discovery fail with 0xc0000135 (DLL not found).
 # Hand the DLL directories to Catch2's DL_PATHS instead of relying on PATH:
 # the directory of the imported Qt6::Core target (its bin/) plus the compiler's
 # own bin/ (libstdc++ / libgcc / libwinpthread).

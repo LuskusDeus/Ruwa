@@ -1328,20 +1328,6 @@ public:
     DabPoint recordDabPoint(float worldX, float worldY, float radiusOverride = -1.0f,
         float strokeDirection = 0.0f, bool strokeDirectionAvailable = false)
     {
-        // Suppress the very first dab of a stroke when the brush angle is
-        // driven by stroke direction but no direction is known yet. Without
-        // this, the click-stamp (and any pre-deferral dabs) paint with the
-        // brush's base angle, then dabs after the head reorient to the path
-        // direction — producing the visible orientation step at the head of
-        // the stroke. Only the angle dynamic is checked because it's the
-        // one whose mismatch is visually obvious; other direction-bound
-        // dynamics (size, scatter, ...) don't produce a comparable artifact.
-        if (m_strokeActive && m_strokeDabs.empty() && !strokeDirectionAvailable
-            && angleBoundToStrokeDirection()) {
-            DabPoint suppressed {};
-            suppressed.alpha = 0;
-            return suppressed;
-        }
         const uint32_t randomSeed = dabRandomSeed(m_strokeDabs.size());
         const int32_t ix = static_cast<int32_t>(std::floor(worldX));
         const int32_t iy = static_cast<int32_t>(std::floor(worldY));
@@ -1532,7 +1518,7 @@ public:
         // looked sheared rather than rotated.
         constexpr float kPiLocal = 3.14159265358979323846f;
         constexpr float kDirectionSmoothingPixels = 6.0f;
-        constexpr float kStartupTravelPx = kDirectionSmoothingPixels;
+        constexpr float kDirectionConfidenceTravelPx = kDirectionSmoothingPixels;
 
         const float prevTravelTotal = m_strokeTravelTotal;
         const float prevSumX = m_strokeDirSumX;
@@ -1551,13 +1537,11 @@ public:
             return true;
         };
 
-        // The integrator state BEFORE this segment is only reliable once
-        // startup deferral has completed. If we used a still-noisy prev state
-        // as the t=0 endpoint of the per-dab lerp, the segment that exits
-        // deferral would interpolate from jitter into the real direction —
-        // smearing the head of the stroke again.
+        // The integrator state BEFORE this segment becomes a useful interpolation
+        // endpoint only after enough travel. Until then, use this segment's new
+        // direction for its dabs instead of blending from startup jitter.
         float prevCos = 1.0f, prevSin = 0.0f, newCos = 1.0f, newSin = 0.0f;
-        const bool prevPostStartup = prevTravelTotal >= kStartupTravelPx;
+        const bool prevPostStartup = prevTravelTotal >= kDirectionConfidenceTravelPx;
         const bool prevAvail = prevPostStartup && unitFrom(prevSumX, prevSumY, &prevCos, &prevSin);
         const bool newAvail = unitFrom(m_strokeDirSumX, m_strokeDirSumY, &newCos, &newSin);
 
@@ -1664,34 +1648,10 @@ public:
         float sinceLast = std::clamp(m_spacingDistanceSinceLastDab, 0.0f, spacingStep);
         float traveled = 0.0f;
 
-        // Only direction-bound-angle brushes need the deferred-startup path.
-        // For everything else, dabs at the head of the stroke have no
-        // visible orientation step, so we skip deferral and place dabs
-        // normally — preserving the click-stamp + immediate stroke response
-        // that users expect.
-        const bool needsDirectionDeferral = angleBoundToStrokeDirection();
-
-        if (needsDirectionDeferral && m_strokeTravelTotal < kStartupTravelPx) {
-            // No dabs placed yet on this segment: recordDabPoint also
-            // suppresses the click-stamp for this brush class. Keep the
-            // spacing accumulator zeroed so post-deferral dabs don't pile
-            // up at the resume point.
-            m_spacingDistanceSinceLastDab = 0.0f;
-            setPressure(toPressure);
-            setStrokeElapsedSeconds(toStrokeElapsedSeconds, strokeTimeAvailable);
-            setInputDynamics(toInputDynamics);
-            return;
-        }
-
         if (m_strokeActive && m_strokeDabs.empty()) {
-            // First emitted dab of the stroke. For direction-bound brushes
-            // we've just exited deferral, so newAvail/newDir reflect a
-            // settled direction; the dab here lands at the segment start
-            // (a few pixels past the click point) but oriented correctly.
-            // For brushes without a deferred dynamic input the click-stamp
-            // normally already placed a dab. Direction- and speed-driven
-            // strokes deliberately arrive here with an empty dab list so their
-            // first observable input can seed the stroke head consistently.
+            // Defensive fallback for callers that start with a segment instead
+            // of a click stamp. The interactive host normally records pen-down
+            // immediately, so this is not a deferred-startup path.
             setPressure(fromPressure);
             setStrokeElapsedSeconds(fromStrokeElapsedSeconds, strokeTimeAvailable);
             setInputDynamics(fromInputDynamics);
@@ -1777,21 +1737,6 @@ public:
     {
         return hasActiveDynamicsBinding(
             ruwa::core::brushes::BrushInputSourceKey::StrokeDirection);
-    }
-
-    /// Narrower check: is the dab's shape-angle slot specifically driven by
-    /// stroke direction? Used to gate the head-of-stroke suppression: only
-    /// when angle reacts to direction does an orientation step at the head
-    /// produce a visible artifact.
-    bool angleBoundToStrokeDirection() const
-    {
-        if (!m_useBrushSettingsModel) {
-            return false;
-        }
-        const auto& angleSlot = m_brushSettingsModel.dynamics.slotForSetting(
-            ruwa::core::brushes::BrushDynamicsSettingKey::ShapeAngle);
-        return angleSlot.binding(ruwa::core::brushes::BrushInputSourceKey::StrokeDirection)
-            .isActive();
     }
 
     bool hasInitializedStrokeDirection() const { return m_strokeDirInitialized; }
@@ -3548,10 +3493,9 @@ private:
     // in a wrong heading.
     float m_strokeDirSumX = 0.0f;
     float m_strokeDirSumY = 0.0f;
-    // Total distance traveled since stroke start. Used to defer dab placement
-    // through the first few pixels where device jitter dominates over real
-    // motion — otherwise an angle-bound brush latches onto that noise and
-    // produces a visibly mis-oriented head before settling.
+    // Total distance traveled since stroke start. Used to decide when the
+    // previous smoothed direction is reliable enough for per-dab interpolation;
+    // early segments still draw immediately using their current direction.
     float m_strokeTravelTotal = 0.0f;
     bool m_strokeDirInitialized = false;
     ruwa::core::brushes::BrushSettingsData m_brushSettingsModel {};

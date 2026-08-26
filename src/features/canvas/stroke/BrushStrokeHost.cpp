@@ -480,8 +480,7 @@ float BrushStrokeHost::sampleSmoothedStrokeSpeed(float worldX, float worldY, dou
 void BrushStrokeHost::backfillDeferredStrokeSpeed(const BrushInputDynamics& seedInputDynamics)
 {
     TileBrush* currentBrush = brush();
-    if (m_initialStrokeSpeedSeeded || !currentBrush || !currentBrush->strokeDabs().empty()
-        || !seedInputDynamics.strokeSpeedAvailable
+    if (m_initialStrokeSpeedSeeded || !currentBrush || !seedInputDynamics.strokeSpeedAvailable
         || !currentBrush->hasActiveDynamicsBinding(
             ruwa::core::brushes::BrushInputSourceKey::StrokeSpeed)) {
         return;
@@ -508,9 +507,17 @@ void BrushStrokeHost::backfillDeferredStrokeSpeed(const BrushInputDynamics& seed
         dynamics.strokeSpeedSpatialDerivative = 0.0f;
         dynamics.strokeSpeedSpatialDerivativeAvailable = false;
     };
-    seedSpeed(m_lastStrokeInputDynamics);
-    seedSpeed(m_prevEmittedInputDynamics);
-    for (size_t i = 0; i < unreliablePointCount; ++i) {
+    // A committed pen-down dab correctly represents zero speed and must stay
+    // untouched. Only the pending motion prefix is backfilled. If a non-UI
+    // caller started directly with a segment, preserve the older empty-stroke
+    // behavior and seed its anchor as well.
+    const bool hasCommittedPenDownDab = !currentBrush->strokeDabs().empty();
+    if (!hasCommittedPenDownDab) {
+        seedSpeed(m_lastStrokeInputDynamics);
+        seedSpeed(m_prevEmittedInputDynamics);
+    }
+    const size_t firstPendingPoint = hasCommittedPenDownDab ? 1 : 0;
+    for (size_t i = firstPendingPoint; i < unreliablePointCount; ++i) {
         seedSpeed(m_liveStrokePoints[i].inputDynamics);
     }
 }
@@ -696,16 +703,15 @@ void BrushStrokeHost::beginStroke(
     TileGrid* paintMask = effectivePaintMask(layer, grid);
     configureBrushSelectionMaskAlpha(*currentBrush, layer, paintMask);
     const bool realtimeRebuild = strokeNeedsRealtimeRebuild();
-    const bool deferInitialDabForDynamicInput
-        = currentBrush->hasActiveStrokeDirectionDynamicsBinding()
-        || currentBrush->hasActiveDynamicsBinding(
-            ruwa::core::brushes::BrushInputSourceKey::StrokeSpeed);
     std::unordered_set<TileKey, TileKeyHash> rebuiltTiles;
     bool previewUpdated = false;
     const size_t changedDabStart = currentBrush->strokeDabs().size();
-    if (deferInitialDabForDynamicInput) {
-        previewUpdated = false;
-    } else if (realtimeRebuild) {
+    // Pen-down is real brush input and must always produce immediate feedback.
+    // Direction is explicitly unavailable until movement, so direction bindings
+    // use their neutral/base value for this stationary dab. Stroke Speed is
+    // explicitly zero above, which is its correct value while the pointer is at
+    // rest. Later motion samples continue through the normal dynamics pipeline.
+    if (realtimeRebuild) {
         m_realtimePreviewTimer.start();
         m_realtimePreviewEventCount = 1;
         currentBrush->setStrokeElapsedSeconds(0.0f, true);
@@ -734,7 +740,7 @@ void BrushStrokeHost::beginStroke(
         m_useGPUBrush = false;
     }
 
-    if ((!realtimeRebuild && !deferInitialDabForDynamicInput) || previewUpdated) {
+    if (!realtimeRebuild || previewUpdated) {
         snapshotNewTiles(currentBrush->strokeBuffer(), grid);
     }
 
@@ -753,9 +759,6 @@ void BrushStrokeHost::beginStroke(
                 collectStrokeChangedKeys(changedKeys);
             }
         }
-    } else if (deferInitialDabForDynamicInput) {
-        // Direction and speed do not exist at pen-down. The first dab is
-        // generated from the first actual segment, once its input is known.
     } else if (currentBrush->hasPositionScatterEffect()) {
         collectStrokeChangedKeys(changedKeys);
     } else {
@@ -1687,14 +1690,14 @@ void BrushStrokeHost::continueStrokeWithResolvedPoint(float worldX, float worldY
     configureBrushSelectionMaskAlpha(*currentBrush, layer, paintMask);
     auto* executionBackend = brushExecutionBackend();
     const bool realtimeRebuild = strokeNeedsRealtimeRebuild();
-    const bool deferInitialDabForDynamicInput = currentBrush->strokeDabs().empty()
-        && (currentBrush->hasActiveStrokeDirectionDynamicsBinding() || strokeSpeedBound);
-    const bool deferRealtimeStrokeSpeedStartup = realtimeRebuild
-        && currentBrush->strokeDabs().empty() && strokeSpeedBound
-        && !m_strokeSpeedStartupEstimateReliable;
+    // Realtime replay normally bypasses the geometry look-ahead. Keep only its
+    // first moving samples pending until speed is observable; the stationary
+    // pen-down dab was already committed and remains visible throughout.
+    const bool deferRealtimeStrokeSpeedMotion = realtimeRebuild && strokeSpeedBound
+        && !m_initialStrokeSpeedSeeded && !m_strokeSpeedStartupEstimateReliable;
     std::unordered_set<TileKey, TileKeyHash> rebuiltTiles;
     bool previewUpdated = false;
-    bool skippedDeferredInitialDab = false;
+    bool skippedDeferredMotion = false;
     const size_t changedDabStart = currentBrush->strokeDabs().size();
 
     if (!hasMeaningfulMovement && (pressureChanged || inputDynamicsChanged)) {
@@ -1721,10 +1724,7 @@ void BrushStrokeHost::continueStrokeWithResolvedPoint(float worldX, float worldY
             return;
         }
 
-        if (deferInitialDabForDynamicInput) {
-            skippedDeferredInitialDab = true;
-            previewUpdated = false;
-        } else if (realtimeRebuild) {
+        if (realtimeRebuild) {
             ++m_realtimePreviewEventCount;
             currentBrush->setStrokeElapsedSeconds(dabElapsedSeconds, true);
             currentBrush->recordDabPoint(stabilizedPoint.x, stabilizedPoint.y);
@@ -1766,20 +1766,15 @@ void BrushStrokeHost::continueStrokeWithResolvedPoint(float worldX, float worldY
             m_lastStrokeInputDynamics = inputDynamics;
             m_lastStrokeElapsedSeconds = dabElapsedSeconds;
         }
-    } else if (deferRealtimeStrokeSpeedStartup) {
-        // Realtime taper replay normally bypasses the geometry look-ahead. Keep
-        // its startup points in that same existing buffer until velocity is
-        // observable, otherwise its very first segment would still be stamped
-        // with the provisional pen-down speed.
+    } else if (deferRealtimeStrokeSpeedMotion) {
         m_liveStrokePoints.push_back({ stabilizedPoint, pressure, dabElapsedSeconds, inputDynamics,
             false });
-        skippedDeferredInitialDab = true;
+        skippedDeferredMotion = true;
     } else if (realtimeRebuild) {
-        const bool strokeWasEmpty = currentBrush->strokeDabs().empty();
         ++m_realtimePreviewEventCount;
         currentBrush->setStrokeElapsedSeconds(dabElapsedSeconds, true);
         std::vector<TileBrush::DabPoint> segmentDabs;
-        if (strokeWasEmpty && strokeSpeedBound && m_liveStrokePoints.size() > 1) {
+        if (!m_initialStrokeSpeedSeeded && strokeSpeedBound && m_liveStrokePoints.size() > 1) {
             m_liveStrokePoints.push_back({ stabilizedPoint, pressure, dabElapsedSeconds,
                 inputDynamics, m_strokeSpeedStartupEstimateReliable });
             backfillDeferredStrokeSpeed(m_liveStrokePoints.back().inputDynamics);
@@ -1793,14 +1788,15 @@ void BrushStrokeHost::continueStrokeWithResolvedPoint(float worldX, float worldY
             }
             m_liveStrokePoints.clear();
         } else {
-            if (strokeWasEmpty) {
+            if (!m_initialStrokeSpeedSeeded) {
                 backfillDeferredStrokeSpeed(inputDynamics);
             }
             currentBrush->appendInterpolatedStrokeDabs(prevX, prevY, stabilizedPoint.x,
                 stabilizedPoint.y, prevPressure, pressure, segmentDabs, m_lastStrokeElapsedSeconds,
                 dabElapsedSeconds, true, m_lastStrokeInputDynamics, inputDynamics);
         }
-        if (strokeWasEmpty && !currentBrush->strokeDabs().empty()) {
+        if (!m_initialStrokeSpeedSeeded
+            && currentBrush->strokeDabs().size() > changedDabStart) {
             m_initialStrokeSpeedSeeded = true;
         }
         previewUpdated
@@ -1856,8 +1852,7 @@ void BrushStrokeHost::continueStrokeWithResolvedPoint(float worldX, float worldY
         while (m_liveStrokePoints.size() > static_cast<size_t>(lagSamples) + 1
             && (!strokeSpeedBound || m_strokeSpeedStartupEstimateReliable
                 || m_initialStrokeSpeedSeeded)) {
-            const bool strokeWasEmpty = currentBrush->strokeDabs().empty();
-            if (strokeWasEmpty) {
+            if (!m_initialStrokeSpeedSeeded) {
                 // Use the newest point in the look-ahead, not the first movement
                 // packet at the head of the buffer.
                 backfillDeferredStrokeSpeed(m_liveStrokePoints.back().inputDynamics);
@@ -1877,7 +1872,8 @@ void BrushStrokeHost::continueStrokeWithResolvedPoint(float worldX, float worldY
                 p3, m_lastStrokePressure, head.pressure, m_lastStrokeElapsedSeconds,
                 head.strokeElapsedSeconds, m_prevEmittedInputDynamics, m_lastStrokeInputDynamics,
                 head.inputDynamics, p3InputDynamics);
-            if (strokeWasEmpty && !currentBrush->strokeDabs().empty()) {
+            if (!m_initialStrokeSpeedSeeded
+                && currentBrush->strokeDabs().size() > changedDabStart) {
                 m_initialStrokeSpeedSeeded = true;
             }
             m_prevEmittedPoint = p1;
@@ -1895,7 +1891,7 @@ void BrushStrokeHost::continueStrokeWithResolvedPoint(float worldX, float worldY
         }
     }
 
-    if (realtimeRebuild && !skippedDeferredInitialDab) {
+    if (realtimeRebuild && !skippedDeferredMotion) {
         m_lastStrokeX = stabilizedPoint.x;
         m_lastStrokeY = stabilizedPoint.y;
         m_lastStrokePressure = pressure;
@@ -1908,7 +1904,7 @@ void BrushStrokeHost::continueStrokeWithResolvedPoint(float worldX, float worldY
     m_lastRawStrokeInputDynamics = inputDynamics;
     m_lastStrokeInputElapsedSeconds = dabElapsedSeconds;
 
-    if ((!realtimeRebuild && !skippedDeferredInitialDab) || previewUpdated) {
+    if ((!realtimeRebuild && !skippedDeferredMotion) || previewUpdated) {
         snapshotNewTiles(currentBrush->strokeBuffer(), grid);
     }
 
@@ -1926,9 +1922,6 @@ void BrushStrokeHost::continueStrokeWithResolvedPoint(float worldX, float worldY
                 collectStrokeChangedKeys(changedKeys);
             }
         }
-    } else if (skippedDeferredInitialDab) {
-        // The first dab will be generated from the first actual segment, once
-        // direction and speed inputs are observable.
     } else if (currentBrush->hasPositionScatterEffect()) {
         collectStrokeChangedKeys(changedKeys);
     } else {
@@ -1956,7 +1949,7 @@ void BrushStrokeHost::continueStrokeWithResolvedPoint(float worldX, float worldY
         updateStabilizerCatchupTimer();
     }
     if (requestRenderAfterStep
-        && ((!realtimeRebuild && !skippedDeferredInitialDab) || previewUpdated)
+        && ((!realtimeRebuild && !skippedDeferredMotion) || previewUpdated)
         && m_callbacks.requestRender) {
         m_callbacks.requestRender();
     }
@@ -2136,12 +2129,8 @@ void BrushStrokeHost::completeEndStrokeAfterQueueDrain()
     auto* executionBackend = brushExecutionBackend();
     TileGrid* paintMask = effectivePaintMask(layer, grid);
     configureBrushSelectionMaskAlpha(*currentBrush, layer, paintMask);
-    const bool forceDeferredInputStamp = !quickShapeWasActive
-        && currentBrush->strokeDabs().empty()
-        && (currentBrush->hasActiveStrokeDirectionDynamicsBinding()
-            || currentBrush->hasActiveDynamicsBinding(
-                ruwa::core::brushes::BrushInputSourceKey::StrokeSpeed));
-    if (!quickShapeWasActive && (!strokeNeedsRealtimeRebuild() || forceDeferredInputStamp)) {
+    const bool hasPendingMotion = m_liveStrokePoints.size() > 1;
+    if (!quickShapeWasActive && (!strokeNeedsRealtimeRebuild() || hasPendingMotion)) {
         // Flush the Laplacian smoothing buffer: apply a strong final
         // smoothing pass to converge any unemitted interior points, then
         // emit them all as chord segments. Without this, a long lag-window
@@ -2163,10 +2152,10 @@ void BrushStrokeHost::completeEndStrokeAfterQueueDrain()
             }
         }
         while (m_liveStrokePoints.size() > 1) {
-            const bool strokeWasEmpty = currentBrush->strokeDabs().empty();
-            if (strokeWasEmpty) {
+            if (!m_initialStrokeSpeedSeeded) {
                 backfillDeferredStrokeSpeed(m_liveStrokePoints.back().inputDynamics);
             }
+            const size_t drainDabStart = currentBrush->strokeDabs().size();
             const LiveStrokePoint head = m_liveStrokePoints[1];
             // Same Catmull-Rom emission as the live loop, so the drained tail
             // keeps the curved silhouette instead of falling back to chords.
@@ -2180,7 +2169,8 @@ void BrushStrokeHost::completeEndStrokeAfterQueueDrain()
                 p3, m_lastStrokePressure, head.pressure, m_lastStrokeElapsedSeconds,
                 head.strokeElapsedSeconds, m_prevEmittedInputDynamics, m_lastStrokeInputDynamics,
                 head.inputDynamics, p3InputDynamics);
-            if (strokeWasEmpty && !currentBrush->strokeDabs().empty()) {
+            if (!m_initialStrokeSpeedSeeded
+                && currentBrush->strokeDabs().size() > drainDabStart) {
                 m_initialStrokeSpeedSeeded = true;
             }
             m_prevEmittedPoint = p1;
