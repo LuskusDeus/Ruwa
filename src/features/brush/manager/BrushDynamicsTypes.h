@@ -49,10 +49,13 @@ constexpr float kBrushSpacingMax = 5.0f;
 /// this in screen space makes a brush react to the same hand motion at every
 /// canvas zoom; faster input is intentionally saturated at the curve endpoint.
 constexpr float kBrushStrokeSpeedMaxScreenPxPerSecond = 4000.0f;
-/// Trailing arc-length measurement window for Stroke Speed. A window spanning
-/// several device packets measures the hand motion rather than packet-to-packet
-/// quantization, while remaining short enough for deliberate acceleration.
-constexpr float kBrushStrokeSpeedFilterTimeSeconds = 0.075f;
+/// Trailing arc-length measurement window for Stroke Speed. Size exposes small
+/// velocity errors much more strongly than colour or angle: the former 75 ms
+/// window still followed ordinary high-frequency hand variation and turned it
+/// into a chain of rounded bulges along an otherwise even stroke. 150 ms spans
+/// enough tablet packets to represent the deliberate motion while keeping a
+/// speed-driven brush responsive to acceleration and direction changes.
+constexpr float kBrushStrokeSpeedFilterTimeSeconds = 0.150f;
 
 enum class BrushInputSourceKey : uint8_t {
     None = 0,
