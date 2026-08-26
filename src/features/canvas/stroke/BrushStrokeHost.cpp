@@ -588,13 +588,23 @@ void BrushStrokeHost::beginStroke(
     m_stabPressure2 = pressure;
     m_stabPressureLastMs = 0.0;
     m_stabClockValid = false;
+    m_stabClockLastWallMs = 0.0;
+    m_stabClockEstimatedPeriodMs = kStabClockInitialPeriodMs;
+    m_stabClockIdleAdvancedSinceRealInput = false;
+    m_stabClockSourceOffsetMs = 0.0;
     m_stabRealWinCount = 0;
-    m_stabEstimatedPeriodMs = kStabClockInitialPeriodMs;
-    m_stabUnreliableTimestampRun = false;
+    m_strokeSpeedClockValid = false;
+    m_strokeSpeedClockLastWallMs = 0.0;
+    m_strokeSpeedClockIdleAdvancedSinceRealInput = false;
+    m_strokeSpeedClockRealWinCount = 0;
+    m_strokeSpeedClockEstimatedPeriodMs = kStrokeSpeedClockInitialPeriodMs;
+    m_strokeSpeedClockUnreliableTimestampRun = false;
     m_dabClockValid = false;
     m_dabClockPrevSynthMs = 0.0;
     m_dabClockElapsedMs = 0.0;
-    m_lastRealInputMs = 0.0;
+    m_lastRealInputWallMs = 0.0;
+    m_realInputWallArrivalSeen = false;
+    m_realInputWallIntervalCount = 0;
     m_lastLiquifyMoveWallMs = 0.0;
     m_lastLiquifyMoveX = worldX;
     m_lastLiquifyMoveY = worldY;
@@ -619,8 +629,12 @@ void BrushStrokeHost::beginStroke(
     m_liveStrokePoints.clear();
     m_liveStrokePoints.push_back({ stabilizedStart, pressure, 0.0f, initialInputDynamics });
 
-    m_strokeSpeedSampleX = worldX;
-    m_strokeSpeedSampleY = worldY;
+    // Stroke Speed is the speed of the cursor that actually lays down the
+    // stroke, not the hardware cursor. They coincide at pen-down, but keeping
+    // the measurement anchor explicitly in the stabilized coordinate stream is
+    // important once idle catch-up starts advancing that cursor on its own.
+    m_strokeSpeedSampleX = stabilizedStart.x;
+    m_strokeSpeedSampleY = stabilizedStart.y;
     m_strokeSpeedCumulativeScreenDistance = 0.0;
     m_strokeSpeedMeasurements.clear();
     m_strokeSpeedMeasurements.push_back({ 0.0, 0.0 });
@@ -638,6 +652,9 @@ void BrushStrokeHost::beginStroke(
     currentBrush->setInputDynamics(initialInputDynamics);
     currentBrush->setStrokeElapsedSeconds(0.0f, true);
     m_strokeElapsedTimer.start();
+    // Pen-down is the first wall-clock input arrival and anchors cadence
+    // learning for the first few move packets of this stroke.
+    m_realInputWallArrivalSeen = true;
     m_realtimePreviewEventCount = 0;
     m_lastRealtimeTaperTailStart = std::numeric_limits<size_t>::max();
     m_lastRealtimeTaperPreviewDabCount = 0;
@@ -873,16 +890,44 @@ void BrushStrokeHost::addStrokeSampleAtElapsed(float worldX, float worldY, float
         timestampReliable = false;
     }
 
-    // Timestamp of the latest REAL pen input (not catch-up). The stabilizer
-    // catch-up only injects geometry once input has gone idle past this — during
-    // continuous drawing the real events drive the curve and injecting catch-up
-    // points would lay collinear samples along the inter-event approach, which
-    // Catmull-Rom can't re-curve (faceted roundings).
-    m_lastRealInputMs = static_cast<double>(strokeElapsedSeconds) * 1000.0;
+    // Wall-clock arrival time of the latest REAL pen input (not catch-up). The
+    // catch-up gate below is evaluated by a QTimer against the same wall clock.
+    // Do not use strokeElapsedSeconds here: recovered tablet packets carry an
+    // acquisition timestamp which can lag behind (or be nudged ahead of) wall
+    // time, making catch-up spuriously alternate with an active packet stream.
+    // That alternation inserts collinear points which Catmull-Rom renders as
+    // visible facets on curves.
+    const double inputArrivalWallMs
+        = static_cast<double>(elapsedSeconds(m_strokeElapsedTimer)) * 1000.0;
+    if (m_realInputWallArrivalSeen) {
+        // Measure distinct event-loop arrivals rather than packet timestamps.
+        // Recovered tablet history is often delivered as several calls at the
+        // same wall time; zero gaps within such a burst are intentionally
+        // ignored, while the gap between bursts is what the catch-up gate must
+        // learn. Very long gaps are UI stalls / real pauses and do not describe
+        // the device's normal delivery cadence.
+        constexpr double kMinArrivalIntervalMs = 0.25;
+        constexpr double kMaxArrivalIntervalMs = 40.0;
+        const double arrivalIntervalMs = inputArrivalWallMs - m_lastRealInputWallMs;
+        if (arrivalIntervalMs >= kMinArrivalIntervalMs
+            && arrivalIntervalMs <= kMaxArrivalIntervalMs) {
+            if (m_realInputWallIntervalCount < kRealInputWallIntervalWindow) {
+                m_realInputWallIntervals[m_realInputWallIntervalCount++] = arrivalIntervalMs;
+            } else {
+                for (int i = 1; i < kRealInputWallIntervalWindow; ++i) {
+                    m_realInputWallIntervals[i - 1] = m_realInputWallIntervals[i];
+                }
+                m_realInputWallIntervals[kRealInputWallIntervalWindow - 1]
+                    = arrivalIntervalMs;
+            }
+        }
+    }
+    m_lastRealInputWallMs = inputArrivalWallMs;
+    m_realInputWallArrivalSeen = true;
 
     // Wall-clock time of the last meaningful pen movement, for the liquify dwell
-    // gate. Unlike m_lastRealInputMs (bumped on every event), this only advances
-    // when the raw input travels past a small screen-space threshold, so a
+    // gate. Unlike m_lastRealInputWallMs (bumped on every event), this only
+    // advances when the raw input travels past a small screen-space threshold, so a
     // held-still stylus — which keeps streaming near-identical packets — reads as
     // idle and lets the dwell fire. Measured against m_strokeElapsedTimer (wall
     // clock) to stay in the same frame as emitLiquifyDwell, independent of the
@@ -1179,63 +1224,65 @@ void BrushStrokeHost::flushQueuedStrokeInput()
 }
 
 double BrushStrokeHost::stepStabilizerClock(
-    double realMs, bool isRealPenSample, bool inputTimestampReliable)
+    double realMs, double wallMs, bool isRealPenSample)
 {
     constexpr double kPauseGapMs = 40.0; // gap that counts as a stop → resync
     constexpr double kMinPeriodMs = 0.2;
     constexpr double kMaxPeriodMs = 40.0;
     constexpr double kMaxDriftMs = 50.0;
 
+    if (!std::isfinite(wallMs)) {
+        wallMs = realMs;
+    }
+
     if (!m_stabClockValid) {
         m_stabClockValid = true;
         m_stabSynthMs = realMs;
         m_stabLastRealPenMs = realMs;
+        m_stabClockLastWallMs = wallMs;
+        m_stabClockSourceOffsetMs = m_stabSynthMs - realMs;
         m_stabRealWin[0] = realMs;
         m_stabRealWinCount = 1;
-        m_stabUnreliableTimestampRun = !inputTimestampReliable;
         return m_stabSynthMs;
     }
 
-    // Catch-up / idle tick: converge in REAL time and do NOT feed the rate
-    // estimate. Leaving m_stabLastRealPenMs untouched means the next real sample
-    // sees the whole pause as a gap → reset below → clean resume.
+    const double wallAdvanceMs = std::max(0.0, wallMs - m_stabClockLastWallMs);
+    m_stabClockLastWallMs = wallMs;
+
+    // Hand off from the packet clock to the catch-up wall clock by DELTAS. The
+    // first idle callback arrives only after the idle gate, so assigning realMs
+    // directly used to turn that whole wait into one EWMA step and visibly kick
+    // the brush cursor forward. Continue with one nominal
+    // catch-up timer period first; subsequent callbacks use their actual wall
+    // duration. Absolute phase is irrelevant to the stabilizer — only monotonic
+    // dt matters.
     if (!isRealPenSample) {
-        m_stabSynthMs = std::max(m_stabSynthMs, realMs);
+        double advanceMs = std::clamp(static_cast<double>(m_stabilizerCatchupTimer.interval()),
+            kMinPeriodMs, kMaxPeriodMs);
+        if (m_stabClockIdleAdvancedSinceRealInput) {
+            advanceMs = wallAdvanceMs;
+        }
+        if (advanceMs > 0.0) {
+            m_stabSynthMs += std::clamp(advanceMs, kMinPeriodMs, kMaxPeriodMs);
+        }
+        m_stabClockIdleAdvancedSinceRealInput = true;
         return m_stabSynthMs;
     }
 
     const double gap = realMs - m_stabLastRealPenMs;
     m_stabLastRealPenMs = realMs;
 
-    if (!(gap >= 0.0) || gap > kPauseGapMs) {
-        // Pause/resume or non-monotonic input: snap and start a fresh window.
-        m_stabSynthMs = realMs;
+    if (m_stabClockIdleAdvancedSinceRealInput || !(gap >= 0.0)
+        || gap > kPauseGapMs) {
+        // Resume from catch-up (or from a pause too short to produce a catch-up
+        // tick) with one normal packet step. Re-anchor the source-to-synthetic
+        // phase instead of snapping to the packet timestamp; absolute clocks can
+        // differ after an idle handoff, while their deltas remain continuous.
+        m_stabSynthMs += m_stabClockEstimatedPeriodMs;
+        m_stabClockSourceOffsetMs = m_stabSynthMs - realMs;
+        m_stabClockIdleAdvancedSinceRealInput = false;
         m_stabRealWin[0] = realMs;
         m_stabRealWinCount = 1;
-        m_stabUnreliableTimestampRun = !inputTimestampReliable;
-        return m_stabSynthMs;
-    }
-
-    if (!inputTimestampReliable) {
-        // The queue's monotonic nudge orders packets that shared one OS/WinTab
-        // timestamp; it is not their physical report period. Advance by the
-        // period already learned from this device (4 ms is the cold-start value
-        // for the 200-266 Hz packet streams this path receives), so every packet
-        // still gets its own continuous position/dynamics sample without the
-        // false 0.5 ms velocity spike.
-        m_stabSynthMs += m_stabEstimatedPeriodMs;
-        m_stabUnreliableTimestampRun = true;
-        return m_stabSynthMs;
-    }
-
-    if (m_stabUnreliableTimestampRun) {
-        // The raw gap spans a run whose individual timestamps were unavailable,
-        // so it cannot update the device-period estimate. Re-anchor the window
-        // here and keep the reconstructed cadence continuous for this sample.
-        m_stabRealWin[0] = realMs;
-        m_stabRealWinCount = 1;
-        m_stabSynthMs += m_stabEstimatedPeriodMs;
-        m_stabUnreliableTimestampRun = false;
         return m_stabSynthMs;
     }
 
@@ -1257,17 +1304,99 @@ double BrushStrokeHost::stepStabilizerClock(
             / static_cast<double>(m_stabRealWinCount - 1);
     }
     periodMs = std::clamp(periodMs, kMinPeriodMs, kMaxPeriodMs);
-    m_stabEstimatedPeriodMs = periodMs;
+    m_stabClockEstimatedPeriodMs = periodMs;
 
     m_stabSynthMs += periodMs;
-    // A recovered burst legitimately puts the reconstructed clock ahead of its
-    // collapsed dispatch timestamp. Never snap it backwards: that would freeze
-    // speed and time dynamics until wall time caught up. Only repair excessive
-    // lag, which is the direction that loses real elapsed time.
-    if (realMs - m_stabSynthMs > kMaxDriftMs) {
-        m_stabSynthMs = realMs;
+    // Bound drift within the current input-clock phase. The offset is reset on
+    // every idle/resume handoff, so this guard cannot undo the smooth transition
+    // by snapping back to a different clock's absolute time.
+    const double mappedRealMs = realMs + m_stabClockSourceOffsetMs;
+    if (std::abs(m_stabSynthMs - mappedRealMs) > kMaxDriftMs) {
+        m_stabSynthMs = mappedRealMs;
     }
     return m_stabSynthMs;
+}
+
+double BrushStrokeHost::stepStrokeSpeedClock(
+    double realMs, double wallMs, bool isRealPenSample, bool inputTimestampReliable)
+{
+    constexpr double kPauseGapMs = 40.0;
+    constexpr double kMinPeriodMs = 0.2;
+    constexpr double kMaxPeriodMs = 40.0;
+    constexpr double kMaxDriftMs = 50.0;
+
+    if (!std::isfinite(wallMs)) {
+        wallMs = realMs;
+    }
+
+    if (!m_strokeSpeedClockValid) {
+        m_strokeSpeedClockValid = true;
+        m_strokeSpeedClockSynthMs = realMs;
+        m_strokeSpeedClockLastRealMs = realMs;
+        m_strokeSpeedClockLastWallMs = wallMs;
+        m_strokeSpeedClockIdleAdvancedSinceRealInput = false;
+        m_strokeSpeedClockRealWin[0] = realMs;
+        m_strokeSpeedClockRealWinCount = 1;
+        m_strokeSpeedClockUnreliableTimestampRun = !inputTimestampReliable;
+        return m_strokeSpeedClockSynthMs;
+    }
+
+    const double wallAdvanceMs = std::max(0.0, wallMs - m_strokeSpeedClockLastWallMs);
+    m_strokeSpeedClockLastWallMs = wallMs;
+    if (!isRealPenSample) {
+        m_strokeSpeedClockSynthMs += wallAdvanceMs;
+        m_strokeSpeedClockIdleAdvancedSinceRealInput |= wallAdvanceMs > 0.0;
+        return m_strokeSpeedClockSynthMs;
+    }
+
+    const double gap = realMs - m_strokeSpeedClockLastRealMs;
+    m_strokeSpeedClockLastRealMs = realMs;
+    const bool resumedAfterIdle = m_strokeSpeedClockIdleAdvancedSinceRealInput;
+    m_strokeSpeedClockIdleAdvancedSinceRealInput = false;
+    if (resumedAfterIdle || !(gap >= 0.0) || gap > kPauseGapMs) {
+        m_strokeSpeedClockSynthMs = std::max(
+            m_strokeSpeedClockSynthMs + std::max(wallAdvanceMs, kMinPeriodMs), realMs);
+        m_strokeSpeedClockRealWin[0] = realMs;
+        m_strokeSpeedClockRealWinCount = 1;
+        m_strokeSpeedClockUnreliableTimestampRun = !inputTimestampReliable;
+        return m_strokeSpeedClockSynthMs;
+    }
+
+    if (!inputTimestampReliable) {
+        m_strokeSpeedClockSynthMs += m_strokeSpeedClockEstimatedPeriodMs;
+        m_strokeSpeedClockUnreliableTimestampRun = true;
+        return m_strokeSpeedClockSynthMs;
+    }
+
+    if (m_strokeSpeedClockUnreliableTimestampRun) {
+        m_strokeSpeedClockRealWin[0] = realMs;
+        m_strokeSpeedClockRealWinCount = 1;
+        m_strokeSpeedClockSynthMs += m_strokeSpeedClockEstimatedPeriodMs;
+        m_strokeSpeedClockUnreliableTimestampRun = false;
+        return m_strokeSpeedClockSynthMs;
+    }
+
+    if (m_strokeSpeedClockRealWinCount < kStabClockWindow) {
+        m_strokeSpeedClockRealWin[m_strokeSpeedClockRealWinCount++] = realMs;
+    } else {
+        for (int i = 1; i < kStabClockWindow; ++i) {
+            m_strokeSpeedClockRealWin[i - 1] = m_strokeSpeedClockRealWin[i];
+        }
+        m_strokeSpeedClockRealWin[kStabClockWindow - 1] = realMs;
+    }
+
+    double periodMs = gap;
+    if (m_strokeSpeedClockRealWinCount >= 2) {
+        periodMs = (m_strokeSpeedClockRealWin[m_strokeSpeedClockRealWinCount - 1]
+                       - m_strokeSpeedClockRealWin[0])
+            / static_cast<double>(m_strokeSpeedClockRealWinCount - 1);
+    }
+    m_strokeSpeedClockEstimatedPeriodMs = std::clamp(periodMs, kMinPeriodMs, kMaxPeriodMs);
+    m_strokeSpeedClockSynthMs += m_strokeSpeedClockEstimatedPeriodMs;
+    if (realMs - m_strokeSpeedClockSynthMs > kMaxDriftMs) {
+        m_strokeSpeedClockSynthMs = realMs;
+    }
+    return m_strokeSpeedClockSynthMs;
 }
 
 float BrushStrokeHost::stepDabDynamicsClock(double synthNowMs, double realMs)
@@ -1342,54 +1471,67 @@ void BrushStrokeHost::continueStrokeImmediate(float worldX, float worldY, float 
         m_callbacks.notifyCanvasInteraction(true);
     }
 
-    // Two clocks with two consumers.
+    // Separate clocks for ordering, geometry, and Stroke Speed.
     //
     //   strokeElapsedSeconds — the RAW input clock (pen event timestamps, or
     //     the wall clock on the mouse/catch-up paths). The input stream is
     //     ordered and de-duplicated against it, so the m_lastStrokeTarget*
     //     bookkeeping and the queue keep using it verbatim.
-    //   nowMs — the de-jittered synthetic sample clock the stabilizer's
+    //   stabilizerNowMs — the proven de-jittered geometry clock the stabilizer's
     //     time-domain EWMA runs on. The OS delivers moves in bursts at coarse
     //     (~15.6 ms) timer resolution, so the observable per-sample dt is
     //     bimodal (nudge floor / one big jump) and the EWMA turns that into a
     //     sawtooth (facets). See stepStabilizerClock.
+    //   strokeSpeedNowMs — packet timing reconstructed independently for the
+    //     Stroke Speed input. It never feeds position or pressure stabilization.
     //   dabElapsedSeconds — what the DABS carry, and therefore what the `Time`
     //     dynamics input reads. Same bimodality, different symptom: per dab it
     //     is a step function, so a hue-over-time brush bands. It integrates
-    //     nowMs rather than sampling it, which also keeps it monotonic across
+    //     stabilizerNowMs rather than sampling it, which also keeps it monotonic across
     //     the snap-backs stepStabilizerClock performs. See stepDabDynamicsClock.
     //
-    // Stepped here, above the quick-shape branch, so every dab of the stroke
-    // reads one clock. Quick-shape samples are ordinary real pen samples, so
-    // feeding them to the period estimate keeps it honest.
+    // Stepped here, above the quick-shape branch, so every consumer advances
+    // exactly once per input/catch-up sample.
     const double realMs = static_cast<double>(strokeElapsedSeconds) * 1000.0;
-    const double nowMs
-        = stepStabilizerClock(realMs, isRealPenSample, inputTimestampReliable);
-    const float dabElapsedSeconds = stepDabDynamicsClock(nowMs, realMs);
-
-    BrushInputDynamics sampledInputDynamics = inputDynamics;
-    if (isRealPenSample) {
-        sampledInputDynamics.strokeSpeed = sampleSmoothedStrokeSpeed(worldX, worldY, nowMs);
-        sampledInputDynamics.strokeSpeedAvailable = true;
-    }
-
-    currentBrush->setPressure(pressure);
-    currentBrush->setInputDynamics(sampledInputDynamics);
-    currentBrush->setStrokeElapsedSeconds(dabElapsedSeconds, true);
-
-    m_lastStrokeTargetX = worldX;
-    m_lastStrokeTargetY = worldY;
-    m_lastStrokeTargetPressure = pressure;
-    m_lastStrokeTargetInputDynamics = sampledInputDynamics;
-    m_lastStrokeTargetElapsedSeconds = strokeElapsedSeconds;
+    const double wallMs = static_cast<double>(elapsedSeconds(m_strokeElapsedTimer)) * 1000.0;
+    const double stabilizerNowMs
+        = stepStabilizerClock(realMs, wallMs, isRealPenSample);
+    const double strokeSpeedNowMs
+        = stepStrokeSpeedClock(realMs, wallMs, isRealPenSample, inputTimestampReliable);
+    const float dabElapsedSeconds = stepDabDynamicsClock(stabilizerNowMs, realMs);
 
     if (auto* quickShape = quickShapeMorph(); quickShape && quickShape->isActive()) {
+        BrushInputDynamics sampledInputDynamics = inputDynamics;
+        sampledInputDynamics.strokeSpeed
+            = sampleSmoothedStrokeSpeed(worldX, worldY, strokeSpeedNowMs);
+        sampledInputDynamics.strokeSpeedAvailable = true;
+        currentBrush->setPressure(pressure);
+        currentBrush->setInputDynamics(sampledInputDynamics);
+        currentBrush->setStrokeElapsedSeconds(dabElapsedSeconds, true);
+        m_lastStrokeTargetX = worldX;
+        m_lastStrokeTargetY = worldY;
+        m_lastStrokeTargetPressure = pressure;
+        m_lastStrokeTargetInputDynamics = sampledInputDynamics;
+        m_lastStrokeTargetElapsedSeconds = strokeElapsedSeconds;
         m_lastStrokeX = worldX;
         m_lastStrokeY = worldY;
         quickShape->updateCursorTarget(worldX, worldY);
         updateStabilizerCatchupTimer();
         return;
     }
+
+    // Stabilization may itself be driven by Stroke Speed. The current cursor
+    // speed does not exist until the stabilizer has produced its output, so use
+    // the previous resolved speed while evaluating this step's lag. This makes
+    // the feedback causal (one output sample of delay) instead of measuring the
+    // hardware cursor first or trying to solve a circular dependency.
+    BrushInputDynamics stabilizationInputDynamics = inputDynamics;
+    stabilizationInputDynamics.strokeSpeed = m_lastStrokeTargetInputDynamics.strokeSpeed;
+    stabilizationInputDynamics.strokeSpeedAvailable
+        = m_lastStrokeTargetInputDynamics.strokeSpeedAvailable;
+    currentBrush->setPressure(pressure);
+    currentBrush->setInputDynamics(stabilizationInputDynamics);
+    currentBrush->setStrokeElapsedSeconds(dabElapsedSeconds, true);
 
     const float stabSlider = currentBrush->stabilization();
     const float stabLagMs = ruwa::core::brushes::stabilizationTauMs(stabSlider);
@@ -1412,27 +1554,57 @@ void BrushStrokeHost::continueStrokeImmediate(float worldX, float worldY, float 
     float emitPressure = pressure;
     if (stabLagMs > 0.0f) {
         const auto sp = ruwa::core::brushes::sampleStrokeStabilizer(
-            m_stabilizationState, worldX, worldY, stabLagMs, nowMs, false);
+            m_stabilizationState, worldX, worldY, stabLagMs, stabilizerNowMs, false);
         resolved = { sp.x, sp.y };
         if (!m_stabPressureValid) {
             m_stabPressure1 = pressure;
             m_stabPressure2 = pressure;
-            m_stabPressureLastMs = nowMs;
+            m_stabPressureLastMs = stabilizerNowMs;
             m_stabPressureValid = true;
         } else {
-            const double dtMs = nowMs - m_stabPressureLastMs;
+            const double dtMs = stabilizerNowMs - m_stabPressureLastMs;
             if (dtMs > 0.0) {
                 const float a = ruwa::core::brushes::detail::stabilizerAlpha(stabLagMs, dtMs);
                 m_stabPressure1 += a * (pressure - m_stabPressure1);
                 m_stabPressure2 += a * (m_stabPressure1 - m_stabPressure2);
-                m_stabPressureLastMs = nowMs;
+                m_stabPressureLastMs = stabilizerNowMs;
             }
         }
         emitPressure = m_stabPressure2;
+    } else {
+        // A dynamic stabilization binding can cross zero and later turn back
+        // on. Synchronize both followers with the pass-through sample while it
+        // is off, otherwise the catch-up timer would still see the old position
+        // as pending and re-enabling would resurrect stale pressure state.
+        ruwa::core::brushes::sampleStrokeStabilizer(
+            m_stabilizationState, worldX, worldY, 0.0f, stabilizerNowMs, false);
+        m_stabPressureValid = true;
+        m_stabPressure1 = pressure;
+        m_stabPressure2 = pressure;
+        m_stabPressureLastMs = stabilizerNowMs;
     }
-    continueStrokeWithResolvedPoint(
-        worldX, worldY, emitPressure, dabElapsedSeconds, sampledInputDynamics, resolved, false,
-        false);
+
+    // Measure the trajectory that is actually painted. Idle catch-up calls this
+    // path too: although no new hardware event exists, the stabilized cursor is
+    // still moving and therefore has a real Stroke Speed. Sampling only real pen
+    // packets left startup speed forever "unreliable" after a short move + hold,
+    // which kept the deferred stroke frozen until input resumed.
+    BrushInputDynamics sampledInputDynamics = inputDynamics;
+    sampledInputDynamics.strokeSpeed
+        = sampleSmoothedStrokeSpeed(resolved.x, resolved.y, strokeSpeedNowMs);
+    sampledInputDynamics.strokeSpeedAvailable = true;
+    currentBrush->setPressure(emitPressure);
+    currentBrush->setInputDynamics(sampledInputDynamics);
+    currentBrush->setStrokeElapsedSeconds(dabElapsedSeconds, true);
+
+    m_lastStrokeTargetX = worldX;
+    m_lastStrokeTargetY = worldY;
+    m_lastStrokeTargetPressure = pressure;
+    m_lastStrokeTargetInputDynamics = sampledInputDynamics;
+    m_lastStrokeTargetElapsedSeconds = strokeElapsedSeconds;
+
+    continueStrokeWithResolvedPoint(worldX, worldY, emitPressure, dabElapsedSeconds,
+        sampledInputDynamics, resolved, false, false);
     updateStabilizerCatchupTimer();
     if (requestRenderAfterStep && m_callbacks.requestRender) {
         m_callbacks.requestRender();
@@ -1461,28 +1633,32 @@ void BrushStrokeHost::continueStrokeWithResolvedPoint(float worldX, float worldY
 
     float moveDx = stabilizedPoint.x - m_lastStrokeInputX;
     float moveDy = stabilizedPoint.y - m_lastStrokeInputY;
-    const bool stabilizerCatchupPending = (currentBrush->stabilization() > 0.0001f)
-        && ruwa::core::brushes::hasPendingStrokeStabilizer(m_stabilizationState, worldX, worldY);
+    const bool stabilizerCatchupPending
+        = ruwa::core::brushes::hasPendingStrokeStabilizer(m_stabilizationState, worldX, worldY);
     // Pressure-only input must be compared with the previous input sample, not
     // m_lastStrokePressure. The latter is the rasterized path anchor and can lag
     // several samples behind while the live smoothing window is populated.
     const float pressureDelta = std::abs(pressure - m_lastStrokeInputPressure);
     const bool pressureChanged = pressureDelta > 0.001f;
+    const bool strokeSpeedBound = currentBrush->hasActiveDynamicsBinding(
+        ruwa::core::brushes::BrushInputSourceKey::StrokeSpeed);
     const auto normalizedAngleDistance = [](float first, float second) {
         const float direct = std::abs(first - second);
         return std::min(direct, 1.0f - direct);
     };
+    const bool strokeSpeedChanged = strokeSpeedBound
+        && (inputDynamics.strokeSpeedAvailable
+                != m_lastRawStrokeInputDynamics.strokeSpeedAvailable
+            || (inputDynamics.strokeSpeedAvailable
+                && std::abs(inputDynamics.strokeSpeed - m_lastRawStrokeInputDynamics.strokeSpeed)
+                    > 0.001f));
     const bool inputDynamicsChanged
         = inputDynamics.penTiltAvailable != m_lastRawStrokeInputDynamics.penTiltAvailable
         || (inputDynamics.penTiltAvailable
             && normalizedAngleDistance(
                    inputDynamics.penTilt, m_lastRawStrokeInputDynamics.penTilt)
                 > (0.5f / 360.0f))
-        || inputDynamics.strokeSpeedAvailable
-            != m_lastRawStrokeInputDynamics.strokeSpeedAvailable
-        || (inputDynamics.strokeSpeedAvailable
-            && std::abs(inputDynamics.strokeSpeed - m_lastRawStrokeInputDynamics.strokeSpeed)
-                > 0.001f);
+        || strokeSpeedChanged;
     const bool movementBelowThreshold = (moveDx * moveDx + moveDy * moveDy)
         < (kQuickLineMovementEpsilon * kQuickLineMovementEpsilon);
     const bool hasMeaningfulMovement = !movementBelowThreshold;
@@ -1511,8 +1687,6 @@ void BrushStrokeHost::continueStrokeWithResolvedPoint(float worldX, float worldY
     configureBrushSelectionMaskAlpha(*currentBrush, layer, paintMask);
     auto* executionBackend = brushExecutionBackend();
     const bool realtimeRebuild = strokeNeedsRealtimeRebuild();
-    const bool strokeSpeedBound = currentBrush->hasActiveDynamicsBinding(
-        ruwa::core::brushes::BrushInputSourceKey::StrokeSpeed);
     const bool deferInitialDabForDynamicInput = currentBrush->strokeDabs().empty()
         && (currentBrush->hasActiveStrokeDirectionDynamicsBinding() || strokeSpeedBound);
     const bool deferRealtimeStrokeSpeedStartup = realtimeRebuild
@@ -2861,11 +3035,11 @@ bool BrushStrokeHost::hasPendingStabilizerCatchup() const
         return false;
     }
 
-    const float tauMs = ruwa::core::brushes::stabilizationTauMs(currentBrush->stabilization());
-    if (tauMs <= 0.0f) {
-        return false;
-    }
-
+    // Do not gate pending geometry on the brush's currently evaluated slider.
+    // In particular Stroke Speed can drive Stabilization to zero while an older
+    // non-zero-lag step still has a tail. The timer must get one more chance to
+    // process that tail; sampleStrokeStabilizer will then either keep converging
+    // or deliberately snap it through the zero-lag path.
     return ruwa::core::brushes::hasPendingStrokeStabilizer(
         m_stabilizationState, m_lastStrokeTargetX, m_lastStrokeTargetY);
 }
@@ -2928,6 +3102,32 @@ void BrushStrokeHost::updateStabilizerCatchupTimer()
     m_stabilizerCatchupTimer.stop();
 }
 
+double BrushStrokeHost::stabilizerCatchupIdleThresholdMs() const
+{
+    constexpr double kMaximumIdleThresholdMs = 24.0;
+    constexpr double kArrivalSafetyFactor = 1.35;
+    constexpr double kSchedulingMarginMs = 1.0;
+
+    // Until a cadence is observable, retain the conservative historical gate.
+    // Once enough distinct arrivals exist, use their upper quartile: this reacts
+    // to the actual device/event-loop rate without treating the zero-time packet
+    // spacing inside a recovered burst as a 1000+ Hz device.
+    if (m_realInputWallIntervalCount < 3) {
+        return kMaximumIdleThresholdMs;
+    }
+
+    std::array<double, kRealInputWallIntervalWindow> sortedIntervals
+        = m_realInputWallIntervals;
+    std::sort(sortedIntervals.begin(),
+        sortedIntervals.begin() + m_realInputWallIntervalCount);
+    const int upperQuartileIndex = (m_realInputWallIntervalCount - 1) * 3 / 4;
+    const double expectedArrivalMs = sortedIntervals[upperQuartileIndex];
+    const double minimumIdleThresholdMs
+        = std::max(1.0, static_cast<double>(m_stabilizerCatchupTimer.interval()));
+    return std::clamp(expectedArrivalMs * kArrivalSafetyFactor + kSchedulingMarginMs,
+        minimumIdleThresholdMs, kMaximumIdleThresholdMs);
+}
+
 void BrushStrokeHost::processStabilizerCatchup()
 {
     if (!m_queuedStrokeSamples.empty()) {
@@ -2948,10 +3148,12 @@ void BrushStrokeHost::processStabilizerCatchup()
     // already drive the geometry; a catch-up tick in between would inject a
     // stabilized point on the straight inter-event approach — collinear samples
     // that Catmull-Rom renders as a faceted rounding. The timer keeps running
-    // and re-checks; it fires for real only on a pause / just before lift.
-    constexpr double kCatchupIdleMs = 24.0;
+    // and re-checks; it fires for real only after the next expected input batch
+    // has actually been missed. A fixed 24 ms gate was safe but created the
+    // visible stop before catch-up on fast devices.
+    const double catchupIdleMs = stabilizerCatchupIdleThresholdMs();
     const double nowMs = static_cast<double>(elapsedSeconds(m_strokeElapsedTimer)) * 1000.0;
-    if (nowMs - m_lastRealInputMs < kCatchupIdleMs) {
+    if (nowMs - m_lastRealInputWallMs < catchupIdleMs) {
         return;
     }
     continueStrokeImmediate(m_lastStrokeTargetX, m_lastStrokeTargetY, m_lastStrokeTargetPressure,
@@ -2978,7 +3180,7 @@ void BrushStrokeHost::emitLiquifyDwell()
     // Only dwell once the pen has stopped MOVING. While the cursor moves the
     // movement-driven dabs already apply the warp; a dwell tick on top would
     // double-apply. Gate on m_lastLiquifyMoveWallMs (advanced only on real
-    // displacement) rather than m_lastRealInputMs (every event) — a stylus held
+    // displacement) rather than m_lastRealInputWallMs (every event) — a stylus held
     // still keeps streaming packets, so the latter would never let this fire.
     // Both this nowMs and m_lastLiquifyMoveWallMs come from m_strokeElapsedTimer,
     // so the comparison stays inside one wall-clock frame.

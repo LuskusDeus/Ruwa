@@ -833,12 +833,20 @@ QImage PixelBrushModule::renderPreview(const BrushPreviewRequest& request) const
     };
 
     StrokeStabilizerState stabilizationState;
+    BrushInputDynamics prevInputDynamics;
+    prevInputDynamics.strokeSpeed = 0.0f;
+    prevInputDynamics.strokeSpeedAvailable = true;
     auto stabilizedPoint = [&](float targetX, float targetY, float pressure,
                                float strokeElapsedSeconds, bool reset) {
         BrushInputContext inputContext;
         inputContext.pressure = pressure;
         inputContext.strokeElapsedSeconds = strokeElapsedSeconds;
         inputContext.strokeTimeAvailable = true;
+        // Match the live stroke's causal ordering when Stroke Speed drives
+        // Stabilization: this step's stabilized output determines this step's
+        // speed, so its lag is evaluated from the previous resolved speed.
+        inputContext.strokeSpeed = prevInputDynamics.strokeSpeed;
+        inputContext.strokeSpeedAvailable = prevInputDynamics.strokeSpeedAvailable;
         const float tauMs
             = stabilizationTauMs(evaluateBrushDynamics(settings, inputContext).stabilization);
         const StrokeStabilizerPoint point = sampleStrokeStabilizer(stabilizationState, targetX,
@@ -851,9 +859,6 @@ QImage PixelBrushModule::renderPreview(const BrushPreviewRequest& request) const
         : std::max(96, static_cast<int>((request.width + request.height) * 0.2f));
     float prevPressure = pathPressure(0.0f);
     float prevElapsedSeconds = pathElapsedSeconds(0.0f);
-    BrushInputDynamics prevInputDynamics;
-    prevInputDynamics.strokeSpeed = 0.0f;
-    prevInputDynamics.strokeSpeedAvailable = true;
     float filteredScreenSpeed = 0.0f;
     auto [startX, startY]
         = stabilizedPoint(pathX(0.0f), pathY(0.0f), prevPressure, prevElapsedSeconds, true);

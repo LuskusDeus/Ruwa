@@ -103,8 +103,8 @@ struct BrushInputContext {
     /// without tilt support.
     float penTilt = 0.0f;
     bool penTiltAvailable = false;
-    /// Smoothed pointer velocity normalized against
-    /// kBrushStrokeSpeedMaxScreenPxPerSecond.
+    /// Smoothed velocity of the resolved stroke cursor (after stabilization),
+    /// normalized against kBrushStrokeSpeedMaxScreenPxPerSecond.
     float strokeSpeed = 0.0f;
     bool strokeSpeedAvailable = false;
 };

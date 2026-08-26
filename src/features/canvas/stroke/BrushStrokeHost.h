@@ -209,11 +209,14 @@ private:
         float strokeElapsedSeconds, const BrushInputDynamics& inputDynamics,
         bool requestRenderAfterStep, bool isRealPenSample = true,
         bool inputTimestampReliable = true);
-    // Advances the de-jittered synthetic clock and returns the nowMs to feed the
-    // stabilizer. Real pen samples drive a windowed period estimate; catch-up
-    // (idle) ticks pass through real time and reset-on-pause keeps it honest.
-    double stepStabilizerClock(
-        double realMs, bool isRealPenSample, bool inputTimestampReliable = true);
+    // Geometry clock used by stabilization and dab time. This deliberately
+    // retains the pre-Stroke-Speed cadence: dynamics timestamp reconstruction
+    // must not alter the trajectory of the brush cursor.
+    double stepStabilizerClock(double realMs, double wallMs, bool isRealPenSample);
+    // Separate clock for Stroke Speed measurement. Repeated packet timestamps
+    // are reconstructed here without feeding their cadence back into geometry.
+    double stepStrokeSpeedClock(double realMs, double wallMs, bool isRealPenSample,
+        bool inputTimestampReliable = true);
     // Stroke time carried by DABS (the `Time` dynamics input). Integrates the
     // forward motion of the synthetic clock above onto the stroke's own origin.
     // synthNowMs is a stepStabilizerClock result; realMs is the raw input clock,
@@ -266,6 +269,7 @@ private:
     bool strokeNeedsRealtimeRebuild() const;
     bool hasPendingStabilizerCatchup() const;
     void updateStabilizerCatchupTimer();
+    double stabilizerCatchupIdleThresholdMs() const;
     // Liquify "dwell": time-based dab while the brush is held (twirl/bloat/pucker
     // keep applying even with no cursor movement). Push is movement-only.
     void emitLiquifyDwell();
@@ -309,10 +313,13 @@ private:
     float m_lastStrokeInputElapsedSeconds = 0.0f;
     QElapsedTimer m_strokeElapsedTimer;
     StrokeInputDevice m_strokeInputDevice = StrokeInputDevice::Stylus;
-    // Stroke speed uses the same uniform sample clock as stabilization. Repeated
-    // input timestamps advance by the learned device period rather than their
-    // artificial ordering nudge. A trailing arc-length window rejects packet
-    // quantization; the shared radius-coupled dynamics follower makes it C1.
+    // Stroke speed follows the resolved stroke cursor (the stabilizer output),
+    // using an independent uniform sample clock so packet timing repair cannot
+    // affect geometry. Idle catch-up ticks are samples too because that cursor
+    // keeps moving after hardware input has stopped. Repeated input timestamps
+    // advance by the learned device period rather than their artificial ordering
+    // nudge. A trailing arc-length window rejects packet quantization; the shared
+    // radius-coupled dynamics follower makes it C1.
     float m_strokeSpeedSampleX = 0.0f;
     float m_strokeSpeedSampleY = 0.0f;
     double m_strokeSpeedCumulativeScreenDistance = 0.0;
@@ -389,25 +396,44 @@ private:
     float m_stabPressure1 = 0.0f;
     float m_stabPressure2 = 0.0f;
     double m_stabPressureLastMs = 0.0;
-    // Reconstructed UNIFORM sample clock fed to the stabilizer as nowMs. The OS
-    // delivers moves in bursts at coarse (~15.6 ms) timer resolution, so the
+    // Uniform geometry clock fed to the stabilizer. The OS delivers moves in
+    // bursts at coarse (~15.6 ms) timer resolution, so the
     // observable per-sample dt is bimodal (nudge floor / one big jump) — the
     // time-domain EWMA turns that into a sawtooth (facets). We estimate the
     // real average sample period over a sliding window of REAL pen samples and
     // advance a synthetic clock by it each sample, so dt is even. The EWMA/τ
     // are unchanged; only the time base is de-jittered, so the lag stays τ in
-    // real time. Catch-up (idle) ticks use real time directly and do NOT feed
-    // the estimate; a pause resets it so resume is clean. See
-    // continueStrokeImmediate / stepStabilizerClock.
+    // real time. Catch-up (idle) continues this clock from its current value by
+    // wall-clock deltas; the first tick uses one nominal timer period rather than
+    // absorbing the whole idle gate. Returning to packet input rebases phase but
+    // preserves dt continuity. See continueStrokeImmediate / stepStabilizerClock.
     static constexpr int kStabClockWindow = 8;
     static constexpr double kStabClockInitialPeriodMs = 4.0;
     bool m_stabClockValid = false;
     double m_stabSynthMs = 0.0;
     double m_stabLastRealPenMs = 0.0;
-    double m_stabEstimatedPeriodMs = kStabClockInitialPeriodMs;
-    bool m_stabUnreliableTimestampRun = false;
+    double m_stabClockLastWallMs = 0.0;
+    double m_stabClockEstimatedPeriodMs = kStabClockInitialPeriodMs;
+    bool m_stabClockIdleAdvancedSinceRealInput = false;
+    // Maps the current raw packet timeline onto the monotonic synthetic one.
+    // Rebased after idle so returning from wall-clock catch-up never snaps time.
+    double m_stabClockSourceOffsetMs = 0.0;
     std::array<double, kStabClockWindow> m_stabRealWin {};
     int m_stabRealWinCount = 0;
+
+    // Stroke Speed has its own reconstructed clock. Keeping these fields out of
+    // the stabilizer clock is intentional: packet timestamp repair may change
+    // dynamics sampling, but can no longer introduce geometry cadence changes.
+    static constexpr double kStrokeSpeedClockInitialPeriodMs = 4.0;
+    bool m_strokeSpeedClockValid = false;
+    double m_strokeSpeedClockSynthMs = 0.0;
+    double m_strokeSpeedClockLastRealMs = 0.0;
+    double m_strokeSpeedClockLastWallMs = 0.0;
+    double m_strokeSpeedClockEstimatedPeriodMs = kStrokeSpeedClockInitialPeriodMs;
+    bool m_strokeSpeedClockIdleAdvancedSinceRealInput = false;
+    bool m_strokeSpeedClockUnreliableTimestampRun = false;
+    std::array<double, kStabClockWindow> m_strokeSpeedClockRealWin {};
+    int m_strokeSpeedClockRealWinCount = 0;
     // Stroke time handed to the DABS, i.e. what the `Time` dynamics input reads
     // (BrushSettings.h normalizedBrushStrokeTime). It must NOT be the raw input
     // clock: with a stylus the OS stamps a whole burst of samples with one
@@ -423,15 +449,25 @@ private:
     bool m_dabClockValid = false;
     double m_dabClockPrevSynthMs = 0.0;
     double m_dabClockElapsedMs = 0.0;
-    // Stroke-elapsed ms of the latest REAL pen input; gates stabilizer catch-up
-    // so it only fires when input is idle (see processStabilizerCatchup).
-    double m_lastRealInputMs = 0.0;
+    // Wall-clock ms of the latest REAL pen input; gates stabilizer catch-up so
+    // it only fires when input is idle (see processStabilizerCatchup). This must
+    // stay in the same QElapsedTimer domain as the timer callback: tablet packet
+    // timestamps are acquisition time and can arrive later in recovered bursts.
+    double m_lastRealInputWallMs = 0.0;
+    // Recent non-zero wall-clock intervals between distinct input arrivals.
+    // Catch-up starts after one expected arrival is missed, instead of imposing
+    // the old fixed 24 ms pause on every device. Intra-burst zero gaps are not
+    // samples of this cadence.
+    static constexpr int kRealInputWallIntervalWindow = 8;
+    bool m_realInputWallArrivalSeen = false;
+    std::array<double, kRealInputWallIntervalWindow> m_realInputWallIntervals {};
+    int m_realInputWallIntervalCount = 0;
     QTimer m_stabilizerCatchupTimer;
     QTimer m_liquifyDwellTimer;
     // Liquify dwell must fire once the pen physically stops MOVING, not once the
     // last input event arrived. A stylus in contact streams packets continuously
     // even while held perfectly still (a mouse goes silent when idle), so gating
-    // the dwell on m_lastRealInputMs — refreshed on every event — would keep the
+    // the dwell on m_lastRealInputWallMs — refreshed on every event — would keep the
     // gate shut forever with a stylus. Track the wall-clock time of the last
     // meaningful movement instead. The threshold is in screen px (zoom-divided to
     // world px at use), so a held pen's sub-pixel jitter still reads as idle at
