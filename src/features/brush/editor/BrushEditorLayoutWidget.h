@@ -204,6 +204,7 @@ private:
     bool m_updatingDabControls = false;
     bool m_brushImportInProgress = false;
     bool m_managerReloadSuppressed = false;
+    bool m_libraryMoveInFlight = false;
     bool m_libraryPreviewRequestsPaused = false;
     QString m_pendingParameterDynamicsBrushId;
     BrushSettingsData m_pendingParameterDynamicsSettings;

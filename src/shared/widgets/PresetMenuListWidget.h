@@ -10,11 +10,15 @@
 
 #include <QLabel>
 #include <QImage>
+#include <QPoint>
+#include <QPointer>
 #include <QPixmap>
 #include <QVector>
 #include <QVBoxLayout>
 #include <QVariant>
 #include <QWidget>
+
+#include <functional>
 
 class QEvent;
 class QHBoxLayout;
@@ -26,6 +30,7 @@ class PresetListRowWidget;
 class SmoothScrollArea;
 class ListCollapseAnimator;
 class SearchBar;
+class DragGhostWidget;
 
 /**
  * @brief Reusable preset list: import/export actions + smooth-scrolling rows
@@ -36,6 +41,10 @@ class PresetMenuListWidget : public QWidget, public ruwa::ui::widgets::IContextM
     Q_OBJECT
 
 public:
+    using ItemMoveHandler
+        = std::function<bool(const QVariant& itemData, const QVariant& targetGroupData,
+            int targetIndex)>;
+
     explicit PresetMenuListWidget(QWidget* parent = nullptr);
     ~PresetMenuListWidget() override;
 
@@ -103,6 +112,11 @@ public:
 
     SmoothScrollArea* scrollArea() const { return m_scrollArea; }
 
+    /// Installs the model-side commit callback for rows carrying drag metadata.
+    /// The callback is invoked after the visual drop preview is resolved and
+    /// must return whether the move was accepted.
+    void setItemMoveHandler(ItemMoveHandler handler) { m_itemMoveHandler = std::move(handler); }
+
     // IContextMenuProvider
     ContextMenuType contextMenuType() const override;
     QVariantMap contextMenuContext() const override;
@@ -118,10 +132,13 @@ signals:
     void importClicked();
     void exportClicked();
     void searchTextChanged(const QString& text);
+    /// Emitted after the settle/return animation has fully completed.
+    void itemMoveFinished(bool accepted);
 
 protected:
     void paintEvent(QPaintEvent* event) override;
     void changeEvent(QEvent* event) override;
+    bool eventFilter(QObject* watched, QEvent* event) override;
 
 private:
     void rebuildRows();
@@ -138,6 +155,22 @@ private:
     /// reorder, active search, …), leaving the caller to do a full rebuild.
     bool tryAnimatedRemoval(const QVector<PresetMenuItem>& newItems);
     QWidget* widgetForItem(const PresetMenuItem& item) const;
+    const PresetMenuItem* draggableItem(const QVariant& userData) const;
+    QWidget* dropGroupWidget(const QVariant& groupData) const;
+    QVector<PresetListRowWidget*> draggableRowsInGroup(
+        const QVariant& groupData, const QVariant& excludedData = {}) const;
+    QVariant dropGroupAt(const QPoint& globalPos) const;
+    int dropIndexAt(const QVariant& groupData, const QPoint& globalPos) const;
+    int itemIndexInGroup(const QVariant& itemData, const QVariant& groupData) const;
+    void startItemDrag(PresetListRowWidget* row, const QPoint& globalPos);
+    void updateItemDrag(const QPoint& globalPos);
+    void finishItemDrag(bool accepted, const QPoint& globalPos);
+    void cleanupItemDrag(bool accepted, bool emitFinished = true);
+    void moveDragRowPreview(const QVariant& groupData, int targetIndex);
+    void restoreDragRowPreview();
+    void commitDraggedItem(const QVariant& groupData, int targetIndex);
+    QPoint dragGhostTargetPosition(const QPoint& globalPos) const;
+    QPoint draggedRowGhostPosition() const;
 
 private slots:
     void onThemeChanged();
@@ -181,6 +214,22 @@ private:
     ListCollapseAnimator* m_collapseAnimator = nullptr;
 
     QVector<PresetListRowWidget*> m_rows;
+
+    ItemMoveHandler m_itemMoveHandler;
+    QPointer<PresetListRowWidget> m_dragCandidateRow;
+    QPointer<PresetListRowWidget> m_draggedRow;
+    QPointer<DragGhostWidget> m_dragGhost;
+    QVariant m_draggedItemData;
+    QVariant m_dragSourceGroupData;
+    QVariant m_dragTargetGroupData;
+    QPoint m_dragPressGlobalPos;
+    QPoint m_dragOffset;
+    QPixmap m_dragSnapshot;
+    int m_dragSourceIndex = -1;
+    int m_dragTargetIndex = -1;
+    bool m_itemDragActive = false;
+    bool m_itemDragSettling = false;
+    bool m_dragCursorOverride = false;
 };
 
 } // namespace ruwa::ui::widgets

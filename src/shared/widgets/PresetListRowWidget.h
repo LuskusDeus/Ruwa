@@ -72,6 +72,10 @@ public:
 
     bool isEditing() const { return m_isEditing; }
     void startEditing();
+    bool canStartDragAt(const QPoint& pos) const;
+    /// Clears a pressed row/action state when a pointer gesture turns into a
+    /// drag and its release is consequently handled by the list container.
+    void cancelPointerInteraction();
 
     QVariant userData() const { return m_item.userData; }
     void setUserData(const QVariant& data) { m_item.userData = data; }

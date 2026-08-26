@@ -7,6 +7,7 @@
 #include "shared/widgets/BaseAnimatedButton.h"
 #include "shared/widgets/inputs/SearchBar.h"
 #include "shared/widgets/layout/SmoothScrollArea.h"
+#include "shared/widgets/reorderlist/ListDragDrop.h"
 #include "features/theme/manager/ThemeManager.h"
 #include "features/theme/manager/ThemeColors.h"
 #include "shared/style/GlassPanel.h"
@@ -15,8 +16,10 @@
 #include <QAbstractButton>
 #include <QApplication>
 #include <QCoreApplication>
+#include <QCursor>
 #include <QEvent>
 #include <QFont>
+#include <QGraphicsOpacityEffect>
 #include <QHBoxLayout>
 #include <QKeyEvent>
 #include <QLabel>
@@ -34,6 +37,7 @@
 #include <functional>
 #include <memory>
 #include <optional>
+#include <utility>
 
 namespace ruwa::ui::widgets {
 
@@ -750,7 +754,10 @@ PresetMenuListWidget::PresetMenuListWidget(QWidget* parent)
     rebuildRows();
 }
 
-PresetMenuListWidget::~PresetMenuListWidget() = default;
+PresetMenuListWidget::~PresetMenuListWidget()
+{
+    cleanupItemDrag(false, false);
+}
 
 namespace {
 void setWidgetLayerChrome(QWidget* w, bool translucent)
@@ -892,11 +899,489 @@ void PresetMenuListWidget::setContextMenuEnabled(bool enabled)
 
 void PresetMenuListWidget::setItems(const QVector<PresetMenuItem>& items)
 {
+    if (m_itemDragActive || m_itemDragSettling) {
+        cleanupItemDrag(false);
+    }
     if (tryAnimatedRemoval(items)) {
         return;
     }
     m_items = items;
     rebuildRows();
+}
+
+bool PresetMenuListWidget::eventFilter(QObject* watched, QEvent* event)
+{
+    if (m_itemDragActive && m_dragGhost) {
+        switch (event->type()) {
+        case QEvent::MouseMove: {
+            auto* mouseEvent = static_cast<QMouseEvent*>(event);
+            updateItemDrag(mouseEvent->globalPosition().toPoint());
+            return true;
+        }
+        case QEvent::MouseButtonRelease: {
+            auto* mouseEvent = static_cast<QMouseEvent*>(event);
+            if (mouseEvent->button() == Qt::LeftButton) {
+                finishItemDrag(true, mouseEvent->globalPosition().toPoint());
+                return true;
+            }
+            break;
+        }
+        case QEvent::KeyPress: {
+            auto* keyEvent = static_cast<QKeyEvent*>(event);
+            if (keyEvent->key() == Qt::Key_Escape) {
+                finishItemDrag(false, QCursor::pos());
+                return true;
+            }
+            break;
+        }
+        case QEvent::ApplicationDeactivate:
+            finishItemDrag(false, QCursor::pos());
+            break;
+        default:
+            break;
+        }
+    }
+
+    auto* row = qobject_cast<PresetListRowWidget*>(watched);
+    if (!row || m_itemDragSettling) {
+        return QWidget::eventFilter(watched, event);
+    }
+
+    switch (event->type()) {
+    case QEvent::MouseButtonPress: {
+        auto* mouseEvent = static_cast<QMouseEvent*>(event);
+        if (mouseEvent->button() == Qt::LeftButton
+            && row->canStartDragAt(mouseEvent->position().toPoint())
+            && draggableItem(row->userData())
+            && m_itemMoveHandler && searchText().trimmed().isEmpty()) {
+            m_dragCandidateRow = row;
+            m_dragPressGlobalPos = mouseEvent->globalPosition().toPoint();
+        }
+        break;
+    }
+    case QEvent::MouseMove: {
+        auto* mouseEvent = static_cast<QMouseEvent*>(event);
+        if (m_dragCandidateRow == row && (mouseEvent->buttons() & Qt::LeftButton)
+            && (mouseEvent->globalPosition().toPoint() - m_dragPressGlobalPos).manhattanLength()
+                >= QApplication::startDragDistance()) {
+            startItemDrag(row, mouseEvent->globalPosition().toPoint());
+            return m_itemDragActive;
+        }
+        break;
+    }
+    case QEvent::MouseButtonRelease:
+        m_dragCandidateRow = nullptr;
+        break;
+    default:
+        break;
+    }
+
+    return QWidget::eventFilter(watched, event);
+}
+
+const PresetMenuItem* PresetMenuListWidget::draggableItem(const QVariant& userData) const
+{
+    for (const PresetMenuItem& item : m_items) {
+        if (!item.isDivider && item.dragEnabled && item.userData == userData) {
+            return &item;
+        }
+    }
+    return nullptr;
+}
+
+QWidget* PresetMenuListWidget::dropGroupWidget(const QVariant& groupData) const
+{
+    for (const PresetMenuItem& item : m_items) {
+        if (item.isDivider && item.dropTarget && item.dragGroupData == groupData) {
+            return widgetForItem(item);
+        }
+    }
+    return nullptr;
+}
+
+QVector<PresetListRowWidget*> PresetMenuListWidget::draggableRowsInGroup(
+    const QVariant& groupData, const QVariant& excludedData) const
+{
+    QVector<PresetListRowWidget*> rows;
+    for (const PresetMenuItem& item : m_items) {
+        if (item.isDivider || !item.dragEnabled || item.dragGroupData != groupData
+            || (excludedData.isValid() && item.userData == excludedData)) {
+            continue;
+        }
+        if (auto* row = qobject_cast<PresetListRowWidget*>(widgetForItem(item))) {
+            if (row->isVisible()) {
+                rows.append(row);
+            }
+        }
+    }
+    std::sort(rows.begin(), rows.end(), [](const PresetListRowWidget* lhs,
+                                             const PresetListRowWidget* rhs) {
+        return lhs->geometry().center().y() < rhs->geometry().center().y();
+    });
+    return rows;
+}
+
+QVariant PresetMenuListWidget::dropGroupAt(const QPoint& globalPos) const
+{
+    if (!m_listContent || !m_scrollArea || !m_scrollArea->viewport()
+        || !m_scrollArea->viewport()->rect().contains(
+            m_scrollArea->viewport()->mapFromGlobal(globalPos))) {
+        return {};
+    }
+
+    const QPoint contentPos = m_listContent->mapFromGlobal(globalPos);
+    QVector<QPair<QVariant, QWidget*>> groups;
+    for (const PresetMenuItem& item : m_items) {
+        if (!item.isDivider || !item.dropTarget) {
+            continue;
+        }
+        if (QWidget* divider = widgetForItem(item); divider && divider->isVisible()) {
+            groups.append(qMakePair(item.dragGroupData, divider));
+        }
+    }
+
+    for (int i = 0; i < groups.size(); ++i) {
+        QWidget* divider = groups[i].second;
+        const int top = divider->geometry().top();
+        const int bottom = i + 1 < groups.size() ? groups[i + 1].second->geometry().top() - 1
+                                                 : m_listContent->height();
+        if (contentPos.y() >= top && contentPos.y() <= bottom) {
+            return groups[i].first;
+        }
+    }
+    return {};
+}
+
+int PresetMenuListWidget::dropIndexAt(
+    const QVariant& groupData, const QPoint& globalPos) const
+{
+    const QVector<PresetListRowWidget*> rows
+        = draggableRowsInGroup(groupData, m_draggedItemData);
+    QWidget* divider = dropGroupWidget(groupData);
+    if (divider && divider->rect().contains(divider->mapFromGlobal(globalPos))) {
+        return rows.size();
+    }
+
+    const int y = m_listContent->mapFromGlobal(globalPos).y();
+    for (int i = 0; i < rows.size(); ++i) {
+        if (y < rows[i]->geometry().center().y()) {
+            return i;
+        }
+    }
+    return rows.size();
+}
+
+int PresetMenuListWidget::itemIndexInGroup(
+    const QVariant& itemData, const QVariant& groupData) const
+{
+    int index = 0;
+    for (const PresetMenuItem& item : m_items) {
+        if (item.isDivider || !item.dragEnabled || item.dragGroupData != groupData) {
+            continue;
+        }
+        if (item.userData == itemData) {
+            return index;
+        }
+        ++index;
+    }
+    return -1;
+}
+
+void PresetMenuListWidget::startItemDrag(PresetListRowWidget* row, const QPoint& globalPos)
+{
+    const PresetMenuItem* item = row ? draggableItem(row->userData()) : nullptr;
+    if (!row || !item || m_itemDragActive || m_itemDragSettling || !m_itemMoveHandler) {
+        return;
+    }
+
+    m_dragSnapshot = row->grab();
+    if (m_dragSnapshot.isNull()) {
+        return;
+    }
+
+    m_dragCandidateRow = nullptr;
+    m_draggedRow = row;
+    m_draggedItemData = item->userData;
+    m_dragSourceGroupData = item->dragGroupData;
+    m_dragSourceIndex = itemIndexInGroup(m_draggedItemData, m_dragSourceGroupData);
+    if (m_dragSourceIndex < 0) {
+        m_draggedRow = nullptr;
+        m_draggedItemData = {};
+        m_dragSourceGroupData = {};
+        return;
+    }
+
+    m_itemDragActive = true;
+    m_dragOffset = row->mapToGlobal(QPoint(0, 0)) - globalPos;
+    row->cancelPointerInteraction();
+
+    auto* opacityEffect = new QGraphicsOpacityEffect(row);
+    opacityEffect->setOpacity(0.25);
+    row->setGraphicsEffect(opacityEffect);
+
+    QWidget* topLevel = window();
+    m_dragGhost = new DragGhostWidget(topLevel);
+    m_dragGhost->setSnapshot(m_dragSnapshot);
+    const QPoint sourceGhostPosition = draggedRowGhostPosition();
+    m_dragGhost->startFollowing(sourceGhostPosition);
+    m_dragGhost->captureBackdrop(topLevel);
+    m_dragGhost->show();
+    m_dragGhost->raise();
+    m_dragGhost->setFollowTarget(dragGhostTargetPosition(globalPos));
+
+    qApp->installEventFilter(this);
+    QApplication::setOverrideCursor(Qt::ClosedHandCursor);
+    m_dragCursorOverride = true;
+    updateItemDrag(globalPos);
+}
+
+void PresetMenuListWidget::updateItemDrag(const QPoint& globalPos)
+{
+    if (!m_itemDragActive || !m_dragGhost) {
+        return;
+    }
+
+    m_dragGhost->setFollowTarget(dragGhostTargetPosition(globalPos));
+    const QVariant groupData = dropGroupAt(globalPos);
+    if (!groupData.isValid()) {
+        m_dragTargetGroupData = {};
+        m_dragTargetIndex = -1;
+        return;
+    }
+
+    const int targetIndex = dropIndexAt(groupData, globalPos);
+    if (m_dragTargetGroupData == groupData && m_dragTargetIndex == targetIndex) {
+        return;
+    }
+    moveDragRowPreview(groupData, targetIndex);
+}
+
+void PresetMenuListWidget::moveDragRowPreview(
+    const QVariant& groupData, int targetIndex)
+{
+    if (!m_draggedRow || !m_listLayout || !dropGroupWidget(groupData)) {
+        return;
+    }
+
+    for (const PresetMenuItem& item : m_items) {
+        if (!item.isDivider && item.dropPlaceholder) {
+            if (QWidget* placeholder = widgetForItem(item)) {
+                placeholder->setVisible(item.dragGroupData != groupData);
+            }
+        }
+    }
+
+    const QVector<PresetListRowWidget*> targetRows
+        = draggableRowsInGroup(groupData, m_draggedItemData);
+    const int boundedIndex = qBound(0, targetIndex, static_cast<int>(targetRows.size()));
+
+    const int currentLayoutIndex = m_listLayout->indexOf(m_draggedRow);
+    if (currentLayoutIndex >= 0) {
+        QLayoutItem* rowItem = m_listLayout->takeAt(currentLayoutIndex);
+        delete rowItem;
+        QLayoutItem* possibleSpacer = m_listLayout->itemAt(currentLayoutIndex);
+        if (possibleSpacer && !possibleSpacer->widget() && !possibleSpacer->layout()) {
+            delete m_listLayout->takeAt(currentLayoutIndex);
+        }
+    }
+
+    int insertionLayoutIndex = -1;
+    if (boundedIndex < targetRows.size()) {
+        insertionLayoutIndex = m_listLayout->indexOf(targetRows[boundedIndex]);
+    } else if (!targetRows.isEmpty()) {
+        insertionLayoutIndex = m_listLayout->indexOf(targetRows.last()) + 1;
+        QLayoutItem* trailing = m_listLayout->itemAt(insertionLayoutIndex);
+        if (trailing && !trailing->widget() && !trailing->layout()) {
+            ++insertionLayoutIndex;
+        }
+    } else {
+        insertionLayoutIndex = m_listLayout->indexOf(dropGroupWidget(groupData)) + 1;
+        QLayoutItem* trailing = m_listLayout->itemAt(insertionLayoutIndex);
+        if (trailing && !trailing->widget() && !trailing->layout()) {
+            ++insertionLayoutIndex;
+        }
+    }
+
+    insertionLayoutIndex = qBound(0, insertionLayoutIndex, m_listLayout->count());
+    m_listLayout->insertWidget(insertionLayoutIndex, m_draggedRow);
+    m_listLayout->insertSpacing(
+        insertionLayoutIndex + 1, ThemeManager::instance().scaled(kBaseRowSpacing));
+    m_listLayout->invalidate();
+    m_listLayout->activate();
+    m_listContent->adjustSize();
+    m_listContent->updateGeometry();
+    if (m_scrollArea) {
+        m_scrollArea->refreshScrollGeometry();
+    }
+
+    m_dragTargetGroupData = groupData;
+    m_dragTargetIndex = boundedIndex;
+}
+
+void PresetMenuListWidget::restoreDragRowPreview()
+{
+    if (m_dragSourceGroupData.isValid() && m_dragSourceIndex >= 0) {
+        moveDragRowPreview(m_dragSourceGroupData, m_dragSourceIndex);
+    }
+    for (const PresetMenuItem& item : m_items) {
+        if (!item.isDivider && item.dropPlaceholder) {
+            if (QWidget* placeholder = widgetForItem(item)) {
+                placeholder->show();
+            }
+        }
+    }
+}
+
+void PresetMenuListWidget::commitDraggedItem(
+    const QVariant& groupData, int targetIndex)
+{
+    int sourceItemIndex = -1;
+    for (int i = 0; i < m_items.size(); ++i) {
+        if (!m_items[i].isDivider && m_items[i].dragEnabled
+            && m_items[i].userData == m_draggedItemData) {
+            sourceItemIndex = i;
+            break;
+        }
+    }
+    if (sourceItemIndex < 0) {
+        return;
+    }
+
+    PresetMenuItem movedItem = m_items.takeAt(sourceItemIndex);
+    movedItem.dragGroupData = groupData;
+    for (int i = m_items.size() - 1; i >= 0; --i) {
+        if (!m_items[i].isDivider && m_items[i].dropPlaceholder
+            && m_items[i].dragGroupData == groupData) {
+            m_items.removeAt(i);
+        }
+    }
+
+    int dividerIndex = -1;
+    for (int i = 0; i < m_items.size(); ++i) {
+        if (m_items[i].isDivider && m_items[i].dropTarget
+            && m_items[i].dragGroupData == groupData) {
+            dividerIndex = i;
+            break;
+        }
+    }
+    if (dividerIndex < 0) {
+        return;
+    }
+
+    int insertionItemIndex = dividerIndex + 1;
+    int seenDraggableRows = 0;
+    while (insertionItemIndex < m_items.size() && !m_items[insertionItemIndex].dropTarget) {
+        const PresetMenuItem& item = m_items[insertionItemIndex];
+        if (!item.isDivider && item.dragEnabled && item.dragGroupData == groupData) {
+            if (seenDraggableRows >= targetIndex) {
+                break;
+            }
+            ++seenDraggableRows;
+        }
+        ++insertionItemIndex;
+    }
+    m_items.insert(insertionItemIndex, std::move(movedItem));
+}
+
+void PresetMenuListWidget::finishItemDrag(bool accepted, const QPoint& globalPos)
+{
+    if (!m_itemDragActive) {
+        return;
+    }
+
+    updateItemDrag(globalPos);
+    qApp->removeEventFilter(this);
+    if (m_dragCursorOverride) {
+        QApplication::restoreOverrideCursor();
+        m_dragCursorOverride = false;
+    }
+
+    const QVariant targetGroupData = m_dragTargetGroupData;
+    const int targetIndex = m_dragTargetIndex;
+    accepted = accepted && targetGroupData.isValid() && targetIndex >= 0 && m_itemMoveHandler;
+    if (accepted) {
+        accepted = m_itemMoveHandler(m_draggedItemData, targetGroupData, targetIndex);
+    }
+    if (accepted) {
+        commitDraggedItem(targetGroupData, targetIndex);
+    } else {
+        restoreDragRowPreview();
+    }
+
+    m_itemDragActive = false;
+    m_itemDragSettling = true;
+    if (m_draggedRow) {
+        m_draggedRow->cancelPointerInteraction();
+    }
+
+    QPointer<PresetMenuListWidget> guard(this);
+    auto finish = [guard, accepted]() {
+        if (guard) {
+            guard->cleanupItemDrag(accepted);
+        }
+    };
+    if (!m_dragGhost) {
+        finish();
+        return;
+    }
+
+    m_dragGhost->animateToTracked([guard]() {
+        return guard ? guard->draggedRowGhostPosition() : QPoint();
+    }, accepted ? DragGhostWidget::Transition::Settle : DragGhostWidget::Transition::Return,
+        std::move(finish));
+}
+
+void PresetMenuListWidget::cleanupItemDrag(bool accepted, bool emitFinished)
+{
+    if (qApp && m_itemDragActive) {
+        qApp->removeEventFilter(this);
+    }
+    if (m_dragCursorOverride) {
+        QApplication::restoreOverrideCursor();
+        m_dragCursorOverride = false;
+    }
+    if (m_draggedRow) {
+        m_draggedRow->setGraphicsEffect(nullptr);
+        m_draggedRow->cancelPointerInteraction();
+    }
+    if (m_dragGhost) {
+        m_dragGhost->deleteLater();
+        m_dragGhost = nullptr;
+    }
+
+    m_dragCandidateRow = nullptr;
+    m_draggedRow = nullptr;
+    m_draggedItemData = {};
+    m_dragSourceGroupData = {};
+    m_dragTargetGroupData = {};
+    m_dragPressGlobalPos = {};
+    m_dragOffset = {};
+    m_dragSnapshot = {};
+    m_dragSourceIndex = -1;
+    m_dragTargetIndex = -1;
+    m_itemDragActive = false;
+    m_itemDragSettling = false;
+
+    if (emitFinished) {
+        emit itemMoveFinished(accepted);
+    }
+}
+
+QPoint PresetMenuListWidget::dragGhostTargetPosition(const QPoint& globalPos) const
+{
+    if (!m_dragGhost) {
+        return {};
+    }
+    return window()->mapFromGlobal(globalPos + m_dragOffset) - m_dragGhost->contentTopLeft();
+}
+
+QPoint PresetMenuListWidget::draggedRowGhostPosition() const
+{
+    if (!m_dragGhost || !m_draggedRow) {
+        return m_dragGhost ? m_dragGhost->pos() : QPoint();
+    }
+    return window()->mapFromGlobal(m_draggedRow->mapToGlobal(QPoint(0, 0)))
+        - m_dragGhost->contentTopLeft();
 }
 
 QVector<QVariant> PresetMenuListWidget::visibleItemUserData(int preloadMargin) const
@@ -1390,6 +1875,9 @@ void PresetMenuListWidget::rebuildRows()
         row->setRenamable(it.renamable);
         row->setActive(it.userData == m_activeData);
         row->setContextMenuEnabled(m_contextMenuEnabled);
+        if (it.dragEnabled) {
+            row->installEventFilter(this);
+        }
 
         connect(row, &PresetListRowWidget::clicked, this, [this, row]() {
             m_selectedData = row->userData();
@@ -1640,6 +2128,9 @@ void PresetMenuListWidget::changeEvent(QEvent* event)
 
 void PresetMenuListWidget::onThemeChanged()
 {
+    if (m_itemDragActive || m_itemDragSettling) {
+        cleanupItemDrag(false);
+    }
     applyContentMargins();
     const auto& colors = ThemeManager::instance().colors();
 

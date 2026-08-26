@@ -49,6 +49,7 @@
 #include <algorithm>
 #include <cmath>
 #include <optional>
+#include <utility>
 
 namespace ruwa::ui::windows {
 
@@ -446,6 +447,33 @@ void BrushEditorLayoutWidget::setupSignals()
                 restoreLibraryScroll(savedScroll);
             });
         });
+    m_libraryList->setItemMoveHandler(
+        [this](const QVariant& itemData, const QVariant& targetGroupData, int targetIndex) {
+            QString brushId;
+            QString targetPresetId;
+            if (!extractLibraryKeyId(itemData, QStringLiteral("brush:"), &brushId)
+                || !extractLibraryKeyId(
+                    targetGroupData, QStringLiteral("pack:"), &targetPresetId)) {
+                return false;
+            }
+
+            QScopedValueRollback<bool> moveGuard(m_libraryMoveInFlight, true);
+            return BrushManager::instance().moveBrush(brushId, targetPresetId, targetIndex);
+        });
+    connect(m_libraryList, &widgets::PresetMenuListWidget::itemMoveFinished, this,
+        [this](bool accepted) {
+            if (!accepted) {
+                return;
+            }
+            // Normalize empty-pack placeholder rows only after the shared drag
+            // ghost has landed; rebuilding any earlier would invalidate the
+            // live destination row used by the settle animation.
+            rebuildLibraryList();
+            const QString selectedKey = !m_selectedBrushId.isEmpty()
+                ? brushLibraryKey(m_selectedBrushId)
+                : (!m_selectedPresetId.isEmpty() ? packLibraryKey(m_selectedPresetId) : QString());
+            m_libraryList->setSelectedUserData(selectedKey, false);
+        });
     connect(m_libraryList, &widgets::PresetMenuListWidget::headerActionTriggered, this,
         [this](int actionId) {
             if (actionId == kLibraryAddPackActionId) {
@@ -484,6 +512,34 @@ void BrushEditorLayoutWidget::setupSignals()
             if (m_managerReloadSuppressed)
                 return;
             loadDataFromManager();
+        });
+    connect(&BrushManager::instance(), &BrushManager::brushMoved, this,
+        [this](const QString&, const QString& targetPresetId, const QString& brushId, int) {
+            QString targetPresetName;
+            for (const auto& preset : std::as_const(m_presets)) {
+                if (preset.id == targetPresetId) {
+                    targetPresetName = preset.name;
+                    break;
+                }
+            }
+            if (m_libraryList && !targetPresetName.isEmpty()) {
+                m_libraryList->setSubtitleForItem(
+                    brushLibraryKey(brushId), translateLibraryText(targetPresetName));
+            }
+
+            const bool movedSelection = brushId == m_selectedBrushId;
+            if (movedSelection) {
+                m_selectedPresetId = targetPresetId;
+                updateToolbarState();
+            }
+
+            if (!m_libraryMoveInFlight) {
+                rebuildLibraryList();
+                if (movedSelection) {
+                    const QString selectedKey = brushLibraryKey(m_selectedBrushId);
+                    m_libraryList->setSelectedUserData(selectedKey, false);
+                }
+            }
         });
     connect(&BrushManager::instance(), &BrushManager::presetRenamed, this,
         [this](const QString& presetId, const QString& newName) {
@@ -1982,6 +2038,8 @@ void BrushEditorLayoutWidget::rebuildLibraryList()
         dividerItem.isDivider = true;
         dividerItem.renamable = true;
         dividerItem.userData = packLibraryKey(preset.id);
+        dividerItem.dropTarget = true;
+        dividerItem.dragGroupData = dividerItem.userData;
 
         widgets::PresetMenuExtraAction removePackAction;
         removePackAction.id = kLibraryRemovePackActionId;
@@ -2013,6 +2071,8 @@ void BrushEditorLayoutWidget::rebuildLibraryList()
             emptyPackItem.userData = packLibraryKey(preset.id);
             emptyPackItem.deletable = false;
             emptyPackItem.renamable = false;
+            emptyPackItem.dropPlaceholder = true;
+            emptyPackItem.dragGroupData = dividerItem.userData;
             items.append(emptyPackItem);
             continue;
         }
@@ -2026,6 +2086,8 @@ void BrushEditorLayoutWidget::rebuildLibraryList()
             brushItem.userData = brushLibraryKey(brush.id);
             brushItem.deletable = true;
             brushItem.renamable = false;
+            brushItem.dragEnabled = true;
+            brushItem.dragGroupData = dividerItem.userData;
             if (auto* session = m_libraryPreviewSessions.value(brush.id, nullptr)) {
                 const QImage image = session->image();
                 if (!image.isNull()) {

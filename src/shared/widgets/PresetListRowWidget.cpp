@@ -265,6 +265,22 @@ void PresetListRowWidget::setPopupChromeStyle(bool enabled)
     update();
 }
 
+void PresetListRowWidget::cancelPointerInteraction()
+{
+    m_isPressed = false;
+    m_renamePressed = false;
+    m_deletePressed = false;
+    for (int i = 0; i < m_extraPressed.size(); ++i) {
+        m_extraPressed[i] = false;
+    }
+    update();
+}
+
+bool PresetListRowWidget::canStartDragAt(const QPoint& pos) const
+{
+    return !m_isEditing && rect().contains(pos) && !isOverAnyAction(pos);
+}
+
 void PresetListRowWidget::setHoverProgress(qreal progress)
 {
     if (!qFuzzyCompare(m_hoverProgress, progress)) {

@@ -63,6 +63,13 @@ struct PresetMenuItem {
     bool renamable = true;
     /// When true, row is a non-interactive horizontal rule (ignore other fields).
     bool isDivider = false;
+    /// Optional drag-and-drop metadata used by PresetMenuListWidget. A draggable
+    /// row can move between divider-backed drop groups without the owner having
+    /// to implement a second list interaction layer.
+    bool dragEnabled = false;
+    bool dropTarget = false;
+    bool dropPlaceholder = false;
+    QVariant dragGroupData;
     QVector<PresetMenuExtraAction> extraActions;
 };
 
