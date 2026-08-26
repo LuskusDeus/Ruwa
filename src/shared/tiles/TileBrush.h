@@ -1739,6 +1739,16 @@ public:
             ruwa::core::brushes::BrushInputSourceKey::StrokeDirection);
     }
 
+    /// Whether the interactive stroke must observe a real segment before its
+    /// first dab can be evaluated. Pressure, time, random and tilt are defined
+    /// by the pen-down sample; direction and speed require two positions.
+    bool requiresMotionBeforeFirstDab() const
+    {
+        return hasActiveStrokeDirectionDynamicsBinding()
+            || hasActiveDynamicsBinding(
+                ruwa::core::brushes::BrushInputSourceKey::StrokeSpeed);
+    }
+
     bool hasInitializedStrokeDirection() const { return m_strokeDirInitialized; }
 
     /// Rotation that StrokeDirection dynamics specifically adds to the dab

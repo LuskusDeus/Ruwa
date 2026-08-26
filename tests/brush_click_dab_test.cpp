@@ -5,7 +5,25 @@
 #include <catch2/catch_approx.hpp>
 #include <catch2/catch_test_macros.hpp>
 
-TEST_CASE("pen-down records a dab before direction is available", "[brush][input][dynamics]")
+namespace {
+
+void enableBinding(ruwa::core::brushes::BrushSettingsData& settings,
+    ruwa::core::brushes::BrushDynamicsSettingKey setting,
+    ruwa::core::brushes::BrushInputSourceKey source)
+{
+    auto& binding = settings.dynamics.slotForSetting(setting).binding(source);
+    binding.enabled = true;
+    binding.curve.points = {
+        { 0.0f, 0.0f, 1.0f },
+        { 1.0f, 1.0f, 1.0f },
+    };
+    binding.curve.normalize(binding.setting, binding.mode);
+}
+
+} // namespace
+
+TEST_CASE("direct dab recording remains available to non-interactive callers",
+    "[brush][input][dynamics]")
 {
     using namespace ruwa::core::brushes;
 
@@ -33,4 +51,40 @@ TEST_CASE("pen-down records a dab before direction is available", "[brush][input
     // Direction is unknowable at pen-down, so the established dynamics
     // fallback keeps the base angle until a real segment supplies direction.
     CHECK(brush.strokeDabs().front().angleDegrees == Catch::Approx(settings.angle));
+}
+
+TEST_CASE("only segment-derived dynamics defer the interactive first dab",
+    "[brush][input][dynamics]")
+{
+    using namespace ruwa::core::brushes;
+
+    BrushSettingsData settings;
+    aether::TileBrush brush;
+    brush.setBrushSettings(settings);
+    CHECK_FALSE(brush.requiresMotionBeforeFirstDab());
+
+    enableBinding(settings, BrushDynamicsSettingKey::ShapeAngle,
+        BrushInputSourceKey::StrokeDirection);
+    brush.setBrushSettings(settings);
+    CHECK(brush.requiresMotionBeforeFirstDab());
+
+    settings = {};
+    enableBinding(settings, BrushDynamicsSettingKey::ShapeAngle,
+        BrushInputSourceKey::StrokeDirection);
+    settings.dynamics.slotForSetting(BrushDynamicsSettingKey::ShapeAngle)
+        .binding(BrushInputSourceKey::StrokeDirection)
+        .enabled = false;
+    brush.setBrushSettings(settings);
+    CHECK_FALSE(brush.requiresMotionBeforeFirstDab());
+
+    settings = {};
+    enableBinding(
+        settings, BrushDynamicsSettingKey::RadiusMultiplier, BrushInputSourceKey::StrokeSpeed);
+    brush.setBrushSettings(settings);
+    CHECK(brush.requiresMotionBeforeFirstDab());
+
+    settings = {};
+    enableBinding(settings, BrushDynamicsSettingKey::ShapeAngle, BrushInputSourceKey::PenTilt);
+    brush.setBrushSettings(settings);
+    CHECK_FALSE(brush.requiresMotionBeforeFirstDab());
 }

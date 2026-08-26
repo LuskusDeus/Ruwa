@@ -507,10 +507,9 @@ void BrushStrokeHost::backfillDeferredStrokeSpeed(const BrushInputDynamics& seed
         dynamics.strokeSpeedSpatialDerivative = 0.0f;
         dynamics.strokeSpeedSpatialDerivativeAvailable = false;
     };
-    // A committed pen-down dab correctly represents zero speed and must stay
-    // untouched. Only the pending motion prefix is backfilled. If a non-UI
-    // caller started directly with a segment, preserve the older empty-stroke
-    // behavior and seed its anchor as well.
+    // Preserve a pen-down dab if a non-interactive caller already committed
+    // one. Interactive speed-bound strokes defer that dab, so their still-empty
+    // stroke seeds the anchor together with the pending motion prefix.
     const bool hasCommittedPenDownDab = !currentBrush->strokeDabs().empty();
     if (!hasCommittedPenDownDab) {
         seedSpeed(m_lastStrokeInputDynamics);
@@ -703,15 +702,15 @@ void BrushStrokeHost::beginStroke(
     TileGrid* paintMask = effectivePaintMask(layer, grid);
     configureBrushSelectionMaskAlpha(*currentBrush, layer, paintMask);
     const bool realtimeRebuild = strokeNeedsRealtimeRebuild();
+    const bool deferInitialDab = currentBrush->requiresMotionBeforeFirstDab();
     std::unordered_set<TileKey, TileKeyHash> rebuiltTiles;
     bool previewUpdated = false;
     const size_t changedDabStart = currentBrush->strokeDabs().size();
-    // Pen-down is real brush input and must always produce immediate feedback.
-    // Direction is explicitly unavailable until movement, so direction bindings
-    // use their neutral/base value for this stationary dab. Stroke Speed is
-    // explicitly zero above, which is its correct value while the pointer is at
-    // rest. Later motion samples continue through the normal dynamics pipeline.
-    if (realtimeRebuild) {
+    // Direction and speed need a segment, so do not commit a dab evaluated with
+    // fallback input at pen-down. Every other brush keeps immediate feedback.
+    if (deferInitialDab) {
+        previewUpdated = false;
+    } else if (realtimeRebuild) {
         m_realtimePreviewTimer.start();
         m_realtimePreviewEventCount = 1;
         currentBrush->setStrokeElapsedSeconds(0.0f, true);
@@ -740,7 +739,7 @@ void BrushStrokeHost::beginStroke(
         m_useGPUBrush = false;
     }
 
-    if (!realtimeRebuild || previewUpdated) {
+    if ((!realtimeRebuild && !deferInitialDab) || previewUpdated) {
         snapshotNewTiles(currentBrush->strokeBuffer(), grid);
     }
 
@@ -759,6 +758,8 @@ void BrushStrokeHost::beginStroke(
                 collectStrokeChangedKeys(changedKeys);
             }
         }
+    } else if (deferInitialDab) {
+        // The first segment will supply the missing direction or speed.
     } else if (currentBrush->hasPositionScatterEffect()) {
         collectStrokeChangedKeys(changedKeys);
     } else {
@@ -1690,9 +1691,10 @@ void BrushStrokeHost::continueStrokeWithResolvedPoint(float worldX, float worldY
     configureBrushSelectionMaskAlpha(*currentBrush, layer, paintMask);
     auto* executionBackend = brushExecutionBackend();
     const bool realtimeRebuild = strokeNeedsRealtimeRebuild();
+    const bool waitingForInitialMotion = currentBrush->strokeDabs().empty()
+        && currentBrush->requiresMotionBeforeFirstDab();
     // Realtime replay normally bypasses the geometry look-ahead. Keep only its
-    // first moving samples pending until speed is observable; the stationary
-    // pen-down dab was already committed and remains visible throughout.
+    // first moving samples pending until speed is observable.
     const bool deferRealtimeStrokeSpeedMotion = realtimeRebuild && strokeSpeedBound
         && !m_initialStrokeSpeedSeeded && !m_strokeSpeedStartupEstimateReliable;
     std::unordered_set<TileKey, TileKeyHash> rebuiltTiles;
@@ -1724,7 +1726,10 @@ void BrushStrokeHost::continueStrokeWithResolvedPoint(float worldX, float worldY
             return;
         }
 
-        if (realtimeRebuild) {
+        if (waitingForInitialMotion) {
+            skippedDeferredMotion = true;
+            previewUpdated = false;
+        } else if (realtimeRebuild) {
             ++m_realtimePreviewEventCount;
             currentBrush->setStrokeElapsedSeconds(dabElapsedSeconds, true);
             currentBrush->recordDabPoint(stabilizedPoint.x, stabilizedPoint.y);
@@ -1922,6 +1927,8 @@ void BrushStrokeHost::continueStrokeWithResolvedPoint(float worldX, float worldY
                 collectStrokeChangedKeys(changedKeys);
             }
         }
+    } else if (skippedDeferredMotion) {
+        // No drawable segment has been observed yet.
     } else if (currentBrush->hasPositionScatterEffect()) {
         collectStrokeChangedKeys(changedKeys);
     } else {
@@ -2130,7 +2137,10 @@ void BrushStrokeHost::completeEndStrokeAfterQueueDrain()
     TileGrid* paintMask = effectivePaintMask(layer, grid);
     configureBrushSelectionMaskAlpha(*currentBrush, layer, paintMask);
     const bool hasPendingMotion = m_liveStrokePoints.size() > 1;
-    if (!quickShapeWasActive && (!strokeNeedsRealtimeRebuild() || hasPendingMotion)) {
+    const bool waitingForInitialMotion = currentBrush->strokeDabs().empty()
+        && currentBrush->requiresMotionBeforeFirstDab() && !hasPendingMotion;
+    if (!quickShapeWasActive && !waitingForInitialMotion
+        && (!strokeNeedsRealtimeRebuild() || hasPendingMotion)) {
         // Flush the Laplacian smoothing buffer: apply a strong final
         // smoothing pass to converge any unemitted interior points, then
         // emit them all as chord segments. Without this, a long lag-window
