@@ -46,6 +46,11 @@ PresetListRowWidget::PresetListRowWidget(const PresetMenuItem& item, QWidget* pa
     : QWidget(parent)
     , m_item(item)
 {
+    // The row is custom-painted with rounded corners. Keep the backing store
+    // transparent so QWidget::grab() preserves alpha outside the painted plate
+    // when the row is used as a drag ghost snapshot.
+    setAttribute(Qt::WA_TranslucentBackground);
+    setAutoFillBackground(false);
     setAttribute(Qt::WA_Hover);
     setMouseTracking(true);
     setCursor(Qt::PointingHandCursor);

@@ -8,6 +8,7 @@
 #include "shared/widgets/inputs/SearchBar.h"
 #include "shared/widgets/layout/SmoothScrollArea.h"
 #include "shared/widgets/reorderlist/ListDragDrop.h"
+#include "shared/style/AnimationPolicy.h"
 #include "features/theme/manager/ThemeManager.h"
 #include "features/theme/manager/ThemeColors.h"
 #include "shared/style/GlassPanel.h"
@@ -27,6 +28,8 @@
 #include <QMouseEvent>
 #include <QPaintEvent>
 #include <QPainter>
+#include <QParallelAnimationGroup>
+#include <QPropertyAnimation>
 #include <QRegion>
 #include <QSet>
 #include <QSizePolicy>
@@ -67,6 +70,24 @@ constexpr int kBaseSearchHeight = 34;
 constexpr int kBuiltinImportActionId = -101;
 constexpr int kBuiltinExportActionId = -102;
 constexpr int kBuiltinDividerRenameActionId = -103;
+constexpr int kItemReorderAnimationMs = 180;
+
+QHash<QWidget*, QPoint> visibleLayoutItemPositions(const QVBoxLayout* layout)
+{
+    QHash<QWidget*, QPoint> positions;
+    if (!layout) {
+        return positions;
+    }
+
+    for (int i = 0; i < layout->count(); ++i) {
+        QLayoutItem* item = layout->itemAt(i);
+        QWidget* widget = item ? item->widget() : nullptr;
+        if (widget && !widget->isHidden()) {
+            positions.insert(widget, widget->pos());
+        }
+    }
+    return positions;
+}
 
 class PresetHeaderToolButton final : public BaseAnimatedButton {
 public:
@@ -757,6 +778,7 @@ PresetMenuListWidget::PresetMenuListWidget(QWidget* parent)
 PresetMenuListWidget::~PresetMenuListWidget()
 {
     cleanupItemDrag(false, false);
+    stopItemReorderAnimation();
 }
 
 namespace {
@@ -902,6 +924,12 @@ void PresetMenuListWidget::setItems(const QVector<PresetMenuItem>& items)
     if (m_itemDragActive || m_itemDragSettling) {
         cleanupItemDrag(false);
     }
+    const bool reorderAnimationWasActive = m_itemReorderAnimation;
+    stopItemReorderAnimation();
+    if (reorderAnimationWasActive && m_listLayout) {
+        m_listLayout->invalidate();
+        m_listLayout->activate();
+    }
     if (tryAnimatedRemoval(items)) {
         return;
     }
@@ -1014,9 +1042,9 @@ QVector<PresetListRowWidget*> PresetMenuListWidget::draggableRowsInGroup(
             }
         }
     }
-    std::sort(rows.begin(), rows.end(), [](const PresetListRowWidget* lhs,
-                                             const PresetListRowWidget* rhs) {
-        return lhs->geometry().center().y() < rhs->geometry().center().y();
+    std::sort(rows.begin(), rows.end(), [this](PresetListRowWidget* lhs, PresetListRowWidget* rhs) {
+        return itemLayoutTargetGeometry(lhs).center().y()
+            < itemLayoutTargetGeometry(rhs).center().y();
     });
     return rows;
 }
@@ -1042,9 +1070,10 @@ QVariant PresetMenuListWidget::dropGroupAt(const QPoint& globalPos) const
 
     for (int i = 0; i < groups.size(); ++i) {
         QWidget* divider = groups[i].second;
-        const int top = divider->geometry().top();
-        const int bottom = i + 1 < groups.size() ? groups[i + 1].second->geometry().top() - 1
-                                                 : m_listContent->height();
+        const int top = itemLayoutTargetGeometry(divider).top();
+        const int bottom = i + 1 < groups.size()
+            ? itemLayoutTargetGeometry(groups[i + 1].second).top() - 1
+            : m_listContent->height();
         if (contentPos.y() >= top && contentPos.y() <= bottom) {
             return groups[i].first;
         }
@@ -1052,19 +1081,18 @@ QVariant PresetMenuListWidget::dropGroupAt(const QPoint& globalPos) const
     return {};
 }
 
-int PresetMenuListWidget::dropIndexAt(
-    const QVariant& groupData, const QPoint& globalPos) const
+int PresetMenuListWidget::dropIndexAt(const QVariant& groupData, const QPoint& globalPos) const
 {
-    const QVector<PresetListRowWidget*> rows
-        = draggableRowsInGroup(groupData, m_draggedItemData);
+    const QVector<PresetListRowWidget*> rows = draggableRowsInGroup(groupData, m_draggedItemData);
     QWidget* divider = dropGroupWidget(groupData);
-    if (divider && divider->rect().contains(divider->mapFromGlobal(globalPos))) {
+    const QPoint contentPos = m_listContent->mapFromGlobal(globalPos);
+    if (divider && itemLayoutTargetGeometry(divider).contains(contentPos)) {
         return rows.size();
     }
 
-    const int y = m_listContent->mapFromGlobal(globalPos).y();
+    const int y = contentPos.y();
     for (int i = 0; i < rows.size(); ++i) {
-        if (y < rows[i]->geometry().center().y()) {
+        if (y < itemLayoutTargetGeometry(rows[i]).center().y()) {
             return i;
         }
     }
@@ -1156,12 +1184,17 @@ void PresetMenuListWidget::updateItemDrag(const QPoint& globalPos)
     moveDragRowPreview(groupData, targetIndex);
 }
 
-void PresetMenuListWidget::moveDragRowPreview(
-    const QVariant& groupData, int targetIndex)
+void PresetMenuListWidget::moveDragRowPreview(const QVariant& groupData, int targetIndex)
 {
     if (!m_draggedRow || !m_listLayout || !dropGroupWidget(groupData)) {
         return;
     }
+
+    // Retarget from the widgets' current on-screen positions when the pointer
+    // crosses several rows quickly. This keeps consecutive previews continuous
+    // instead of snapping an in-flight transition to its previous destination.
+    stopItemReorderAnimation();
+    const QHash<QWidget*, QPoint> startPositions = visibleLayoutItemPositions(m_listLayout);
 
     for (const PresetMenuItem& item : m_items) {
         if (!item.isDivider && item.dropPlaceholder) {
@@ -1214,6 +1247,45 @@ void PresetMenuListWidget::moveDragRowPreview(
         m_scrollArea->refreshScrollGeometry();
     }
 
+    // QVBoxLayout has now resolved the final slots. Seed every retained widget
+    // back at its pre-reorder position and use the same position-animation
+    // pattern as the shared animated reorder lists.
+    m_listLayout->activate();
+    const QHash<QWidget*, QPoint> targetPositions = visibleLayoutItemPositions(m_listLayout);
+    m_itemReorderTargets = targetPositions;
+
+    auto* animationGroup = new QParallelAnimationGroup(this);
+    for (auto it = targetPositions.cbegin(); it != targetPositions.cend(); ++it) {
+        QWidget* widget = it.key();
+        const auto startIt = startPositions.constFind(widget);
+        if (!widget || startIt == startPositions.cend() || startIt.value() == it.value()) {
+            continue;
+        }
+
+        widget->move(startIt.value());
+        auto* positionAnimation = new QPropertyAnimation(widget, "pos", animationGroup);
+        positionAnimation->setDuration(ruwa::ui::core::anim::duration(kItemReorderAnimationMs));
+        positionAnimation->setEasingCurve(QEasingCurve::InOutCubic);
+        positionAnimation->setStartValue(startIt.value());
+        positionAnimation->setEndValue(it.value());
+        animationGroup->addAnimation(positionAnimation);
+    }
+
+    if (animationGroup->animationCount() > 0) {
+        m_itemReorderAnimation = animationGroup;
+        connect(animationGroup, &QParallelAnimationGroup::finished, this, [this, animationGroup]() {
+            if (m_itemReorderAnimation == animationGroup) {
+                m_itemReorderAnimation = nullptr;
+                m_itemReorderTargets.clear();
+            }
+            animationGroup->deleteLater();
+        });
+        ruwa::ui::core::anim::start(animationGroup);
+    } else {
+        m_itemReorderTargets.clear();
+        delete animationGroup;
+    }
+
     m_dragTargetGroupData = groupData;
     m_dragTargetIndex = boundedIndex;
 }
@@ -1232,8 +1304,7 @@ void PresetMenuListWidget::restoreDragRowPreview()
     }
 }
 
-void PresetMenuListWidget::commitDraggedItem(
-    const QVariant& groupData, int targetIndex)
+void PresetMenuListWidget::commitDraggedItem(const QVariant& groupData, int targetIndex)
 {
     int sourceItemIndex = -1;
     for (int i = 0; i < m_items.size(); ++i) {
@@ -1281,6 +1352,26 @@ void PresetMenuListWidget::commitDraggedItem(
         ++insertionItemIndex;
     }
     m_items.insert(insertionItemIndex, std::move(movedItem));
+}
+
+QRect PresetMenuListWidget::itemLayoutTargetGeometry(QWidget* widget) const
+{
+    if (!widget) {
+        return {};
+    }
+    const auto targetIt = m_itemReorderTargets.constFind(widget);
+    return targetIt == m_itemReorderTargets.cend() ? widget->geometry()
+                                                   : QRect(targetIt.value(), widget->size());
+}
+
+void PresetMenuListWidget::stopItemReorderAnimation()
+{
+    if (m_itemReorderAnimation) {
+        m_itemReorderAnimation->stop();
+        m_itemReorderAnimation->deleteLater();
+        m_itemReorderAnimation = nullptr;
+    }
+    m_itemReorderTargets.clear();
 }
 
 void PresetMenuListWidget::finishItemDrag(bool accepted, const QPoint& globalPos)
@@ -1816,6 +1907,7 @@ bool PresetMenuListWidget::itemMatchesFilter(const PresetMenuItem& item) const
 
 void PresetMenuListWidget::rebuildRows()
 {
+    stopItemReorderAnimation();
     const int savedScroll = m_scrollArea ? m_scrollArea->scrollValue() : 0;
 
     while (m_listLayout->count() > 0) {

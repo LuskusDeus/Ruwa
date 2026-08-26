@@ -10,6 +10,7 @@
 
 #include <QLabel>
 #include <QImage>
+#include <QHash>
 #include <QPoint>
 #include <QPointer>
 #include <QPixmap>
@@ -23,6 +24,7 @@
 class QEvent;
 class QHBoxLayout;
 class QPaintEvent;
+class QParallelAnimationGroup;
 
 namespace ruwa::ui::widgets {
 
@@ -169,6 +171,8 @@ private:
     void moveDragRowPreview(const QVariant& groupData, int targetIndex);
     void restoreDragRowPreview();
     void commitDraggedItem(const QVariant& groupData, int targetIndex);
+    QRect itemLayoutTargetGeometry(QWidget* widget) const;
+    void stopItemReorderAnimation();
     QPoint dragGhostTargetPosition(const QPoint& globalPos) const;
     QPoint draggedRowGhostPosition() const;
 
@@ -219,6 +223,8 @@ private:
     QPointer<PresetListRowWidget> m_dragCandidateRow;
     QPointer<PresetListRowWidget> m_draggedRow;
     QPointer<DragGhostWidget> m_dragGhost;
+    QPointer<QParallelAnimationGroup> m_itemReorderAnimation;
+    QHash<QWidget*, QPoint> m_itemReorderTargets;
     QVariant m_draggedItemData;
     QVariant m_dragSourceGroupData;
     QVariant m_dragTargetGroupData;
