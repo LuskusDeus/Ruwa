@@ -11,6 +11,7 @@
 
 #include <QJsonObject>
 #include <QHash>
+#include <QPixmap>
 #include <QPointer>
 #include <QSet>
 #include <QString>
@@ -23,6 +24,7 @@ class QEvent;
 
 namespace ruwa::ui::widgets {
 class AnimatedStackedWidget;
+class DragGhostWidget;
 class SmoothScrollArea;
 } // namespace ruwa::ui::widgets
 
@@ -65,10 +67,15 @@ private slots:
     void queueReload();
     void onManagerBrushRenamed(const QString& brushId, const QString& newName);
     void onManagerPresetRenamed(const QString& presetId, const QString& newName);
+    void onManagerBrushMoved(const QString& sourcePackId, const QString& targetPackId,
+        const QString& brushId, int targetIndex);
+    void onFavoriteBrushOrderChanged(const QStringList& brushIds);
     void onSectionToggled(const QString& packId, bool expanded);
     void onBrushActivated(const QString& packId, const QString& brushId);
     void onBrushEditorRequested(const QString& packId, const QString& brushId);
     void onBrushDeleteRequested(const QString& packId, const QString& brushId);
+    void startBrushDrag(
+        const QString& packId, const QString& brushId, QWidget* row, const QPoint& globalPos);
     void onThemeChanged();
     void syncSelectionFromCanvas();
 
@@ -114,6 +121,16 @@ private:
     void applySharedCollapsedState();
     /// Record a user toggle and mirror it onto every other panel instance.
     void setPackCollapsed(const QString& packId, bool collapsed);
+    void updateBrushDrag(const QPoint& globalPos);
+    void finishBrushDrag(bool accepted, const QPoint& globalPos);
+    void clearBrushDropTarget(bool restoreExpansion);
+    void cleanupBrushDrag();
+    QPoint brushGhostTargetPosition(const QPoint& globalPos) const;
+    BrushPackListSection* brushDropSectionAt(const QPoint& globalPos) const;
+    bool updateCachedBrushMove(const QString& sourcePackId, const QString& targetPackId,
+        const QString& brushId, int targetIndex, BrushListBrushData* movedBrush);
+    void applyBrushMoveToBuiltSections(const QString& sourcePackId, const QString& targetPackId,
+        const QString& brushId, int targetIndex, const BrushListBrushData& movedBrush);
 
 private:
     widgets::AnimatedStackedWidget* m_pageStack = nullptr;
@@ -127,6 +144,20 @@ private:
     QSet<QString> m_queuedScrollRestoreKeys;
     QPointer<ruwa::ui::windows::BrushEditorWindow> m_brushEditorWindow;
     QString m_selectedBrushId;
+    QString m_draggedBrushId;
+    QString m_dragSourcePackId;
+    QString m_dragTargetPackId;
+    QPixmap m_dragSnapshot;
+    QPointer<QWidget> m_draggedBrushRow;
+    QPointer<BrushPackListSection> m_dragTargetSection;
+    QPointer<ruwa::ui::widgets::DragGhostWidget> m_dragGhost;
+    QPoint m_dragOffset;
+    QPoint m_dragSourceGhostPosition;
+    int m_dragTargetIndex = -1;
+    bool m_dragTargetWasExpanded = true;
+    bool m_brushDragActive = false;
+    bool m_brushDragSettling = false;
+    bool m_dragCursorOverride = false;
     bool m_reloadQueued = false;
     bool m_restoringState = false;
     ViewMode m_viewMode = ViewMode::All;

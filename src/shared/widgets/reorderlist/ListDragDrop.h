@@ -107,6 +107,10 @@ public:
     /// Fly to the final slot, or return to the source and fade away.
     void animateTo(
         const QPoint& targetPos, Transition transition, std::function<void()> finished = {});
+    /// Same transition, but resolves the destination on every animation frame.
+    /// Use this when another concurrent layout animation can move the landing row.
+    void animateToTracked(std::function<QPoint()> targetPosition, Transition transition,
+        std::function<void()> finished = {});
 
 signals:
     void morphFinished();
@@ -117,6 +121,8 @@ protected:
 private:
     int visualPadding() const;
     void advanceFollow();
+    void animateToImpl(std::function<QPoint()> targetPosition, Transition transition,
+        std::function<void()> finished);
 
     QPixmap m_snapshot;
     QSize m_visualContentSize;

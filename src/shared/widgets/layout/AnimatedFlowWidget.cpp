@@ -62,6 +62,24 @@ void AnimatedFlowWidget::setItems(
         return;
     }
 
+    const auto isRetained = [&flowItems, &pinnedItems](QWidget* widget) {
+        return flowItems.contains(widget) || pinnedItems.contains(widget);
+    };
+    QList<QPointer<QWidget>> previousItems = m_flowItems;
+    previousItems.append(m_pinnedItems);
+    for (const QPointer<QWidget>& previousItem : std::as_const(previousItems)) {
+        QWidget* widget = previousItem.data();
+        if (!widget || isRetained(widget)) {
+            continue;
+        }
+        // setItems() is also the transfer boundary used by animated lists.
+        // An item omitted from the new order must no longer be driven by this
+        // container after another AnimatedFlowWidget adopts it.
+        removeTarget(widget);
+        removeHiddenItem(widget);
+        untrackItem(widget);
+    }
+
     m_flowItems.clear();
     m_pinnedItems.clear();
     m_flowItems.reserve(flowItems.size());

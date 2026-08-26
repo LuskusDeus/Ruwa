@@ -62,6 +62,10 @@ struct AppSettings {
         QHash<QString, int> brushDisplayColorIndices;
         /// Brush ids marked as favorites. Stored globally, independent of panel layouts.
         QSet<QString> favoriteBrushIds;
+        /// Stable user-defined order for favorite brushes. Empty means the
+        /// Brushes Panel should derive its legacy pack order. Membership remains
+        /// authoritative in favoriteBrushIds for fast lookups.
+        QStringList favoriteBrushOrder;
     } appearance;
 
     // === EDITOR ===

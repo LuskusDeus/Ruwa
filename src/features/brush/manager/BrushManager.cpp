@@ -631,6 +631,55 @@ bool BrushManager::removeBrush(const QString& brushId)
     return false;
 }
 
+bool BrushManager::moveBrush(const QString& brushId, const QString& targetPresetId, int targetIndex)
+{
+    ensureLoaded();
+    if (brushId.isEmpty() || !m_brushesByPreset.contains(targetPresetId)) {
+        return false;
+    }
+
+    QString sourcePresetId;
+    int sourceIndex = -1;
+    for (auto it = m_brushesByPreset.cbegin(); it != m_brushesByPreset.cend(); ++it) {
+        const auto& brushes = it.value();
+        for (int i = 0; i < brushes.size(); ++i) {
+            if (brushes[i].id == brushId) {
+                sourcePresetId = it.key();
+                sourceIndex = i;
+                break;
+            }
+        }
+        if (sourceIndex >= 0) {
+            break;
+        }
+    }
+    if (sourceIndex < 0) {
+        return false;
+    }
+
+    auto& sourceBrushes = m_brushesByPreset[sourcePresetId];
+    const int targetSize = sourcePresetId == targetPresetId
+        ? static_cast<int>(sourceBrushes.size()) - 1
+        : static_cast<int>(m_brushesByPreset[targetPresetId].size());
+    const int resolvedIndex = targetIndex < 0 ? targetSize : qBound(0, targetIndex, targetSize);
+    if (sourcePresetId == targetPresetId && resolvedIndex == sourceIndex) {
+        return true;
+    }
+
+    BrushData brush = sourceBrushes.takeAt(sourceIndex);
+    auto& targetBrushes = m_brushesByPreset[targetPresetId];
+    brush.presetId = targetPresetId;
+    targetBrushes.insert(resolvedIndex, std::move(brush));
+
+    // Brush packs are persisted as one settings snapshot. A single save here
+    // therefore commits both the source removal and destination insertion
+    // together, while keeping favorites, recent history and starred settings
+    // intact because the brush id does not change.
+    save();
+    emit brushMoved(sourcePresetId, targetPresetId, brushId, resolvedIndex);
+    return true;
+}
+
 bool BrushManager::removeBrushOrPreset(const QString& brushId)
 {
     ensureLoaded();

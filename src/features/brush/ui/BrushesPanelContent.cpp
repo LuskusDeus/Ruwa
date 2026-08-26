@@ -13,11 +13,18 @@
 #include "features/theme/manager/ThemeManager.h"
 #include "shared/widgets/layout/AnimatedStackedWidget.h"
 #include "shared/widgets/layout/SmoothScrollArea.h"
+#include "shared/widgets/reorderlist/ListDragDrop.h"
 #include "shell/docking/widgets/DockPanel.h"
 
+#include <QAbstractButton>
+#include <QApplication>
+#include <QCursor>
 #include <QEvent>
+#include <QGraphicsOpacityEffect>
 #include <QJsonArray>
+#include <QKeyEvent>
 #include <QLabel>
+#include <QMouseEvent>
 #include <QRect>
 #include <QTimer>
 #include <QVBoxLayout>
@@ -75,6 +82,7 @@ BrushesPanelContent::BrushesPanelContent(QWidget* parent)
             ruwa::core::SettingsManager::instance().setBrushFavorite(brushId, false);
             queueReload();
         });
+    connect(&manager, &BrushManager::brushMoved, this, &BrushesPanelContent::onManagerBrushMoved);
     connect(
         &manager, &BrushManager::brushRenamed, this, &BrushesPanelContent::onManagerBrushRenamed);
     connect(&manager, &BrushManager::dataReset, this, &BrushesPanelContent::queueReload);
@@ -161,6 +169,9 @@ BrushesPanelContent::BrushesPanelContent(QWidget* parent)
                 rebuildPage(QLatin1String(kFavoritesPageKey));
             }
         });
+    connect(&ruwa::core::SettingsManager::instance(),
+        &ruwa::core::SettingsManager::favoriteBrushOrderChanged, this,
+        &BrushesPanelContent::onFavoriteBrushOrderChanged);
 
     // Visibility-gated: deferred for hidden (background-tab) instances; flushed
     // on activation via WorkspaceTab.
@@ -173,6 +184,7 @@ BrushesPanelContent::BrushesPanelContent(QWidget* parent)
 
 BrushesPanelContent::~BrushesPanelContent()
 {
+    cleanupBrushDrag();
     s_instances.removeAll(this);
 }
 
@@ -201,6 +213,9 @@ void BrushesPanelContent::setCanvasPanel(CanvasPanel* canvasPanel)
 
 void BrushesPanelContent::reloadFromManager()
 {
+    if (m_brushDragActive) {
+        cleanupBrushDrag();
+    }
     m_packs = collectPacks();
 
     QSet<QString> validPackIds;
@@ -438,6 +453,145 @@ void BrushesPanelContent::onManagerPresetRenamed(const QString& presetId, const 
     emit packFiltersChanged(packFilterIds(), packFilterNames());
 }
 
+void BrushesPanelContent::onManagerBrushMoved(const QString& sourcePackId,
+    const QString& targetPackId, const QString& brushId, int targetIndex)
+{
+    BrushListBrushData movedBrush;
+    if (!updateCachedBrushMove(sourcePackId, targetPackId, brushId, targetIndex, &movedBrush)) {
+        // The manager is authoritative. Refresh only the lightweight cached
+        // data here; a move must never rebuild the live panel hierarchy.
+        m_packs = collectPacks();
+        for (const BrushListPackData& pack : std::as_const(m_packs)) {
+            if (pack.id != targetPackId) {
+                continue;
+            }
+            for (const BrushListBrushData& brush : pack.brushes) {
+                if (brush.id == brushId) {
+                    movedBrush = brush;
+                    break;
+                }
+            }
+            break;
+        }
+    }
+    if (movedBrush.id.isEmpty()) {
+        return;
+    }
+
+    applyBrushMoveToBuiltSections(sourcePackId, targetPackId, brushId, targetIndex, movedBrush);
+    refreshAllScrollGeometry();
+    emit visiblePreviewStateChanged();
+}
+
+void BrushesPanelContent::onFavoriteBrushOrderChanged(const QStringList& brushIds)
+{
+    for (FilterPage& page : m_filterPages) {
+        if (auto* favorites = page.sections.value(QLatin1String(kFavoritesSectionId), nullptr)) {
+            favorites->reorderBrushes(brushIds, true);
+        }
+    }
+    refreshAllScrollGeometry();
+}
+
+bool BrushesPanelContent::updateCachedBrushMove(const QString& sourcePackId,
+    const QString& targetPackId, const QString& brushId, int targetIndex,
+    BrushListBrushData* movedBrush)
+{
+    BrushListPackData* sourcePack = nullptr;
+    BrushListPackData* targetPack = nullptr;
+    for (BrushListPackData& pack : m_packs) {
+        if (pack.id == sourcePackId) {
+            sourcePack = &pack;
+        }
+        if (pack.id == targetPackId) {
+            targetPack = &pack;
+        }
+    }
+    if (!sourcePack || !targetPack) {
+        return false;
+    }
+
+    int sourceIndex = -1;
+    for (int i = 0; i < sourcePack->brushes.size(); ++i) {
+        if (sourcePack->brushes[i].id == brushId) {
+            sourceIndex = i;
+            break;
+        }
+    }
+    if (sourceIndex < 0) {
+        return false;
+    }
+
+    BrushListBrushData brush = sourcePack->brushes.takeAt(sourceIndex);
+    brush.packId = targetPackId;
+    const int resolvedIndex = qBound(0, targetIndex, static_cast<int>(targetPack->brushes.size()));
+    targetPack->brushes.insert(resolvedIndex, brush);
+    if (movedBrush) {
+        *movedBrush = brush;
+    }
+    return true;
+}
+
+void BrushesPanelContent::applyBrushMoveToBuiltSections(const QString& sourcePackId,
+    const QString& targetPackId, const QString& brushId, int targetIndex,
+    const BrushListBrushData& movedBrush)
+{
+    if (sourcePackId == targetPackId) {
+        for (FilterPage& page : m_filterPages) {
+            if (auto* section = page.sections.value(sourcePackId, nullptr)) {
+                section->reorderBrush(brushId, targetIndex, true);
+            }
+            if (auto* favorites
+                = page.sections.value(QLatin1String(kFavoritesSectionId), nullptr)) {
+                favorites->updateBrushPackId(brushId, targetPackId);
+            }
+        }
+        return;
+    }
+
+    QList<BrushPackListSection*> sourceOnlySections;
+    QList<BrushPackListSection*> targetOnlySections;
+    const auto transferRow = [&brushId, &movedBrush, targetIndex](
+                                 BrushPackListSection* source, BrushPackListSection* target) {
+        QWidget* row = source->takeBrushRow(brushId, nullptr, true);
+        if (!target->insertBrushRow(movedBrush, targetIndex, row, true) && row) {
+            row->deleteLater();
+        }
+    };
+    for (FilterPage& page : m_filterPages) {
+        BrushPackListSection* source = page.sections.value(sourcePackId, nullptr);
+        BrushPackListSection* target = page.sections.value(targetPackId, nullptr);
+        if (source && target) {
+            transferRow(source, target);
+        } else {
+            if (source) {
+                sourceOnlySections.append(source);
+            }
+            if (target) {
+                targetOnlySections.append(target);
+            }
+        }
+
+        if (auto* favorites = page.sections.value(QLatin1String(kFavoritesSectionId), nullptr)) {
+            favorites->updateBrushPackId(brushId, targetPackId);
+        }
+    }
+
+    const int transferableCount = qMin(sourceOnlySections.size(), targetOnlySections.size());
+    for (int i = 0; i < transferableCount; ++i) {
+        transferRow(sourceOnlySections[i], targetOnlySections[i]);
+    }
+    for (int i = transferableCount; i < sourceOnlySections.size(); ++i) {
+        QWidget* row = sourceOnlySections[i]->takeBrushRow(brushId, nullptr, true);
+        if (row) {
+            row->deleteLater();
+        }
+    }
+    for (int i = transferableCount; i < targetOnlySections.size(); ++i) {
+        targetOnlySections[i]->insertBrushRow(movedBrush, targetIndex, nullptr, true);
+    }
+}
+
 void BrushesPanelContent::queueReload()
 {
     if (m_reloadQueued) {
@@ -506,6 +660,9 @@ void BrushesPanelContent::onBrushDeleteRequested(const QString& packId, const QS
 
 void BrushesPanelContent::onThemeChanged()
 {
+    if (m_brushDragActive) {
+        cleanupBrushDrag();
+    }
     const QMargins outerMargins = ruwa::ui::docking::DockPanel::contentPadding();
     const int spacing = ruwa::ui::core::ThemeManager::instance().scaled(8);
     for (FilterPage& page : m_filterPages) {
@@ -536,6 +693,37 @@ void BrushesPanelContent::syncSelectionFromCanvas()
 
 bool BrushesPanelContent::eventFilter(QObject* watched, QEvent* event)
 {
+    if (m_brushDragActive && m_dragGhost) {
+        switch (event->type()) {
+        case QEvent::MouseMove: {
+            auto* mouseEvent = static_cast<QMouseEvent*>(event);
+            updateBrushDrag(mouseEvent->globalPosition().toPoint());
+            return true;
+        }
+        case QEvent::MouseButtonRelease: {
+            auto* mouseEvent = static_cast<QMouseEvent*>(event);
+            if (mouseEvent->button() == Qt::LeftButton) {
+                finishBrushDrag(true, mouseEvent->globalPosition().toPoint());
+                return true;
+            }
+            break;
+        }
+        case QEvent::KeyPress: {
+            auto* keyEvent = static_cast<QKeyEvent*>(event);
+            if (keyEvent->key() == Qt::Key_Escape) {
+                finishBrushDrag(false, QCursor::pos());
+                return true;
+            }
+            break;
+        }
+        case QEvent::ApplicationDeactivate:
+            finishBrushDrag(false, QCursor::pos());
+            break;
+        default:
+            break;
+        }
+    }
+
     const QString pageKey = m_scrollViewportPageKeys.value(watched);
     if (!pageKey.isEmpty() && m_pendingScrollRestoreKeys.contains(pageKey)) {
         switch (event->type()) {
@@ -556,6 +744,256 @@ bool BrushesPanelContent::eventFilter(QObject* watched, QEvent* event)
     }
 
     return QWidget::eventFilter(watched, event);
+}
+
+void BrushesPanelContent::startBrushDrag(
+    const QString& packId, const QString& brushId, QWidget* row, const QPoint& globalPos)
+{
+    auto* sourceSection = qobject_cast<BrushPackListSection*>(sender());
+    if (!row || !sourceSection || m_brushDragActive || m_brushDragSettling
+        || BrushManager::instance().presetIdForBrush(brushId) != packId) {
+        return;
+    }
+
+    m_dragSnapshot = row->grab();
+    if (m_dragSnapshot.isNull()) {
+        return;
+    }
+
+    m_brushDragActive = true;
+    m_draggedBrushId = brushId;
+    m_dragSourcePackId = packId;
+    m_draggedBrushRow = row;
+    m_dragOffset = row->mapToGlobal(QPoint(0, 0)) - globalPos;
+    if (auto* button = qobject_cast<QAbstractButton*>(row)) {
+        button->setDown(false);
+    }
+
+    auto* opacityEffect = new QGraphicsOpacityEffect(row);
+    opacityEffect->setOpacity(0.25);
+    row->setGraphicsEffect(opacityEffect);
+
+    QWidget* topLevel = window();
+    m_dragGhost = new widgets::DragGhostWidget(topLevel);
+    m_dragGhost->setSnapshot(m_dragSnapshot);
+    m_dragSourceGhostPosition
+        = topLevel->mapFromGlobal(row->mapToGlobal(QPoint(0, 0))) - m_dragGhost->contentTopLeft();
+    m_dragGhost->startFollowing(m_dragSourceGhostPosition);
+    m_dragGhost->captureBackdrop(topLevel);
+    m_dragGhost->show();
+    m_dragGhost->raise();
+    m_dragGhost->setFollowTarget(brushGhostTargetPosition(globalPos));
+
+    qApp->installEventFilter(this);
+    if (!m_dragCursorOverride) {
+        QApplication::setOverrideCursor(Qt::ClosedHandCursor);
+        m_dragCursorOverride = true;
+    }
+    updateBrushDrag(globalPos);
+}
+
+void BrushesPanelContent::updateBrushDrag(const QPoint& globalPos)
+{
+    if (!m_brushDragActive || !m_dragGhost) {
+        return;
+    }
+
+    m_dragGhost->setFollowTarget(brushGhostTargetPosition(globalPos));
+    BrushPackListSection* targetSection = brushDropSectionAt(globalPos);
+    if (targetSection != m_dragTargetSection) {
+        clearBrushDropTarget(true);
+        if (targetSection) {
+            m_dragTargetSection = targetSection;
+            m_dragTargetPackId = targetSection->packData().id;
+            m_dragTargetWasExpanded = targetSection->isExpanded();
+            if (!m_dragTargetWasExpanded) {
+                targetSection->setExpanded(true, true);
+            }
+        }
+    }
+
+    if (!m_dragTargetSection) {
+        return;
+    }
+
+    const int insertIndex
+        = m_dragTargetSection->brushInsertIndexAtGlobal(globalPos, m_draggedBrushId);
+    if (insertIndex != m_dragTargetIndex) {
+        m_dragTargetIndex = insertIndex;
+        m_dragTargetSection->showBrushDropPlaceholder(
+            m_dragSnapshot, insertIndex, m_draggedBrushId);
+    }
+}
+
+void BrushesPanelContent::finishBrushDrag(bool accepted, const QPoint& globalPos)
+{
+    if (!m_brushDragActive) {
+        return;
+    }
+
+    updateBrushDrag(globalPos);
+    qApp->removeEventFilter(this);
+    if (m_dragCursorOverride) {
+        QApplication::restoreOverrideCursor();
+        m_dragCursorOverride = false;
+    }
+
+    QRect targetRect;
+    QString targetPackId;
+    int targetIndex = -1;
+    if (accepted && m_dragTargetSection && !m_dragTargetPackId.isEmpty()
+        && m_dragTargetIndex >= 0) {
+        targetRect = m_dragTargetSection->brushDropTargetGlobalRect();
+        targetPackId = m_dragTargetPackId;
+        targetIndex = m_dragTargetIndex;
+    } else {
+        accepted = false;
+    }
+
+    if (accepted) {
+        if (targetPackId == QLatin1String(kFavoritesSectionId) && m_dragTargetSection) {
+            QStringList favoriteOrder;
+            favoriteOrder.reserve(m_dragTargetSection->packData().brushes.size());
+            for (const BrushListBrushData& brush : m_dragTargetSection->packData().brushes) {
+                if (brush.id != m_draggedBrushId) {
+                    favoriteOrder.append(brush.id);
+                }
+            }
+            favoriteOrder.insert(
+                qBound(0, targetIndex, static_cast<int>(favoriteOrder.size())), m_draggedBrushId);
+            accepted = ruwa::core::SettingsManager::instance().setFavoriteBrushOrder(favoriteOrder);
+        } else {
+            accepted
+                = BrushManager::instance().moveBrush(m_draggedBrushId, targetPackId, targetIndex);
+        }
+    }
+
+    if (accepted) {
+        if (targetPackId != QLatin1String(kFavoritesSectionId) && !m_dragTargetWasExpanded) {
+            setPackCollapsed(targetPackId, false);
+            notifyStateChanged();
+        }
+        if (m_dragTargetSection) {
+            m_dragTargetSection->commitBrushDropPreview();
+        }
+        clearBrushDropTarget(false);
+    } else {
+        clearBrushDropTarget(true);
+    }
+
+    m_brushDragActive = false;
+    m_brushDragSettling = true;
+
+    QPoint fallbackTargetPosition = m_dragSourceGhostPosition;
+    if (accepted && targetRect.isValid() && m_dragGhost) {
+        fallbackTargetPosition
+            = window()->mapFromGlobal(targetRect.topLeft()) - m_dragGhost->contentTopLeft();
+    }
+
+    QPointer<BrushesPanelContent> guard(this);
+    auto finish = [guard]() {
+        if (!guard) {
+            return;
+        }
+        guard->cleanupBrushDrag();
+    };
+
+    if (!m_dragGhost) {
+        finish();
+        return;
+    }
+
+    // The source section and every section below it keep changing geometry
+    // while their flow/height animations settle. Resolve the live row position
+    // on every ghost frame so both an accepted drop and a cancelled return land
+    // on the widget rather than on a stale pre-layout rectangle.
+    const QPointer<QWidget> landingRow = m_draggedBrushRow;
+    const QPointer<QWidget> landingWindow = window();
+    const QPointer<widgets::DragGhostWidget> landingGhost = m_dragGhost;
+    auto trackedTarget = [landingRow, landingWindow, landingGhost, fallbackTargetPosition]() {
+        if (!landingRow || !landingWindow || !landingGhost) {
+            return fallbackTargetPosition;
+        }
+        return landingWindow->mapFromGlobal(landingRow->mapToGlobal(QPoint(0, 0)))
+            - landingGhost->contentTopLeft();
+    };
+    m_dragGhost->animateToTracked(std::move(trackedTarget),
+        accepted ? widgets::DragGhostWidget::Transition::Settle
+                 : widgets::DragGhostWidget::Transition::Return,
+        std::move(finish));
+}
+
+void BrushesPanelContent::clearBrushDropTarget(bool restoreExpansion)
+{
+    if (m_dragTargetSection) {
+        m_dragTargetSection->clearBrushDropPlaceholder();
+        if (restoreExpansion && !m_dragTargetWasExpanded) {
+            m_dragTargetSection->setExpanded(false, true);
+        }
+    }
+    m_dragTargetSection = nullptr;
+    m_dragTargetPackId.clear();
+    m_dragTargetIndex = -1;
+    m_dragTargetWasExpanded = true;
+}
+
+void BrushesPanelContent::cleanupBrushDrag()
+{
+    if (qApp && m_brushDragActive) {
+        qApp->removeEventFilter(this);
+    }
+    if (m_dragCursorOverride) {
+        QApplication::restoreOverrideCursor();
+        m_dragCursorOverride = false;
+    }
+
+    clearBrushDropTarget(true);
+    if (m_draggedBrushRow) {
+        m_draggedBrushRow->setGraphicsEffect(nullptr);
+        if (auto* button = qobject_cast<QAbstractButton*>(m_draggedBrushRow.data())) {
+            button->setDown(false);
+        }
+    }
+    if (m_dragGhost) {
+        m_dragGhost->deleteLater();
+        m_dragGhost = nullptr;
+    }
+
+    m_dragSnapshot = {};
+    m_draggedBrushRow = nullptr;
+    m_draggedBrushId.clear();
+    m_dragSourcePackId.clear();
+    m_dragOffset = {};
+    m_dragSourceGhostPosition = {};
+    m_brushDragActive = false;
+    m_brushDragSettling = false;
+}
+
+QPoint BrushesPanelContent::brushGhostTargetPosition(const QPoint& globalPos) const
+{
+    if (!m_dragGhost) {
+        return {};
+    }
+    return window()->mapFromGlobal(globalPos + m_dragOffset) - m_dragGhost->contentTopLeft();
+}
+
+BrushPackListSection* BrushesPanelContent::brushDropSectionAt(const QPoint& globalPos) const
+{
+    const auto pageIt = m_filterPages.constFind(currentPageKey());
+    if (pageIt == m_filterPages.cend()) {
+        return nullptr;
+    }
+
+    for (auto it = pageIt->sections.cbegin(); it != pageIt->sections.cend(); ++it) {
+        BrushPackListSection* section = it.value();
+        if (!section || !section->isVisible()) {
+            continue;
+        }
+        if (section->rect().contains(section->mapFromGlobal(globalPos))) {
+            return section;
+        }
+    }
+    return nullptr;
 }
 
 QVector<BrushListPackData> BrushesPanelContent::collectPacks() const
@@ -789,12 +1227,31 @@ void BrushesPanelContent::rebuildPage(const QString& pageKey)
         BrushListPackData favorites;
         favorites.id = QLatin1String(kFavoritesSectionId);
         favorites.name = tr("Favorites");
-        const QSet<QString> favoriteIds
-            = ruwa::core::SettingsManager::instance().favoriteBrushIds();
+        auto& settings = ruwa::core::SettingsManager::instance();
+        const QSet<QString> favoriteIds = settings.favoriteBrushIds();
+        QHash<QString, BrushListBrushData> favoritesById;
         for (const BrushListPackData& pack : m_packs) {
             for (const BrushListBrushData& brush : pack.brushes) {
                 if (favoriteIds.contains(brush.id)) {
+                    favoritesById.insert(brush.id, brush);
+                }
+            }
+        }
+        QSet<QString> appendedFavoriteIds;
+        for (const QString& brushId : settings.favoriteBrushOrder()) {
+            const auto brushIt = favoritesById.constFind(brushId);
+            if (brushIt != favoritesById.cend() && !appendedFavoriteIds.contains(brushId)) {
+                favorites.brushes.append(brushIt.value());
+                appendedFavoriteIds.insert(brushId);
+            }
+        }
+        // Older settings may only contain membership. Keep their established
+        // pack order until the first explicit favorites reorder persists it.
+        for (const BrushListPackData& pack : m_packs) {
+            for (const BrushListBrushData& brush : pack.brushes) {
+                if (favoriteIds.contains(brush.id) && !appendedFavoriteIds.contains(brush.id)) {
                     favorites.brushes.append(brush);
+                    appendedFavoriteIds.insert(brush.id);
                 }
             }
         }
@@ -830,6 +1287,7 @@ void BrushesPanelContent::addPackSection(
 {
     auto* section = new BrushPackListSection(page.scrollContent);
     section->setPackData(pack);
+    section->setBrushDragEnabled(true);
     section->setExpanded(forceExpanded || !s_collapsedPackIds.contains(pack.id), false);
     section->setSelectedBrushId(m_selectedBrushId);
 
@@ -840,6 +1298,8 @@ void BrushesPanelContent::addPackSection(
         &BrushesPanelContent::onBrushEditorRequested);
     connect(section, &BrushPackListSection::brushDeleteRequested, this,
         &BrushesPanelContent::onBrushDeleteRequested);
+    connect(section, &BrushPackListSection::brushDragRequested, this,
+        &BrushesPanelContent::startBrushDrag);
     connect(section, &BrushPackListSection::contentGeometryChanged, this,
         [this, pageKey]() { refreshScrollGeometry(pageKey); });
     connect(section, &BrushPackListSection::visiblePreviewStateChanged, this,

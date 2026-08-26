@@ -235,6 +235,18 @@ void DragGhostWidget::captureBackdrop(QWidget* backdropWidget)
 void DragGhostWidget::animateTo(
     const QPoint& targetPos, Transition transition, std::function<void()> finished)
 {
+    animateToImpl([targetPos]() { return targetPos; }, transition, std::move(finished));
+}
+
+void DragGhostWidget::animateToTracked(
+    std::function<QPoint()> targetPosition, Transition transition, std::function<void()> finished)
+{
+    animateToImpl(std::move(targetPosition), transition, std::move(finished));
+}
+
+void DragGhostWidget::animateToImpl(
+    std::function<QPoint()> targetPosition, Transition transition, std::function<void()> finished)
+{
     stopFollowing();
     if (m_backdropFadeAnimation) {
         m_backdropFadeAnimation->stop();
@@ -249,11 +261,20 @@ void DragGhostWidget::animateTo(
     auto* group = new QParallelAnimationGroup(this);
     m_transitionAnimation = group;
 
-    auto* positionAnimation = new QPropertyAnimation(this, "pos", group);
+    const QPoint startPosition = pos();
+    auto* positionAnimation = new QVariantAnimation(group);
     positionAnimation->setDuration(anim::duration(300));
     positionAnimation->setEasingCurve(QEasingCurve::InOutCubic);
-    positionAnimation->setStartValue(pos());
-    positionAnimation->setEndValue(targetPos);
+    positionAnimation->setStartValue(0.0);
+    positionAnimation->setEndValue(1.0);
+    connect(positionAnimation, &QVariantAnimation::valueChanged, this,
+        [this, startPosition, targetPosition](const QVariant& value) {
+            const qreal progress = value.toReal();
+            const QPoint target = targetPosition ? targetPosition() : startPosition;
+            const QPointF position
+                = QPointF(startPosition) + (QPointF(target) - QPointF(startPosition)) * progress;
+            move(qRound(position.x()), qRound(position.y()));
+        });
     group->addAnimation(positionAnimation);
 
     auto* opacityAnimation = new QPropertyAnimation(this, "ghostOpacity", group);
@@ -278,8 +299,11 @@ void DragGhostWidget::animateTo(
     group->addAnimation(rotationAnimation);
 
     connect(group, &QParallelAnimationGroup::finished, this,
-        [this, finished = std::move(finished)]() mutable {
+        [this, targetPosition, finished = std::move(finished)]() mutable {
             m_transitionAnimation = nullptr;
+            if (targetPosition) {
+                move(targetPosition());
+            }
             if (finished) {
                 finished();
             }

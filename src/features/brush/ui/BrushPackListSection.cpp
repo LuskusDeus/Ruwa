@@ -19,15 +19,18 @@
 #include "shell/context-menu/IContextMenuProvider.h"
 #include "shared/style/AnimationPolicy.h"
 
+#include <QApplication>
 #include <QLatin1String>
 #include <QColor>
 #include <QCoreApplication>
 #include <QFontMetrics>
 #include <QLabel>
 #include <QLinearGradient>
+#include <QMouseEvent>
 #include <QPainter>
 #include <QPainterPath>
 #include <QResizeEvent>
+#include <QSet>
 #include <QTimer>
 #include <QVariantList>
 #include <QVBoxLayout>
@@ -109,6 +112,8 @@ public:
     }
 
     QString brushId() const { return m_brush.id; }
+
+    void setOwningPackId(const QString& packId) { m_brush.packId = packId; }
 
     void setPreviewStateChangedCallback(std::function<void()> callback)
     {
@@ -618,6 +623,28 @@ private:
     std::function<void()> m_previewStateChanged;
 };
 
+class BrushDropPlaceholder final : public QWidget {
+public:
+    explicit BrushDropPlaceholder(const QPixmap& snapshot, QWidget* parent = nullptr)
+        : QWidget(parent)
+        , m_snapshot(snapshot)
+    {
+        setAttribute(Qt::WA_TransparentForMouseEvents, true);
+        setFixedSize(snapshot.size() / snapshot.devicePixelRatio());
+    }
+
+protected:
+    void paintEvent(QPaintEvent*) override
+    {
+        QPainter painter(this);
+        painter.setOpacity(0.25);
+        painter.drawPixmap(rect(), m_snapshot);
+    }
+
+private:
+    QPixmap m_snapshot;
+};
+
 } // namespace
 
 BrushPackListSection::BrushPackListSection(QWidget* parent)
@@ -725,6 +752,307 @@ void BrushPackListSection::setSelectedBrushId(const QString& brushId)
 {
     m_selectedBrushId = brushId;
     updateSelectionState();
+}
+
+int BrushPackListSection::brushInsertIndexAtGlobal(
+    const QPoint& globalPos, const QString& draggedBrushId) const
+{
+    const bool excludesDraggedBrush
+        = !draggedBrushId.isEmpty() && m_brushRows.contains(draggedBrushId);
+    const int stationaryCount
+        = static_cast<int>(m_pack.brushes.size()) - (excludesDraggedBrush ? 1 : 0);
+    if (!m_contentContainer || !m_expanded || stationaryCount <= 0) {
+        return qMax(0, stationaryCount);
+    }
+    if (m_headerButton
+        && m_headerButton->rect().contains(m_headerButton->mapFromGlobal(globalPos))) {
+        return stationaryCount;
+    }
+
+    struct Placement {
+        int index = 0;
+        QRect rect;
+    };
+
+    QList<Placement> placements;
+    placements.reserve(m_pack.brushes.size());
+    int stationaryIndex = 0;
+    for (const BrushListBrushData& brush : m_pack.brushes) {
+        if (brush.id == draggedBrushId) {
+            continue;
+        }
+        QWidget* row = m_brushRows.value(brush.id, nullptr);
+        if (!row) {
+            continue;
+        }
+        const QRect rect = m_contentContainer->itemTargetGeometry(row);
+        if (rect.isValid()) {
+            placements.append({ stationaryIndex, rect });
+        }
+        ++stationaryIndex;
+    }
+    if (placements.isEmpty()) {
+        return 0;
+    }
+
+    const QPoint contentPos = m_contentContainer->mapFromGlobal(globalPos);
+    if (contentPos.y() < placements.front().rect.top()) {
+        return 0;
+    }
+    if (contentPos.y() > placements.back().rect.bottom()) {
+        return stationaryCount;
+    }
+
+    int closestRowCenter = placements.front().rect.center().y();
+    int closestDistance = qAbs(contentPos.y() - closestRowCenter);
+    for (const Placement& placement : placements) {
+        const int center = placement.rect.center().y();
+        const int distance = qAbs(contentPos.y() - center);
+        if (distance < closestDistance) {
+            closestDistance = distance;
+            closestRowCenter = center;
+        }
+    }
+
+    int indexAfterRow = 0;
+    for (const Placement& placement : placements) {
+        if (placement.rect.center().y() != closestRowCenter) {
+            continue;
+        }
+        if (contentPos.x() < placement.rect.center().x()) {
+            return placement.index;
+        }
+        indexAfterRow = placement.index + 1;
+    }
+    return indexAfterRow;
+}
+
+void BrushPackListSection::showBrushDropPlaceholder(
+    const QPixmap& snapshot, int insertIndex, const QString& draggedBrushId)
+{
+    const bool reordersExistingRow
+        = !draggedBrushId.isEmpty() && m_brushRows.contains(draggedBrushId);
+    const int stationaryCount
+        = static_cast<int>(m_pack.brushes.size()) - (reordersExistingRow ? 1 : 0);
+    const int boundedIndex = qBound(0, insertIndex, stationaryCount);
+    const QString previewDraggedBrushId = reordersExistingRow ? draggedBrushId : QString();
+    if (!reordersExistingRow && !m_dropPlaceholder) {
+        m_dropPlaceholder = new BrushDropPlaceholder(snapshot, m_contentContainer);
+    }
+    if (m_dropInsertIndex == boundedIndex && m_dropDraggedBrushId == previewDraggedBrushId
+        && (reordersExistingRow || (m_dropPlaceholder && m_dropPlaceholder->isVisible()))) {
+        return;
+    }
+
+    m_dropInsertIndex = boundedIndex;
+    m_dropDraggedBrushId = previewDraggedBrushId;
+    applyBrushFlowItems(true);
+}
+
+void BrushPackListSection::clearBrushDropPlaceholder()
+{
+    if (!m_dropPlaceholder && m_dropDraggedBrushId.isEmpty()) {
+        return;
+    }
+
+    QWidget* placeholder = m_dropPlaceholder;
+    m_dropPlaceholder = nullptr;
+    m_dropDraggedBrushId.clear();
+    m_dropInsertIndex = -1;
+    if (placeholder) {
+        placeholder->hide();
+    }
+    applyBrushFlowItems(true);
+    if (placeholder) {
+        placeholder->deleteLater();
+    }
+}
+
+void BrushPackListSection::commitBrushDropPreview()
+{
+    if (m_dropDraggedBrushId.isEmpty()) {
+        clearBrushDropPlaceholder();
+        return;
+    }
+    reorderBrush(m_dropDraggedBrushId, m_dropInsertIndex, true);
+}
+
+QRect BrushPackListSection::brushDropTargetGlobalRect() const
+{
+    if (m_expanded && m_dropPlaceholder && m_contentContainer) {
+        const QRect target = m_contentContainer->itemTargetGeometry(m_dropPlaceholder);
+        if (target.isValid()) {
+            return QRect(m_contentContainer->mapToGlobal(target.topLeft()), target.size());
+        }
+    }
+    if (m_expanded && !m_dropDraggedBrushId.isEmpty() && m_contentContainer) {
+        QWidget* row = m_brushRows.value(m_dropDraggedBrushId, nullptr);
+        const QRect target = m_contentContainer->itemTargetGeometry(row);
+        if (row && target.isValid()) {
+            return QRect(m_contentContainer->mapToGlobal(target.topLeft()), target.size());
+        }
+    }
+
+    return m_headerButton ? QRect(m_headerButton->mapToGlobal(QPoint(0, 0)), m_headerButton->size())
+                          : QRect();
+}
+
+bool BrushPackListSection::reorderBrush(const QString& brushId, int targetIndex, bool animate)
+{
+    int sourceIndex = -1;
+    for (int i = 0; i < m_pack.brushes.size(); ++i) {
+        if (m_pack.brushes[i].id == brushId) {
+            sourceIndex = i;
+            break;
+        }
+    }
+    if (sourceIndex < 0) {
+        return false;
+    }
+
+    const BrushListBrushData brush = m_pack.brushes.takeAt(sourceIndex);
+    const int resolvedIndex = qBound(0, targetIndex, static_cast<int>(m_pack.brushes.size()));
+    m_pack.brushes.insert(resolvedIndex, brush);
+    if (m_dropDraggedBrushId == brushId) {
+        m_dropDraggedBrushId.clear();
+        m_dropInsertIndex = -1;
+    }
+    applyBrushFlowItems(animate);
+    return true;
+}
+
+void BrushPackListSection::reorderBrushes(const QStringList& brushIds, bool animate)
+{
+    if (m_pack.brushes.size() < 2) {
+        clearBrushDropPlaceholder();
+        return;
+    }
+
+    QHash<QString, BrushListBrushData> brushesById;
+    brushesById.reserve(m_pack.brushes.size());
+    for (const BrushListBrushData& brush : std::as_const(m_pack.brushes)) {
+        brushesById.insert(brush.id, brush);
+    }
+
+    QVector<BrushListBrushData> reordered;
+    reordered.reserve(m_pack.brushes.size());
+    QSet<QString> appendedIds;
+    for (const QString& brushId : brushIds) {
+        const auto brushIt = brushesById.constFind(brushId);
+        if (brushIt != brushesById.cend() && !appendedIds.contains(brushId)) {
+            reordered.append(brushIt.value());
+            appendedIds.insert(brushId);
+        }
+    }
+    for (const BrushListBrushData& brush : std::as_const(m_pack.brushes)) {
+        if (!appendedIds.contains(brush.id)) {
+            reordered.append(brush);
+        }
+    }
+
+    m_pack.brushes = std::move(reordered);
+    m_dropDraggedBrushId.clear();
+    m_dropInsertIndex = -1;
+    applyBrushFlowItems(animate);
+}
+
+QWidget* BrushPackListSection::takeBrushRow(
+    const QString& brushId, BrushListBrushData* brushData, bool animate)
+{
+    int sourceIndex = -1;
+    for (int i = 0; i < m_pack.brushes.size(); ++i) {
+        if (m_pack.brushes[i].id == brushId) {
+            sourceIndex = i;
+            break;
+        }
+    }
+    if (sourceIndex < 0) {
+        return nullptr;
+    }
+
+    const BrushListBrushData removedBrush = m_pack.brushes.takeAt(sourceIndex);
+    if (brushData) {
+        *brushData = removedBrush;
+    }
+
+    QWidget* row = m_brushRows.take(brushId);
+    if (row) {
+        row->removeEventFilter(this);
+        QObject::disconnect(row, nullptr, this, nullptr);
+        auto* rowButton = static_cast<PackBrushRowButton*>(row);
+        rowButton->setOpenEditorCallback({});
+        rowButton->setDeleteBrushCallback({});
+        rowButton->setPreviewStateChangedCallback({});
+        row->hide();
+    }
+    if (m_dragCandidateRow == row) {
+        m_dragCandidateRow = nullptr;
+        m_dragPressPosition = {};
+    }
+    if (m_dropDraggedBrushId == brushId) {
+        m_dropDraggedBrushId.clear();
+        m_dropInsertIndex = -1;
+    }
+    if (m_pack.brushes.isEmpty()) {
+        ensureEmptyLabel();
+    }
+    applyBrushFlowItems(animate);
+    updateSelectionState();
+    return row;
+}
+
+bool BrushPackListSection::insertBrushRow(
+    const BrushListBrushData& brushData, int targetIndex, QWidget* existingRow, bool animate)
+{
+    if (brushData.id.isEmpty() || m_brushRows.contains(brushData.id)) {
+        return false;
+    }
+
+    QWidget* placeholder = m_dropPlaceholder;
+    QRect seedGeometry;
+    if (placeholder) {
+        seedGeometry = m_contentContainer->itemTargetGeometry(placeholder);
+        placeholder->hide();
+    }
+    m_dropPlaceholder = nullptr;
+    m_dropDraggedBrushId.clear();
+    m_dropInsertIndex = -1;
+    removeEmptyLabel();
+
+    const int resolvedIndex = qBound(0, targetIndex, static_cast<int>(m_pack.brushes.size()));
+    m_pack.brushes.insert(resolvedIndex, brushData);
+
+    QWidget* row = existingRow ? existingRow : createBrushRow(brushData);
+    if (existingRow) {
+        configureBrushRow(row, brushData);
+    }
+    row->setParent(m_contentContainer);
+    if (seedGeometry.isValid()) {
+        row->setGeometry(seedGeometry);
+    }
+    m_brushRows.insert(brushData.id, row);
+    applyBrushFlowItems(animate);
+    if (placeholder) {
+        placeholder->deleteLater();
+    }
+    updateSelectionState();
+    return true;
+}
+
+bool BrushPackListSection::updateBrushPackId(const QString& brushId, const QString& packId)
+{
+    for (BrushListBrushData& brush : m_pack.brushes) {
+        if (brush.id != brushId) {
+            continue;
+        }
+        brush.packId = packId;
+        if (QWidget* row = m_brushRows.value(brushId, nullptr)) {
+            static_cast<PackBrushRowButton*>(row)->setOwningPackId(packId);
+            configureBrushRow(row, brush);
+        }
+        return true;
+    }
+    return false;
 }
 
 bool BrushPackListSection::updateBrushSettings(
@@ -844,16 +1172,67 @@ bool BrushPackListSection::visiblePreviewsReady(QWidget* viewport) const
     return true;
 }
 
+bool BrushPackListSection::eventFilter(QObject* watched, QEvent* event)
+{
+    QWidget* row = qobject_cast<QWidget*>(watched);
+    const QString brushId = row ? m_brushRows.key(row) : QString();
+    if (!m_brushDragEnabled || !row || brushId.isEmpty()) {
+        return QWidget::eventFilter(watched, event);
+    }
+
+    switch (event->type()) {
+    case QEvent::MouseButtonPress: {
+        auto* mouseEvent = static_cast<QMouseEvent*>(event);
+        if (mouseEvent->button() == Qt::LeftButton) {
+            m_dragCandidateRow = row;
+            m_dragPressPosition = mouseEvent->position().toPoint();
+        }
+        break;
+    }
+    case QEvent::MouseMove: {
+        auto* mouseEvent = static_cast<QMouseEvent*>(event);
+        if (m_dragCandidateRow == row && (mouseEvent->buttons() & Qt::LeftButton)
+            && (mouseEvent->position().toPoint() - m_dragPressPosition).manhattanLength()
+                >= QApplication::startDragDistance()) {
+            auto* rowButton = static_cast<PackBrushRowButton*>(row);
+            QString sourcePackId = m_pack.id;
+            for (const BrushListBrushData& brush : std::as_const(m_pack.brushes)) {
+                if (brush.id == brushId) {
+                    sourcePackId = brush.packId.isEmpty() ? m_pack.id : brush.packId;
+                    break;
+                }
+            }
+
+            m_dragCandidateRow = nullptr;
+            rowButton->setDown(false);
+            emit brushDragRequested(
+                sourcePackId, brushId, row, mouseEvent->globalPosition().toPoint());
+            return true;
+        }
+        break;
+    }
+    case QEvent::MouseButtonRelease:
+    case QEvent::Hide:
+        m_dragCandidateRow = nullptr;
+        m_dragPressPosition = {};
+        break;
+    default:
+        break;
+    }
+
+    return QWidget::eventFilter(watched, event);
+}
+
 void BrushPackListSection::rebuildBrushRows()
 {
+    clearBrushDropPlaceholder();
     m_brushRows.clear();
     m_contentContainer->clearItems(
         ruwa::ui::widgets::AnimatedFlowWidget::ItemDisposal::DeleteLater);
 
     if (m_pack.brushes.isEmpty()) {
-        m_emptyLabel = new QLabel(tr("Pack is empty"), m_contentContainer);
-        m_emptyLabel->setContentsMargins(12, 6, 12, 6);
-        m_emptyLabel->setStyleSheet(QStringLiteral("background: transparent;"));
+        m_emptyLabel = nullptr;
+        ensureEmptyLabel();
         m_contentContainer->setItems({ m_emptyLabel });
         return;
     }
@@ -862,23 +1241,94 @@ void BrushPackListSection::rebuildBrushRows()
     QList<QWidget*> rows;
     rows.reserve(m_pack.brushes.size());
     for (const BrushListBrushData& brush : m_pack.brushes) {
-        auto* rowButton = new PackBrushRowButton(brush, m_contentContainer);
-        const QString sourcePackId = brush.packId.isEmpty() ? m_pack.id : brush.packId;
-        rowButton->setOpenEditorCallback([this, sourcePackId](const QString& brushId) {
-            emit brushEditorRequested(sourcePackId, brushId);
-        });
-        rowButton->setDeleteBrushCallback([this, sourcePackId](const QString& brushId) {
-            emit brushDeleteRequested(sourcePackId, brushId);
-        });
-        rowButton->setPreviewStateChangedCallback([this]() { emit visiblePreviewStateChanged(); });
-        connect(
-            rowButton, &QAbstractButton::clicked, this, [this, sourcePackId, brushId = brush.id]() {
-                emit brushActivated(sourcePackId, brushId);
-            });
-        rows.append(rowButton);
-        m_brushRows.insert(brush.id, rowButton);
+        QWidget* row = createBrushRow(brush);
+        rows.append(row);
+        m_brushRows.insert(brush.id, row);
     }
     m_contentContainer->setItems(rows);
+}
+
+QWidget* BrushPackListSection::createBrushRow(const BrushListBrushData& brush)
+{
+    auto* row = new PackBrushRowButton(brush, m_contentContainer);
+    configureBrushRow(row, brush);
+    return row;
+}
+
+void BrushPackListSection::configureBrushRow(QWidget* row, const BrushListBrushData& brush)
+{
+    if (!row) {
+        return;
+    }
+
+    auto* rowButton = static_cast<PackBrushRowButton*>(row);
+    row->removeEventFilter(this);
+    QObject::disconnect(rowButton, nullptr, this, nullptr);
+    rowButton->setOwningPackId(brush.packId);
+    rowButton->installEventFilter(this);
+
+    const QString sourcePackId = brush.packId.isEmpty() ? m_pack.id : brush.packId;
+    rowButton->setOpenEditorCallback([this, sourcePackId](const QString& brushId) {
+        emit brushEditorRequested(sourcePackId, brushId);
+    });
+    rowButton->setDeleteBrushCallback([this, sourcePackId](const QString& brushId) {
+        emit brushDeleteRequested(sourcePackId, brushId);
+    });
+    rowButton->setPreviewStateChangedCallback([this]() { emit visiblePreviewStateChanged(); });
+    connect(rowButton, &QAbstractButton::clicked, this,
+        [this, sourcePackId, brushId = brush.id]() { emit brushActivated(sourcePackId, brushId); });
+}
+
+void BrushPackListSection::ensureEmptyLabel()
+{
+    if (m_emptyLabel) {
+        return;
+    }
+    m_emptyLabel = new QLabel(tr("Pack is empty"), m_contentContainer);
+    m_emptyLabel->setContentsMargins(12, 6, 12, 6);
+    m_emptyLabel->setStyleSheet(QStringLiteral("background: transparent;"));
+}
+
+void BrushPackListSection::removeEmptyLabel()
+{
+    if (!m_emptyLabel) {
+        return;
+    }
+    QLabel* emptyLabel = m_emptyLabel;
+    m_emptyLabel = nullptr;
+    emptyLabel->hide();
+    emptyLabel->deleteLater();
+}
+
+void BrushPackListSection::applyBrushFlowItems(bool animate)
+{
+    QList<QWidget*> rows;
+    rows.reserve(m_pack.brushes.size() + (m_dropPlaceholder ? 1 : 0));
+    for (const BrushListBrushData& brush : m_pack.brushes) {
+        if (brush.id == m_dropDraggedBrushId) {
+            continue;
+        }
+        if (QWidget* row = m_brushRows.value(brush.id, nullptr)) {
+            rows.append(row);
+        }
+    }
+
+    QWidget* movingItem = m_dropPlaceholder;
+    if (!movingItem && !m_dropDraggedBrushId.isEmpty()) {
+        movingItem = m_brushRows.value(m_dropDraggedBrushId, nullptr);
+    }
+    if (movingItem) {
+        rows.insert(qBound(0, m_dropInsertIndex, static_cast<int>(rows.size())), movingItem);
+    }
+
+    if (m_emptyLabel) {
+        m_emptyLabel->setVisible(rows.isEmpty());
+        if (rows.isEmpty()) {
+            rows.append(m_emptyLabel);
+        }
+    }
+    m_contentContainer->setItems(rows, {}, animate);
+    scheduleExpandedHeightRefresh();
 }
 
 void BrushPackListSection::updateExpandedVisualState(bool animated)

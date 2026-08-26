@@ -7,6 +7,8 @@
 #include <QVariantMap>
 #include <QtConcurrent>
 
+#include <utility>
+
 namespace ruwa::core {
 
 namespace {
@@ -15,6 +17,7 @@ constexpr auto kFirstRunIntegrationCompletedKey = "firstRunIntegrationCompleted"
 constexpr auto kLegacyInitialSetupCompletedKey = "initialSetupCompleted";
 constexpr auto kBrushDisplayColorsGroup = "BrushDisplayColors";
 constexpr auto kFavoriteBrushIdsKey = "favoriteBrushIds";
+constexpr auto kFavoriteBrushOrderKey = "favoriteBrushOrder";
 constexpr int kMinBrushDisplayColorIndex = 0;
 constexpr int kMaxBrushDisplayColorIndex = 8;
 
@@ -167,6 +170,12 @@ void SettingsManager::saveAsync()
         QStringList favoriteBrushIds = snapshot.appearance.favoriteBrushIds.values();
         favoriteBrushIds.sort();
         settings.setValue(QLatin1String(kFavoriteBrushIdsKey), favoriteBrushIds);
+        if (snapshot.appearance.favoriteBrushOrder.isEmpty()) {
+            settings.remove(QLatin1String(kFavoriteBrushOrderKey));
+        } else {
+            settings.setValue(
+                QLatin1String(kFavoriteBrushOrderKey), snapshot.appearance.favoriteBrushOrder);
+        }
         settings.endGroup();
 
         // Editor
@@ -286,12 +295,29 @@ void SettingsManager::loadAppearance(QSettings& settings)
     settings.endGroup();
 
     m_settings.appearance.favoriteBrushIds.clear();
+    m_settings.appearance.favoriteBrushOrder.clear();
     const QStringList favoriteBrushIds
         = settings.value(QLatin1String(kFavoriteBrushIdsKey)).toStringList();
     for (const QString& brushId : favoriteBrushIds) {
-        if (!brushId.isEmpty()) {
+        if (!brushId.isEmpty() && !m_settings.appearance.favoriteBrushIds.contains(brushId)) {
             m_settings.appearance.favoriteBrushIds.insert(brushId);
         }
+    }
+    const QStringList favoriteBrushOrder
+        = settings.value(QLatin1String(kFavoriteBrushOrderKey)).toStringList();
+    QSet<QString> orderedFavoriteIds;
+    for (const QString& brushId : favoriteBrushOrder) {
+        if (m_settings.appearance.favoriteBrushIds.contains(brushId)
+            && !orderedFavoriteIds.contains(brushId)) {
+            m_settings.appearance.favoriteBrushOrder.append(brushId);
+            orderedFavoriteIds.insert(brushId);
+        }
+    }
+    // A custom order is only valid when it covers current membership. Otherwise
+    // fall back to the historical pack order rather than exposing a partial list.
+    if (m_settings.appearance.favoriteBrushOrder.size()
+        != m_settings.appearance.favoriteBrushIds.size()) {
+        m_settings.appearance.favoriteBrushOrder.clear();
     }
 
     settings.endGroup();
@@ -560,6 +586,14 @@ QSet<QString> SettingsManager::favoriteBrushIds()
     return m_settings.appearance.favoriteBrushIds;
 }
 
+QStringList SettingsManager::favoriteBrushOrder()
+{
+    if (!m_loaded) {
+        load();
+    }
+    return m_settings.appearance.favoriteBrushOrder;
+}
+
 void SettingsManager::setBrushFavorite(const QString& brushId, bool favorite)
 {
     if (brushId.isEmpty() || isBrushFavorite(brushId) == favorite) {
@@ -568,13 +602,53 @@ void SettingsManager::setBrushFavorite(const QString& brushId, bool favorite)
 
     if (favorite) {
         m_settings.appearance.favoriteBrushIds.insert(brushId);
+        if (!m_settings.appearance.favoriteBrushOrder.isEmpty()) {
+            m_settings.appearance.favoriteBrushOrder.append(brushId);
+        }
     } else {
         m_settings.appearance.favoriteBrushIds.remove(brushId);
+        m_settings.appearance.favoriteBrushOrder.removeAll(brushId);
     }
 
     saveBrushFavoritesAsync();
     emit brushFavoriteChanged(brushId, favorite);
     emit settingsChanged();
+}
+
+bool SettingsManager::setFavoriteBrushOrder(const QStringList& brushIds)
+{
+    if (!m_loaded) {
+        load();
+    }
+
+    QStringList normalized;
+    QSet<QString> seen;
+    normalized.reserve(m_settings.appearance.favoriteBrushIds.size());
+    const auto appendFavorite = [this, &normalized, &seen](const QString& brushId) {
+        if (!brushId.isEmpty() && m_settings.appearance.favoriteBrushIds.contains(brushId)
+            && !seen.contains(brushId)) {
+            normalized.append(brushId);
+            seen.insert(brushId);
+        }
+    };
+    for (const QString& brushId : brushIds) {
+        appendFavorite(brushId);
+    }
+    for (const QString& brushId : std::as_const(m_settings.appearance.favoriteBrushOrder)) {
+        appendFavorite(brushId);
+    }
+    for (const QString& brushId : std::as_const(m_settings.appearance.favoriteBrushIds)) {
+        appendFavorite(brushId);
+    }
+
+    if (normalized == m_settings.appearance.favoriteBrushOrder) {
+        return true;
+    }
+    m_settings.appearance.favoriteBrushOrder = normalized;
+    saveBrushFavoritesAsync();
+    emit favoriteBrushOrderChanged(normalized);
+    emit settingsChanged();
+    return true;
 }
 
 void SettingsManager::saveBrushFavoritesAsync()
@@ -583,19 +657,26 @@ void SettingsManager::saveBrushFavoritesAsync()
     const QString application = QCoreApplication::applicationName();
     QStringList favoriteBrushIds = m_settings.appearance.favoriteBrushIds.values();
     favoriteBrushIds.sort();
+    const QStringList favoriteBrushOrder = m_settings.appearance.favoriteBrushOrder;
     const quint64 serial = m_brushFavoriteSaveSerial.fetchAndAddRelaxed(1) + 1;
 
-    (void) QtConcurrent::run([organization, application, favoriteBrushIds, serial]() {
-        if (serial != SettingsManager::instance().m_brushFavoriteSaveSerial.loadAcquire()) {
-            return;
-        }
+    (void) QtConcurrent::run(
+        [organization, application, favoriteBrushIds, favoriteBrushOrder, serial]() {
+            if (serial != SettingsManager::instance().m_brushFavoriteSaveSerial.loadAcquire()) {
+                return;
+            }
 
-        QSettings settings(organization, application);
-        settings.beginGroup(QStringLiteral("Appearance"));
-        settings.setValue(QLatin1String(kFavoriteBrushIdsKey), favoriteBrushIds);
-        settings.endGroup();
-        settings.sync();
-    });
+            QSettings settings(organization, application);
+            settings.beginGroup(QStringLiteral("Appearance"));
+            settings.setValue(QLatin1String(kFavoriteBrushIdsKey), favoriteBrushIds);
+            if (favoriteBrushOrder.isEmpty()) {
+                settings.remove(QLatin1String(kFavoriteBrushOrderKey));
+            } else {
+                settings.setValue(QLatin1String(kFavoriteBrushOrderKey), favoriteBrushOrder);
+            }
+            settings.endGroup();
+            settings.sync();
+        });
 }
 
 // === EDITOR ===

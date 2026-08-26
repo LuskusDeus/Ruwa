@@ -79,7 +79,9 @@ public:
     void setBrushDisplayColorIndex(const QString& brushId, int colorIndex);
     bool isBrushFavorite(const QString& brushId);
     QSet<QString> favoriteBrushIds();
+    QStringList favoriteBrushOrder();
     void setBrushFavorite(const QString& brushId, bool favorite);
+    bool setFavoriteBrushOrder(const QStringList& brushIds);
 
     // === EDITOR SETTERS ===
     void setAutoSaveInterval(int minutes); // 0=Off, 2=2min, 5=5min, 10=10min
@@ -120,6 +122,7 @@ signals:
     void welcomeBannerDisplayedImageKeyChanged(const QString& key);
     void brushDisplayColorChanged(const QString& brushId, int colorIndex);
     void brushFavoriteChanged(const QString& brushId, bool favorite);
+    void favoriteBrushOrderChanged(const QStringList& brushIds);
     void totalUsageSecondsChanged(qint64 totalSeconds);
 
 private:

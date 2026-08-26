@@ -64,6 +64,10 @@ public:
 
     QString createBrush(const QString& presetId);
     bool removeBrush(const QString& brushId);
+    /// Moves an existing brush without changing its identity or per-brush metadata.
+    /// targetIndex is resolved against the destination after the brush is removed
+    /// from its source pack; a negative value appends it.
+    bool moveBrush(const QString& brushId, const QString& targetPresetId, int targetIndex = -1);
     /// Removes a brush using the brush-editor policy: when it is the last
     /// brush in its preset, removes the whole preset instead.
     bool removeBrushOrPreset(const QString& brushId);
@@ -103,6 +107,8 @@ signals:
     void presetRenamed(const QString& presetId, const QString& newName);
     void brushCreated(const QString& presetId, const QString& brushId);
     void brushRemoved(const QString& presetId, const QString& brushId);
+    void brushMoved(const QString& sourcePresetId, const QString& targetPresetId,
+        const QString& brushId, int targetIndex);
     void brushRenamed(const QString& brushId, const QString& newName);
     void brushSettingsUpdated(
         const QString& presetId, const QString& brushId, const BrushSettingsData& settings);
