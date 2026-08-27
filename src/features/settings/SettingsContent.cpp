@@ -89,8 +89,8 @@ protected:
         const auto& theme = ruwa::ui::core::ThemeManager::instance();
         const auto& colors = theme.colors();
 
-        // Visuals mirror HexColorInput (color panel): capsule pill, surfaceAlt
-        // resting fill, soft surfaceElevated hover plate, gradient pill border.
+        // Keep the shared capsule treatment, but use the theme's semantic error
+        // colour to mark this destructive action in every theme.
         const QRectF r(this->rect());
         const qreal pillR = qMax(0.0, r.height() * 0.5 - 0.5);
         const QRectF fillRect = r.adjusted(1.0, 1.0, -1.0, -1.0);
@@ -100,23 +100,23 @@ protected:
         painter.setBrush(colors.surfaceAlt);
         painter.drawRoundedRect(fillRect, fillR, fillR);
 
-        if (hoverProgress() > 0.001) {
-            QColor plate = colors.surfaceElevated();
-            plate.setAlpha(qBound(0, qRound(hoverProgress() * 90), 255));
-            painter.setBrush(plate);
-            painter.drawRoundedRect(fillRect, fillR, fillR);
-        }
+        const qreal hover = hoverProgress();
+        const int tintAlpha = qRound((colors.isDark ? 24 : 18) + hover * (colors.isDark ? 22 : 16));
+        painter.setBrush(ruwa::ui::core::ThemeColors::withAlpha(colors.error, tintAlpha));
+        painter.drawRoundedRect(fillRect, fillR, fillR);
 
         {
             QColor borderTop = ruwa::ui::core::ThemeColors::interpolate(
-                colors.borderSubtle(), colors.borderSubtleHover(), hoverProgress());
+                ruwa::ui::core::ThemeColors::withAlpha(colors.error, 72),
+                ruwa::ui::core::ThemeColors::withAlpha(colors.error, 128), hover);
             ruwa::ui::painting::drawGradientBorder(painter, r.adjusted(0.5, 0.5, -0.5, -0.5), pillR,
                 borderTop,
                 ruwa::ui::core::ThemeColors::withAlpha(borderTop, borderTop.alpha() / 2));
         }
 
         QColor textColor = ruwa::ui::core::ThemeColors::interpolate(
-            colors.textMuted, colors.text, hoverProgress());
+            ruwa::ui::core::ThemeColors::interpolate(colors.text, colors.error, 0.78), colors.error,
+            hover);
 
         const int iconSize = theme.scaled(BASE_RESET_ICON_SIZE);
         const int spacing = theme.scaled(BASE_RESET_SPACING);
