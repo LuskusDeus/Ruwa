@@ -20,6 +20,7 @@
 #include "features/canvas/rendering/LayerScreenSourceCache.h"
 #include "features/canvas/rendering/SmartContentCompositor.h"
 #include "features/canvas/rendering/TextRetainedPayloadBuilder.h"
+#include "features/canvas/clipboard/MergedSelectionExtractor.h"
 #include "features/brush/rendering/DabShapeCache.h"
 #include "features/canvas/rendering/BrushCursorContourBuilder.h"
 #include "features/brush/rendering/GLBrushRenderer.h"
@@ -5408,11 +5409,9 @@ bool OpenGLCanvasWidget::doFillSelectionWithColor(const QColor& color)
 
 bool OpenGLCanvasWidget::doClearSelectionContent()
 {
-    if (!m_selectionController)
+    if (!canClearSelectionContent())
         return false;
     auto* layer = activeLayer();
-    if (!isLayerCanvasEditable(layer) || !layer->isRaster() || !layer->tileGrid)
-        return false;
     notifyCanvasInteraction(true);
 
     auto& targetGrid = *layer->tileGrid;
@@ -5540,6 +5539,54 @@ bool OpenGLCanvasWidget::copySelectionPixelsToClipboard(QImage* outFlattenedImag
 
     ruwa::shared::clipboard::EditClipboard::instance().setPixels(
         std::shared_ptr<const TileGrid>(std::move(copied)), bounds);
+    return true;
+}
+
+bool OpenGLCanvasWidget::copyMergedSelectionPixelsToClipboard(QImage* outFlattenedImage)
+{
+    if (outFlattenedImage) {
+        *outFlattenedImage = {};
+    }
+    if (!m_selectionController || !hasSelectionMask()) {
+        return false;
+    }
+
+    const auto& selectionMask = m_selectionController->lassoSelection().mask();
+    QRect captureBounds;
+    if (!selectionMaskPixelBounds(selectionMask, captureBounds)) {
+        return false;
+    }
+
+    if (hasFiniteDocumentBounds()) {
+        captureBounds = captureBounds.intersected(
+            QRect(0, 0, static_cast<int>(m_canvas.width()), static_cast<int>(m_canvas.height())));
+    }
+    if (captureBounds.isEmpty()) {
+        return false;
+    }
+
+    const TilePixelFormat copyFormat
+        = m_layerModel ? m_layerModel->documentTileFormat() : m_canvas.compositionGrid().format();
+    CanvasCaptureOptions captureOptions;
+    captureOptions.includeCanvasBackground = true;
+    captureOptions.highPrecision = copyFormat != TilePixelFormat::RGBA8;
+    ruwa::shared::imaging::PixelSurface composite
+        = captureCanvasSurface(captureBounds, captureOptions);
+    if (composite.isNull()) {
+        return false;
+    }
+
+    MergedSelectionExtraction extracted
+        = extractMergedSelectionPixels(composite, captureBounds, selectionMask, copyFormat);
+    if (!extracted) {
+        return false;
+    }
+
+    if (outFlattenedImage) {
+        *outFlattenedImage = imageFromTileGridRegion(*extracted.pixels, extracted.contentBounds);
+    }
+    ruwa::shared::clipboard::EditClipboard::instance().setPixels(
+        std::shared_ptr<const TileGrid>(std::move(extracted.pixels)), extracted.contentBounds);
     return true;
 }
 
@@ -5693,6 +5740,13 @@ bool OpenGLCanvasWidget::selectionBoundsWorld(QRectF& outBounds) const
 bool OpenGLCanvasWidget::fillSelectionWithColor(const QColor& color)
 {
     return m_selectionController && m_selectionController->fillSelectionWithColor(color);
+}
+
+bool OpenGLCanvasWidget::canClearSelectionContent() const
+{
+    const auto* layer = activeLayer();
+    return m_selectionController && hasSelectionMask() && isLayerCanvasEditable(layer)
+        && layer->isRaster() && layer->tileGrid;
 }
 
 bool OpenGLCanvasWidget::clearSelectionContent()

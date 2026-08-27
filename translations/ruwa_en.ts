@@ -4600,9 +4600,19 @@ Ruwa uses the Qt framework (version %1), dynamically linked under the GNU Lesser
         <translation type="unfinished"></translation>
     </message>
     <message>
+        <location filename="../src/shell/top-bar/TopBar.cpp" line="709"/>
+        <source>Copy Merged</source>
+        <translation type="unfinished">Copy Merged</translation>
+    </message>
+    <message>
         <location filename="../src/shell/top-bar/TopBar.cpp" line="719"/>
         <source>Paste</source>
         <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location filename="../src/shell/top-bar/TopBar.cpp" line="711"/>
+        <source>Delete</source>
+        <translation type="unfinished">Delete</translation>
     </message>
     <message>
         <location filename="../src/shell/top-bar/TopBar.cpp" line="775"/>

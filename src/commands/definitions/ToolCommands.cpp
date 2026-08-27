@@ -603,35 +603,6 @@ void ToolZoomCommand::execute(const CommandContext& ctx, const QVariantMap& args
 }
 
 // ======================================================================================
-//   C A M E R A
-// ======================================================================================
-
-CommandInfo ToolCameraCommand::info() const
-{
-    return CommandInfo { .id = "tools.camera",
-        .title = "Camera",
-        .category = "Tools",
-        .description = "Copy canvas to clipboard",
-        .aliases = { "camera", "copy-canvas", "screenshot" },
-        .defaultShortcut = QKeySequence(Qt::CTRL | Qt::SHIFT | Qt::Key_C),
-        .icon = QIcon() };
-}
-
-bool ToolCameraCommand::canExecute(const CommandContext& ctx) const
-{
-    return canExecuteToolCommand(ctx);
-}
-
-void ToolCameraCommand::execute(const CommandContext& ctx, const QVariantMap& args)
-{
-    Q_UNUSED(args);
-    auto* workspaceTab = ctx.activeWorkspaceTab();
-    if (!workspaceTab)
-        return;
-    workspaceTab->copyCanvasToClipboard();
-}
-
-// ======================================================================================
 //   D E F A U L T   C O L O R S
 // ======================================================================================
 
@@ -932,7 +903,6 @@ void registerToolCommands(CommandRegistry& registry)
     registry.registerCommand(std::make_unique<ToolRotateViewCommand>());
     registry.registerCommand(std::make_unique<ToolCanvasResizeCommand>());
     registry.registerCommand(std::make_unique<ToolZoomCommand>());
-    registry.registerCommand(std::make_unique<ToolCameraCommand>());
     registry.registerCommand(std::make_unique<ResetForegroundBackgroundColorsCommand>());
     registry.registerCommand(std::make_unique<SwapForegroundBackgroundColorsCommand>());
     registry.registerCommand(std::make_unique<BrushSizeIncreaseCommand>());

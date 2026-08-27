@@ -17,6 +17,7 @@
 #include <QGuiApplication>
 #include <QLineEdit>
 #include <QPlainTextEdit>
+#include <QTextCursor>
 #include <QTextEdit>
 
 namespace ruwa::core::commands {
@@ -117,6 +118,59 @@ bool routeSelectAllToFocusedTextInput(QWidget* focus)
     return widgetIsTextInput(focus);
 }
 
+/// Keep the application-wide Delete binding from swallowing normal text
+/// editing while still preventing it from reaching the document behind a field.
+bool routeDeleteToFocusedTextInput(QWidget* focus)
+{
+    if (auto* lineEdit = qobject_cast<QLineEdit*>(focus)) {
+        if (!lineEdit->isReadOnly()) {
+            lineEdit->del();
+        }
+        return true;
+    }
+    const auto deleteFromEditor = [](auto* editor) {
+        if (editor->isReadOnly()) {
+            return;
+        }
+        QTextCursor cursor = editor->textCursor();
+        if (cursor.hasSelection()) {
+            cursor.removeSelectedText();
+        } else {
+            cursor.deleteChar();
+        }
+        editor->setTextCursor(cursor);
+    };
+    if (auto* textEdit = qobject_cast<QTextEdit*>(focus)) {
+        deleteFromEditor(textEdit);
+        return true;
+    }
+    if (auto* plainTextEdit = qobject_cast<QPlainTextEdit*>(focus)) {
+        deleteFromEditor(plainTextEdit);
+        return true;
+    }
+    return widgetIsTextInput(focus);
+}
+
+bool canDeleteFromFocusedTextInput(QWidget* focus)
+{
+    if (auto* lineEdit = qobject_cast<QLineEdit*>(focus)) {
+        return !lineEdit->isReadOnly()
+            && (lineEdit->hasSelectedText()
+                || lineEdit->cursorPosition() < lineEdit->text().size());
+    }
+    const auto editorCanDelete = [](const auto* editor) {
+        const QTextCursor cursor = editor->textCursor();
+        return !editor->isReadOnly() && (cursor.hasSelection() || !cursor.atEnd());
+    };
+    if (auto* textEdit = qobject_cast<QTextEdit*>(focus)) {
+        return editorCanDelete(textEdit);
+    }
+    if (auto* plainTextEdit = qobject_cast<QPlainTextEdit*>(focus)) {
+        return editorCanDelete(plainTextEdit);
+    }
+    return false;
+}
+
 bool canExecuteContentTransformAction(const CommandContext& ctx)
 {
     auto* panel = ctx.activeCanvasPanel();
@@ -161,6 +215,32 @@ void CopyCommand::execute(const CommandContext& ctx, const QVariantMap& args)
         return;
     }
     workspaceTab->handleCopyRequest();
+}
+
+CommandInfo CopyMergedCommand::info() const
+{
+    return CommandInfo { .id = "edit.copyMerged",
+        .title = "Copy Merged",
+        .category = "Edit",
+        .description = "Copy the merged visible result inside the active selection",
+        .aliases = { "copy-merged", "merged-copy" },
+        .defaultShortcut = QKeySequence(Qt::CTRL | Qt::SHIFT | Qt::Key_C),
+        .icon = QIcon(),
+        .legacyIds = { "tools.camera" } };
+}
+
+bool CopyMergedCommand::canExecute(const CommandContext& ctx) const
+{
+    auto* canvasPanel = ctx.activeCanvasPanel();
+    return canvasPanel && canvasPanel->hasActiveSelection();
+}
+
+void CopyMergedCommand::execute(const CommandContext& ctx, const QVariantMap& args)
+{
+    Q_UNUSED(args);
+    if (auto* workspaceTab = ctx.activeWorkspaceTab()) {
+        workspaceTab->handleCopyMergedRequest();
+    }
 }
 
 CommandInfo CutCommand::info() const
@@ -636,7 +716,19 @@ CommandInfo ContextualDeleteCommand::info() const
 
 bool ContextualDeleteCommand::canExecute(const CommandContext& ctx) const
 {
-    return ctx.activeWorkspaceTab() != nullptr;
+    QWidget* focus = ctx.focusWidget();
+    if (widgetIsTextInput(focus)) {
+        return canDeleteFromFocusedTextInput(focus);
+    }
+    if (!ctx.activeWorkspaceTab()) {
+        return false;
+    }
+    auto* layersPanel = ctx.activeLayersPanel();
+    if (layersPanel && widgetIsWithin(focus, layersPanel)) {
+        return layersPanel->canDeleteSelectedLayersOrMask();
+    }
+    auto* canvasPanel = ctx.activeCanvasPanel();
+    return canvasPanel && canvasPanel->canDeleteSelectionContent();
 }
 
 void ContextualDeleteCommand::execute(const CommandContext& ctx, const QVariantMap& args)
@@ -644,7 +736,7 @@ void ContextualDeleteCommand::execute(const CommandContext& ctx, const QVariantM
     Q_UNUSED(args);
 
     QWidget* focus = ctx.focusWidget();
-    if (widgetIsTextInput(focus)) {
+    if (routeDeleteToFocusedTextInput(focus)) {
         return;
     }
 
@@ -652,11 +744,7 @@ void ContextualDeleteCommand::execute(const CommandContext& ctx, const QVariantM
     // everything else (in practice the canvas) owns pixel deletion.
     auto* layersPanel = ctx.activeLayersPanel();
     if (layersPanel && widgetIsWithin(focus, layersPanel)) {
-        if (layersPanel->selectedLayerMaskIsPaintTarget()) {
-            layersPanel->deleteSelectedLayerMask();
-        } else {
-            layersPanel->deleteSelectedLayers();
-        }
+        layersPanel->deleteSelectedLayersOrMask();
         return;
     }
 
@@ -671,6 +759,7 @@ void registerEditCommands(CommandRegistry& registry)
 {
     registry.registerCommand(std::make_unique<CutCommand>());
     registry.registerCommand(std::make_unique<CopyCommand>());
+    registry.registerCommand(std::make_unique<CopyMergedCommand>());
     registry.registerCommand(std::make_unique<PasteCommand>());
     registry.registerCommand(std::make_unique<DeselectCommand>());
     registry.registerCommand(std::make_unique<FillSelectionCommand>());

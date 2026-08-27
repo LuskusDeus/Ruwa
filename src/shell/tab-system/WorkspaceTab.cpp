@@ -4274,11 +4274,6 @@ void WorkspaceTab::promptImportImageFiles(const QStringList& filePaths)
     m_canvasPanel->promptImportImageFiles(filePaths);
 }
 
-bool WorkspaceTab::copyCanvasToClipboard()
-{
-    return m_canvasPanel && m_canvasPanel->copyCanvasToClipboard();
-}
-
 bool WorkspaceTab::isLayerClipboardTargetActive() const
 {
     if (!m_layersPanel) {
@@ -4359,6 +4354,11 @@ bool WorkspaceTab::handleCopyRequest()
 
     m_layerCopyArmed = false;
     return m_canvasPanel && m_canvasPanel->copySelectionPixels();
+}
+
+bool WorkspaceTab::handleCopyMergedRequest()
+{
+    return m_canvasPanel && m_canvasPanel->copyMergedSelectionPixels();
 }
 
 bool WorkspaceTab::handlePasteRequest()

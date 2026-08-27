@@ -313,6 +313,8 @@ public:
     bool fillLayerMaskFromActiveSelection(const ruwa::core::layers::LayerId& id);
     void clearSelectionMask();
     bool fillSelectionWithCurrentColor();
+    /// True when Delete can clear the selected pixels on the active layer.
+    bool canDeleteSelectionContent() const;
     /// Erase the content under the active selection. Returns false when there is
     /// no selection (or a transform is in flight).
     bool deleteSelectionContent();
@@ -343,6 +345,8 @@ public:
     /// Copy the pixels under the active selection (edit clipboard + system
     /// clipboard image). False when there is nothing copyable.
     bool copySelectionPixels();
+    /// Copy the merged visible result under the active selection.
+    bool copyMergedSelectionPixels();
     /// Copy the pixels under the active selection, then erase them.
     bool cutSelectionPixels();
     /// Create a raster layer from the pixels under the active selection. When

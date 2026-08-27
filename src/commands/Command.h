@@ -56,6 +56,9 @@ struct CommandInfo {
     /// When non-empty: selecting without args prefills search with this alias + space
     /// instead of executing. For commands that require an argument (e.g. sbs, sbo).
     QString palettePrefillAlias;
+    /// Previous command IDs accepted for persisted shortcuts and programmatic
+    /// callers after a command is renamed or moved to another category.
+    QStringList legacyIds;
 };
 
 /**

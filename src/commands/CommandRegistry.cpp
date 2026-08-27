@@ -36,13 +36,23 @@ void CommandRegistry::registerCommand(std::unique_ptr<Command> command)
         return;
     }
 
-    const QString category = command->info().category;
+    const CommandInfo info = command->info();
+    const QString category = info.category;
 
     // Store raw pointer for category index before moving
     Command* rawPtr = command.get();
 
+    // A newly registered canonical ID always takes ownership of that ID, even
+    // if an older command previously advertised it as a legacy alias.
+    m_byLegacyId.remove(id);
     m_commands[stdId] = std::move(command);
     m_byCategory[category].append(rawPtr);
+    for (const QString& legacyId : info.legacyIds) {
+        if (!legacyId.isEmpty() && legacyId != id && !hasCommand(legacyId)
+            && !m_byLegacyId.contains(legacyId)) {
+            m_byLegacyId.insert(legacyId, rawPtr);
+        }
+    }
 
     emit commandRegistered(id);
 }
@@ -51,13 +61,20 @@ Command* CommandRegistry::command(const QString& id) const
 {
     const std::string stdId = id.toStdString();
     auto it = m_commands.find(stdId);
-    return (it != m_commands.end()) ? it->second.get() : nullptr;
+    return (it != m_commands.end()) ? it->second.get() : m_byLegacyId.value(id, nullptr);
+}
+
+QString CommandRegistry::canonicalCommandId(const QString& id) const
+{
+    if (Command* resolved = command(id)) {
+        return resolved->id();
+    }
+    return id;
 }
 
 bool CommandRegistry::hasCommand(const QString& id) const
 {
-    const std::string stdId = id.toStdString();
-    return m_commands.find(stdId) != m_commands.end();
+    return command(id) != nullptr;
 }
 
 QList<Command*> CommandRegistry::allCommands() const

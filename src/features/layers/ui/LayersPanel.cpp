@@ -4796,6 +4796,16 @@ bool LayersPanel::selectedLayerMaskIsPaintTarget() const
     return layer && layer->hasMask() && layer->maskEditActive;
 }
 
+bool LayersPanel::canDeleteSelectedLayersOrMask() const
+{
+    if (selectedLayerMaskIsPaintTarget()) {
+        return true;
+    }
+    const QList<LayerData*> selected = m_layerModel.selectedLayers();
+    return std::any_of(selected.cbegin(), selected.cend(),
+        [](const LayerData* layer) { return layer && !layer->isBackground(); });
+}
+
 bool LayersPanel::deleteSelectedLayersOrMask()
 {
     // Selecting a layer's mask thumbnail makes the mask the thing the panel acts

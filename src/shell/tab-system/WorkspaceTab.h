@@ -286,13 +286,14 @@ public:
     void seedStartupImageImport(const QImage& image, const QString& layerName);
     bool importImageFilesBelowSelectedKeepingSelection(const QStringList& filePaths);
     void promptImportImageFiles(const QStringList& filePaths);
-    bool copyCanvasToClipboard();
     /// Ctrl+X / Ctrl+C / Ctrl+V routed by what is focused: the layers panel cuts
     /// layers (or the selected layer's mask), the canvas cuts the pixels inside
     /// the active selection. Paste reinstates whichever of those was copied last,
-    /// falling back to an image on the system clipboard.
+    /// falling back to an image on the system clipboard. Copy Merged always reads
+    /// the visible canvas composite inside the active selection.
     bool handleCutRequest();
     bool handleCopyRequest();
+    bool handleCopyMergedRequest();
     bool handlePasteRequest();
 
     // === Panel Access ===

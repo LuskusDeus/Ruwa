@@ -435,11 +435,17 @@ void ShortcutManager::loadFromSettings()
             continue;
         }
 
+        const QString commandId = CommandRegistry::instance().canonicalCommandId(key);
+        // A canonical entry written by a newer version wins over its legacy key.
+        if (commandId != key && keys.contains(commandId)) {
+            continue;
+        }
+
         const QString storedShortcut = settings.value(key).toString();
         // An existing key with an empty value is an explicit override: the user
         // cleared the default shortcut and expects it to remain unassigned.
         if (storedShortcut.isEmpty()) {
-            m_customShortcuts.insert(key, QKeySequence());
+            m_customShortcuts.insert(commandId, QKeySequence());
             continue;
         }
 
@@ -448,11 +454,15 @@ void ShortcutManager::loadFromSettings()
             seq = QKeySequence::fromString(storedShortcut, QKeySequence::NativeText);
         }
         if (!seq.isEmpty()) {
-            m_customShortcuts.insert(key, seq);
+            m_customShortcuts.insert(commandId, seq);
         }
     }
 
     m_lastUsedShortcuts = settings.value("LastUsed", QStringList()).toStringList();
+    for (QString& commandId : m_lastUsedShortcuts) {
+        commandId = CommandRegistry::instance().canonicalCommandId(commandId);
+    }
+    m_lastUsedShortcuts.removeDuplicates();
     while (m_lastUsedShortcuts.size() > MAX_LAST_USED) {
         m_lastUsedShortcuts.removeLast();
     }

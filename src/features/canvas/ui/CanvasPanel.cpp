@@ -2880,6 +2880,11 @@ bool CanvasPanel::reselectSelection()
     return true;
 }
 
+bool CanvasPanel::canDeleteSelectionContent() const
+{
+    return m_glWidget && m_glWidget->canClearSelectionContent();
+}
+
 bool CanvasPanel::deleteSelectionContent()
 {
     if (!m_glWidget || !m_glWidget->hasSelectionMask()) {
@@ -2963,6 +2968,24 @@ bool CanvasPanel::copySelectionPixels()
 
     QImage flattened;
     if (!m_glWidget->copySelectionPixelsToClipboard(&flattened)) {
+        return false;
+    }
+
+    publishImageToSystemClipboard(flattened);
+    return true;
+}
+
+bool CanvasPanel::copyMergedSelectionPixels()
+{
+    if (!m_glWidget || !m_glWidget->hasSelectionMask()) {
+        return false;
+    }
+
+    // The merged readback must see the same transformed state as the canvas.
+    commitTransformBeforeDocumentMutation();
+
+    QImage flattened;
+    if (!m_glWidget->copyMergedSelectionPixelsToClipboard(&flattened)) {
         return false;
     }
 

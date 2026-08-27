@@ -51,6 +51,10 @@ public:
     /// Get command by ID (returns nullptr if not found)
     Command* command(const QString& id) const;
 
+    /// Resolve a current or legacy ID to the registered canonical command ID.
+    /// Unknown IDs are returned unchanged so persisted settings remain forward-compatible.
+    QString canonicalCommandId(const QString& id) const;
+
     /// Check if command exists
     bool hasCommand(const QString& id) const;
 
@@ -90,6 +94,7 @@ private:
     // Use std::unordered_map for unique_ptr storage (QHash doesn't support move-only types)
     std::unordered_map<std::string, std::unique_ptr<Command>> m_commands;
     QHash<QString, QList<Command*>> m_byCategory;
+    QHash<QString, Command*> m_byLegacyId;
 };
 
 } // namespace ruwa::core

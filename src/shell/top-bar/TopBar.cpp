@@ -706,7 +706,9 @@ void TopBar::setupEditMenu()
     m_editItems.append(MenuItem::Separator());
     m_editItems.append(commandMenuItem(tr("Cut"), QStringLiteral("edit.cut")));
     m_editItems.append(commandMenuItem(tr("Copy"), QStringLiteral("edit.copy")));
+    m_editItems.append(commandMenuItem(tr("Copy Merged"), QStringLiteral("edit.copyMerged")));
     m_editItems.append(commandMenuItem(tr("Paste"), QStringLiteral("edit.paste")));
+    m_editItems.append(commandMenuItem(tr("Delete"), QStringLiteral("edit.delete")));
     m_editItems.append(MenuItem::Separator());
     // Placeholders: editItemsWithEnabledState() swaps them for freshly built
     // submenus so every command's enabled state is current on each open.
@@ -1296,10 +1298,12 @@ QList<MenuItem> TopBar::editItemsWithEnabledState() const
     // silently shift the hardcoded indices and grey out the wrong items.
     static const QStringList kWorkspaceOnlyIds { QStringLiteral("edit.undo"),
         QStringLiteral("edit.redo"), QStringLiteral("edit.cut"), QStringLiteral("edit.copy"),
-        QStringLiteral("edit.paste") };
+        QStringLiteral("edit.copyMerged"), QStringLiteral("edit.paste"),
+        QStringLiteral("edit.delete") };
 
     QList<MenuItem> items = m_editItems;
     const bool inWorkspace = isInWorkspace();
+    const auto& executor = ruwa::core::CommandExecutor::instance();
     for (MenuItem& item : items) {
         if (item.separator) {
             continue;
@@ -1321,7 +1325,10 @@ QList<MenuItem> TopBar::editItemsWithEnabledState() const
             continue;
         }
         if (kWorkspaceOnlyIds.contains(item.commandId)) {
-            item.enabled = inWorkspace;
+            const bool needsContextCheck = item.commandId == QLatin1String("edit.copyMerged")
+                || item.commandId == QLatin1String("edit.delete");
+            item.enabled
+                = inWorkspace && (!needsContextCheck || executor.canExecute(item.commandId));
         }
     }
     return items;

@@ -4709,9 +4709,19 @@ Ruwa использует фреймворк Qt (версия %1), динами�
         <translation>Копировать</translation>
     </message>
     <message>
+        <location filename="../src/shell/top-bar/TopBar.cpp" line="709"/>
+        <source>Copy Merged</source>
+        <translation>Копировать совмещённые данные</translation>
+    </message>
+    <message>
         <location filename="../src/shell/top-bar/TopBar.cpp" line="719"/>
         <source>Paste</source>
         <translation>Вставить</translation>
+    </message>
+    <message>
+        <location filename="../src/shell/top-bar/TopBar.cpp" line="711"/>
+        <source>Delete</source>
+        <translation>Удалить</translation>
     </message>
     <message>
         <location filename="../src/shell/top-bar/TopBar.cpp" line="775"/>

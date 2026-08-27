@@ -13,9 +13,12 @@ add_executable(RuwaTests
     ../src/features/transform/TransformSnapSession.cpp
     ../src/features/canvas/scene/Camera2D.cpp
     ../src/features/canvas/scene/Viewport.cpp
+    ../src/features/canvas/clipboard/MergedSelectionExtractor.cpp
+    ../src/shared/imaging/PixelSurface.cpp
     ../src/shell/docking/layout/DockLayoutCalculator.cpp
     ../src/shell/docking/layout/DockSplitNode.cpp
     camera_rotation_test.cpp
+    merged_selection_extractor_test.cpp
     brush_click_dab_test.cpp
     dab_shape_falloff_test.cpp
     dock_split_push_drag_test.cpp

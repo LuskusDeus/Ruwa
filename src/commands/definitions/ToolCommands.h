@@ -162,13 +162,6 @@ public:
     void execute(const CommandContext& ctx, const QVariantMap& args = {}) override;
 };
 
-class ToolCameraCommand : public Command {
-public:
-    CommandInfo info() const override;
-    bool canExecute(const CommandContext& ctx) const override;
-    void execute(const CommandContext& ctx, const QVariantMap& args = {}) override;
-};
-
 class ResetForegroundBackgroundColorsCommand : public Command {
 public:
     CommandInfo info() const override;

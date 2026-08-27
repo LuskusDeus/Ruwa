@@ -282,6 +282,8 @@ public:
     bool hasSelectionMask() const;
     bool selectionBoundsWorld(QRectF& outBounds) const;
     bool fillSelectionWithColor(const QColor& color);
+    /// True when clearSelectionContent() has an editable raster target.
+    bool canClearSelectionContent() const;
     bool clearSelectionContent();
     /// Lift the pixels under the active selection out of the active raster layer
     /// into the edit clipboard; the layer itself is left untouched. Fills
@@ -289,6 +291,10 @@ public:
     /// the system clipboard. False when there is no selection, the active layer
     /// is not a plain raster layer, or the region is empty.
     bool copySelectionPixelsToClipboard(QImage* outFlattenedImage = nullptr);
+    /// Copy the visible composite under the active selection into the edit
+    /// clipboard. Unlike copySelectionPixelsToClipboard(), this reads every
+    /// visible composited layer and then applies the selection coverage.
+    bool copyMergedSelectionPixelsToClipboard(QImage* outFlattenedImage = nullptr);
     /// Extract the pixels under the active selection without changing either the
     /// document or the edit clipboard. Tiles remain in document coordinates.
     /// Used by both clipboard copy and Layer via Copy/Cut.
