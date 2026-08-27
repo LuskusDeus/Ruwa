@@ -710,6 +710,8 @@ void TopBar::setupEditMenu()
     m_editItems.append(commandMenuItem(tr("Paste"), QStringLiteral("edit.paste")));
     m_editItems.append(commandMenuItem(tr("Delete"), QStringLiteral("edit.delete")));
     m_editItems.append(MenuItem::Separator());
+    m_editItems.append(commandMenuItem(tr("Fill"), QStringLiteral("selection.fill")));
+    m_editItems.append(MenuItem::Separator());
     // Placeholders: editItemsWithEnabledState() swaps them for freshly built
     // submenus so every command's enabled state is current on each open.
     m_editItems.append(buildTransformMenuItem());
@@ -758,7 +760,6 @@ MenuItem TopBar::buildSelectionMenuItem() const
         entry(tr("Select Layer Content"), QStringLiteral("selection.selectLayerContent")),
         entry(tr("Select Layer Mask"), QStringLiteral("selection.selectLayerMask")),
         MenuItem::Separator(),
-        entry(tr("Fill"), QStringLiteral("selection.fill")),
         entry(tr("Delete Content"), QStringLiteral("selection.deleteContent")),
     };
     return selectionItem;
@@ -1299,7 +1300,7 @@ QList<MenuItem> TopBar::editItemsWithEnabledState() const
     static const QStringList kWorkspaceOnlyIds { QStringLiteral("edit.undo"),
         QStringLiteral("edit.redo"), QStringLiteral("edit.cut"), QStringLiteral("edit.copy"),
         QStringLiteral("edit.copyMerged"), QStringLiteral("edit.paste"),
-        QStringLiteral("edit.delete") };
+        QStringLiteral("edit.delete"), QStringLiteral("selection.fill") };
 
     QList<MenuItem> items = m_editItems;
     const bool inWorkspace = isInWorkspace();
@@ -1326,7 +1327,8 @@ QList<MenuItem> TopBar::editItemsWithEnabledState() const
         }
         if (kWorkspaceOnlyIds.contains(item.commandId)) {
             const bool needsContextCheck = item.commandId == QLatin1String("edit.copyMerged")
-                || item.commandId == QLatin1String("edit.delete");
+                || item.commandId == QLatin1String("edit.delete")
+                || item.commandId == QLatin1String("selection.fill");
             item.enabled
                 = inWorkspace && (!needsContextCheck || executor.canExecute(item.commandId));
         }

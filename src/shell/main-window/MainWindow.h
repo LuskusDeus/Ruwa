@@ -54,6 +54,7 @@ class TabSystemCoordinator;
 class OverlayCoordinator;
 class CommandCoordinator;
 class ContextMenuCoordinator;
+class ContextWindow;
 
 /**
  * @brief Main application window (refactored with coordinator pattern)
@@ -94,6 +95,9 @@ public:
 
     /// Show context menu
     void showContextMenu(int menuType, const QPoint& globalPos, const QVariantMap& context = {});
+
+    /// Open the modal Fill settings window for the active selection.
+    void showFillContextWindow();
 
     // === Widget Access (for StartupAnimationController) ===
 
@@ -173,6 +177,7 @@ private:
     OverlayCoordinator* m_overlayCoordinator = nullptr;
     CommandCoordinator* m_commandCoordinator = nullptr;
     ContextMenuCoordinator* m_contextMenuCoordinator = nullptr;
+    QPointer<ContextWindow> m_contextWindow;
 
     // Hidden OpenGL widget for pre-warming
     QOpenGLWidget* m_glWarmup = nullptr;

@@ -350,7 +350,7 @@ CommandInfo FillSelectionCommand::info() const
     return CommandInfo { .id = "selection.fill",
         .title = "Fill",
         .category = "Selection",
-        .description = "Fill the current selection with the active color",
+        .description = "Open Fill settings for the current selection",
         .aliases = { "fill", "fill-selection" },
         .defaultShortcut = QKeySequence(Qt::SHIFT | Qt::Key_F5),
         .icon = QIcon() };
@@ -366,8 +366,8 @@ void FillSelectionCommand::execute(const CommandContext& ctx, const QVariantMap&
 {
     Q_UNUSED(args);
 
-    if (auto* canvasPanel = ctx.activeCanvasPanel()) {
-        canvasPanel->fillSelectionWithCurrentColor();
+    if (auto* mainWindow = ctx.mainWindow()) {
+        mainWindow->showFillContextWindow();
     }
 }
 

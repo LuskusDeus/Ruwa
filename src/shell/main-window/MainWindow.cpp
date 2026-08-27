@@ -11,6 +11,7 @@
 #include "shell/main-window/OverlayCoordinator.h"
 #include "shell/main-window/CommandCoordinator.h"
 #include "shell/main-window/ContextMenuCoordinator.h"
+#include "shell/context-window/ContextWindow.h"
 
 #include "shell/tab-system/TabManager.h"
 #include "shell/tab-system/BaseTab.h"
@@ -35,6 +36,8 @@
 #include "services/updates/UpdateManager.h"
 #include "features/settings/SettingsManager.h"
 #include "features/canvas/ui/CanvasPanelHelpers.h"
+#include "features/canvas/ui/CanvasPanel.h"
+#include "features/fill/FillContextWidget.h"
 #include <QCoreApplication>
 #include <QDesktopServices>
 #include <QApplication>
@@ -364,6 +367,31 @@ MainWindow::~MainWindow()
         m_firstLaunchUpdateDismissSyncFuture.waitForFinished();
     }
     persistWindowState();
+}
+
+void MainWindow::showFillContextWindow()
+{
+    if (m_contextWindow) {
+        m_contextWindow->raise();
+        m_contextWindow->activateWindow();
+        return;
+    }
+
+    auto* content = new widgets::FillContextWidget();
+    auto* contextWindow = new ContextWindow(this, tr("Fill"), content);
+    m_contextWindow = contextWindow;
+
+    connect(content, &widgets::FillContextWidget::cancelRequested, contextWindow,
+        &ContextWindow::dismiss);
+    connect(content, &widgets::FillContextWidget::fillRequested, this, [this, contextWindow]() {
+        auto* workspace = activeWorkspaceTab();
+        auto* canvas = workspace ? workspace->canvasPanel() : nullptr;
+        if (canvas && canvas->fillSelectionWithCurrentColor()) {
+            contextWindow->dismiss();
+        }
+    });
+
+    contextWindow->showAnimated();
 }
 
 void MainWindow::persistWindowState()
