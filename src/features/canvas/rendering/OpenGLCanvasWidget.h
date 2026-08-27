@@ -508,8 +508,11 @@ public:
     void setCursorPositionPinned(bool pinned) { m_cursorPositionPinned = pinned; }
 
     // Canvas resize overlay (GL-rendered)
+    /// suppressCanvasCornerRounding feeds the existing animated corner-effect state while active.
     void setCanvasResizeOverlayState(
-        bool active, const QRectF& selectionWorldRect, bool selectingOrMoving);
+        bool active, const QRectF& selectionWorldRect, bool selectingOrMoving,
+        bool suppressCanvasCornerRounding = false);
+    void setCanvasResizeSnapVisualState(const TransformSnapVisualState& state);
     void setTextEditOverlayState(const TextEditOverlayState& state);
 
     using BackdropRegionProvider = std::function<std::vector<CanvasBackdropRegion>()>;
@@ -1152,6 +1155,8 @@ private:
     QRectF m_canvasResizeSelectionWorld;
     bool m_canvasResizeOverlayActive = false;
     bool m_canvasResizeOverlaySelecting = false;
+    bool m_canvasResizeSuppressCanvasCornerRounding = false;
+    TransformSnapVisualState m_canvasResizeSnapVisualState;
     std::unique_ptr<GLSelectionRenderer> m_selectionRenderer;
 
     // Canvas overlay manager (owns all GL overlays)

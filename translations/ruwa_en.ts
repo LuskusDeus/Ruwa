@@ -4253,7 +4253,7 @@ Ruwa uses the Qt framework (version %1), dynamically linked under the GNU Lesser
     <message>
         <location filename="../src/features/settings/SettingsContent.cpp" line="407"/>
         <location filename="../src/features/settings/SettingsContent.cpp" line="736"/>
-        <source>Align transformed content to the canvas center and finite edges</source>
+        <source>Align transformed content to the canvas center and edges, and canvas resize edges to finite bounds</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
@@ -4265,7 +4265,7 @@ Ruwa uses the Qt framework (version %1), dynamically linked under the GNU Lesser
     <message>
         <location filename="../src/features/settings/SettingsContent.cpp" line="412"/>
         <location filename="../src/features/settings/SettingsContent.cpp" line="739"/>
-        <source>Align transformed content to visible layers and groups</source>
+        <source>Align transformed content and canvas resize edges to visible layers and groups</source>
         <translation type="unfinished"></translation>
     </message>
     <message>

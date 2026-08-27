@@ -132,13 +132,21 @@ std::vector<SnapRelation> TransformSnapSolver::alignmentCandidates(const SnapSce
     constexpr std::array<SnapAnchor, 3> anchors { SnapAnchor::Start, SnapAnchor::Center,
         SnapAnchor::End };
 
+    const auto alignmentAnchorEnabled = [&settings](SnapAnchor anchor) {
+        return anchor != SnapAnchor::Center || settings.centerAlignmentEnabled;
+    };
+
     if (settings.canvasEnabled && scene.canvasSize.x > 0.0f && scene.canvasSize.y > 0.0f) {
         const SnapTarget canvas = canvasTarget(scene);
-        constexpr std::array<SnapAnchor, 1> center { SnapAnchor::Center };
         for (SnapAxis axis : { SnapAxis::X, SnapAxis::Y }) {
             for (SnapAnchor sourceAnchor : anchors) {
-                addAlignment(result, sourceBounds, canvas, axis, sourceAnchor, center.front(),
-                    sourceParentId);
+                if (!alignmentAnchorEnabled(sourceAnchor)) {
+                    continue;
+                }
+                if (settings.centerAlignmentEnabled) {
+                    addAlignment(result, sourceBounds, canvas, axis, sourceAnchor,
+                        SnapAnchor::Center, sourceParentId);
+                }
                 if (scene.finiteCanvas) {
                     addAlignment(result, sourceBounds, canvas, axis, sourceAnchor,
                         SnapAnchor::Start, sourceParentId);
@@ -152,6 +160,9 @@ std::vector<SnapRelation> TransformSnapSolver::alignmentCandidates(const SnapSce
     if (!canvasOnly && settings.layersEnabled) {
         auto appendIndex = [&](SnapAxis axis, const std::vector<SnapAxisEntry>& index) {
             for (SnapAnchor sourceAnchor : anchors) {
+                if (!alignmentAnchorEnabled(sourceAnchor)) {
+                    continue;
+                }
                 const float sourceCoordinate = anchorCoordinate(sourceBounds, axis, sourceAnchor);
                 auto it = index.begin();
                 if (std::isfinite(coordinateSearchRadius)) {
@@ -170,6 +181,9 @@ std::vector<SnapRelation> TransformSnapSolver::alignmentCandidates(const SnapSce
                     if (entry.targetIndex >= scene.targets.size()) {
                         continue;
                     }
+                    if (!alignmentAnchorEnabled(entry.anchor)) {
+                        continue;
+                    }
                     addAlignment(result, sourceBounds, scene.targets[entry.targetIndex], axis,
                         sourceAnchor, entry.anchor, sourceParentId);
                 }
@@ -182,7 +196,13 @@ std::vector<SnapRelation> TransformSnapSolver::alignmentCandidates(const SnapSce
             for (const SnapTarget& target : scene.targets) {
                 for (SnapAxis axis : { SnapAxis::X, SnapAxis::Y }) {
                     for (SnapAnchor sourceAnchor : anchors) {
+                        if (!alignmentAnchorEnabled(sourceAnchor)) {
+                            continue;
+                        }
                         for (SnapAnchor targetAnchor : anchors) {
+                            if (!alignmentAnchorEnabled(targetAnchor)) {
+                                continue;
+                            }
                             addAlignment(result, sourceBounds, target, axis, sourceAnchor,
                                 targetAnchor, sourceParentId);
                         }

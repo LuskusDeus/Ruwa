@@ -27,6 +27,8 @@ struct SnapSettings {
     bool canvasEnabled = true;
     bool layersEnabled = true;
     bool equalSpacingEnabled = true;
+    /// Allow center anchors on both the moving geometry and snap targets.
+    bool centerAlignmentEnabled = true;
     bool pixelAlignRasterMovesEnabled = true;
     float captureThresholdScreenPx = kSnapCaptureThresholdScreenPx;
     float releaseThresholdScreenPx = kSnapReleaseThresholdScreenPx;

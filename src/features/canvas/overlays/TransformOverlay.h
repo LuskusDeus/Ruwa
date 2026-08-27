@@ -55,6 +55,11 @@ public:
     void render(const Viewport& viewport, GLuint sceneTextureId = 0,
         const std::array<float, 16>* viewProjectionContent = nullptr);
 
+    /// Render only the shared auto-snap guides, without entering transform mode.
+    void renderAutoSnapGuides(const TransformAutoSnapGuides& guides, const Viewport& viewport,
+        GLuint sceneTextureId = 0,
+        const std::array<float, 16>* viewProjectionContent = nullptr);
+
     void onTransformModeEntered();
     /// @param animated If false, hide immediately (no fade). Use for move-only transform where
     /// chrome was never shown.

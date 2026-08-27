@@ -21,8 +21,11 @@ public:
 
     SnapResult solveMove(const Rect& sourceBounds, const Viewport* viewport, float screenZoom,
         bool allowX = true, bool allowY = true);
+    /// excludedTargetX/Y suppress target lines already occupied by a fixed opposite edge.
     SnapResult solvePoint(const Vector2& point, const Viewport* viewport, float screenZoom,
-        bool canvasOnly = false, bool allowX = true, bool allowY = true);
+        bool canvasOnly = false, bool allowX = true, bool allowY = true,
+        std::optional<float> excludedTargetX = std::nullopt,
+        std::optional<float> excludedTargetY = std::nullopt);
 
     void clear();
     const TransformSnapVisualState& visualState() const { return m_visualState; }

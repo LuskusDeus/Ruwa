@@ -14,6 +14,8 @@
 #include <QPoint>
 #include <QSize>
 #include <functional>
+#include <memory>
+#include <optional>
 
 class QWidget;
 class QVariantAnimation;
@@ -21,6 +23,7 @@ class QMouseEvent;
 
 namespace aether {
 class OpenGLCanvasWidget;
+class TransformSnapSession;
 }
 
 namespace ruwa::core::layers {
@@ -113,6 +116,16 @@ signals:
     void previewSizeChanged(const QSize& size);
 
 private:
+    enum class SnapOperation { None, Point, Move };
+
+    void beginSnapSession();
+    void endSnapSession();
+    aether::Vector2 snapPoint(const aether::Vector2& point, bool allowX, bool allowY,
+        std::optional<float> excludedTargetX = std::nullopt,
+        std::optional<float> excludedTargetY = std::nullopt);
+    void snapResizedRect(QRectF& rect);
+    void snapMovedRect(QRectF& rect);
+
     aether::OpenGLCanvasWidget* m_glWidget = nullptr;
     QWidget* m_contentWidget = nullptr;
     ruwa::core::layers::LayerModel* m_layerModel = nullptr;
@@ -136,6 +149,8 @@ private:
     QRectF m_resizeStartRect;
 
     QVariantAnimation* m_rectAnim = nullptr;
+    std::unique_ptr<aether::TransformSnapSession> m_snapSession;
+    SnapOperation m_snapOperation = SnapOperation::None;
 
     static constexpr int kDragThreshold = 4;
     static constexpr qreal kHandleFramePaddingPx = 10.0;

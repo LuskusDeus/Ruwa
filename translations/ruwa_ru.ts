@@ -4264,8 +4264,8 @@ Ruwa использует фреймворк Qt (версия %1), динами�
     <message>
         <location filename="../src/features/settings/SettingsContent.cpp" line="407"/>
         <location filename="../src/features/settings/SettingsContent.cpp" line="736"/>
-        <source>Align transformed content to the canvas center and finite edges</source>
-        <translation>Выравнивать перемещаемое содержимое по центру и краям холста</translation>
+        <source>Align transformed content to the canvas center and edges, and canvas resize edges to finite bounds</source>
+        <translation>Выравнивать перемещаемое содержимое по центру и краям холста, а края ресайза — по границам конечного холста</translation>
     </message>
     <message>
         <location filename="../src/features/settings/SettingsContent.cpp" line="410"/>
@@ -4276,8 +4276,8 @@ Ruwa использует фреймворк Qt (версия %1), динами�
     <message>
         <location filename="../src/features/settings/SettingsContent.cpp" line="412"/>
         <location filename="../src/features/settings/SettingsContent.cpp" line="739"/>
-        <source>Align transformed content to visible layers and groups</source>
-        <translation>Выравнивать перемещаемое содержимое по видимым слоям и группам</translation>
+        <source>Align transformed content and canvas resize edges to visible layers and groups</source>
+        <translation>Выравнивать перемещаемое содержимое и края ресайза холста по видимым слоям и группам</translation>
     </message>
     <message>
         <location filename="../src/features/settings/SettingsContent.cpp" line="415"/>

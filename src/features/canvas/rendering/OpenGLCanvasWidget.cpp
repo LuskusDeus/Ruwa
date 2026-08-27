@@ -42,6 +42,7 @@
 #include "features/canvas/scene/CanvasDisplayTransforms.h"
 #include "features/transform/TransformApplicator.h"
 #include "features/transform/TransformGeometry.h"
+#include "features/transform/TransformSnapSceneBuilder.h"
 #include "features/transform/TransformSessionCommand.h"
 
 #include <QDebug>
@@ -2714,7 +2715,8 @@ bool OpenGLCanvasWidget::updateCanvasCornerEffectState()
     const bool interactionCoolingDown = idleSinceInteractionMs < kCanvasCornerInteractionCooldownMs;
     const bool interactionActive = (m_strokeHost && m_strokeHost->isDrawing())
         || m_transformController.isActive() || m_lassoFillActive || isLassoActive()
-        || isRectSelectionActive() || isCircleSelectionActive();
+        || isRectSelectionActive() || isCircleSelectionActive()
+        || m_canvasResizeSuppressCanvasCornerRounding;
     const float targetRadius
         = (!interactionActive && fullyVisible && editIdleEnough && !interactionCoolingDown)
         ? kCanvasCornerMaxScreenRadiusPx
@@ -2817,14 +2819,15 @@ void OpenGLCanvasWidget::hideFillProgressPopupImmediate()
     }
 }
 
-void OpenGLCanvasWidget::setCanvasResizeOverlayState(
-    bool active, const QRectF& selectionWorldRect, bool selectingOrMoving)
+void OpenGLCanvasWidget::setCanvasResizeOverlayState(bool active,
+    const QRectF& selectionWorldRect, bool selectingOrMoving, bool suppressCanvasCornerRounding)
 {
     // Keep last valid rect while fading out to avoid flash/jump.
     if (active || !selectionWorldRect.isEmpty()) {
         m_canvasResizeSelectionWorld = selectionWorldRect.normalized();
     }
     m_canvasResizeOverlaySelecting = selectingOrMoving;
+    m_canvasResizeSuppressCanvasCornerRounding = active && suppressCanvasCornerRounding;
 
     if (active != m_canvasResizeOverlayActive) {
         m_canvasResizeOverlayActive = active;
@@ -2846,6 +2849,12 @@ void OpenGLCanvasWidget::setCanvasResizeOverlayState(
         }
     }
 
+    requestRender();
+}
+
+void OpenGLCanvasWidget::setCanvasResizeSnapVisualState(const TransformSnapVisualState& state)
+{
+    m_canvasResizeSnapVisualState = state;
     requestRender();
 }
 
@@ -9481,10 +9490,6 @@ void OpenGLCanvasWidget::beginTransformSnapSession()
     settings.equalSpacingEnabled = editor.autoSnapEqualSpacingEnabled;
     settings.pixelAlignRasterMovesEnabled = editor.pixelAlignRasterMovesEnabled;
 
-    SnapScene scene;
-    scene.canvasSize = m_canvas.size();
-    scene.finiteCanvas = hasFiniteDocumentBounds();
-
     std::optional<QUuid> sourceParentId;
     bool rootsShareParent = true;
     if (m_layerModel) {
@@ -9520,57 +9525,8 @@ void OpenGLCanvasWidget::beginTransformSnapSession()
         return false;
     };
 
-    auto effectivelyVisible = [](const ruwa::core::layers::LayerData* layer) {
-        for (auto* current = layer; current; current = current->parent) {
-            if (!current->visible || current->opacity <= 0.0 || current->isBackground()) {
-                return false;
-            }
-        }
-        return layer != nullptr;
-    };
-
-    std::function<std::optional<Rect>(const ruwa::core::layers::LayerData*)> visibleBounds;
-    visibleBounds = [&](const ruwa::core::layers::LayerData* layer) -> std::optional<Rect> {
-        if (!effectivelyVisible(layer)) {
-            return std::nullopt;
-        }
-        Rect bounds {};
-        if (const auto ownBounds = aether::transformBoundsForLayer(layer)) {
-            bounds = *ownBounds;
-        }
-        for (const auto& child : layer->children) {
-            if (const auto childBounds = visibleBounds(child.get())) {
-                bounds = unionTransformBounds(bounds, *childBounds);
-            }
-        }
-        return bounds.width > 0.0f && bounds.height > 0.0f ? std::optional<Rect>(bounds)
-                                                           : std::nullopt;
-    };
-
-    if (m_layerModel && settings.layersEnabled) {
-        const QList<ruwa::core::layers::LayerData*> layers = m_layerModel->allLayersFlattened();
-        scene.targets.reserve(static_cast<size_t>(layers.size()));
-        for (const auto* layer : layers) {
-            if (!effectivelyVisible(layer) || belongsToMovingHierarchy(layer)
-                || (!transformIsVisualTarget(layer) && !layer->isGroup())) {
-                continue;
-            }
-            const auto bounds
-                = layer->isGroup() ? visibleBounds(layer) : aether::transformBoundsForLayer(layer);
-            if (!bounds) {
-                continue;
-            }
-            SnapTarget target;
-            target.bounds = *bounds;
-            target.id = layer->id;
-            target.parentId = layer->parent ? layer->parent->id : QUuid {};
-            target.type = layer->isGroup()      ? SnapTargetType::Group
-                : layer->isText()               ? SnapTargetType::Text
-                : layer->isIsolatedPixelLayer() ? SnapTargetType::IsolatedPixel
-                                                : SnapTargetType::Raster;
-            scene.targets.push_back(std::move(target));
-        }
-    }
+    SnapScene scene = buildTransformSnapScene(m_layerModel, m_canvas.size(),
+        hasFiniteDocumentBounds(), settings.layersEnabled, belongsToMovingHierarchy);
 
     bool rasterOnly = !m_transformTargetSet.visualTargets.empty();
     for (const TransformTargetInfo& target : m_transformTargetSet.visualTargets) {
@@ -11411,6 +11367,11 @@ void OpenGLCanvasWidget::paintGL_renderOverlays(GLuint sceneTarget)
             m_viewport, sceneTex, surfaceWidth, surfaceHeight, &docToScreenFn);
         if (canvasResizeOverlay->isAnimating())
             update();
+    }
+    if (drawCanvasResizeOverlay && transformOverlay && transformOverlay->isInitialized()
+        && m_canvasResizeSnapVisualState.active()) {
+        transformOverlay->renderAutoSnapGuides(
+            m_canvasResizeSnapVisualState, m_viewport, sceneTex, &contentVp);
     }
     if (drawTextEditOverlay && textEditOverlay) {
         textEditOverlay->render(m_viewport, sceneTex, surfaceWidth, surfaceHeight, &contentVp);

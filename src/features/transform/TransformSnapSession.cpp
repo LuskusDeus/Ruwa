@@ -191,13 +191,25 @@ SnapResult TransformSnapSession::solveMove(
 }
 
 SnapResult TransformSnapSession::solvePoint(const Vector2& point, const Viewport* viewport,
-    float screenZoom, bool canvasOnly, bool allowX, bool allowY)
+    float screenZoom, bool canvasOnly, bool allowX, bool allowY,
+    std::optional<float> excludedTargetX, std::optional<float> excludedTargetY)
 {
     const float zoom
         = viewport ? viewport->camera().zoom() : (screenZoom > 1.0e-6f ? screenZoom : 1.0f);
     const float searchRadius = m_settings.releaseThresholdScreenPx / std::abs(zoom);
     std::vector<SnapRelation> candidates = TransformSnapSolver::pointCandidates(
         m_scene, m_settings, point, m_sourceParentId, canvasOnly, searchRadius);
+    constexpr float exclusionEpsilon = 0.001f;
+    candidates.erase(std::remove_if(candidates.begin(), candidates.end(),
+                         [&](const SnapRelation& relation) {
+                             const std::optional<float>& excluded = relation.axis == SnapAxis::X
+                                 ? excludedTargetX
+                                 : excludedTargetY;
+                             return excluded
+                                 && std::abs(relation.targetCoordinate - *excluded)
+                                     <= exclusionEpsilon;
+                         }),
+        candidates.end());
     SnapResult result;
     result.xRelation
         = choose(SnapAxis::X, candidates, point, viewport, screenZoom, allowX, result.xRelations);

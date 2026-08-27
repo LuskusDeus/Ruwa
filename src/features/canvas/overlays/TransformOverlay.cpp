@@ -293,6 +293,42 @@ void TransformOverlay::render(const Viewport& viewport, GLuint sceneTextureId,
         true, nullptr, m_lastDrawCornerRotationIcons, nullptr);
 }
 
+void TransformOverlay::renderAutoSnapGuides(const TransformAutoSnapGuides& guides,
+    const Viewport& viewport, GLuint sceneTextureId,
+    const std::array<float, 16>* viewProjectionContent)
+{
+    if (!m_initialized || !guides.active()) {
+        return;
+    }
+
+    const auto vpMatrix
+        = viewProjectionContent ? *viewProjectionContent : viewport.viewProjectionMatrix();
+    m_gl->glEnable(GL_BLEND);
+    m_gl->glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
+    m_gl->glDisable(GL_DEPTH_TEST);
+
+    if (sceneTextureId && m_invertProgram) {
+        m_curProgram = m_invertProgram;
+        m_curLocMVP = m_locInvertMVP;
+        m_curLocColor = m_locInvertColor;
+        m_gl->glUseProgram(m_invertProgram);
+        m_gl->glBindTextureUnit(0, sceneTextureId);
+        m_gl->glUniform1i(m_locInvertSceneTexture, 0);
+        const Vector2 viewportSize = viewport.size();
+        m_gl->glUniform2f(m_locInvertViewportSize, viewportSize.x, viewportSize.y);
+    } else {
+        m_curProgram = m_shaderProgram;
+        m_curLocMVP = m_locMVP;
+        m_curLocColor = m_locColor;
+    }
+
+    const auto& colors = ruwa::ui::core::ThemeManager::instance().colors();
+    const QColor accent = colors.accent;
+    drawAutoSnapGuides(guides, viewport, viewport.camera().zoom(), accent.redF(), accent.greenF(),
+        accent.blueF(), 0.95f * accent.alphaF(), vpMatrix, nullptr);
+    m_gl->glDisable(GL_BLEND);
+}
+
 void TransformOverlay::onTransformModeEntered()
 {
     startVisibilityAnimation(1.0f);

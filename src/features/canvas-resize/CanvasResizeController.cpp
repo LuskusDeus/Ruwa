@@ -9,6 +9,9 @@
 
 #include "features/canvas/rendering/OpenGLCanvasWidget.h"
 #include "features/layers/model/LayerModel.h"
+#include "features/settings/SettingsManager.h"
+#include "features/transform/TransformSnapSceneBuilder.h"
+#include "features/transform/TransformSnapSession.h"
 #include "shared/style/AnimationPolicy.h"
 
 #include <QWidget>
@@ -116,6 +119,7 @@ bool CanvasResizeController::handleMousePress(const aether::Vector2& worldPos,
     if (m_overlayActive) {
         const Handle hitHandle = hitHandleAt(globalPos);
         if (hitHandle != Handle::None) {
+            beginSnapSession();
             m_isResizing = true;
             m_isMoving = false;
             m_isSelecting = false;
@@ -128,6 +132,7 @@ bool CanvasResizeController::handleMousePress(const aether::Vector2& worldPos,
 
     if (m_overlayActive && !m_selectionWorld.isEmpty() && containsPoint(globalPos)
         && !approximatelyMatchesCanvasRect(m_selectionWorld, m_canvasSize)) {
+        beginSnapSession();
         m_isMoving = true;
         m_isResizing = false;
         m_moveAnchorWorld = worldPos;
@@ -139,8 +144,14 @@ bool CanvasResizeController::handleMousePress(const aether::Vector2& worldPos,
         m_rectAnim->stop();
     }
 
+    beginSnapSession();
     m_pressPos = localPos;
-    m_startWorld = worldPos;
+    m_startWorld = snapPoint(worldPos, true, true);
+    // The press point and the moving corner are different snap subjects. Preserve the snapped
+    // start coordinate, but do not carry its hysteresis latch into the corner drag.
+    if (m_snapSession) {
+        m_snapSession->clear();
+    }
     m_isSelecting = true;
     m_isMoving = false;
     m_isResizing = false;
@@ -150,7 +161,8 @@ bool CanvasResizeController::handleMousePress(const aether::Vector2& worldPos,
     m_dragDetected = false;
     if (!wasActive) {
         m_selectionWorld
-            = QRectF(static_cast<qreal>(worldPos.x), static_cast<qreal>(worldPos.y), 0.5, 0.5);
+            = QRectF(static_cast<qreal>(m_startWorld.x), static_cast<qreal>(m_startWorld.y), 0.5,
+                0.5);
         startOverlayFadeIn();
     }
     updateOverlay();
@@ -201,6 +213,7 @@ bool CanvasResizeController::handleMouseMove(
         case Handle::None:
             break;
         }
+        snapResizedRect(rect);
         m_selectionWorld = rect.normalized();
         updateOverlay();
         return true;
@@ -210,6 +223,7 @@ bool CanvasResizeController::handleMouseMove(
         const qreal dx = static_cast<qreal>(worldPos.x - m_moveAnchorWorld.x);
         const qreal dy = static_cast<qreal>(worldPos.y - m_moveAnchorWorld.y);
         m_selectionWorld = m_moveStartRect.translated(dx, dy);
+        snapMovedRect(m_selectionWorld);
         updateOverlay();
         return true;
     }
@@ -223,14 +237,16 @@ bool CanvasResizeController::handleMouseMove(
         }
 
         if (m_dragDetected) {
+            const aether::Vector2 snappedWorld
+                = snapPoint(worldPos, true, true, m_startWorld.x, m_startWorld.y);
             const qreal left
-                = qMin(static_cast<qreal>(m_startWorld.x), static_cast<qreal>(worldPos.x));
+                = qMin(static_cast<qreal>(m_startWorld.x), static_cast<qreal>(snappedWorld.x));
             const qreal top
-                = qMin(static_cast<qreal>(m_startWorld.y), static_cast<qreal>(worldPos.y));
+                = qMin(static_cast<qreal>(m_startWorld.y), static_cast<qreal>(snappedWorld.y));
             const qreal right
-                = qMax(static_cast<qreal>(m_startWorld.x), static_cast<qreal>(worldPos.x));
+                = qMax(static_cast<qreal>(m_startWorld.x), static_cast<qreal>(snappedWorld.x));
             const qreal bottom
-                = qMax(static_cast<qreal>(m_startWorld.y), static_cast<qreal>(worldPos.y));
+                = qMax(static_cast<qreal>(m_startWorld.y), static_cast<qreal>(snappedWorld.y));
             m_selectionWorld = QRectF(QPointF(left, top), QPointF(right, bottom));
         }
         updateOverlay();
@@ -256,11 +272,13 @@ bool CanvasResizeController::handleMouseRelease(
     if (m_isResizing) {
         m_isResizing = false;
         m_activeHandle = Handle::None;
+        endSnapSession();
         return true;
     }
 
     if (m_isMoving) {
         m_isMoving = false;
+        endSnapSession();
         return true;
     }
 
@@ -281,6 +299,7 @@ bool CanvasResizeController::handleMouseRelease(
         }
 
         m_overlayActive = true;
+        endSnapSession();
         updateOverlay();
         return true;
     }
@@ -467,8 +486,10 @@ void CanvasResizeController::clearOverlay(bool animated)
         m_rectAnim->stop();
     }
     if (m_glWidget) {
-        m_glWidget->setCanvasResizeOverlayState(false, lastRect, false);
+        m_glWidget->setCanvasResizeSnapVisualState({});
+        m_glWidget->setCanvasResizeOverlayState(false, lastRect, false, true);
     }
+    m_snapSession.reset();
     m_selectionWorld = QRectF();
     emit previewSizeChanged(m_canvasSize);
     emit overlayStateChanged();
@@ -482,7 +503,9 @@ void CanvasResizeController::updateOverlay()
 
     const bool overlayActive = m_overlayActive || m_isSelecting || m_isMoving || m_isResizing;
     m_glWidget->setCanvasResizeOverlayState(
-        overlayActive, m_selectionWorld, m_isSelecting || m_isMoving || m_isResizing);
+        overlayActive, m_selectionWorld, m_isSelecting || m_isMoving || m_isResizing, true);
+    m_glWidget->setCanvasResizeSnapVisualState(
+        m_snapSession ? m_snapSession->visualState() : aether::TransformSnapVisualState {});
 
     if (overlayActive && m_callbacks.updateSelectionActionPopup) {
         m_callbacks.updateSelectionActionPopup();
@@ -497,7 +520,7 @@ void CanvasResizeController::startOverlayFadeIn()
         return;
     }
     m_glWidget->setCanvasResizeOverlayState(
-        true, m_selectionWorld, m_isSelecting || m_isMoving || m_isResizing);
+        true, m_selectionWorld, m_isSelecting || m_isMoving || m_isResizing, true);
 }
 
 void CanvasResizeController::startRectTransition(
@@ -589,6 +612,11 @@ void CanvasResizeController::translateSelection(qreal dx, qreal dy)
     m_startWorld.x += static_cast<float>(dx);
     m_startWorld.y += static_cast<float>(dy);
     m_selectionWorld.translate(dx, dy);
+    const QPointF beforeSnap = m_selectionWorld.topLeft();
+    snapMovedRect(m_selectionWorld);
+    const QPointF snapCorrection = m_selectionWorld.topLeft() - beforeSnap;
+    m_startWorld.x += static_cast<float>(snapCorrection.x());
+    m_startWorld.y += static_cast<float>(snapCorrection.y());
     updateOverlay();
 }
 
@@ -597,6 +625,183 @@ void CanvasResizeController::resetInteractionState()
     m_isSelecting = false;
     m_isMoving = false;
     m_isResizing = false;
+    endSnapSession();
+}
+
+void CanvasResizeController::beginSnapSession()
+{
+    m_snapSession.reset();
+    m_snapOperation = SnapOperation::None;
+    if (!m_glWidget || !m_canvasSize.isValid() || m_canvasSize.isEmpty()) {
+        return;
+    }
+
+    const auto& editor = ruwa::core::SettingsManager::instance().settings().editor;
+    if (!editor.autoSnapCanvasEnabled && !editor.autoSnapLayersEnabled) {
+        return;
+    }
+
+    aether::SnapSettings settings;
+    // Crop edges use Photoshop-style boundary targets, without transform-only centers or spacing.
+    settings.canvasEnabled = editor.autoSnapCanvasEnabled;
+    settings.layersEnabled = editor.autoSnapLayersEnabled;
+    settings.equalSpacingEnabled = false;
+    settings.centerAlignmentEnabled = false;
+
+    aether::SnapScene scene = aether::buildTransformSnapScene(m_layerModel,
+        { static_cast<float>(m_canvasSize.width()), static_cast<float>(m_canvasSize.height()) },
+        m_glWidget->hasFiniteDocumentBounds(), settings.layersEnabled);
+
+    m_snapSession = std::make_unique<aether::TransformSnapSession>(settings, std::move(scene),
+        aether::SnapCoordinatePolicy::Continuous);
+}
+
+void CanvasResizeController::endSnapSession()
+{
+    m_snapSession.reset();
+    m_snapOperation = SnapOperation::None;
+    if (m_glWidget) {
+        m_glWidget->setCanvasResizeSnapVisualState({});
+    }
+}
+
+aether::Vector2 CanvasResizeController::snapPoint(
+    const aether::Vector2& point, bool allowX, bool allowY,
+    std::optional<float> excludedTargetX, std::optional<float> excludedTargetY)
+{
+    if (!m_snapSession || !m_glWidget) {
+        return point;
+    }
+
+    if (m_snapOperation != SnapOperation::Point) {
+        m_snapSession->clear();
+        m_snapOperation = SnapOperation::Point;
+    }
+
+    const auto& viewport = m_glWidget->viewport();
+    const aether::SnapResult result = m_snapSession->solvePoint(
+        point, &viewport, viewport.camera().zoom(), false, allowX, allowY, excludedTargetX,
+        excludedTargetY);
+    return { point.x + result.correction.x, point.y + result.correction.y };
+}
+
+void CanvasResizeController::snapResizedRect(QRectF& rect)
+{
+    bool allowX = false;
+    bool allowY = false;
+    std::optional<float> excludedTargetX;
+    std::optional<float> excludedTargetY;
+    aether::Vector2 activePoint { static_cast<float>(rect.center().x()),
+        static_cast<float>(rect.center().y()) };
+
+    switch (m_activeHandle) {
+    case Handle::TopLeft:
+        activePoint = { static_cast<float>(rect.left()), static_cast<float>(rect.top()) };
+        allowX = true;
+        allowY = true;
+        excludedTargetX = static_cast<float>(rect.right());
+        excludedTargetY = static_cast<float>(rect.bottom());
+        break;
+    case Handle::Top:
+        activePoint.y = static_cast<float>(rect.top());
+        allowY = true;
+        excludedTargetY = static_cast<float>(rect.bottom());
+        break;
+    case Handle::TopRight:
+        activePoint = { static_cast<float>(rect.right()), static_cast<float>(rect.top()) };
+        allowX = true;
+        allowY = true;
+        excludedTargetX = static_cast<float>(rect.left());
+        excludedTargetY = static_cast<float>(rect.bottom());
+        break;
+    case Handle::Right:
+        activePoint.x = static_cast<float>(rect.right());
+        allowX = true;
+        excludedTargetX = static_cast<float>(rect.left());
+        break;
+    case Handle::BottomRight:
+        activePoint = { static_cast<float>(rect.right()), static_cast<float>(rect.bottom()) };
+        allowX = true;
+        allowY = true;
+        excludedTargetX = static_cast<float>(rect.left());
+        excludedTargetY = static_cast<float>(rect.top());
+        break;
+    case Handle::Bottom:
+        activePoint.y = static_cast<float>(rect.bottom());
+        allowY = true;
+        excludedTargetY = static_cast<float>(rect.top());
+        break;
+    case Handle::BottomLeft:
+        activePoint = { static_cast<float>(rect.left()), static_cast<float>(rect.bottom()) };
+        allowX = true;
+        allowY = true;
+        excludedTargetX = static_cast<float>(rect.right());
+        excludedTargetY = static_cast<float>(rect.top());
+        break;
+    case Handle::Left:
+        activePoint.x = static_cast<float>(rect.left());
+        allowX = true;
+        excludedTargetX = static_cast<float>(rect.right());
+        break;
+    case Handle::None:
+        return;
+    }
+
+    const aether::Vector2 snapped
+        = snapPoint(activePoint, allowX, allowY, excludedTargetX, excludedTargetY);
+    switch (m_activeHandle) {
+    case Handle::TopLeft:
+        rect.setLeft(snapped.x);
+        rect.setTop(snapped.y);
+        break;
+    case Handle::Top:
+        rect.setTop(snapped.y);
+        break;
+    case Handle::TopRight:
+        rect.setRight(snapped.x);
+        rect.setTop(snapped.y);
+        break;
+    case Handle::Right:
+        rect.setRight(snapped.x);
+        break;
+    case Handle::BottomRight:
+        rect.setRight(snapped.x);
+        rect.setBottom(snapped.y);
+        break;
+    case Handle::Bottom:
+        rect.setBottom(snapped.y);
+        break;
+    case Handle::BottomLeft:
+        rect.setLeft(snapped.x);
+        rect.setBottom(snapped.y);
+        break;
+    case Handle::Left:
+        rect.setLeft(snapped.x);
+        break;
+    case Handle::None:
+        break;
+    }
+}
+
+void CanvasResizeController::snapMovedRect(QRectF& rect)
+{
+    if (!m_snapSession || !m_glWidget || rect.isEmpty()) {
+        return;
+    }
+
+    if (m_snapOperation != SnapOperation::Move) {
+        m_snapSession->clear();
+        m_snapOperation = SnapOperation::Move;
+    }
+
+    const QRectF normalized = rect.normalized();
+    const aether::Rect source { static_cast<float>(normalized.left()),
+        static_cast<float>(normalized.top()), static_cast<float>(normalized.width()),
+        static_cast<float>(normalized.height()) };
+    const auto& viewport = m_glWidget->viewport();
+    const aether::SnapResult result
+        = m_snapSession->solveMove(source, &viewport, viewport.camera().zoom());
+    rect.translate(result.correction.x, result.correction.y);
 }
 
 } // namespace ruwa::ui::workspace

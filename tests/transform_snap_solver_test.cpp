@@ -51,6 +51,32 @@ TEST_CASE("transform snap canvas exposes center and finite edges")
         }));
 }
 
+TEST_CASE("canvas-only snap can exclude center alignment")
+{
+    SnapSettings settings;
+    settings.layersEnabled = false;
+    settings.equalSpacingEnabled = false;
+    settings.centerAlignmentEnabled = false;
+
+    TransformSnapSession centerSession(
+        settings, finiteCanvasScene(), SnapCoordinatePolicy::Continuous);
+    REQUIRE_FALSE(
+        centerSession.solvePoint({ 48.0f, 40.0f }, nullptr, 1.0f, true).xRelation.has_value());
+
+    TransformSnapSession edgeSession(
+        settings, finiteCanvasScene(), SnapCoordinatePolicy::Continuous);
+    const SnapResult edge = edgeSession.solvePoint({ 94.0f, 40.0f }, nullptr, 1.0f, true);
+    REQUIRE(edge.xRelation.has_value());
+    REQUIRE(edge.xRelation->targetAnchor == SnapAnchor::End);
+    REQUIRE(edge.correction.x == Catch::Approx(6.0f));
+
+    TransformSnapSession movedRectSession(
+        settings, finiteCanvasScene(), SnapCoordinatePolicy::Continuous);
+    const SnapResult movedRect
+        = movedRectSession.solveMove({ -10.0f, 20.0f, 20.0f, 10.0f }, nullptr, 1.0f);
+    REQUIRE_FALSE(movedRect.xRelation.has_value());
+}
+
 TEST_CASE("transform snap hysteresis captures at eight and releases after fourteen screen pixels")
 {
     SnapSettings settings;
@@ -59,6 +85,39 @@ TEST_CASE("transform snap hysteresis captures at eight and releases after fourte
     REQUIRE(session.solvePoint({ 92.0f, 40.0f }, nullptr, 1.0f, true).xRelation.has_value());
     REQUIRE(session.solvePoint({ 87.0f, 40.0f }, nullptr, 1.0f, true).xRelation.has_value());
     REQUIRE_FALSE(session.solvePoint({ 85.0f, 40.0f }, nullptr, 1.0f, true).xRelation.has_value());
+}
+
+TEST_CASE("point snap excludes a target coordinate occupied by the opposite crop edge")
+{
+    SnapSettings settings;
+    settings.centerAlignmentEnabled = false;
+    TransformSnapSession session(settings, finiteCanvasScene(), SnapCoordinatePolicy::Continuous);
+
+    REQUIRE(session.solvePoint({ 6.0f, 40.0f }, nullptr, 1.0f, true).xRelation.has_value());
+    const SnapResult result = session.solvePoint(
+        { 6.0f, 40.0f }, nullptr, 1.0f, true, true, false, 0.0f, std::nullopt);
+    REQUIRE_FALSE(result.xRelation.has_value());
+}
+
+TEST_CASE("crop boundary policy snaps to layer edges without using layer centers")
+{
+    SnapSettings settings;
+    settings.canvasEnabled = false;
+    settings.equalSpacingEnabled = false;
+    settings.centerAlignmentEnabled = false;
+
+    SnapScene scene;
+    scene.targets = { { { 30.0f, 10.0f, 20.0f, 20.0f }, QUuid::createUuid(), {},
+        SnapTargetType::Raster } };
+
+    TransformSnapSession edgeSession(settings, scene, SnapCoordinatePolicy::Continuous);
+    const SnapResult edge = edgeSession.solvePoint({ 24.0f, 20.0f }, nullptr, 1.0f);
+    REQUIRE(edge.xRelation.has_value());
+    REQUIRE(edge.xRelation->targetCoordinate == Catch::Approx(30.0f));
+
+    TransformSnapSession centerSession(settings, scene, SnapCoordinatePolicy::Continuous);
+    REQUIRE_FALSE(
+        centerSession.solvePoint({ 39.0f, 20.0f }, nullptr, 1.0f).xRelation.has_value());
 }
 
 TEST_CASE("transform snap thresholds are measured through zoomed and rotated viewport")

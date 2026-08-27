@@ -747,10 +747,11 @@ void SettingsContent::createEditorCategory()
         category->addSettingsWidget(toggle);
     };
     addSnapToggle(m_autoSnapCanvasToggle, tr("Snap to canvas"),
-        tr("Align transformed content to the canvas center and finite edges"),
+        tr("Align transformed content to the canvas center and edges, and canvas resize edges to "
+           "finite bounds"),
         &ruwa::core::SettingsManager::setAutoSnapCanvasEnabled);
     addSnapToggle(m_autoSnapLayersToggle, tr("Snap to layers"),
-        tr("Align transformed content to visible layers and groups"),
+        tr("Align transformed content and canvas resize edges to visible layers and groups"),
         &ruwa::core::SettingsManager::setAutoSnapLayersEnabled);
     addSnapToggle(m_autoSnapEqualSpacingToggle, tr("Snap to equal spacing"),
         tr("Repeat nearby gaps and center content between neighboring objects"),
