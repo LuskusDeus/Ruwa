@@ -1461,10 +1461,6 @@ void BrushStrokeHost::continueStrokeImmediate(float worldX, float worldY, float 
         inputTimestampReliable = false;
     }
 
-    const Vector2 smoothedTarget = smoothInputTargetForViewport(worldX, worldY);
-    worldX = smoothedTarget.x;
-    worldY = smoothedTarget.y;
-
     TileBrush* currentBrush = brush();
     TileGrid* grid = activeLayerTileGrid();
     if (!currentBrush || !grid) {
@@ -1504,6 +1500,26 @@ void BrushStrokeHost::continueStrokeImmediate(float worldX, float worldY, float 
         = stepStrokeSpeedClock(realMs, wallMs, isRealPenSample, inputTimestampReliable);
     const float dabElapsedSeconds = stepDabDynamicsClock(stabilizerNowMs, realMs);
 
+    // Stabilization may itself be driven by Stroke Speed. The current cursor
+    // speed does not exist until the stabilizer has produced its output, so use
+    // the previous resolved speed while evaluating this step's lag. This makes
+    // the feedback causal (one output sample of delay) instead of measuring the
+    // hardware cursor first or trying to solve a circular dependency.
+    BrushInputDynamics stabilizationInputDynamics = inputDynamics;
+    stabilizationInputDynamics.strokeSpeed = m_lastStrokeTargetInputDynamics.strokeSpeed;
+    stabilizationInputDynamics.strokeSpeedAvailable
+        = m_lastStrokeTargetInputDynamics.strokeSpeedAvailable;
+    currentBrush->setPressure(pressure);
+    currentBrush->setInputDynamics(stabilizationInputDynamics);
+    currentBrush->setStrokeElapsedSeconds(dabElapsedSeconds, true);
+
+    const float stabSlider = currentBrush->stabilization();
+    const float stabLagMs = ruwa::core::brushes::stabilizationTauMs(stabSlider);
+    const Vector2 filteredTarget
+        = smoothInputTargetForViewport(worldX, worldY, stabLagMs > 0.0f);
+    worldX = filteredTarget.x;
+    worldY = filteredTarget.y;
+
     if (auto* quickShape = quickShapeMorph(); quickShape && quickShape->isActive()) {
         BrushInputDynamics sampledInputDynamics = inputDynamics;
         sampledInputDynamics.strokeSpeed
@@ -1524,22 +1540,6 @@ void BrushStrokeHost::continueStrokeImmediate(float worldX, float worldY, float 
         return;
     }
 
-    // Stabilization may itself be driven by Stroke Speed. The current cursor
-    // speed does not exist until the stabilizer has produced its output, so use
-    // the previous resolved speed while evaluating this step's lag. This makes
-    // the feedback causal (one output sample of delay) instead of measuring the
-    // hardware cursor first or trying to solve a circular dependency.
-    BrushInputDynamics stabilizationInputDynamics = inputDynamics;
-    stabilizationInputDynamics.strokeSpeed = m_lastStrokeTargetInputDynamics.strokeSpeed;
-    stabilizationInputDynamics.strokeSpeedAvailable
-        = m_lastStrokeTargetInputDynamics.strokeSpeedAvailable;
-    currentBrush->setPressure(pressure);
-    currentBrush->setInputDynamics(stabilizationInputDynamics);
-    currentBrush->setStrokeElapsedSeconds(dabElapsedSeconds, true);
-
-    const float stabSlider = currentBrush->stabilization();
-    const float stabLagMs = ruwa::core::brushes::stabilizationTauMs(stabSlider);
-
     // Take ONE stabilized point per call and let the downstream Catmull-Rom
     // interpolate the curve between such points. Feeding the stabilizer's dense
     // 1 ms sub-point stream as geometry instead made smooth arcs FACETED:
@@ -1549,7 +1549,7 @@ void BrushStrokeHost::continueStrokeImmediate(float worldX, float worldY, float 
     // inter-event facets, and Catmull-Rom can't re-curve points that genuinely
     // lie on a line. Keeping only the per-event stabilized point (still
     // jitter-filtered by the EWMA) and curving BETWEEN them restores smooth
-    // roundings — exactly how the no-stabilizer path already works.
+    // roundings without feeding dense sub-points into the rasterizer.
     //
     // Pressure is delayed in lockstep with position (2-stage EWMA, same alpha)
     // so each dab carries the pressure the pen had at that lagged point — see the
@@ -1607,8 +1607,15 @@ void BrushStrokeHost::continueStrokeImmediate(float worldX, float worldY, float 
     m_lastStrokeTargetInputDynamics = sampledInputDynamics;
     m_lastStrokeTargetElapsedSeconds = strokeElapsedSeconds;
 
+    const bool strokeSpeedBound = currentBrush->hasActiveDynamicsBinding(
+        ruwa::core::brushes::BrushInputSourceKey::StrokeSpeed);
+    // The Laplacian/Catmull-Rom path retains at least two future samples. That
+    // look-ahead is appropriate for stabilized geometry and for the initial
+    // Stroke Speed estimate, but a literal 0% setting must commit each resolved
+    // input point in the current drain.
+    const bool zeroLatencyGeometry = stabLagMs <= 0.0f && !strokeSpeedBound;
     continueStrokeWithResolvedPoint(worldX, worldY, emitPressure, dabElapsedSeconds,
-        sampledInputDynamics, resolved, false, false);
+        sampledInputDynamics, resolved, zeroLatencyGeometry, false, false);
     updateStabilizerCatchupTimer();
     if (requestRenderAfterStep && m_callbacks.requestRender) {
         m_callbacks.requestRender();
@@ -1617,7 +1624,8 @@ void BrushStrokeHost::continueStrokeImmediate(float worldX, float worldY, float 
 
 void BrushStrokeHost::continueStrokeWithResolvedPoint(float worldX, float worldY, float pressure,
     float dabElapsedSeconds, const BrushInputDynamics& inputDynamics,
-    const Vector2& resolvedPoint, bool requestRenderAfterStep, bool updateCatchupTimer)
+    const Vector2& resolvedPoint, bool zeroLatencyGeometry, bool requestRenderAfterStep,
+    bool updateCatchupTimer)
 {
     if (!m_isDrawing) {
         return;
@@ -1806,6 +1814,28 @@ void BrushStrokeHost::continueStrokeWithResolvedPoint(float worldX, float worldY
         }
         previewUpdated
             = rebuildStrokePreviewFromDabs(grid, paintMask, executionBackend, true, &rebuiltTiles);
+    } else if (zeroLatencyGeometry) {
+        // Reuse the established segment rasterizer, but commit the current input
+        // point immediately instead of retaining the two-sample smoothing tail.
+        rasterizeStrokeSegment(grid, paintMask, executionBackend, prevX, prevY,
+            stabilizedPoint.x, stabilizedPoint.y, prevPressure, pressure,
+            m_lastStrokeElapsedSeconds, dabElapsedSeconds, m_lastStrokeInputDynamics,
+            inputDynamics);
+
+        m_prevEmittedPoint = { prevX, prevY };
+        m_prevEmittedInputDynamics = m_lastStrokeInputDynamics;
+        m_lastStrokeX = stabilizedPoint.x;
+        m_lastStrokeY = stabilizedPoint.y;
+        m_lastStrokePressure = pressure;
+        m_lastStrokeInputDynamics = inputDynamics;
+        m_lastStrokeElapsedSeconds = dabElapsedSeconds;
+
+        // Keep the same single anchor invariant beginStroke establishes. If a
+        // dynamics binding turns stabilization on later in this stroke, the
+        // existing look-ahead path can continue from this exact committed point.
+        m_liveStrokePoints.clear();
+        m_liveStrokePoints.push_back(
+            { stabilizedPoint, pressure, dabElapsedSeconds, inputDynamics, true });
     } else {
         // Adaptive Laplacian smoothing of a sliding window over the live
         // polyline. Replaces the previous spline-based emission entirely.
@@ -3044,10 +3074,13 @@ bool BrushStrokeHost::hasPendingStabilizerCatchup() const
         m_stabilizationState, m_lastStrokeTargetX, m_lastStrokeTargetY);
 }
 
-Vector2 BrushStrokeHost::smoothInputTargetForViewport(float worldX, float worldY)
+Vector2 BrushStrokeHost::smoothInputTargetForViewport(float worldX, float worldY, bool enabled)
 {
     const Vector2 raw { worldX, worldY };
-    if (m_strokeInputDevice != StrokeInputDevice::Stylus) {
+    if (m_strokeInputDevice != StrokeInputDevice::Stylus || !enabled) {
+        // Do not apply the independent zoom-out follower when stabilization is
+        // explicitly disabled. Otherwise the later zero-latency raster path
+        // would still receive an already-lagged target.
         m_autoInputSmoothingValid = false;
         return raw;
     }

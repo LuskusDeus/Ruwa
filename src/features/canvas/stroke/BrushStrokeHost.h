@@ -230,7 +230,8 @@ private:
     // input clock — everything this writes ends up on a dab.
     void continueStrokeWithResolvedPoint(float worldX, float worldY, float pressure,
         float dabElapsedSeconds, const BrushInputDynamics& inputDynamics,
-        const Vector2& stabilizedPoint, bool requestRenderAfterStep, bool updateCatchupTimer);
+        const Vector2& stabilizedPoint, bool zeroLatencyGeometry, bool requestRenderAfterStep,
+        bool updateCatchupTimer);
     void rasterizeStrokeSegment(TileGrid* grid, TileGrid* selectionMask,
         BrushExecutionBackend* brushExecutionBackend, float fromX, float fromY, float toX,
         float toY, float fromPressure, float toPressure, float fromStrokeElapsedSeconds,
@@ -273,7 +274,7 @@ private:
     // Liquify "dwell": time-based dab while the brush is held (twirl/bloat/pucker
     // keep applying even with no cursor movement). Push is movement-only.
     void emitLiquifyDwell();
-    Vector2 smoothInputTargetForViewport(float worldX, float worldY);
+    Vector2 smoothInputTargetForViewport(float worldX, float worldY, bool enabled);
     // World-space window (px) for continuous dynamics signals that can affect
     // dab geometry. Coupled to the brush base radius so their rate of change
     // stays smooth relative to dab spacing at any brush size / zoom.
