@@ -130,6 +130,26 @@
         <translation type="unfinished"></translation>
     </message>
     <message>
+        <location filename="../src/features/brush/ui/BrushDynamicsEditorWidget.cpp" line="1490"/>
+        <source>FILTER</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location filename="../src/features/brush/ui/BrushDynamicsEditorWidget.cpp" line="1494"/>
+        <source>Smoothing</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location filename="../src/features/brush/ui/BrushDynamicsEditorWidget.cpp" line="1498"/>
+        <source>Strength</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location filename="../src/features/brush/ui/BrushDynamicsEditorWidget.cpp" line="1502"/>
+        <source>Response speed by change</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
         <location filename="../src/features/brush/ui/BrushDynamicsEditorWidget.cpp" line="1242"/>
         <source>INPUTS</source>
         <translation type="unfinished"></translation>

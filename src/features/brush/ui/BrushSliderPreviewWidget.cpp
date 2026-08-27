@@ -32,11 +32,26 @@ bool dynamicsBindingsEqual(const ruwa::core::brushes::BrushDynamicsModel& a,
             return false;
         }
 
+        if (lhsSlot.inputFilter.durationSec != rhsSlot.inputFilter.durationSec
+            || lhsSlot.inputFilter.responseCurve.points.size()
+                != rhsSlot.inputFilter.responseCurve.points.size()) {
+            return false;
+        }
+        for (std::size_t pointIndex = 0;
+            pointIndex < lhsSlot.inputFilter.responseCurve.points.size(); ++pointIndex) {
+            const auto& lp = lhsSlot.inputFilter.responseCurve.points[pointIndex];
+            const auto& rp = rhsSlot.inputFilter.responseCurve.points[pointIndex];
+            if (lp.x != rp.x || lp.y != rp.y || lp.smoothness != rp.smoothness) {
+                return false;
+            }
+        }
+
         for (std::size_t bindingIndex = 0; bindingIndex < lhsSlot.bindings.size(); ++bindingIndex) {
             const auto& lhs = lhsSlot.bindings[bindingIndex];
             const auto& rhs = rhsSlot.bindings[bindingIndex];
             if (lhs.setting != rhs.setting || lhs.source != rhs.source || lhs.mode != rhs.mode
-                || lhs.enabled != rhs.enabled
+                || lhs.enabled != rhs.enabled || lhs.durationSec != rhs.durationSec
+                || lhs.endAction != rhs.endAction
                 || lhs.curve.points.size() != rhs.curve.points.size()) {
                 return false;
             }

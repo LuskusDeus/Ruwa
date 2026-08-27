@@ -93,7 +93,7 @@ BrushDynamicsSlot dynamicsSlotForSetting(
     }
 
     auto slot = settings.dynamics.slotForSetting(dynamicsKey);
-    if (slot.hasStoredBindings()) {
+    if (slot.hasStoredInputBindings()) {
         return slot;
     }
 
@@ -104,6 +104,7 @@ BrushDynamicsSlot dynamicsSlotForSetting(
     }
 
     auto fallbackSlot = defaultDynamicsSlotForSetting(settingKey);
+    fallbackSlot.inputFilter = slot.inputFilter;
     fallbackSlot.binding(BrushInputSourceKey::TabletPressure).enabled
         = slot.binding(BrushInputSourceKey::TabletPressure).enabled;
     return fallbackSlot;
@@ -188,6 +189,9 @@ bool applyDynamicsSlotForSetting(
 
     auto normalizedSlot = slot;
     normalizedSlot.setting = dynamicsKey;
+    normalizedSlot.inputFilter.durationSec
+        = clampBrushInputFilterDurationSeconds(normalizedSlot.inputFilter.durationSec);
+    normalizedSlot.inputFilter.responseCurve.normalize();
     for (std::size_t sourceIndex = 0; sourceIndex < normalizedSlot.bindings.size(); ++sourceIndex) {
         auto& binding = normalizedSlot.bindings[sourceIndex];
         binding.setting = dynamicsKey;

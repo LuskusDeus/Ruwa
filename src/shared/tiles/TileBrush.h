@@ -75,6 +75,7 @@ public:
     {
         m_brushSettingsModel = settings;
         m_useBrushSettingsModel = true;
+        m_dynamicsFilterState.reset();
         refreshRandomBoundSettingMask();
 
         setHardness(m_brushSettingsModel.hardness);
@@ -446,10 +447,7 @@ public:
         m_inputDynamics.penTilt = std::clamp(m_inputDynamics.penTilt, 0.0f, 1.0f);
         m_inputDynamics.strokeSpeed = std::clamp(m_inputDynamics.strokeSpeed, 0.0f, 1.0f);
     }
-    const ruwa::core::brushes::BrushInputDynamics& inputDynamics() const
-    {
-        return m_inputDynamics;
-    }
+    const ruwa::core::brushes::BrushInputDynamics& inputDynamics() const { return m_inputDynamics; }
     void setStrokeElapsedSeconds(float seconds, bool available = true)
     {
         if (!available || !std::isfinite(seconds)) {
@@ -833,6 +831,7 @@ public:
         m_strokeDirSumY = 0.0f;
         m_strokeTravelTotal = 0.0f;
         m_strokeDirInitialized = false;
+        m_dynamicsFilterState.reset();
         clearStrokeTime();
     }
 
@@ -899,6 +898,7 @@ public:
         m_strokeDirSumY = 0.0f;
         m_strokeTravelTotal = 0.0f;
         m_strokeDirInitialized = false;
+        m_dynamicsFilterState.reset();
         clearStrokeTime();
         m_inputDynamics = {};
         return affected;
@@ -1318,6 +1318,7 @@ public:
         m_strokeDirSumY = 0.0f;
         m_strokeTravelTotal = 0.0f;
         m_strokeDirInitialized = false;
+        m_dynamicsFilterState.reset();
         clearStrokeTime();
         m_inputDynamics = {};
     }
@@ -1339,7 +1340,7 @@ public:
         inputContext.strokeDirection = std::clamp(strokeDirection, 0.0f, 1.0f);
         inputContext.strokeDirectionAvailable = strokeDirectionAvailable;
         populateSettingRandomValues(inputContext, ix, iy, randomSeed);
-        const auto dynamicState = evaluateDynamicsForInput(inputContext);
+        const auto dynamicState = advanceDynamicsForInput(inputContext);
 
         DabPoint dab;
         dab.worldX = worldX;
@@ -1735,8 +1736,7 @@ public:
 
     bool hasActiveStrokeDirectionDynamicsBinding() const
     {
-        return hasActiveDynamicsBinding(
-            ruwa::core::brushes::BrushInputSourceKey::StrokeDirection);
+        return hasActiveDynamicsBinding(ruwa::core::brushes::BrushInputSourceKey::StrokeDirection);
     }
 
     /// Whether the interactive stroke must observe a real segment before its
@@ -1745,8 +1745,7 @@ public:
     bool requiresMotionBeforeFirstDab() const
     {
         return hasActiveStrokeDirectionDynamicsBinding()
-            || hasActiveDynamicsBinding(
-                ruwa::core::brushes::BrushInputSourceKey::StrokeSpeed);
+            || hasActiveDynamicsBinding(ruwa::core::brushes::BrushInputSourceKey::StrokeSpeed);
     }
 
     bool hasInitializedStrokeDirection() const { return m_strokeDirInitialized; }
@@ -1783,12 +1782,18 @@ public:
         auto withoutDir = withDir;
         withoutDir.strokeDirectionAvailable = false;
 
-        const float angleWith
+        const float angleWithTarget
             = ruwa::core::brushes::evaluateDynamicsSlotValue(m_angleDegrees, angleSlot, withDir);
         const float angleWithout
             = ruwa::core::brushes::evaluateDynamicsSlotValueExcludingSource(m_angleDegrees,
                 angleSlot, withoutDir, ruwa::core::brushes::BrushInputSourceKey::StrokeDirection);
-        float deltaDeg = angleWith - angleWithout;
+        // The cursor is a preview and must not advance the stroke's filter
+        // state. It does, however, use that exact state and timestamp so its
+        // direction-driven rotation matches the next recorded dab instead of
+        // snapping directly to the unfiltered target.
+        const float filteredAngleWith = ruwa::core::brushes::previewDynamicsInputFilter(
+            angleWithTarget, angleSlot, withDir, m_dynamicsFilterState);
+        float deltaDeg = filteredAngleWith - angleWithout;
         // Wrap to the shortest-arc representative in (-180, 180]; otherwise
         // a 359° → 1° transition would visually spin the cursor the long way.
         if (deltaDeg > 180.0f)
@@ -2106,7 +2111,18 @@ private:
             return legacy;
         }
 
-        return ruwa::core::brushes::evaluateBrushDynamics(m_brushSettingsModel, inputContext);
+        return ruwa::core::brushes::evaluateBrushDynamics(
+            m_brushSettingsModel, inputContext, &m_dynamicsFilterState, false);
+    }
+
+    ruwa::core::brushes::BrushEvaluatedState advanceDynamicsForInput(
+        const ruwa::core::brushes::BrushInputContext& inputContext)
+    {
+        if (!m_useBrushSettingsModel) {
+            return evaluateDynamicsForInput(inputContext);
+        }
+        return ruwa::core::brushes::evaluateBrushDynamics(
+            m_brushSettingsModel, inputContext, &m_dynamicsFilterState, true);
     }
 
     ruwa::core::brushes::BrushEvaluatedState evaluateDynamicsForPressure(float pressure,
@@ -3509,6 +3525,7 @@ private:
     float m_strokeTravelTotal = 0.0f;
     bool m_strokeDirInitialized = false;
     ruwa::core::brushes::BrushSettingsData m_brushSettingsModel {};
+    mutable ruwa::core::brushes::BrushDynamicsFilterState m_dynamicsFilterState {};
     bool m_useBrushSettingsModel = false;
     // Bitmask of setting indices whose dynamics slot has an *active* binding
     // to BrushInputSourceKey::RandomValue. Recomputed in setBrushSettings.

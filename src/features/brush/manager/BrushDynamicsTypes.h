@@ -56,6 +56,9 @@ constexpr float kBrushStrokeSpeedMaxScreenPxPerSecond = 4000.0f;
 /// enough tablet packets to represent the deliberate motion while keeping a
 /// speed-driven brush responsive to acceleration and direction changes.
 constexpr float kBrushStrokeSpeedFilterTimeSeconds = 0.150f;
+/// Maximum full-range traversal time of the per-setting dynamics post-filter.
+/// The UI exposes this as 0-100%; zero bypasses the filter completely.
+constexpr float kBrushInputFilterMaxDurationSeconds = 2.0f;
 
 enum class BrushInputSourceKey : uint8_t {
     None = 0,
@@ -140,6 +143,14 @@ inline float clampBrushTimeDurationSeconds(float value)
     return std::clamp(value, 0.1f, 10.0f);
 }
 
+inline float clampBrushInputFilterDurationSeconds(float value)
+{
+    if (!std::isfinite(value)) {
+        return 0.0f;
+    }
+    return std::clamp(value, 0.0f, kBrushInputFilterMaxDurationSeconds);
+}
+
 inline float normalizeAngleDegrees(float value)
 {
     if (!std::isfinite(value)) {
@@ -178,9 +189,8 @@ inline float interpolateNormalizedAngle(float from, float to, float amount)
     return result;
 }
 
-inline BrushInputDynamics interpolateBrushInputDynamics(
-    const BrushInputDynamics& from, const BrushInputDynamics& to, float amount,
-    float travelDistance = 0.0f)
+inline BrushInputDynamics interpolateBrushInputDynamics(const BrushInputDynamics& from,
+    const BrushInputDynamics& to, float amount, float travelDistance = 0.0f)
 {
     BrushInputDynamics result;
     amount = clamp01(amount);
@@ -224,15 +234,15 @@ inline BrushInputDynamics interpolateBrushInputDynamics(
             const float h10 = amount3 - 2.0f * amount2 + amount;
             const float h01 = -2.0f * amount3 + 3.0f * amount2;
             const float h11 = amount3 - amount2;
-            result.strokeSpeed = clamp01(h00 * fromValue + h10 * fromTangent + h01 * toValue
-                + h11 * toTangent);
+            result.strokeSpeed
+                = clamp01(h00 * fromValue + h10 * fromTangent + h01 * toValue + h11 * toTangent);
 
             const float dh00 = 6.0f * amount2 - 6.0f * amount;
             const float dh10 = 3.0f * amount2 - 4.0f * amount + 1.0f;
             const float dh01 = -dh00;
             const float dh11 = 3.0f * amount2 - 2.0f * amount;
-            result.strokeSpeedSpatialDerivative = (dh00 * fromValue + dh10 * fromTangent
-                + dh01 * toValue + dh11 * toTangent)
+            result.strokeSpeedSpatialDerivative
+                = (dh00 * fromValue + dh10 * fromTangent + dh01 * toValue + dh11 * toTangent)
                 / travelDistance;
             result.strokeSpeedSpatialDerivativeAvailable = true;
         } else {

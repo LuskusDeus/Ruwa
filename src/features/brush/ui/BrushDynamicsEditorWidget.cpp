@@ -16,6 +16,7 @@
 #include "shared/widgets/layout/AnimatedStackedWidget.h"
 
 #include <QCoreApplication>
+#include <QFrame>
 #include <QHBoxLayout>
 #include <QLabel>
 #include <QLocale>
@@ -35,6 +36,7 @@ using namespace ruwa::ui::core;
 namespace {
 
 constexpr int kTimeDurationSliderFactor = 10;
+constexpr int kInputFilterStrengthMaximum = 100;
 
 void makeWidgetTransparent(QWidget* widget)
 {
@@ -66,6 +68,26 @@ QString formatTimeDurationLabel(float durationSec)
     return QLocale().toString(clamped, 'f', 1);
 }
 
+int sliderValueFromInputFilterDuration(float durationSec)
+{
+    const float normalized = ruwa::core::brushes::clampBrushInputFilterDurationSeconds(durationSec)
+        / ruwa::core::brushes::kBrushInputFilterMaxDurationSeconds;
+    return qRound(normalized * static_cast<float>(kInputFilterStrengthMaximum));
+}
+
+float inputFilterDurationFromSliderValue(int sliderValue)
+{
+    const float normalized
+        = static_cast<float>(sliderValue) / static_cast<float>(kInputFilterStrengthMaximum);
+    return ruwa::core::brushes::clampBrushInputFilterDurationSeconds(
+        normalized * ruwa::core::brushes::kBrushInputFilterMaxDurationSeconds);
+}
+
+QString formatInputFilterStrength(float durationSec)
+{
+    return QStringLiteral("%1%").arg(sliderValueFromInputFilterDuration(durationSec));
+}
+
 QVector<qreal> evenlySpacedTicks(qreal minValue, qreal maxValue, int segments)
 {
     QVector<qreal> ticks;
@@ -85,6 +107,7 @@ QVector<qreal> evenlySpacedTicks(qreal minValue, qreal maxValue, int segments)
 class BrushDynamicsSourceButton final : public BaseAnimatedButton {
 public:
     enum class SourceIcon {
+        Filter,
         Pressure,
         Time,
         Random,
@@ -211,6 +234,8 @@ private:
     QString iconResourceName() const
     {
         switch (m_icon) {
+        case SourceIcon::Filter:
+            return QStringLiteral("Curve");
         case SourceIcon::Pressure:
             return QStringLiteral("PenPressure");
         case SourceIcon::Time:
@@ -369,6 +394,17 @@ BrushDynamicsEditorWidget::defaultStrokeSpeedBinding(BrushDynamicsSettingKey set
     return binding;
 }
 
+ruwa::core::brushes::BrushDynamicsInputFilter BrushDynamicsEditorWidget::defaultInputFilter()
+{
+    ruwa::core::brushes::BrushDynamicsInputFilter filter;
+    filter.responseCurve.points = {
+        { 0.0f, 1.0f, 0.65f },
+        { 1.0f, 1.0f, 0.65f },
+    };
+    filter.responseCurve.normalize();
+    return filter;
+}
+
 BrushDynamicsEditorWidget::BrushDynamicsBinding BrushDynamicsEditorWidget::displayBinding(
     BrushDynamicsBinding binding) const
 {
@@ -440,13 +476,12 @@ BrushDynamicsEditorWidget::CurveAxesConfig BrushDynamicsEditorWidget::curveAxesC
         config.horizontalAxis.tickValues = evenlySpacedTicks(0.0, 360.0, 4);
     } else if (binding.source == BrushInputSourceKey::StrokeSpeed) {
         config.horizontalAxis.minValue = 0.0;
-        config.horizontalAxis.maxValue
-            = ruwa::core::brushes::kBrushStrokeSpeedMaxScreenPxPerSecond;
+        config.horizontalAxis.maxValue = ruwa::core::brushes::kBrushStrokeSpeedMaxScreenPxPerSecond;
         config.horizontalAxis.displayScale = 1.0;
         config.horizontalAxis.displayDecimals = 0;
         config.horizontalAxis.suffix = QStringLiteral(" px/s");
-        config.horizontalAxis.tickValues = evenlySpacedTicks(
-            0.0, ruwa::core::brushes::kBrushStrokeSpeedMaxScreenPxPerSecond, 4);
+        config.horizontalAxis.tickValues
+            = evenlySpacedTicks(0.0, ruwa::core::brushes::kBrushStrokeSpeedMaxScreenPxPerSecond, 4);
     }
     return config;
 }
@@ -486,6 +521,9 @@ QString BrushDynamicsEditorWidget::formatRandomRange(
 
 ToggleSwitch* BrushDynamicsEditorWidget::activeToggle() const
 {
+    if (m_activeSource == BrushInputSourceKey::None) {
+        return nullptr;
+    }
     if (m_activeSource == BrushInputSourceKey::Time) {
         return m_timeToggle;
     }
@@ -506,6 +544,9 @@ ToggleSwitch* BrushDynamicsEditorWidget::activeToggle() const
 
 SegmentedOptionSelector* BrushDynamicsEditorWidget::activeModeSelector() const
 {
+    if (m_activeSource == BrushInputSourceKey::None) {
+        return nullptr;
+    }
     if (m_activeSource == BrushInputSourceKey::RandomValue) {
         return m_randomModeSelector;
     }
@@ -523,6 +564,9 @@ SegmentedOptionSelector* BrushDynamicsEditorWidget::activeModeSelector() const
 
 CurveEditorWidget* BrushDynamicsEditorWidget::activeCurveEditor() const
 {
+    if (m_activeSource == BrushInputSourceKey::None) {
+        return m_filterCurveEditor;
+    }
     if (m_activeSource == BrushInputSourceKey::RandomValue) {
         return nullptr;
     }
@@ -557,6 +601,18 @@ BrushDynamicsEditorWidget::BrushDynamicsEditorWidget(QWidget* parent)
         ThemeManager::instance().scaled(7));
     sourcesLayout->setSpacing(ThemeManager::instance().scaled(3));
 
+    m_filterSectionLabel = new QLabel(m_sourcesColumn);
+    m_filterSectionLabel->setObjectName(QStringLiteral("brush_dynamics_editor_filter_label"));
+    m_filterButton = new BrushDynamicsSourceButton(
+        QCoreApplication::translate("BrushEditorParameterOverlay", "Smoothing"), m_sourcesColumn);
+    static_cast<BrushDynamicsSourceButton*>(m_filterButton)
+        ->setSourceIcon(BrushDynamicsSourceButton::SourceIcon::Filter);
+
+    auto* sourcesSeparator = new QFrame(m_sourcesColumn);
+    sourcesSeparator->setObjectName(QStringLiteral("brush_dynamics_editor_sources_separator"));
+    sourcesSeparator->setFrameShape(QFrame::HLine);
+    sourcesSeparator->setFrameShadow(QFrame::Plain);
+
     m_sourcesLabel = new QLabel(m_sourcesColumn);
     m_sourcesLabel->setObjectName(QStringLiteral("brush_dynamics_editor_sources_label"));
 
@@ -571,7 +627,8 @@ BrushDynamicsEditorWidget::BrushDynamicsEditorWidget(QWidget* parent)
     m_tiltButton = new BrushDynamicsSourceButton(
         QCoreApplication::translate("BrushEditorParameterOverlay", "Pen Tilt"), m_sourcesColumn);
     m_speedButton = new BrushDynamicsSourceButton(
-        QCoreApplication::translate("BrushEditorParameterOverlay", "Stroke Speed"), m_sourcesColumn);
+        QCoreApplication::translate("BrushEditorParameterOverlay", "Stroke Speed"),
+        m_sourcesColumn);
     static_cast<BrushDynamicsSourceButton*>(m_tabletPressureButton)
         ->setSourceIcon(BrushDynamicsSourceButton::SourceIcon::Pressure);
     static_cast<BrushDynamicsSourceButton*>(m_timeButton)
@@ -585,6 +642,12 @@ BrushDynamicsEditorWidget::BrushDynamicsEditorWidget(QWidget* parent)
     static_cast<BrushDynamicsSourceButton*>(m_speedButton)
         ->setSourceIcon(BrushDynamicsSourceButton::SourceIcon::Speed);
 
+    sourcesLayout->addWidget(m_filterSectionLabel);
+    sourcesLayout->addSpacing(ThemeManager::instance().scaled(2));
+    sourcesLayout->addWidget(m_filterButton);
+    sourcesLayout->addSpacing(ThemeManager::instance().scaled(4));
+    sourcesLayout->addWidget(sourcesSeparator);
+    sourcesLayout->addSpacing(ThemeManager::instance().scaled(4));
     sourcesLayout->addWidget(m_sourcesLabel);
     sourcesLayout->addSpacing(ThemeManager::instance().scaled(2));
     sourcesLayout->addWidget(m_tabletPressureButton);
@@ -602,6 +665,42 @@ BrushDynamicsEditorWidget::BrushDynamicsEditorWidget(QWidget* parent)
     m_editorStack->setSlideOrientation(AnimatedStackedWidget::SlideOrientation::Vertical);
     m_editorStack->setAnimationDuration(220);
     m_editorStack->setSizePolicy(QSizePolicy::Expanding, QSizePolicy::Expanding);
+
+    m_filterPage = new QWidget(m_editorStack);
+    m_filterPage->setObjectName(QStringLiteral("brush_dynamics_editor_filter_page"));
+    makeWidgetTransparent(m_filterPage);
+    m_filterPage->setSizePolicy(QSizePolicy::Expanding, QSizePolicy::Expanding);
+    auto* filterLayout = new QVBoxLayout(m_filterPage);
+    filterLayout->setContentsMargins(0, 0, 0, 0);
+    filterLayout->setSpacing(ThemeManager::instance().scaled(12));
+
+    auto* filterStrengthRow = new QWidget(m_filterPage);
+    makeWidgetTransparent(filterStrengthRow);
+    auto* filterStrengthLayout = new QHBoxLayout(filterStrengthRow);
+    filterStrengthLayout->setContentsMargins(0, 0, 0, 0);
+    filterStrengthLayout->setSpacing(ThemeManager::instance().scaled(12));
+    m_filterStrengthLabel = new QLabel(filterStrengthRow);
+    m_filterStrengthLabel->setObjectName(
+        QStringLiteral("brush_dynamics_editor_filter_strength_label"));
+    m_filterStrengthSlider = new ProgressHandleSlider(filterStrengthRow);
+    m_filterStrengthSlider->setRange(0, kInputFilterStrengthMaximum);
+    m_filterStrengthSlider->setOrientation(Qt::Horizontal);
+    m_filterStrengthSlider->setShowValueText(true);
+    m_filterStrengthSlider->setValueDisplayMode(ProgressHandleSlider::ValueDisplayMode::RawValue);
+    m_filterStrengthSlider->setValueTextPrefix(QString());
+    m_filterStrengthSlider->setValueTextSuffix(QString());
+    filterStrengthLayout->addWidget(m_filterStrengthLabel, 1);
+    filterStrengthLayout->addWidget(m_filterStrengthSlider, 0);
+
+    m_filterCurveLabel = new QLabel(m_filterPage);
+    m_filterCurveLabel->setObjectName(QStringLiteral("brush_dynamics_editor_filter_curve_label"));
+    m_filterCurveEditor = new CurveEditorWidget(m_filterPage);
+    m_filterCurveEditor->setSizePolicy(QSizePolicy::Expanding, QSizePolicy::Fixed);
+
+    filterLayout->addWidget(filterStrengthRow);
+    filterLayout->addWidget(m_filterCurveLabel);
+    filterLayout->addWidget(m_filterCurveEditor, 0, Qt::AlignTop);
+    filterLayout->addStretch(1);
 
     m_pressurePage = new QWidget(m_editorStack);
     m_pressurePage->setObjectName(QStringLiteral("brush_dynamics_editor_pressure_page"));
@@ -826,56 +925,56 @@ BrushDynamicsEditorWidget::BrushDynamicsEditorWidget(QWidget* parent)
     directionLayout->addWidget(m_directionCurveEditor, 0, Qt::AlignTop);
     directionLayout->addStretch(1);
 
-    const auto createCurveSourcePage = [this](const QString& objectPrefix, QWidget*& page,
-                                           QLabel*& enabledLabel, QLabel*& modeLabel,
-                                           ToggleSwitch*& toggle,
-                                           SegmentedOptionSelector*& modeSelector,
-                                           CurveEditorWidget*& curveEditor) {
-        page = new QWidget(m_editorStack);
-        page->setObjectName(objectPrefix + QStringLiteral("_page"));
-        makeWidgetTransparent(page);
-        page->setSizePolicy(QSizePolicy::Expanding, QSizePolicy::Expanding);
-        auto* pageLayout = new QVBoxLayout(page);
-        pageLayout->setContentsMargins(0, 0, 0, 0);
-        pageLayout->setSpacing(ThemeManager::instance().scaled(12));
+    const auto createCurveSourcePage
+        = [this](const QString& objectPrefix, QWidget*& page, QLabel*& enabledLabel,
+              QLabel*& modeLabel, ToggleSwitch*& toggle, SegmentedOptionSelector*& modeSelector,
+              CurveEditorWidget*& curveEditor) {
+              page = new QWidget(m_editorStack);
+              page->setObjectName(objectPrefix + QStringLiteral("_page"));
+              makeWidgetTransparent(page);
+              page->setSizePolicy(QSizePolicy::Expanding, QSizePolicy::Expanding);
+              auto* pageLayout = new QVBoxLayout(page);
+              pageLayout->setContentsMargins(0, 0, 0, 0);
+              pageLayout->setSpacing(ThemeManager::instance().scaled(12));
 
-        auto* toggleRow = new QWidget(page);
-        makeWidgetTransparent(toggleRow);
-        auto* toggleLayout = new QHBoxLayout(toggleRow);
-        toggleLayout->setContentsMargins(0, 0, 0, 0);
-        toggleLayout->setSpacing(ThemeManager::instance().scaled(10));
-        enabledLabel = new QLabel(toggleRow);
-        enabledLabel->setObjectName(objectPrefix + QStringLiteral("_enabled_label"));
-        toggle = new ToggleSwitch(toggleRow);
-        toggleLayout->addWidget(enabledLabel);
-        toggleLayout->addStretch();
-        toggleLayout->addWidget(toggle);
+              auto* toggleRow = new QWidget(page);
+              makeWidgetTransparent(toggleRow);
+              auto* toggleLayout = new QHBoxLayout(toggleRow);
+              toggleLayout->setContentsMargins(0, 0, 0, 0);
+              toggleLayout->setSpacing(ThemeManager::instance().scaled(10));
+              enabledLabel = new QLabel(toggleRow);
+              enabledLabel->setObjectName(objectPrefix + QStringLiteral("_enabled_label"));
+              toggle = new ToggleSwitch(toggleRow);
+              toggleLayout->addWidget(enabledLabel);
+              toggleLayout->addStretch();
+              toggleLayout->addWidget(toggle);
 
-        auto* modeRow = new QWidget(page);
-        makeWidgetTransparent(modeRow);
-        auto* modeLayout = new QHBoxLayout(modeRow);
-        modeLayout->setContentsMargins(0, 0, 0, 0);
-        modeLayout->setSpacing(ThemeManager::instance().scaled(10));
-        modeLabel = new QLabel(modeRow);
-        modeLabel->setObjectName(objectPrefix + QStringLiteral("_mode_label"));
-        modeSelector = new SegmentedOptionSelector(modeRow);
-        modeSelector->setDisplayMode(SegmentedOptionSelector::DisplayMode::TextOnly);
-        modeLayout->addWidget(modeLabel);
-        modeLayout->addWidget(modeSelector, 1);
+              auto* modeRow = new QWidget(page);
+              makeWidgetTransparent(modeRow);
+              auto* modeLayout = new QHBoxLayout(modeRow);
+              modeLayout->setContentsMargins(0, 0, 0, 0);
+              modeLayout->setSpacing(ThemeManager::instance().scaled(10));
+              modeLabel = new QLabel(modeRow);
+              modeLabel->setObjectName(objectPrefix + QStringLiteral("_mode_label"));
+              modeSelector = new SegmentedOptionSelector(modeRow);
+              modeSelector->setDisplayMode(SegmentedOptionSelector::DisplayMode::TextOnly);
+              modeLayout->addWidget(modeLabel);
+              modeLayout->addWidget(modeSelector, 1);
 
-        curveEditor = new CurveEditorWidget(page);
-        curveEditor->setSizePolicy(QSizePolicy::Expanding, QSizePolicy::Fixed);
-        pageLayout->addWidget(toggleRow);
-        pageLayout->addWidget(modeRow);
-        pageLayout->addWidget(curveEditor, 0, Qt::AlignTop);
-        pageLayout->addStretch(1);
-    };
+              curveEditor = new CurveEditorWidget(page);
+              curveEditor->setSizePolicy(QSizePolicy::Expanding, QSizePolicy::Fixed);
+              pageLayout->addWidget(toggleRow);
+              pageLayout->addWidget(modeRow);
+              pageLayout->addWidget(curveEditor, 0, Qt::AlignTop);
+              pageLayout->addStretch(1);
+          };
     createCurveSourcePage(QStringLiteral("brush_dynamics_editor_tilt"), m_tiltPage,
         m_tiltEnabledLabel, m_tiltModeLabel, m_tiltToggle, m_tiltModeSelector, m_tiltCurveEditor);
     createCurveSourcePage(QStringLiteral("brush_dynamics_editor_speed"), m_speedPage,
         m_speedEnabledLabel, m_speedModeLabel, m_speedToggle, m_speedModeSelector,
         m_speedCurveEditor);
 
+    m_editorStack->addWidget(m_filterPage);
     m_editorStack->addWidget(m_pressurePage);
     m_editorStack->addWidget(m_timePage);
     m_editorStack->addWidget(m_randomPage);
@@ -888,6 +987,8 @@ BrushDynamicsEditorWidget::BrushDynamicsEditorWidget(QWidget* parent)
 
     connect(
         &ThemeManager::instance(), &ThemeManager::themeChanged, this, [this]() { updateStyles(); });
+    connect(m_filterButton, &QPushButton::clicked, this,
+        [this]() { setActiveSource(BrushInputSourceKey::None); });
     connect(m_tabletPressureButton, &QPushButton::clicked, this,
         [this]() { setActiveSource(BrushInputSourceKey::TabletPressure); });
     connect(m_timeButton, &QPushButton::clicked, this,
@@ -957,6 +1058,25 @@ BrushDynamicsEditorWidget::BrushDynamicsEditorWidget(QWidget* parent)
     connectCurveEditor(m_directionCurveEditor);
     connectCurveEditor(m_tiltCurveEditor);
     connectCurveEditor(m_speedCurveEditor);
+
+    connect(m_filterCurveEditor, &CurveEditorWidget::pointsChanged, this, [this]() {
+        auto filter = m_slot.inputFilter;
+        filter.responseCurve = m_filterCurveEditor->curve();
+        filter.responseCurve.normalize();
+        storeInputFilter(filter);
+    });
+    connect(m_filterCurveEditor, &CurveEditorWidget::editingFinished, this,
+        &BrushDynamicsEditorWidget::editingFinished);
+
+    connect(
+        m_filterStrengthSlider, &ProgressHandleSlider::valueChanged, this, [this](int sliderValue) {
+            auto filter = m_slot.inputFilter;
+            filter.durationSec = inputFilterDurationFromSliderValue(sliderValue);
+            storeInputFilter(filter);
+            syncEditorFromCurrentBinding();
+        });
+    connect(m_filterStrengthSlider, &ProgressHandleSlider::sliderReleased, this,
+        &BrushDynamicsEditorWidget::editingFinished);
 
     connect(
         m_timeDurationSlider, &ProgressHandleSlider::valueChanged, this, [this](int sliderValue) {
@@ -1064,20 +1184,21 @@ BrushDynamicsEditorWidget::BrushInputSourceKey BrushDynamicsEditorWidget::fallba
 int BrushDynamicsEditorWidget::sourcePageIndex(BrushInputSourceKey source) const
 {
     switch (source) {
-    case BrushInputSourceKey::TabletPressure:
-        return 0;
-    case BrushInputSourceKey::Time:
-        return 1;
-    case BrushInputSourceKey::RandomValue:
-        return 2;
-    case BrushInputSourceKey::StrokeDirection:
-        return 3;
-    case BrushInputSourceKey::PenTilt:
-        return 4;
-    case BrushInputSourceKey::StrokeSpeed:
-        return 5;
-    case BrushInputSourceKey::StrokeProgress:
     case BrushInputSourceKey::None:
+        return 0;
+    case BrushInputSourceKey::TabletPressure:
+        return 1;
+    case BrushInputSourceKey::Time:
+        return 2;
+    case BrushInputSourceKey::RandomValue:
+        return 3;
+    case BrushInputSourceKey::StrokeDirection:
+        return 4;
+    case BrushInputSourceKey::PenTilt:
+        return 5;
+    case BrushInputSourceKey::StrokeSpeed:
+        return 6;
+    case BrushInputSourceKey::StrokeProgress:
     case BrushInputSourceKey::Count:
         break;
     }
@@ -1086,7 +1207,7 @@ int BrushDynamicsEditorWidget::sourcePageIndex(BrushInputSourceKey source) const
 
 void BrushDynamicsEditorWidget::setActiveSource(BrushInputSourceKey source)
 {
-    if (!isSourceAvailable(source)) {
+    if (source != BrushInputSourceKey::None && !isSourceAvailable(source)) {
         source = fallbackSource();
     }
 
@@ -1158,6 +1279,12 @@ BrushDynamicsEditorWidget::BrushDynamicsBinding BrushDynamicsEditorWidget::defau
 
 void BrushDynamicsEditorWidget::resetActiveSourceBinding()
 {
+    if (m_activeSource == BrushInputSourceKey::None) {
+        storeInputFilter({});
+        syncEditorFromCurrentBinding();
+        emit editingFinished();
+        return;
+    }
     if (!ruwa::core::brushes::supportsBrushInputSource(m_activeSource)) {
         return;
     }
@@ -1209,8 +1336,48 @@ void BrushDynamicsEditorWidget::storeCurrentBinding(
     }
 }
 
+void BrushDynamicsEditorWidget::storeInputFilter(
+    const ruwa::core::brushes::BrushDynamicsInputFilter& filter, bool emitSlotChanged)
+{
+    if (!ruwa::core::brushes::supportsBrushDynamicsSetting(m_slot.setting)) {
+        return;
+    }
+
+    m_slot.inputFilter = filter;
+    m_slot.inputFilter.durationSec
+        = ruwa::core::brushes::clampBrushInputFilterDurationSeconds(m_slot.inputFilter.durationSec);
+    m_slot.inputFilter.responseCurve.normalize();
+    if (emitSlotChanged) {
+        emit slotChanged(m_settingKey, m_slot);
+    }
+}
+
 void BrushDynamicsEditorWidget::syncEditorFromCurrentBinding()
 {
+    auto filter = m_slot.inputFilter;
+    if (filter.responseCurve.empty()) {
+        auto fallback = defaultInputFilter();
+        fallback.durationSec = filter.durationSec;
+        filter = fallback;
+    }
+    filter.durationSec
+        = ruwa::core::brushes::clampBrushInputFilterDurationSeconds(filter.durationSec);
+    filter.responseCurve.normalize();
+
+    if (m_filterCurveEditor) {
+        CurveEditorWidget::AxisDisplaySpec percentAxis { 0.0, 1.0, 100.0, 0, QStringLiteral("%"),
+            evenlySpacedTicks(0.0, 1.0, 4), true };
+        m_filterCurveEditor->setVerticalRange(0.0, 1.0);
+        m_filterCurveEditor->setHorizontalAxisDisplay(percentAxis);
+        m_filterCurveEditor->setVerticalAxisDisplay(percentAxis);
+        m_filterCurveEditor->setCurve(filter.responseCurve);
+    }
+    if (m_filterStrengthSlider) {
+        const QSignalBlocker blocker(m_filterStrengthSlider);
+        m_filterStrengthSlider->setValue(sliderValueFromInputFilterDuration(filter.durationSec));
+        m_filterStrengthSlider->setCustomDisplayText(formatInputFilterStrength(filter.durationSec));
+    }
+
     const auto bindingForSource = [this](BrushInputSourceKey source) {
         auto binding = m_slot.binding(source);
         binding.setting = m_slot.setting;
@@ -1400,6 +1567,22 @@ void BrushDynamicsEditorWidget::updateModeSelector()
 
 void BrushDynamicsEditorWidget::updateTexts()
 {
+    if (m_filterSectionLabel) {
+        m_filterSectionLabel->setText(
+            QCoreApplication::translate("BrushEditorParameterOverlay", "FILTER"));
+    }
+    if (m_filterButton) {
+        m_filterButton->setText(
+            QCoreApplication::translate("BrushEditorParameterOverlay", "Smoothing"));
+    }
+    if (m_filterStrengthLabel) {
+        m_filterStrengthLabel->setText(
+            QCoreApplication::translate("BrushEditorParameterOverlay", "Strength"));
+    }
+    if (m_filterCurveLabel) {
+        m_filterCurveLabel->setText(
+            QCoreApplication::translate("BrushEditorParameterOverlay", "Response speed by change"));
+    }
     if (m_pressureLabel) {
         m_pressureLabel->setText(
             QCoreApplication::translate("BrushEditorParameterOverlay", "Enabled"));
@@ -1509,6 +1692,15 @@ void BrushDynamicsEditorWidget::updateSourceButtons()
         button->setActive(enabled && m_activeSource == source);
     };
 
+    if (auto* filterButton = static_cast<BrushDynamicsSourceButton*>(m_filterButton)) {
+        const bool available = ruwa::core::brushes::supportsBrushDynamicsSetting(m_slot.setting);
+        filterButton->setVisible(true);
+        filterButton->setEnabled(true);
+        filterButton->setSourceAvailable(available);
+        filterButton->setSuppressedByOverride(false);
+        filterButton->setActive(available && m_activeSource == BrushInputSourceKey::None);
+    }
+
     syncButton(m_tabletPressureButton, BrushInputSourceKey::TabletPressure);
     syncButton(m_timeButton, BrushInputSourceKey::Time);
     syncButton(m_randomButton, BrushInputSourceKey::RandomValue);
@@ -1533,6 +1725,7 @@ void BrushDynamicsEditorWidget::updateStyles()
 
     const QFont sectionFont = theme.font(ThemeFontRole::Small, QFont::Bold);
     const QFont sourcesHeaderFont = theme.font(ThemeFontRole::Micro, QFont::Bold);
+    m_filterSectionLabel->setFont(sourcesHeaderFont);
     m_sourcesLabel->setFont(sourcesHeaderFont);
 
     const QString labelStyle = QStringLiteral("QLabel { background: transparent; color: %1; }")
@@ -1548,6 +1741,8 @@ void BrushDynamicsEditorWidget::updateStyles()
         }
     };
 
+    styleLabel(m_filterStrengthLabel, theme.scaled(92));
+    styleLabel(m_filterCurveLabel);
     styleLabel(m_pressureLabel);
     styleLabel(m_modeLabel);
     styleLabel(m_timeEnabledLabel);
@@ -1570,9 +1765,19 @@ void BrushDynamicsEditorWidget::updateStyles()
               .arg(colors.surfaceAlt.name(QColor::HexArgb),
                   colors.borderSubtle().name(QColor::HexArgb), QString::number(theme.scaled(10)));
     m_sourcesColumn->setStyleSheet(sourcesPanelStyle);
+    m_filterSectionLabel->setStyleSheet(
+        QStringLiteral("QLabel { background: transparent; color: %1; }")
+            .arg(colors.textMuted.name(QColor::HexArgb)));
     m_sourcesLabel->setStyleSheet(QStringLiteral("QLabel { background: transparent; color: %1; }")
             .arg(colors.textMuted.name(QColor::HexArgb)));
+    m_filterSectionLabel->setContentsMargins(theme.scaled(4), 0, 0, 0);
     m_sourcesLabel->setContentsMargins(theme.scaled(4), 0, 0, 0);
+    if (auto* separator = m_sourcesColumn->findChild<QFrame*>(
+            QStringLiteral("brush_dynamics_editor_sources_separator"))) {
+        separator->setFixedHeight(1);
+        separator->setStyleSheet(QStringLiteral("QFrame { border: none; background: %1; }")
+                .arg(colors.borderSubtle().name(QColor::HexArgb)));
+    }
 
     if (auto* bodyLayout = qobject_cast<QHBoxLayout*>(layout())) {
         bodyLayout->setSpacing(theme.scaled(m_compact ? 12 : 16));
@@ -1582,8 +1787,8 @@ void BrushDynamicsEditorWidget::updateStyles()
             theme.scaled(6), theme.scaled(7), theme.scaled(6), theme.scaled(7));
         sourcesLayout->setSpacing(theme.scaled(3));
     }
-    for (QWidget* page :
-        { m_pressurePage, m_timePage, m_randomPage, m_directionPage, m_tiltPage, m_speedPage }) {
+    for (QWidget* page : { m_filterPage, m_pressurePage, m_timePage, m_randomPage, m_directionPage,
+             m_tiltPage, m_speedPage }) {
         if (auto* pageLayout = qobject_cast<QVBoxLayout*>(page->layout())) {
             pageLayout->setSpacing(theme.scaled(m_compact ? 10 : 12));
         }
@@ -1594,15 +1799,16 @@ void BrushDynamicsEditorWidget::updateStyles()
     if (m_editorStack) {
         m_editorStack->setMinimumHeight(theme.scaled(m_compact ? 246 : 330));
     }
-    for (CurveEditorWidget* editor : { m_curveEditor, m_timeCurveEditor, m_directionCurveEditor,
-             m_tiltCurveEditor, m_speedCurveEditor }) {
+    for (CurveEditorWidget* editor : { m_filterCurveEditor, m_curveEditor, m_timeCurveEditor,
+             m_directionCurveEditor, m_tiltCurveEditor, m_speedCurveEditor }) {
         if (!editor) {
             continue;
         }
         editor->setMinimumHeight(curveHeight);
         editor->setMaximumHeight(curveHeight);
     }
-    for (ProgressHandleSlider* slider : { m_timeDurationSlider, m_randomRangeSlider }) {
+    for (ProgressHandleSlider* slider :
+        { m_filterStrengthSlider, m_timeDurationSlider, m_randomRangeSlider }) {
         if (!slider) {
             continue;
         }
@@ -1617,16 +1823,14 @@ void BrushDynamicsEditorWidget::updateStyles()
         m_timeEndActionCombo->setPopupMinWidth(timeControlWidth);
         m_timeEndActionCombo->setSizePolicy(QSizePolicy::Fixed, QSizePolicy::Fixed);
     }
-    for (ToggleSwitch* toggle :
-        { m_pressureToggle, m_timeToggle, m_randomToggle, m_directionToggle, m_tiltToggle,
-            m_speedToggle }) {
+    for (ToggleSwitch* toggle : { m_pressureToggle, m_timeToggle, m_randomToggle, m_directionToggle,
+             m_tiltToggle, m_speedToggle }) {
         if (toggle) {
             toggle->setFixedSize(theme.scaled(40), theme.scaled(20));
         }
     }
-    for (QPushButton* button :
-        { m_tabletPressureButton, m_timeButton, m_randomButton, m_directionButton, m_tiltButton,
-            m_speedButton }) {
+    for (QPushButton* button : { m_filterButton, m_tabletPressureButton, m_timeButton,
+             m_randomButton, m_directionButton, m_tiltButton, m_speedButton }) {
         if (!button) {
             continue;
         }

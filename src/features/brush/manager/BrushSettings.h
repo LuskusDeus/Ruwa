@@ -111,6 +111,23 @@ struct BrushDynamicsRandomRange {
     float maximum = 0.0f;
 };
 
+/// Post-filter applied after every active input binding in a dynamics slot.
+/// `durationSec` is the time needed to traverse the setting's full value range
+/// when the response curve allows 100% speed. The curve maps the normalized
+/// distance to the target (x) to the allowed normalized speed (y).
+struct BrushDynamicsInputFilter {
+    float durationSec = 0.0f;
+    BrushMappingCurve responseCurve;
+
+    bool enabled() const { return durationSec > 0.000001f; }
+    bool hasStoredState() const { return enabled() || !responseCurve.empty(); }
+
+    float responseForDistance(float normalizedDistance) const
+    {
+        return clamp01(responseCurve.evaluateUnclamped(normalizedDistance, 1.0f));
+    }
+};
+
 inline BrushDynamicsRandomRange brushDynamicsRandomRange(const BrushDynamicsBinding& binding)
 {
     const float neutralValue = binding.mode == BrushDynamicsBlendMode::Add ? 0.0f : 1.0f;
@@ -219,6 +236,7 @@ inline float brushInputSourceValue(const BrushInputContext& inputContext,
 struct BrushDynamicsSlot {
     BrushDynamicsSettingKey setting = BrushDynamicsSettingKey::None;
     std::array<BrushDynamicsBinding, kBrushInputSourceKeyCount> bindings {};
+    BrushDynamicsInputFilter inputFilter;
 
     BrushDynamicsSlot()
     {
@@ -237,7 +255,7 @@ struct BrushDynamicsSlot {
         return bindings[brushInputSourceIndex(source)];
     }
 
-    bool hasStoredBindings() const
+    bool hasStoredInputBindings() const
     {
         for (const auto& bindingItem : bindings) {
             if (bindingItem.hasStoredState()) {
@@ -245,6 +263,11 @@ struct BrushDynamicsSlot {
             }
         }
         return false;
+    }
+
+    bool hasStoredBindings() const
+    {
+        return inputFilter.hasStoredState() || hasStoredInputBindings();
     }
 
     bool hasActiveBindings() const
@@ -306,6 +329,16 @@ struct BrushDynamicsModel {
         return false;
     }
 
+    bool hasStoredInputBindings() const
+    {
+        for (const auto& slotItem : settingSlots) {
+            if (slotItem.hasStoredInputBindings()) {
+                return true;
+            }
+        }
+        return false;
+    }
+
     BrushDynamicsBinding& pressureBinding(BrushDynamicsSettingKey setting)
     {
         return slotForSetting(setting).binding(BrushInputSourceKey::TabletPressure);
@@ -325,6 +358,19 @@ struct BrushDynamicsModel {
             }
         }
         return false;
+    }
+};
+
+struct BrushDynamicsFilterState {
+    std::array<float, kBrushDynamicsSettingKeyCount> values {};
+    std::array<float, kBrushDynamicsSettingKeyCount> elapsedSeconds {};
+    std::array<bool, kBrushDynamicsSettingKeyCount> initialized {};
+
+    void reset()
+    {
+        values.fill(0.0f);
+        elapsedSeconds.fill(0.0f);
+        initialized.fill(false);
     }
 };
 
@@ -639,12 +685,96 @@ inline float evaluateDynamicsSlotValueExcludingSource(float baseValue,
         slot.setting, baseValue * multiplyFactor + additiveDelta);
 }
 
+inline float dynamicsFilterTargetDelta(
+    BrushDynamicsSettingKey setting, float filteredValue, float targetValue)
+{
+    if (setting == BrushDynamicsSettingKey::ShapeAngle
+        || setting == BrushDynamicsSettingKey::ColorHue) {
+        float delta = normalizeAngleDegrees(targetValue) - normalizeAngleDegrees(filteredValue);
+        if (delta > 180.0f) {
+            delta -= 360.0f;
+        } else if (delta < -180.0f) {
+            delta += 360.0f;
+        }
+        return delta;
+    }
+    return targetValue - filteredValue;
+}
+
+inline float previewDynamicsInputFilter(float targetValue, const BrushDynamicsSlot& slot,
+    const BrushInputContext& inputContext, const BrushDynamicsFilterState& state)
+{
+    const auto& filter = slot.inputFilter;
+    if (!filter.enabled() || !inputContext.strokeTimeAvailable) {
+        return targetValue;
+    }
+
+    const std::size_t settingIndex = brushDynamicsSettingIndex(slot.setting);
+    if (settingIndex >= state.values.size() || !state.initialized[settingIndex]) {
+        return targetValue;
+    }
+
+    const float elapsedSeconds = std::max(0.0f, inputContext.strokeElapsedSeconds);
+    const float previousElapsedSeconds = state.elapsedSeconds[settingIndex];
+    if (!std::isfinite(elapsedSeconds) || elapsedSeconds < previousElapsedSeconds) {
+        return targetValue;
+    }
+
+    const float deltaSeconds = elapsedSeconds - previousElapsedSeconds;
+    if (deltaSeconds <= 0.0f) {
+        return state.values[settingIndex];
+    }
+
+    const float valueRange
+        = brushDynamicsResultMax(slot.setting) - brushDynamicsResultMin(slot.setting);
+    if (valueRange <= 0.000001f) {
+        return targetValue;
+    }
+
+    const float currentValue = state.values[settingIndex];
+    const float targetDelta = dynamicsFilterTargetDelta(slot.setting, currentValue, targetValue);
+    const float normalizedDistance = clamp01(std::abs(targetDelta) / valueRange);
+    const float response = filter.responseForDistance(normalizedDistance);
+    const float duration = clampBrushInputFilterDurationSeconds(filter.durationSec);
+    const float allowedDelta = valueRange * response * deltaSeconds / std::max(duration, 0.000001f);
+    const float appliedDelta
+        = std::copysign(std::min(std::abs(targetDelta), allowedDelta), targetDelta);
+    return finalizeBrushDynamicsResultValue(slot.setting, currentValue + appliedDelta);
+}
+
+inline float advanceDynamicsInputFilter(float targetValue, const BrushDynamicsSlot& slot,
+    const BrushInputContext& inputContext, BrushDynamicsFilterState& state)
+{
+    const std::size_t settingIndex = brushDynamicsSettingIndex(slot.setting);
+    if (settingIndex >= state.values.size()) {
+        return targetValue;
+    }
+
+    const bool canContinue = slot.inputFilter.enabled() && inputContext.strokeTimeAvailable
+        && std::isfinite(inputContext.strokeElapsedSeconds) && state.initialized[settingIndex]
+        && inputContext.strokeElapsedSeconds >= state.elapsedSeconds[settingIndex];
+    const float filteredValue = canContinue
+        ? previewDynamicsInputFilter(targetValue, slot, inputContext, state)
+        : targetValue;
+    state.values[settingIndex] = filteredValue;
+    state.elapsedSeconds[settingIndex]
+        = inputContext.strokeTimeAvailable && std::isfinite(inputContext.strokeElapsedSeconds)
+        ? std::max(0.0f, inputContext.strokeElapsedSeconds)
+        : 0.0f;
+    state.initialized[settingIndex]
+        = slot.inputFilter.enabled() && inputContext.strokeTimeAvailable;
+    return filteredValue;
+}
+
 inline void normalizeBrushDynamics(BrushDynamicsModel& dynamics)
 {
     for (std::size_t settingIndex = 0; settingIndex < dynamics.settingSlots.size();
         ++settingIndex) {
         auto& slotItem = dynamics.settingSlots[settingIndex];
         slotItem.setting = brushDynamicsSettingFromIndex(settingIndex);
+        slotItem.inputFilter.durationSec
+            = clampBrushInputFilterDurationSeconds(slotItem.inputFilter.durationSec);
+        slotItem.inputFilter.responseCurve.normalize();
 
         bool overrideClaimed = false;
         for (std::size_t sourceIndex = 0; sourceIndex < slotItem.bindings.size(); ++sourceIndex) {
@@ -676,59 +806,59 @@ inline void normalizeBrushDynamics(BrushDynamicsModel& dynamics)
     }
 }
 
-inline BrushEvaluatedState evaluateBrushDynamics(
-    const BrushSettingsData& settings, const BrushInputContext& inputContext)
+inline BrushEvaluatedState evaluateBrushDynamics(const BrushSettingsData& settings,
+    const BrushInputContext& inputContext, BrushDynamicsFilterState* filterState = nullptr,
+    bool advanceFilterState = false)
 {
     const auto& dynamics = settings.dynamics;
 
+    const auto evaluateSlot = [&](float baseValue, BrushDynamicsSettingKey setting) {
+        const auto& slot = dynamics.slotForSetting(setting);
+        const float targetValue = evaluateDynamicsSlotValue(baseValue, slot, inputContext);
+        if (!filterState) {
+            return targetValue;
+        }
+        return advanceFilterState
+            ? advanceDynamicsInputFilter(targetValue, slot, inputContext, *filterState)
+            : previewDynamicsInputFilter(targetValue, slot, inputContext, *filterState);
+    };
+
     BrushEvaluatedState out;
-    out.radiusMultiplier = clampNonNegative(evaluateDynamicsSlotValue(
-        1.0f, dynamics.slotForSetting(BrushDynamicsSettingKey::RadiusMultiplier), inputContext));
-    out.opacityMultiplier = clampNonNegative(evaluateDynamicsSlotValue(
-        1.0f, dynamics.slotForSetting(BrushDynamicsSettingKey::OpacityMultiplier), inputContext));
-    out.hardness = evaluateDynamicsSlotValue(settings.hardness,
-        dynamics.slotForSetting(BrushDynamicsSettingKey::ShapeHardness), inputContext);
-    out.spacing = evaluateDynamicsSlotValue(settings.spacing,
-        dynamics.slotForSetting(BrushDynamicsSettingKey::ShapeSpacing), inputContext);
-    out.flow = evaluateDynamicsSlotValue(
-        settings.flow, dynamics.slotForSetting(BrushDynamicsSettingKey::ShapeFlow), inputContext);
-    out.roundness = evaluateDynamicsSlotValue(settings.roundness,
-        dynamics.slotForSetting(BrushDynamicsSettingKey::ShapeRoundness), inputContext);
-    out.angleDegrees = evaluateDynamicsSlotValue(
-        settings.angle, dynamics.slotForSetting(BrushDynamicsSettingKey::ShapeAngle), inputContext);
-    out.textureAmount = evaluateDynamicsSlotValue(settings.textureAmount,
-        dynamics.slotForSetting(BrushDynamicsSettingKey::TextureAmount), inputContext);
-    out.textureScale = evaluateDynamicsSlotValue(settings.textureScale,
-        dynamics.slotForSetting(BrushDynamicsSettingKey::TextureScale), inputContext);
-    out.textureContrast = evaluateDynamicsSlotValue(settings.textureContrast,
-        dynamics.slotForSetting(BrushDynamicsSettingKey::TextureContrast), inputContext);
-    out.textureDepth = evaluateDynamicsSlotValue(settings.textureDepth,
-        dynamics.slotForSetting(BrushDynamicsSettingKey::TextureDepth), inputContext);
-    out.textureBlend = evaluateDynamicsSlotValue(settings.textureBlend,
-        dynamics.slotForSetting(BrushDynamicsSettingKey::TextureBlend), inputContext);
-    out.textureEdgeBoost = evaluateDynamicsSlotValue(settings.textureEdgeBoost,
-        dynamics.slotForSetting(BrushDynamicsSettingKey::TextureEdgeBoost), inputContext);
-    out.colorHue = evaluateDynamicsSlotValue(settings.colorHue,
-        dynamics.slotForSetting(BrushDynamicsSettingKey::ColorHue), inputContext);
-    out.colorLightness = evaluateDynamicsSlotValue(settings.colorLightness,
-        dynamics.slotForSetting(BrushDynamicsSettingKey::ColorLightness), inputContext);
-    out.colorSaturation = evaluateDynamicsSlotValue(settings.colorSaturation,
-        dynamics.slotForSetting(BrushDynamicsSettingKey::ColorSaturation), inputContext);
-    out.scatterPosition = evaluateDynamicsSlotValue(settings.scatterPosition,
-        dynamics.slotForSetting(BrushDynamicsSettingKey::ScatterPosition), inputContext);
-    out.postCorrection = evaluateDynamicsSlotValue(settings.postCorrection,
-        dynamics.slotForSetting(BrushDynamicsSettingKey::StrokePostCorrection), inputContext);
-    out.stabilization = evaluateDynamicsSlotValue(settings.stabilization,
-        dynamics.slotForSetting(BrushDynamicsSettingKey::StrokeStabilization), inputContext);
-    out.startTaper = evaluateDynamicsSlotValue(settings.startTaper,
-        dynamics.slotForSetting(BrushDynamicsSettingKey::StrokeStartTaper), inputContext);
-    out.endTaper = evaluateDynamicsSlotValue(settings.endTaper,
-        dynamics.slotForSetting(BrushDynamicsSettingKey::StrokeEndTaper), inputContext);
-    out.startCorrectionLength = evaluateDynamicsSlotValue(settings.startCorrectionLength,
-        dynamics.slotForSetting(BrushDynamicsSettingKey::StrokeStartCorrectionLength),
-        inputContext);
-    out.endCorrectionLength = evaluateDynamicsSlotValue(settings.endCorrectionLength,
-        dynamics.slotForSetting(BrushDynamicsSettingKey::StrokeEndCorrectionLength), inputContext);
+    out.radiusMultiplier
+        = clampNonNegative(evaluateSlot(1.0f, BrushDynamicsSettingKey::RadiusMultiplier));
+    out.opacityMultiplier
+        = clampNonNegative(evaluateSlot(1.0f, BrushDynamicsSettingKey::OpacityMultiplier));
+    out.hardness = evaluateSlot(settings.hardness, BrushDynamicsSettingKey::ShapeHardness);
+    out.spacing = evaluateSlot(settings.spacing, BrushDynamicsSettingKey::ShapeSpacing);
+    out.flow = evaluateSlot(settings.flow, BrushDynamicsSettingKey::ShapeFlow);
+    out.roundness = evaluateSlot(settings.roundness, BrushDynamicsSettingKey::ShapeRoundness);
+    out.angleDegrees = evaluateSlot(settings.angle, BrushDynamicsSettingKey::ShapeAngle);
+    out.textureAmount
+        = evaluateSlot(settings.textureAmount, BrushDynamicsSettingKey::TextureAmount);
+    out.textureScale = evaluateSlot(settings.textureScale, BrushDynamicsSettingKey::TextureScale);
+    out.textureContrast
+        = evaluateSlot(settings.textureContrast, BrushDynamicsSettingKey::TextureContrast);
+    out.textureDepth = evaluateSlot(settings.textureDepth, BrushDynamicsSettingKey::TextureDepth);
+    out.textureBlend = evaluateSlot(settings.textureBlend, BrushDynamicsSettingKey::TextureBlend);
+    out.textureEdgeBoost
+        = evaluateSlot(settings.textureEdgeBoost, BrushDynamicsSettingKey::TextureEdgeBoost);
+    out.colorHue = evaluateSlot(settings.colorHue, BrushDynamicsSettingKey::ColorHue);
+    out.colorLightness
+        = evaluateSlot(settings.colorLightness, BrushDynamicsSettingKey::ColorLightness);
+    out.colorSaturation
+        = evaluateSlot(settings.colorSaturation, BrushDynamicsSettingKey::ColorSaturation);
+    out.scatterPosition
+        = evaluateSlot(settings.scatterPosition, BrushDynamicsSettingKey::ScatterPosition);
+    out.postCorrection
+        = evaluateSlot(settings.postCorrection, BrushDynamicsSettingKey::StrokePostCorrection);
+    out.stabilization
+        = evaluateSlot(settings.stabilization, BrushDynamicsSettingKey::StrokeStabilization);
+    out.startTaper = evaluateSlot(settings.startTaper, BrushDynamicsSettingKey::StrokeStartTaper);
+    out.endTaper = evaluateSlot(settings.endTaper, BrushDynamicsSettingKey::StrokeEndTaper);
+    out.startCorrectionLength = evaluateSlot(
+        settings.startCorrectionLength, BrushDynamicsSettingKey::StrokeStartCorrectionLength);
+    out.endCorrectionLength = evaluateSlot(
+        settings.endCorrectionLength, BrushDynamicsSettingKey::StrokeEndCorrectionLength);
     return out;
 }
 

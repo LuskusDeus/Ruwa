@@ -96,6 +96,14 @@ QVariantMap serializeDynamicsBinding(const BrushDynamicsBinding& binding)
     return map;
 }
 
+QVariantMap serializeDynamicsInputFilter(const BrushDynamicsInputFilter& filter)
+{
+    return {
+        { QStringLiteral("durationSec"), clampBrushInputFilterDurationSeconds(filter.durationSec) },
+        { QStringLiteral("points"), serializeCurve(filter.responseCurve) },
+    };
+}
+
 QVariantMap serializeDynamicsBindings(const BrushDynamicsModel& dynamics)
 {
     QVariantMap settingsMap;
@@ -106,6 +114,10 @@ QVariantMap serializeDynamicsBindings(const BrushDynamicsModel& dynamics)
         }
 
         QVariantMap sourcesMap;
+        if (slotItem.inputFilter.hasStoredState()) {
+            sourcesMap.insert(
+                QStringLiteral("filter"), serializeDynamicsInputFilter(slotItem.inputFilter));
+        }
         for (const auto& binding : slotItem.bindings) {
             if (!binding.hasStoredState()) {
                 continue;
@@ -168,6 +180,16 @@ BrushDynamicsModel deserializeDynamicsBindings(const QVariant& value)
         const QVariantMap sourcesMap = settingIt.value().toMap();
         for (auto sourceIt = sourcesMap.constBegin(); sourceIt != sourcesMap.constEnd();
             ++sourceIt) {
+            if (sourceIt.key() == QStringLiteral("filter")) {
+                const QVariantMap filterMap = sourceIt.value().toMap();
+                auto& filter = dynamics.slotForSetting(dynamicsKey).inputFilter;
+                filter.durationSec = clampBrushInputFilterDurationSeconds(static_cast<float>(
+                    filterMap.value(QStringLiteral("durationSec"), filter.durationSec).toDouble()));
+                filter.responseCurve = deserializeCurve(filterMap.value(QStringLiteral("points")),
+                    BrushDynamicsSettingKey::None, BrushDynamicsBlendMode::Multiply);
+                continue;
+            }
+
             const BrushInputSourceKey source
                 = brushInputSourceKeyFromName(sourceIt.key().toStdString());
             if (!supportsBrushInputSource(source)) {
@@ -833,6 +855,7 @@ QImage PixelBrushModule::renderPreview(const BrushPreviewRequest& request) const
     };
 
     StrokeStabilizerState stabilizationState;
+    BrushDynamicsFilterState previewFilterState;
     BrushInputDynamics prevInputDynamics;
     prevInputDynamics.strokeSpeed = 0.0f;
     prevInputDynamics.strokeSpeedAvailable = true;
@@ -847,8 +870,8 @@ QImage PixelBrushModule::renderPreview(const BrushPreviewRequest& request) const
         // speed, so its lag is evaluated from the previous resolved speed.
         inputContext.strokeSpeed = prevInputDynamics.strokeSpeed;
         inputContext.strokeSpeedAvailable = prevInputDynamics.strokeSpeedAvailable;
-        const float tauMs
-            = stabilizationTauMs(evaluateBrushDynamics(settings, inputContext).stabilization);
+        const float tauMs = stabilizationTauMs(
+            evaluateBrushDynamics(settings, inputContext, &previewFilterState, true).stabilization);
         const StrokeStabilizerPoint point = sampleStrokeStabilizer(stabilizationState, targetX,
             targetY, tauMs, static_cast<double>(strokeElapsedSeconds) * 1000.0, reset);
         return std::pair<float, float> { point.x, point.y };
@@ -876,10 +899,8 @@ QImage PixelBrushModule::renderPreview(const BrushPreviewRequest& request) const
         BrushInputDynamics inputDynamics;
         const float elapsedDelta = strokeElapsedSeconds - prevElapsedSeconds;
         if (elapsedDelta > 0.000001f) {
-            const float instantScreenSpeed
-                = std::hypot(toX - startX, toY - startY) / elapsedDelta;
-            const float alpha
-                = 1.0f - std::exp(-elapsedDelta / kBrushStrokeSpeedFilterTimeSeconds);
+            const float instantScreenSpeed = std::hypot(toX - startX, toY - startY) / elapsedDelta;
+            const float alpha = 1.0f - std::exp(-elapsedDelta / kBrushStrokeSpeedFilterTimeSeconds);
             filteredScreenSpeed += alpha * (instantScreenSpeed - filteredScreenSpeed);
             inputDynamics.strokeSpeed = normalizeBrushStrokeSpeed(filteredScreenSpeed);
             inputDynamics.strokeSpeedAvailable = true;
@@ -1259,7 +1280,7 @@ BrushSettingsData PixelBrushModule::normalizeCompatibilitySettings(
     normalizeMinMax(out.opacityPressureMin, out.opacityPressureMax);
     normalizeMinMax(out.sizePressureMin, out.sizePressureMax);
     normalizeMinMax(out.flowPressureMin, out.flowPressureMax);
-    if (!out.dynamics.hasStoredBindings()) {
+    if (!out.dynamics.hasStoredInputBindings()) {
         migrateLegacyPressureBinding(out.dynamics, BrushDynamicsSettingKey::ShapeFlow,
             out.flowPressureMin, out.flowPressureMax,
             out.flowPressureMin < 0.999f || out.flowPressureMax < 0.999f);

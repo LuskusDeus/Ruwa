@@ -12,6 +12,7 @@
 
 class QLabel;
 class QPushButton;
+class QFrame;
 
 namespace ruwa::ui::widgets {
 
@@ -80,6 +81,7 @@ private:
     static BrushDynamicsBinding defaultStrokeDirectionBinding(BrushDynamicsSettingKey setting);
     static BrushDynamicsBinding defaultPenTiltBinding(BrushDynamicsSettingKey setting);
     static BrushDynamicsBinding defaultStrokeSpeedBinding(BrushDynamicsSettingKey setting);
+    static ruwa::core::brushes::BrushDynamicsInputFilter defaultInputFilter();
     BrushDynamicsBinding displayBinding(BrushDynamicsBinding binding) const;
     CurveAxesConfig curveAxesConfigForBinding(const BrushDynamicsBinding& binding) const;
     int randomRangeSliderFactor() const;
@@ -95,6 +97,8 @@ private:
     BrushDynamicsBinding currentBinding() const;
     BrushDynamicsBinding defaultBindingForSource(BrushInputSourceKey source) const;
     void storeCurrentBinding(const BrushDynamicsBinding& binding, bool emitSlotChanged = true);
+    void storeInputFilter(
+        const ruwa::core::brushes::BrushDynamicsInputFilter& filter, bool emitSlotChanged = true);
     void syncEditorFromCurrentBinding();
     void updateModeSelector();
     void updateTexts();
@@ -103,13 +107,17 @@ private:
 
     QWidget* m_sourcesColumn = nullptr;
     AnimatedStackedWidget* m_editorStack = nullptr;
+    QWidget* m_filterPage = nullptr;
     QWidget* m_pressurePage = nullptr;
     QWidget* m_timePage = nullptr;
     QWidget* m_randomPage = nullptr;
     QWidget* m_directionPage = nullptr;
     QWidget* m_tiltPage = nullptr;
     QWidget* m_speedPage = nullptr;
+    QLabel* m_filterSectionLabel = nullptr;
     QLabel* m_sourcesLabel = nullptr;
+    QLabel* m_filterStrengthLabel = nullptr;
+    QLabel* m_filterCurveLabel = nullptr;
     QLabel* m_pressureLabel = nullptr;
     QLabel* m_modeLabel = nullptr;
     QLabel* m_timeEnabledLabel = nullptr;
@@ -125,6 +133,7 @@ private:
     QLabel* m_tiltModeLabel = nullptr;
     QLabel* m_speedEnabledLabel = nullptr;
     QLabel* m_speedModeLabel = nullptr;
+    QPushButton* m_filterButton = nullptr;
     QPushButton* m_tabletPressureButton = nullptr;
     QPushButton* m_timeButton = nullptr;
     QPushButton* m_randomButton = nullptr;
@@ -151,6 +160,8 @@ private:
     ToggleSwitch* m_speedToggle = nullptr;
     SegmentedOptionSelector* m_speedModeSelector = nullptr;
     CurveEditorWidget* m_speedCurveEditor = nullptr;
+    CurveEditorWidget* m_filterCurveEditor = nullptr;
+    ProgressHandleSlider* m_filterStrengthSlider = nullptr;
     QString m_settingKey;
     BrushDynamicsSlot m_slot;
     BrushDynamicTargetDef m_targetDef;
