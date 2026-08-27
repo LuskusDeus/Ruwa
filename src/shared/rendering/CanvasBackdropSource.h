@@ -131,7 +131,7 @@ inline constexpr double kGlassIndexOfRefraction = 1.5;
 /// three fixed wavelengths at a spread this wide read as three stacked copies
 /// of the backdrop rather than a fringe. WelcomeBanner's raster copy still takes
 /// the three and is correspondingly cruder.
-inline constexpr double kGlassChromaticDispersion = 0.30;
+inline constexpr double kGlassChromaticDispersion = 0.60;
 
 /// Tangent of the Snell deviation at kGlassMaxTilt - the largest the profile
 /// can reach, and so the peak of the displacement in units of the thickness.
