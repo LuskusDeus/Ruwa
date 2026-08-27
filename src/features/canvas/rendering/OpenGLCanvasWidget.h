@@ -353,8 +353,18 @@ public:
     /// selection edges preserved. No-op (returns false) without an active
     /// selection. Dirties the affected region; the caller owns undo + notify.
     bool fillLayerMaskFromActiveSelection(const QUuid& layerId);
-    bool flipSelectionHorizontally();
-    bool flipSelectionVertically();
+    /// Apply a transform to the active selection when one exists, or to the
+    /// selected layer(s) otherwise. A command-created session is committed
+    /// automatically; an existing user session remains open with its own undo
+    /// step.
+    bool flipContentHorizontally();
+    bool flipContentVertically();
+    bool rotateContent90Clockwise();
+    bool rotateContent90Counterclockwise();
+    bool rotateContent180();
+    bool canToggleTransformMode() const;
+    bool canApplyContentTransformAction() const;
+    bool canEnterWarpTransformMode() const;
 
     /// Mirror the content of the running transform session in place (the same
     /// eased flip the selection popup plays, minus the auto-confirm): the
@@ -638,8 +648,18 @@ private:
     bool offerRasterizeForSelectionTransformTargets(bool hasSelection);
     TileGrid* activeLayerTileGrid() const;
     ruwa::core::layers::LayerData* activeLayer() const;
-    bool startAnimatedSelectionFlip(bool flipHorizontal, bool flipVertical);
-    bool flipActiveTransform(bool flipHorizontal, bool flipVertical);
+    enum class AnimatedContentTransform {
+        FlipHorizontal,
+        FlipVertical,
+        Rotate90Clockwise,
+        Rotate90Counterclockwise,
+        Rotate180,
+    };
+    bool isTransformCommandInputAvailable() const;
+    bool hasTransformableTarget() const;
+    bool animateContentTransform(AnimatedContentTransform action);
+    bool applyAnimatedContentTransform(AnimatedContentTransform action);
+    bool applyAnimatedContentTransformToActiveSession(AnimatedContentTransform action);
 
     // Update tile position index after brush stroke
     void updateTileIndex(const ruwa::core::layers::LayerData* layer,

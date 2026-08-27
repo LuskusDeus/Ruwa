@@ -117,6 +117,18 @@ bool routeSelectAllToFocusedTextInput(QWidget* focus)
     return widgetIsTextInput(focus);
 }
 
+bool canExecuteContentTransformAction(const CommandContext& ctx)
+{
+    auto* panel = ctx.activeCanvasPanel();
+    return panel && panel->canApplyContentTransformAction();
+}
+
+bool canEnterWarpTransform(const CommandContext& ctx)
+{
+    auto* panel = ctx.activeCanvasPanel();
+    return panel && panel->canEnterWarpTransformMode();
+}
+
 } // namespace
 
 CommandInfo CopyCommand::info() const
@@ -465,55 +477,147 @@ void TransformSelectionCommand::execute(const CommandContext& ctx, const QVarian
     }
 }
 
-CommandInfo FlipSelectionHorizontalCommand::info() const
+CommandInfo WarpTransformCommand::info() const
 {
-    return CommandInfo { .id = "selection.flipHorizontal",
-        .title = "Flip Selection Horizontally",
-        .category = "Selection",
-        .description = "Mirror the content under the active selection left to right, in place",
-        .aliases = { "flip-selection-horizontal" },
+    return CommandInfo { .id = "edit.warp",
+        .title = "Warp",
+        .category = "Edit",
+        .description = "Enter Warp mode for the active selection or selected layer",
+        .aliases = { "warp", "deform" },
         .defaultShortcut = QKeySequence(),
         .icon = QIcon() };
 }
 
-bool FlipSelectionHorizontalCommand::canExecute(const CommandContext& ctx) const
+bool WarpTransformCommand::canExecute(const CommandContext& ctx) const
 {
-    auto* canvasPanel = ctx.activeCanvasPanel();
-    return canvasPanel && canvasPanel->hasActiveSelection();
+    return canEnterWarpTransform(ctx);
 }
 
-void FlipSelectionHorizontalCommand::execute(const CommandContext& ctx, const QVariantMap& args)
+void WarpTransformCommand::execute(const CommandContext& ctx, const QVariantMap& args)
 {
     Q_UNUSED(args);
-
-    if (auto* canvasPanel = ctx.activeCanvasPanel()) {
-        canvasPanel->flipSelectionContentHorizontally();
+    if (auto* panel = ctx.activeCanvasPanel()) {
+        panel->enterWarpTransformMode();
     }
 }
 
-CommandInfo FlipSelectionVerticalCommand::info() const
+CommandInfo Rotate90ClockwiseCommand::info() const
 {
-    return CommandInfo { .id = "selection.flipVertical",
-        .title = "Flip Selection Vertically",
-        .category = "Selection",
-        .description = "Mirror the content under the active selection top to bottom, in place",
-        .aliases = { "flip-selection-vertical" },
+    return CommandInfo { .id = "edit.rotate90Clockwise",
+        .title = "Rotate 90 Clockwise",
+        .category = "Edit",
+        .description = "Rotate the active selection or selected layer 90 degrees clockwise",
+        .aliases = { "rotate-90-clockwise", "rotate-right" },
         .defaultShortcut = QKeySequence(),
         .icon = QIcon() };
 }
 
-bool FlipSelectionVerticalCommand::canExecute(const CommandContext& ctx) const
+bool Rotate90ClockwiseCommand::canExecute(const CommandContext& ctx) const
 {
-    auto* canvasPanel = ctx.activeCanvasPanel();
-    return canvasPanel && canvasPanel->hasActiveSelection();
+    return canExecuteContentTransformAction(ctx);
 }
 
-void FlipSelectionVerticalCommand::execute(const CommandContext& ctx, const QVariantMap& args)
+void Rotate90ClockwiseCommand::execute(const CommandContext& ctx, const QVariantMap& args)
 {
     Q_UNUSED(args);
+    if (auto* panel = ctx.activeCanvasPanel()) {
+        panel->rotateContent90Clockwise();
+    }
+}
 
-    if (auto* canvasPanel = ctx.activeCanvasPanel()) {
-        canvasPanel->flipSelectionContentVertically();
+CommandInfo Rotate90CounterclockwiseCommand::info() const
+{
+    return CommandInfo { .id = "edit.rotate90Counterclockwise",
+        .title = "Rotate 90 Counterclockwise",
+        .category = "Edit",
+        .description = "Rotate the active selection or selected layer 90 degrees counterclockwise",
+        .aliases = { "rotate-90-counterclockwise", "rotate-left" },
+        .defaultShortcut = QKeySequence(),
+        .icon = QIcon() };
+}
+
+bool Rotate90CounterclockwiseCommand::canExecute(const CommandContext& ctx) const
+{
+    return canExecuteContentTransformAction(ctx);
+}
+
+void Rotate90CounterclockwiseCommand::execute(const CommandContext& ctx, const QVariantMap& args)
+{
+    Q_UNUSED(args);
+    if (auto* panel = ctx.activeCanvasPanel()) {
+        panel->rotateContent90Counterclockwise();
+    }
+}
+
+CommandInfo Rotate180Command::info() const
+{
+    return CommandInfo { .id = "edit.rotate180",
+        .title = "Rotate 180",
+        .category = "Edit",
+        .description = "Rotate the active selection or selected layer 180 degrees",
+        .aliases = { "rotate-180", "turn-upside-down" },
+        .defaultShortcut = QKeySequence(),
+        .icon = QIcon() };
+}
+
+bool Rotate180Command::canExecute(const CommandContext& ctx) const
+{
+    return canExecuteContentTransformAction(ctx);
+}
+
+void Rotate180Command::execute(const CommandContext& ctx, const QVariantMap& args)
+{
+    Q_UNUSED(args);
+    if (auto* panel = ctx.activeCanvasPanel()) {
+        panel->rotateContent180();
+    }
+}
+
+CommandInfo FlipHorizontalCommand::info() const
+{
+    return CommandInfo { .id = "edit.flipHorizontal",
+        .title = "Flip Horizontal",
+        .category = "Edit",
+        .description = "Flip the active selection or selected layer horizontally",
+        .aliases = { "flip-horizontal", "mirror-horizontal" },
+        .defaultShortcut = QKeySequence(),
+        .icon = QIcon() };
+}
+
+bool FlipHorizontalCommand::canExecute(const CommandContext& ctx) const
+{
+    return canExecuteContentTransformAction(ctx);
+}
+
+void FlipHorizontalCommand::execute(const CommandContext& ctx, const QVariantMap& args)
+{
+    Q_UNUSED(args);
+    if (auto* panel = ctx.activeCanvasPanel()) {
+        panel->flipContentHorizontally();
+    }
+}
+
+CommandInfo FlipVerticalCommand::info() const
+{
+    return CommandInfo { .id = "edit.flipVertical",
+        .title = "Flip Vertical",
+        .category = "Edit",
+        .description = "Flip the active selection or selected layer vertically",
+        .aliases = { "flip-vertical", "mirror-vertical" },
+        .defaultShortcut = QKeySequence(),
+        .icon = QIcon() };
+}
+
+bool FlipVerticalCommand::canExecute(const CommandContext& ctx) const
+{
+    return canExecuteContentTransformAction(ctx);
+}
+
+void FlipVerticalCommand::execute(const CommandContext& ctx, const QVariantMap& args)
+{
+    Q_UNUSED(args);
+    if (auto* panel = ctx.activeCanvasPanel()) {
+        panel->flipContentVertically();
     }
 }
 
@@ -577,8 +681,12 @@ void registerEditCommands(CommandRegistry& registry)
     registry.registerCommand(std::make_unique<SelectLayerMaskCommand>());
     registry.registerCommand(std::make_unique<DeleteSelectionContentCommand>());
     registry.registerCommand(std::make_unique<TransformSelectionCommand>());
-    registry.registerCommand(std::make_unique<FlipSelectionHorizontalCommand>());
-    registry.registerCommand(std::make_unique<FlipSelectionVerticalCommand>());
+    registry.registerCommand(std::make_unique<WarpTransformCommand>());
+    registry.registerCommand(std::make_unique<Rotate90ClockwiseCommand>());
+    registry.registerCommand(std::make_unique<Rotate90CounterclockwiseCommand>());
+    registry.registerCommand(std::make_unique<Rotate180Command>());
+    registry.registerCommand(std::make_unique<FlipHorizontalCommand>());
+    registry.registerCommand(std::make_unique<FlipVerticalCommand>());
     registry.registerCommand(std::make_unique<ContextualDeleteCommand>());
 }
 

@@ -224,6 +224,9 @@ private:
     /// Edit -> Selection submenu, rebuilt on every open so each entry reflects
     /// its command's current canExecute() (selection present, layer has a mask...).
     MenuItem buildSelectionMenuItem() const;
+    /// Edit -> Transform submenu, rebuilt on every open so one-shot actions are
+    /// disabled while a stroke or another transform apply owns the canvas.
+    MenuItem buildTransformMenuItem() const;
     /// File -> Export submenu, rebuilt on every open for the same reason.
     MenuItem buildExportMenuItem() const;
     MenuItem buildPanelsMenuItem();

@@ -667,7 +667,7 @@ Try Square Selection first to restrict the area.</source>
     </message>
     <message>
         <location filename="../src/features/canvas/ui/CanvasMouseInputHandler.cpp" line="398"/>
-        <source>Deform</source>
+        <source>Warp</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
@@ -4605,6 +4605,36 @@ Ruwa uses the Qt framework (version %1), dynamically linked under the GNU Lesser
         <translation type="unfinished"></translation>
     </message>
     <message>
+        <location filename="../src/shell/top-bar/TopBar.cpp" line="775"/>
+        <source>Transform</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location filename="../src/shell/top-bar/TopBar.cpp" line="778"/>
+        <source>Free Transform</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location filename="../src/shell/top-bar/TopBar.cpp" line="779"/>
+        <source>Warp</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location filename="../src/shell/top-bar/TopBar.cpp" line="781"/>
+        <source>Rotate 90 Clockwise</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location filename="../src/shell/top-bar/TopBar.cpp" line="782"/>
+        <source>Rotate 90 Counterclockwise</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location filename="../src/shell/top-bar/TopBar.cpp" line="783"/>
+        <source>Rotate 180</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
         <location filename="../src/shell/top-bar/TopBar.cpp" line="725"/>
         <source>Preferences...</source>
         <translation type="unfinished"></translation>
@@ -4655,17 +4685,12 @@ Ruwa uses the Qt framework (version %1), dynamically linked under the GNU Lesser
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location filename="../src/shell/top-bar/TopBar.cpp" line="771"/>
-        <source>Transform Selection</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <location filename="../src/shell/top-bar/TopBar.cpp" line="772"/>
+        <location filename="../src/shell/top-bar/TopBar.cpp" line="785"/>
         <source>Flip Horizontal</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location filename="../src/shell/top-bar/TopBar.cpp" line="773"/>
+        <location filename="../src/shell/top-bar/TopBar.cpp" line="786"/>
         <source>Flip Vertical</source>
         <translation type="unfinished"></translation>
     </message>

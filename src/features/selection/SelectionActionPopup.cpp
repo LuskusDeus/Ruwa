@@ -173,10 +173,14 @@ SelectionActionPopup::SelectionActionPopup(QWidget* parent)
 
     m_flipVerticalButton = new PopupActionButton(false, this, m_secondSection);
     m_flipVerticalButton->setToolTip(tr("Flip vertically"));
+    ToolTipController::setShortcutCommand(
+        m_flipVerticalButton, QStringLiteral("edit.flipVertical"));
     secondLayout->addWidget(m_flipVerticalButton);
 
     m_flipHorizontalButton = new PopupActionButton(false, this, m_secondSection);
     m_flipHorizontalButton->setToolTip(tr("Flip horizontally"));
+    ToolTipController::setShortcutCommand(
+        m_flipHorizontalButton, QStringLiteral("edit.flipHorizontal"));
     secondLayout->addWidget(m_flipHorizontalButton);
 
     m_closeSeparator = new PopupSeparator(this, m_secondSection);

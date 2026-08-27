@@ -332,10 +332,14 @@ public:
     void selectActiveLayerContent();
     /// Replace the selection with the selected layer's mask coverage.
     void selectActiveLayerMaskContent();
-    /// Mirror the content under the selection in place (animated, undoable).
-    /// False when there is no selection, or a transform/stroke owns the pixels.
-    bool flipSelectionContentHorizontally();
-    bool flipSelectionContentVertically();
+    /// Apply an animated, undoable one-shot transform to the active selection,
+    /// or to the selected layer(s) when there is no active selection.
+    bool flipContentHorizontally();
+    bool flipContentVertically();
+    bool rotateContent90Clockwise();
+    bool rotateContent90Counterclockwise();
+    bool rotateContent180();
+    bool canApplyContentTransformAction() const;
     /// Copy the pixels under the active selection (edit clipboard + system
     /// clipboard image). False when there is nothing copyable.
     bool copySelectionPixels();
@@ -435,7 +439,11 @@ public:
     void setLassoFillStabilization(qreal stabilization);
 
     // Transform mode
+    bool canToggleTransformMode() const;
     void enterTransformMode();
+    /// Enter the existing transform session directly in Warp mode.
+    bool canEnterWarpTransformMode() const;
+    bool enterWarpTransformMode();
     void confirmTransform();
     /// Translate the selected layers' content by @p delta document pixels as a
     /// single undoable step (the Move tool's path, driven programmatically).

@@ -213,8 +213,8 @@ QImage imageFromTileGridRegion(const aether::TileGrid& grid, const QRect& bounds
     return image.convertToFormat(QImage::Format_ARGB32);
 }
 
-constexpr int kAutoFlipAnimationDurationMs
-    = static_cast<int>(aether::TransformController::SCALE_ANIMATION_DURATION * 1000.0f) + 16;
+constexpr int kAutoTransformActionAnimationDurationMs
+    = static_cast<int>(aether::TransformController::ACTION_ANIMATION_DURATION * 1000.0f) + 16;
 
 std::unordered_set<aether::TileKey, aether::TileKeyHash> retainedTextTileKeys(
     ruwa::core::layers::LayerData* layer)
@@ -6414,61 +6414,137 @@ bool OpenGLCanvasWidget::fillLayerMaskFromActiveSelection(const QUuid& layerId)
     return true;
 }
 
-bool OpenGLCanvasWidget::flipSelectionHorizontally()
+bool OpenGLCanvasWidget::flipContentHorizontally()
 {
-    return startAnimatedSelectionFlip(true, false);
+    return applyAnimatedContentTransform(AnimatedContentTransform::FlipHorizontal);
 }
 
-bool OpenGLCanvasWidget::flipSelectionVertically()
+bool OpenGLCanvasWidget::flipContentVertically()
 {
-    return startAnimatedSelectionFlip(false, true);
+    return applyAnimatedContentTransform(AnimatedContentTransform::FlipVertical);
+}
+
+bool OpenGLCanvasWidget::rotateContent90Clockwise()
+{
+    return applyAnimatedContentTransform(AnimatedContentTransform::Rotate90Clockwise);
+}
+
+bool OpenGLCanvasWidget::rotateContent90Counterclockwise()
+{
+    return applyAnimatedContentTransform(AnimatedContentTransform::Rotate90Counterclockwise);
+}
+
+bool OpenGLCanvasWidget::rotateContent180()
+{
+    return applyAnimatedContentTransform(AnimatedContentTransform::Rotate180);
+}
+
+bool OpenGLCanvasWidget::isTransformCommandInputAvailable() const
+{
+    return m_initialized && !m_autoApplyingTransform && !m_pendingTransform.active
+        && !hasPendingStrokeFinalization() && !isFillPreviewActive()
+        && (!m_strokeHost || !m_strokeHost->isDrawing());
+}
+
+bool OpenGLCanvasWidget::hasTransformableTarget() const
+{
+    if (!m_layerModel) {
+        return false;
+    }
+    const TransformTargetSet targets
+        = buildTransformTargetSet(*m_layerModel, aether::transformBoundsForLayer);
+    return !targets.empty() && targets.contentBounds.width > 0.0f
+        && targets.contentBounds.height > 0.0f;
+}
+
+bool OpenGLCanvasWidget::canToggleTransformMode() const
+{
+    if (!isTransformCommandInputAvailable()) {
+        return false;
+    }
+    if (m_transformController.isActive()) {
+        return !m_transformController.isDragging();
+    }
+    return hasTransformableTarget();
+}
+
+bool OpenGLCanvasWidget::canApplyContentTransformAction() const
+{
+    if (!isTransformCommandInputAvailable()) {
+        return false;
+    }
+    if (m_transformController.isActive()) {
+        return !m_moveOnlyTransform && !m_transformController.isDragging()
+            && m_transformController.canAnimateDiscreteAction();
+    }
+    return hasTransformableTarget();
+}
+
+bool OpenGLCanvasWidget::canEnterWarpTransformMode() const
+{
+    if (!isTransformCommandInputAvailable()) {
+        return false;
+    }
+    if (m_transformController.isActive()) {
+        return !m_moveOnlyTransform && !m_transformController.isDragging()
+            && !m_transformController.hasPendingDiscreteActionAnimation()
+            && m_transformController.interactionMode() != TransformInteractionMode::Deform;
+    }
+    return hasTransformableTarget();
 }
 
 bool OpenGLCanvasWidget::canFlipActiveTransform() const
 {
-    return m_transformController.isActive() && !m_transformController.isDragging()
-        && !m_moveOnlyTransform && !m_autoApplyingTransform
-        && m_transformController.canAnimateFlip();
+    return m_transformController.isActive() && canApplyContentTransformAction();
 }
 
 bool OpenGLCanvasWidget::flipActiveTransformHorizontally()
 {
-    return flipActiveTransform(true, false);
+    return applyAnimatedContentTransformToActiveSession(AnimatedContentTransform::FlipHorizontal);
 }
 
 bool OpenGLCanvasWidget::flipActiveTransformVertically()
 {
-    return flipActiveTransform(false, true);
+    return applyAnimatedContentTransformToActiveSession(AnimatedContentTransform::FlipVertical);
 }
 
-bool OpenGLCanvasWidget::flipActiveTransform(bool flipHorizontal, bool flipVertical)
+bool OpenGLCanvasWidget::animateContentTransform(AnimatedContentTransform action)
 {
-    if ((!flipHorizontal && !flipVertical) || !canFlipActiveTransform()) {
+    constexpr float kHalfPi = 1.57079632679489661923f;
+    switch (action) {
+    case AnimatedContentTransform::FlipHorizontal:
+        return m_transformController.animateFlipHorizontal();
+    case AnimatedContentTransform::FlipVertical:
+        return m_transformController.animateFlipVertical();
+    case AnimatedContentTransform::Rotate90Clockwise:
+        return m_transformController.animateRotationBy(kHalfPi);
+    case AnimatedContentTransform::Rotate90Counterclockwise:
+        return m_transformController.animateRotationBy(-kHalfPi);
+    case AnimatedContentTransform::Rotate180:
+        return m_transformController.animateRotationBy(kHalfPi * 2.0f);
+    }
+    return false;
+}
+
+bool OpenGLCanvasWidget::applyAnimatedContentTransformToActiveSession(
+    AnimatedContentTransform action)
+{
+    if (!m_transformController.isActive() || !canApplyContentTransformAction()) {
         return false;
     }
 
-    const TransformState before = m_transformController.state();
+    const TransformState before = m_transformController.animatedTargetState();
     const TransformInteractionMode mode = m_transformController.interactionMode();
 
-    bool started = false;
-    if (flipHorizontal) {
-        started = m_transformController.animateFlipHorizontal() || started;
-    }
-    if (flipVertical) {
-        started = m_transformController.animateFlipVertical() || started;
-    }
-    if (!started) {
+    if (!animateContentTransform(action)) {
         return false;
     }
 
-    // Record the flip as its own undo step, but build the command by hand rather
-    // than going through begin/commitTransformUndoStep: committing finalizes the
-    // pending animation, which would snap the mirror into place instead of
-    // playing it. The endpoint is already known, so undo/redo jump between the
-    // two states while the eased flip keeps running on screen.
+    // Record the action as its own undo step without finalizing the animation.
+    // Both snapshots are logical endpoints, never transient frames, so rapid
+    // repeated commands compose and undo predictably while easing continues.
     if (m_transformUndoManager) {
-        TransformState after = before;
-        after.scale = m_transformController.animatedTargetScale();
+        const TransformState after = m_transformController.animatedTargetState();
         if (!transformStatesNearlyEqual(before, after)) {
             m_transformUndoManager->push(
                 std::make_unique<TransformSessionCommand>(&m_transformController, before, mode,
@@ -6483,55 +6559,40 @@ bool OpenGLCanvasWidget::flipActiveTransform(bool flipHorizontal, bool flipVerti
     return true;
 }
 
-bool OpenGLCanvasWidget::startAnimatedSelectionFlip(bool flipHorizontal, bool flipVertical)
+bool OpenGLCanvasWidget::applyAnimatedContentTransform(AnimatedContentTransform action)
 {
-    if (!flipHorizontal && !flipVertical)
-        return false;
-    if (m_autoApplyingTransform || m_pendingTransform.active)
-        return false;
-    if ((m_strokeHost && m_strokeHost->isDrawing()) || !m_selectionController)
+    if (!canApplyContentTransformAction())
         return false;
 
-    const bool hasSelectionMask = m_selectionController->lassoSelection().hasSelection()
-        && !m_selectionController->lassoSelection().mask().empty();
-    if (!hasSelectionMask)
-        return false;
+    // A command must not close a transform session the user is still editing.
+    // Apply it as a session-local undo step, matching the transform context
+    // popup, and leave confirmation to the user.
+    if (m_transformController.isActive()) {
+        return applyAnimatedContentTransformToActiveSession(action);
+    }
 
     const uint64_t sequence = ++m_autoApplyTransformSequence;
     m_autoApplyingTransform = true;
 
-    if (m_transformController.isActive()) {
-        if (m_moveOnlyTransform || m_transformController.isDragging()) {
-            m_autoApplyingTransform = false;
-            return false;
-        }
-    } else {
-        enterTransformMode();
-        if (!m_transformController.isActive()) {
-            m_autoApplyingTransform = false;
-            return false;
-        }
+    enterTransformMode();
+    if (!m_transformController.isActive()) {
+        m_autoApplyingTransform = false;
+        return false;
     }
 
-    bool started = false;
-    if (flipHorizontal) {
-        started = m_transformController.animateFlipHorizontal() || started;
-    }
-    if (flipVertical) {
-        started = m_transformController.animateFlipVertical() || started;
-    }
-    if (!started) {
-        m_autoApplyingTransform = false;
+    if (!animateContentTransform(action)) {
+        cancelTransform();
         return false;
     }
 
     requestRender();
 
-    // Mirrors the transform's own scale animation, which rides the canvas
-    // animation policy — this wait has to shrink with it.
-    const int flipSettleMs
-        = anim::canvasEnabled() ? qMax(1, qRound(kAutoFlipAnimationDurationMs / anim::speed())) : 0;
-    QTimer::singleShot(flipSettleMs, this, [this, sequence]() {
+    // Mirrors the transform action animation, which rides the canvas animation
+    // policy — this wait has to shrink with it.
+    const int settleMs = anim::canvasEnabled()
+        ? qMax(1, qRound(kAutoTransformActionAnimationDurationMs / anim::speed()))
+        : 0;
+    QTimer::singleShot(settleMs, this, [this, sequence]() {
         if (!m_autoApplyingTransform || sequence != m_autoApplyTransformSequence) {
             return;
         }
@@ -10049,6 +10110,14 @@ void OpenGLCanvasWidget::setTransformInteractionMode(aether::TransformInteractio
 {
     if (m_transformController.interactionMode() == mode) {
         return;
+    }
+
+    // Mode conversion rewrites the transform representation (similarity <-
+    // -> mesh/free quad). Never convert an intermediate frame of a command
+    // animation: settle its logical endpoint first.
+    if (m_transformController.isActive() && !m_transformController.isDragging()
+        && m_transformController.hasPendingDiscreteActionAnimation()) {
+        m_transformController.finalizePendingAnimation();
     }
 
     const bool recordUndoStep = m_transformController.isActive()

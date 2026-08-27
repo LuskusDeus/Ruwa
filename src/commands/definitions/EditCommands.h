@@ -111,14 +111,42 @@ public:
     void execute(const CommandContext& ctx, const QVariantMap& args = {}) override;
 };
 
-class FlipSelectionHorizontalCommand : public Command {
+class WarpTransformCommand : public Command {
 public:
     CommandInfo info() const override;
     bool canExecute(const CommandContext& ctx) const override;
     void execute(const CommandContext& ctx, const QVariantMap& args = {}) override;
 };
 
-class FlipSelectionVerticalCommand : public Command {
+class Rotate90ClockwiseCommand : public Command {
+public:
+    CommandInfo info() const override;
+    bool canExecute(const CommandContext& ctx) const override;
+    void execute(const CommandContext& ctx, const QVariantMap& args = {}) override;
+};
+
+class Rotate90CounterclockwiseCommand : public Command {
+public:
+    CommandInfo info() const override;
+    bool canExecute(const CommandContext& ctx) const override;
+    void execute(const CommandContext& ctx, const QVariantMap& args = {}) override;
+};
+
+class Rotate180Command : public Command {
+public:
+    CommandInfo info() const override;
+    bool canExecute(const CommandContext& ctx) const override;
+    void execute(const CommandContext& ctx, const QVariantMap& args = {}) override;
+};
+
+class FlipHorizontalCommand : public Command {
+public:
+    CommandInfo info() const override;
+    bool canExecute(const CommandContext& ctx) const override;
+    void execute(const CommandContext& ctx, const QVariantMap& args = {}) override;
+};
+
+class FlipVerticalCommand : public Command {
 public:
     CommandInfo info() const override;
     bool canExecute(const CommandContext& ctx) const override;

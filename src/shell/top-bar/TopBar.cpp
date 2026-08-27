@@ -708,8 +708,9 @@ void TopBar::setupEditMenu()
     m_editItems.append(commandMenuItem(tr("Copy"), QStringLiteral("edit.copy")));
     m_editItems.append(commandMenuItem(tr("Paste"), QStringLiteral("edit.paste")));
     m_editItems.append(MenuItem::Separator());
-    // Placeholder: editItemsWithEnabledState() swaps it for a freshly built one
-    // so the submenu's per-command enabled state is current on every open.
+    // Placeholders: editItemsWithEnabledState() swaps them for freshly built
+    // submenus so every command's enabled state is current on each open.
+    m_editItems.append(buildTransformMenuItem());
     m_editItems.append(buildSelectionMenuItem());
     m_editItems.append(MenuItem::Separator());
     m_editItems.append(commandMenuItem(tr("Preferences..."), QStringLiteral("nav.settings")));
@@ -757,12 +758,34 @@ MenuItem TopBar::buildSelectionMenuItem() const
         MenuItem::Separator(),
         entry(tr("Fill"), QStringLiteral("selection.fill")),
         entry(tr("Delete Content"), QStringLiteral("selection.deleteContent")),
-        MenuItem::Separator(),
-        entry(tr("Transform Selection"), QStringLiteral("selection.transform")),
-        entry(tr("Flip Horizontal"), QStringLiteral("selection.flipHorizontal")),
-        entry(tr("Flip Vertical"), QStringLiteral("selection.flipVertical")),
     };
     return selectionItem;
+}
+
+MenuItem TopBar::buildTransformMenuItem() const
+{
+    const auto& executor = ruwa::core::CommandExecutor::instance();
+    const auto entry = [&executor](const QString& text, const QString& commandId) {
+        MenuItem item = commandMenuItem(text, commandId);
+        item.enabled = executor.canExecute(commandId);
+        return item;
+    };
+
+    MenuItem transformItem;
+    transformItem.text = tr("Transform");
+    transformItem.enabled = isInWorkspace();
+    transformItem.submenu = {
+        entry(tr("Free Transform"), QStringLiteral("edit.transform")),
+        entry(tr("Warp"), QStringLiteral("edit.warp")),
+        MenuItem::Separator(),
+        entry(tr("Rotate 90 Clockwise"), QStringLiteral("edit.rotate90Clockwise")),
+        entry(tr("Rotate 90 Counterclockwise"), QStringLiteral("edit.rotate90Counterclockwise")),
+        entry(tr("Rotate 180"), QStringLiteral("edit.rotate180")),
+        MenuItem::Separator(),
+        entry(tr("Flip Horizontal"), QStringLiteral("edit.flipHorizontal")),
+        entry(tr("Flip Vertical"), QStringLiteral("edit.flipVertical")),
+    };
+    return transformItem;
 }
 
 void TopBar::setupViewMenu()
@@ -1282,7 +1305,19 @@ QList<MenuItem> TopBar::editItemsWithEnabledState() const
             continue;
         }
         if (item.hasSubmenu()) {
-            item = buildSelectionMenuItem();
+            const auto containsCommand = [&item](QLatin1String commandId) {
+                for (const MenuItem& submenuItem : item.submenu) {
+                    if (submenuItem.commandId == commandId) {
+                        return true;
+                    }
+                }
+                return false;
+            };
+            if (containsCommand(QLatin1String("edit.transform"))) {
+                item = buildTransformMenuItem();
+            } else if (containsCommand(QLatin1String("selection.selectAll"))) {
+                item = buildSelectionMenuItem();
+            }
             continue;
         }
         if (kWorkspaceOnlyIds.contains(item.commandId)) {

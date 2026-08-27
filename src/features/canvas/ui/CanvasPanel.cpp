@@ -1031,17 +1031,55 @@ void CanvasPanel::setToolMode(ToolId tool)
 //   T R A N S F O R M   M O D E
 // ==========================================================================
 
+bool CanvasPanel::canToggleTransformMode() const
+{
+    return !isAnySelectionInteractionActive() && m_glWidget && m_glWidget->canToggleTransformMode();
+}
+
 void CanvasPanel::enterTransformMode()
 {
-    if (!m_glWidget || !m_glWidget->isInitialized())
+    if (!m_glWidget || !m_glWidget->isInitialized() || isAnySelectionInteractionActive()
+        || m_glWidget->isFillPreviewActive()) {
         return;
+    }
+    if (m_glWidget->hasPendingStrokeFinalization()) {
+        m_glWidget->flushPendingStrokeFinalization();
+    }
     hideRadialMenu();
     m_ctrlPressed = (QApplication::keyboardModifiers() & Qt::ControlModifier) != 0;
     m_glWidget->enterTransformMode();
+    if (!m_glWidget->isTransformActive()) {
+        updateSelectionActionPopup();
+        return;
+    }
     updateCursorManagerOverlay();
     emit transformModeChanged(true);
     syncToolStateOverlayContent();
     updateSelectionActionPopup();
+}
+
+bool CanvasPanel::enterWarpTransformMode()
+{
+    if (!canEnterWarpTransformMode()) {
+        return false;
+    }
+    if (!m_glWidget->isTransformActive()) {
+        enterTransformMode();
+    }
+    if (!m_glWidget->isTransformActive() || m_glWidget->isAutoApplyingTransform()) {
+        return false;
+    }
+
+    m_glWidget->setTransformInteractionMode(aether::TransformInteractionMode::Deform);
+    updateCursorManagerOverlay();
+    syncToolStateOverlayContent();
+    return true;
+}
+
+bool CanvasPanel::canEnterWarpTransformMode() const
+{
+    return !isAnySelectionInteractionActive() && m_glWidget
+        && m_glWidget->canEnterWarpTransformMode();
 }
 
 void CanvasPanel::confirmTransform()
@@ -2862,22 +2900,55 @@ bool CanvasPanel::hasActiveSelection() const
     return m_glWidget && m_glWidget->hasSelectionMask();
 }
 
-bool CanvasPanel::flipSelectionContentHorizontally()
+bool CanvasPanel::flipContentHorizontally()
 {
-    if (!m_glWidget || !m_glWidget->flipSelectionHorizontally()) {
+    if (!m_glWidget || !m_glWidget->flipContentHorizontally()) {
         return false;
     }
     updateSelectionActionPopup();
     return true;
 }
 
-bool CanvasPanel::flipSelectionContentVertically()
+bool CanvasPanel::flipContentVertically()
 {
-    if (!m_glWidget || !m_glWidget->flipSelectionVertically()) {
+    if (!m_glWidget || !m_glWidget->flipContentVertically()) {
         return false;
     }
     updateSelectionActionPopup();
     return true;
+}
+
+bool CanvasPanel::rotateContent90Clockwise()
+{
+    if (!m_glWidget || !m_glWidget->rotateContent90Clockwise()) {
+        return false;
+    }
+    updateSelectionActionPopup();
+    return true;
+}
+
+bool CanvasPanel::rotateContent90Counterclockwise()
+{
+    if (!m_glWidget || !m_glWidget->rotateContent90Counterclockwise()) {
+        return false;
+    }
+    updateSelectionActionPopup();
+    return true;
+}
+
+bool CanvasPanel::rotateContent180()
+{
+    if (!m_glWidget || !m_glWidget->rotateContent180()) {
+        return false;
+    }
+    updateSelectionActionPopup();
+    return true;
+}
+
+bool CanvasPanel::canApplyContentTransformAction() const
+{
+    return !isAnySelectionInteractionActive() && m_glWidget
+        && m_glWidget->canApplyContentTransformAction();
 }
 
 bool CanvasPanel::copySelectionPixels()
@@ -3613,6 +3684,17 @@ void CanvasPanel::keyPressEvent(QKeyEvent* event)
     }
 
     if (m_glWidget && m_glWidget->isTransformActive()) {
+        const bool arrowKey = event->key() == Qt::Key_Left || event->key() == Qt::Key_Right
+            || event->key() == Qt::Key_Up || event->key() == Qt::Key_Down;
+        const bool transformControlKey = arrowKey || event->key() == Qt::Key_Return
+            || event->key() == Qt::Key_Enter || event->key() == Qt::Key_Escape;
+        const bool actionAnimationPending
+            = m_glWidget->transformController().hasPendingDiscreteActionAnimation();
+        if ((m_glWidget->isAutoApplyingTransform() && transformControlKey)
+            || (actionAnimationPending && arrowKey)) {
+            event->accept();
+            return;
+        }
         if (event->key() == Qt::Key_Return || event->key() == Qt::Key_Enter) {
             confirmTransform();
             event->accept();

@@ -595,7 +595,7 @@ Try Square Selection first to restrict the area.</source>
     </message>
     <message>
         <location filename="../src/features/canvas/ui/CanvasMouseInputHandler.cpp" line="398"/>
-        <source>Deform</source>
+        <source>Warp</source>
         <translation>Деформация</translation>
     </message>
     <message>
@@ -4714,6 +4714,36 @@ Ruwa использует фреймворк Qt (версия %1), динами�
         <translation>Вставить</translation>
     </message>
     <message>
+        <location filename="../src/shell/top-bar/TopBar.cpp" line="775"/>
+        <source>Transform</source>
+        <translation>Трансформация</translation>
+    </message>
+    <message>
+        <location filename="../src/shell/top-bar/TopBar.cpp" line="778"/>
+        <source>Free Transform</source>
+        <translation>Свободная трансформация</translation>
+    </message>
+    <message>
+        <location filename="../src/shell/top-bar/TopBar.cpp" line="779"/>
+        <source>Warp</source>
+        <translation>Деформация</translation>
+    </message>
+    <message>
+        <location filename="../src/shell/top-bar/TopBar.cpp" line="781"/>
+        <source>Rotate 90 Clockwise</source>
+        <translation>Повернуть на 90° по часовой стрелке</translation>
+    </message>
+    <message>
+        <location filename="../src/shell/top-bar/TopBar.cpp" line="782"/>
+        <source>Rotate 90 Counterclockwise</source>
+        <translation>Повернуть на 90° против часовой стрелки</translation>
+    </message>
+    <message>
+        <location filename="../src/shell/top-bar/TopBar.cpp" line="783"/>
+        <source>Rotate 180</source>
+        <translation>Повернуть на 180°</translation>
+    </message>
+    <message>
         <location filename="../src/shell/top-bar/TopBar.cpp" line="725"/>
         <source>Preferences...</source>
         <translation>Параметры...</translation>
@@ -4764,17 +4794,12 @@ Ruwa использует фреймворк Qt (версия %1), динами�
         <translation>Удалить содержимое</translation>
     </message>
     <message>
-        <location filename="../src/shell/top-bar/TopBar.cpp" line="771"/>
-        <source>Transform Selection</source>
-        <translation>Трансформировать выделенное</translation>
-    </message>
-    <message>
-        <location filename="../src/shell/top-bar/TopBar.cpp" line="772"/>
+        <location filename="../src/shell/top-bar/TopBar.cpp" line="785"/>
         <source>Flip Horizontal</source>
         <translation>Отразить по горизонтали</translation>
     </message>
     <message>
-        <location filename="../src/shell/top-bar/TopBar.cpp" line="773"/>
+        <location filename="../src/shell/top-bar/TopBar.cpp" line="786"/>
         <source>Flip Vertical</source>
         <translation>Отразить по вертикали</translation>
     </message>

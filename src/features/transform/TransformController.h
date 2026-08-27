@@ -48,7 +48,9 @@ public:
 
     static constexpr float ROTATION_SNAP_STEP_RADIANS = 15.0f * 3.14159265358979323846f / 180.0f;
     static constexpr float ROTATION_SMOOTH_SPEED = 22.0f;
-    static constexpr float SCALE_ANIMATION_DURATION = 0.18f;
+    /// Discrete transform actions (flip and quarter-turn rotation) deliberately
+    /// share one duration and easing curve so menu actions feel like one family.
+    static constexpr float ACTION_ANIMATION_DURATION = 0.18f;
     /// Shift-move axis guide fade (same exponential style as rotation smoothing).
     static constexpr float MOVE_AXIS_GUIDE_OPACITY_SPEED = 28.0f;
     /// Screen-space half-width of invisible Shift-move axis trigger zones.
@@ -112,9 +114,6 @@ public:
         // Always start a transform session in Classic mode; the previously used
         // interaction mode is intentionally not remembered.
         m_interactionMode = TransformInteractionMode::Classic;
-        if (!m_moveOnly && m_interactionMode == TransformInteractionMode::Deform) {
-            m_state.initializeDeformMeshFromCurrentTransform();
-        }
         resetMoveAxisGuideState();
         resetMoveShiftSmoothState();
         syncAnimatedState();
@@ -162,9 +161,6 @@ public:
         // Always start a transform session in Classic mode; the previously used
         // interaction mode is intentionally not remembered.
         m_interactionMode = TransformInteractionMode::Classic;
-        if (!m_moveOnly && m_interactionMode == TransformInteractionMode::Deform) {
-            m_state.initializeDeformMeshFromCurrentTransform();
-        }
         resetMoveAxisGuideState();
         resetMoveShiftSmoothState();
         syncAnimatedState();
@@ -423,6 +419,10 @@ public:
         m_dragStartContentCenter = currentTransformContentCenterWorld();
         m_targetRotation = m_state.rotation;
         m_rotationAnimationActive = false;
+        m_discreteRotationStart = m_state.rotation;
+        m_discreteRotationTarget = m_state.rotation;
+        m_discreteRotationElapsed = 0.0f;
+        m_discreteRotationAnimationActive = false;
         m_freeRotateAnimationActive = false;
         m_freeRotateAnimationBaseQuad.reset();
         m_scaleAnimationStartScale = m_state.scale;
@@ -751,7 +751,13 @@ public:
     bool hasPendingAnimation() const
     {
         return m_rotationAnimationActive || m_scaleAnimationActive || m_moveTranslationAnimActive
-            || m_freeRotateAnimationActive || moveAxisGuideAnimating();
+            || m_discreteRotationAnimationActive || m_freeRotateAnimationActive
+            || moveAxisGuideAnimating();
+    }
+
+    bool hasPendingDiscreteActionAnimation() const
+    {
+        return m_scaleAnimationActive || m_discreteRotationAnimationActive;
     }
 
     bool moveAxisGuideAnimating() const
@@ -789,25 +795,35 @@ public:
 
     bool hasSnapSession() const { return m_snapSession != nullptr; }
 
-    /// Mirroring is a scale sign flip, which only exists while the transform is
-    /// still a similarity: a free quad or a deform mesh has no scale to negate.
-    bool canAnimateFlip() const
+    /// Discrete scale/rotation actions only exist while the transform is still
+    /// a similarity: a free quad or a deform mesh has no single scale/angle.
+    bool canAnimateDiscreteAction() const
     {
         return m_active && !m_state.hasFreeQuad() && !m_state.hasDeformMesh();
     }
 
-    /// Endpoint of a running flip/scale animation (the live scale when idle), so
-    /// callers can record the outcome without cutting the animation short.
-    Vector2 animatedTargetScale() const
+    /// Logical endpoint of command-driven animation. The live state may still
+    /// be between frames, but undo and a following command must compose from
+    /// this endpoint rather than from that transient frame.
+    TransformState animatedTargetState() const
     {
-        return m_scaleAnimationActive ? m_targetScale : m_state.scale;
+        TransformState target = m_state;
+        if (m_scaleAnimationActive) {
+            target.scale = m_targetScale;
+        }
+        if (m_discreteRotationAnimationActive) {
+            target.rotation = normalizeAngleDelta(m_discreteRotationTarget);
+        } else if (m_rotationAnimationActive) {
+            target.rotation = normalizeAngleDelta(m_targetRotation);
+        }
+        return target;
     }
 
     bool animateFlipHorizontal()
     {
         if (!m_active || m_state.hasFreeQuad() || m_state.hasDeformMesh())
             return false;
-        Vector2 targetScale = m_state.scale;
+        Vector2 targetScale = m_scaleAnimationActive ? m_targetScale : m_state.scale;
         targetScale.x = -targetScale.x;
         clampScale(targetScale.x);
         return animateScaleTo(targetScale);
@@ -817,10 +833,49 @@ public:
     {
         if (!m_active || m_state.hasFreeQuad() || m_state.hasDeformMesh())
             return false;
-        Vector2 targetScale = m_state.scale;
+        Vector2 targetScale = m_scaleAnimationActive ? m_targetScale : m_state.scale;
         targetScale.y = -targetScale.y;
         clampScale(targetScale.y);
         return animateScaleTo(targetScale);
+    }
+
+    /// Animate a command-driven rotation with the same OutCubic curve and
+    /// duration as a flip. Positive angles rotate clockwise in document space
+    /// (the document Y axis points down).
+    bool animateRotationBy(float angleRadians)
+    {
+        if (!m_active || m_state.hasFreeQuad() || m_state.hasDeformMesh()
+            || std::abs(angleRadians) < 0.0001f) {
+            return false;
+        }
+
+        // Chain from the logical endpoint when another rotation is still in
+        // flight. This keeps rapid 90° commands additive without introducing a
+        // visual snap to the previous endpoint first.
+        const float baseRotation = m_discreteRotationAnimationActive
+            ? m_discreteRotationTarget
+            : (m_rotationAnimationActive ? m_targetRotation : m_state.rotation);
+        const float targetRotation = baseRotation + angleRadians;
+        const float normalizedTarget = normalizeAngleDelta(targetRotation);
+        if (std::abs(normalizeAngleDelta(normalizedTarget - m_state.rotation)) < 0.0001f) {
+            const bool supersededPendingAnimation
+                = m_discreteRotationAnimationActive || m_rotationAnimationActive;
+            m_state.rotation = normalizedTarget;
+            m_targetRotation = normalizedTarget;
+            m_rotationAnimationActive = false;
+            m_discreteRotationStart = normalizedTarget;
+            m_discreteRotationTarget = normalizedTarget;
+            m_discreteRotationElapsed = 0.0f;
+            m_discreteRotationAnimationActive = false;
+            return supersededPendingAnimation;
+        }
+
+        m_rotationAnimationActive = false;
+        m_discreteRotationStart = m_state.rotation;
+        m_discreteRotationTarget = targetRotation;
+        m_discreteRotationElapsed = 0.0f;
+        m_discreteRotationAnimationActive = true;
+        return true;
     }
 
     /// Re-sync drag-start snapshot after external state modifications
@@ -838,6 +893,10 @@ public:
         m_dragStartContentCenter = currentTransformContentCenterWorld();
         m_targetRotation = m_state.rotation;
         m_rotationAnimationActive = false;
+        m_discreteRotationStart = m_state.rotation;
+        m_discreteRotationTarget = m_state.rotation;
+        m_discreteRotationElapsed = 0.0f;
+        m_discreteRotationAnimationActive = false;
         m_freeRotateAnimationActive = false;
         m_freeRotateAnimationBaseQuad.reset();
         m_scaleAnimationStartScale = m_state.scale;
@@ -866,7 +925,7 @@ public:
         if (m_scaleAnimationActive) {
             m_scaleAnimationElapsed += std::max(dt, 0.0f);
             const float t
-                = std::clamp(m_scaleAnimationElapsed / SCALE_ANIMATION_DURATION, 0.0f, 1.0f);
+                = std::clamp(m_scaleAnimationElapsed / ACTION_ANIMATION_DURATION, 0.0f, 1.0f);
             const float eased = easeOutCubic(t);
             m_state.scale = { interpolateScaleComponent(
                                   m_scaleAnimationStartScale.x, m_targetScale.x, eased),
@@ -874,6 +933,21 @@ public:
             if (t >= 1.0f) {
                 m_state.scale = m_targetScale;
                 m_scaleAnimationActive = false;
+            }
+            changed = true;
+        }
+
+        if (m_discreteRotationAnimationActive) {
+            m_discreteRotationElapsed += std::max(dt, 0.0f);
+            const float t
+                = std::clamp(m_discreteRotationElapsed / ACTION_ANIMATION_DURATION, 0.0f, 1.0f);
+            const float eased = easeOutCubic(t);
+            m_state.rotation = m_discreteRotationStart
+                + (m_discreteRotationTarget - m_discreteRotationStart) * eased;
+            if (t >= 1.0f) {
+                m_state.rotation = normalizeAngleDelta(m_discreteRotationTarget);
+                m_discreteRotationTarget = m_state.rotation;
+                m_discreteRotationAnimationActive = false;
             }
             changed = true;
         }
@@ -903,6 +977,10 @@ public:
     {
         m_targetRotation = m_state.rotation;
         m_rotationAnimationActive = false;
+        m_discreteRotationStart = m_state.rotation;
+        m_discreteRotationTarget = m_state.rotation;
+        m_discreteRotationElapsed = 0.0f;
+        m_discreteRotationAnimationActive = false;
         m_freeRotateAnimationActive = false;
         m_freeRotateAnimationBaseQuad.reset();
         m_scaleAnimationStartScale = m_state.scale;
@@ -920,6 +998,11 @@ public:
         if (m_rotationAnimationActive) {
             m_state.rotation = m_targetRotation;
             m_rotationAnimationActive = false;
+        }
+        if (m_discreteRotationAnimationActive) {
+            m_state.rotation = normalizeAngleDelta(m_discreteRotationTarget);
+            m_discreteRotationTarget = m_state.rotation;
+            m_discreteRotationAnimationActive = false;
         }
         if (m_freeRotateAnimationActive) {
             m_freeRotateDisplayAngle = m_freeRotateTargetAngle;
@@ -2739,12 +2822,13 @@ private:
 
         if (std::abs(m_state.scale.x - normalizedTarget.x) < 0.0001f
             && std::abs(m_state.scale.y - normalizedTarget.y) < 0.0001f) {
+            const bool supersededPendingAnimation = m_scaleAnimationActive;
             m_state.scale = normalizedTarget;
             m_scaleAnimationStartScale = normalizedTarget;
             m_targetScale = normalizedTarget;
             m_scaleAnimationElapsed = 0.0f;
             m_scaleAnimationActive = false;
-            return false;
+            return supersededPendingAnimation;
         }
 
         m_scaleAnimationStartScale = m_state.scale;
@@ -2843,6 +2927,10 @@ private:
     float m_dragStartRotation = 0.0f;
     float m_targetRotation = 0.0f;
     bool m_rotationAnimationActive = false;
+    float m_discreteRotationStart = 0.0f;
+    float m_discreteRotationTarget = 0.0f;
+    float m_discreteRotationElapsed = 0.0f;
+    bool m_discreteRotationAnimationActive = false;
     std::optional<std::array<Vector2, 4>> m_freeRotateAnimationBaseQuad;
     Vector2 m_freeRotateAnimationCenter {};
     float m_freeRotateDisplayAngle = 0.0f;

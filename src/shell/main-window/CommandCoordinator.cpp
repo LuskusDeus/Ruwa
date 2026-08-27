@@ -66,17 +66,21 @@ void CommandCoordinator::setupCommandSystem()
     registry.registerCommand(std::make_unique<ruwa::core::UndoActionCommand>(undoResolver));
     registry.registerCommand(std::make_unique<ruwa::core::RedoActionCommand>(undoResolver));
 
-    // Transform command: Ctrl+T
-    auto transformActivator = [this]() {
+    const auto activeCanvasPanel = [this]() -> ruwa::ui::workspace::CanvasPanel* {
         if (!m_tabManager)
-            return;
+            return nullptr;
         auto* activeTab = m_tabManager->activeTab();
         if (!activeTab)
-            return;
+            return nullptr;
         auto* wsTab = dynamic_cast<ruwa::ui::tabs::WorkspaceTab*>(activeTab);
         if (!wsTab)
-            return;
-        auto* panel = wsTab->canvasPanel();
+            return nullptr;
+        return wsTab->canvasPanel();
+    };
+
+    // Transform command: Ctrl+T
+    const auto transformActivator = [activeCanvasPanel]() {
+        auto* panel = activeCanvasPanel();
         if (!panel)
             return;
 
@@ -86,8 +90,12 @@ void CommandCoordinator::setupCommandSystem()
             panel->enterTransformMode();
         }
     };
-    registry.registerCommand(
-        std::make_unique<ruwa::core::TransformActionCommand>(transformActivator));
+    const auto transformAvailability = [activeCanvasPanel]() {
+        auto* panel = activeCanvasPanel();
+        return panel && panel->canToggleTransformMode();
+    };
+    registry.registerCommand(std::make_unique<ruwa::core::TransformActionCommand>(
+        transformActivator, transformAvailability));
 
     auto& shortcuts = ruwa::core::ShortcutManager::instance();
     shortcuts.setShortcutContext(m_mainWindow);

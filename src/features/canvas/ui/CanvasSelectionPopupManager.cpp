@@ -92,22 +92,12 @@ void CanvasSelectionPopupManager::ensureSelectionActionPopup()
         });
 
     QObject::connect(m_panel->m_selectionActionPopup,
-        &ruwa::ui::widgets::SelectionActionPopup::flipVerticalRequested, m_panel, [this]() {
-            if (!m_panel->m_glWidget)
-                return;
-            if (m_panel->m_glWidget->flipSelectionVertically()) {
-                updateSelectionActionPopup();
-            }
-        });
+        &ruwa::ui::widgets::SelectionActionPopup::flipVerticalRequested, m_panel,
+        [this]() { m_panel->flipContentVertically(); });
 
     QObject::connect(m_panel->m_selectionActionPopup,
-        &ruwa::ui::widgets::SelectionActionPopup::flipHorizontalRequested, m_panel, [this]() {
-            if (!m_panel->m_glWidget)
-                return;
-            if (m_panel->m_glWidget->flipSelectionHorizontally()) {
-                updateSelectionActionPopup();
-            }
-        });
+        &ruwa::ui::widgets::SelectionActionPopup::flipHorizontalRequested, m_panel,
+        [this]() { m_panel->flipContentHorizontally(); });
 
     QObject::connect(m_panel->m_selectionActionPopup,
         &ruwa::ui::widgets::SelectionActionPopup::deleteRequested, m_panel, [this]() {

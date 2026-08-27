@@ -390,6 +390,12 @@ bool CanvasMouseInputHandler::handleMousePress(QMouseEvent* event)
 
     // Transform mode mouse handling
     if (glWidget->isTransformActive()) {
+        if ((glWidget->isAutoApplyingTransform()
+                || glWidget->transformController().hasPendingDiscreteActionAnimation())
+            && (event->button() == Qt::LeftButton || event->button() == Qt::RightButton)) {
+            event->accept();
+            return true;
+        }
         if (event->button() == Qt::LeftButton) {
             aether::Vector2 worldPos = m_panel->mapToWorld(event->globalPosition());
             float zoom = glWidget->viewport().camera().zoom();
@@ -435,7 +441,7 @@ bool CanvasMouseInputHandler::handleMousePress(QMouseEvent* event)
                 QVariantMap deformAction;
                 deformAction.insert(
                     QStringLiteral("id"), static_cast<int>(CanvasPanel::TransformActionModeDeform));
-                deformAction.insert(QStringLiteral("text"), QObject::tr("Deform"));
+                deformAction.insert(QStringLiteral("text"), QObject::tr("Warp"));
                 deformAction.insert(QStringLiteral("checked"),
                     currentMode == aether::TransformInteractionMode::Deform);
                 deformAction.insert(QStringLiteral("enabled"),

@@ -18,9 +18,11 @@ namespace ruwa::core {
 class TransformActionCommand : public Command {
 public:
     using TransformActivator = std::function<void()>;
+    using TransformAvailability = std::function<bool()>;
 
-    explicit TransformActionCommand(TransformActivator activator)
+    TransformActionCommand(TransformActivator activator, TransformAvailability availability)
         : m_activator(std::move(activator))
+        , m_availability(std::move(availability))
     {
     }
 
@@ -39,7 +41,7 @@ public:
     bool canExecute(const CommandContext& ctx) const override
     {
         Q_UNUSED(ctx);
-        return m_activator != nullptr;
+        return m_activator != nullptr && m_availability != nullptr && m_availability();
     }
 
     void execute(const CommandContext& ctx, const QVariantMap& args = {}) override
@@ -53,6 +55,7 @@ public:
 
 private:
     TransformActivator m_activator;
+    TransformAvailability m_availability;
 };
 
 } // namespace ruwa::core

@@ -27,6 +27,7 @@ add_executable(RuwaTests
     smoke_test.cpp
     stroke_input_queue_test.cpp
     taper_state_test.cpp
+    transform_discrete_action_test.cpp
     transform_snap_solver_test.cpp
     texture_replacement_math_test.cpp
     update_manifest_test.cpp

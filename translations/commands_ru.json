@@ -108,6 +108,66 @@
       "transform"
     ]
   },
+  "edit.warp": {
+    "title": "Деформация",
+    "category": "Правка",
+    "description": "Перейти в режим деформации активного выделения или выбранного слоя",
+    "aliases": [
+      "warp",
+      "deform",
+      "деформация"
+    ]
+  },
+  "edit.rotate90Clockwise": {
+    "title": "Повернуть на 90° по часовой стрелке",
+    "category": "Правка",
+    "description": "Повернуть активное выделение или выбранный слой на 90 градусов по часовой стрелке",
+    "aliases": [
+      "rotate-90-clockwise",
+      "rotate-right",
+      "повернуть-вправо"
+    ]
+  },
+  "edit.rotate90Counterclockwise": {
+    "title": "Повернуть на 90° против часовой стрелки",
+    "category": "Правка",
+    "description": "Повернуть активное выделение или выбранный слой на 90 градусов против часовой стрелки",
+    "aliases": [
+      "rotate-90-counterclockwise",
+      "rotate-left",
+      "повернуть-влево"
+    ]
+  },
+  "edit.rotate180": {
+    "title": "Повернуть на 180°",
+    "category": "Правка",
+    "description": "Повернуть активное выделение или выбранный слой на 180 градусов",
+    "aliases": [
+      "rotate-180",
+      "turn-upside-down",
+      "повернуть-на-180"
+    ]
+  },
+  "edit.flipHorizontal": {
+    "title": "Отразить по горизонтали",
+    "category": "Правка",
+    "description": "Отразить по горизонтали активное выделение или выбранный слой",
+    "aliases": [
+      "flip-horizontal",
+      "mirror-horizontal",
+      "отразить-по-горизонтали"
+    ]
+  },
+  "edit.flipVertical": {
+    "title": "Отразить по вертикали",
+    "category": "Правка",
+    "description": "Отразить по вертикали активное выделение или выбранный слой",
+    "aliases": [
+      "flip-vertical",
+      "mirror-vertical",
+      "отразить-по-вертикали"
+    ]
+  },
   "edit.transform-last-stroke": {
     "title": "Трансформация последнего мазка",
     "category": "Правка",
@@ -652,24 +712,6 @@
     "aliases": [
       "transform-selection",
       "трансформировать-выделенное"
-    ]
-  },
-  "selection.flipHorizontal": {
-    "title": "Отразить выделенное по горизонтали",
-    "category": "Выделение",
-    "description": "Зеркально отразить содержимое под активным выделением слева направо, на месте",
-    "aliases": [
-      "flip-selection-horizontal",
-      "отразить-по-горизонтали"
-    ]
-  },
-  "selection.flipVertical": {
-    "title": "Отразить выделенное по вертикали",
-    "category": "Выделение",
-    "description": "Зеркально отразить содержимое под активным выделением сверху вниз, на месте",
-    "aliases": [
-      "flip-selection-vertical",
-      "отразить-по-вертикали"
     ]
   },
   "file.export": {
