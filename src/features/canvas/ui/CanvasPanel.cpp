@@ -32,6 +32,7 @@
 #include "features/canvas/rendering/OpenGLCanvasWidget.h"
 #include "shared/undo/UndoManager.h"
 #include "shared/undo/LayerAddCommand.h"
+#include "shared/undo/SelectionState.h"
 #include "shared/undo/TextLayerContentCommand.h"
 #include "features/layers/model/LayerModel.h"
 #include "features/layers/model/LayerData.h"
@@ -2903,6 +2904,55 @@ bool CanvasPanel::cutSelectionPixels()
     return copySelectionPixels() && deleteSelectionContent();
 }
 
+bool CanvasPanel::canCreateLayerFromSelection(bool cutFromSource) const
+{
+    return m_layerModel && m_glWidget
+        && m_glWidget->canExtractSelectionPixels(/*requireEditableLayer=*/cutFromSource);
+}
+
+bool CanvasPanel::createLayerFromSelection(bool cutFromSource)
+{
+    if (!canCreateLayerFromSelection(cutFromSource)) {
+        return false;
+    }
+
+    // The extracted tiles must match what is currently visible on the source
+    // layer, not the state from before a pending transform.
+    commitTransformBeforeDocumentMutation();
+    if (!canCreateLayerFromSelection(cutFromSource)) {
+        return false;
+    }
+
+    std::unique_ptr<aether::TileGrid> extractedGrid;
+    if (!m_glWidget->extractSelectionPixels(extractedGrid)) {
+        return false;
+    }
+
+    const auto* sourceLayer = m_layerModel->selectedLayer();
+    const QString layerName = sourceLayer
+        ? ruwa::core::layers::LayerData::copiedName(sourceLayer->name)
+        : tr("Layer copy");
+
+    auto* undoManager = undoManagerOrNull();
+    if (cutFromSource && undoManager) {
+        undoManager->beginTransaction(QStringLiteral("Layer via Cut"));
+    }
+
+    const bool sourcePrepared = !cutFromSource || m_glWidget->clearSelectionContent();
+    const bool added = sourcePrepared
+        && addPixelLayer(std::move(extractedGrid), layerName,
+            cutFromSource ? QStringLiteral("Layer via Cut") : QStringLiteral("Layer via Copy"),
+            /*enterTransformAfterAdd=*/false);
+
+    if (cutFromSource && undoManager) {
+        undoManager->endTransaction();
+    }
+    if (added) {
+        updateSelectionActionPopup();
+    }
+    return added;
+}
+
 bool CanvasPanel::canPasteClipboardPixels() const
 {
     return m_layerModel && m_glWidget
@@ -2926,11 +2976,6 @@ bool CanvasPanel::pasteClipboardPixelsAsLayer()
     m_glWidget->clearSelectionMask();
     updateSelectionActionPopup();
 
-    auto layer = ruwa::core::layers::LayerData::create(
-        ruwa::core::layers::LayerType::Raster, tr("Pasted"));
-    if (!layer) {
-        return false;
-    }
     // Tiles keep their document coordinates: the paste lands exactly where the
     // pixels were copied from, and transform mode moves it from there. Pasting
     // into a different (usually smaller) document can leave that spot entirely
@@ -2947,9 +2992,30 @@ bool CanvasPanel::pasteClipboardPixelsAsLayer()
         tileOffsetX = static_cast<int>(std::lround(delta.x() / tileSpan));
         tileOffsetY = static_cast<int>(std::lround(delta.y() / tileSpan));
     }
-    layer->tileGrid = aether::cloneGridWithSolids(*pastedGrid, tileOffsetX, tileOffsetY);
+    auto grid = aether::cloneGridWithSolids(*pastedGrid, tileOffsetX, tileOffsetY);
+    return addPixelLayer(std::move(grid), tr("Pasted"), QStringLiteral("Add Layer"),
+        /*enterTransformAfterAdd=*/true);
+}
+
+bool CanvasPanel::addPixelLayer(std::unique_ptr<aether::TileGrid> grid, const QString& layerName,
+    const QString& undoLabel, bool enterTransformAfterAdd)
+{
+    if (!m_layerModel || !m_glWidget || !grid || grid->empty()) {
+        return false;
+    }
+
+    auto* undoManager = undoManagerOrNull();
+    const aether::LayerSelectionState selectionBefore
+        = aether::captureLayerSelection(m_layerModel->selectionManager());
+
+    auto layer
+        = ruwa::core::layers::LayerData::create(ruwa::core::layers::LayerType::Raster, layerName);
+    if (!layer) {
+        return false;
+    }
+    layer->tileGrid = std::move(grid);
     layer->thumbnailDirty = true;
-    const ruwa::core::layers::LayerId pastedId = layer->id;
+    const ruwa::core::layers::LayerId addedId = layer->id;
 
     // Above the current layer, next to it in the same group — same placement
     // rule as pasting a layer.
@@ -2975,13 +3041,13 @@ bool CanvasPanel::pasteClipboardPixelsAsLayer()
     } else {
         m_layerModel->addLayerTo(layer, parentId, insertIndex);
     }
-    auto* addedLayer = m_layerModel->layerById(pastedId);
+    auto* addedLayer = m_layerModel->layerById(addedId);
     if (!addedLayer) {
         return false;
     }
-    m_layerModel->setSelectedLayer(pastedId);
+    m_layerModel->setSelectedLayer(addedId);
 
-    if (auto* undoManager = undoManagerOrNull()) {
+    if (undoManager) {
         // Where the layer actually landed, not where we asked for it.
         ruwa::core::layers::LayerId addedParentId;
         int addedIndex = -1;
@@ -3002,21 +3068,27 @@ bool CanvasPanel::pasteClipboardPixelsAsLayer()
         if (undoClone) {
             auto requestRenderFn = [this]() { requestRender(); };
             auto onContentChangedFn = [this]() { notifyContentChanged(); };
-            undoManager->push(std::make_unique<aether::LayerAddCommand>(m_layerModel,
+            auto command = std::make_unique<aether::LayerAddCommand>(m_layerModel,
                 QList<std::shared_ptr<ruwa::core::layers::LayerData>> { std::move(undoClone) },
                 QList<std::pair<ruwa::core::layers::LayerId, int>> {
                     { addedParentId, addedIndex } },
-                requestRenderFn, onContentChangedFn));
+                requestRenderFn, onContentChangedFn);
+            command->setLayerSelectionChange(
+                selectionBefore, aether::captureLayerSelection(m_layerModel->selectionManager()));
+            command->setLabel(undoLabel);
+            undoManager->push(std::move(command));
         }
     }
 
     notifyContentChanged();
     requestRender();
 
-    // Free placement before the paste is committed: Enter/click-away applies it,
-    // Esc leaves the pixels where they were copied from. Goes through the panel
-    // so the transform overlay, cursor and tool state come along.
-    enterTransformMode();
+    if (enterTransformAfterAdd) {
+        // Free placement before the paste is committed: Enter/click-away applies it,
+        // Esc leaves the pixels where they were copied from. Goes through the panel
+        // so the transform overlay, cursor and tool state come along.
+        enterTransformMode();
+    }
     return true;
 }
 

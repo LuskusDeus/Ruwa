@@ -8,6 +8,8 @@
 #include "commands/CommandContext.h"
 #include "commands/CommandRegistry.h"
 #include "shell/tab-system/WorkspaceTab.h"
+#include "features/canvas/ui/CanvasPanel.h"
+#include "features/layers/model/LayerData.h"
 #include "features/layers/ui/LayersPanel.h"
 namespace ruwa::core::commands {
 
@@ -17,6 +19,13 @@ bool canExecuteLayerCommand(const CommandContext& ctx)
 {
     auto* panel = ctx.activeLayersPanel();
     return panel && panel->layerModel();
+}
+
+bool canDuplicateSelectedLayers(const CommandContext& ctx)
+{
+    auto* panel = ctx.activeLayersPanel();
+    const auto* selectedLayer = panel ? panel->selectedLayer() : nullptr;
+    return selectedLayer && !selectedLayer->isBackground();
 }
 
 } // namespace
@@ -139,24 +148,59 @@ void DeleteSelectedLayersCommand::execute(const CommandContext& ctx, const QVari
 CommandInfo DuplicateSelectedLayersCommand::info() const
 {
     return CommandInfo { .id = "layers.duplicate",
-        .title = "Duplicate Selected Layers",
+        .title = "Layer via Copy",
         .category = "Layers",
-        .description = "Duplicate currently selected layers",
-        .aliases = { "layer-duplicate", "duplicate-layer", "copy-layer" },
+        .description = "Copy the active pixel selection to a new layer, or duplicate the selected "
+                       "layers when there is no pixel selection",
+        .aliases = { "layer-duplicate", "duplicate-layer", "copy-layer", "layer-via-copy" },
         .defaultShortcut = QKeySequence(Qt::CTRL | Qt::Key_J),
         .icon = QIcon() };
 }
 
 bool DuplicateSelectedLayersCommand::canExecute(const CommandContext& ctx) const
 {
-    return canExecuteLayerCommand(ctx);
+    auto* canvasPanel = ctx.activeCanvasPanel();
+    if (canvasPanel && canvasPanel->hasActiveSelection()) {
+        return canvasPanel->canCreateLayerFromSelection(/*cutFromSource=*/false);
+    }
+    return canDuplicateSelectedLayers(ctx);
 }
 
 void DuplicateSelectedLayersCommand::execute(const CommandContext& ctx, const QVariantMap& args)
 {
     Q_UNUSED(args);
+    if (auto* canvasPanel = ctx.activeCanvasPanel();
+        canvasPanel && canvasPanel->hasActiveSelection()) {
+        canvasPanel->createLayerFromSelection(/*cutFromSource=*/false);
+        return;
+    }
     if (auto* panel = ctx.activeLayersPanel()) {
         panel->duplicateSelectedLayers();
+    }
+}
+
+CommandInfo LayerViaCutCommand::info() const
+{
+    return CommandInfo { .id = "layers.via-cut",
+        .title = "Layer via Cut",
+        .category = "Layers",
+        .description = "Move the pixels inside the active selection to a new layer",
+        .aliases = { "layer-via-cut", "cut-selection-to-layer" },
+        .defaultShortcut = QKeySequence(Qt::CTRL | Qt::SHIFT | Qt::Key_J),
+        .icon = QIcon() };
+}
+
+bool LayerViaCutCommand::canExecute(const CommandContext& ctx) const
+{
+    auto* canvasPanel = ctx.activeCanvasPanel();
+    return canvasPanel && canvasPanel->canCreateLayerFromSelection(/*cutFromSource=*/true);
+}
+
+void LayerViaCutCommand::execute(const CommandContext& ctx, const QVariantMap& args)
+{
+    Q_UNUSED(args);
+    if (auto* canvasPanel = ctx.activeCanvasPanel()) {
+        canvasPanel->createLayerFromSelection(/*cutFromSource=*/true);
     }
 }
 
@@ -272,6 +316,7 @@ void registerLayerCommands(CommandRegistry& registry)
     registry.registerCommand(std::make_unique<AddAdjustmentLayerCommand>());
     registry.registerCommand(std::make_unique<DeleteSelectedLayersCommand>());
     registry.registerCommand(std::make_unique<DuplicateSelectedLayersCommand>());
+    registry.registerCommand(std::make_unique<LayerViaCutCommand>());
     registry.registerCommand(std::make_unique<MergeDownCommand>());
     registry.registerCommand(std::make_unique<MergeVisibleCommand>());
     registry.registerCommand(std::make_unique<QuickClippingMaskCommand>());

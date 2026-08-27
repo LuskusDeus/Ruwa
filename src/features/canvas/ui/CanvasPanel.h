@@ -35,6 +35,7 @@
 #include <QPointer>
 
 #include <functional>
+#include <memory>
 #include <optional>
 #include <utility>
 
@@ -56,6 +57,7 @@ class QPainter;
 
 namespace aether {
 class OpenGLCanvasWidget;
+class TileGrid;
 }
 
 namespace ruwa::core::layers {
@@ -339,6 +341,11 @@ public:
     bool copySelectionPixels();
     /// Copy the pixels under the active selection, then erase them.
     bool cutSelectionPixels();
+    /// Create a raster layer from the pixels under the active selection. When
+    /// @p cutFromSource is true, remove those pixels from the source layer in
+    /// the same undo step. The selection and edit clipboard are preserved.
+    bool canCreateLayerFromSelection(bool cutFromSource) const;
+    bool createLayerFromSelection(bool cutFromSource);
     /// Whether the edit clipboard holds pixels this canvas could paste.
     bool canPasteClipboardPixels() const;
     /// Paste the copied pixels as a new layer above the current one, in place,
@@ -597,6 +604,8 @@ private:
 
     void onSurfaceResized(uint32_t width, uint32_t height);
     void onGLInitialized();
+    bool addPixelLayer(std::unique_ptr<aether::TileGrid> grid, const QString& layerName,
+        const QString& undoLabel, bool enterTransformAfterAdd);
     void updateStyles();
     void positionBrushOverlayDefault();
     void positionStylusJoystickDefault();

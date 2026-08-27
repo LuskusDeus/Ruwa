@@ -8,11 +8,13 @@
 #define RUWA_CORE_UNDO_LAYERADDCOMMAND_H
 
 #include "shared/undo/UndoManager.h"
+#include "shared/undo/SelectionState.h"
 #include "features/layers/model/LayerData.h"
 
 #include <QList>
 #include <functional>
 #include <memory>
+#include <optional>
 
 namespace ruwa::core::layers {
 class LayerModel;
@@ -35,6 +37,11 @@ public:
         QList<std::pair<ruwa::core::layers::LayerId, int>> positions, RequestRenderFn requestRender,
         OnContentChangedFn onContentChanged);
 
+    /// Restore the exact layer selection around undo/redo. Optional because
+    /// callers that do not change selection keep their existing behavior.
+    void setLayerSelectionChange(LayerSelectionState before, LayerSelectionState after);
+    void setLabel(QString label);
+
     void undo() override;
     void redo() override;
     QString text() const override;
@@ -45,6 +52,9 @@ private:
     ruwa::core::layers::LayerModel* m_layerModel = nullptr;
     QList<std::shared_ptr<ruwa::core::layers::LayerData>> m_layers;
     QList<std::pair<ruwa::core::layers::LayerId, int>> m_positions;
+    std::optional<LayerSelectionState> m_selectionBefore;
+    std::optional<LayerSelectionState> m_selectionAfter;
+    QString m_label = QStringLiteral("Add Layer");
 
     RequestRenderFn m_requestRender;
     OnContentChangedFn m_onContentChanged;

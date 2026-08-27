@@ -43,6 +43,19 @@ LayerAddCommand::LayerAddCommand(ruwa::core::layers::LayerModel* layerModel,
 {
 }
 
+void LayerAddCommand::setLayerSelectionChange(LayerSelectionState before, LayerSelectionState after)
+{
+    m_selectionBefore = std::move(before);
+    m_selectionAfter = std::move(after);
+}
+
+void LayerAddCommand::setLabel(QString label)
+{
+    if (!label.isEmpty()) {
+        m_label = std::move(label);
+    }
+}
+
 void LayerAddCommand::undo()
 {
     if (!m_layerModel)
@@ -50,6 +63,13 @@ void LayerAddCommand::undo()
 
     const QList<ruwa::core::layers::LayerId> idsToRemove = collectRootLayerIds(m_layers);
     m_layerModel->removeLayers(idsToRemove);
+
+    if (m_selectionBefore) {
+        applyLayerSelection(m_layerModel->selectionManager(), *m_selectionBefore,
+            [this](const ruwa::core::layers::LayerId& id) {
+                return m_layerModel && m_layerModel->contains(id);
+            });
+    }
 
     if (m_requestRender)
         m_requestRender();
@@ -76,6 +96,13 @@ void LayerAddCommand::redo()
         }
     }
 
+    if (m_selectionAfter) {
+        applyLayerSelection(m_layerModel->selectionManager(), *m_selectionAfter,
+            [this](const ruwa::core::layers::LayerId& id) {
+                return m_layerModel && m_layerModel->contains(id);
+            });
+    }
+
     if (m_requestRender)
         m_requestRender();
     if (m_onContentChanged)
@@ -84,7 +111,7 @@ void LayerAddCommand::redo()
 
 QString LayerAddCommand::text() const
 {
-    return QStringLiteral("Add Layer");
+    return m_label;
 }
 
 qint64 LayerAddCommand::memorySize() const
@@ -97,6 +124,15 @@ qint64 LayerAddCommand::memorySize() const
                 * (sizeof(aether::TileKey) + aether::TILE_BYTE_SIZE + 64);
         }
     }
+    const auto selectionBytes = [](const std::optional<LayerSelectionState>& state) {
+        if (!state) {
+            return qint64 { 0 };
+        }
+        return static_cast<qint64>(state->selectedIds.size())
+            * static_cast<qint64>(sizeof(ruwa::core::layers::LayerId));
+    };
+    size += selectionBytes(m_selectionBefore) + selectionBytes(m_selectionAfter);
+    size += static_cast<qint64>(m_label.capacity() * sizeof(QChar));
     return size;
 }
 

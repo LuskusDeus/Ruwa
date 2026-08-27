@@ -289,6 +289,14 @@ public:
     /// the system clipboard. False when there is no selection, the active layer
     /// is not a plain raster layer, or the region is empty.
     bool copySelectionPixelsToClipboard(QImage* outFlattenedImage = nullptr);
+    /// Extract the pixels under the active selection without changing either the
+    /// document or the edit clipboard. Tiles remain in document coordinates.
+    /// Used by both clipboard copy and Layer via Copy/Cut.
+    /// The availability check is deliberately structural (selection + non-empty
+    /// raster source), so command-state refreshes never scan selection pixels.
+    bool canExtractSelectionPixels(bool requireEditableLayer = false) const;
+    bool extractSelectionPixels(std::unique_ptr<TileGrid>& outGrid, QRect* outBounds = nullptr,
+        QImage* outFlattenedImage = nullptr);
     /// Clear all pixels in a raster layer (undoable). Layer must be visible, unlocked, raster.
     bool clearLayerPixelContent(const QUuid& layerId);
     /// Bake generated pixel layer to raster (transform applied). Returns false if layer is missing

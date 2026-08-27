@@ -5532,6 +5532,41 @@ bool OpenGLCanvasWidget::doClearSelectionContent()
 
 bool OpenGLCanvasWidget::copySelectionPixelsToClipboard(QImage* outFlattenedImage)
 {
+    std::unique_ptr<TileGrid> copied;
+    QRect bounds;
+    if (!extractSelectionPixels(copied, &bounds, outFlattenedImage)) {
+        return false;
+    }
+
+    ruwa::shared::clipboard::EditClipboard::instance().setPixels(
+        std::shared_ptr<const TileGrid>(std::move(copied)), bounds);
+    return true;
+}
+
+bool OpenGLCanvasWidget::canExtractSelectionPixels(bool requireEditableLayer) const
+{
+    if (!m_selectionController || !hasSelectionMask()) {
+        return false;
+    }
+
+    const auto* layer = activeLayer();
+    if (!layer || !layer->isRaster() || !layer->tileGrid || layer->tileGrid->empty()) {
+        return false;
+    }
+    return !requireEditableLayer || isLayerCanvasEditable(layer);
+}
+
+bool OpenGLCanvasWidget::extractSelectionPixels(
+    std::unique_ptr<TileGrid>& outGrid, QRect* outBounds, QImage* outFlattenedImage)
+{
+    outGrid.reset();
+    if (outBounds) {
+        *outBounds = {};
+    }
+    if (outFlattenedImage) {
+        *outFlattenedImage = {};
+    }
+
     if (!m_selectionController || !hasSelectionMask())
         return false;
     // Reading the layer's own tiles means only plain raster layers qualify: a
@@ -5549,7 +5584,7 @@ bool OpenGLCanvasWidget::copySelectionPixelsToClipboard(QImage* outFlattenedImag
     const int canvasW = static_cast<int>(m_canvas.width());
     const int canvasH = static_cast<int>(m_canvas.height());
 
-    auto copied = std::make_shared<TileGrid>();
+    auto copied = std::make_unique<TileGrid>();
     copied->setFormat(sourceGrid.format());
 
     int minX = std::numeric_limits<int>::max();
@@ -5611,7 +5646,10 @@ bool OpenGLCanvasWidget::copySelectionPixelsToClipboard(QImage* outFlattenedImag
     if (outFlattenedImage)
         *outFlattenedImage = imageFromTileGridRegion(*copied, bounds);
 
-    ruwa::shared::clipboard::EditClipboard::instance().setPixels(std::move(copied), bounds);
+    outGrid = std::move(copied);
+    if (outBounds) {
+        *outBounds = bounds;
+    }
     return true;
 }
 
