@@ -1,5 +1,6 @@
 // SPDX-License-Identifier: MPL-2.0
 
+#include "features/canvas/engine/CanvasEngineSession.h"
 #include "RadialMenuController.h"
 
 #include "RadialMenuConfig.h"
@@ -8,7 +9,7 @@
 #include "commands/CommandExecutor.h"
 #include "commands/CommandRegistry.h"
 #include "commands/ShortcutManager.h"
-#include "features/canvas/rendering/OpenGLCanvasWidget.h"
+#include "features/canvas/engine/CanvasEngineQtEvents.h"
 #include "features/canvas/ui/CanvasCursorManager.h"
 #include "features/canvas/ui/CanvasPanel.h"
 #include "shared/i18n/CommandLocalization.h"
@@ -71,12 +72,13 @@ void RadialMenuController::ensureWidget()
     // Same frosted backdrop as the on-canvas overlays. The widget is built on
     // the first right-click, long after the canvas set the others up, so it
     // subscribes here instead.
-    if (auto* glWidget = m_panel->m_glWidget) {
-        menu->setBackdropSource(glWidget);
-        connect(glWidget, &aether::OpenGLCanvasWidget::backdropAvailabilityChanged, menu,
+    if (m_panel->m_engineBinding) {
+        menu->setBackdropSource(m_panel->m_engineBinding->backdropSource());
+        connect(&m_panel->m_engineBinding->events(),
+            &CanvasEngineQtEvents::backdropAvailabilityChanged, menu,
             QOverload<>::of(&QWidget::update));
-        connect(
-            glWidget, &QObject::destroyed, menu, [menu]() { menu->setBackdropSource(nullptr); });
+        connect(m_panel->m_engineBinding->viewportHostWidget(), &QObject::destroyed, menu,
+            [menu]() { menu->setBackdropSource(nullptr); });
     }
 
     connect(

@@ -5,9 +5,10 @@
 // ==========================================================================
 
 #include "CanvasOverlayLayoutManager.h"
+#include "features/canvas/engine/CanvasEngineSession.h"
 #include "CanvasOverlayLayout.h"
 #include "CanvasPanel.h"
-#include "features/canvas/rendering/OpenGLCanvasWidget.h"
+#include "features/canvas/engine/CanvasEngineTypes.h"
 
 #include "features/brush/ui/BrushControlOverlay.h"
 #include "features/canvas/ui/CanvasStylusJoystickContainerWidget.h"
@@ -170,8 +171,8 @@ void CanvasOverlayLayoutManager::setCanvasWidgetVisible(CanvasWidget widget, boo
     if (!handles.widget)
         return;
     handles.widget->setVisible(visible);
-    if (m_panel->m_glWidget) {
-        m_panel->m_glWidget->requestBackdropUpdate();
+    if (m_panel->m_engineBinding) {
+        m_panel->m_engineBinding->session().presentation().requestBackdropUpdate();
     }
     // Showing again after a fade-out would otherwise keep the faded opacity.
     if (visible && handles.opacity) {

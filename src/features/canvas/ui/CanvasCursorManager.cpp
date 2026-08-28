@@ -203,9 +203,9 @@ void CanvasCursorManager::setCursorResolver(CursorResolver resolver)
     m_cursorResolver = std::move(resolver);
 }
 
-void CanvasCursorManager::setUseGLBrushCursor(bool use)
+void CanvasCursorManager::setUseRenderedBrushCursor(bool use)
 {
-    m_useGLBrushCursor = use;
+    m_useRenderedBrushCursor = use;
 }
 
 void CanvasCursorManager::setBrushCursorCallback(BrushCursorCallback callback)
@@ -213,9 +213,9 @@ void CanvasCursorManager::setBrushCursorCallback(BrushCursorCallback callback)
     m_brushCursorCallback = std::move(callback);
 }
 
-void CanvasCursorManager::setUseGLEyedropperCursor(bool use)
+void CanvasCursorManager::setUseRenderedEyedropperCursor(bool use)
 {
-    m_useGLEyedropperCursor = use;
+    m_useRenderedEyedropperCursor = use;
 }
 
 void CanvasCursorManager::setEyedropperCursorCallback(EyedropperCursorCallback callback)
@@ -223,9 +223,9 @@ void CanvasCursorManager::setEyedropperCursorCallback(EyedropperCursorCallback c
     m_eyedropperCursorCallback = std::move(callback);
 }
 
-void CanvasCursorManager::setUseGLToolCursor(bool use)
+void CanvasCursorManager::setUseRenderedToolCursor(bool use)
 {
-    m_useGLToolCursor = use;
+    m_useRenderedToolCursor = use;
 }
 
 void CanvasCursorManager::setToolCursorCallback(ToolCursorCallback callback)
@@ -310,14 +310,14 @@ void CanvasCursorManager::updateCursorPosition(const QPoint& globalPos)
     }
 
     const bool showToolOverlay = overCanvas && !m_hasRequestedCursor;
-    if (m_useGLBrushCursor && m_brushCursorCallback) {
+    if (m_useRenderedBrushCursor && m_brushCursorCallback) {
         m_brushCursorCallback(showToolOverlay ? std::optional<QPoint>(globalPos) : std::nullopt);
     }
-    if (m_useGLEyedropperCursor && m_eyedropperCursorCallback) {
+    if (m_useRenderedEyedropperCursor && m_eyedropperCursorCallback) {
         m_eyedropperCursorCallback(
             showToolOverlay ? std::optional<QPoint>(globalPos) : std::nullopt);
     }
-    if (m_useGLToolCursor && m_toolCursorCallback) {
+    if (m_useRenderedToolCursor && m_toolCursorCallback) {
         m_toolCursorCallback(showToolOverlay ? std::optional<QPoint>(globalPos) : std::nullopt);
     }
 
@@ -443,7 +443,7 @@ void CanvasCursorManager::applyOverlayState(bool overCanvas)
         if (m_activeOverlay) {
             m_activeOverlay->hide();
         }
-    } else if (overCanvas && (m_useGLBrushCursor || m_useGLEyedropperCursor || m_useGLToolCursor)) {
+    } else if (overCanvas && (m_useRenderedBrushCursor || m_useRenderedEyedropperCursor || m_useRenderedToolCursor)) {
         applyCursor(QCursor(Qt::BlankCursor));
         if (m_activeOverlay) {
             m_activeOverlay->hide();

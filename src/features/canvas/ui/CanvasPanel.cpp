@@ -66,6 +66,7 @@
 #include "features/color/ColorPicker.h"
 #include "features/canvas/ui/CanvasCursorManager.h"
 #include "features/theme/manager/ThemeManager.h"
+#include "shared/style/AnimationPolicy.h"
 #include "features/settings/SettingsManager.h"
 #include "features/export/ExportSettingsPanel.h"
 #include "features/export/ExportAreaController.h"
@@ -88,6 +89,7 @@
 #include <QFileDialog>
 #include <QFutureWatcher>
 #include <QImage>
+#include <cstring>
 #include <QImageReader>
 #include <QtConcurrent>
 #include <QLabel>
@@ -752,10 +754,29 @@ CanvasTransformCapability* CanvasPanel::inputTransform() const
     return session ? &session->transform() : nullptr;
 }
 
+CanvasHitTesting* CanvasPanel::inputHitTesting() const
+{
+    auto* session = inputEngineSession();
+    return session ? &session->hitTesting() : nullptr;
+}
+
 CanvasPresentationCapability* CanvasPanel::inputPresentation() const
 {
     auto* session = inputEngineSession();
     return session ? &session->presentation() : nullptr;
+}
+
+void CanvasPanel::pushTransformSnapPolicy()
+{
+    const auto& editor = ruwa::core::SettingsManager::instance().settings().editor;
+    CanvasTransformSnapPolicy policy;
+    policy.snapCanvas = editor.autoSnapCanvasEnabled;
+    policy.snapLayers = editor.autoSnapLayersEnabled;
+    policy.equalSpacing = editor.autoSnapEqualSpacingEnabled;
+    policy.pixelAlignRasterMoves = editor.pixelAlignRasterMovesEnabled;
+    if (auto* transform = inputTransform()) {
+        transform->setSnapPolicy(policy);
+    }
 }
 
 ruwa::core::canvas::CanvasFillRequestResult CanvasPanel::requestFillAt(int documentX, int documentY)
@@ -1355,7 +1376,7 @@ bool CanvasPanel::enterWarpTransformMode()
         return false;
     }
 
-    m_glWidget->setTransformInteractionMode(aether::TransformInteractionMode::Deform);
+    m_glWidget->setTransformInteractionMode(TransformInteractionMode::Deform);
     updateCursorManagerOverlay();
     syncToolStateOverlayContent();
     return true;
@@ -1594,10 +1615,10 @@ void CanvasPanel::onSimpleContextAction(int actionId)
 
     switch (actionId) {
     case TransformActionModeClassic:
-        m_glWidget->setTransformInteractionMode(aether::TransformInteractionMode::Classic);
+        m_glWidget->setTransformInteractionMode(TransformInteractionMode::Classic);
         break;
     case TransformActionModeDeform:
-        m_glWidget->setTransformInteractionMode(aether::TransformInteractionMode::Deform);
+        m_glWidget->setTransformInteractionMode(TransformInteractionMode::Deform);
         break;
     case TransformActionFlipHorizontal:
         m_glWidget->flipActiveTransformHorizontally();
@@ -4840,7 +4861,7 @@ void CanvasPanel::updateCursorManagerOverlay()
         = !parameterCursorActive && !transformActive && (currentTool == ToolId::Eyedropper);
     const bool useToolCursor = parameterCursorActive
         || (!transformActive
-            && aether::toolCursorStyle(currentTool) != aether::ToolCursorStyle::None);
+            && toolCursorStyle(currentTool) != ToolCursorStyle::None);
     m_cursorManager->setUseRenderedBrushCursor(useBrush);
     m_cursorManager->setUseRenderedEyedropperCursor(useEyedropper);
     m_cursorManager->setUseRenderedToolCursor(useToolCursor);
@@ -4849,14 +4870,17 @@ void CanvasPanel::updateCursorManagerOverlay()
     if (!transformActive || parameterCursorActive) {
         m_cursorManager->clearRequestedCursor();
     }
-    if (!useBrush && m_glWidget) {
-        m_glWidget->setBrushCursorState(false, 0, 0, 0);
-    }
-    if (!useEyedropper && m_glWidget) {
-        m_glWidget->setEyedropperCursorState(false, 0, 0);
-    }
-    if (!useToolCursor && m_glWidget) {
-        m_glWidget->setToolCursorState(false, 0, 0);
+    if (m_engineBinding && (!useBrush || !useEyedropper || !useToolCursor)) {
+        auto& presentation = m_engineBinding->session().presentation();
+        if (!useBrush) {
+            presentation.setBrushCursorState(false, 0, 0, 0);
+        }
+        if (!useEyedropper) {
+            presentation.setEyedropperCursorState(false, 0, 0);
+        }
+        if (!useToolCursor) {
+            presentation.setToolCursorState(false, 0, 0);
+        }
     }
     m_cursorManager->refreshCursorPosition();
 }
@@ -4906,7 +4930,7 @@ void CanvasPanel::updateToolCursor()
     // Tools with a GL cursor (move, fill, magic wand, lasso, shape selections)
     // must not request a system cursor: a requested cursor suppresses the GL
     // overlay.
-    if (aether::toolCursorStyle(currentTool) != aether::ToolCursorStyle::None
+    if (toolCursorStyle(currentTool) != ToolCursorStyle::None
         && !(m_glWidget && m_glWidget->isTransformActive())) {
         if (m_cursorManager) {
             m_cursorManager->clearRequestedCursor();
@@ -5096,14 +5120,54 @@ void CanvasPanel::updateStyles()
 
     m_contentWidget->setStyleSheet(QString("background: %1;").arg(c.background.darker(120).name()));
 
-    if (m_glWidget) {
-        m_glWidget->setBackgroundColor(
-            aether::Color::fromRGB(c.background.red(), c.background.green(), c.background.blue()));
+    // Canvas presentation state is pushed, never queried by the renderer
+    // (plan 7.28): display style, transform chrome style and the motion
+    // policy are translated here from the application theme and animation
+    // policy. Theme changes re-run this whole push.
+    if (m_engineBinding) {
+        const auto toUiColor = [](const QColor& color) {
+            CanvasUiColor out;
+            out.r = static_cast<float>(color.redF());
+            out.g = static_cast<float>(color.greenF());
+            out.b = static_cast<float>(color.blueF());
+            out.a = static_cast<float>(color.alphaF());
+            return out;
+        };
+        auto& presentation = m_engineBinding->session().presentation();
 
-        m_glWidget->setCheckerColors(
-            aether::Color::fromRGB(c.canvas().red(), c.canvas().green(), c.canvas().blue()),
-            aether::Color::fromRGB(
-                c.canvasGrid().red(), c.canvasGrid().green(), c.canvasGrid().blue()));
+        CanvasDisplayStyle display;
+        display.background = toUiColor(c.background);
+        display.checkerColorA = toUiColor(c.canvas());
+        display.checkerColorB = toUiColor(c.canvasGrid());
+        presentation.setDisplayStyle(display);
+
+        TransformPresentationStyle transformStyle;
+        transformStyle.primary = toUiColor(c.primary);
+        transformStyle.accent = toUiColor(c.accent);
+        const QPixmap cornerIcon = ruwa::ui::core::IconProvider::instance().getPixmap(
+            ruwa::ui::core::IconProvider::StandardIcon::RotationCorner, QSize(64, 64));
+        const QImage cornerImage = cornerIcon.isNull()
+            ? QImage()
+            : cornerIcon.toImage().convertToFormat(QImage::Format_RGBA8888);
+        if (!cornerImage.isNull()) {
+            auto icon = ruwa::shared::imaging::PixelSurface::create(cornerImage.width(),
+                cornerImage.height(), ruwa::shared::imaging::PixelStorage::UInt8,
+                ruwa::shared::imaging::PixelAlpha::Straight);
+            if (!icon.isNull()) {
+                const qsizetype rowBytes = static_cast<qsizetype>(cornerImage.width()) * 4;
+                for (int y = 0; y < cornerImage.height(); ++y) {
+                    std::memcpy(icon.scanLine(y), cornerImage.constScanLine(y),
+                        static_cast<size_t>(rowBytes));
+                }
+                transformStyle.rotationCornerIcon = std::move(icon);
+            }
+        }
+        presentation.setTransformPresentationStyle(transformStyle);
+
+        CanvasMotionPolicy motionPolicy;
+        motionPolicy.enabled = ruwa::ui::core::anim::canvasEnabled();
+        motionPolicy.speed = ruwa::ui::core::anim::speed();
+        presentation.setMotionPolicy(motionPolicy);
     }
 }
 

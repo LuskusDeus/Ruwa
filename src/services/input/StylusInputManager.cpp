@@ -3,7 +3,8 @@
 #include "services/input/StylusInputManager.h"
 #include "services/input/StylusDebugService.h"
 #include "services/input/StylusInputTrace.h"
-#include "features/canvas/rendering/OpenGLCanvasWidget.h"
+#include "features/canvas/ui/CanvasPanel.h"
+#include "features/canvas/ui/CanvasViewportHost.h"
 #include "features/layers/ui/LayerListView.h"
 #include "features/layers/ui/LayerRowWidget.h"
 #include "shared/widgets/inputs/ProgressHandleSlider.h"
@@ -201,17 +202,7 @@ bool applicationOwnsForegroundWindow()
 
 bool isCanvasWidget(QWidget* widget)
 {
-    if (!widget) {
-        return false;
-    }
-
-    for (QWidget* current = widget; current; current = current->parentWidget()) {
-        if (qobject_cast<aether::OpenGLCanvasWidget*>(current)) {
-            return true;
-        }
-    }
-
-    return false;
+    return ruwa::ui::workspace::viewportHostForWidget(widget) != nullptr;
 }
 
 bool isPointInsideWidgetGlobalRect(QWidget* widget, const QPoint& globalPos)
@@ -225,13 +216,7 @@ bool isPointInsideWidgetGlobalRect(QWidget* widget, const QPoint& globalPos)
 
 QWidget* closestCanvasWidget(QWidget* widget)
 {
-    for (QWidget* current = widget; current; current = current->parentWidget()) {
-        if (qobject_cast<aether::OpenGLCanvasWidget*>(current)) {
-            return current;
-        }
-    }
-
-    return nullptr;
+    return ruwa::ui::workspace::viewportHostForWidget(widget);
 }
 
 QWidget* directChildCanvasAtGlobalPos(QWidget* widget, const QPoint& globalPos)
@@ -240,16 +225,24 @@ QWidget* directChildCanvasAtGlobalPos(QWidget* widget, const QPoint& globalPos)
         return nullptr;
     }
 
-    const auto canvasWidgets
-        = widget->findChildren<aether::OpenGLCanvasWidget*>(QString(), Qt::FindDirectChildrenOnly);
-    for (auto* canvasWidget : canvasWidgets) {
-        if (!canvasWidget || !canvasWidget->isVisible()) {
+    const auto children
+        = widget->findChildren<QWidget*>(QString(), Qt::FindDirectChildrenOnly);
+    for (auto* child : children) {
+        // UI-semantic canvas identification: a direct child either IS a canvas
+        // panel (use its viewport host) or IS the viewport host itself.
+        QWidget* canvasHost = nullptr;
+        if (auto* panel = qobject_cast<ruwa::ui::workspace::CanvasPanel*>(child)) {
+            canvasHost = panel->viewportHostWidget();
+        } else if (ruwa::ui::workspace::isViewportHostWidget(child)) {
+            canvasHost = child;
+        }
+        if (!canvasHost || !canvasHost->isVisible()) {
             continue;
         }
 
-        const QPoint localPos = canvasWidget->mapFromGlobal(globalPos);
-        if (canvasWidget->rect().contains(localPos)) {
-            return canvasWidget;
+        const QPoint localPos = canvasHost->mapFromGlobal(globalPos);
+        if (canvasHost->rect().contains(localPos)) {
+            return canvasHost;
         }
     }
 

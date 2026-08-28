@@ -379,14 +379,14 @@ QColor sampleColorFromLayerModel(
 // ==========================================================================
 
 Qt::CursorShape cursorForTransformHandle(
-    const aether::TransformHitResult& hit, bool cornersActAsRotationHandles)
+    const TransformHitResult& hit, bool cornersActAsRotationHandles)
 {
     if (cornersActAsRotationHandles) {
         switch (hit.handle) {
-        case aether::TransformHandle::TopLeft:
-        case aether::TransformHandle::TopRight:
-        case aether::TransformHandle::BottomRight:
-        case aether::TransformHandle::BottomLeft:
+        case TransformHandle::TopLeft:
+        case TransformHandle::TopRight:
+        case TransformHandle::BottomRight:
+        case TransformHandle::BottomLeft:
             if (hit.classicCornerRotationAffordance) {
                 return Qt::CrossCursor;
             }
@@ -398,8 +398,16 @@ Qt::CursorShape cursorForTransformHandle(
     return cursorForTransformHandle(hit.handle, cornersActAsRotationHandles);
 }
 
-Qt::CursorShape cursorForTransformHandle(const aether::TransformHitResult& hit,
+Qt::CursorShape cursorForTransformHandle(const TransformHitResult& hit,
     const aether::TransformState& state, bool cornersActAsRotationHandles,
+    bool canvasContentFlipHorizontal, bool canvasContentFlipVertical)
+{
+    return cursorForTransformHandle(hit, cornersActAsRotationHandles, std::signbit(state.scale.x),
+        std::signbit(state.scale.y), canvasContentFlipHorizontal, canvasContentFlipVertical);
+}
+
+Qt::CursorShape cursorForTransformHandle(const TransformHitResult& hit,
+    bool cornersActAsRotationHandles, bool scaleMirroredHorizontal, bool scaleMirroredVertical,
     bool canvasContentFlipHorizontal, bool canvasContentFlipVertical)
 {
     Qt::CursorShape cursor = cursorForTransformHandle(hit, cornersActAsRotationHandles);
@@ -407,9 +415,8 @@ Qt::CursorShape cursorForTransformHandle(const aether::TransformHitResult& hit,
         return cursor;
     }
 
-    const bool visuallyFlippedHorizontal
-        = std::signbit(state.scale.x) != canvasContentFlipHorizontal;
-    const bool visuallyFlippedVertical = std::signbit(state.scale.y) != canvasContentFlipVertical;
+    const bool visuallyFlippedHorizontal = scaleMirroredHorizontal != canvasContentFlipHorizontal;
+    const bool visuallyFlippedVertical = scaleMirroredVertical != canvasContentFlipVertical;
     // A single reflection reverses the diagonal shown on screen. Two reflections amount to a
     // 180-degree rotation, so the original diagonal remains correct.
     if (visuallyFlippedHorizontal == visuallyFlippedVertical) {
@@ -420,27 +427,27 @@ Qt::CursorShape cursorForTransformHandle(const aether::TransformHitResult& hit,
 }
 
 Qt::CursorShape cursorForTransformHandle(
-    aether::TransformHandle handle, bool cornersActAsRotationHandles)
+    TransformHandle handle, bool cornersActAsRotationHandles)
 {
     Q_UNUSED(cornersActAsRotationHandles);
     switch (handle) {
-    case aether::TransformHandle::TopLeft:
-    case aether::TransformHandle::BottomRight:
+    case TransformHandle::TopLeft:
+    case TransformHandle::BottomRight:
         return Qt::SizeFDiagCursor;
-    case aether::TransformHandle::TopRight:
-    case aether::TransformHandle::BottomLeft:
+    case TransformHandle::TopRight:
+    case TransformHandle::BottomLeft:
         return Qt::SizeBDiagCursor;
-    case aether::TransformHandle::Top:
-    case aether::TransformHandle::Bottom:
+    case TransformHandle::Top:
+    case TransformHandle::Bottom:
         return Qt::SizeVerCursor;
-    case aether::TransformHandle::Left:
-    case aether::TransformHandle::Right:
+    case TransformHandle::Left:
+    case TransformHandle::Right:
         return Qt::SizeHorCursor;
-    case aether::TransformHandle::Rotate:
+    case TransformHandle::Rotate:
         return Qt::CrossCursor;
-    case aether::TransformHandle::Move:
+    case TransformHandle::Move:
         return Qt::SizeAllCursor;
-    case aether::TransformHandle::DeformPoint:
+    case TransformHandle::DeformPoint:
         return Qt::SizeAllCursor;
     default:
         return Qt::ArrowCursor;

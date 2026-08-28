@@ -60,7 +60,7 @@ public:
     void setCursorResolver(CursorResolver resolver);
 
     /// When true, use GL-rendered brush cursor (inversion) instead of QWidget overlay.
-    void setUseGLBrushCursor(bool use);
+    void setUseRenderedBrushCursor(bool use);
 
     /// Callback for GL brush cursor. Contains the global position when the cursor
     /// should be visible; std::nullopt means that it should be hidden.
@@ -68,7 +68,7 @@ public:
     void setBrushCursorCallback(BrushCursorCallback callback);
 
     /// When true, use GL-rendered eyedropper cursor (magnifier, color border, invert border).
-    void setUseGLEyedropperCursor(bool use);
+    void setUseRenderedEyedropperCursor(bool use);
 
     /// Callback for GL eyedropper cursor. Contains the global position when the cursor
     /// should be visible; std::nullopt means that it should be hidden.
@@ -76,7 +76,7 @@ public:
     void setEyedropperCursorCallback(EyedropperCursorCallback callback);
 
     /// When true, use the GL-rendered tool cursor (pointer arrow + tool badge).
-    void setUseGLToolCursor(bool use);
+    void setUseRenderedToolCursor(bool use);
 
     /// Callback for the GL tool cursor. Contains the global position when the
     /// cursor should be visible; std::nullopt means that it should be hidden.
@@ -133,11 +133,11 @@ private:
     bool m_hasRequestedCursor = false;
     Qt::CursorShape m_requestedCursor = Qt::ArrowCursor;
     CursorResolver m_cursorResolver;
-    bool m_useGLBrushCursor = false;
+    bool m_useRenderedBrushCursor = false;
     BrushCursorCallback m_brushCursorCallback;
-    bool m_useGLEyedropperCursor = false;
+    bool m_useRenderedEyedropperCursor = false;
     EyedropperCursorCallback m_eyedropperCursorCallback;
-    bool m_useGLToolCursor = false;
+    bool m_useRenderedToolCursor = false;
     ToolCursorCallback m_toolCursorCallback;
     bool m_suppressed = false;
     bool m_overlayDragActive

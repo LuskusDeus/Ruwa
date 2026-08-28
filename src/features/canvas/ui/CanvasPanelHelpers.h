@@ -75,12 +75,19 @@ QColor sampleColorFromLayerModel(
     const ruwa::core::layers::LayerModel* layerModel, const aether::Canvas& canvas, int x, int y);
 
 Qt::CursorShape cursorForTransformHandle(
-    const aether::TransformHitResult& hit, bool cornersActAsRotationHandles = false);
-Qt::CursorShape cursorForTransformHandle(const aether::TransformHitResult& hit,
+    const TransformHitResult& hit, bool cornersActAsRotationHandles = false);
+Qt::CursorShape cursorForTransformHandle(const TransformHitResult& hit,
     const aether::TransformState& state, bool cornersActAsRotationHandles,
     bool canvasContentFlipHorizontal, bool canvasContentFlipVertical);
+/// Semantic-input form of the overload above: the transform's per-axis scale
+/// signs arrive as explicit flags instead of a TransformState reference
+/// (plan 7.6.22 — input code holds no transform state object).
+Qt::CursorShape cursorForTransformHandle(const TransformHitResult& hit,
+    bool cornersActAsRotationHandles, bool scaleMirroredHorizontal,
+    bool scaleMirroredVertical, bool canvasContentFlipHorizontal,
+    bool canvasContentFlipVertical);
 Qt::CursorShape cursorForTransformHandle(
-    aether::TransformHandle handle, bool cornersActAsRotationHandles = false);
+    TransformHandle handle, bool cornersActAsRotationHandles = false);
 
 float normalizeAngleDelta(float delta);
 bool isAngleEffectivelyZero(float radians);

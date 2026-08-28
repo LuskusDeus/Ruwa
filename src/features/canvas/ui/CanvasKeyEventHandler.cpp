@@ -84,7 +84,7 @@ bool CanvasKeyEventHandler::handleEvent(QObject* watched, QEvent* event)
         auto* ke = static_cast<QKeyEvent*>(event);
         if (ruwa::core::ShortcutManager::instance().shortcutsEnabled() && !ke->isAutoRepeat()
             && (ke->modifiers() & ~Qt::ShiftModifier) == Qt::NoModifier
-            && !m_host->temporaryToolHoldActive() && m_host->inputGlWidget()
+            && !m_host->temporaryToolHoldActive() && m_host->inputRenderReady()
             && m_host->hasInputFocusOrCursorOverCanvas() && !m_host->isDrawingActive()) {
             auto toolOpt = m_host->inputToolModeForKeyEvent(ke);
             if (toolOpt && !canvasShortcuts.actionForKey(ke->key())) {
@@ -118,7 +118,7 @@ bool CanvasKeyEventHandler::handleEvent(QObject* watched, QEvent* event)
                 ? relevantModifiers == Qt::NoModifier
                 : relevantModifiers == requiredModifier;
             if (moveKeyOnly && ruwa::core::ShortcutManager::instance().shortcutsEnabled()
-                && m_host->inputGlWidget() && m_host->hasInputFocusOrCursorOverCanvas()) {
+                && m_host->inputRenderReady() && m_host->hasInputFocusOrCursorOverCanvas()) {
                 const bool blockTempMoveInTransform = m_host->isTransformInputActive();
                 const bool blockTempMoveInSelectionInteraction
                     = m_host->isAnySelectionInteractionActive();
@@ -194,7 +194,7 @@ bool CanvasKeyEventHandler::handleEvent(QObject* watched, QEvent* event)
                 && m_host->temporaryToolHeldKeyIs(panCanvasKey)
                 && !m_host->temporaryToolShiftSpaceCombo();
             if ((panWithShift || shiftWhilePanHeld) && !ke->isAutoRepeat()
-                && !m_host->temporaryToolShiftSpaceCombo() && m_host->inputGlWidget()
+                && !m_host->temporaryToolShiftSpaceCombo() && m_host->inputRenderReady()
                 && m_host->hasInputFocusOrCursorOverCanvas() && !m_host->isDrawingActive()) {
                 const bool blockInTransform = m_host->isTransformInputActive();
                 const bool blockInSelection = m_host->isAnySelectionInteractionActive();
@@ -252,7 +252,7 @@ bool CanvasKeyEventHandler::handleEvent(QObject* watched, QEvent* event)
             if (isTempToolKey && !ke->isAutoRepeat() && !blockTempHandInSelectionInteraction
                 && !blockTempEyedropperInTransform && !blockTempEyedropperForTool
                 && !blockTempEyedropperForSizeDrag && !m_host->temporaryToolHoldActive()
-                && m_host->inputGlWidget() && m_host->hasInputFocusOrCursorOverCanvas()) {
+                && m_host->inputRenderReady() && m_host->hasInputFocusOrCursorOverCanvas()) {
                 auto toolOpt = m_host->inputToolModeForKey(ke->key());
                 if (toolOpt && *toolOpt != currentTool) {
                     m_host->setPendingTemporaryToolKey(ke->key(), true);

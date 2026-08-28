@@ -87,7 +87,7 @@ void CanvasPanel::syncEffectParameterOverlayPresentation()
         return;
     }
 
-    std::vector<aether::ParameterCircleOverlayState> states;
+    std::vector<ParameterCircleOverlayState> states;
     if (view && m_effectParameterOverlay && m_effectParameterOverlay->isVisible() && m_contentWidget
         && m_viewportHostWidget) {
         const QSizeF extent = view->viewportExtent();
@@ -110,7 +110,7 @@ void CanvasPanel::syncEffectParameterOverlayPresentation()
                 continue;
             }
 
-            aether::ParameterCircleOverlayState state;
+            ParameterCircleOverlayState state;
             state.centerX = static_cast<float>(viewportCenter.x() * scaleX);
             state.centerY = static_cast<float>(viewportCenter.y() * scaleY);
             state.radius = static_cast<float>(std::max<qreal>(0.0, screen.radius * radiusScale));

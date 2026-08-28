@@ -5,6 +5,7 @@
 // ==========================================================================
 
 #include "CanvasPanel.h"
+#include "features/canvas/engine/CanvasEngineSession.h"
 
 #include "CanvasTabletHandler.h"
 #include "CanvasMouseInputHandler.h"
@@ -17,7 +18,7 @@
 #include "CanvasOverlayLayout.h"
 #include "CanvasCursorManager.h"
 #include "CanvasPanelHelpers.h"
-#include "features/canvas/rendering/OpenGLCanvasWidget.h"
+#include "features/canvas/engine/CanvasEngineTypes.h"
 #include "features/brush/ui/BrushControlOverlay.h"
 #include "features/canvas/ui/CanvasToolStateOverlay.h"
 #include "features/canvas/ui/CanvasZoomInfoOverlay.h"
@@ -46,15 +47,15 @@ QWidget* CanvasPanel::createContent()
     m_contentLayout->setContentsMargins(0, 0, 0, 0);
     m_contentLayout->setSpacing(0);
 
-    // Placeholder until tab transition animation completes (createGLContent replaces it)
+    // Placeholder until tab transition animation completes (createRenderContent replaces it)
     // Visible immediately with theme background — drawn before GL init
-    m_glPlaceholder = new QWidget(m_contentWidget);
-    m_glPlaceholder->setMinimumSize(200, 200);
-    m_glPlaceholder->setSizePolicy(QSizePolicy::Expanding, QSizePolicy::Expanding);
-    m_glPlaceholder->setStyleSheet(QString("background-color: %1;")
+    m_renderPlaceholder = new QWidget(m_contentWidget);
+    m_renderPlaceholder->setMinimumSize(200, 200);
+    m_renderPlaceholder->setSizePolicy(QSizePolicy::Expanding, QSizePolicy::Expanding);
+    m_renderPlaceholder->setStyleSheet(QString("background-color: %1;")
             .arg(ruwa::ui::core::ThemeManager::instance().colors().background.name()));
-    m_glPlaceholder->setAutoFillBackground(true);
-    m_contentLayout->addWidget(m_glPlaceholder);
+    m_renderPlaceholder->setAutoFillBackground(true);
+    m_contentLayout->addWidget(m_renderPlaceholder);
 
     // Overlay covering canvas with theme background color — fades out when zoom animation starts
     m_loadingOverlay = new QWidget(m_contentWidget);
@@ -216,42 +217,38 @@ QWidget* CanvasPanel::createContent()
         });
     connect(m_toolStateOverlay, &ruwa::ui::widgets::CanvasToolStateOverlay::undoRequested, this,
         [this]() {
-            if (m_glWidget) {
-                m_glWidget->canvas().undoManager().undo();
-            }
+            historyUndo();
         });
     connect(m_toolStateOverlay, &ruwa::ui::widgets::CanvasToolStateOverlay::redoRequested, this,
         [this]() {
-            if (m_glWidget) {
-                m_glWidget->canvas().undoManager().redo();
-            }
+            historyRedo();
         });
     connect(m_toolStateOverlay, &ruwa::ui::widgets::CanvasToolStateOverlay::copyCanvasRequested,
         this, [this]() { copyCanvasToClipboard(); });
     connect(m_toolStateOverlay,
         &ruwa::ui::widgets::CanvasToolStateOverlay::canvasFlipHorizontalRequested, this,
         [this](bool checked) {
-            if (!m_glWidget) {
+            if (!m_engineBinding) {
                 return;
             }
-            if (m_glWidget->canvasContentFlipHorizontal() != checked) {
+            if (canvasContentFlipHorizontal() != checked) {
                 toggleCanvasViewFlipHorizontal();
             } else if (m_toolStateOverlay) {
-                m_toolStateOverlay->setCanvasFlipStates(m_glWidget->canvasContentFlipHorizontal(),
-                    m_glWidget->canvasContentFlipVertical());
+                m_toolStateOverlay->setCanvasFlipStates(
+                    canvasContentFlipHorizontal(), canvasContentFlipVertical());
             }
         });
     connect(m_toolStateOverlay,
         &ruwa::ui::widgets::CanvasToolStateOverlay::canvasFlipVerticalRequested, this,
         [this](bool checked) {
-            if (!m_glWidget) {
+            if (!m_engineBinding) {
                 return;
             }
-            if (m_glWidget->canvasContentFlipVertical() != checked) {
+            if (canvasContentFlipVertical() != checked) {
                 toggleCanvasViewFlipVertical();
             } else if (m_toolStateOverlay) {
-                m_toolStateOverlay->setCanvasFlipStates(m_glWidget->canvasContentFlipHorizontal(),
-                    m_glWidget->canvasContentFlipVertical());
+                m_toolStateOverlay->setCanvasFlipStates(
+                    canvasContentFlipHorizontal(), canvasContentFlipVertical());
             }
         });
     connect(m_toolStateOverlay, &ruwa::ui::widgets::CanvasToolStateOverlay::brushEraserModeToggled,
@@ -293,8 +290,8 @@ QWidget* CanvasPanel::createContent()
             if (m_toolStateController) {
                 m_toolStateController->setLiquifyToolMode(mode);
             }
-            if (m_glWidget) {
-                m_glWidget->brush().setLiquifyToolMode(mode);
+            if (m_engineBinding) {
+                m_engineBinding->session().painting().setLiquifyToolMode(mode);
             }
         });
     connect(m_toolStateOverlay,

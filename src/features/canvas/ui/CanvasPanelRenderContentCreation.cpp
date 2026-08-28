@@ -22,6 +22,8 @@
 #include "features/canvas/engine/CanvasEngineSession.h"
 
 #include "CanvasCursorManager.h"
+#include "CanvasFillProgressPopup.h"
+#include "CanvasTransformMetricPresenter.h"
 #include "CanvasParameterOverlayWidget.h"
 #include "CanvasOverlayLayoutManager.h"
 #include "CanvasToolStateController.h"
@@ -54,6 +56,7 @@
 
 #include <QGraphicsOpacityEffect>
 #include <QList>
+#include <QMessageBox>
 #include <QPoint>
 #include <QPointF>
 #include <QUuid>
@@ -93,6 +96,14 @@ bool CanvasPanel::createRenderContent()
     createInfo.boundsMode = m_canvasBoundsMode;
     createInfo.lassoStabilization = static_cast<float>(lassoStabilization());
     createInfo.lassoFillStabilization = static_cast<float>(lassoFillStabilization());
+    // Rasterization confirmation is an application decision injected into the
+    // engine (plan 7.15.4) — the renderer itself has no dialog fallback.
+    createInfo.rasterizationDecisionProvider
+        = [this](const QString& title, const QString& message) {
+              return ruwa::ui::widgets::MessagePopupManager::showBlocking(
+                  this, title + QStringLiteral("\n\n") + message, tr("Yes"), tr("No"), 360,
+                  true);
+          };
     m_engineBinding = runtime->createBinding(createInfo, m_contentWidget);
 
     m_glWidget = aetherLegacyRenderer(*m_engineBinding); // TRANSITIONAL QUARANTINE
@@ -125,6 +136,12 @@ bool CanvasPanel::createRenderContent()
             const qint64 bytes = static_cast<qint64>(megabytes) * 1024LL * 1024LL;
             m_engineBinding->history().setMemoryLimit(bytes);
         });
+
+    // Transform snap preferences are pushed, never queried by the renderer
+    // (plan 7.27.2): initial snapshot now, refreshed on any settings change.
+    pushTransformSnapPolicy();
+    connect(&ruwa::core::SettingsManager::instance(), &ruwa::core::SettingsManager::settingsChanged,
+        this, [this]() { pushTransformSnapPolicy(); });
 
     // Keep overlay on top — layout-add puts new widget above overlay, so raise overlay again
     if (m_loadingOverlay) {
@@ -204,10 +221,33 @@ bool CanvasPanel::createRenderContent()
         m_glWidget->setLayerModel(m_layerModel); // TRANSITIONAL QUARANTINE
     }
 
-    m_glWidget->setRasterizationConfirmCallback( // TRANSITIONAL QUARANTINE
-        [this](const QString& title, const QString& message) {
-            return ruwa::ui::widgets::MessagePopupManager::showBlocking(
-                this, title + QStringLiteral("\n\n") + message, tr("Yes"), tr("No"), 360, true);
+    // Application-owned presentation of engine metric/fill facts (group H):
+    // the renderer publishes state, these presenters own the QWidget chrome.
+    m_transformMetricPresenter = new CanvasTransformMetricPresenter(m_viewportHostWidget, this);
+    m_transformMetricPresenter->setDocumentToViewport([this](const QPointF& documentPos) {
+        return m_engineBinding
+            ? m_engineBinding->session().view().viewportFromDocument(documentPos)
+            : documentPos;
+    });
+    connect(&events, &CanvasEngineQtEvents::transformPresentationChanged,
+        m_transformMetricPresenter, &CanvasTransformMetricPresenter::present);
+
+    m_fillProgressPopup = new CanvasFillProgressPopup(m_viewportHostWidget);
+    m_fillProgressPopup->setDocumentToViewport([this](const QPointF& documentPos) {
+        return m_engineBinding
+            ? m_engineBinding->session().view().viewportFromDocument(documentPos)
+            : documentPos;
+    });
+    connect(&events, &CanvasEngineQtEvents::fillActivityChanged, m_fillProgressPopup,
+        &CanvasFillProgressPopup::presentFillActivity);
+    connect(&events, &CanvasEngineQtEvents::presentationSyncRequested, m_fillProgressPopup,
+        &CanvasFillProgressPopup::updateAnchor);
+
+    // Renderer initialization failure (plan 7.15.5): the engine reports an
+    // owned diagnostic; the application decides the presentation.
+    connect(&events, &CanvasEngineQtEvents::engineFailed, this,
+        [this](const CanvasEngineDiagnostic& diagnostic) {
+            QMessageBox::critical(this, tr("Shader Loading Error"), diagnostic.message);
         });
 
     // Brush overlay already created in createContent(); ensure it's under loading overlay
@@ -244,7 +284,7 @@ bool CanvasPanel::createRenderContent()
         // widgets immediately before paintGL, so layout animation and blur use
         // one positional source of truth.
         session.presentation().setBackdropRegionProvider([this]() {
-            std::vector<aether::CanvasBackdropRegion> regions;
+            std::vector<ruwa::shared::rendering::CanvasBackdropRegion> regions;
             if (!m_viewportHostWidget || !m_contentWidget) {
                 return regions;
             }
@@ -455,7 +495,13 @@ bool CanvasPanel::createRenderContent()
             : 1.0;
         const float centerX = static_cast<float>(static_cast<qreal>(localPos.x()) * scaleX);
         const float centerY = static_cast<float>(static_cast<qreal>(localPos.y()) * scaleY);
-        presentation.setEyedropperCursorState(true, centerX, centerY, currentBrushColor());
+        const QColor sampled = currentBrushColor();
+        CanvasColorValue sampledColor;
+        sampledColor.r = static_cast<float>(sampled.redF());
+        sampledColor.g = static_cast<float>(sampled.greenF());
+        sampledColor.b = static_cast<float>(sampled.blueF());
+        sampledColor.a = static_cast<float>(sampled.alphaF());
+        presentation.setEyedropperCursorState(true, centerX, centerY, sampledColor);
     });
     m_cursorManager->setToolCursorCallback([this](const std::optional<QPoint>& globalPos) {
         if (!m_engineBinding || m_engineBinding->session().status() != CanvasEngineStatus::Ready) {
@@ -480,12 +526,12 @@ bool CanvasPanel::createRenderContent()
         const float centerY = static_cast<float>(static_cast<qreal>(localPos.y()) * scaleY);
         if (m_effectParameterOverlayDragging || effectParameterOverlayHitTest(*globalPos) >= 0) {
             presentation.setToolCursorState(
-                true, centerX, centerY, aether::ToolCursorStyle::Pointer, QString());
+                true, centerX, centerY, ToolCursorStyle::Pointer);
             return;
         }
         const ToolId cursorTool = toolMode();
-        presentation.setToolCursorState(true, centerX, centerY, aether::toolCursorStyle(cursorTool),
-            aether::toolCursorIconResource(cursorTool));
+        presentation.setToolCursorState(
+            true, centerX, centerY, toolCursorStyle(cursorTool), cursorTool);
     });
     m_cursorManager->setSuppressed(m_cursorManagerSuppressedByLoading);
     updateCursorManagerOverlay();

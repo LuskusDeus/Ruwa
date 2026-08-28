@@ -7,6 +7,7 @@
 #ifndef RUWA_UI_WORKSPACE_CANVASINPUTHOST_H
 #define RUWA_UI_WORKSPACE_CANVASINPUTHOST_H
 
+#include "features/canvas/engine/CanvasEngineSession.h"
 #include "features/canvas/ui/CanvasPanelTypes.h"
 #include "shared/types/Types.h"
 
@@ -20,10 +21,7 @@
 class QKeyEvent;
 class QMouseEvent;
 class QTabletEvent;
-
-namespace aether {
-class OpenGLCanvasWidget;
-}
+class QWidget;
 
 namespace ruwa::ui::workspace {
 
@@ -35,7 +33,21 @@ public:
 
     virtual ToolId currentInputTool() const = 0;
     virtual void setToolMode(ToolId tool) = 0;
-    virtual aether::OpenGLCanvasWidget* inputGlWidget() const = 0;
+    /// True when the engine session exists and has finished initializing.
+    /// Input paths gate their renderer access on this exactly where they used
+    /// to null-check/initialize-check the concrete renderer (plan 7.6.17).
+    virtual bool inputRenderReady() const = 0;
+    /// Engine capabilities for input. Non-null whenever the render content
+    /// exists; callers check inputRenderReady() before mutating state.
+    virtual CanvasViewCapability* inputView() const = 0;
+    virtual CanvasPaintingCapability* inputPainting() const = 0;
+    virtual CanvasEditingCapability* inputEditing() const = 0;
+    virtual CanvasTransformCapability* inputTransform() const = 0;
+    virtual CanvasHitTesting* inputHitTesting() const = 0;
+    virtual CanvasPresentationCapability* inputPresentation() const = 0;
+    /// The generic QWidget viewport host: mapFromGlobal/geometry/cursor
+    /// ownership only — never renderer API (plan 7.6.17).
+    virtual QWidget* inputViewportHostWidget() const = 0;
     virtual CanvasCursorManager* inputCursorManager() const = 0;
 
     virtual bool hasInputFocus() const = 0;

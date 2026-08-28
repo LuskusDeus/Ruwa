@@ -6,7 +6,7 @@
 
 #include "app/TabletToMouseEventFilter.h"
 #include "services/input/StylusInputManager.h"
-#include "features/canvas/rendering/OpenGLCanvasWidget.h"
+#include "features/canvas/ui/CanvasViewportHost.h"
 #include "features/canvas/ui/CanvasPanel.h"
 #include "features/canvas/ui/CanvasStylusJoystickContainerWidget.h"
 #include "features/layers/ui/LayerListView.h"
@@ -58,16 +58,7 @@ TabletToMouseEventFilter::~TabletToMouseEventFilter()
 
 bool TabletToMouseEventFilter::isCanvasWidget(QWidget* widget)
 {
-    if (!widget) {
-        return false;
-    }
-
-    for (QWidget* w = widget; w; w = w->parentWidget()) {
-        if (qobject_cast<aether::OpenGLCanvasWidget*>(w)) {
-            return true;
-        }
-    }
-    return false;
+    return ruwa::ui::workspace::viewportHostForWidget(widget) != nullptr;
 }
 
 static bool isCanvasPanelWidget(QWidget* widget)
@@ -118,7 +109,7 @@ static bool shouldBlockWidgetMouseDuringCanvasDrawing(QWidget* widget, const QPo
     }
 
     for (QWidget* current = widget; current; current = current->parentWidget()) {
-        if (qobject_cast<aether::OpenGLCanvasWidget*>(current)) {
+        if (ruwa::ui::workspace::isViewportHostWidget(current)) {
             return false;
         }
     }
@@ -173,7 +164,7 @@ static bool shouldBypassCanvasSynthesis(QWidget* widget, const QPoint& globalPos
         return false;
     }
 
-    auto* canvasWidget = panel->findChild<aether::OpenGLCanvasWidget*>();
+    QWidget* canvasWidget = panel->viewportHostWidget();
     if (!canvasWidget || !isPointInsideWidgetGlobalRect(canvasWidget, globalPos)) {
         return false;
     }

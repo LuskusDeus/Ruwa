@@ -10,7 +10,6 @@
 
 #include "services/input/StylusDebugService.h"
 #include "services/input/StylusInputManager.h"
-#include "features/canvas/rendering/OpenGLCanvasWidget.h"
 #include "features/layers/model/LayerModel.h"
 #include "features/brush/ui/BrushControlOverlay.h"
 #include "features/brush/ui/BrushPackOverlay.h"
@@ -57,10 +56,10 @@ bool nearlySameScreenPoint(const QPointF& a, const QPointF& b)
     return dx * dx + dy * dy < 0.0001;
 }
 
-aether::BrushStrokeHost::BrushInputDynamics inputDynamicsFromScreenTilt(
+ruwa::core::brushes::BrushInputDynamics inputDynamicsFromScreenTilt(
     const CanvasInputHost* host, const QPointF& globalPos, const QPointF& screenDirection)
 {
-    aether::BrushStrokeHost::BrushInputDynamics result;
+    ruwa::core::brushes::BrushInputDynamics result;
     if (!host || std::hypot(screenDirection.x(), screenDirection.y()) <= 0.000001) {
         return result;
     }
@@ -82,7 +81,7 @@ aether::BrushStrokeHost::BrushInputDynamics inputDynamicsFromScreenTilt(
     return result;
 }
 
-aether::BrushStrokeHost::BrushInputDynamics tabletInputDynamics(
+ruwa::core::brushes::BrushInputDynamics tabletInputDynamics(
     const CanvasInputHost* host, const QTabletEvent* event, const QPointF& globalPos)
 {
     if (!host || !event) {
@@ -112,7 +111,7 @@ aether::BrushStrokeHost::BrushInputDynamics tabletInputDynamics(
 
 } // namespace
 
-bool CanvasTabletHandler::globalPosOverGlViewport(
+bool CanvasTabletHandler::globalPosOverViewport(
     const CanvasInputHost* host, const QPointF& globalPos)
 {
     return host && host->isGlobalOverInputViewport(globalPos);
@@ -130,8 +129,7 @@ void CanvasTabletHandler::handleTabletEvent(QTabletEvent* event)
         return;
     }
 
-    auto* glWidget = m_host->inputGlWidget();
-    if (!glWidget || !glWidget->isInitialized()) {
+    if (!m_host->inputRenderReady()) {
         event->ignore();
         return;
     }
@@ -321,10 +319,10 @@ void CanvasTabletHandler::handleTabletEvent(QTabletEvent* event)
                 aether::Vector2 worldPos = m_host->mapInputToViewportWorld(globalPosF);
                 m_strokeTimestampBaseMs = event->timestamp();
                 m_lastTabletElapsedSec = 0.0f;
-                m_host->inputGlWidget()->beginStroke(worldPos.x, worldPos.y, pressure,
-                    aether::BrushStrokeHost::StrokeInputDevice::Stylus,
+                m_host->inputPainting()->beginStroke(worldPos.x, worldPos.y, pressure,
+                    StrokeInputDevice::Stylus,
                     event->modifiers().testFlag(Qt::ShiftModifier), inputDynamics);
-                m_host->setInputDrawingActive(m_host->inputGlWidget()->isDrawing());
+                m_host->setInputDrawingActive(m_host->inputPainting()->isDrawing());
                 if (!m_host->isInputDrawingActive()) {
                     m_host->showBlockedDrawMessageForSelectedLayer();
                 }
@@ -356,10 +354,10 @@ void CanvasTabletHandler::handleTabletEvent(QTabletEvent* event)
                 aether::Vector2 worldPos = m_host->mapInputToViewportWorld(globalPosF);
                 m_strokeTimestampBaseMs = event->timestamp();
                 m_lastTabletElapsedSec = 0.0f;
-                m_host->inputGlWidget()->beginStroke(worldPos.x, worldPos.y, pressure,
-                    aether::BrushStrokeHost::StrokeInputDevice::Stylus,
+                m_host->inputPainting()->beginStroke(worldPos.x, worldPos.y, pressure,
+                    StrokeInputDevice::Stylus,
                     event->modifiers().testFlag(Qt::ShiftModifier), inputDynamics);
-                m_host->setInputDrawingActive(m_host->inputGlWidget()->isDrawing());
+                m_host->setInputDrawingActive(m_host->inputPainting()->isDrawing());
                 if (!m_host->isInputDrawingActive()) {
                     m_host->showBlockedDrawMessageForSelectedLayer();
                 }
@@ -439,7 +437,7 @@ void CanvasTabletHandler::handleTabletEvent(QTabletEvent* event)
                 if (m_host->isSpaceStrokeMoveActive()) {
                     m_host->endSpaceStrokeMove();
                 }
-                m_host->inputGlWidget()->endStroke();
+                m_host->inputPainting()->endStroke();
                 // Finalize a still-draining stroke before any mode flag moves:
                 // endStroke() flattens the whole buffer and reads those flags then.
                 m_host->notifyStrokeSessionEnded();
@@ -493,18 +491,18 @@ void CanvasTabletHandler::handleTabletEvent(QTabletEvent* event)
                         // the event handler. The queue applies the frame budget;
                         // the real sample below drains it in the same call, so
                         // nothing is postponed.
-                        m_host->inputGlWidget()->queueStrokeAtElapsed(
+                        m_host->inputPainting()->queueStrokeAtElapsed(
                             wp.x, wp.y, pkt.pressure, pktElapsed,
-                            aether::BrushStrokeHost::StrokeInputDevice::Stylus,
+                            StrokeInputDevice::Stylus,
                             packetInputDynamics);
                     }
                 }
             }
 
             aether::Vector2 worldPos = m_host->mapInputToViewportWorld(globalPosF);
-            m_host->inputGlWidget()->continueStrokeAtElapsed(
+            m_host->inputPainting()->continueStrokeAtElapsed(
                 worldPos.x, worldPos.y, pressure, curElapsedSec,
-                aether::BrushStrokeHost::StrokeInputDevice::Stylus, inputDynamics);
+                StrokeInputDevice::Stylus, inputDynamics);
             m_lastTabletElapsedSec = curElapsedSec;
             m_host->notifyCanvasContentChanged();
             event->accept();
@@ -523,7 +521,7 @@ void CanvasTabletHandler::handleTabletEvent(QTabletEvent* event)
                     if (nearlySameScreenPoint(pkt.globalPos, globalPosF)) {
                         continue;
                     }
-                    if (!CanvasTabletHandler::globalPosOverGlViewport(m_host, pkt.globalPos)) {
+                    if (!CanvasTabletHandler::globalPosOverViewport(m_host, pkt.globalPos)) {
                         continue;
                     }
                     const QPointF localPkt = m_panel->mapFromGlobal(pkt.globalPos);
@@ -553,7 +551,7 @@ void CanvasTabletHandler::handleTabletEvent(QTabletEvent* event)
                 if (m_host->isSpaceStrokeMoveActive()) {
                     m_host->endSpaceStrokeMove();
                 }
-                m_host->inputGlWidget()->endStroke();
+                m_host->inputPainting()->endStroke();
                 // Finalize a still-draining stroke before any mode flag moves:
                 // endStroke() flattens the whole buffer and reads those flags then.
                 m_host->notifyStrokeSessionEnded();

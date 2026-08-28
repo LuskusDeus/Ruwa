@@ -1875,8 +1875,9 @@ void WorkspaceTab::tryCaptureRecentProjectThumbnail(const QString& path)
         return;
     }
 
-    // getFullCanvasThumbnail() -> grabCanvasImage() temporarily hijacks the live camera and
-    // ends with setZoom(prevZoom), which clears the camera's animating flag. If that lands
+    // getFullCanvasThumbnail() captures the document through the engine, whose
+    // capture transaction temporarily drives the live camera and ends with
+    // setZoom(prevZoom), which clears the camera's animating flag. If that lands
     // while the startup zoom-in appearance animation is still running, the frame-swap
     // completion handler reads isAnimating()==false and freezes the zoom mid-flight (the
     // canvas stays zoomed out, and the motion stops abruptly). New/empty projects have no

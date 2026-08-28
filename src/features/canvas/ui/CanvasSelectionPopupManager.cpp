@@ -5,10 +5,11 @@
 // ==========================================================================
 
 #include "CanvasSelectionPopupManager.h"
+#include "features/canvas/engine/CanvasEngineSession.h"
 #include "CanvasPanel.h"
 #include "features/canvas/ui/CanvasCursorManager.h"
 
-#include "features/canvas/rendering/OpenGLCanvasWidget.h"
+#include "features/canvas/engine/CanvasEngineTypes.h"
 #include "shared/widgets/overlays/ConfirmationPopup.h"
 #include "features/selection/SelectionActionPopup.h"
 #include "features/color/ColorPicker.h"
@@ -77,9 +78,10 @@ void CanvasSelectionPopupManager::ensureSelectionActionPopup()
 
     QObject::connect(m_panel->m_selectionActionPopup,
         &ruwa::ui::widgets::SelectionActionPopup::fillRequested, m_panel, [this]() {
-            if (!m_panel->m_glWidget)
+            if (!m_panel->m_engineBinding)
                 return;
-            if (m_panel->m_glWidget->fillSelectionWithColor(m_panel->m_selectionFillColor)) {
+            if (m_panel->m_engineBinding->session().editing().fillSelectionWithColor(
+                    m_panel->m_selectionFillColor)) {
                 m_panel->canvasContentChanged();
             }
             updateSelectionActionPopup(true);
@@ -101,9 +103,9 @@ void CanvasSelectionPopupManager::ensureSelectionActionPopup()
 
     QObject::connect(m_panel->m_selectionActionPopup,
         &ruwa::ui::widgets::SelectionActionPopup::deleteRequested, m_panel, [this]() {
-            if (!m_panel->m_glWidget)
+            if (!m_panel->m_engineBinding)
                 return;
-            if (m_panel->m_glWidget->clearSelectionContent()) {
+            if (m_panel->m_engineBinding->session().editing().clearSelectionContent()) {
                 m_panel->canvasContentChanged();
             }
             updateSelectionActionPopup(true);
@@ -131,7 +133,8 @@ void CanvasSelectionPopupManager::ensureConfirmationPopup()
 
     QObject::connect(m_panel->m_confirmationPopup, &ruwa::ui::widgets::ConfirmationPopup::confirmed,
         m_panel, [this]() {
-            if (m_panel->m_glWidget && m_panel->m_glWidget->isTransformActive()) {
+            if (m_panel->m_engineBinding
+                && m_panel->m_engineBinding->session().transform().isActive()) {
                 m_panel->confirmTransform();
             } else if (m_panel->m_canvasResizeController
                 && m_panel->m_canvasResizeController->isActive()) {
@@ -140,7 +143,8 @@ void CanvasSelectionPopupManager::ensureConfirmationPopup()
         });
     QObject::connect(m_panel->m_confirmationPopup, &ruwa::ui::widgets::ConfirmationPopup::cancelled,
         m_panel, [this]() {
-            if (m_panel->m_glWidget && m_panel->m_glWidget->isTransformActive()) {
+            if (m_panel->m_engineBinding
+                && m_panel->m_engineBinding->session().transform().isActive()) {
                 m_panel->cancelTransform();
             } else if (m_panel->m_canvasResizeController
                 && m_panel->m_canvasResizeController->isActive()) {
@@ -153,15 +157,16 @@ void CanvasSelectionPopupManager::updateSelectionActionPopup(bool forceShow)
 {
     updateConfirmationPopup();
 
-    if (!m_panel->m_contentWidget || !m_panel->m_glWidget
-        || !m_panel->m_glWidget->isInitialized()) {
+    if (!m_panel->m_contentWidget || !m_panel->m_engineBinding
+        || m_panel->m_engineBinding->session().status() != CanvasEngineStatus::Ready) {
         if (m_panel->m_selectionActionPopup) {
             m_panel->m_selectionActionPopup->hideImmediate();
         }
         return;
     }
 
-    const bool hasSelection = m_panel->m_glWidget->hasSelectionMask();
+    const bool hasSelection
+        = m_panel->m_engineBinding->session().editing().hasSelectionMask();
     if (!hasSelection) {
         m_panel->m_selectionActionPopupDismissed = false;
         m_panel->m_selectionPopupWorldCenterValid = false;
@@ -175,8 +180,8 @@ void CanvasSelectionPopupManager::updateSelectionActionPopup(bool forceShow)
         return;
     }
 
-    if (m_panel->m_glWidget->isTransformActive()
-        && !m_panel->m_glWidget->isAutoApplyingTransform()) {
+    if (m_panel->m_engineBinding->session().transform().isActive()
+        && !m_panel->m_engineBinding->session().transform().isAutoApplying()) {
         if (m_panel->m_selectionColorPickerOverlay
             && m_panel->m_selectionColorPickerOverlay->isActive()) {
             m_panel->m_selectionColorPickerOverlay->hidePicker();
@@ -214,7 +219,7 @@ void CanvasSelectionPopupManager::updateSelectionActionPopup(bool forceShow)
         return;
     }
 
-    if (m_panel->m_glWidget->isAutoApplyingTransform()
+    if (m_panel->m_engineBinding->session().transform().isAutoApplying()
         && m_panel->m_selectionActionPopup->isPopupVisible()) {
         return;
     }
@@ -235,9 +240,9 @@ void CanvasSelectionPopupManager::updateSelectionActionPopup(bool forceShow)
         = qBound(8, targetX, qMax(8, m_panel->m_contentWidget->width() - popupWidth - 8));
     const int clampedY
         = qBound(8, targetY, qMax(8, m_panel->m_contentWidget->height() - popupHeight - 8));
-    const auto& camera = m_panel->m_glWidget->viewport().camera();
+    auto& view = m_panel->m_engineBinding->session().view();
     const bool cameraNavigating = m_panel->m_isPanning || m_panel->m_isZoomDragging
-        || m_panel->m_isRotatingView || camera.isAnimating() || camera.isFitToViewAnimating();
+        || m_panel->m_isRotatingView || view.isCameraAnimating() || view.isFitToViewAnimating();
     const bool animateShow
         = !m_panel->m_selectionActionPopup->isPopupVisible() && !cameraNavigating;
     const bool hasTargetDelta = qAbs(clampedX - m_panel->m_selectionActionPopup->x()) > 1
@@ -258,10 +263,11 @@ void CanvasSelectionPopupManager::updateConfirmationPopup()
     }
 
     QRectF activeRect;
-    if (m_panel->m_glWidget && m_panel->m_glWidget->isInitialized()
-        && m_panel->m_glWidget->isTransformActive()
-        && !m_panel->m_glWidget->isAutoApplyingTransform()
-        && !m_panel->m_glWidget->isMoveOnlyTransform()) {
+    if (m_panel->m_engineBinding
+        && m_panel->m_engineBinding->session().status() == CanvasEngineStatus::Ready
+        && m_panel->m_engineBinding->session().transform().isActive()
+        && !m_panel->m_engineBinding->session().transform().isAutoApplying()
+        && !m_panel->m_engineBinding->session().transform().isMoveOnly()) {
         activeRect = m_panel->activeTransformRectInWidget();
     } else if (m_panel->m_canvasResizeController
         && (m_panel->m_canvasResizeController->isActive()

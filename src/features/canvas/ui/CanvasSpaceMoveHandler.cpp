@@ -5,9 +5,10 @@
 // ==========================================================================
 
 #include "CanvasSpaceMoveHandler.h"
+#include "features/canvas/engine/CanvasEngineSession.h"
 #include "CanvasPanel.h"
 
-#include "features/canvas/rendering/OpenGLCanvasWidget.h"
+#include "features/canvas/engine/CanvasEngineTypes.h"
 #include "features/canvas/ui/CanvasCursorManager.h"
 
 #include <QCursor>
@@ -36,7 +37,7 @@ void CanvasSpaceMoveHandler::beginSpaceSelectionMove()
 
 void CanvasSpaceMoveHandler::moveActiveSelectionWithSpace(const QPoint& globalPos)
 {
-    if (!m_panel->m_spaceSelectionMoveActive || !m_panel->m_glWidget)
+    if (!m_panel->m_spaceSelectionMoveActive || !m_panel->m_engineBinding)
         return;
     if (globalPos == m_panel->m_spaceSelectionMoveLastGlobalPos)
         return;
@@ -48,7 +49,7 @@ void CanvasSpaceMoveHandler::moveActiveSelectionWithSpace(const QPoint& globalPo
     const qreal dy = static_cast<qreal>(currWorld.y - prevWorld.y);
 
     if (m_panel->m_isLassoSelecting || m_panel->m_isRectSelecting || m_panel->m_isCircleSelecting) {
-        m_panel->m_glWidget->translateActiveSelection(
+        m_panel->m_engineBinding->session().editing().translateActiveSelection(
             static_cast<float>(dx), static_cast<float>(dy));
     }
 
@@ -71,7 +72,7 @@ void CanvasSpaceMoveHandler::endSpaceSelectionMove()
 
 void CanvasSpaceMoveHandler::beginSpaceStrokeMove()
 {
-    if (!m_panel->m_isDrawing || !m_panel->m_glWidget)
+    if (!m_panel->m_isDrawing || !m_panel->m_engineBinding)
         return;
     m_panel->m_spaceStrokeMoveActive = true;
     m_panel->m_spaceStrokeMoveLastGlobalPos = m_panel->m_cursorManager
@@ -85,8 +86,10 @@ void CanvasSpaceMoveHandler::beginSpaceStrokeMove()
 
 void CanvasSpaceMoveHandler::moveActiveStrokeWithSpace(const QPoint& globalPos)
 {
-    if (!m_panel->m_spaceStrokeMoveActive || !m_panel->m_glWidget || !m_panel->m_isDrawing)
+    if (!m_panel->m_spaceStrokeMoveActive || !m_panel->m_engineBinding
+        || !m_panel->m_isDrawing) {
         return;
+    }
     if (globalPos == m_panel->m_spaceStrokeMoveLastGlobalPos)
         return;
 
@@ -94,7 +97,7 @@ void CanvasSpaceMoveHandler::moveActiveStrokeWithSpace(const QPoint& globalPos)
     const aether::Vector2 currWorld = m_panel->mapToWorld(globalPos);
     const float dx = currWorld.x - prevWorld.x;
     const float dy = currWorld.y - prevWorld.y;
-    m_panel->m_glWidget->translateActiveStroke(dx, dy);
+    m_panel->m_engineBinding->session().painting().translateActiveStroke(dx, dy);
 
     m_panel->m_spaceStrokeMoveLastGlobalPos = globalPos;
 }

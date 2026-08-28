@@ -10,16 +10,15 @@
 #include "CanvasPanelHelpers.h"
 #include "TextEditingController.h"
 
-#include "features/canvas/rendering/OpenGLCanvasWidget.h"
 #include "features/transform/TransformState.h"
 #include "features/layers/model/LayerModel.h"
 #include "features/brush/ui/BrushControlOverlay.h"
 #include "features/brush/ui/BrushPackOverlay.h"
 #include "features/brush/ui/BrushSizeCurve.h"
+#include "features/canvas/stroke/StrokeInputQueue.h"
 #include "features/canvas/ui/CanvasCursorManager.h"
 #include "features/canvas/ui/CanvasPositionPickerOverlay.h"
 #include "shared/resources/IconProvider.h"
-#include "shared/tiles/TileBrush.h"
 #include "shell/context-menu/ContextMenuSystem.h"
 #include "services/input/StylusDebugService.h"
 #include "services/input/StylusInputManager.h"
@@ -62,7 +61,7 @@ QPoint panelLocalPos(const CanvasPanel* panel, const QMouseEvent* event)
     return panel->mapFromGlobal(event->globalPosition().toPoint());
 }
 
-MousePointerSample sampleMousePointer(aether::OpenGLCanvasWidget* canvasWidget, QMouseEvent* event)
+MousePointerSample sampleMousePointer(QMouseEvent* event)
 {
     MousePointerSample sample;
     if (!event) {
@@ -119,14 +118,13 @@ MousePointerSample sampleMousePointer(aether::OpenGLCanvasWidget* canvasWidget, 
         }
     }
 
-    (void) canvasWidget;
     return sample;
 }
 
-aether::BrushStrokeHost::BrushInputDynamics pointerInputDynamics(const CanvasInputHost* host,
+ruwa::core::brushes::BrushInputDynamics pointerInputDynamics(const CanvasInputHost* host,
     const QPointF& globalPos, const MousePointerSample& sample)
 {
-    aether::BrushStrokeHost::BrushInputDynamics result;
+    ruwa::core::brushes::BrushInputDynamics result;
     if (!host || !sample.tiltAvailable) {
         return result;
     }
@@ -146,11 +144,9 @@ aether::BrushStrokeHost::BrushInputDynamics pointerInputDynamics(const CanvasInp
     return result;
 }
 
-aether::BrushStrokeHost::StrokeInputDevice strokeInputDeviceForSample(
-    const MousePointerSample& sample)
+StrokeInputDevice strokeInputDeviceForSample(const MousePointerSample& sample)
 {
-    return sample.stylusLike ? aether::BrushStrokeHost::StrokeInputDevice::Stylus
-                             : aether::BrushStrokeHost::StrokeInputDevice::Mouse;
+    return sample.stylusLike ? StrokeInputDevice::Stylus : StrokeInputDevice::Mouse;
 }
 
 } // namespace
@@ -203,13 +199,13 @@ void CanvasMouseInputHandler::dispatchUncoalescedWorldMoves(
         const QPointF currentGlobal = event->globalPosition();
         // Outside the GL viewport, WM_MOUSEMOVE history often mixes unrelated screen samples
         // (second monitor, chrome). Per-point clamping turns those into fake edge tours.
-        if (m_panel->isGlobalOverGlViewport(currentGlobal)) {
+        if (m_panel->isGlobalOverViewport(currentGlobal)) {
             const QPoint currentScreenPos = currentGlobal.toPoint();
             const auto recovered
                 = ruwa::services::input::StylusInputManager::recoverMouseMoveHistory(
                     currentScreenPos);
             for (const auto& rp : recovered) {
-                if (!m_panel->isGlobalOverGlViewport(rp.pos)) {
+                if (!m_panel->isGlobalOverViewport(rp.pos)) {
                     continue;
                 }
                 const aether::Vector2 wp = m_panel->mapToViewportWorld(rp.pos);
@@ -232,31 +228,33 @@ bool CanvasMouseInputHandler::isPaintingLikeTool() const
 
 bool CanvasMouseInputHandler::beginBrushSizeAdjust(QMouseEvent* event)
 {
-    auto* gl = m_host ? m_host->inputGlWidget() : nullptr;
-    if (!event || !m_panel || !gl || !gl->isInitialized()) {
+    auto* hostWidget = m_host ? m_host->inputViewportHostWidget() : nullptr;
+    auto* view = m_host ? m_host->inputView() : nullptr;
+    if (!event || !m_panel || !hostWidget || !view || !m_host->inputRenderReady()) {
         return false;
     }
 
     const QPoint globalPos = event->globalPosition().toPoint();
 
-    const qreal scaleX = gl->width() > 0
-        ? static_cast<qreal>(gl->viewport().width()) / static_cast<qreal>(gl->width())
+    const QSizeF viewportExtent = view->viewportExtent();
+    const qreal scaleX = hostWidget->width() > 0
+        ? viewportExtent.width() / static_cast<qreal>(hostWidget->width())
         : 1.0;
-    const qreal scaleY = gl->height() > 0
-        ? static_cast<qreal>(gl->viewport().height()) / static_cast<qreal>(gl->height())
+    const qreal scaleY = hostWidget->height() > 0
+        ? viewportExtent.height() / static_cast<qreal>(hostWidget->height())
         : 1.0;
-    const QPoint localPos = gl->mapFromGlobal(globalPos);
+    const QPoint localPos = hostWidget->mapFromGlobal(globalPos);
 
     m_brushSizeAdjust = true;
     // The ring is parked on the anchor for the whole drag, so the frame must
     // stop following the pointer with it.
-    gl->setCursorPositionPinned(true);
+    m_host->inputPresentation()->setCursorPositionPinned(true);
     m_brushSizeAnchorGlobal = globalPos;
     m_brushSizeLastGlobal = globalPos;
     m_brushSizeAnchorVx = static_cast<float>(static_cast<qreal>(localPos.x()) * scaleX);
     m_brushSizeAnchorVy = static_cast<float>(static_cast<qreal>(localPos.y()) * scaleY);
     m_brushSizeCursorScale = static_cast<float>((scaleX + scaleY) * 0.5);
-    m_brushSizeStartRadius = gl->brush().radius();
+    m_brushSizeStartRadius = m_host->inputPainting()->brushRadius();
 
     // Suppress the cursor manager so it stops moving the brush ring with the
     // mouse; then force the OS cursor to a horizontal resize arrow on top of
@@ -265,7 +263,7 @@ bool CanvasMouseInputHandler::beginBrushSizeAdjust(QMouseEvent* event)
         cursorManager->setSuppressed(true);
     }
     const QCursor resizeCursor(Qt::SizeHorCursor);
-    gl->setCursor(resizeCursor);
+    hostWidget->setCursor(resizeCursor);
     m_panel->setCursor(resizeCursor);
 
     if (QWidget::mouseGrabber() != m_panel) {
@@ -279,8 +277,8 @@ bool CanvasMouseInputHandler::beginBrushSizeAdjust(QMouseEvent* event)
 
 void CanvasMouseInputHandler::updateBrushSizeAdjust(const QPoint& globalPos)
 {
-    auto* gl = m_host ? m_host->inputGlWidget() : nullptr;
-    if (!m_brushSizeAdjust || !m_panel || !gl) {
+    auto* view = m_host ? m_host->inputView() : nullptr;
+    if (!m_brushSizeAdjust || !m_panel || !view) {
         return;
     }
     m_brushSizeLastGlobal = globalPos;
@@ -290,7 +288,7 @@ void CanvasMouseInputHandler::updateBrushSizeAdjust(const QPoint& globalPos)
     // stays centred on the anchor, so the pointer is a slider, not a rim grip.
     const float dx = static_cast<float>(globalPos.x() - m_brushSizeAnchorGlobal.x());
 
-    const float zoom = gl->viewport().camera().zoom();
+    const float zoom = static_cast<float>(view->zoom());
     const float deltaWorld = (zoom > 0.0f) ? (dx / zoom) : dx;
     const float worldRadius = std::max(0.0f, m_brushSizeStartRadius + deltaWorld);
 
@@ -304,13 +302,15 @@ void CanvasMouseInputHandler::updateBrushSizeAdjust(const QPoint& globalPos)
 
 void CanvasMouseInputHandler::applyBrushSizeAdjustOverlay()
 {
-    auto* gl = m_host ? m_host->inputGlWidget() : nullptr;
-    if (!m_panel || !gl) {
+    auto* view = m_host ? m_host->inputView() : nullptr;
+    auto* painting = m_host ? m_host->inputPainting() : nullptr;
+    auto* presentation = m_host ? m_host->inputPresentation() : nullptr;
+    if (!m_panel || !view || !painting || !presentation) {
         return;
     }
-    const float zoom = gl->viewport().camera().zoom();
-    const float radiusViewport = gl->brush().radius() * zoom * m_brushSizeCursorScale;
-    gl->setBrushCursorState(true, m_brushSizeAnchorVx, m_brushSizeAnchorVy, radiusViewport);
+    const float zoom = static_cast<float>(view->zoom());
+    const float radiusViewport = painting->brushRadius() * zoom * m_brushSizeCursorScale;
+    presentation->setBrushCursorState(true, m_brushSizeAnchorVx, m_brushSizeAnchorVy, radiusViewport);
 }
 
 void CanvasMouseInputHandler::endBrushSizeAdjust()
@@ -324,10 +324,12 @@ void CanvasMouseInputHandler::endBrushSizeAdjust()
         if (QWidget::mouseGrabber() == m_panel) {
             m_panel->releaseMouse();
         }
-        if (auto* gl = m_host->inputGlWidget()) {
-            gl->unsetCursor();
-            gl->setCursorPositionPinned(false);
-            gl->setBrushCursorState(false, 0, 0, 0);
+        if (auto* hostWidget = m_host->inputViewportHostWidget()) {
+            hostWidget->unsetCursor();
+        }
+        if (auto* presentation = m_host->inputPresentation()) {
+            presentation->setCursorPositionPinned(false);
+            presentation->setBrushCursorState(false, 0, 0, 0);
         }
         m_panel->unsetCursor();
         if (auto* cursorManager = m_host->inputCursorManager()) {
@@ -339,10 +341,12 @@ void CanvasMouseInputHandler::endBrushSizeAdjust()
 
 bool CanvasMouseInputHandler::handleMousePress(QMouseEvent* event)
 {
-    auto* glWidget = m_host->inputGlWidget();
-    if (!glWidget || !glWidget->isInitialized()) {
+    if (!m_host->inputRenderReady()) {
         return false;
     }
+    auto* view = m_host->inputView();
+    auto* editing = m_host->inputEditing();
+    auto* transform = m_host->inputTransform();
 
     if (m_panel->isPositionPickerActive()) {
         const bool handToolActive = m_host->currentInputTool() == ToolId::Hand;
@@ -377,7 +381,7 @@ bool CanvasMouseInputHandler::handleMousePress(QMouseEvent* event)
     if (event->button() == Qt::LeftButton && event->modifiers().testFlag(Qt::ShiftModifier)
         && event->modifiers().testFlag(Qt::AltModifier) && !m_brushSizeAdjust
         && !m_host->isInputDrawingActive() && !m_panel->m_tabletActive
-        && !glWidget->isTransformActive() && isPaintingLikeTool()) {
+        && !transform->isActive() && isPaintingLikeTool()) {
         return beginBrushSizeAdjust(event);
     }
 
@@ -389,26 +393,27 @@ bool CanvasMouseInputHandler::handleMousePress(QMouseEvent* event)
     const QPoint localPos = panelLocalPos(m_panel, event);
 
     // Transform mode mouse handling
-    if (glWidget->isTransformActive()) {
-        if ((glWidget->isAutoApplyingTransform()
-                || glWidget->transformController().hasPendingDiscreteActionAnimation())
+    if (transform->isActive()) {
+        if ((transform->isAutoApplying() || transform->hasPendingDiscreteActionAnimation())
             && (event->button() == Qt::LeftButton || event->button() == Qt::RightButton)) {
             event->accept();
             return true;
         }
         if (event->button() == Qt::LeftButton) {
             aether::Vector2 worldPos = m_panel->mapToWorld(event->globalPosition());
-            float zoom = glWidget->viewport().camera().zoom();
-            auto& ctrl = glWidget->transformController();
-            const auto hit = ctrl.hitTestDetailed(worldPos, zoom);
+            const QPointF documentPos(worldPos.x, worldPos.y);
+            const float zoom = static_cast<float>(view->zoom());
+            const auto hit = transform->hitTest(documentPos, zoom);
 
-            glWidget->beginTransformUndoStep();
-            if (ctrl.mousePress(worldPos, zoom, event->modifiers())) {
-                glWidget->beginTransformSnapSession();
+            transform->beginUndoStep();
+            if (transform->pointerPress(documentPos, zoom, event->modifiers())) {
+                transform->beginSnapSession();
                 m_panel->m_transformDragCursorValid = true;
-                m_panel->m_transformDragCursor = detail::cursorForTransformHandle(hit, ctrl.state(),
-                    ctrl.cornersActAsRotationHandles(), glWidget->canvasContentFlipHorizontal(),
-                    glWidget->canvasContentFlipVertical());
+                m_panel->m_transformDragCursor = detail::cursorForTransformHandle(hit,
+                    transform->cornersActAsRotationHandles(),
+                    transform->isScaleMirroredHorizontally(),
+                    transform->isScaleMirroredVertically(), view->contentFlipHorizontal(),
+                    view->contentFlipVertical());
                 if (auto* cursorManager = m_host->inputCursorManager()) {
                     cursorManager->setRequestedCursor(m_panel->m_transformDragCursor);
                     cursorManager->updateCursorPosition(event->globalPosition().toPoint());
@@ -416,26 +421,25 @@ bool CanvasMouseInputHandler::handleMousePress(QMouseEvent* event)
                 event->accept();
                 return true;
             }
-            glWidget->discardTransformUndoStep();
+            transform->discardUndoStep();
             m_panel->confirmTransform();
             event->accept();
             return true;
         } else if (event->button() == Qt::RightButton) {
             aether::Vector2 worldPos = m_panel->mapToWorld(event->globalPosition());
-            auto* gl = glWidget;
-            auto& ctrl = gl->transformController();
-            if (!gl->isMoveOnlyTransform() && ctrl.state().pointInTransformedRect(worldPos)) {
+            if (!transform->isMoveOnly()
+                && transform->containsDocumentPoint(QPointF(worldPos.x, worldPos.y))) {
                 QVariantList actions;
-                const auto currentMode = gl->transformInteractionMode();
+                const auto currentMode = transform->interactionMode();
 
                 QVariantMap classicAction;
                 classicAction.insert(QStringLiteral("id"),
                     static_cast<int>(CanvasPanel::TransformActionModeClassic));
                 classicAction.insert(QStringLiteral("text"), QObject::tr("Classic"));
                 classicAction.insert(QStringLiteral("checked"),
-                    currentMode == aether::TransformInteractionMode::Classic);
+                    currentMode == TransformInteractionMode::Classic);
                 classicAction.insert(QStringLiteral("enabled"),
-                    currentMode != aether::TransformInteractionMode::Classic);
+                    currentMode != TransformInteractionMode::Classic);
                 actions.push_back(classicAction);
 
                 QVariantMap deformAction;
@@ -443,14 +447,14 @@ bool CanvasMouseInputHandler::handleMousePress(QMouseEvent* event)
                     QStringLiteral("id"), static_cast<int>(CanvasPanel::TransformActionModeDeform));
                 deformAction.insert(QStringLiteral("text"), QObject::tr("Warp"));
                 deformAction.insert(QStringLiteral("checked"),
-                    currentMode == aether::TransformInteractionMode::Deform);
+                    currentMode == TransformInteractionMode::Deform);
                 deformAction.insert(QStringLiteral("enabled"),
-                    currentMode != aether::TransformInteractionMode::Deform);
+                    currentMode != TransformInteractionMode::Deform);
                 actions.push_back(deformAction);
 
                 // Mirroring shares the eased flip the selection popup plays, so it
                 // rides along here as an icon-only pair under a separator.
-                const bool canFlip = gl->canFlipActiveTransform();
+                const bool canFlip = transform->canFlipContent();
                 QVariantMap separator;
                 separator.insert(QStringLiteral("separator"), true);
                 actions.push_back(separator);
@@ -493,7 +497,7 @@ bool CanvasMouseInputHandler::handleMousePress(QMouseEvent* event)
             m_panel->m_isPanning = true;
             m_panel->m_panButton = event->button();
             m_panel->m_lastMousePos = event->globalPosition();
-            glWidget->beginPanSampling();
+            view->beginPanSampling();
             m_panel->updateToolCursor();
             event->accept();
             return true;
@@ -504,17 +508,16 @@ bool CanvasMouseInputHandler::handleMousePress(QMouseEvent* event)
         m_panel->markTemporaryToolUsed();
 
         if (m_host->currentInputTool() == ToolId::CanvasResize) {
-            auto& cam = glWidget->viewport().camera();
             if (m_panel->m_canvasResizeAwaitingRotationReset) {
-                if (cam.isAnimating()) {
+                if (view->isCameraAnimating()) {
                     event->accept();
                     return true;
                 }
                 m_panel->m_canvasResizeAwaitingRotationReset = false;
             }
-            if (!detail::isAngleEffectivelyZero(cam.rotation())) {
+            if (!detail::isAngleEffectivelyZero(static_cast<float>(view->rotationRadians()))) {
                 m_panel->m_canvasResizeAwaitingRotationReset = true;
-                cam.setRotationSmooth(0.0f);
+                view->setRotationSmoothRadians(0.0);
                 m_panel->requestRender();
                 event->accept();
                 return true;
@@ -537,7 +540,7 @@ bool CanvasMouseInputHandler::handleMousePress(QMouseEvent* event)
             m_panel->m_isPanning = true;
             m_panel->m_panButton = Qt::LeftButton;
             m_panel->m_lastMousePos = event->globalPosition();
-            glWidget->beginPanSampling();
+            view->beginPanSampling();
             m_panel->updateToolCursor();
             event->accept();
             return true;
@@ -548,7 +551,8 @@ bool CanvasMouseInputHandler::handleMousePress(QMouseEvent* event)
             if (pickLayerByContent && m_panel->m_layerModel) {
                 const aether::Vector2 worldPos
                     = m_panel->mapToWorld(event->globalPosition().toPoint());
-                const QUuid hitLayerId = glWidget->moveToolContentLayerAt(worldPos);
+                const QUuid hitLayerId
+                    = m_host->inputHitTesting()->movableContentLayerAt(QPointF(worldPos.x, worldPos.y));
                 if (!hitLayerId.isNull() && !m_panel->m_layerModel->isSelected(hitLayerId)) {
                     m_pendingMoveToolContentHit = true;
                     m_pendingMoveToolContentLayerId = hitLayerId;
@@ -560,13 +564,13 @@ bool CanvasMouseInputHandler::handleMousePress(QMouseEvent* event)
                 }
             }
 
-            if (glWidget->enterMoveOnlyTransformMode()) {
+            if (transform->enterMoveOnly()) {
                 aether::Vector2 worldPos = m_panel->mapToWorld(event->globalPosition().toPoint());
-                float zoom = glWidget->viewport().camera().zoom();
-                auto& ctrl = glWidget->transformController();
-                glWidget->beginTransformUndoStep();
-                if (ctrl.mousePress(worldPos, zoom, event->modifiers())) {
-                    glWidget->beginTransformSnapSession();
+                const QPointF documentPos(worldPos.x, worldPos.y);
+                const float zoom = static_cast<float>(view->zoom());
+                transform->beginUndoStep();
+                if (transform->pointerPress(documentPos, zoom, event->modifiers())) {
+                    transform->beginSnapSession();
                     m_panel->m_transformDragCursorValid = true;
                     m_panel->m_transformDragCursor = Qt::SizeAllCursor;
                     if (auto* cursorManager = m_host->inputCursorManager()) {
@@ -576,8 +580,8 @@ bool CanvasMouseInputHandler::handleMousePress(QMouseEvent* event)
                     event->accept();
                     return true;
                 }
-                glWidget->discardTransformUndoStep();
-                glWidget->cancelTransform();
+                transform->discardUndoStep();
+                transform->cancel();
             }
             event->accept();
             return true;
@@ -589,22 +593,23 @@ bool CanvasMouseInputHandler::handleMousePress(QMouseEvent* event)
             return true;
         }
         if (m_host->currentInputTool() == ToolId::Zoom) {
-            glWidget->viewport().camera().stopAnimation();
+            view->stopCameraAnimation();
             m_panel->m_isZoomDragging = true;
             m_panel->m_zoomDragStartPos = localPos;
-            m_panel->m_zoomDragStartValue = glWidget->viewport().camera().zoom();
-            QPoint localPos = glWidget->mapFromGlobal(event->globalPosition().toPoint());
+            m_panel->m_zoomDragStartValue = static_cast<float>(view->zoom());
+            QPoint localPos
+                = m_host->inputViewportHostWidget()->mapFromGlobal(event->globalPosition().toPoint());
             m_panel->m_zoomAnchorScreen = aether::Vector2(localPos.x(), localPos.y());
             m_panel->showZoomInfoOverlay();
             event->accept();
             return true;
         }
         if (m_host->currentInputTool() == ToolId::RotateView) {
-            auto& cam = glWidget->viewport().camera();
-            cam.stopAnimation();
+            view->stopCameraAnimation();
             m_panel->m_isRotatingView = true;
-            const QPoint widgetPos = glWidget->mapFromGlobal(event->globalPosition().toPoint());
-            const QPoint center = glWidget->rect().center();
+            auto* hostWidget = m_host->inputViewportHostWidget();
+            const QPoint widgetPos = hostWidget->mapFromGlobal(event->globalPosition().toPoint());
+            const QPoint center = hostWidget->rect().center();
             m_panel->m_rotateViewLastAngle
                 = std::atan2(static_cast<float>(widgetPos.y() - center.y()),
                     static_cast<float>(widgetPos.x() - center.x()));
@@ -619,10 +624,10 @@ bool CanvasMouseInputHandler::handleMousePress(QMouseEvent* event)
             QColor picked;
             if (fromLayerOnly) {
                 picked = detail::sampleColorFromActiveLayer(
-                    m_panel->m_layerModel, glWidget->canvas(), px, py);
-            } else if (!glWidget->sampleColorFromScene(worldPos.x, worldPos.y, picked)) {
+                    m_panel->m_layerModel, m_panel->accessCanvas(), px, py);
+            } else if (!editing->sampleSceneColor(QPointF(worldPos.x, worldPos.y), picked)) {
                 picked = detail::sampleColorFromLayerModel(
-                    m_panel->m_layerModel, glWidget->canvas(), px, py);
+                    m_panel->m_layerModel, m_panel->accessCanvas(), px, py);
             }
             uint8_t r, g, b, alphaToUse;
             if (fromLayerOnly) {
@@ -657,7 +662,7 @@ bool CanvasMouseInputHandler::handleMousePress(QMouseEvent* event)
             if (event->button() == Qt::LeftButton) {
                 const int px = static_cast<int>(std::floor(worldPos.x));
                 const int py = static_cast<int>(std::floor(worldPos.y));
-                glWidget->performFill(px, py);
+                m_panel->requestFillAt(px, py);
             }
             event->accept();
             return true;
@@ -667,7 +672,7 @@ bool CanvasMouseInputHandler::handleMousePress(QMouseEvent* event)
             if (event->button() == Qt::LeftButton) {
                 const int px = static_cast<int>(std::floor(worldPos.x));
                 const int py = static_cast<int>(std::floor(worldPos.y));
-                glWidget->performClassicFill(px, py);
+                m_panel->requestClassicFillAt(px, py);
             }
             event->accept();
             return true;
@@ -676,7 +681,7 @@ bool CanvasMouseInputHandler::handleMousePress(QMouseEvent* event)
             ruwa::services::input::StylusInputManager::resetMouseMoveHistory();
             aether::Vector2 worldPos = m_panel->mapToViewportWorld(event->globalPosition());
             m_panel->m_isLassoFillSelecting = true;
-            glWidget->beginLassoFill(worldPos.x, worldPos.y);
+            editing->beginLassoFill(worldPos.x, worldPos.y);
             if (QWidget::mouseGrabber() != m_panel) {
                 m_panel->grabMouse();
             }
@@ -689,7 +694,7 @@ bool CanvasMouseInputHandler::handleMousePress(QMouseEvent* event)
             m_panel->m_isLassoSelecting = true;
             m_panel->m_lassoAdd = event->modifiers().testFlag(Qt::ShiftModifier);
             m_panel->m_lassoSubtract = event->modifiers().testFlag(Qt::AltModifier);
-            glWidget->beginLasso(
+            editing->beginLasso(
                 worldPos.x, worldPos.y, m_panel->m_lassoAdd, m_panel->m_lassoSubtract);
             if (QWidget::mouseGrabber() != m_panel) {
                 m_panel->grabMouse();
@@ -703,7 +708,7 @@ bool CanvasMouseInputHandler::handleMousePress(QMouseEvent* event)
             m_panel->m_isRectSelecting = true;
             m_panel->m_rectAdd = event->modifiers().testFlag(Qt::ShiftModifier);
             m_panel->m_rectSubtract = event->modifiers().testFlag(Qt::AltModifier);
-            glWidget->beginRectSelection(
+            editing->beginRectSelection(
                 worldPos.x, worldPos.y, m_panel->m_rectAdd, m_panel->m_rectSubtract);
             if (QWidget::mouseGrabber() != m_panel) {
                 m_panel->grabMouse();
@@ -717,7 +722,7 @@ bool CanvasMouseInputHandler::handleMousePress(QMouseEvent* event)
             m_panel->m_isCircleSelecting = true;
             m_panel->m_circleAdd = event->modifiers().testFlag(Qt::ShiftModifier);
             m_panel->m_circleSubtract = event->modifiers().testFlag(Qt::AltModifier);
-            glWidget->beginCircleSelection(
+            editing->beginCircleSelection(
                 worldPos.x, worldPos.y, m_panel->m_circleAdd, m_panel->m_circleSubtract);
             if (QWidget::mouseGrabber() != m_panel) {
                 m_panel->grabMouse();
@@ -729,7 +734,7 @@ bool CanvasMouseInputHandler::handleMousePress(QMouseEvent* event)
             const aether::Vector2 worldPos = m_panel->mapToViewportWorld(event->globalPosition());
             const bool addSelection = event->modifiers().testFlag(Qt::ShiftModifier);
             const bool subtractSelection = event->modifiers().testFlag(Qt::AltModifier);
-            glWidget->performMagicWandSelection(static_cast<int>(std::floor(worldPos.x)),
+            editing->performMagicWandSelection(static_cast<int>(std::floor(worldPos.x)),
                 static_cast<int>(std::floor(worldPos.y)), addSelection, subtractSelection);
             event->accept();
             return true;
@@ -752,7 +757,7 @@ bool CanvasMouseInputHandler::handleMousePress(QMouseEvent* event)
                     // clean, with proper undo state.
                     if (m_panel->m_isDrawing) {
                         m_panel->m_isDrawing = false;
-                        m_panel->m_glWidget->endStroke();
+                        m_host->inputPainting()->endStroke();
                         m_panel->notifyStrokeSessionEnded();
                         m_panel->canvasContentChanged();
                     }
@@ -761,7 +766,7 @@ bool CanvasMouseInputHandler::handleMousePress(QMouseEvent* event)
                     return true;
                 }
             }
-            const MousePointerSample pointerSample = sampleMousePointer(glWidget, event);
+            const MousePointerSample pointerSample = sampleMousePointer(event);
             const auto inputDynamics
                 = pointerInputDynamics(m_panel, event->globalPosition(), pointerSample);
             if (m_panel->m_brushOverlay) {
@@ -775,16 +780,16 @@ bool CanvasMouseInputHandler::handleMousePress(QMouseEvent* event)
                 pointerSample.isEraser || m_panel->shouldEraseForTool(m_host->currentInputTool()));
             ruwa::services::input::StylusInputManager::resetMouseMoveHistory();
             aether::Vector2 worldPos = m_panel->mapToViewportWorld(event->globalPosition());
-            glWidget->beginStroke(worldPos.x, worldPos.y, pointerSample.pressure,
+            m_host->inputPainting()->beginStroke(worldPos.x, worldPos.y, pointerSample.pressure,
                 strokeInputDeviceForSample(pointerSample),
                 event->modifiers().testFlag(Qt::ShiftModifier), inputDynamics);
             // Seed the recovered-point pressure interpolation from the click
             // sample so the very first coalesced batch lerps from real data.
             m_lastRealStrokePressure = pointerSample.pressure;
-            m_lastRealStrokeElapsedSec = glWidget->strokeElapsedSecondsNow();
+            m_lastRealStrokeElapsedSec = m_host->inputPainting()->strokeElapsedSecondsNow();
             m_lastRealStrokeInputDynamics = inputDynamics;
             m_lastRealStrokeSampleValid = true;
-            m_panel->m_isDrawing = glWidget->isDrawing();
+            m_panel->m_isDrawing = m_host->inputPainting()->isDrawing();
             if (!m_panel->m_isDrawing) {
                 m_panel->showBlockedDrawMessageForSelectedLayer();
             } else if (QWidget::mouseGrabber() != m_panel) {
@@ -803,13 +808,11 @@ bool CanvasMouseInputHandler::handleMousePress(QMouseEvent* event)
         return true;
     }
     if (event->button() == Qt::MiddleButton) {
-        if (glWidget) {
-            m_panel->m_isPanning = true;
-            m_panel->m_panButton = event->button();
-            m_panel->m_lastMousePos = event->globalPosition();
-            glWidget->beginPanSampling();
-            m_panel->updateToolCursor();
-        }
+        m_panel->m_isPanning = true;
+        m_panel->m_panButton = event->button();
+        m_panel->m_lastMousePos = event->globalPosition();
+        view->beginPanSampling();
+        m_panel->updateToolCursor();
         event->accept();
         return true;
     }
@@ -818,7 +821,10 @@ bool CanvasMouseInputHandler::handleMousePress(QMouseEvent* event)
 
 bool CanvasMouseInputHandler::handleMouseMove(QMouseEvent* event)
 {
-    auto* glWidget = m_host->inputGlWidget();
+    auto* view = m_host->inputView();
+    auto* editing = m_host->inputEditing();
+    auto* transform = m_host->inputTransform();
+    auto* painting = m_host->inputPainting();
     auto* cursorManager = m_host->inputCursorManager();
 
     if (m_panel->isPositionPickerActive()) {
@@ -849,9 +855,9 @@ bool CanvasMouseInputHandler::handleMouseMove(QMouseEvent* event)
         }
         return true;
     }
-    if (!glWidget || !glWidget->isInitialized()) {
-        if (glWidget)
-            glWidget->endPanSampling();
+    if (!m_host->inputRenderReady()) {
+        if (view)
+            view->endPanSampling();
         m_panel->m_isPanning = false;
         m_panel->m_isZoomDragging = false;
         m_panel->m_isRotatingView = false;
@@ -889,24 +895,24 @@ bool CanvasMouseInputHandler::handleMouseMove(QMouseEvent* event)
         m_panel->setFocus();
     }
 
-    if (cursorManager && glWidget && glWidget->isTransformActive()) {
+    if (cursorManager && transform->isActive()) {
         if (m_panel->m_isPanning) {
             cursorManager->setRequestedCursor(Qt::ClosedHandCursor);
-        } else if (glWidget->transformController().isDragging()
-            && m_panel->m_transformDragCursorValid) {
+        } else if (transform->isDragging() && m_panel->m_transformDragCursorValid) {
             cursorManager->setRequestedCursor(m_panel->m_transformDragCursor);
         } else {
             aether::Vector2 worldPos = m_panel->mapToWorld(globalPos);
-            float zoom = glWidget->viewport().camera().zoom();
-            auto& tc = glWidget->transformController();
-            const auto hit = tc.hitTestDetailed(worldPos, zoom);
-            cursorManager->setRequestedCursor(detail::cursorForTransformHandle(hit, tc.state(),
-                tc.cornersActAsRotationHandles(), glWidget->canvasContentFlipHorizontal(),
-                glWidget->canvasContentFlipVertical()));
+            const float zoom = static_cast<float>(view->zoom());
+            const auto hit = transform->hitTest(QPointF(worldPos.x, worldPos.y), zoom);
+            cursorManager->setRequestedCursor(detail::cursorForTransformHandle(hit,
+                transform->cornersActAsRotationHandles(),
+                transform->isScaleMirroredHorizontally(),
+                transform->isScaleMirroredVertically(), view->contentFlipHorizontal(),
+                view->contentFlipVertical()));
         }
     }
-    if (m_host->currentInputTool() == ToolId::CanvasResize && glWidget
-        && !glWidget->isTransformActive() && m_panel->m_canvasResizeController && cursorManager) {
+    if (m_host->currentInputTool() == ToolId::CanvasResize && !transform->isActive()
+        && m_panel->m_canvasResizeController && cursorManager) {
         cursorManager->setRequestedCursor(
             m_panel->m_canvasResizeController->cursorForPosition(globalPos));
     }
@@ -915,9 +921,9 @@ bool CanvasMouseInputHandler::handleMouseMove(QMouseEvent* event)
         cursorManager->updateCursorPosition(globalPos);
     }
 
-    if (glWidget && glWidget->isInitialized()) {
+    {
         aether::Vector2 worldPos = m_panel->mapToWorld(globalPos);
-        if (glWidget->isInfiniteCanvas() || glWidget->canvas().contains(worldPos)) {
+        if (m_panel->isInfiniteCanvas() || m_panel->accessCanvas().contains(worldPos)) {
             m_panel->cursorPositionChanged(
                 QPoint(static_cast<int>(worldPos.x), static_cast<int>(worldPos.y)));
         }
@@ -925,7 +931,7 @@ bool CanvasMouseInputHandler::handleMouseMove(QMouseEvent* event)
 
     if (m_pendingMoveToolContentHit) {
         if (!(event->buttons() & Qt::LeftButton) || m_host->currentInputTool() != ToolId::Move
-            || !m_panel->m_layerModel || !glWidget) {
+            || !m_panel->m_layerModel) {
             clearPendingMoveToolContentHit();
             return false;
         }
@@ -942,13 +948,12 @@ bool CanvasMouseInputHandler::handleMouseMove(QMouseEvent* event)
 
         if (m_panel->m_layerModel->contains(targetLayerId)) {
             m_panel->m_layerModel->setSelectedLayer(targetLayerId);
-            if (glWidget->enterMoveOnlyTransformMode()) {
-                auto& ctrl = glWidget->transformController();
-                const auto& viewport = glWidget->viewport();
-                const float zoom = viewport.camera().zoom();
-                glWidget->beginTransformUndoStep();
-                if (ctrl.mousePress(pressWorldPos, zoom, pressModifiers)) {
-                    glWidget->beginTransformSnapSession();
+            if (transform->enterMoveOnly()) {
+                const float zoom = static_cast<float>(view->zoom());
+                transform->beginUndoStep();
+                if (transform->pointerPress(QPointF(pressWorldPos.x, pressWorldPos.y), zoom,
+                        pressModifiers)) {
+                    transform->beginSnapSession();
                     m_panel->m_transformDragCursorValid = true;
                     m_panel->m_transformDragCursor = Qt::SizeAllCursor;
                     if (cursorManager) {
@@ -956,16 +961,17 @@ bool CanvasMouseInputHandler::handleMouseMove(QMouseEvent* event)
                     }
 
                     const aether::Vector2 worldPos = m_panel->mapToWorld(globalPos);
-                    glWidget->latchSelectionCopyMoveTransformIfNeeded(worldPos);
-                    if (ctrl.mouseMove(worldPos, zoom, event->modifiers(), &viewport)) {
-                        glWidget->syncTransformMetricOverlays();
+                    transform->latchSelectionCopyMove(QPointF(worldPos.x, worldPos.y));
+                    if (transform->pointerMove(
+                            QPointF(worldPos.x, worldPos.y), zoom, event->modifiers())) {
+                        transform->syncMetricOverlays();
                         m_panel->requestRender();
                     }
                     event->accept();
                     return true;
                 }
-                glWidget->discardTransformUndoStep();
-                glWidget->cancelTransform();
+                transform->discardUndoStep();
+                transform->cancel();
             }
         }
 
@@ -1002,38 +1008,38 @@ bool CanvasMouseInputHandler::handleMouseMove(QMouseEvent* event)
     }
     if (m_panel->m_isLassoFillSelecting) {
         dispatchUncoalescedWorldMoves(
-            event, [this](float x, float y) { m_panel->m_glWidget->updateLassoFill(x, y); });
+            event, [this](float x, float y) { m_panel->inputEditing()->updateLassoFill(x, y); });
         event->accept();
         return true;
     }
     if (m_panel->m_isLassoSelecting) {
         dispatchUncoalescedWorldMoves(
-            event, [this](float x, float y) { m_panel->m_glWidget->updateLasso(x, y); });
+            event, [this](float x, float y) { m_panel->inputEditing()->updateLasso(x, y); });
         event->accept();
         return true;
     }
     if (m_panel->m_isRectSelecting) {
         dispatchUncoalescedWorldMoves(
-            event, [this](float x, float y) { m_panel->m_glWidget->updateRectSelection(x, y); });
+            event, [this](float x, float y) { m_panel->inputEditing()->updateRectSelection(x, y); });
         m_panel->updateSelectionSizeOverlay();
         event->accept();
         return true;
     }
     if (m_panel->m_isCircleSelecting) {
         dispatchUncoalescedWorldMoves(
-            event, [this](float x, float y) { m_panel->m_glWidget->updateCircleSelection(x, y); });
+            event, [this](float x, float y) { m_panel->inputEditing()->updateCircleSelection(x, y); });
         event->accept();
         return true;
     }
     if (m_panel->m_isRotatingView) {
-        QPoint widgetPos = m_panel->m_glWidget->mapFromGlobal(event->globalPosition().toPoint());
-        QPoint center = m_panel->m_glWidget->rect().center();
+        QPoint widgetPos
+            = m_panel->inputViewportHostWidget()->mapFromGlobal(event->globalPosition().toPoint());
+        QPoint center = m_panel->inputViewportHostWidget()->rect().center();
         const float curAngle = std::atan2(static_cast<float>(widgetPos.y() - center.y()),
             static_cast<float>(widgetPos.x() - center.x()));
         const float deltaAngle
             = detail::normalizeAngleDelta(curAngle - m_panel->m_rotateViewLastAngle);
-        auto& cam = m_panel->m_glWidget->viewport().camera();
-        cam.addRotation(deltaAngle);
+        m_panel->inputView()->addRotationRadians(static_cast<qreal>(deltaAngle));
         m_panel->m_rotateViewLastAngle = curAngle;
         m_panel->requestRender();
         if (m_panel->m_canvasResizeController && m_panel->m_canvasResizeController->isActive()) {
@@ -1051,20 +1057,17 @@ bool CanvasMouseInputHandler::handleMouseMove(QMouseEvent* event)
             = std::sqrt(static_cast<float>(delta.x() * delta.x() + delta.y() * delta.y()));
         const float direction = delta.y() <= 0 ? 1.0f : -1.0f;
         const float zoomExponent = direction * dragDistance * 0.0025f;
-        const float targetZoom = qBound(m_panel->m_glWidget->viewport().camera().minZoom(),
+        const float targetZoom = qBound(static_cast<float>(view->minZoom()),
             m_panel->m_zoomDragStartValue * std::exp(zoomExponent),
-            m_panel->m_glWidget->viewport().camera().maxZoom());
+            static_cast<float>(view->maxZoom()));
 
-        auto& cam = m_panel->m_glWidget->viewport().camera();
-        const float currentZoom = cam.zoom();
+        const float currentZoom = static_cast<float>(view->zoom());
         if (currentZoom > 0.0f) {
             float factor = targetZoom / currentZoom;
             factor = qBound(0.88f, factor, 1.12f);
-            const aether::Vector2 viewportSize(
-                static_cast<float>(m_panel->m_glWidget->viewport().width()),
-                static_cast<float>(m_panel->m_glWidget->viewport().height()));
-            cam.zoomAt(factor, m_panel->m_zoomAnchorScreen, viewportSize);
-            m_panel->zoomChanged(static_cast<qreal>(cam.zoom()));
+            view->zoomAtViewportPoint(static_cast<qreal>(factor),
+                QPointF(m_panel->m_zoomAnchorScreen.x, m_panel->m_zoomAnchorScreen.y));
+            m_panel->zoomChanged(view->zoom());
             m_panel->showZoomInfoOverlay();
             m_panel->requestRender();
             if (m_panel->m_canvasResizeController
@@ -1100,10 +1103,10 @@ bool CanvasMouseInputHandler::handleMouseMove(QMouseEvent* event)
             QColor picked;
             if (fromLayerOnly) {
                 picked = detail::sampleColorFromActiveLayer(
-                    m_panel->m_layerModel, m_panel->m_glWidget->canvas(), px, py);
-            } else if (!m_panel->m_glWidget->sampleColorFromScene(worldPos.x, worldPos.y, picked)) {
+                    m_panel->m_layerModel, m_panel->accessCanvas(), px, py);
+            } else if (!editing->sampleSceneColor(QPointF(worldPos.x, worldPos.y), picked)) {
                 picked = detail::sampleColorFromLayerModel(
-                    m_panel->m_layerModel, m_panel->m_glWidget->canvas(), px, py);
+                    m_panel->m_layerModel, m_panel->accessCanvas(), px, py);
             }
             uint8_t r, g, b, alphaToUse;
             if (fromLayerOnly) {
@@ -1158,20 +1161,20 @@ bool CanvasMouseInputHandler::handleMouseMove(QMouseEvent* event)
             return true;
         }
 
-        const MousePointerSample pointerSample = sampleMousePointer(m_panel->m_glWidget, event);
+        const MousePointerSample pointerSample = sampleMousePointer(event);
         const auto inputDynamics
             = pointerInputDynamics(m_panel, event->globalPosition(), pointerSample);
         const bool nativeDispatch = stylusInput.isDispatchingNativeInput();
         const std::optional<float> nativeElapsed
             = nativeDispatch ? stylusInput.dispatchStrokeElapsedSeconds() : std::nullopt;
         const float currentElapsedSec
-            = nativeElapsed.value_or(m_panel->m_glWidget->strokeElapsedSecondsNow());
+            = nativeElapsed.value_or(painting->strokeElapsedSecondsNow());
 
         // Recover intermediate OS mouse positions. Skip this only while WinTab
         // owns the pointer; its packet buffer already contains those samples.
         if (!stylusInput.usesNativeUiRouting() || !stylusInput.nativeCursorPosition()) {
             const QPoint currentScreenPos = event->globalPosition().toPoint();
-            if (m_panel->isGlobalOverGlViewport(currentScreenPos)) {
+            if (m_panel->isGlobalOverViewport(currentScreenPos)) {
                 const auto recovered
                     = ruwa::services::input::StylusInputManager::recoverMouseMoveHistory(
                         currentScreenPos);
@@ -1203,7 +1206,7 @@ bool CanvasMouseInputHandler::handleMouseMove(QMouseEvent* event)
                     std::size_t recoveredIndex = 0;
                     for (const auto& rp : recovered) {
                         ++recoveredIndex;
-                        if (!m_panel->isGlobalOverGlViewport(rp.pos)) {
+                        if (!m_panel->isGlobalOverViewport(rp.pos)) {
                             continue;
                         }
                         const aether::Vector2 wp = m_panel->mapToViewportWorld(rp.pos);
@@ -1233,7 +1236,7 @@ bool CanvasMouseInputHandler::handleMouseMove(QMouseEvent* event)
                         // handler. The queue applies the same frame budget the
                         // native path gets, and the real sample below drains it
                         // immediately, so nothing is deferred by doing this.
-                        m_panel->m_glWidget->queueStrokeAtElapsed(wp.x, wp.y, recoveredPressure,
+                        painting->queueStrokeAtElapsed(wp.x, wp.y, recoveredPressure,
                             recoveredElapsedSec, strokeInputDeviceForSample(pointerSample),
                             recoveredInputDynamics);
                     }
@@ -1244,14 +1247,14 @@ bool CanvasMouseInputHandler::handleMouseMove(QMouseEvent* event)
         aether::Vector2 worldPos = m_panel->mapToViewportWorld(event->globalPosition());
         if (nativeDispatch) {
             // A single WT_PACKET notification can contain a large recovered
-            // burst. Feed it into BrushStrokeHost's existing time-budgeted
+            // burst. Feed it into the engine's existing time-budgeted
             // queue so the native routing loop remains cheap and painting can
             // interleave with rasterization.
-            m_panel->m_glWidget->queueStrokeAtElapsed(worldPos.x, worldPos.y,
+            painting->queueStrokeAtElapsed(worldPos.x, worldPos.y,
                 pointerSample.pressure, currentElapsedSec,
                 strokeInputDeviceForSample(pointerSample), inputDynamics);
         } else {
-            m_panel->m_glWidget->continueStroke(worldPos.x, worldPos.y, pointerSample.pressure,
+            painting->continueStroke(worldPos.x, worldPos.y, pointerSample.pressure,
                 strokeInputDeviceForSample(pointerSample), inputDynamics);
         }
         // This real sample becomes the left anchor for the next batch's
@@ -1264,26 +1267,24 @@ bool CanvasMouseInputHandler::handleMouseMove(QMouseEvent* event)
         event->accept();
         return true;
     }
-    if (m_panel->m_glWidget->isTransformActive()
-        && m_panel->m_glWidget->transformController().isDragging()) {
+    if (transform->isActive() && transform->isDragging()) {
         aether::Vector2 worldPos = m_panel->mapToWorld(event->globalPosition());
-        const auto& viewport = m_panel->m_glWidget->viewport();
-        float zoom = viewport.camera().zoom();
-        m_panel->m_glWidget->latchSelectionCopyMoveTransformIfNeeded(worldPos);
-        if (m_panel->m_glWidget->transformController().mouseMove(
-                worldPos, zoom, event->modifiers(), &viewport)) {
-            m_panel->m_glWidget->syncTransformMetricOverlays();
+        const QPointF documentPos(worldPos.x, worldPos.y);
+        const float zoom = static_cast<float>(view->zoom());
+        transform->latchSelectionCopyMove(documentPos);
+        if (transform->pointerMove(documentPos, zoom, event->modifiers())) {
+            transform->syncMetricOverlays();
             m_panel->requestRender();
         }
         event->accept();
         return true;
     }
     if (m_panel->m_isPanning) {
-        // Camera pan is applied in paintGL via OpenGLCanvasWidget pan sampling
-        // (beginPanSampling/endPanSampling). The widget reads QCursor::pos()
-        // once per VSync, so pan is synchronous with the display refresh.
+        // Camera pan is applied by the engine's frame-sampled pan
+        // (beginPanSampling/endPanSampling): it reads the live pointer once
+        // per VSync, so pan is synchronous with the display refresh.
         m_panel->m_lastMousePos = event->globalPosition();
-        if (m_panel->m_glWidget && m_panel->m_canvasResizeController
+        if (m_panel->m_canvasResizeController
             && m_panel->m_canvasResizeController->isActive()) {
             m_panel->m_canvasResizeController->updateOverlay();
         }
@@ -1298,7 +1299,9 @@ bool CanvasMouseInputHandler::handleMouseMove(QMouseEvent* event)
 
 bool CanvasMouseInputHandler::handleMouseRelease(QMouseEvent* event)
 {
-    auto* glWidget = m_host->inputGlWidget();
+    auto* view = m_host->inputView();
+    auto* editing = m_host->inputEditing();
+    auto* transform = m_host->inputTransform();
     if (m_brushSizeAdjust) {
         if (event && event->button() == Qt::LeftButton) {
             endBrushSizeAdjust();
@@ -1311,9 +1314,9 @@ bool CanvasMouseInputHandler::handleMouseRelease(QMouseEvent* event)
         }
         return true;
     }
-    if (!glWidget || !glWidget->isInitialized()) {
-        if (glWidget)
-            glWidget->endPanSampling();
+    if (!m_host->inputRenderReady()) {
+        if (view)
+            view->endPanSampling();
         m_panel->m_isPanning = false;
         m_panel->m_isZoomDragging = false;
         m_panel->m_isRotatingView = false;
@@ -1345,22 +1348,20 @@ bool CanvasMouseInputHandler::handleMouseRelease(QMouseEvent* event)
         m_textSelecting = false;
         // Don't consume — let other handlers run, but selection extension stops here.
     }
-    if (m_panel->m_glWidget->isTransformActive()
-        && m_panel->m_glWidget->transformController().isDragging()
+    if (transform->isActive() && transform->isDragging()
         && event->button() == Qt::LeftButton) {
         const bool hadTransformGuides
-            = m_panel->m_glWidget->transformController().moveAxisGuideActive()
-            || m_panel->m_glWidget->transformController().snapVisualState().active();
-        m_panel->m_glWidget->transformController().mouseRelease();
-        m_panel->m_glWidget->syncTransformMetricOverlays();
-        m_panel->m_glWidget->commitTransformUndoStep();
+            = transform->isMoveAxisGuideActive() || transform->isSnapGuideActive();
+        transform->pointerRelease();
+        transform->syncMetricOverlays();
+        transform->commitUndoStep();
         m_panel->m_transformDragCursorValid = false;
         if (hadTransformGuides) {
             m_panel->requestRender();
         }
         // Move tool: apply the move-only transform immediately on mouse release
         // instead of leaving it live until a single click or tool change.
-        if (m_panel->m_glWidget->isMoveOnlyTransform()) {
+        if (transform->isMoveOnly()) {
             m_panel->confirmTransform();
         }
         event->accept();
@@ -1378,14 +1379,14 @@ bool CanvasMouseInputHandler::handleMouseRelease(QMouseEvent* event)
     }
     if (m_panel->m_isLassoFillSelecting && event->button() == Qt::LeftButton) {
         m_panel->m_isLassoFillSelecting = false;
-        m_panel->m_glWidget->endLassoFill();
+        editing->endLassoFill();
         m_panel->canvasContentChanged();
         event->accept();
         return true;
     }
     if (m_panel->m_isLassoSelecting && event->button() == Qt::LeftButton) {
         m_panel->m_isLassoSelecting = false;
-        m_panel->m_glWidget->endLasso(m_panel->m_lassoAdd, m_panel->m_lassoSubtract);
+        editing->endLasso(m_panel->m_lassoAdd, m_panel->m_lassoSubtract);
         m_panel->m_lassoAdd = false;
         m_panel->m_lassoSubtract = false;
         event->accept();
@@ -1393,7 +1394,7 @@ bool CanvasMouseInputHandler::handleMouseRelease(QMouseEvent* event)
     }
     if (m_panel->m_isRectSelecting && event->button() == Qt::LeftButton) {
         m_panel->m_isRectSelecting = false;
-        m_panel->m_glWidget->endRectSelection(m_panel->m_rectAdd, m_panel->m_rectSubtract);
+        editing->endRectSelection(m_panel->m_rectAdd, m_panel->m_rectSubtract);
         m_panel->m_rectAdd = false;
         m_panel->m_rectSubtract = false;
         m_panel->hideSelectionSizeOverlay();
@@ -1402,7 +1403,7 @@ bool CanvasMouseInputHandler::handleMouseRelease(QMouseEvent* event)
     }
     if (m_panel->m_isCircleSelecting && event->button() == Qt::LeftButton) {
         m_panel->m_isCircleSelecting = false;
-        m_panel->m_glWidget->endCircleSelection(m_panel->m_circleAdd, m_panel->m_circleSubtract);
+        editing->endCircleSelection(m_panel->m_circleAdd, m_panel->m_circleSubtract);
         m_panel->m_circleAdd = false;
         m_panel->m_circleSubtract = false;
         event->accept();
@@ -1416,8 +1417,9 @@ bool CanvasMouseInputHandler::handleMouseRelease(QMouseEvent* event)
     }
     if (m_panel->m_isRotatingView && event->button() == Qt::LeftButton) {
         m_panel->m_isRotatingView = false;
-        auto& cam = m_panel->m_glWidget->viewport().camera();
-        if (cam.snapRotationSmooth(kRotateViewSnapIncrement, kRotateViewSnapCaptureDistance)) {
+        if (view->snapRotationRadiansSmooth(
+                static_cast<qreal>(kRotateViewSnapIncrement),
+                static_cast<qreal>(kRotateViewSnapCaptureDistance))) {
             m_panel->requestRender();
         }
         event->accept();
@@ -1433,7 +1435,7 @@ bool CanvasMouseInputHandler::handleMouseRelease(QMouseEvent* event)
         if (m_panel->m_spaceStrokeMoveActive) {
             m_panel->endSpaceStrokeMove();
         }
-        m_panel->m_glWidget->endStroke();
+        m_host->inputPainting()->endStroke();
         // Finalize a still-draining stroke before any mode flag moves: endStroke()
         // flattens the whole buffer and reads those flags when it does.
         m_panel->notifyStrokeSessionEnded();
@@ -1445,8 +1447,8 @@ bool CanvasMouseInputHandler::handleMouseRelease(QMouseEvent* event)
     if (m_panel->m_isPanning && event->button() == m_panel->m_panButton) {
         m_panel->m_isPanning = false;
         m_panel->m_panButton = Qt::NoButton;
-        if (m_panel->m_glWidget)
-            m_panel->m_glWidget->endPanSampling();
+        if (view)
+            view->endPanSampling();
         m_panel->updateToolCursor();
         event->accept();
         return true;
@@ -1456,25 +1458,23 @@ bool CanvasMouseInputHandler::handleMouseRelease(QMouseEvent* event)
 
 bool CanvasMouseInputHandler::handleMouseDoubleClick(QMouseEvent* event)
 {
-    auto* glWidget = m_host->inputGlWidget();
+    auto* view = m_host->inputView();
     if (m_brushSizeAdjust) {
         if (event) {
             event->accept();
         }
         return true;
     }
-    if (!glWidget || !glWidget->isInitialized() || event->button() != Qt::LeftButton) {
+    if (!view || !m_host->inputRenderReady() || event->button() != Qt::LeftButton) {
         return false;
     }
     if (m_host->currentInputTool() == ToolId::Zoom) {
-        auto& cam = glWidget->viewport().camera();
-        const float currentZoom = cam.zoom();
-        if (currentZoom > 0.0f) {
-            const aether::Vector2 viewportSize(static_cast<float>(glWidget->viewport().width()),
-                static_cast<float>(glWidget->viewport().height()));
-            const aether::Vector2 centerScreen(viewportSize.x * 0.5f, viewportSize.y * 0.5f);
-            cam.zoomAtSmooth(1.0f / currentZoom, centerScreen, viewportSize);
-            m_panel->zoomChanged(static_cast<qreal>(cam.zoom()));
+        const qreal currentZoom = view->zoom();
+        if (currentZoom > 0.0) {
+            const QSizeF viewportSize = view->viewportExtent();
+            const QPointF centerScreen(viewportSize.width() * 0.5, viewportSize.height() * 0.5);
+            view->zoomAtViewportPointSmooth(1.0 / currentZoom, centerScreen);
+            m_panel->zoomChanged(view->zoom());
             m_panel->showZoomInfoOverlay();
             m_panel->requestRender();
         }
@@ -1482,8 +1482,7 @@ bool CanvasMouseInputHandler::handleMouseDoubleClick(QMouseEvent* event)
         return true;
     }
     if (m_host->currentInputTool() == ToolId::RotateView) {
-        auto& cam = glWidget->viewport().camera();
-        cam.setRotationSmooth(0.0f);
+        view->setRotationSmoothRadians(0.0);
         m_panel->requestRender();
         event->accept();
         return true;

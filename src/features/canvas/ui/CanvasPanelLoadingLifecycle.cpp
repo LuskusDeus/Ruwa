@@ -5,12 +5,13 @@
 // ==========================================================================
 
 #include "CanvasPanel.h"
+#include "features/canvas/engine/CanvasEngineSession.h"
 
 #include "CanvasOverlayLayoutManager.h"
 #include "CanvasCursorManager.h"
 #include "CanvasPanelHelpers.h"
 #include "features/canvas/scene/ZoomLimits.h"
-#include "features/canvas/rendering/OpenGLCanvasWidget.h"
+#include "features/canvas/engine/CanvasEngineTypes.h"
 #include "features/brush/ui/BrushControlOverlay.h"
 #include "features/brush/ui/BrushSizeCurve.h"
 #include "features/canvas/ui/CanvasToolStateOverlay.h"
@@ -96,24 +97,25 @@ void CanvasPanel::setLoadingOverlayDecorationsVisible(bool visible)
 
 bool CanvasPanel::playNewProjectAppearanceAnimationIfScheduled()
 {
-    if (!m_playNewProjectAppearanceAnimation || !m_glWidget || !m_glWidget->isInitialized()) {
+    if (!m_playNewProjectAppearanceAnimation || !isRenderContentReady()) {
         return false;
     }
     m_playNewProjectAppearanceAnimation = false;
 
     QTimer::singleShot(50, this, [this]() {
-        if (!m_glWidget)
+        if (!m_engineBinding) {
             return;
-        auto& vp = m_glWidget->viewport();
-        auto& cam = vp.camera();
+        }
+        auto& view = m_engineBinding->session().view();
         const QRect displayFrame = effectiveDisplayFrame();
-        const aether::Vector2 fitSize { static_cast<float>(qMax(1, displayFrame.width())),
-            static_cast<float>(qMax(1, displayFrame.height())) };
-        const aether::Vector2 displayCenter { static_cast<float>(displayFrame.center().x()) + 0.5f,
-            static_cast<float>(displayFrame.center().y()) + 0.5f };
-        const auto vpSize = vp.size();
+        const int fitWidth = qMax(1, displayFrame.width());
+        const int fitHeight = qMax(1, displayFrame.height());
+        const QPointF displayCenter(
+            static_cast<qreal>(displayFrame.center().x()) + 0.5,
+            static_cast<qreal>(displayFrame.center().y()) + 0.5);
+        const QSizeF vpSize = view.viewportExtent();
 
-        if (vpSize.x <= 100.0f || vpSize.y <= 100.0f) {
+        if (vpSize.width() <= 100.0 || vpSize.height() <= 100.0) {
             completeLoadingAppearanceAnimation();
             fadeOutLoadingOverlay();
             return;
@@ -121,21 +123,21 @@ bool CanvasPanel::playNewProjectAppearanceAnimationIfScheduled()
 
         fadeOutLoadingOverlay();
 
-        cam.centerOn(displayCenter);
-        const float maxZoom = cam.maxZoom();
-        cam.setZoomLimits(0.001f, maxZoom);
-        cam.setZoom(0.001f);
-        emit zoomChanged(static_cast<qreal>(cam.zoom()));
+        view.centerCameraOn(displayCenter);
+        view.setZoomLimits(0.001, view.maxZoom());
+        view.setZoom(0.001);
+        emit zoomChanged(view.zoom());
         const float maxBrush = ruwa::ui::widgets::maxBrushRadiusForCanvasMode(
-            static_cast<int>(fitSize.x), static_cast<int>(fitSize.y), hasFiniteDocumentBounds());
+            fitWidth, fitHeight, hasFiniteDocumentBounds());
         const auto [minZoom, maxZoomComputed] = ruwa::core::canvas::computeZoomLimits(
-            static_cast<int>(vpSize.x), static_cast<int>(vpSize.y), maxBrush);
+            static_cast<int>(vpSize.width()), static_cast<int>(vpSize.height()), maxBrush);
         (void) maxZoomComputed;
-        const float startZoom = std::clamp(minZoom * 3.0f, 0.001f, maxZoom);
-        cam.centerOn(displayCenter);
+        const qreal startZoom = std::clamp(
+            static_cast<qreal>(minZoom) * 3.0, 0.001, view.maxZoom());
+        view.centerCameraOn(displayCenter);
         m_loadingAppearanceAnimationRunning = true;
-        cam.setZoomSmooth(startZoom, vpSize);
-        emit zoomChanged(static_cast<qreal>(cam.zoom()));
+        view.setZoomSmooth(startZoom);
+        emit zoomChanged(view.zoom());
         requestRender();
     });
     return true;
@@ -302,8 +304,8 @@ void CanvasPanel::hideLoadingOverlayImmediately()
     if (m_stylusJoystick && m_stylusJoystick->isVisible()) {
         m_stylusJoystick->raise();
     }
-    if (m_glWidget) {
-        m_glWidget->requestBackdropUpdate();
+    if (m_engineBinding) {
+        m_engineBinding->session().presentation().requestBackdropUpdate();
     }
 
     if (!m_loadingAppearanceAnimationActive) {

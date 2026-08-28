@@ -112,6 +112,8 @@ class ExportAreaController;
 class ImageImportSelectionOverlay;
 class CanvasParameterOverlayWidget;
 class CanvasEngineQtBinding;
+class CanvasFillProgressPopup;
+class CanvasTransformMetricPresenter;
 
 class CanvasPanel : public ruwa::ui::docking::DockPanel, public CanvasInputHost {
     friend class CanvasMouseInputHandler;
@@ -437,16 +439,20 @@ public:
     void notifyContentChanged();
     void refreshZoomLimits();
 
-    /// Capture current canvas view as thumbnail (for recent projects). Returns null if GL not
-    /// ready.
+    /// Capture the presented canvas view as a thumbnail (for recent projects).
+    /// The engine runs the capture as an atomic transaction (mirror + rendered
+    /// pointer suppressed for the frame, then restored). Returns null if the
+    /// render content is not ready.
     QPixmap grabCanvasThumbnail(int maxSize = 256) const;
 
-    /// Full canvas image scaled to maxSize (for Navigator panel). Returns null if GL not ready.
+    /// Full canvas image scaled to maxSize (for Navigator panel). Returns null
+    /// if the render content is not ready.
     QImage getFullCanvasThumbnail(int maxSize = 512) const;
     QImage getCanvasRegionThumbnail(const QRect& worldRect, const QSize& targetSize) const;
     QImage renderNavigatorOverviewTile(const QRect& worldRect, const QSize& targetSize) const;
 
-    /// Get full-resolution canvas image for export. Returns null QImage if GL not ready.
+    /// Get full-resolution canvas image for export. Returns null QImage if the
+    /// render content is not ready.
     QImage exportCanvasImage();
     bool copyCanvasToClipboard();
 
@@ -588,8 +594,8 @@ public:
     }
 
     /// True while the startup zoom-in appearance animation is still running. Callers that
-    /// hijack the live camera (e.g. grabCanvasImage for thumbnails) must not do so during
-    /// this window: grabCanvasImage's setZoom() clears the camera's animating flag, which
+    /// hijack the live camera (e.g. document captures for thumbnails) must not do so during
+    /// this window: the capture's camera setup clears the camera's animating flag, which
     /// the frame-swap completion handler then reads as "animation finished" and freezes the
     /// zoom mid-flight.
     bool isLoadingAppearanceAnimationActive() const { return m_loadingAppearanceAnimationActive; }
@@ -771,6 +777,7 @@ private:
     CanvasPaintingCapability* inputPainting() const override;
     CanvasEditingCapability* inputEditing() const override;
     CanvasTransformCapability* inputTransform() const override;
+    CanvasHitTesting* inputHitTesting() const override;
     CanvasPresentationCapability* inputPresentation() const override;
     QWidget* inputViewportHostWidget() const override { return m_viewportHostWidget; }
     CanvasCursorManager* inputCursorManager() const override { return m_cursorManager; }
@@ -888,6 +895,11 @@ private:
     /// stay silent. The translation context stays "OpenGLCanvasWidget" so the
     /// existing ru/en translations keep matching the source strings.
     void presentFillRadiusLimitMessage(const ruwa::core::canvas::CanvasFillRequestResult& result);
+    /// Push the current user snap preferences into the engine (plan 7.27.2):
+    /// once when the render content is created and again on every
+    /// SettingsManager change. The engine caches the snapshot for the next
+    /// transform drag.
+    void pushTransformSnapPolicy();
     void setCtrlModifierPressed(bool pressed) override { m_ctrlPressed = pressed; }
     void setAltModifierPressed(bool pressed) override { m_altPressed = pressed; }
     void updateInputCursorPosition(const QPoint& globalPos) override;
@@ -1051,6 +1063,10 @@ private:
 
     // Canvas cursor manager (GL brush/eyedropper cursor when over canvas)
     CanvasCursorManager* m_cursorManager = nullptr;
+    /// Application-owned presentation of engine metric facts (plan 7.15.1).
+    CanvasTransformMetricPresenter* m_transformMetricPresenter = nullptr;
+    /// Application-owned presentation of engine fill activity (plan 7.15.2).
+    CanvasFillProgressPopup* m_fillProgressPopup = nullptr;
     bool m_transformDragCursorValid = false;
     Qt::CursorShape m_transformDragCursor = Qt::ArrowCursor;
 

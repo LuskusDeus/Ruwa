@@ -5,12 +5,13 @@
 // ==========================================================================
 
 #include "CanvasImageImportHelper.h"
+#include "features/canvas/engine/CanvasEngineSession.h"
 #include "CanvasPanel.h"
 #include "CanvasPanelHelpers.h"
 #include "CanvasCursorManager.h"
 #include "ImageImportSelectionOverlay.h"
 
-#include "features/canvas/rendering/OpenGLCanvasWidget.h"
+#include "features/canvas/engine/CanvasEngineTypes.h"
 #include "features/layers/model/LayerData.h"
 #include "features/layers/model/LayerModel.h"
 #include "shared/undo/LayerAddCommand.h"
@@ -143,8 +144,8 @@ void CanvasImageImportHelper::applyImportedBatchAtRoot(detail::ImportedLayerBatc
     }
 
     m_panel->commitTransformBeforeDocumentMutation();
-    if (m_panel->m_glWidget) {
-        m_panel->m_glWidget->clearSelectionMask();
+    if (m_panel->m_engineBinding) {
+        m_panel->m_engineBinding->session().editing().clearSelectionMask();
     }
     m_panel->updateSelectionActionPopup();
 
@@ -166,7 +167,7 @@ void CanvasImageImportHelper::applyImportedBatchAtRoot(detail::ImportedLayerBatc
         m_panel->m_layerModel->setSelectedLayer(lastImportedLayerId);
     }
 
-    if (auto* undoManager = m_panel->undoManagerOrNull(); !undoLayers.isEmpty() && undoManager) {
+    if (!undoLayers.isEmpty() && m_panel->m_engineBinding) {
         auto requestRender = [panel = m_panel]() {
             if (panel)
                 panel->requestRender();
@@ -177,7 +178,7 @@ void CanvasImageImportHelper::applyImportedBatchAtRoot(detail::ImportedLayerBatc
         };
         auto cmd = std::make_unique<aether::LayerAddCommand>(m_panel->m_layerModel,
             std::move(undoLayers), std::move(positions), requestRender, onContentChanged);
-        undoManager->push(std::move(cmd));
+        m_panel->pushHistoryCommand(std::move(cmd));
     }
 }
 
@@ -189,8 +190,8 @@ void CanvasImageImportHelper::applyImportedBatchBelowSelectedKeepingSelection(
     }
 
     m_panel->commitTransformBeforeDocumentMutation();
-    if (m_panel->m_glWidget) {
-        m_panel->m_glWidget->clearSelectionMask();
+    if (m_panel->m_engineBinding) {
+        m_panel->m_engineBinding->session().editing().clearSelectionMask();
     }
     m_panel->updateSelectionActionPopup();
 
@@ -240,7 +241,7 @@ void CanvasImageImportHelper::applyImportedBatchBelowSelectedKeepingSelection(
         m_panel->m_layerModel->setSelectedLayer(anchorLayerId);
     }
 
-    if (auto* undoManager = m_panel->undoManagerOrNull(); !undoLayers.isEmpty() && undoManager) {
+    if (!undoLayers.isEmpty() && m_panel->m_engineBinding) {
         auto requestRender = [panel = m_panel]() {
             if (panel)
                 panel->requestRender();
@@ -251,7 +252,7 @@ void CanvasImageImportHelper::applyImportedBatchBelowSelectedKeepingSelection(
         };
         auto cmd = std::make_unique<aether::LayerAddCommand>(m_panel->m_layerModel,
             std::move(undoLayers), std::move(positions), requestRender, onContentChanged);
-        undoManager->push(std::move(cmd));
+        m_panel->pushHistoryCommand(std::move(cmd));
     }
 }
 

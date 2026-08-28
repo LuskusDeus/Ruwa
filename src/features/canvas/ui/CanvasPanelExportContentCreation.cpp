@@ -9,7 +9,6 @@
 #include "features/export/ExportAreaController.h"
 #include "features/export/ExportModeController.h"
 #include "features/export/ExportSettingsPanel.h"
-#include "features/canvas/rendering/OpenGLCanvasWidget.h"
 #include "features/export/ExportSettings.h"
 
 #include <QRect>
@@ -88,8 +87,8 @@ void CanvasPanel::createExportModeContent()
                 updateExportAreaCursor();
             } else {
                 m_exportAreaController->exit();
-                if (m_glWidget) {
-                    m_glWidget->unsetCursor();
+                if (m_viewportHostWidget) {
+                    m_viewportHostWidget->unsetCursor();
                 }
                 if (m_contentWidget) {
                     m_contentWidget->unsetCursor();

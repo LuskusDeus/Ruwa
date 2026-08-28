@@ -35,7 +35,7 @@ public:
     void handleTabletEvent(QTabletEvent* event);
 
 private:
-    static bool globalPosOverGlViewport(const CanvasInputHost* host, const QPointF& globalPos);
+    static bool globalPosOverViewport(const CanvasInputHost* host, const QPointF& globalPos);
 
     CanvasInputHost* m_host = nullptr;
     CanvasPanel* m_panel = nullptr;
