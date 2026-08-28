@@ -360,3 +360,22 @@ add_custom_command(
 
 add_custom_target(RuwaPigmentLutResource DEPENDS "${RUWA_PIGMENT_LUT_RESOURCE}")
 add_dependencies(Ruwa RuwaPigmentLutResource)
+
+# ---------------------------------------------------------------------------
+# Renderer boundary enforcement (Stage 1 decoupling)
+#
+# Keeps the Aether renderer replaceable: application/UI code must reach the
+# canvas engine only through the neutral session (features/canvas/runtime/),
+# never through the legacy renderer widget header. Deliberate Stage 1
+# transitional dependencies are quarantined in
+# docs/renderer-boundary-quarantine.md and fail under --strict.
+# ---------------------------------------------------------------------------
+find_package(Python3 QUIET COMPONENTS Interpreter)
+if(Python3_Interpreter_FOUND)
+    add_custom_target(check_renderer_boundary
+        COMMAND ${Python3_EXECUTABLE} "${CMAKE_CURRENT_SOURCE_DIR}/tools/check_renderer_boundary.py"
+        WORKING_DIRECTORY "${CMAKE_CURRENT_SOURCE_DIR}"
+        COMMENT "Checking the renderer boundary (OpenGLCanvasWidget containment)"
+        VERBATIM
+    )
+endif()
