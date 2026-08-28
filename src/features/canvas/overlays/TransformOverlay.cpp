@@ -6,17 +6,13 @@
 
 #include "features/canvas/overlays/TransformOverlay.h"
 
-#include "features/theme/manager/ThemeManager.h"
-#include "shared/resources/IconProvider.h"
 #include "shared/rendering/GLProgramBinaryCache.h"
 
 #include <cmath>
+#include <cstring>
 #include <vector>
 #include <algorithm>
 #include <set>
-#include <QColor>
-#include <QImage>
-#include <QPixmap>
 
 namespace aether {
 
@@ -186,29 +182,8 @@ Result<void> TransformOverlay::initialize()
         m_locTexInvColor = m_gl->glGetUniformLocation(m_texInvertProgram, "uColor");
     }
 
-    {
-        using ruwa::ui::core::IconProvider;
-        QPixmap pm = IconProvider::instance().getPixmap(
-            IconProvider::StandardIcon::RotationCorner, QSize(64, 64));
-        if (!pm.isNull()) {
-            QImage img
-                = pm.toImage().convertToFormat(QImage::Format_RGBA8888).flipped(Qt::Vertical);
-            if (!img.isNull()) {
-                m_gl->glGenTextures(1, &m_rotationIconTexture);
-                m_gl->glBindTexture(GL_TEXTURE_2D, m_rotationIconTexture);
-                m_gl->glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
-                m_gl->glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
-                m_gl->glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
-                m_gl->glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
-                m_gl->glPixelStorei(GL_UNPACK_ALIGNMENT, 1);
-                m_gl->glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA, img.width(), img.height(), 0, GL_RGBA,
-                    GL_UNSIGNED_BYTE, img.constBits());
-                m_gl->glPixelStorei(GL_UNPACK_ALIGNMENT, 4);
-                m_gl->glBindTexture(GL_TEXTURE_2D, 0);
-                m_rotationIconReady = (m_rotationIconTexture != 0);
-            }
-        }
-    }
+    // The rotation-corner icon arrives through setPresentationStyle()
+    // (plan 7.15.8); the overlay no longer reads IconProvider/ThemeManager.
 
     // Create VAO and VBO
     m_gl->glGenVertexArrays(1, &m_vao);
@@ -322,11 +297,56 @@ void TransformOverlay::renderAutoSnapGuides(const TransformAutoSnapGuides& guide
         m_curLocColor = m_locColor;
     }
 
-    const auto& colors = ruwa::ui::core::ThemeManager::instance().colors();
-    const QColor accent = colors.accent;
-    drawAutoSnapGuides(guides, viewport, viewport.camera().zoom(), accent.redF(), accent.greenF(),
-        accent.blueF(), 0.95f * accent.alphaF(), vpMatrix, nullptr);
+    drawAutoSnapGuides(guides, viewport, viewport.camera().zoom(), m_accentColor[0],
+        m_accentColor[1], m_accentColor[2], 0.95f * m_accentColor[3], vpMatrix, nullptr);
     m_gl->glDisable(GL_BLEND);
+}
+
+void TransformOverlay::setPresentationStyle(
+    const ruwa::ui::workspace::TransformPresentationStyle& style)
+{
+    m_primaryColor[0] = style.primary.r;
+    m_primaryColor[1] = style.primary.g;
+    m_primaryColor[2] = style.primary.b;
+    m_primaryColor[3] = style.primary.a;
+    m_accentColor[0] = style.accent.r;
+    m_accentColor[1] = style.accent.g;
+    m_accentColor[2] = style.accent.b;
+    m_accentColor[3] = style.accent.a;
+
+    if (!style.rotationCornerIcon || style.rotationCornerIcon->isNull()) {
+        return;
+    }
+
+    // Upload the supplied CPU asset (straight-alpha RGBA8, row 0 at the top).
+    // GL texture coordinates run bottom-up, so the rows are flipped during the
+    // copy — the same thing the old IconProvider/QImage path did.
+    const auto& icon = *style.rotationCornerIcon;
+    std::vector<uint8_t> flipped;
+    flipped.resize(static_cast<size_t>(icon.bytesPerLine()) * icon.height());
+    for (int y = 0; y < icon.height(); ++y) {
+        const uint8_t* src = icon.scanLine(y);
+        uint8_t* dst = flipped.data()
+            + static_cast<size_t>(icon.height() - 1 - y) * icon.bytesPerLine();
+        std::memcpy(dst, src, static_cast<size_t>(icon.bytesPerLine()));
+    }
+
+    const GLuint previousTexture = m_rotationIconTexture;
+    m_gl->glGenTextures(1, &m_rotationIconTexture);
+    m_gl->glBindTexture(GL_TEXTURE_2D, m_rotationIconTexture);
+    m_gl->glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
+    m_gl->glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
+    m_gl->glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
+    m_gl->glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
+    m_gl->glPixelStorei(GL_UNPACK_ALIGNMENT, 1);
+    m_gl->glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA, icon.width(), icon.height(), 0, GL_RGBA,
+        GL_UNSIGNED_BYTE, flipped.data());
+    m_gl->glPixelStorei(GL_UNPACK_ALIGNMENT, 4);
+    m_gl->glBindTexture(GL_TEXTURE_2D, 0);
+    m_rotationIconReady = (m_rotationIconTexture != 0);
+    if (previousTexture) {
+        m_gl->glDeleteTextures(1, &previousTexture);
+    }
 }
 
 void TransformOverlay::onTransformModeEntered()
@@ -438,9 +458,10 @@ void TransformOverlay::renderInternal(const TransformState& state, const Viewpor
     m_gl->glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
     m_gl->glDisable(GL_DEPTH_TEST);
 
-    const auto& colors = ruwa::ui::core::ThemeManager::instance().colors();
-    const QColor primary = colors.primary;
-    const float a = 0.95f * primary.alphaF();
+    const float primaryR = m_primaryColor[0];
+    const float primaryG = m_primaryColor[1];
+    const float primaryB = m_primaryColor[2];
+    const float a = 0.95f * m_primaryColor[3];
 
     if (sceneTextureId && m_invertProgram) {
         m_curProgram = m_invertProgram;
@@ -458,9 +479,9 @@ void TransformOverlay::renderInternal(const TransformState& state, const Viewpor
         m_curLocColor = m_locColor;
     }
 
-    float r = primary.redF();
-    float g = primary.greenF();
-    float b = primary.blueF();
+    float r = primaryR;
+    float g = primaryG;
+    float b = primaryB;
     if (sceneTextureId && m_invertProgram) {
         r = 0.0f;
         g = 0.0f;
@@ -473,9 +494,8 @@ void TransformOverlay::renderInternal(const TransformState& state, const Viewpor
             *moveAxisGuide, viewport, zoom, r, g, b, a, vpMatrix, documentWorldFromScreen);
     }
     if (autoSnapGuides && autoSnapGuides->active()) {
-        const QColor accent = colors.accent;
-        drawAutoSnapGuides(*autoSnapGuides, viewport, zoom, accent.redF(), accent.greenF(),
-            accent.blueF(), 0.95f * accent.alphaF(), vpMatrix, documentWorldFromScreen);
+        drawAutoSnapGuides(*autoSnapGuides, viewport, zoom, m_accentColor[0], m_accentColor[1],
+            m_accentColor[2], 0.95f * m_accentColor[3], vpMatrix, documentWorldFromScreen);
     }
 
     if (!drawTransformChrome) {

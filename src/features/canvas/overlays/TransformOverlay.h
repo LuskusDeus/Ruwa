@@ -7,6 +7,7 @@
 #ifndef RUWA_CORE_TRANSFORM_TRANSFORMOVERLAY_H
 #define RUWA_CORE_TRANSFORM_TRANSFORMOVERLAY_H
 
+#include "features/canvas/engine/CanvasEngineTypes.h"
 #include "features/transform/TransformState.h"
 #include "features/transform/TransformSnapTypes.h"
 #include "shared/types/Result.h"
@@ -64,6 +65,13 @@ public:
     /// @param animated If false, hide immediately (no fade). Use for move-only transform where
     /// chrome was never shown.
     void onTransformModeExited(bool animated = true);
+
+    /// Application-provided presentation style (plan 7.28.4): chrome colours
+    /// and the rotation-corner icon. Must be called with the GL context
+    /// current (the widget pushes it from its frame); replaces colours, and
+    /// re-uploads the icon when one is supplied. With no icon the overlay
+    /// keeps whatever texture it already has (or draws corners as lines).
+    void setPresentationStyle(const ruwa::ui::workspace::TransformPresentationStyle& style);
 
     bool isInitialized() const { return m_initialized; }
     bool isAnimating() const { return OverlayVisualBase::isAnimating(); }
@@ -153,6 +161,11 @@ private:
     GLint m_locTexInvScene = -1;
     GLint m_locTexInvViewport = -1;
     GLint m_locTexInvColor = -1;
+
+    /// Application-pushed chrome colours (plan 7.15.8); defaults match the
+    /// previous ThemeManager-derived values until the first push arrives.
+    float m_primaryColor[4] = { 0.0f, 0.0f, 0.0f, 1.0f };
+    float m_accentColor[4] = { 0.0f, 0.0f, 0.0f, 1.0f };
 };
 
 } // namespace aether
