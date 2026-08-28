@@ -3,7 +3,11 @@
 // ==========================================================================
 //   R U W A   |   T O O L   C U R S O R   I C O N S
 // ==========================================================================
-// Which tools get a GL cursor, which shape it takes, and the badge it uses.
+// Which tools get a rendered cursor, which shape it takes, and the badge it
+// uses. The state model lives in the renderer-neutral workspace namespace;
+// the `aether` aliases below only keep the legacy overlay internals building.
+// Which QRC asset a badge maps to is an engine-integration detail and lives
+// in the Aether binding, not here (plan 7.12.6).
 // ==========================================================================
 
 #ifndef RUWA_FEATURES_CANVAS_OVERLAYS_TOOLCURSORICONS_H
@@ -13,9 +17,9 @@
 
 #include <QString>
 
-namespace aether {
+namespace ruwa::ui::workspace {
 
-/// Shape of the GL cursor a tool draws.
+/// Shape of the rendered cursor a tool draws.
 enum class ToolCursorStyle {
     None, ///< Tool draws its own cursor (brush, eyedropper) or keeps a system one.
     Pointer, ///< Plain custom-rendered pointer arrow without a tool badge.
@@ -25,9 +29,8 @@ enum class ToolCursorStyle {
 
 /// Shape-drawing selection tools aim at an exact point rather than grab
 /// something under the pointer, so they get the crosshair instead of an arrow.
-inline ToolCursorStyle toolCursorStyle(ruwa::ui::workspace::ToolId tool)
+inline ToolCursorStyle toolCursorStyle(ToolId tool)
 {
-    using ruwa::ui::workspace::ToolId;
     switch (tool) {
     case ToolId::SquareSelection:
     case ToolId::CircleSelection:
@@ -44,27 +47,12 @@ inline ToolCursorStyle toolCursorStyle(ruwa::ui::workspace::ToolId tool)
     }
 }
 
-/// QRC path of the badge icon. Empty for styles that draw no badge.
-inline QString toolCursorIconResource(ruwa::ui::workspace::ToolId tool)
-{
-    using ruwa::ui::workspace::ToolId;
-    switch (tool) {
-    case ToolId::Fill:
-        return QStringLiteral(":/icons/SmartFillColor");
-    case ToolId::ClassicFill:
-        return QStringLiteral(":/icons/FillColor");
-    case ToolId::Move:
-        return QStringLiteral(":/icons/Move");
-    case ToolId::MagicWand:
-        return QStringLiteral(":/icons/MagicWand");
-    case ToolId::Lasso:
-        return QStringLiteral(":/icons/Lasso");
-    case ToolId::LassoFill:
-        return QStringLiteral(":/icons/LassoFill");
-    default:
-        return QString();
-    }
-}
+} // namespace ruwa::ui::workspace
+
+namespace aether {
+
+using ruwa::ui::workspace::ToolCursorStyle;
+using ruwa::ui::workspace::toolCursorStyle;
 
 } // namespace aether
 

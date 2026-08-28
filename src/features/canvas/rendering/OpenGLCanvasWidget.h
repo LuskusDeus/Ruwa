@@ -23,6 +23,7 @@
 #include "features/canvas/quick-shape/QuickShapeMorph.h"
 #include "features/canvas/stroke/BrushStrokeHost.h"
 #include "features/canvas/overlays/CursorOverlayState.h"
+#include "features/canvas/overlays/TextEditOverlayState.h"
 #include "features/canvas/rendering/LayerCompositingBuilder.h"
 #include "features/canvas/rendering/CanvasBackdropRenderer.h"
 #include "features/canvas/rendering/SceneFboManager.h"
@@ -72,7 +73,6 @@ class QEvent;
 
 namespace aether {
 class UndoManager;
-class FillProgressPopupWidget;
 class FillWorker;
 } // namespace aether
 
@@ -85,9 +85,6 @@ struct SmartDocument;
 namespace ruwa::core::brushes {
 class IBrushEngineSession;
 }
-namespace ruwa::ui::widgets {
-class CanvasMetricLabelOverlay;
-}
 
 namespace aether {
 
@@ -98,7 +95,6 @@ class CanvasOverlayManager;
 class GLSelectionRenderer;
 class LayerScreenSourceCache;
 struct CompositeLayerInfo;
-struct TextEditOverlayState;
 
 class OpenGLCanvasWidget : public QOpenGLWidget,
                            protected QOpenGLFunctions_4_5_Core,
@@ -132,6 +128,10 @@ public:
     // Mirror canvas pixels in the view only (camera pan/zoom/rotate unchanged).
     bool canvasContentFlipHorizontal() const { return m_canvasContentFlipHorizontal; }
     bool canvasContentFlipVertical() const { return m_canvasContentFlipVertical; }
+    /// The mirror the frame is actually drawn with: stored flips suppressed by
+    /// the export-preview mirror suppression.
+    bool effectiveContentFlipH() const;
+    bool effectiveContentFlipV() const;
     void setCanvasContentFlipHorizontal(bool flip);
     void setCanvasContentFlipVertical(bool flip);
     void toggleCanvasContentFlipHorizontal();
@@ -450,10 +450,17 @@ public:
     /// used for overlay exit animation.
     void cancelTransform(std::optional<bool> moveOnlyStateForOverlay = std::nullopt);
     void beginTransformUndoStep();
-    /// Freeze canvas/layer snap targets and current editor settings for this drag.
+    /// Snap preferences pushed by the application (plan 7.27.2); cached and
+    /// consumed by beginTransformSnapSession — the renderer never queries
+    /// SettingsManager itself.
+    void setTransformSnapSettings(
+        bool canvasSnap, bool layersSnap, bool equalSpacing, bool pixelAlignRasterMoves);
+    /// Freeze canvas/layer snap targets and the cached snap preferences for this drag.
     void beginTransformSnapSession();
-    /// Refresh every transform capsule: the snap spacing labels and the live
-    /// move/rotate/scale readout for the handle currently being dragged.
+    /// Refresh transform metric presentation: publishes the snap-spacing
+    /// labels, the live move/rotate/scale readout and the viewport-local drag
+    /// anchor through transformPresentationChanged() (plan 7.15.1). The
+    /// QWidget capsules rendering those facts belong to the application.
     void syncTransformMetricOverlays();
     void commitTransformUndoStep();
     void discardTransformUndoStep();
@@ -497,14 +504,14 @@ public:
     /// The region is rendered in CHUNKS through one small reusable framebuffer,
     /// so GPU memory stays bounded no matter how large the requested region is;
     /// only the destination CPU surface scales with it. Returns a null surface
-    /// when GL is not ready or the surface cannot be allocated.
+    /// when GL is not ready or the surface cannot be allocated. The surface is
+    /// returned in the alpha mode the request asks for (converted from the
+    /// premultiplied readback exactly once, here).
     ruwa::shared::imaging::PixelSurface captureCanvasSurface(
-        const QRect& worldRect, const ruwa::ui::workspace::CanvasCaptureRequest& request);
+        const ruwa::ui::workspace::CanvasDocumentCaptureRequest& request);
 
-    /// Render the full canvas to an image (for export). Returns null QImage if GL not ready.
-    QImage grabCanvasImage();
-    QImage grabCanvasImage(const QRect& worldRect);
-    QImage renderCompositedRegion(const QRect& worldRect, const QSize& targetSize);
+    QImage renderCompositedRegion(const QRect& worldRect, const QSize& targetSize,
+        bool includeCanvasBackground = true);
     bool computeExportContentBounds(QRect& outBounds);
     bool computeNavigatorContentBounds(QRect& outBounds);
 
@@ -513,6 +520,7 @@ public:
 
     /// When true, paintGL skips brush/eyedropper cursor overlays (for thumbnail capture).
     void setSkipCursorOverlays(bool skip) { m_skipCursorOverlays = skip; }
+    bool skipCursorOverlays() const { return m_skipCursorOverlays; }
     /// Pin the GL cursor to the position it is given, instead of letting each
     /// frame re-sample the live pointer. For drags that park the cursor on an
     /// anchor while the pointer keeps moving (brush-size adjust).
@@ -524,6 +532,26 @@ public:
         bool selectingOrMoving, bool suppressCanvasCornerRounding = false);
     void setCanvasResizeSnapVisualState(const TransformSnapVisualState& state);
     void setTextEditOverlayState(const TextEditOverlayState& state);
+
+    /// Live pointer sampling injected by the Qt binding (plan 7.15.6). Both
+    /// accessors return viewport-local positions; the renderer never reads
+    /// QCursor or the stylus service itself.
+    void setPointerSource(const ruwa::ui::workspace::CanvasPointerSource& source);
+    /// Camera/transform interpolation policy pushed by the application
+    /// (plan 7.15.10); consumed by the frame loop instead of the shared UI
+    /// animation policy.
+    void setMotionPolicy(const ruwa::ui::workspace::CanvasMotionPolicy& policy);
+    /// Colours/assets the transform overlay renders with (plan 7.28.4).
+    /// Uploaded to the overlay on the next frame with a current GL context.
+    void setTransformPresentationStyle(
+        const ruwa::ui::workspace::TransformPresentationStyle& style);
+
+    /// Failure reported by renderer initialization (plan 7.15.5): empty when
+    /// initialization succeeded. The UI presents it; no dialog lives here.
+    const std::optional<ruwa::ui::workspace::CanvasEngineDiagnostic>& lastFailure() const
+    {
+        return m_lastFailure;
+    }
 
     using BackdropRegionProvider = std::function<std::vector<CanvasBackdropRegion>()>;
     void setBackdropRegionProvider(BackdropRegionProvider provider);
@@ -539,9 +567,15 @@ signals:
     void strokePainted();
     void contentRegionChanged(const QRect& worldRect);
     void contentTilesChanged(const QList<QPoint>& tilePositions);
-    void fillProcessingLayerChanged(const QUuid& layerId);
+    /// Source-of-truth fill activity snapshot (plan 7.14.5).
+    void fillActivityChanged(const ruwa::ui::workspace::CanvasFillActivityState& state);
     void surfaceResized(uint32_t width, uint32_t height);
     void initialized();
+    /// Renderer initialization failure with an owned diagnostic (plan 7.15.5).
+    void rendererFailed(const QString& code, const QString& message);
+    /// Transform metric facts for application-owned QWidget presentation.
+    void transformPresentationChanged(
+        const ruwa::ui::workspace::TransformPresentationState& state);
     void transformModeEntered();
     void transformModeExited(bool applied);
     void cameraZoomChanged(qreal zoom);
@@ -662,14 +696,6 @@ private:
     uint32_t effectiveDocumentBoundsWidth() const;
     uint32_t effectiveDocumentBoundsHeight() const;
 
-    void ensureFillProgressPopup();
-    QPoint fillProgressPopupAnchorPoint() const;
-    QPoint fillProgressPopupTopLeft() const;
-    void updateFillProgressPopupPosition();
-    void showClassicFillWaitPopup();
-    void showFillProgressPopupDone(const QPoint& anchorPoint);
-    void hideFillProgressPopupImmediate();
-
     bool selectionPathNeedsCatchup(float targetX, float targetY, float stabilization) const;
     void resetSelectionPathStabilizer();
     void updateStabilizerCatchupTimer();
@@ -780,13 +806,12 @@ private:
     bool applyFloodFillResult(const QUuid& layerId, FloodFillResult&& result,
         std::optional<SelectionRestoreContext> selectionRestore, bool maskTarget = false);
     bool commitFillPreviewResult();
-    void stopFillPreview(bool cancelWorker = true, bool hidePopup = true);
+    void stopFillPreview(bool cancelWorker = true);
     bool updateFillPreviewAnimationState();
     void failFillPreviewGpuPipeline();
     void releaseFillPreviewGpuResources();
     void flushPendingFillPreviewTextureDeletes();
-    QUuid currentFillProcessingLayerId() const;
-    void syncFillProcessingLayerSignal();
+    void publishFillActivity();
 
     // Called by CanvasSelectionController for fill/clear operations
     bool doFillSelectionWithColor(const QColor& color);
@@ -906,27 +931,27 @@ private:
     // visible composite tiles exactly once when it flips. See paintGL_runComposite.
     bool m_strokeEffectSuppressed = false;
 
-    bool effectiveContentFlipH() const;
-    bool effectiveContentFlipV() const;
-
     bool m_initialized = false;
 
     // Transform mode
     TransformController m_transformController;
     TransformTargetSet m_transformTargetSet;
-    std::vector<ruwa::ui::widgets::CanvasMetricLabelOverlay*> m_transformSnapMetricLabels;
-    /// Live readout of the drag in progress (offset / angle / scale percentage).
-    ruwa::ui::widgets::CanvasMetricLabelOverlay* m_transformDragMetricLabel = nullptr;
-    /// Transformed corners latched when the drag started; the readout above is
-    /// measured against them, so it works for quad/mesh modes too.
+    /// Transformed corners latched when the drag started; the published drag
+    /// readout is measured against them, so it works for quad/mesh modes too.
     std::optional<std::array<Vector2, 4>> m_transformDragStartCorners;
-    void syncTransformSnapMetricLabels();
-    void syncTransformDragMetricLabel();
-    /// Keep the drag readout glued to the cursor while the drag is in progress.
-    void refreshTransformDragMetricAnchor();
+    /// Build the current metric facts and publish them through
+    /// transformPresentationChanged() (plan 7.15.1).
+    void publishTransformPresentation();
+    ruwa::ui::workspace::TransformPresentationState buildTransformPresentationState() const;
+    /// True while the last published presentation state was non-empty, so the
+    /// clearing (empty) state is published exactly once when it goes away.
+    bool m_transformPresentationPublished = false;
     std::unique_ptr<UndoManager> m_transformUndoManager;
     std::optional<TransformState> m_transformUndoStepBefore;
     std::optional<TransformInteractionMode> m_transformUndoStepBeforeMode;
+    /// Application-pushed snap preferences (plan 7.27.2); defaults enable
+    /// every snap kind until the first push arrives.
+    SnapSettings m_transformSnapSettings {};
     bool m_moveOnlyTransform = false; // Move tool: transform without overlay
     /// Set between beginInteractiveContentMove() and endInteractiveContentMove().
     bool m_interactiveContentMove = false;
@@ -1141,6 +1166,10 @@ private:
     };
     FillPreviewState m_fillPreview;
     std::vector<GLuint> m_pendingFillPreviewTextureDeletes;
+    /// Activity snapshot facts published through fillActivityChanged
+    /// (plan 7.14.5); fill UI policy lives in the application presenter.
+    ruwa::ui::workspace::CanvasFillActivityState currentFillActivityState() const;
+    ruwa::ui::workspace::CanvasFillActivityState m_lastPublishedFillActivity;
     void resetFillPreviewMetrics();
     void rebuildFillPreviewMetricsFromGrid();
     bool updateFillPreviewMetricsFromBatch(const FillPreviewState::ProgressBatch& batch);
@@ -1169,7 +1198,6 @@ private:
     std::shared_ptr<std::atomic<bool>> m_fillWorkerCancelState;
     uint64_t m_fillWorkerRequestSequence = 0;
     uint64_t m_activeFillWorkerRequest = 0;
-    QUuid m_signaledFillProcessingLayerId;
 
     // Lasso selection
     QRectF m_canvasResizeSelectionWorld;
@@ -1181,7 +1209,6 @@ private:
 
     // Canvas overlay manager (owns all GL overlays)
     std::unique_ptr<CanvasOverlayManager> m_overlayManager;
-    FillProgressPopupWidget* m_fillProgressPopup = nullptr;
 
     // Brush and eyedropper cursor overlay state
     CursorOverlayState m_cursorOverlayState;
@@ -1193,6 +1220,15 @@ private:
     /// A mismatch with the live pointer is what asks for the follow-up frame.
     float m_lastSyncedCursorX = 0.0f;
     float m_lastSyncedCursorY = 0.0f;
+
+    // Application-pushed presentation inputs (plan 7.15/7.28): the renderer
+    // never reaches into application services for these.
+    ruwa::ui::workspace::CanvasPointerSource m_pointerSource;
+    ruwa::ui::workspace::CanvasMotionPolicy m_motionPolicy {};
+    ruwa::ui::workspace::TransformPresentationStyle m_transformPresentationStyle;
+    bool m_transformPresentationStyleDirty = false;
+    /// Owned diagnostic for the last failed initialization (plan 7.15.5).
+    std::optional<ruwa::ui::workspace::CanvasEngineDiagnostic> m_lastFailure;
 
     // Scene FBO for cursor overlay rendering (inversion needs scene texture)
     SceneFboManager m_sceneFboManager;
@@ -1225,7 +1261,8 @@ private:
     // per frame, so pan advances in lock-step with display refresh rather than
     // mouse event rate.
     bool m_panSamplingActive = false;
-    QPointF m_panSamplingLastGlobalPos;
+    /// Last sampled system pointer (viewport-local) for frame-sampled pan.
+    std::optional<QPointF> m_panSamplingLastPointerPos;
 };
 
 } // namespace aether

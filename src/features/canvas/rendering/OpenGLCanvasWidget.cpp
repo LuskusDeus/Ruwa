@@ -51,9 +51,7 @@
 #include "features/layers/model/LayerModel.h"
 #include "features/layers/model/LayerData.h"
 #include "features/effects/EffectCoverageResolver.h"
-#include "features/settings/SettingsManager.h"
 #include "features/theme/manager/ThemeColors.h"
-#include "features/theme/manager/ThemeManager.h"
 
 #include "shared/undo/UndoManager.h"
 #include "shared/undo/SelectionState.h"
@@ -62,12 +60,10 @@
 #include "shared/undo/LayerRemoveCommand.h"
 #include "features/layers/smart/SmartDocument.h"
 #include "shared/clipboard/EditClipboard.h"
-#include "shared/style/AnimationPolicy.h"
 #include "shared/tiles/TileGrid.h"
 #include "shared/tiles/TileGridClone.h"
 #include "shared/tiles/TilePixelAccess.h"
 #include "shared/types/GeometryHelpers.h"
-#include "shared/widgets/DotGridLoadingIndicator.h"
 #include "features/canvas/undo/DrawCommand.h"
 #include "features/canvas/undo/ApplyMaskCommand.h"
 #include "features/canvas/undo/ApplyLayerEffectsCommand.h"
@@ -81,7 +77,6 @@
 #include "shared/rendering/ShaderDirectoryResolver.h"
 
 #include <QCoreApplication>
-#include <QCursor>
 #include <QScreen>
 #include <QWindow>
 #include <QDir>
@@ -95,7 +90,6 @@
 #include <QImage>
 #include <QLabel>
 #include <QLinearGradient>
-#include <QMessageBox>
 #include <QOpenGLContext>
 #include <QOffscreenSurface>
 #include <QOpenGLVersionFunctionsFactory>
@@ -111,8 +105,6 @@
 #include "platform/windows/WindowsInkFeedback.h"
 #include "features/canvas/rendering/LayerCompositingBuilder.h"
 #include "features/canvas/selection/CanvasSelectionController.h"
-#include "features/canvas/ui/CanvasMetricLabelOverlay.h"
-#include "services/input/StylusInputManager.h"
 
 #include <algorithm>
 #include <array>
@@ -126,8 +118,6 @@
 #include <unordered_map>
 #include <unordered_set>
 #include <vector>
-
-namespace anim = ruwa::ui::core::anim;
 
 namespace {
 
@@ -532,9 +522,6 @@ constexpr qint64 kCanvasCornerFrameDelayMs = 16;
 constexpr float kCanvasCornerVisibilityMarginPx = 0.5f;
 constexpr float kCanvasCornerMaxScreenRadiusPx = 12.0f;
 constexpr float kCanvasCornerAnimationSpeed = 14.0f;
-constexpr qint64 kClassicFillWaitPopupDelayMs = 2000;
-constexpr int kFillProgressPopupMargin = 8;
-constexpr int kFillProgressPopupOffsetY = 18;
 
 std::unique_ptr<ruwa::core::brushes::IBrushEngineSession> createDefaultBrushSession()
 {
@@ -613,356 +600,6 @@ QSize currentSurfacePixelSize(const aether::OpenGLCanvasWidget* widget)
 }
 
 } // namespace
-
-class FillProgressPopupWidget final : public QWidget {
-public:
-    static constexpr int ProcessingTextWidth = 400;
-    static constexpr int CompactProcessingTextWidth = 120;
-    static constexpr int DoneTextWidth = 96;
-    static constexpr int ProcessingIndicatorSize = 22;
-    static constexpr int DoneIndicatorSize = 16;
-
-    explicit FillProgressPopupWidget(QWidget* parent = nullptr)
-        : QWidget(parent)
-    {
-        setAttribute(Qt::WA_TranslucentBackground);
-        setAttribute(Qt::WA_NoSystemBackground);
-        setAttribute(Qt::WA_TransparentForMouseEvents);
-        setAttribute(Qt::WA_ShowWithoutActivating);
-
-        auto* layout = new QHBoxLayout(this);
-        layout->setContentsMargins(12, 8, 12, 8);
-        layout->setSpacing(8);
-
-        m_indicator = new ruwa::ui::widgets::DotGridLoadingIndicator(this);
-        m_indicator->setFixedSize(16, 16);
-        layout->addWidget(m_indicator, 0, Qt::AlignVCenter);
-
-        m_label = new QLabel(this);
-        m_label->setWordWrap(true);
-        m_label->setAlignment(Qt::AlignLeft | Qt::AlignVCenter);
-        m_label->setSizePolicy(QSizePolicy::Preferred, QSizePolicy::Preferred);
-        m_label->setMinimumWidth(ProcessingTextWidth);
-        m_label->setMaximumWidth(ProcessingTextWidth);
-        layout->addWidget(m_label, 1);
-
-        m_opacityEffect = new QGraphicsOpacityEffect(this);
-        m_opacityEffect->setOpacity(0.0);
-        setGraphicsEffect(m_opacityEffect);
-
-        m_opacityAnim = new QPropertyAnimation(m_opacityEffect, "opacity", this);
-        m_opacityAnim->setEasingCurve(QEasingCurve::OutCubic);
-
-        m_posAnim = new QPropertyAnimation(this, "pos", this);
-        m_posAnim->setEasingCurve(QEasingCurve::OutCubic);
-
-        m_geometryAnim = new QPropertyAnimation(this, "geometry", this);
-        m_geometryAnim->setEasingCurve(QEasingCurve::OutCubic);
-
-        connect(&ruwa::ui::core::ThemeManager::instance(),
-            &ruwa::ui::core::ThemeManager::themeChanged, this, [this]() {
-                updateTheme();
-                updateGeometry();
-                update();
-            });
-
-        updateTheme();
-        hide();
-    }
-
-    void showProcessingAt(const QPoint& anchorPoint)
-    {
-        showProcessingAt(anchorPoint,
-            QCoreApplication::translate(
-                "OpenGLCanvasWidget", "Filling the area. Live preview is paused. Please wait."),
-            ProcessingTextWidth);
-    }
-
-    void showProcessingAt(const QPoint& anchorPoint, const QString& text, int textWidth)
-    {
-        ++m_transitionToken;
-        m_state = State::Processing;
-        m_processingTextWidth = std::max(1, textWidth);
-        m_label->setText(text);
-        m_indicator->show();
-        m_indicator->start();
-        applyStateSizing();
-        updateTheme();
-        if (layout()) {
-            layout()->activate();
-        }
-        const QSize targetSize = sizeHint();
-        resize(targetSize);
-        startShow(popupTopLeftForAnchor(anchorPoint, targetSize));
-    }
-
-    void showDoneAt(const QPoint& anchorPoint)
-    {
-        const int token = ++m_transitionToken;
-        const bool morphFromProcessing = isVisible() && !m_isHiding && m_state == State::Processing;
-        const QRect currentGeometry = geometry();
-
-        m_state = State::Done;
-        m_label->setText(QCoreApplication::translate("OpenGLCanvasWidget", "Done!"));
-        m_indicator->stop();
-        m_indicator->hide();
-        applyStateSizing();
-        updateTheme();
-        if (layout()) {
-            layout()->activate();
-        }
-
-        const QSize targetSize = sizeHint();
-        const QRect targetGeometry(popupTopLeftForAnchor(anchorPoint, targetSize), targetSize);
-
-        if (morphFromProcessing) {
-            startMorph(currentGeometry, targetGeometry, token);
-        } else {
-            resize(targetSize);
-            startShow(targetGeometry.topLeft());
-            scheduleDoneHide(token);
-        }
-    }
-
-    void updateAnchor(const QPoint& topLeft)
-    {
-        if (!isVisible() || m_isHiding) {
-            return;
-        }
-
-        if (m_posAnim->state() == QAbstractAnimation::Running) {
-            m_posAnim->setEndValue(topLeft);
-        } else if (pos() != topLeft) {
-            move(topLeft);
-        }
-    }
-
-    void hideImmediate()
-    {
-        ++m_transitionToken;
-        m_state = State::Hidden;
-        m_isHiding = false;
-        m_indicator->stop();
-        m_indicator->hide();
-        m_opacityAnim->stop();
-        m_posAnim->stop();
-        m_geometryAnim->stop();
-        m_opacityEffect->setOpacity(0.0);
-        hide();
-    }
-
-    bool isProcessingVisible() const
-    {
-        return isVisible() && !m_isHiding && m_state == State::Processing;
-    }
-
-protected:
-    void paintEvent(QPaintEvent* event) override
-    {
-        Q_UNUSED(event);
-
-        QPainter painter(this);
-        painter.setRenderHint(QPainter::Antialiasing);
-
-        const auto& colors = ruwa::ui::core::ThemeManager::instance().colors();
-        QRectF rect = this->rect().adjusted(0.5, 0.5, -0.5, -0.5);
-        constexpr qreal radius = 8.0;
-
-        painter.setPen(Qt::NoPen);
-        painter.setBrush(colors.surfaceElevated());
-        painter.drawRoundedRect(rect, radius, radius);
-
-        QPainterPath borderPath;
-        QRectF borderRect = rect.adjusted(0.5, 0.5, -0.5, -0.5);
-        borderPath.addRoundedRect(borderRect, radius - 0.5, radius - 0.5);
-
-        QLinearGradient borderGradient(borderRect.topLeft(), borderRect.bottomLeft());
-        QColor borderTop = colors.borderSubtle();
-        QColor borderBottom
-            = ruwa::ui::core::ThemeColors::withAlpha(borderTop, borderTop.alpha() / 2);
-        borderGradient.setColorAt(0.0, borderTop);
-        borderGradient.setColorAt(1.0, borderBottom);
-
-        QPen borderPen;
-        borderPen.setBrush(borderGradient);
-        borderPen.setWidth(1);
-        borderPen.setCosmetic(true);
-
-        painter.setPen(borderPen);
-        painter.setBrush(Qt::NoBrush);
-        painter.drawPath(borderPath);
-    }
-
-private:
-    enum class State { Hidden, Processing, Done };
-
-    void startShow(const QPoint& topLeft)
-    {
-        const QPoint startPos = topLeft + QPoint(0, 10);
-
-        m_isHiding = false;
-        disconnect(m_opacityAnim, &QPropertyAnimation::finished, this, nullptr);
-        m_geometryAnim->stop();
-        if (pos() != startPos) {
-            move(startPos);
-        }
-        show();
-        raise();
-
-        m_opacityAnim->stop();
-        m_opacityAnim->setDuration(anim::duration(120));
-        m_opacityAnim->setStartValue(m_opacityEffect->opacity());
-        m_opacityAnim->setEndValue(1.0);
-
-        m_posAnim->stop();
-        m_posAnim->setDuration(anim::duration(120));
-        m_posAnim->setStartValue(startPos);
-        m_posAnim->setEndValue(topLeft);
-
-        anim::start(m_opacityAnim);
-        anim::start(m_posAnim);
-    }
-
-    void startHide()
-    {
-        if (!isVisible() || m_isHiding) {
-            return;
-        }
-
-        m_isHiding = true;
-        m_indicator->stop();
-
-        const QPoint currentPos = pos();
-
-        m_opacityAnim->stop();
-        m_opacityAnim->setDuration(anim::duration(180));
-        m_opacityAnim->setStartValue(m_opacityEffect->opacity());
-        m_opacityAnim->setEndValue(0.0);
-
-        m_posAnim->stop();
-        m_posAnim->setDuration(anim::duration(180));
-        m_posAnim->setStartValue(currentPos);
-        m_posAnim->setEndValue(currentPos - QPoint(0, 10));
-
-        m_geometryAnim->stop();
-
-        disconnect(m_opacityAnim, &QPropertyAnimation::finished, this, nullptr);
-        connect(m_opacityAnim, &QPropertyAnimation::finished, this, [this]() {
-            if (!m_isHiding) {
-                return;
-            }
-            m_state = State::Hidden;
-            m_isHiding = false;
-            m_indicator->hide();
-            hide();
-        });
-
-        // The opacity animation owns the completion (it hides the popup), so
-        // start it last: with animations disabled it finishes inside the call.
-        anim::start(m_posAnim);
-        anim::start(m_opacityAnim);
-    }
-
-    void startMorph(const QRect& startGeometry, const QRect& targetGeometry, int token)
-    {
-        m_posAnim->stop();
-        m_geometryAnim->stop();
-        m_geometryAnim->setDuration(anim::duration(150));
-        m_geometryAnim->setStartValue(startGeometry);
-        m_geometryAnim->setEndValue(targetGeometry);
-        setGeometry(startGeometry);
-
-        disconnect(m_geometryAnim, &QPropertyAnimation::finished, this, nullptr);
-        connect(m_geometryAnim, &QPropertyAnimation::finished, this, [this, token]() {
-            if (token != m_transitionToken || m_state != State::Done || m_isHiding) {
-                return;
-            }
-            scheduleDoneHide(token);
-        });
-
-        anim::start(m_geometryAnim);
-    }
-
-    void scheduleDoneHide(int token)
-    {
-        QTimer::singleShot(500, this, [this, token]() {
-            if (token != m_transitionToken || m_state != State::Done || m_isHiding) {
-                return;
-            }
-            startHide();
-        });
-    }
-
-    void updateTheme()
-    {
-        const auto& theme = ruwa::ui::core::ThemeManager::instance();
-        const auto& colors = theme.colors();
-
-        m_label->setFont(theme.font(ruwa::ui::core::ThemeFontRole::Body, QFont::Medium));
-        m_label->setStyleSheet(
-            QString("QLabel { background: transparent; color: %1; }").arg(colors.text.name()));
-
-        const int indicatorBaseSize
-            = (m_state == State::Processing) ? ProcessingIndicatorSize : DoneIndicatorSize;
-        const int indicatorSize = theme.scaled(indicatorBaseSize);
-        m_indicator->setFixedSize(indicatorSize, indicatorSize);
-        m_indicator->setAccentColor(colors.primary);
-
-        const int textWidth
-            = theme.scaled((m_state == State::Processing) ? m_processingTextWidth : DoneTextWidth);
-        m_label->setMinimumWidth(textWidth);
-        m_label->setMaximumWidth(textWidth);
-
-        if (auto* layout = qobject_cast<QHBoxLayout*>(this->layout())) {
-            const int verticalPadding = (m_state == State::Processing) ? 6 : 8;
-            layout->setContentsMargins(theme.scaled(12), theme.scaled(verticalPadding),
-                theme.scaled(12), theme.scaled(verticalPadding));
-            layout->setSpacing(theme.scaled(8));
-        }
-    }
-
-    void applyStateSizing()
-    {
-        if (m_state == State::Processing) {
-            m_label->setMinimumWidth(m_processingTextWidth);
-            m_label->setMaximumWidth(m_processingTextWidth);
-            m_label->setWordWrap(true);
-        } else {
-            m_label->setMinimumWidth(DoneTextWidth);
-            m_label->setMaximumWidth(DoneTextWidth);
-            m_label->setWordWrap(false);
-        }
-    }
-
-    QPoint popupTopLeftForAnchor(const QPoint& anchorPoint, const QSize& popupSize) const
-    {
-        constexpr int popupMargin = 8;
-        constexpr int popupOffsetY = 18;
-
-        int x = anchorPoint.x() - popupSize.width() / 2;
-        int y = anchorPoint.y() - popupSize.height() - popupOffsetY;
-
-        if (auto* parent = parentWidget()) {
-            x = qBound(popupMargin, x,
-                qMax(popupMargin, parent->width() - popupSize.width() - popupMargin));
-            y = qBound(popupMargin, y,
-                qMax(popupMargin, parent->height() - popupSize.height() - popupMargin));
-        }
-
-        return QPoint(x, y);
-    }
-
-    ruwa::ui::widgets::DotGridLoadingIndicator* m_indicator = nullptr;
-    QLabel* m_label = nullptr;
-    QGraphicsOpacityEffect* m_opacityEffect = nullptr;
-    QPropertyAnimation* m_opacityAnim = nullptr;
-    QPropertyAnimation* m_posAnim = nullptr;
-    QPropertyAnimation* m_geometryAnim = nullptr;
-    int m_processingTextWidth = ProcessingTextWidth;
-    State m_state = State::Hidden;
-    bool m_isHiding = false;
-    int m_transitionToken = 0;
-};
 
 } // namespace aether
 
@@ -2594,7 +2231,10 @@ void OpenGLCanvasWidget::requestRender()
 void OpenGLCanvasWidget::beginPanSampling()
 {
     m_panSamplingActive = true;
-    m_panSamplingLastGlobalPos = QCursor::pos();
+    m_panSamplingLastPointerPos.reset();
+    if (m_pointerSource.systemPointerViewportLocal) {
+        m_panSamplingLastPointerPos = m_pointerSource.systemPointerViewportLocal();
+    }
     update();
 }
 
@@ -2752,74 +2392,6 @@ bool OpenGLCanvasWidget::updateCanvasCornerEffectState()
     return false;
 }
 
-void OpenGLCanvasWidget::ensureFillProgressPopup()
-{
-    if (m_fillProgressPopup) {
-        return;
-    }
-
-    m_fillProgressPopup = new FillProgressPopupWidget(this);
-    m_fillProgressPopup->hide();
-}
-
-QPoint OpenGLCanvasWidget::fillProgressPopupTopLeft() const
-{
-    if (!m_fillProgressPopup) {
-        return QPoint(kFillProgressPopupMargin, kFillProgressPopupMargin);
-    }
-
-    const QPoint anchorPoint = fillProgressPopupAnchorPoint();
-    const QSize popupSize = m_fillProgressPopup->isVisible() ? m_fillProgressPopup->size()
-                                                             : m_fillProgressPopup->sizeHint();
-
-    int x = anchorPoint.x() - popupSize.width() / 2;
-    int y = anchorPoint.y() - popupSize.height() - kFillProgressPopupOffsetY;
-
-    x = qBound(kFillProgressPopupMargin, x,
-        qMax(kFillProgressPopupMargin, width() - popupSize.width() - kFillProgressPopupMargin));
-    y = qBound(kFillProgressPopupMargin, y,
-        qMax(kFillProgressPopupMargin, height() - popupSize.height() - kFillProgressPopupMargin));
-    return QPoint(x, y);
-}
-
-QPoint OpenGLCanvasWidget::fillProgressPopupAnchorPoint() const
-{
-    const Vector2 screenPos = screenFromDocumentWorld(m_fillPreview.origin);
-    return QPoint(
-        static_cast<int>(std::round(screenPos.x)), static_cast<int>(std::round(screenPos.y)));
-}
-
-void OpenGLCanvasWidget::updateFillProgressPopupPosition()
-{
-    if (!m_fillProgressPopup || !m_fillProgressPopup->isVisible() || !m_fillPreview.active) {
-        return;
-    }
-
-    m_fillProgressPopup->updateAnchor(fillProgressPopupTopLeft());
-}
-
-void OpenGLCanvasWidget::showClassicFillWaitPopup()
-{
-    ensureFillProgressPopup();
-    m_fillProgressPopup->showProcessingAt(fillProgressPopupAnchorPoint(),
-        QCoreApplication::translate("OpenGLCanvasWidget", "please wait"),
-        FillProgressPopupWidget::CompactProcessingTextWidth);
-    m_fillProgressPopup->updateAnchor(fillProgressPopupTopLeft());
-}
-
-void OpenGLCanvasWidget::showFillProgressPopupDone(const QPoint& anchorPoint)
-{
-    ensureFillProgressPopup();
-    m_fillProgressPopup->showDoneAt(anchorPoint);
-}
-
-void OpenGLCanvasWidget::hideFillProgressPopupImmediate()
-{
-    if (m_fillProgressPopup) {
-        m_fillProgressPopup->hideImmediate();
-    }
-}
-
 void OpenGLCanvasWidget::setCanvasResizeOverlayState(bool active, const QRectF& selectionWorldRect,
     bool selectingOrMoving, bool suppressCanvasCornerRounding)
 {
@@ -2945,6 +2517,25 @@ void OpenGLCanvasWidget::setRasterizationConfirmCallback(
     std::function<bool(const QString&, const QString&)> fn)
 {
     m_rasterizationConfirmCallback = std::move(fn);
+}
+
+void OpenGLCanvasWidget::setPointerSource(
+    const ruwa::ui::workspace::CanvasPointerSource& source)
+{
+    m_pointerSource = source;
+}
+
+void OpenGLCanvasWidget::setMotionPolicy(const ruwa::ui::workspace::CanvasMotionPolicy& policy)
+{
+    m_motionPolicy = policy;
+}
+
+void OpenGLCanvasWidget::setTransformPresentationStyle(
+    const ruwa::ui::workspace::TransformPresentationStyle& style)
+{
+    m_transformPresentationStyle = style;
+    m_transformPresentationStyleDirty = true;
+    requestRender();
 }
 
 void OpenGLCanvasWidget::onLayersChanged()
@@ -3569,14 +3160,11 @@ bool OpenGLCanvasWidget::ensurePaintableActiveLayer()
                                "Convert the selected layer to a raster layer?")
                                 .arg(layerKind);
 
-    bool confirmed = false;
-    if (m_rasterizationConfirmCallback) {
-        confirmed = m_rasterizationConfirmCallback(title, message);
-    } else {
-        const auto reply = QMessageBox::question(
-            this, title, message, QMessageBox::Yes | QMessageBox::No, QMessageBox::Yes);
-        confirmed = (reply == QMessageBox::Yes);
-    }
+    // The decision provider is injected by the application (plan 7.15.4);
+    // with none registered the conversion is declined — the renderer never
+    // opens a dialog itself.
+    const bool confirmed
+        = m_rasterizationConfirmCallback && m_rasterizationConfirmCallback(title, message);
 
     if (!confirmed) {
         return false;
@@ -4136,14 +3724,9 @@ bool OpenGLCanvasWidget::confirmRasterizeForSelectionTransform(
                                "Rasterize the layer to transform the selection?")
                                 .arg(isolatedLayerKindLabel(layer));
 
-    bool confirmed = false;
-    if (m_rasterizationConfirmCallback) {
-        confirmed = m_rasterizationConfirmCallback(title, message);
-    } else {
-        const auto reply = QMessageBox::question(
-            this, title, message, QMessageBox::Yes | QMessageBox::No, QMessageBox::Yes);
-        confirmed = (reply == QMessageBox::Yes);
-    }
+    // Same injected decision provider; never a renderer-owned dialog.
+    const bool confirmed
+        = m_rasterizationConfirmCallback && m_rasterizationConfirmCallback(title, message);
 
     if (!confirmed) {
         return false;
@@ -4756,7 +4339,7 @@ void OpenGLCanvasWidget::cancelPendingLassoFillCommit(const QUuid& layerId)
     m_lassoFillCommit.job->cancelled.store(true, std::memory_order_release);
     m_lassoFillCommit.targetLayerId = QUuid();
     m_lassoFillCommit.job.reset();
-    syncFillProcessingLayerSignal();
+    publishFillActivity();
 }
 
 void OpenGLCanvasWidget::handlePendingLassoFillResult(uint64_t sequence, const QUuid& layerId,
@@ -4770,7 +4353,7 @@ void OpenGLCanvasWidget::handlePendingLassoFillResult(uint64_t sequence, const Q
     const std::shared_ptr<LassoFillCommitState::AsyncJob> job = m_lassoFillCommit.job;
     m_lassoFillCommit.targetLayerId = QUuid();
     m_lassoFillCommit.job.reset();
-    syncFillProcessingLayerSignal();
+    publishFillActivity();
 
     if (!job || job->cancelled.load(std::memory_order_acquire)) {
         return;
@@ -5567,11 +5150,13 @@ bool OpenGLCanvasWidget::copyMergedSelectionPixelsToClipboard(QImage* outFlatten
 
     const TilePixelFormat copyFormat
         = m_layerModel ? m_layerModel->documentTileFormat() : m_canvas.compositionGrid().format();
-    ruwa::ui::workspace::CanvasCaptureRequest captureOptions;
+    ruwa::ui::workspace::CanvasDocumentCaptureRequest captureOptions;
+    captureOptions.region = captureBounds;
     captureOptions.includeCanvasBackground = true;
     captureOptions.highPrecision = copyFormat != TilePixelFormat::RGBA8;
-    ruwa::shared::imaging::PixelSurface composite
-        = captureCanvasSurface(captureBounds, captureOptions);
+    // The merged pixels are re-filtered downstream: keep the readback in its
+    // premultiplied form and convert exactly once, at the pipeline's end.
+    ruwa::shared::imaging::PixelSurface composite = captureCanvasSurface(captureOptions);
     if (composite.isNull()) {
         return false;
     }
@@ -6643,8 +6228,8 @@ bool OpenGLCanvasWidget::applyAnimatedContentTransform(AnimatedContentTransform 
 
     // Mirrors the transform action animation, which rides the canvas animation
     // policy — this wait has to shrink with it.
-    const int settleMs = anim::canvasEnabled()
-        ? qMax(1, qRound(kAutoTransformActionAnimationDurationMs / anim::speed()))
+    const int settleMs = m_motionPolicy.enabled
+        ? qMax(1, qRound(kAutoTransformActionAnimationDurationMs / m_motionPolicy.speed))
         : 0;
     QTimer::singleShot(settleMs, this, [this, sequence]() {
         if (!m_autoApplyingTransform || sequence != m_autoApplyTransformSequence) {
@@ -6683,7 +6268,7 @@ void OpenGLCanvasWidget::scheduleDeferredFillKickoff(const QUuid& layerId, FillA
     m_pendingFillKickoff.canvasBounds = canvasBounds;
     m_pendingFillKickoff.maskTarget = maskTarget;
     m_pendingFillKickoff.forceFinalResultOnly = forceFinalResultOnly;
-    syncFillProcessingLayerSignal();
+    publishFillActivity();
 
     const uint64_t sequence = m_pendingFillKickoff.sequence;
     QTimer::singleShot(0, this, [this, sequence]() { executeDeferredFillKickoff(sequence); });
@@ -6699,12 +6284,12 @@ void OpenGLCanvasWidget::executeDeferredFillKickoff(uint64_t sequence)
     m_pendingFillKickoff = {};
     auto* layer = m_layerModel ? m_layerModel->layerById(kickoff.layerId) : nullptr;
     if (!isLayerCanvasEditable(layer) || (!layer->isRaster() && !kickoff.maskTarget)) {
-        syncFillProcessingLayerSignal();
+        publishFillActivity();
         return;
     }
     TileGrid* targetGrid = kickoff.maskTarget ? layer->maskTileGrid() : layer->tileGrid.get();
     if (!targetGrid) {
-        syncFillProcessingLayerSignal();
+        publishFillActivity();
         return;
     }
 
@@ -6714,7 +6299,7 @@ void OpenGLCanvasWidget::executeDeferredFillKickoff(uint64_t sequence)
         ? &m_selectionController->lassoSelection().mask()
         : nullptr;
     if (selectionMask && fillMaskAlphaAt(selectionMask, kickoff.origin.x, kickoff.origin.y) == 0) {
-        syncFillProcessingLayerSignal();
+        publishFillActivity();
         return;
     }
 
@@ -6761,7 +6346,7 @@ void OpenGLCanvasWidget::executeDeferredFillKickoff(uint64_t sequence)
 
     m_fillWorkerCancelState = request->cancelState;
     m_activeFillWorkerRequest = request->sequence;
-    syncFillProcessingLayerSignal();
+    publishFillActivity();
 
     const bool submitted = QMetaObject::invokeMethod(
         m_fillWorker,
@@ -6777,7 +6362,7 @@ void OpenGLCanvasWidget::executeDeferredFillKickoff(uint64_t sequence)
 
     m_activeFillWorkerRequest = 0;
     m_fillWorkerCancelState.reset();
-    syncFillProcessingLayerSignal();
+    publishFillActivity();
 }
 
 void OpenGLCanvasWidget::initializeFillWorker()
@@ -6997,7 +6582,7 @@ void OpenGLCanvasWidget::startAsyncFillSession(const QUuid& layerId, FillAlgorit
     m_fillPreview.easeStartMs = 0;
     m_fillPreview.pendingResult = {};
     m_fillPreview.selectionRestore = std::move(selectionRestore);
-    syncFillProcessingLayerSignal();
+    publishFillActivity();
 
     const bool hasInitialPreview = !initialMaskTiles.empty();
     const bool hasInitialPendingResult = initialPendingResult.pixelsFilled > 0;
@@ -7933,32 +7518,58 @@ bool OpenGLCanvasWidget::commitFillPreviewResult()
         std::move(m_fillPreview.selectionRestore), m_fillPreview.maskTarget);
 }
 
-QUuid OpenGLCanvasWidget::currentFillProcessingLayerId() const
+
+ruwa::ui::workspace::CanvasFillActivityState OpenGLCanvasWidget::currentFillActivityState() const
 {
-    if (m_pendingFillKickoff.pending && !m_pendingFillKickoff.layerId.isNull()) {
-        return m_pendingFillKickoff.layerId;
+    using ruwa::ui::workspace::CanvasFillActivityState;
+    using ruwa::ui::workspace::CanvasFillPhase;
+
+    CanvasFillActivityState activity;
+    if (m_pendingFillKickoff.pending) {
+        activity.phase = CanvasFillPhase::Queued;
+        activity.layer = m_pendingFillKickoff.layerId;
+        activity.origin
+            = QPointF(m_pendingFillKickoff.origin.x, m_pendingFillKickoff.origin.y);
+        activity.algorithm = m_pendingFillKickoff.algorithm;
+        activity.waitingForFinalResult = m_pendingFillKickoff.forceFinalResultOnly;
+        return activity;
     }
-    if ((m_fillPreview.active || m_activeFillWorkerRequest != 0)
-        && !m_fillPreview.targetLayerId.isNull()) {
-        return m_fillPreview.targetLayerId;
+    if (m_fillPreview.active) {
+        if (m_fillPreview.pendingResult.pixelsFilled > 0 && !m_fillPreview.previewActive
+            && !m_fillPreview.awaitingResult) {
+            activity.phase = CanvasFillPhase::Committing;
+        } else if (m_fillPreview.previewActive) {
+            activity.phase = CanvasFillPhase::Previewing;
+        } else {
+            activity.phase = CanvasFillPhase::Computing;
+        }
+        activity.layer = m_fillPreview.targetLayerId;
+        activity.origin = QPointF(m_fillPreview.origin.x, m_fillPreview.origin.y);
+        activity.algorithm = m_fillPreview.algorithm;
+        activity.livePreviewAvailable = m_fillPreview.previewActive;
+        activity.waitingForFinalResult
+            = m_fillPreview.finalResultOnly && m_fillPreview.awaitingResult;
+        return activity;
     }
     if (m_lassoFillCommit.job && !m_lassoFillCommit.targetLayerId.isNull()) {
-        return m_lassoFillCommit.targetLayerId;
+        activity.phase = CanvasFillPhase::Committing;
+        activity.layer = m_lassoFillCommit.targetLayerId;
+        return activity;
     }
-    return {};
+    return activity;
 }
 
-void OpenGLCanvasWidget::syncFillProcessingLayerSignal()
+void OpenGLCanvasWidget::publishFillActivity()
 {
-    const QUuid currentLayerId = currentFillProcessingLayerId();
-    if (currentLayerId == m_signaledFillProcessingLayerId) {
+    const auto activity = currentFillActivityState();
+    if (activity == m_lastPublishedFillActivity) {
         return;
     }
-    m_signaledFillProcessingLayerId = currentLayerId;
-    emit fillProcessingLayerChanged(m_signaledFillProcessingLayerId);
+    m_lastPublishedFillActivity = activity;
+    emit fillActivityChanged(activity);
 }
 
-void OpenGLCanvasWidget::stopFillPreview(bool cancelWorker, bool hidePopup)
+void OpenGLCanvasWidget::stopFillPreview(bool cancelWorker)
 {
     if (!m_fillPreview.active && m_fillPreview.affectedKeys.empty() && !m_fillPreview.job
         && !m_pendingFillKickoff.pending && m_activeFillWorkerRequest == 0) {
@@ -8000,10 +7611,7 @@ void OpenGLCanvasWidget::stopFillPreview(bool cancelWorker, bool hidePopup)
         m_fillWorkerCancelState.reset();
         m_activeFillWorkerRequest = 0;
     }
-    if (hidePopup) {
-        hideFillProgressPopupImmediate();
-    }
-    syncFillProcessingLayerSignal();
+    publishFillActivity();
 }
 
 void OpenGLCanvasWidget::releaseFillPreviewGpuResources()
@@ -8064,29 +7672,14 @@ bool OpenGLCanvasWidget::updateFillPreviewAnimationState()
         return m_fillPreview.active;
     }
 
-    const bool finalResultOnlyAwaitingResult
-        = m_fillPreview.finalResultOnly && m_fillPreview.awaitingResult;
-    if (finalResultOnlyAwaitingResult) {
-        const qint64 elapsedMs = m_fillPreview.timer.isValid() ? m_fillPreview.timer.elapsed() : 0;
-        if (elapsedMs >= kClassicFillWaitPopupDelayMs) {
-            if (!m_fillProgressPopup || !m_fillProgressPopup->isProcessingVisible()) {
-                showClassicFillWaitPopup();
-            } else {
-                updateFillProgressPopupPosition();
-            }
-        }
-    } else if (m_fillPreview.finalResultOnly && m_fillProgressPopup
-        && m_fillProgressPopup->isProcessingVisible()) {
-        hideFillProgressPopupImmediate();
-    }
+    // Fill presentation is application policy (plan 7.14.5): the engine only
+    // publishes its activity snapshot each frame while a fill is running; the
+    // wait-popup delay and popup lifecycle live in the UI presenter.
+    publishFillActivity();
 
     if (!m_fillPreview.previewActive) {
         if (m_fillPreview.awaitingResult) {
             adoptCompletedFillResult();
-        }
-        if (m_fillPreview.finalResultOnly && m_fillProgressPopup
-            && m_fillProgressPopup->isProcessingVisible() && !m_fillPreview.awaitingResult) {
-            hideFillProgressPopupImmediate();
         }
         beginFillPreviewAnimation(FloodFillResult {});
         return m_fillPreview.active;
@@ -8938,7 +8531,8 @@ bool OpenGLCanvasWidget::computeNavigatorContentBounds(QRect& outBounds)
     return outBounds.isValid() && !outBounds.isEmpty();
 }
 
-QImage OpenGLCanvasWidget::renderCompositedRegion(const QRect& worldRect, const QSize& targetSize)
+QImage OpenGLCanvasWidget::renderCompositedRegion(const QRect& worldRect, const QSize& targetSize,
+    bool includeCanvasBackground)
 {
     if (!m_initialized || !m_renderer || !targetSize.isValid() || targetSize.isEmpty()) {
         return {};
@@ -9000,7 +8594,7 @@ QImage OpenGLCanvasWidget::renderCompositedRegion(const QRect& worldRect, const 
     glClear(GL_COLOR_BUFFER_BIT);
 
     Color canvasBg;
-    if (m_layerCompositingBuilder
+    if (includeCanvasBackground && m_layerCompositingBuilder
         && m_layerCompositingBuilder->resolveCanvasBackgroundColor(canvasBg)) {
         glEnable(GL_BLEND);
         glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
@@ -9069,14 +8663,8 @@ QImage OpenGLCanvasWidget::renderCompositedRegion(const QRect& worldRect, const 
     return image;
 }
 
-QImage OpenGLCanvasWidget::grabCanvasImage()
-{
-    return grabCanvasImage(
-        QRect(0, 0, static_cast<int>(m_canvas.width()), static_cast<int>(m_canvas.height())));
-}
-
 ruwa::shared::imaging::PixelSurface OpenGLCanvasWidget::captureCanvasSurface(
-    const QRect& worldRect, const ruwa::ui::workspace::CanvasCaptureRequest& request)
+    const ruwa::ui::workspace::CanvasDocumentCaptureRequest& request)
 {
     using ruwa::shared::imaging::PixelAlpha;
     using ruwa::shared::imaging::PixelStorage;
@@ -9086,7 +8674,7 @@ ruwa::shared::imaging::PixelSurface OpenGLCanvasWidget::captureCanvasSurface(
         return {};
     }
 
-    const QRect region = worldRect.normalized();
+    const QRect region = request.region.normalized();
     if (!region.isValid() || region.isEmpty()) {
         return {};
     }
@@ -9246,29 +8834,12 @@ ruwa::shared::imaging::PixelSurface OpenGLCanvasWidget::captureCanvasSurface(
     glDeleteFramebuffers(1, &exportFbo);
     glDeleteTextures(1, &exportTex);
 
+    // Hand the readback out in the alpha semantics the request asked for. The
+    // GPU produced premultiplied color; a Straight request converts exactly
+    // once, here, so no consumer re-derives it.
+    surface.convertAlphaMode(request.alphaMode);
+
     return surface;
-}
-
-QImage OpenGLCanvasWidget::grabCanvasImage(const QRect& worldRect)
-{
-    ruwa::shared::imaging::PixelSurface surface = captureCanvasSurface(worldRect, {});
-    if (surface.isNull()) {
-        return QImage();
-    }
-
-    // Every caller of this overload (thumbnails, clipboard, fast export) wants
-    // a plain straight-alpha 8-bit image.
-    surface.convertAlphaMode(ruwa::shared::imaging::PixelAlpha::Straight);
-
-    QImage image(surface.width(), surface.height(), QImage::Format_RGBA8888);
-    if (image.isNull()) {
-        return QImage();
-    }
-    for (int y = 0; y < surface.height(); ++y) {
-        std::memcpy(
-            image.scanLine(y), surface.scanLine(y), static_cast<size_t>(surface.bytesPerLine()));
-    }
-    return image;
 }
 
 void OpenGLCanvasWidget::updateBrushCursorStamp()
@@ -9655,6 +9226,15 @@ void OpenGLCanvasWidget::beginTransformUndoStep()
     m_transformUndoStepBeforeMode = m_transformController.interactionMode();
 }
 
+void OpenGLCanvasWidget::setTransformSnapSettings(
+    bool canvasSnap, bool layersSnap, bool equalSpacing, bool pixelAlignRasterMoves)
+{
+    m_transformSnapSettings.canvasEnabled = canvasSnap;
+    m_transformSnapSettings.layersEnabled = layersSnap;
+    m_transformSnapSettings.equalSpacingEnabled = equalSpacing;
+    m_transformSnapSettings.pixelAlignRasterMovesEnabled = pixelAlignRasterMoves;
+}
+
 void OpenGLCanvasWidget::beginTransformSnapSession()
 {
     if (!m_transformController.isActive() || !m_transformController.isDragging()) {
@@ -9666,12 +9246,7 @@ void OpenGLCanvasWidget::beginTransformSnapSession()
     // reference frame the live drag readout measures against.
     m_transformDragStartCorners = m_transformController.state().transformedCorners();
 
-    const auto& editor = ruwa::core::SettingsManager::instance().settings().editor;
-    SnapSettings settings;
-    settings.canvasEnabled = editor.autoSnapCanvasEnabled;
-    settings.layersEnabled = editor.autoSnapLayersEnabled;
-    settings.equalSpacingEnabled = editor.autoSnapEqualSpacingEnabled;
-    settings.pixelAlignRasterMovesEnabled = editor.pixelAlignRasterMovesEnabled;
+    const SnapSettings settings = m_transformSnapSettings;
 
     std::optional<QUuid> sourceParentId;
     bool rootsShareParent = true;
@@ -9724,35 +9299,26 @@ void OpenGLCanvasWidget::beginTransformSnapSession()
 
 void OpenGLCanvasWidget::syncTransformMetricOverlays()
 {
-    syncTransformSnapMetricLabels();
-    syncTransformDragMetricLabel();
+    publishTransformPresentation();
 }
 
-void OpenGLCanvasWidget::syncTransformSnapMetricLabels()
+ruwa::ui::workspace::TransformPresentationState
+OpenGLCanvasWidget::buildTransformPresentationState() const
 {
-    const auto& labels = m_transformController.snapVisualState().labels;
-    while (m_transformSnapMetricLabels.size() < labels.size()) {
-        m_transformSnapMetricLabels.push_back(
-            new ruwa::ui::widgets::CanvasMetricLabelOverlay(this));
+    using ruwa::ui::workspace::TransformMetricKind;
+    using ruwa::ui::workspace::TransformMetricPointLabel;
+    using ruwa::ui::workspace::TransformMetricSegment;
+    using ruwa::ui::workspace::TransformPresentationState;
+
+    TransformPresentationState state;
+
+    for (const SnapMetricLabel& label : m_transformController.snapVisualState().labels) {
+        state.snapLabels.push_back({ QPointF(label.position.x, label.position.y), label.text });
     }
 
-    for (size_t i = 0; i < labels.size(); ++i) {
-        const SnapMetricLabel& label = labels[i];
-        const Vector2 screen = screenFromDocumentWorld(label.position);
-        m_transformSnapMetricLabels[i]->presentAtPoint(label.text, QPointF(screen.x, screen.y));
-    }
-    for (size_t i = labels.size(); i < m_transformSnapMetricLabels.size(); ++i) {
-        m_transformSnapMetricLabels[i]->dismiss();
-    }
-}
-
-void OpenGLCanvasWidget::syncTransformDragMetricLabel()
-{
     // Measure against the corners latched at drag start rather than the raw
     // translation/rotation/scale fields: those are bypassed in free-quad and
     // mesh modes, while the corners are meaningful in every mode.
-    using ruwa::ui::widgets::MetricSegment;
-    QList<MetricSegment> segments;
     if (m_transformController.isActive() && m_transformController.isDragging()
         && m_transformDragStartCorners.has_value()) {
         const auto& start = *m_transformDragStartCorners;
@@ -9774,14 +9340,12 @@ void OpenGLCanvasWidget::syncTransformDragMetricLabel()
             const Vector2 to = centroid(now);
             const int dx = qRound(to.x - from.x);
             const int dy = qRound(to.y - from.y);
-            // The arrows carry the direction, so the values stay unsigned. Both
-            // icons point their default way (left / down); each flips once the
-            // content travels against it.
-            const QString offsetTemplate = QStringLiteral("8888");
-            segments.append(MetricSegment { QStringLiteral(":/icons/TransformLeft"), dx > 0, false,
-                QString::number(qAbs(dx)), offsetTemplate });
-            segments.append(MetricSegment { QStringLiteral(":/icons/TransformDown"), false, dy < 0,
-                QString::number(qAbs(dy)), offsetTemplate });
+            // Values stay unsigned; the direction travels with the kind as
+            // negativeDirection and the presenter maps it onto its icons.
+            state.dragSegments.push_back(
+                { TransformMetricKind::MoveX, QString::number(qAbs(dx)), dx < 0 });
+            state.dragSegments.push_back(
+                { TransformMetricKind::MoveY, QString::number(qAbs(dy)), dy < 0 });
             break;
         }
         case TransformDragKind::Rotate: {
@@ -9793,11 +9357,8 @@ void OpenGLCanvasWidget::syncTransformDragMetricLabel()
                     * kRadiansToDegrees;
                 // Report the shortest signed rotation, matching what the drag reads as.
                 degrees = std::fmod(degrees + 540.0, 360.0) - 180.0;
-                // The rotation glyph is never mirrored, so the sign is the only
-                // thing left to tell the two directions apart — keep it.
-                segments.append(MetricSegment { QStringLiteral(":/icons/TransformRotation"), false,
-                    false, QString::number(degrees, 'f', 1) + QStringLiteral("°"),
-                    QStringLiteral("-888.8°") });
+                state.dragSegments.push_back({ TransformMetricKind::Rotation,
+                    QString::number(degrees, 'f', 1) + QStringLiteral("\u00b0"), degrees < 0.0 });
             }
             break;
         }
@@ -9810,48 +9371,42 @@ void OpenGLCanvasWidget::syncTransformDragMetricLabel()
                 const bool uniform = std::abs(widthPercent - heightPercent) < 0.05;
                 const QString value = uniform
                     ? QStringLiteral("%1%").arg(QString::number(widthPercent, 'f', 1))
-                    : QStringLiteral("%1% × %2%")
+                    : QStringLiteral("%1% \u00d7 %2%")
                           .arg(QString::number(widthPercent, 'f', 1),
                               QString::number(heightPercent, 'f', 1));
                 // Non-uniform scales can grow one axis and shrink the other;
-                // the icon follows the area, which is what the eye reads.
+                // negativeDirection reports the area shrinking, which is what
+                // the eye reads.
                 const bool grew = widthPercent * heightPercent >= 100.0 * 100.0;
-                segments.append(MetricSegment { grew ? QStringLiteral(":/icons/TransformBigger")
-                                                     : QStringLiteral(":/icons/TransformSmaller"),
-                    false, false, value,
-                    uniform ? QStringLiteral("888.8%") : QStringLiteral("888.8% × 888.8%") });
+                state.dragSegments.push_back({ TransformMetricKind::Scale, value, !grew });
             }
             break;
         }
         default:
             break;
         }
-    }
 
-    if (segments.isEmpty()) {
-        if (m_transformDragMetricLabel) {
-            m_transformDragMetricLabel->dismiss();
+        // The anchor is sampled from the injected system pointer source, the
+        // same one frame-sampled pan uses, so the readout tracks the pointer
+        // at display refresh rate (plan 7.15.6). Viewport-local already.
+        if (m_pointerSource.systemPointerViewportLocal) {
+            state.dragAnchor = m_pointerSource.systemPointerViewportLocal();
         }
-        return;
     }
 
-    if (!m_transformDragMetricLabel) {
-        m_transformDragMetricLabel = new ruwa::ui::widgets::CanvasMetricLabelOverlay(this);
-    }
-
-    m_transformDragMetricLabel->presentAtCursor(segments, QPointF(mapFromGlobal(QCursor::pos())));
+    return state;
 }
 
-void OpenGLCanvasWidget::refreshTransformDragMetricAnchor()
+void OpenGLCanvasWidget::publishTransformPresentation()
 {
-    // Sampled per frame off the OS cursor rather than off move events, the same
-    // way pan sampling is: the readout then tracks the pointer at the display
-    // refresh rate even when Qt coalesces or delays the moves behind it.
-    if (!m_transformDragMetricLabel || !m_transformController.isActive()
-        || !m_transformController.isDragging()) {
+    auto state = buildTransformPresentationState();
+    const bool empty = state.snapLabels.empty() && state.dragSegments.empty()
+        && !state.dragAnchor.has_value();
+    if (empty && !m_transformPresentationPublished) {
         return;
     }
-    m_transformDragMetricLabel->refreshAtCursor(QPointF(mapFromGlobal(QCursor::pos())));
+    m_transformPresentationPublished = !empty;
+    emit transformPresentationChanged(state);
 }
 
 void OpenGLCanvasWidget::commitTransformUndoStep()
@@ -10913,6 +10468,11 @@ void OpenGLCanvasWidget::cancelTransform(std::optional<bool> moveOnlyStateForOve
 void OpenGLCanvasWidget::initializeGL()
 {
     if (!initializeOpenGLFunctions()) {
+        m_lastFailure = ruwa::ui::workspace::CanvasEngineDiagnostic {
+            QStringLiteral("GLFunctions"), QStringLiteral("OpenGL functions unavailable") };
+        qCritical() << "Canvas renderer initialization failed: OpenGL functions unavailable";
+        emit rendererFailed(QStringLiteral("GLFunctions"),
+            QStringLiteral("OpenGL functions unavailable"));
         return;
     }
 
@@ -10930,13 +10490,19 @@ void OpenGLCanvasWidget::initializeGL()
 
     m_renderer = std::make_unique<GLRenderer>(static_cast<QOpenGLFunctions_4_5_Core*>(this));
 
-    const auto showShaderDirectoryError = [this](const QString& message) {
-        QMessageBox::critical(this, tr("Shader Loading Error"), message);
+    const auto reportInitializationFailure = [this](const QString& code,
+                                                 const QString& message) {
+        // Failure presentation is application policy (plan 7.15.5): record the
+        // owned diagnostic, log, and report — no renderer-owned dialog.
+        m_lastFailure = ruwa::ui::workspace::CanvasEngineDiagnostic { code, message };
+        qCritical().noquote() << "Canvas renderer initialization failed:" << message;
+        emit rendererFailed(code, message);
     };
 
     auto shaderDirResult = resolveRuntimeShaderDirectory();
     if (!shaderDirResult) {
-        showShaderDirectoryError(QString::fromStdString(shaderDirResult.error().message));
+        reportInitializationFailure(QStringLiteral("ShaderDirectory"),
+            QString::fromStdString(shaderDirResult.error().message));
         return;
     }
 
@@ -10948,8 +10514,8 @@ void OpenGLCanvasWidget::initializeGL()
 
     auto result = m_renderer->initialize(finalShaderDir);
     if (!result) {
-        qCritical().noquote() << "OpenGL renderer initialization failed:"
-                              << QString::fromStdString(result.error().message);
+        reportInitializationFailure(QStringLiteral("RendererInit"),
+            QString::fromStdString(result.error().message));
         return;
     }
 
@@ -10965,7 +10531,8 @@ void OpenGLCanvasWidget::initializeGL()
     auto overlayResult
         = m_overlayManager->initialize(static_cast<QOpenGLFunctions_4_5_Core*>(this));
     if (!overlayResult) {
-        showShaderDirectoryError(QString::fromStdString(overlayResult.error().message));
+        reportInitializationFailure(QStringLiteral("OverlayInit"),
+            QString::fromStdString(overlayResult.error().message));
         m_overlayManager->shutdown();
         m_overlayManager.reset();
         return;
@@ -10976,7 +10543,8 @@ void OpenGLCanvasWidget::initializeGL()
         = std::make_unique<GLSelectionRenderer>(static_cast<QOpenGLFunctions_4_5_Core*>(this));
     auto selResult = m_selectionRenderer->initialize();
     if (!selResult) {
-        showShaderDirectoryError(QString::fromStdString(selResult.error().message));
+        reportInitializationFailure(QStringLiteral("SelectionRendererInit"),
+            QString::fromStdString(selResult.error().message));
         m_selectionRenderer->shutdown();
         m_selectionRenderer.reset();
         m_overlayManager->shutdown();
@@ -11000,6 +10568,7 @@ void OpenGLCanvasWidget::initializeGL()
 
     prewarmOneTimeGpuPaths();
 
+    m_lastFailure.reset();
     m_initialized = true;
     emit initialized();
 }
@@ -11025,25 +10594,30 @@ void OpenGLCanvasWidget::paintGL_updateCameraAndEmitSignals()
         : 0.016f;
     m_cameraFrameTimer.restart();
 
-    // VSync-synchronous pan: sample OS cursor position directly here, so one
-    // delta is applied per paint regardless of how mouse events were scheduled
-    // by Qt's event loop. Eliminates beat-pattern judder on high-refresh
-    // displays where mouse poll rate and VSync rate don't divide evenly.
+    // VSync-synchronous pan: sample the injected system pointer once per
+    // paint, so one delta is applied per frame regardless of how input events
+    // were scheduled by Qt's event loop. Eliminates beat-pattern judder on
+    // high-refresh displays where pointer poll rate and VSync rate don't
+    // divide evenly. The pointer source is injected (plan 7.15.6).
     if (m_panSamplingActive) {
-        const QPointF currentGlobal = QCursor::pos();
-        if (currentGlobal != m_panSamplingLastGlobalPos) {
+        const std::optional<QPointF> currentPointer
+            = m_pointerSource.systemPointerViewportLocal
+                ? m_pointerSource.systemPointerViewportLocal()
+                : std::nullopt;
+        if (currentPointer && m_panSamplingLastPointerPos && *currentPointer != *m_panSamplingLastPointerPos) {
             auto& cam = m_viewport.camera();
-            const QPointF prevInGl = mapFromGlobal(m_panSamplingLastGlobalPos);
-            const QPointF currInGl = mapFromGlobal(currentGlobal);
             const aether::Vector2 viewportSize = m_viewport.size();
             const aether::Vector2 prevScreen(
-                static_cast<float>(prevInGl.x()), static_cast<float>(prevInGl.y()));
+                static_cast<float>(m_panSamplingLastPointerPos->x()),
+                static_cast<float>(m_panSamplingLastPointerPos->y()));
             const aether::Vector2 currScreen(
-                static_cast<float>(currInGl.x()), static_cast<float>(currInGl.y()));
+                static_cast<float>(currentPointer->x()), static_cast<float>(currentPointer->y()));
             const aether::Vector2 worldPrev = cam.screenToWorld(prevScreen, viewportSize);
             const aether::Vector2 worldCurr = cam.screenToWorld(currScreen, viewportSize);
             cam.move(worldPrev - worldCurr);
-            m_panSamplingLastGlobalPos = currentGlobal;
+            m_panSamplingLastPointerPos = currentPointer;
+        } else if (currentPointer) {
+            m_panSamplingLastPointerPos = currentPointer;
         }
     }
 
@@ -11051,8 +10625,9 @@ void OpenGLCanvasWidget::paintGL_updateCameraAndEmitSignals()
     // a faster policy means a faster decay, which is exactly a longer time step.
     // With canvas animations off there is nothing to interpolate — both the
     // camera and the transform jump to the state they were heading for.
-    if (anim::canvasEnabled()) {
-        const float animatedDt = dt * static_cast<float>(anim::speed());
+    // Policy is pushed by the application (plan 7.15.10), not queried here.
+    if (m_motionPolicy.enabled) {
+        const float animatedDt = dt * static_cast<float>(m_motionPolicy.speed);
         m_viewport.camera().update(animatedDt);
         if (m_transformController.isActive() && m_transformController.updateAnimation(animatedDt)) {
             update();
@@ -11067,8 +10642,10 @@ void OpenGLCanvasWidget::paintGL_updateCameraAndEmitSignals()
     m_cameraWasAnimatingLastFrame
         = m_viewport.camera().isAnimating() || m_transformController.hasPendingAnimation();
 
-    updateFillProgressPopupPosition();
-    refreshTransformDragMetricAnchor();
+    // Re-publish the transform metric facts so the drag anchor tracks the
+    // live pointer at frame rate (plan 7.15.1/7.15.6); publishing is a no-op
+    // while nothing is on screen.
+    publishTransformPresentation();
     const float zoom = m_viewport.camera().zoom();
     if (zoom != m_lastEmittedZoom) {
         m_lastEmittedZoom = zoom;
@@ -11502,6 +11079,13 @@ void OpenGLCanvasWidget::paintGL_renderOverlays(GLuint sceneTarget)
     const int surfaceWidth = surfaceSize.width();
     const int surfaceHeight = surfaceSize.height();
     auto* transformOverlay = m_overlayManager ? m_overlayManager->transformOverlay() : nullptr;
+    if (transformOverlay && transformOverlay->isInitialized()
+        && m_transformPresentationStyleDirty) {
+        // The style push needs a current GL context for the icon upload, so it
+        // happens here instead of at setTransformPresentationStyle() time.
+        transformOverlay->setPresentationStyle(m_transformPresentationStyle);
+        m_transformPresentationStyleDirty = false;
+    }
     auto* canvasResizeOverlay
         = m_overlayManager ? m_overlayManager->canvasResizeOverlay() : nullptr;
     auto* textEditOverlay = m_overlayManager ? m_overlayManager->textEditOverlay() : nullptr;
@@ -11584,20 +11168,15 @@ void OpenGLCanvasWidget::paintGL_syncCursorToLivePointer()
         && !m_cursorOverlayState.toolCursorVisible) {
         return;
     }
-    if (!isActiveWindow()) {
-        // The GL cursor belongs to Ruwa's own canvas interaction; while another
-        // window is in front, the pointer is not ours to follow. Same rule as
-        // CanvasCursorManager::isOverCanvas.
-        return;
-    }
-
-    // Same source of truth as CanvasCursorManager: the direct WinTab position
-    // while native routing owns the stylus, the system pointer otherwise.
-    const auto nativePos
-        = ruwa::services::input::StylusInputManager::instance().nativeCursorPosition();
-    const QPoint globalPos = nativePos.value_or(QCursor::pos());
-    const QPoint localPos = mapFromGlobal(globalPos);
-    if (!rect().contains(localPos)) {
+    // Same source of truth as CanvasCursorManager — injected by the binding
+    // (plan 7.15.6): the direct WinTab position while native routing owns the
+    // stylus, the system pointer otherwise, nullopt while the pointer is not
+    // ours or is off the canvas.
+    const std::optional<QPointF> renderedPointer
+        = m_pointerSource.renderedPointerViewportLocal
+            ? m_pointerSource.renderedPointerViewportLocal()
+            : std::nullopt;
+    if (!renderedPointer) {
         // Off the canvas. Visibility is the cursor manager's call, not this
         // frame's — leave the last position alone and let it hide the cursor.
         return;
@@ -11608,8 +11187,8 @@ void OpenGLCanvasWidget::paintGL_syncCursorToLivePointer()
     const qreal scaleY = height() > 0
         ? static_cast<qreal>(m_viewport.height()) / static_cast<qreal>(height())
         : 1.0;
-    const float centerX = static_cast<float>(static_cast<qreal>(localPos.x()) * scaleX);
-    const float centerY = static_cast<float>(static_cast<qreal>(localPos.y()) * scaleY);
+    const float centerX = static_cast<float>(static_cast<qreal>(renderedPointer->x()) * scaleX);
+    const float centerY = static_cast<float>(static_cast<qreal>(renderedPointer->y()) * scaleY);
 
     // A moved pointer always earns one more frame. Normally the MouseMove that
     // carried it would have asked for that frame; when input is starved nothing

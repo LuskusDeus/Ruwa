@@ -43,14 +43,6 @@ void main() {
 }
 )";
 
-std::array<Vector2, 4> transformedRectCorners(const TransformState& transform, const Rect& rect)
-{
-    return { transform.transformPoint({ rect.left(), rect.top() }),
-        transform.transformPoint({ rect.right(), rect.top() }),
-        transform.transformPoint({ rect.right(), rect.bottom() }),
-        transform.transformPoint({ rect.left(), rect.bottom() }) };
-}
-
 Vector2 worldToScreenWithMatrix(
     const Vector2& world, const std::array<float, 16>& matrix, int surfaceWidth, int surfaceHeight)
 {
@@ -172,40 +164,28 @@ void TextEditOverlayGL::render(const Viewport& viewport, GLuint sceneTextureId, 
     m_gl->glDisable(GL_DEPTH_TEST);
 
     const bool canInvertScene = sceneTextureId != 0;
-    for (const Rect& rect : m_state.selectionSourceRects) {
+    for (const TextEditSelectionQuad& quad : m_state.selectionQuads) {
         if (canInvertScene) {
-            drawSourceRect(rect, 1.0f, 1.0f, 1.0f, 1.0f, vpMatrix, true);
+            drawWorldQuad(quad, 1.0f, 1.0f, 1.0f, 1.0f, vpMatrix, true);
         } else {
-            drawSourceRect(rect, 0.17f, 0.47f, 1.0f, 0.32f, vpMatrix, false);
+            drawWorldQuad(quad, 0.17f, 0.47f, 1.0f, 0.32f, vpMatrix, false);
         }
     }
-    if (m_state.caretVisible && m_state.caretSourceRect.height > 0.0f) {
-        drawCaretScreenRect(
-            m_state.caretSourceRect, 1.0f, 1.0f, 1.0f, 0.95f, vpMatrix, sceneTextureId != 0);
+    if (m_state.caretVisible && m_state.caretAxis) {
+        drawCaretAxisSegment((*m_state.caretAxis)[0], (*m_state.caretAxis)[1], 1.0f, 1.0f, 1.0f,
+            0.95f, vpMatrix, sceneTextureId != 0);
     }
 
     m_gl->glDisable(GL_BLEND);
 }
 
-void TextEditOverlayGL::drawSourceRect(const Rect& rect, float r, float g, float b, float a,
-    const std::array<float, 16>& vpMatrix, bool invert)
+void TextEditOverlayGL::drawCaretAxisSegment(const Vector2& topWorld, const Vector2& bottomWorld,
+    float r, float g, float b, float a, const std::array<float, 16>& vpMatrix, bool invert)
 {
-    if (rect.width <= 0.0f || rect.height <= 0.0f || a <= 0.0f) {
-        return;
-    }
-    drawWorldQuad(transformedRectCorners(m_state.transform, rect), r, g, b, a, vpMatrix, invert);
-}
-
-void TextEditOverlayGL::drawCaretScreenRect(const Rect& rect, float r, float g, float b, float a,
-    const std::array<float, 16>& vpMatrix, bool invert)
-{
-    if (rect.height <= 0.0f || a <= 0.0f) {
+    if (a <= 0.0f) {
         return;
     }
 
-    const float sourceX = rect.left() + rect.width * 0.5f;
-    const Vector2 topWorld = m_state.transform.transformPoint({ sourceX, rect.top() });
-    const Vector2 bottomWorld = m_state.transform.transformPoint({ sourceX, rect.bottom() });
     const Vector2 topScreen
         = worldToScreenWithMatrix(topWorld, vpMatrix, m_surfaceWidth, m_surfaceHeight);
     const Vector2 bottomScreen
@@ -217,17 +197,6 @@ void TextEditOverlayGL::drawCaretScreenRect(const Rect& rect, float r, float g, 
     Vector2 axis { 0.0f, 1.0f };
     if (len > 0.001f) {
         axis = { dx / len, dy / len };
-    } else {
-        const Vector2 fallbackTopWorld
-            = m_state.transform.transformPoint({ sourceX, rect.top() - 1.0f });
-        const Vector2 fallbackTopScreen
-            = worldToScreenWithMatrix(fallbackTopWorld, vpMatrix, m_surfaceWidth, m_surfaceHeight);
-        const float fdx = topScreen.x - fallbackTopScreen.x;
-        const float fdy = topScreen.y - fallbackTopScreen.y;
-        const float fallbackLen = std::sqrt(fdx * fdx + fdy * fdy);
-        if (fallbackLen > 0.001f) {
-            axis = { fdx / fallbackLen, fdy / fallbackLen };
-        }
     }
 
     constexpr float kCaretWidthPx = 2.0f;

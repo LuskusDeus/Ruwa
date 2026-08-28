@@ -3,8 +3,8 @@
 #ifndef RUWA_CORE_RENDERING_TEXTEDITOVERLAYGL_H
 #define RUWA_CORE_RENDERING_TEXTEDITOVERLAYGL_H
 
+#include "features/canvas/overlays/TextEditOverlayState.h"
 #include "features/canvas/scene/Viewport.h"
-#include "features/transform/TransformState.h"
 #include "shared/types/Result.h"
 
 #include <QOpenGLFunctions_4_5_Core>
@@ -14,15 +14,6 @@
 #include <vector>
 
 namespace aether {
-
-struct TextEditOverlayState {
-    bool active = false;
-    TransformState transform;
-    Rect sourceBounds;
-    std::vector<Rect> selectionSourceRects;
-    Rect caretSourceRect;
-    bool caretVisible = false;
-};
 
 class TextEditOverlayGL {
 public:
@@ -40,10 +31,8 @@ public:
         int surfaceHeight, const std::array<float, 16>* viewProjectionContent = nullptr);
 
 private:
-    void drawSourceRect(const Rect& rect, float r, float g, float b, float a,
-        const std::array<float, 16>& vpMatrix, bool invert);
-    void drawCaretScreenRect(const Rect& rect, float r, float g, float b, float a,
-        const std::array<float, 16>& vpMatrix, bool invert);
+    void drawCaretAxisSegment(const Vector2& topWorld, const Vector2& bottomWorld, float r,
+        float g, float b, float a, const std::array<float, 16>& vpMatrix, bool invert);
     void drawWorldQuad(const std::array<Vector2, 4>& points, float r, float g, float b, float a,
         const std::array<float, 16>& vpMatrix, bool invert);
 
