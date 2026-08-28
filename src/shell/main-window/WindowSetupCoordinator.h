@@ -10,7 +10,6 @@
 #include <QObject>
 
 class QMainWindow;
-class QOpenGLWidget;
 class QScreen;
 
 namespace QWK {
@@ -37,7 +36,10 @@ public:
     void setupWindowAgent(
         QMainWindow* mainWindow, widgets::TopBar* topBar, tabs::CustomTabBar* tabBar);
 
-    void setupOpenGLWarmup(QMainWindow* parent);
+    /// Prepare the top-level window for canvas presentation. Engine
+    /// warm-up details live behind the selected canvas engine runtime
+    /// (plan 7.6.49); the coordinator owns none of them.
+    void setupPresentationWarmup(QMainWindow* parent);
     void restoreWindowState(QMainWindow* mainWindow);
     void saveWindowState(QMainWindow* mainWindow);
 
@@ -48,7 +50,6 @@ public:
 
 private:
     QWK::WidgetWindowAgent* m_windowAgent = nullptr;
-    QOpenGLWidget* m_glWarmup = nullptr;
 };
 
 } // namespace ruwa::ui::windows

@@ -5,6 +5,9 @@
 // ======================================================================================
 
 #include "WindowSetupCoordinator.h"
+
+#include "app/Application.h"
+#include "features/canvas/engine/CanvasEngineQtRuntime.h"
 #include "shell/top-bar/TopBar.h"
 #include "shell/tab-system/CustomTabBar.h"
 
@@ -14,7 +17,6 @@
 #include <QSettings>
 #include <QScreen>
 #include <QGuiApplication>
-#include <QOpenGLWidget>
 #include <QWindow>
 
 namespace ruwa::ui::windows {
@@ -180,18 +182,20 @@ void WindowSetupCoordinator::setupWindowAgent(
     }
 }
 
-void WindowSetupCoordinator::setupOpenGLWarmup(QMainWindow* parent)
+void WindowSetupCoordinator::setupPresentationWarmup(QMainWindow* parent)
 {
-    if (!parent)
+    if (!parent) {
         return;
+    }
 
-    // Pre-warm OpenGL by creating a hidden widget
-    // This forces Qt to initialize the OpenGL subsystem BEFORE any visible
-    // widgets are created, preventing window recreation when canvas is shown
-    m_glWarmup = new QOpenGLWidget(parent);
-    m_glWarmup->setFixedSize(1, 1);
-    m_glWarmup->setAttribute(Qt::WA_DontShowOnScreen);
-    m_glWarmup->show(); // Triggers initializeGL()
+    // Engine presentation warm-up (hidden widget or otherwise) is owned by the
+    // selected canvas engine runtime; the coordinator does not know the
+    // backend (plan 7.6.48/7.6.49).
+    if (auto* app = ruwa::Application::instance()) {
+        if (auto* runtime = app->engineRuntime()) {
+            runtime->prepareTopLevelWindow(parent);
+        }
+    }
 }
 
 void WindowSetupCoordinator::restoreWindowState(QMainWindow* mainWindow)

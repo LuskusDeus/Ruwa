@@ -12,17 +12,19 @@
 #define RUWA_APPLICATION_H
 
 #include <QApplication>
+
+#include <memory>
 #include <QStringList>
 
 class QEvent;
-class QOpenGLContext;
-class QOffscreenSurface;
-class QOpenGLWidget;
 
 namespace ruwa {
 
 namespace ui::widgets {
 class ToolTipController;
+}
+namespace ui::workspace {
+class CanvasEngineQtRuntime;
 }
 
 class Application : public QApplication {
@@ -40,13 +42,20 @@ public:
     // ----------------------------------------------------------------------
     static Application* instance();
 
-    // Returns shared OpenGL context for resource sharing
-    QOpenGLContext* sharedGLContext();
+    /// The selected canvas engine runtime (composition-root owned). Engine
+    /// bootstrap/warm-up lives behind this neutral interface; generic
+    /// application code never names the concrete engine (plan 7.31.1).
+    ui::workspace::CanvasEngineQtRuntime* engineRuntime() const
+    {
+        return m_engineRuntime.get();
+    }
 
     // Initialize managers (fonts, themes, commands)
     // Called by StartupController during startup sequence
     void initializeManagers();
-    void warmUpOpenGLShaders();
+    /// Warm the selected engine's shader/PSO cache; progress is application
+    /// presentation policy layered over neutral runtime stage facts.
+    void warmUpEngineShaders();
 
     // Restart current application process preserving command line arguments
     static bool restart();
@@ -92,15 +101,12 @@ private:
     //   I N T E R N A L   S E T U P
     // ----------------------------------------------------------------------
     void setupDefaultSettings();
-    void initializeOpenGL();
 
     // OpenGL context for early initialization
-    QOpenGLContext* m_glContext = nullptr;
-    QOffscreenSurface* m_glSurface = nullptr;
+    std::unique_ptr<ui::workspace::CanvasEngineQtRuntime> m_engineRuntime;
 
     // Hidden OpenGL widget to pre-warm Qt's OpenGL subsystem
     // This prevents window recreation when first OpenGL widget is shown
-    class QOpenGLWidget* m_glWarmup = nullptr;
     ui::widgets::ToolTipController* m_toolTipController = nullptr;
 };
 

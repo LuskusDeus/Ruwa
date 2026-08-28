@@ -21,7 +21,6 @@
 #include <QByteArray>
 #include <QStringList>
 
-class QOpenGLWidget;
 class QDragEnterEvent;
 class QDragMoveEvent;
 class QDropEvent;
@@ -180,7 +179,6 @@ private:
     QPointer<ContextWindow> m_contextWindow;
 
     // Hidden OpenGL widget for pre-warming
-    QOpenGLWidget* m_glWarmup = nullptr;
 
     /// Tab we listen to for title / modified (QPointer clears if destroyed without a coordinator
     /// signal).

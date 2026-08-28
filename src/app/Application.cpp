@@ -6,6 +6,8 @@
 
 #include "app/Application.h"
 #include "app/TabletToMouseEventFilter.h"
+#include "features/canvas/engine/CanvasEngineQtRuntime.h"
+#include "features/canvas/engine/aether/AetherCanvasEngineQtRuntime.h"
 #include "services/input/StylusDebugService.h"
 #include "services/input/StylusInputManager.h"
 #include "features/theme/manager/ThemeManager.h"
@@ -20,18 +22,12 @@
 #include "services/discord/DiscordService.h"
 #include "services/updates/UpdateManager.h"
 #include "shared/rendering/GLProgramBinaryCache.h"
-#include "shared/rendering/GLShaderWarmup.h"
 #include "shared/widgets/overlays/ToolTipController.h"
 
 #include <QDebug>
 #include <QEventLoop>
 #include <QFileOpenEvent>
 #include <QSettings>
-#include <QSurfaceFormat>
-#include <QOpenGLContext>
-#include <QOffscreenSurface>
-#include <QOpenGLFunctions>
-#include <QOpenGLWidget>
 #include <QProcess>
 #include <QDir>
 #include <QPointer>
@@ -126,8 +122,11 @@ Application::Application(int& argc, char** argv)
     : QApplication(argc, argv)
 {
 
-    setupDefaultSettings();
-    initializeOpenGL(); // Pre-warm OpenGL context
+    // Composition root: this is the only application location that names the
+    // concrete canvas engine runtime (plan 7.31.1).
+    m_engineRuntime = std::make_unique<ruwa::ui::workspace::AetherCanvasEngineQtRuntime>();
+    m_engineRuntime->applySurfaceFormatPolicy();
+    m_engineRuntime->initialize(); // Pre-warm the engine GL subsystem
 
     // Synthesize mouse events from stylus outside canvas
     // (AA_SynthesizeMouseForUnhandledTabletEvents is false)
@@ -150,9 +149,10 @@ Application::~Application()
     }
 
     // Cleanup OpenGL
-    delete m_glWarmup;
-    delete m_glContext;
-    delete m_glSurface;
+    if (m_engineRuntime) {
+        m_engineRuntime->shutdown();
+    }
+    m_engineRuntime.reset();
 }
 
 Application* Application::instance()
@@ -238,34 +238,32 @@ void Application::initializeManagers()
     pumpStartupUi();
 }
 
-void Application::warmUpOpenGLShaders()
+void Application::warmUpEngineShaders()
 {
-    if (!m_glContext || !m_glSurface) {
+    if (!m_engineRuntime) {
         return;
     }
 
-    emit loadingProgress("Preparing OpenGL shader cache...", 62);
+    emit loadingProgress("Preparing graphics shader cache...", 62);
     pumpStartupUi();
 
-    auto warmupResult = aether::warmUpOpenGLShaderPrograms(
-        m_glContext, m_glSurface, [this](const QString& message, int percentage) {
-            emit loadingProgress(message, percentage);
+    const bool warmupOk = m_engineRuntime->warmUpShaders(
+        [this](const ui::workspace::CanvasEngineWarmupStage& stage) {
+            emit loadingProgress(stage.message, stage.percentage);
             pumpStartupUi();
         });
 
-    if (!warmupResult) {
-        qCritical().noquote() << "OpenGL shader warmup failed:"
-                              << QString::fromStdString(warmupResult.error().message);
+    if (!warmupOk) {
+        qCritical().noquote() << "Canvas engine shader warmup failed";
         return;
     }
 
-    emit loadingProgress("OpenGL shaders ready", 94);
+    emit loadingProgress("Graphics shaders ready", 94);
     pumpStartupUi();
 }
 
 void Application::setupDefaultSettings()
 {
-
     // 1. P E R S I S T E N C E
     // ----------------------------------------------------------------------
     QSettings::setDefaultFormat(QSettings::IniFormat);
@@ -274,63 +272,13 @@ void Application::setupDefaultSettings()
     setApplicationName("Ruwa");
     // Version is set in main.cpp before Application creation
 
-    // 2. G R A P H I C S   C O N T E X T   ( O p e n G L )
+    // 2. G R A P H I C S   C O N T E X T
     // ----------------------------------------------------------------------
-    // Note: Used for Qt Quick / Widgets mixing, independent of Vulkan engine
-    QSurfaceFormat format;
-    format.setVersion(4, 5); // OpenGL 4.5
-    format.setProfile(QSurfaceFormat::CoreProfile);
-    format.setDepthBufferSize(24);
-    format.setStencilBufferSize(8);
-    // No MSAA. This default format is what the top-level window's compositing
-    // surface gets, and everything visible is either raster UI or the canvas
-    // QOpenGLWidget which renders into its own non-multisampled FBO — so a 4x
-    // multisampled window surface would only add a full-screen resolve + 4x
-    // color bandwidth to every present, which weak GPUs pay for in frame time.
-    format.setSamples(0);
-
-    QSurfaceFormat::setDefaultFormat(format);
-}
-
-void Application::initializeOpenGL()
-{
-
-    // Pre-warm OpenGL context at startup to avoid delay when creating canvas
-    // This also ensures context sharing works properly
-
-    m_glSurface = new QOffscreenSurface;
-    m_glSurface->setFormat(QSurfaceFormat::defaultFormat());
-    m_glSurface->create();
-
-    m_glContext = new QOpenGLContext;
-    m_glContext->setFormat(QSurfaceFormat::defaultFormat());
-
-    if (m_glContext->create()) {
-        m_glContext->makeCurrent(m_glSurface);
-
-        // Log OpenGL info
-        const char* vendor
-            = reinterpret_cast<const char*>(m_glContext->functions()->glGetString(GL_VENDOR));
-        const char* renderer
-            = reinterpret_cast<const char*>(m_glContext->functions()->glGetString(GL_RENDERER));
-        const char* version
-            = reinterpret_cast<const char*>(m_glContext->functions()->glGetString(GL_VERSION));
-
-        m_glContext->doneCurrent();
+    // Engine-specific surface-format policy belongs to the selected engine
+    // runtime (plan 7.6.46); nothing here names a graphics backend.
+    if (m_engineRuntime) {
+        m_engineRuntime->applySurfaceFormatPolicy();
     }
-
-    // Create hidden OpenGL widget to force Qt to initialize OpenGL subsystem
-    // This prevents window recreation when first visible OpenGL widget is created
-    m_glWarmup = new QOpenGLWidget;
-    m_glWarmup->setFixedSize(1, 1);
-    m_glWarmup->setAttribute(Qt::WA_DontShowOnScreen);
-    m_glWarmup->setAttribute(Qt::WA_QuitOnClose, false);
-    m_glWarmup->show(); // Triggers initializeGL()
-}
-
-QOpenGLContext* Application::sharedGLContext()
-{
-    return m_glContext;
 }
 
 bool Application::restart()

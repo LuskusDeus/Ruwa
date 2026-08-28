@@ -122,7 +122,7 @@ void StartupController::initializeManagers()
 
     // Initialize all managers (fonts, themes, commands, shortcuts)
     m_app->initializeManagers();
-    m_app->warmUpOpenGLShaders();
+    m_app->warmUpEngineShaders();
 
     // Managers initialized
     QTimer::singleShot(100, this, &StartupController::onManagersInitialized);

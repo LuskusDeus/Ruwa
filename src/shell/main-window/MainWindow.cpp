@@ -337,7 +337,7 @@ MainWindow::MainWindow(QWidget* parent, const QStringList& startupOpenFilePaths)
     // Initialize coordinators
     m_setupCoordinator = new WindowSetupCoordinator(this);
     m_setupCoordinator->setupWindowAgent(this, m_topBar, m_tabBar);
-    m_setupCoordinator->setupOpenGLWarmup(this);
+    m_setupCoordinator->setupPresentationWarmup(this);
 
     m_tabCoordinator = new TabSystemCoordinator(this);
     m_tabCoordinator->initialize(
