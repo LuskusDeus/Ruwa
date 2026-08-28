@@ -768,25 +768,41 @@ MenuItem TopBar::buildSelectionMenuItem() const
 MenuItem TopBar::buildTransformMenuItem() const
 {
     const auto& executor = ruwa::core::CommandExecutor::instance();
-    const auto entry = [&executor](const QString& text, const QString& commandId) {
+    const auto entry = [](const QString& text, const QString& commandId, bool enabled) {
         MenuItem item = commandMenuItem(text, commandId);
-        item.enabled = executor.canExecute(commandId);
+        item.enabled = enabled;
         return item;
     };
+
+    // Outside an active transform session all transform commands share the same availability
+    // gate and target lookup. Asking the command system for each item separately used to rebuild
+    // the transform target set seven times while Edit was opening. During a live session their
+    // predicates differ, so keep taking the distinct snapshots in that state.
+    const bool canToggleTransform = executor.canExecute(QStringLiteral("edit.transform"));
+    auto* canvasPanel = executor.context().activeCanvasPanel();
+    const bool transformSessionActive = canvasPanel && canvasPanel->isTransformActive();
+    const bool canWarp = transformSessionActive ? executor.canExecute(QStringLiteral("edit.warp"))
+                                                : canToggleTransform;
+    const bool canApplyDiscreteTransform = transformSessionActive
+        ? executor.canExecute(QStringLiteral("edit.rotate90Clockwise"))
+        : canToggleTransform;
 
     MenuItem transformItem;
     transformItem.text = tr("Transform");
     transformItem.enabled = isInWorkspace();
     transformItem.submenu = {
-        entry(tr("Free Transform"), QStringLiteral("edit.transform")),
-        entry(tr("Warp"), QStringLiteral("edit.warp")),
+        entry(tr("Free Transform"), QStringLiteral("edit.transform"), canToggleTransform),
+        entry(tr("Warp"), QStringLiteral("edit.warp"), canWarp),
         MenuItem::Separator(),
-        entry(tr("Rotate 90 Clockwise"), QStringLiteral("edit.rotate90Clockwise")),
-        entry(tr("Rotate 90 Counterclockwise"), QStringLiteral("edit.rotate90Counterclockwise")),
-        entry(tr("Rotate 180"), QStringLiteral("edit.rotate180")),
+        entry(tr("Rotate 90 Clockwise"), QStringLiteral("edit.rotate90Clockwise"),
+            canApplyDiscreteTransform),
+        entry(tr("Rotate 90 Counterclockwise"), QStringLiteral("edit.rotate90Counterclockwise"),
+            canApplyDiscreteTransform),
+        entry(tr("Rotate 180"), QStringLiteral("edit.rotate180"), canApplyDiscreteTransform),
         MenuItem::Separator(),
-        entry(tr("Flip Horizontal"), QStringLiteral("edit.flipHorizontal")),
-        entry(tr("Flip Vertical"), QStringLiteral("edit.flipVertical")),
+        entry(tr("Flip Horizontal"), QStringLiteral("edit.flipHorizontal"),
+            canApplyDiscreteTransform),
+        entry(tr("Flip Vertical"), QStringLiteral("edit.flipVertical"), canApplyDiscreteTransform),
     };
     return transformItem;
 }
@@ -1079,12 +1095,11 @@ void TopBar::showPopupForButton(MenuButton* button)
         m_layoutPresetsPopup->forceHide();
     }
 
-    const QList<MenuItem> items = getItemsForButton(button);
-
     // Switch: menu already visible, hover different button - smooth transition (like ColorPicker)
     if (m_menuPopup->isPopupVisible() && !m_menuPopup->isHiding()) {
         if (m_currentMenuButton == button)
             return;
+        const QList<MenuItem> items = getItemsForButton(button);
         m_currentMenuButton = button;
         m_fileBtn->setMenuActive(button == m_fileBtn);
         m_editBtn->setMenuActive(button == m_editBtn);
@@ -1098,6 +1113,8 @@ void TopBar::showPopupForButton(MenuButton* button)
     if (m_menuPopup->isHiding()) {
         m_menuPopup->forceHide();
     }
+
+    const QList<MenuItem> items = getItemsForButton(button);
 
     m_currentMenuButton = button;
     m_fileBtn->setMenuActive(button == m_fileBtn);

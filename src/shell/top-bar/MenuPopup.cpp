@@ -298,6 +298,11 @@ MenuPopup::MenuPopup(QWidget* parent)
     // QPropertyAnimation
     m_opacityEffect = new QGraphicsOpacityEffect(this);
     m_opacityEffect->setOpacity(0.0);
+    // Attached top-level menus already animate their reveal height. Keeping a graphics effect
+    // enabled as well makes Qt render the complete widget subtree into an offscreen image on
+    // every frame; the expanded Edit menu made that path visibly frame-bound. Submenus still
+    // use the effect for their short horizontal fade/slide animation.
+    m_opacityEffect->setEnabled(false);
     setGraphicsEffect(m_opacityEffect);
 
     m_opacityAnim = new QPropertyAnimation(this, "popupOpacity", this);
@@ -407,6 +412,7 @@ void MenuPopup::ensureSubmenuPopup()
     m_submenuPopup = new MenuPopup(overlay);
     m_submenuPopup->setParent(overlay);
     m_submenuPopup->m_isSubmenu = true;
+    m_submenuPopup->m_opacityEffect->setEnabled(true);
 
     if (OverlayContainer* oc = OverlayContainer::instance(overlay->window())) {
         oc->registerPopup(m_submenuPopup);
@@ -1024,6 +1030,15 @@ void MenuPopup::startShowAnimation()
     // Disconnect any hide-finished handler from previous hide cycle
     disconnect(m_opacityAnim, &QPropertyAnimation::finished, this, nullptr);
 
+    if (!m_isSubmenu) {
+        // Match MessagePopup: the attached menu's height reveal is the animation. Avoid an
+        // overlapping whole-subtree opacity pass, which is particularly expensive over the GL
+        // canvas for tall menus.
+        m_opacityAnim->stop();
+        setPopupOpacity(1.0);
+        return;
+    }
+
     m_opacityAnim->stop();
     m_opacityAnim->setDuration(anim::duration(SHOW_DURATION));
     m_opacityAnim->setStartValue(m_opacity);
@@ -1043,35 +1058,46 @@ void MenuPopup::startHideAnimation()
     if (m_heightAnim)
         m_heightAnim->stop();
 
-    m_opacityAnim->setDuration(anim::duration(SLIDE_DURATION));
-    m_opacityAnim->setStartValue(m_opacity);
-    m_opacityAnim->setEndValue(0.0);
-    m_opacityAnim->setEasingCurve(QEasingCurve::OutCubic);
-
-    if (m_isSubmenu) {
-        // Submenu: slide horizontally back toward its parent while fading.
-        m_isAnimatingHeight = false;
-        const QPoint currentPos = pos();
-        const QPoint endPos = m_submenuSlideFromLeft
-            ? currentPos + QPoint(SLIDE_OFFSET, 0) // Slide out to the right
-            : currentPos - QPoint(SLIDE_OFFSET, 0); // Slide out to the left
-        m_posAnim->setDuration(anim::duration(SLIDE_DURATION));
-        m_posAnim->setStartValue(currentPos);
-        m_posAnim->setEndValue(endPos);
-        m_posAnim->setEasingCurve(QEasingCurve::OutCubic);
-        anim::start(m_posAnim);
-    } else {
-        // Attached popup: retract the body upward into the TopBar seam (no move),
-        // mirroring the height-reveal it opened with.
+    if (!m_isSubmenu) {
+        // Top-level menus retract through their existing height animation. Complete the hide
+        // from that animation instead of running the disabled opacity effect as a second timer.
         ensureHeightAnim();
+        disconnect(m_heightAnim, &QPropertyAnimation::finished, this, nullptr);
+        connect(m_heightAnim, &QPropertyAnimation::finished, this, [this]() {
+            if (!m_isHiding) {
+                return;
+            }
+            m_isHiding = false;
+            m_isAnimatingHeight = false;
+            hide();
+            emit hidden();
+        });
+
         m_isAnimatingHeight = true;
-        m_heightAnim->stop();
         m_heightAnim->setDuration(anim::duration(SLIDE_DURATION));
         m_heightAnim->setStartValue(m_displayHeight > 0 ? m_displayHeight : height());
         m_heightAnim->setEndValue(0);
         m_heightAnim->setEasingCurve(QEasingCurve::InCubic);
         anim::start(m_heightAnim);
+        return;
     }
+
+    m_opacityAnim->setDuration(anim::duration(SLIDE_DURATION));
+    m_opacityAnim->setStartValue(m_opacity);
+    m_opacityAnim->setEndValue(0.0);
+    m_opacityAnim->setEasingCurve(QEasingCurve::OutCubic);
+
+    // Submenu: slide horizontally back toward its parent while fading.
+    m_isAnimatingHeight = false;
+    const QPoint currentPos = pos();
+    const QPoint endPos = m_submenuSlideFromLeft
+        ? currentPos + QPoint(SLIDE_OFFSET, 0) // Slide out to the right
+        : currentPos - QPoint(SLIDE_OFFSET, 0); // Slide out to the left
+    m_posAnim->setDuration(anim::duration(SLIDE_DURATION));
+    m_posAnim->setStartValue(currentPos);
+    m_posAnim->setEndValue(endPos);
+    m_posAnim->setEasingCurve(QEasingCurve::OutCubic);
+    anim::start(m_posAnim);
 
     // Disconnect any previous hide-finished connection, then connect for this hide cycle
     disconnect(m_opacityAnim, &QPropertyAnimation::finished, this, nullptr);

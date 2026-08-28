@@ -106,6 +106,8 @@ private:
     QPointer<MessagePopup> m_messagePopup;
     /// Default matches legacy offset when overlay matched content below top bar only.
     int m_messagePopupAnchorY = 12;
+    /// Coalesces position + height notifications emitted in the same animation frame.
+    bool m_maskUpdateScheduled = false;
 
     static QHash<QWidget*, OverlayContainer*> s_instances;
 };

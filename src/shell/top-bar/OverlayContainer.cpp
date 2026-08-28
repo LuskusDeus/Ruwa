@@ -146,7 +146,14 @@ void OverlayContainer::setMessagePopupAnchorY(int y)
 
 void OverlayContainer::scheduleMaskUpdate()
 {
-    QTimer::singleShot(20, this, &OverlayContainer::updateMaskForVisiblePopups);
+    if (m_maskUpdateScheduled) {
+        return;
+    }
+    m_maskUpdateScheduled = true;
+    QTimer::singleShot(20, this, [this]() {
+        m_maskUpdateScheduled = false;
+        updateMaskForVisiblePopups();
+    });
 }
 
 bool OverlayContainer::hasActivePopups() const
