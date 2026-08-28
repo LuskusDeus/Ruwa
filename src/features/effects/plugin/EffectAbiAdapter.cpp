@@ -11,6 +11,7 @@
 #include <QStringList>
 
 #include <algorithm>
+#include <cstddef>
 #include <cmath>
 #include <cstring>
 #include <limits>
@@ -31,6 +32,8 @@ namespace ruwa::core::effects::plugin {
 
 namespace {
 
+using ruwa::core::effects::EffectCanvasControlDefinition;
+using ruwa::core::effects::EffectCanvasControlType;
 using ruwa::core::effects::EffectParamDefinition;
 using ruwa::core::effects::EffectParamType;
 using ruwa::core::effects::LayerEffectDescriptor;
@@ -99,6 +102,29 @@ ruwa::core::effects::EffectParamDefaultBinding mapBinding(RuwaEffectDefaultBindi
     default:
         return B::None;
     }
+}
+
+EffectCanvasControlType mapCanvasControlType(RuwaEffectCanvasControlType type)
+{
+    switch (type) {
+    case RUWA_EFFECT_CANVAS_CONTROL_CIRCLE:
+    default:
+        return EffectCanvasControlType::Circle;
+    }
+}
+
+EffectCanvasControlDefinition mapCanvasControlDef(const RuwaEffectCanvasControlDef* control)
+{
+    EffectCanvasControlDefinition mapped;
+    if (!control) {
+        return mapped;
+    }
+    mapped.id = QString::fromUtf8(control->id ? control->id : "");
+    mapped.type = mapCanvasControlType(control->type);
+    mapped.valueParamKey = QString::fromUtf8(control->value_key ? control->value_key : "");
+    mapped.centerXParamKey = QString::fromUtf8(control->center_x_key ? control->center_x_key : "");
+    mapped.centerYParamKey = QString::fromUtf8(control->center_y_key ? control->center_y_key : "");
+    return mapped;
 }
 
 QColor colorFromFloats(const float c[4])
@@ -377,6 +403,18 @@ LayerEffectDescriptor buildLayerEffectDescriptor(const RuwaEffectDescriptor* eff
 
     for (uint32_t i = 0; i < effect->param_count; ++i) {
         d.params.append(mapParamDef(abiArrayElement(effect->params, i)));
+    }
+
+    const std::size_t canvasControlFieldsEnd = offsetof(RuwaEffectDescriptor, canvas_control_count)
+        + sizeof(effect->canvas_control_count);
+    if (effect->struct_size >= canvasControlFieldsEnd && effect->canvas_controls) {
+        for (uint32_t i = 0; i < effect->canvas_control_count; ++i) {
+            const auto* control = abiArrayElement(effect->canvas_controls, i);
+            if (!control) {
+                break;
+            }
+            d.canvasControls.append(mapCanvasControlDef(control));
+        }
     }
 
     if (effect->pixel_expansion_radius) {

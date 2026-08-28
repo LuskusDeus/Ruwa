@@ -5,6 +5,8 @@
 // ==========================================================================
 
 #include "app/TabletToMouseEventFilter.h"
+#include "features/canvas/document/CanvasHistoryFacade.h"
+#include "features/canvas/engine/CanvasEngineSession.h"
 #include "CanvasPanel.h"
 #include "CanvasTabletHandler.h"
 #include "CanvasMouseInputHandler.h"
@@ -16,6 +18,7 @@
 #include "ImageImportSelectionOverlay.h"
 #include "CanvasOverlayLayoutManager.h"
 #include "CanvasOverlayLayout.h"
+#include "CanvasParameterOverlayWidget.h"
 #include "CanvasToolStateController.h"
 #include "CanvasViewController.h"
 #include "TextEditingController.h"
@@ -352,7 +355,7 @@ CanvasPanel::~CanvasPanel()
     m_interactionEnabled = false;
     m_isDrawing = false;
     m_tabletActive = false;
-    m_glContentCreated = false;
+    m_renderContentCreated = false;
 
     if (m_canvasResizeController) {
         m_canvasResizeController->setGlWidget(nullptr);
@@ -368,14 +371,19 @@ CanvasPanel::~CanvasPanel()
         delete m_viewController;
         m_viewController = nullptr;
     }
-    if (auto* glWidget = std::exchange(m_glWidget, nullptr)) {
-        disconnect(glWidget, nullptr, this, nullptr);
-        glWidget->hide();
-        if (m_contentLayout) {
-            m_contentLayout->removeWidget(glWidget);
+    // Tear the engine binding down first, while the GL context is still valid.
+    // The binding disconnects, hides and destroys the host widget; the layout
+    // is notified through Qt's normal widget-destruction path.
+    if (m_engineBinding) {
+        if (QWidget* host = m_engineBinding->viewportHostWidget()) {
+            if (m_contentLayout) {
+                m_contentLayout->removeWidget(host);
+            }
         }
-        delete glWidget;
+        m_engineBinding.reset();
     }
+    m_glWidget = nullptr;
+    m_viewportHostWidget = nullptr;
 
     persistGlobalToolState();
     if (m_toolStateController) {
@@ -700,34 +708,311 @@ void CanvasPanel::hideSelectionSizeOverlay()
         m_viewController->hideSelectionSizeOverlay();
 }
 
-aether::Viewport& CanvasPanel::viewport()
+aether::Viewport& CanvasPanel::accessViewport()
 {
-    return m_viewController->viewport();
+    return m_glWidget->viewport();
 }
 
-const aether::Viewport& CanvasPanel::viewport() const
+const aether::Viewport& CanvasPanel::accessViewport() const
 {
-    return m_viewController->viewport();
+    return m_glWidget->viewport();
 }
 
-aether::Canvas& CanvasPanel::canvas()
+aether::Canvas& CanvasPanel::accessCanvas()
 {
-    return m_viewController->canvas();
+    return m_glWidget->canvas();
 }
 
-const aether::Canvas& CanvasPanel::canvas() const
+const aether::Canvas& CanvasPanel::accessCanvas() const
 {
-    return m_viewController->canvas();
+    return m_glWidget->canvas();
+}
+
+CanvasViewCapability* CanvasPanel::inputView() const
+{
+    auto* session = inputEngineSession();
+    return session ? &session->view() : nullptr;
+}
+
+CanvasPaintingCapability* CanvasPanel::inputPainting() const
+{
+    auto* session = inputEngineSession();
+    return session ? &session->painting() : nullptr;
+}
+
+CanvasEditingCapability* CanvasPanel::inputEditing() const
+{
+    auto* session = inputEngineSession();
+    return session ? &session->editing() : nullptr;
+}
+
+CanvasTransformCapability* CanvasPanel::inputTransform() const
+{
+    auto* session = inputEngineSession();
+    return session ? &session->transform() : nullptr;
+}
+
+CanvasPresentationCapability* CanvasPanel::inputPresentation() const
+{
+    auto* session = inputEngineSession();
+    return session ? &session->presentation() : nullptr;
+}
+
+ruwa::core::canvas::CanvasFillRequestResult CanvasPanel::requestFillAt(int documentX, int documentY)
+{
+    auto* session = inputEngineSession();
+    if (!session) {
+        return { ruwa::core::canvas::CanvasFillRequestStatus::RejectedNotReady, std::nullopt };
+    }
+    auto result = session->editing().performFill(documentX, documentY);
+    presentFillRadiusLimitMessage(result);
+    return result;
+}
+
+ruwa::core::canvas::CanvasFillRequestResult CanvasPanel::requestClassicFillAt(
+    int documentX, int documentY)
+{
+    auto* session = inputEngineSession();
+    if (!session) {
+        return { ruwa::core::canvas::CanvasFillRequestStatus::RejectedNotReady, std::nullopt };
+    }
+    auto result = session->editing().performClassicFill(documentX, documentY);
+    presentFillRadiusLimitMessage(result);
+    return result;
+}
+
+void CanvasPanel::presentFillRadiusLimitMessage(
+    const ruwa::core::canvas::CanvasFillRequestResult& result)
+{
+    if (result.status != ruwa::core::canvas::CanvasFillRequestStatus::RejectedRegionTooLarge
+        || !result.limit) {
+        return;
+    }
+
+    const int roundedRadius
+        = static_cast<int>(std::round(std::max(result.limit->estimatedRadiusDocumentPx, 0.0)));
+    QString message;
+    if (result.limit->algorithm == ruwa::core::canvas::CanvasFillAlgorithm::Smart) {
+        message = QCoreApplication::translate("OpenGLCanvasWidget",
+            "Smart Fill is blocked for very large regions.\n"
+            "Estimated radius: about %1 px (limit: 3000 px).\n"
+            "Try Square Selection first, or use Classic Fill for this area.")
+                      .arg(roundedRadius);
+    } else {
+        message = QCoreApplication::translate("OpenGLCanvasWidget",
+            "Classic Fill is blocked for extremely large regions.\n"
+            "Estimated radius: about %1 px (limit: 8000 px).\n"
+            "Try Square Selection first to restrict the area.")
+                      .arg(roundedRadius);
+    }
+
+    ruwa::ui::widgets::MessagePopupManager::show(this, message,
+        { { QCoreApplication::translate("OpenGLCanvasWidget", "OK"), true, []() { } } }, 420);
+}
+
+bool CanvasPanel::canHistoryUndo() const
+{
+    return m_engineBinding && m_engineBinding->history().canUndo();
+}
+
+bool CanvasPanel::canHistoryRedo() const
+{
+    return m_engineBinding && m_engineBinding->history().canRedo();
+}
+
+void CanvasPanel::historyUndo()
+{
+    if (m_engineBinding) {
+        m_engineBinding->history().undo();
+    }
+}
+
+void CanvasPanel::historyRedo()
+{
+    if (m_engineBinding) {
+        m_engineBinding->history().redo();
+    }
+}
+
+void CanvasPanel::pushHistoryCommand(std::unique_ptr<aether::IUndoCommand> command)
+{
+    if (m_engineBinding) {
+        m_engineBinding->history().pushLegacyCommand(std::move(command));
+    }
+}
+
+void CanvasPanel::beginHistoryTransaction(const QString& text)
+{
+    if (m_engineBinding) {
+        m_engineBinding->history().beginTransaction(text);
+    }
+}
+
+void CanvasPanel::endHistoryTransaction()
+{
+    if (m_engineBinding) {
+        m_engineBinding->history().endTransaction();
+    }
 }
 
 aether::UndoManager* CanvasPanel::undoManagerOrNull()
 {
-    return m_viewController ? m_viewController->undoManagerOrNull() : nullptr;
+    return m_engineBinding ? m_engineBinding->history().legacyUndoManager() : nullptr;
 }
 
 aether::UndoManager* CanvasPanel::activeUndoManagerOrNull()
 {
-    return m_viewController ? m_viewController->activeUndoManagerOrNull() : nullptr;
+    return m_glWidget ? m_glWidget->activeUndoManager() : nullptr;
+}
+
+// ==========================================================================
+//   R E N D E R E R - N E U T R A L   V I E W   A C C E S S
+// ==========================================================================
+// Semantic camera/view operations backed by the engine session. They return
+// safe defaults while the render content does not exist yet.
+
+namespace {
+constexpr qreal kNoZoomDefault = 1.0;
+} // namespace
+
+qreal CanvasPanel::currentZoom() const
+{
+    return m_engineBinding ? m_engineBinding->session().view().zoom() : kNoZoomDefault;
+}
+
+qreal CanvasPanel::minZoom() const
+{
+    return m_engineBinding ? m_engineBinding->session().view().minZoom() : kNoZoomDefault;
+}
+
+qreal CanvasPanel::maxZoom() const
+{
+    return m_engineBinding ? m_engineBinding->session().view().maxZoom() : kNoZoomDefault;
+}
+
+QPointF CanvasPanel::cameraPosition() const
+{
+    return m_engineBinding ? m_engineBinding->session().view().cameraPosition() : QPointF();
+}
+
+qreal CanvasPanel::cameraRotationRadians() const
+{
+    return m_engineBinding ? m_engineBinding->session().view().rotationRadians() : 0.0;
+}
+
+bool CanvasPanel::isCameraAnimating() const
+{
+    return m_engineBinding ? m_engineBinding->session().view().isCameraAnimating() : false;
+}
+
+QSizeF CanvasPanel::viewportExtent() const
+{
+    return m_engineBinding ? m_engineBinding->session().view().viewportExtent() : QSizeF();
+}
+
+QPolygonF CanvasPanel::visibleDocumentPolygon() const
+{
+    return m_engineBinding ? m_engineBinding->session().view().visibleDocumentPolygon()
+                           : QPolygonF();
+}
+
+QPointF CanvasPanel::documentFromViewport(const QPointF& viewportPos) const
+{
+    return m_engineBinding ? m_engineBinding->session().view().documentFromViewport(viewportPos)
+                           : QPointF();
+}
+
+QPointF CanvasPanel::viewportFromDocument(const QPointF& documentPos) const
+{
+    return m_engineBinding ? m_engineBinding->session().view().viewportFromDocument(documentPos)
+                           : QPointF();
+}
+
+void CanvasPanel::setCameraZoom(qreal zoom)
+{
+    if (m_engineBinding) {
+        m_engineBinding->session().view().setZoom(zoom);
+    }
+}
+
+void CanvasPanel::zoomAtViewportPoint(qreal factor, const QPointF& viewportPos)
+{
+    if (m_engineBinding) {
+        m_engineBinding->session().view().zoomAtViewportPoint(factor, viewportPos);
+    }
+}
+
+void CanvasPanel::setCameraZoomLimits(qreal minZoom, qreal maxZoom)
+{
+    if (m_engineBinding) {
+        m_engineBinding->session().view().setZoomLimits(minZoom, maxZoom);
+    }
+}
+
+void CanvasPanel::setCameraPosition(const QPointF& documentPos)
+{
+    if (m_engineBinding) {
+        m_engineBinding->session().view().setCameraPosition(documentPos);
+    }
+}
+
+void CanvasPanel::moveCameraBy(const QPointF& documentDelta)
+{
+    if (m_engineBinding) {
+        m_engineBinding->session().view().moveCameraBy(documentDelta);
+    }
+}
+
+void CanvasPanel::setCameraRotationRadians(qreal radians)
+{
+    if (m_engineBinding) {
+        m_engineBinding->session().view().setRotationRadians(radians);
+    }
+}
+
+void CanvasPanel::addCameraRotationRadians(qreal deltaRadians)
+{
+    if (m_engineBinding) {
+        m_engineBinding->session().view().addRotationRadians(deltaRadians);
+    }
+}
+
+void CanvasPanel::centerCameraOn(const QPointF& documentPoint)
+{
+    if (m_engineBinding) {
+        m_engineBinding->session().view().centerCameraOn(documentPoint);
+    }
+}
+
+void CanvasPanel::stopCameraAnimation()
+{
+    if (m_engineBinding) {
+        m_engineBinding->session().view().stopCameraAnimation();
+    }
+}
+
+bool CanvasPanel::canvasContentFlipHorizontal() const
+{
+    return m_engineBinding ? m_engineBinding->session().view().contentFlipHorizontal() : false;
+}
+
+bool CanvasPanel::canvasContentFlipVertical() const
+{
+    return m_engineBinding ? m_engineBinding->session().view().contentFlipVertical() : false;
+}
+
+void CanvasPanel::setCanvasContentFlipHorizontal(bool flip)
+{
+    if (m_engineBinding) {
+        m_engineBinding->session().view().setContentFlipHorizontal(flip);
+    }
+}
+
+void CanvasPanel::setCanvasContentFlipVertical(bool flip)
+{
+    if (m_engineBinding) {
+        m_engineBinding->session().view().setContentFlipVertical(flip);
+    }
 }
 
 // ==========================================================================
@@ -2338,9 +2623,21 @@ void CanvasPanel::setLayerModel(ruwa::core::layers::LayerModel* model)
                 publishEffectiveExportFrameIfChanged();
                 emit canvasContentChanged();
             });
+        connect(m_layerModel, &ruwa::core::layers::LayerModel::layerEffectsChanged, this,
+            [this](const ruwa::core::layers::LayerId& id, quint64) {
+                if (id == m_effectParameterOverlayLayerId) {
+                    refreshEffectParameterOverlay();
+                }
+            });
         connect(m_layerModel, &ruwa::core::layers::LayerModel::selectionChanged, this,
-            [this](const ruwa::core::layers::LayerId&) { cancelPositionPicking(); });
+            [this](const ruwa::core::layers::LayerId& id) {
+                cancelPositionPicking();
+                if (id != m_effectParameterOverlayLayerId) {
+                    setEffectParameterOverlaySelection({}, {});
+                }
+            });
     }
+    refreshEffectParameterOverlay();
     publishEffectiveExportFrameIfChanged();
     // If m_glWidget doesn't exist yet, it will be applied in createContent()
 }
@@ -3292,9 +3589,9 @@ void CanvasPanel::requestRender()
 //   C A N V A S   R E A D I N E S S
 // ==========================================================================
 
-bool CanvasPanel::isGLContentReady() const
+bool CanvasPanel::isRenderContentReady() const
 {
-    return m_glWidget && m_glWidget->isInitialized();
+    return m_engineBinding && m_engineBinding->session().status() == CanvasEngineStatus::Ready;
 }
 
 void CanvasPanel::onThemeChanged()
@@ -3332,6 +3629,7 @@ void CanvasPanel::onThemeChanged()
     if (m_toolStateOverlay && m_overlayLayoutManager) {
         m_overlayLayoutManager->layoutToolStateOverlay();
     }
+    syncEffectParameterOverlayPresentation();
     requestRender();
 }
 
@@ -3385,14 +3683,14 @@ aether::Vector2 CanvasPanel::mapToViewportWorld(const QPointF& globalPos) const
                             : aether::Vector2 { 0.0f, 0.0f };
 }
 
-bool CanvasPanel::isGlobalOverGlViewport(const QPoint& globalPos) const
+bool CanvasPanel::isGlobalOverViewport(const QPoint& globalPos) const
 {
-    return m_viewController && m_viewController->isGlobalOverGlViewport(globalPos);
+    return m_viewController && m_viewController->isGlobalOverViewport(globalPos);
 }
 
-bool CanvasPanel::isGlobalOverGlViewport(const QPointF& globalPos) const
+bool CanvasPanel::isGlobalOverViewport(const QPointF& globalPos) const
 {
-    return m_viewController && m_viewController->isGlobalOverGlViewport(globalPos);
+    return m_viewController && m_viewController->isGlobalOverViewport(globalPos);
 }
 
 QPointF CanvasPanel::mapWorldToPanel(const aether::Vector2& worldPos) const
@@ -3485,6 +3783,16 @@ void CanvasPanel::resizeEvent(QResizeEvent* event)
 {
     const QSize contentSizeBeforeLayout = m_contentWidget ? m_contentWidget->size() : QSize();
     DockPanel::resizeEvent(event);
+    if (m_effectParameterOverlay && m_contentWidget) {
+        m_effectParameterOverlay->setGeometry(m_contentWidget->rect());
+        syncEffectParameterOverlayPresentation();
+    }
+    QTimer::singleShot(0, this, [this]() {
+        if (m_effectParameterOverlay && m_contentWidget) {
+            m_effectParameterOverlay->setGeometry(m_contentWidget->rect());
+            syncEffectParameterOverlayPresentation();
+        }
+    });
     if (m_overlayLayoutManager) {
         m_overlayLayoutManager->scheduleInitialBrushOverlayPlacement();
         if (!m_stylusJoystickUserMoved) {
@@ -3608,7 +3916,7 @@ void CanvasPanel::mousePressEvent(QMouseEvent* event)
         DockPanel::mousePressEvent(event);
         return;
     }
-    if (handleCanvasMousePress(event)) {
+    if (handleEffectParameterOverlayMousePress(event) || handleCanvasMousePress(event)) {
         return;
     }
     DockPanel::mousePressEvent(event);
@@ -3655,7 +3963,8 @@ void CanvasPanel::mouseMoveEvent(QMouseEvent* event)
         DockPanel::mouseMoveEvent(event);
         return;
     }
-    if (m_mouseHandler && m_mouseHandler->handleMouseMove(event)) {
+    if (handleEffectParameterOverlayMouseMove(event)
+        || (m_mouseHandler && m_mouseHandler->handleMouseMove(event))) {
         return;
     }
     DockPanel::mouseMoveEvent(event);
@@ -3677,7 +3986,9 @@ void CanvasPanel::mouseReleaseEvent(QMouseEvent* event)
         DockPanel::mouseReleaseEvent(event);
         return;
     }
-    if (m_mouseHandler && m_mouseHandler->handleMouseRelease(event)) {
+    if (handleEffectParameterOverlayMouseRelease(event)) {
+        event->accept();
+    } else if (m_mouseHandler && m_mouseHandler->handleMouseRelease(event)) {
         event->accept();
     } else {
         DockPanel::mouseReleaseEvent(event);
@@ -3755,6 +4066,20 @@ void CanvasPanel::keyReleaseEvent(QKeyEvent* event)
 
 bool CanvasPanel::eventFilter(QObject* watched, QEvent* event)
 {
+    // A parameter-control drag keeps ownership even when the pointer leaves the
+    // GL widget. This branch intentionally precedes canvasInputTarget: the
+    // application filter is the existing cross-widget input arbiter.
+    if (m_effectParameterOverlayDragging) {
+        if (event->type() == QEvent::MouseMove
+            && handleEffectParameterOverlayMouseMove(static_cast<QMouseEvent*>(event))) {
+            return true;
+        }
+        if (event->type() == QEvent::MouseButtonRelease
+            && handleEffectParameterOverlayMouseRelease(static_cast<QMouseEvent*>(event))) {
+            return true;
+        }
+    }
+
     const bool canvasInputTarget = isCanvasInputEventTarget(watched);
     if (canvasInputTarget && isCanvasActivationEventType(event->type()) && !isActiveCanvasPanel()) {
         activateApplicationEventFilter();
@@ -3824,7 +4149,8 @@ bool CanvasPanel::eventFilter(QObject* watched, QEvent* event)
     if (canvasInputTarget) {
         switch (event->type()) {
         case QEvent::MouseButtonPress:
-            if (handleCanvasMousePress(static_cast<QMouseEvent*>(event))) {
+            if (handleEffectParameterOverlayMousePress(static_cast<QMouseEvent*>(event))
+                || handleCanvasMousePress(static_cast<QMouseEvent*>(event))) {
                 return true;
             }
             break;
@@ -3835,12 +4161,17 @@ bool CanvasPanel::eventFilter(QObject* watched, QEvent* event)
             }
             break;
         case QEvent::MouseMove:
-            if (m_mouseHandler
-                && m_mouseHandler->handleMouseMove(static_cast<QMouseEvent*>(event))) {
+            if (handleEffectParameterOverlayMouseMove(static_cast<QMouseEvent*>(event))
+                || (m_mouseHandler
+                    && m_mouseHandler->handleMouseMove(static_cast<QMouseEvent*>(event)))) {
                 return true;
             }
             break;
         case QEvent::MouseButtonRelease:
+            if (handleEffectParameterOverlayMouseRelease(static_cast<QMouseEvent*>(event))) {
+                updateSelectionActionPopup();
+                return true;
+            }
             if (m_mouseHandler
                 && m_mouseHandler->handleMouseRelease(static_cast<QMouseEvent*>(event))) {
                 if (!isAnySelectionInteractionActive() && m_spaceSelectionMoveActive) {
@@ -4067,7 +4398,8 @@ void CanvasPanel::endSpaceStrokeMove()
 
 bool CanvasPanel::isTransformInputActive() const
 {
-    return m_glWidget && m_glWidget->isTransformActive();
+    auto* transform = inputTransform();
+    return transform && transform->isActive();
 }
 
 void CanvasPanel::beginTemporaryToolHoldFromButton(Qt::MouseButton heldButton, ToolId tool)
@@ -4497,20 +4829,24 @@ void CanvasPanel::updateCursorManagerOverlay()
 
     const bool transformActive = m_glWidget && m_glWidget->isTransformActive();
     const ToolId currentTool = toolMode();
+    const bool parameterCursorActive = m_effectParameterOverlayDragging
+        || (m_effectParameterOverlay && m_effectParameterOverlay->hoveredCircle() >= 0);
     if (!transformActive) {
         m_transformDragCursorValid = false;
     }
-    const bool useBrush
-        = !transformActive && CanvasToolStateController::isDrawInstrument(currentTool);
-    const bool useEyedropper = !transformActive && (currentTool == ToolId::Eyedropper);
-    const bool useToolCursor
-        = !transformActive && aether::toolCursorStyle(currentTool) != aether::ToolCursorStyle::None;
-    m_cursorManager->setUseGLBrushCursor(useBrush);
-    m_cursorManager->setUseGLEyedropperCursor(useEyedropper);
-    m_cursorManager->setUseGLToolCursor(useToolCursor);
+    const bool useBrush = !parameterCursorActive && !transformActive
+        && CanvasToolStateController::isDrawInstrument(currentTool);
+    const bool useEyedropper
+        = !parameterCursorActive && !transformActive && (currentTool == ToolId::Eyedropper);
+    const bool useToolCursor = parameterCursorActive
+        || (!transformActive
+            && aether::toolCursorStyle(currentTool) != aether::ToolCursorStyle::None);
+    m_cursorManager->setUseRenderedBrushCursor(useBrush);
+    m_cursorManager->setUseRenderedEyedropperCursor(useEyedropper);
+    m_cursorManager->setUseRenderedToolCursor(useToolCursor);
     m_cursorManager->setActiveOverlay(nullptr);
 
-    if (!transformActive) {
+    if (!transformActive || parameterCursorActive) {
         m_cursorManager->clearRequestedCursor();
     }
     if (!useBrush && m_glWidget) {
@@ -4529,6 +4865,13 @@ void CanvasPanel::updateToolCursor()
 {
     if (!isInteractionEnabled())
         return;
+    if (m_effectParameterOverlayDragging
+        || (m_effectParameterOverlay && m_effectParameterOverlay->hoveredCircle() >= 0)) {
+        if (m_cursorManager) {
+            updateCursorManagerOverlay();
+        }
+        return;
+    }
     const ToolId currentTool = toolMode();
     if (m_positionPickerActive && currentTool != ToolId::Hand) {
         // Picking mode shows a plain crosshair over the canvas for every tool
@@ -4662,6 +5005,10 @@ bool CanvasPanel::isCursorOverCanvas() const
 std::optional<Qt::CursorShape> CanvasPanel::resolveCursorForPosition(const QPoint& globalPos) const
 {
     if (!m_glWidget) {
+        return std::nullopt;
+    }
+
+    if (m_effectParameterOverlayDragging || effectParameterOverlayHitTest(globalPos) >= 0) {
         return std::nullopt;
     }
 

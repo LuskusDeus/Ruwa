@@ -7,9 +7,11 @@
 #ifndef AETHER_ENGINE_QT_BRUSHCURSOROVERLAYGL_H
 #define AETHER_ENGINE_QT_BRUSHCURSOROVERLAYGL_H
 
+#include "features/canvas/overlays/CursorOverlayState.h"
 #include "shared/types/Result.h"
 #include "shared/types/Types.h"
 
+#include <QColor>
 #include <QOpenGLFunctions_4_5_Core>
 #include <QPointer>
 #include <QtGui/qopengl.h>
@@ -42,6 +44,16 @@ public:
     void render(float centerX, float centerY, float radiusPx, int viewportWidth, int viewportHeight,
         GLuint sceneTextureId, float rotationRadians = 0.0f, float uiScale = 1.0f);
 
+    /// Render a parameter-control circle: a primary-colored center stroke with
+    /// scene-inverting one-pixel borders on both sides. Hover progress is
+    /// expected in [0, 1] and subtly grows the stroke and radial handle.
+    void renderParameterCircle(float centerX, float centerY, float radiusPx, int viewportWidth,
+        int viewportHeight, GLuint sceneTextureId, const QColor& primaryColor, float hoverProgress,
+        float uiScale = 1.0f);
+
+    static CursorCaptureRect parameterCircleCaptureRect(
+        float centerX, float centerY, float radiusPx, float uiScale = 1.0f);
+
     /// Set custom stamp contours (normalized to [-1,1], centered around the
     /// brush center). One entry per outer or inner boundary loop of the dab;
     /// pass an empty list to fall back to a plain circle.
@@ -60,6 +72,10 @@ private:
         const std::array<float, 16>& mvp, GLuint sceneTextureId, float vpW, float vpH);
     void drawRing(float cx, float cy, float outerRadius, float innerRadius, int segments,
         const std::array<float, 16>& mvp, GLuint sceneTextureId, float vpW, float vpH);
+    void drawAnnulus(float cx, float cy, float innerRadius, float outerRadius, int segments,
+        const std::array<float, 16>& mvp, GLuint program);
+    void drawSolidCircle(float cx, float cy, float radius, int segments,
+        const std::array<float, 16>& mvp, const QColor& color);
     void drawPlus(float cx, float cy, float uiScale, const std::array<float, 16>& mvp,
         GLuint sceneTextureId, float vpW, float vpH);
     void drawPolygonStroke(float cx, float cy, float scale, float strokeWidth,
@@ -71,6 +87,7 @@ private:
 
     GLuint m_invertProgram = 0;
     GLuint m_passthroughProgram = 0;
+    GLuint m_solidProgram = 0;
     GLuint m_vao = 0;
     GLuint m_vbo = 0;
     GLsizeiptr m_vboCapacityBytes = 0;
@@ -82,6 +99,8 @@ private:
     GLint m_locPassthroughMVP = -1;
     GLint m_locPassthroughSceneTexture = -1;
     GLint m_locPassthroughViewportSize = -1;
+    GLint m_locSolidMVP = -1;
+    GLint m_locSolidColor = -1;
 
     bool m_initialized = false;
 

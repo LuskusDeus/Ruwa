@@ -11,6 +11,7 @@
 #include "features/canvas/ui/CanvasInputHost.h"
 #include "features/canvas/ui/CanvasPanelTypes.h"
 #include "features/canvas/ui/CanvasToolStateController.h"
+#include "features/fill/FillAlgorithm.h"
 #include "shell/docking/widgets/DockPanel.h"
 
 #include "features/canvas-resize/CanvasResizeController.h"
@@ -26,13 +27,16 @@
 #include <QString>
 #include <QPointF>
 #include <QSize>
+#include <QSizeF>
 #include <QStringList>
 #include <QRect>
 #include <QRectF>
+#include <QPolygonF>
 #include <QVBoxLayout>
 #include <QElapsedTimer>
 #include <QList>
 #include <QPointer>
+#include <QVariant>
 
 #include <functional>
 #include <memory>
@@ -56,9 +60,12 @@ class QDropEvent;
 class QPainter;
 
 namespace aether {
+class Canvas;
+class IUndoCommand;
 class OpenGLCanvasWidget;
 class TileGrid;
-}
+class Viewport;
+} // namespace aether
 
 namespace ruwa::core::layers {
 class LayerModel;
@@ -103,6 +110,8 @@ class ExportSettingsPanel;
 class ExportModeController;
 class ExportAreaController;
 class ImageImportSelectionOverlay;
+class CanvasParameterOverlayWidget;
+class CanvasEngineQtBinding;
 
 class CanvasPanel : public ruwa::ui::docking::DockPanel, public CanvasInputHost {
     friend class CanvasMouseInputHandler;
@@ -172,17 +181,69 @@ public:
     }
     bool infiniteCanvasEnabled() const { return isInfiniteCanvas(); }
 
-    // Viewport access
-    aether::Viewport& viewport();
-    const aether::Viewport& viewport() const;
+    // === Renderer-neutral view access ===
+    //
+    // Semantic camera/view operations. The engine's viewport/camera objects do
+    // not cross the application boundary (accessViewport()/accessCanvas() below
+    // are quarantined implementation access for CanvasPanel's own internals and
+    // its friend classes).
 
-    // Canvas access
-    aether::Canvas& canvas();
-    const aether::Canvas& canvas() const;
+    /// Camera/view state queries. Return defaults until the render content
+    /// exists; most callers additionally guard with isRenderContentReady().
+    qreal currentZoom() const;
+    qreal minZoom() const;
+    qreal maxZoom() const;
+    /// Camera centre in document coordinates.
+    QPointF cameraPosition() const;
+    qreal cameraRotationRadians() const;
+    bool isCameraAnimating() const;
+    /// Interactive viewport extent in viewport-logical units.
+    QSizeF viewportExtent() const;
+    /// The generic widget hosting the render viewport (UI host role only:
+    /// layout, hit-testing, focus — never renderer API).
+    QWidget* viewportHostWidget() const { return m_viewportHostWidget; }
+    /// The part of the document currently visible, in document coordinates.
+    QPolygonF visibleDocumentPolygon() const;
+    /// Document point under a viewport-logical position.
+    QPointF documentFromViewport(const QPointF& viewportPos) const;
+    /// Viewport-logical position of a document point.
+    QPointF viewportFromDocument(const QPointF& documentPos) const;
 
-    /// Undo manager for this canvas. Returns nullptr if GL content not yet created.
+    // Camera mutations
+    void setCameraZoom(qreal zoom);
+    /// Zoom at a viewport-logical point (keeps that point stationary).
+    void zoomAtViewportPoint(qreal factor, const QPointF& viewportPos);
+    void setCameraZoomLimits(qreal minZoom, qreal maxZoom);
+    void setCameraPosition(const QPointF& documentPos);
+    /// Move the camera by a document-space delta.
+    void moveCameraBy(const QPointF& documentDelta);
+    void setCameraRotationRadians(qreal radians);
+    void addCameraRotationRadians(qreal deltaRadians);
+    void centerCameraOn(const QPointF& documentPoint);
+    void stopCameraAnimation();
+
+    // Display-only content mirror (document and export stay unmirrored).
+    bool canvasContentFlipHorizontal() const;
+    bool canvasContentFlipVertical() const;
+    void setCanvasContentFlipHorizontal(bool flip);
+    void setCanvasContentFlipVertical(bool flip);
+
+    // === History (plan 7.30.1) ===
+    // Semantic panel wrappers over the binding's transitional history facade.
+    // Raw UndoManager access below is quarantined for call sites that still
+    // need the concrete manager (see docs/renderer-boundary-quarantine.md).
+    bool canHistoryUndo() const;
+    bool canHistoryRedo() const;
+    void historyUndo();
+    void historyRedo();
+    void pushHistoryCommand(std::unique_ptr<aether::IUndoCommand> command);
+    void beginHistoryTransaction(const QString& text);
+    void endHistoryTransaction();
+
+    /// TRANSITIONAL QUARANTINE: raw legacy manager access. Do not use in new
+    /// code; ownership moves to an application document subsystem.
     aether::UndoManager* undoManagerOrNull();
-    /// Undo manager used by Undo/Redo actions; transform mode can temporarily override it.
+    /// TRANSITIONAL QUARANTINE: active-manager routing (transform override).
     aether::UndoManager* activeUndoManagerOrNull();
 
     // Camera controls
@@ -252,6 +313,10 @@ public:
 
     // Layer model integration
     void setLayerModel(ruwa::core::layers::LayerModel* model);
+    /// Show the declarative on-canvas controls belonging to one transiently
+    /// selected effect. Null ids clear them immediately.
+    void setEffectParameterOverlaySelection(
+        const ruwa::core::layers::LayerId& layerId, const QUuid& effectId);
     void selectLayerContent(const ruwa::core::layers::LayerId& id);
     /// Load a layer's mask into the pixel selection (grays stay partially selected).
     void selectLayerMaskContent(const ruwa::core::layers::LayerId& id);
@@ -486,13 +551,15 @@ public:
     void setDeferredAppearanceAnimation(bool deferred);
     void setLoadingOverlayDecorationsVisible(bool visible);
 
-    /// Create the OpenGL widget (deferred until after tab transition animation).
-    /// Called by WorkspaceTab::onTransitionFinishedImpl().
-    /// @return true if GL content was created in this call (first time only)
-    bool createGLContent();
+    /// Create the render content: build the engine binding (host widget +
+    /// session + events) through the Aether integration. Deferred until after
+    /// tab transition animation. Called by WorkspaceTab::onTransitionFinishedImpl().
+    /// @return true if the render content was created in this call (first time only)
+    bool createRenderContent();
 
-    /// True when GL content exists and is initialized (safe to use viewport/canvas).
-    bool isGLContentReady() const;
+    /// True when render content exists and the engine is ready (safe to use
+    /// the session capabilities and the semantic view API).
+    bool isRenderContentReady() const;
 
     /// Canvas widgets visibility (View → Canvas widgets menu)
     void setCanvasWidgetVisible(CanvasWidget widget, bool visible);
@@ -553,11 +620,20 @@ public:
     void commitPositionPicking(const QPointF& docPos);
     bool isPositionPickerActive() const { return m_positionPickerActive; }
 
+    // === Fill tool ===
+
+    /// Run a fill request and present its preflight facts (plan 7.6.41):
+    /// RejectedRegionTooLarge maps to the existing localized radius-limit
+    /// popup, every other rejection stays silent exactly as before. The
+    /// result is returned for callers that want the status themselves.
+    ruwa::core::canvas::CanvasFillRequestResult requestFillAt(int documentX, int documentY);
+    ruwa::core::canvas::CanvasFillRequestResult requestClassicFillAt(int documentX, int documentY);
+
 public slots:
     void onSimpleContextAction(int actionId);
 
 signals:
-    void glContentReady();
+    void renderContentReady();
     /// Emitted once per composited canvas frame. Consumers must stay trivial: this
     /// fires at display refresh rate while the canvas is streaming frames.
     void canvasFrameRendered();
@@ -573,6 +649,13 @@ signals:
     void canvasContentChanged();
     void canvasContentRegionChanged(const QRect& worldRect);
     void canvasContentTilesChanged(const QList<QPoint>& tilePositions);
+    /// Live edit produced by a declarative parameter overlay. WorkspaceTab
+    /// routes it back through LayerEffectsPanel so the existing merged undo
+    /// transaction and card synchronization are reused.
+    void effectParameterOverlayChanged(const ruwa::core::layers::LayerId& layerId,
+        const QUuid& effectId, const QString& key, const QVariant& value);
+    void effectParameterOverlayEditFinished(
+        const ruwa::core::layers::LayerId& layerId, const QUuid& effectId);
     void fillProcessingLayerChanged(const ruwa::core::layers::LayerId& id);
     /// A pointer press was accepted as a canvas-tool interaction.
     void canvasToolInteractionStarted();
@@ -617,7 +700,7 @@ private:
     using TemporaryToolHold = CanvasTemporaryToolHold;
 
     void onSurfaceResized(uint32_t width, uint32_t height);
-    void onGLInitialized();
+    void onRenderSessionReady();
     bool addPixelLayer(std::unique_ptr<aether::TileGrid> grid, const QString& layerName,
         const QString& undoLabel, bool enterTransformAfterAdd);
     void updateStyles();
@@ -673,7 +756,23 @@ private:
     void setCursorManagerSuppressedByLoading(bool suppressed);
     void syncToolStateOverlayContent();
     ToolId currentInputTool() const override { return toolMode(); }
-    aether::OpenGLCanvasWidget* inputGlWidget() const override { return m_glWidget; }
+    /// Engine session behind the binding; null until the render content is
+    /// created (plan 7.6.17 input-host seam).
+    CanvasEngineSession* inputEngineSession() const
+    {
+        return m_engineBinding ? &m_engineBinding->session() : nullptr;
+    }
+    bool inputRenderReady() const override
+    {
+        auto* session = inputEngineSession();
+        return session && session->status() == CanvasEngineStatus::Ready;
+    }
+    CanvasViewCapability* inputView() const override;
+    CanvasPaintingCapability* inputPainting() const override;
+    CanvasEditingCapability* inputEditing() const override;
+    CanvasTransformCapability* inputTransform() const override;
+    CanvasPresentationCapability* inputPresentation() const override;
+    QWidget* inputViewportHostWidget() const override { return m_viewportHostWidget; }
     CanvasCursorManager* inputCursorManager() const override { return m_cursorManager; }
     bool hasInputFocus() const override { return hasFocus(); }
     bool hasInputFocusOrCursorOverCanvas() const override
@@ -774,8 +873,21 @@ private:
     void createExportModeContent();
 
     bool handleCanvasMousePress(QMouseEvent* event);
+    bool handleEffectParameterOverlayMousePress(QMouseEvent* event);
+    bool handleEffectParameterOverlayMouseMove(QMouseEvent* event);
+    bool handleEffectParameterOverlayMouseRelease(QMouseEvent* event);
+    void ensureEffectParameterOverlay();
+    void refreshEffectParameterOverlay();
+    void syncEffectParameterOverlayPresentation();
+    void finishEffectParameterOverlayDrag(bool notifyEditor);
+    int effectParameterOverlayHitTest(const QPointF& globalPosition) const;
     void showBlockedDrawMessageForSelectedLayer() override;
     void showDrawOnBackgroundMessage();
+    /// Localized application-side presentation of a fill's
+    /// RejectedRegionTooLarge preflight result (plan 7.6.41); other statuses
+    /// stay silent. The translation context stays "OpenGLCanvasWidget" so the
+    /// existing ru/en translations keep matching the source strings.
+    void presentFillRadiusLimitMessage(const ruwa::core::canvas::CanvasFillRequestResult& result);
     void setCtrlModifierPressed(bool pressed) override { m_ctrlPressed = pressed; }
     void setAltModifierPressed(bool pressed) override { m_altPressed = pressed; }
     void updateInputCursorPosition(const QPoint& globalPos) override;
@@ -818,16 +930,28 @@ private:
     {
         return mapToViewportWorld(globalPos);
     }
-    bool isGlobalOverGlViewport(const QPoint& globalPos) const;
-    bool isGlobalOverGlViewport(const QPointF& globalPos) const;
+    /// TRANSITIONAL QUARANTINE (Stage 1): legacy GL-viewport naming kept for
+    /// the call sites that have not moved to isGlobalOverInputViewport yet.
+    bool isGlobalOverViewport(const QPoint& globalPos) const;
+    bool isGlobalOverViewport(const QPointF& globalPos) const;
     bool isGlobalOverInputViewport(const QPoint& globalPos) const override
     {
-        return isGlobalOverGlViewport(globalPos);
+        return isGlobalOverViewport(globalPos);
     }
     bool isGlobalOverInputViewport(const QPointF& globalPos) const override
     {
-        return isGlobalOverGlViewport(globalPos);
+        return isGlobalOverViewport(globalPos);
     }
+
+    /// Quarantined implementation access to the engine's viewport/canvas for
+    /// CanvasPanel's own internals and its friend classes. Everything that
+    /// crosses the application boundary goes through the semantic view API
+    /// above or the engine session; these accessors disappear with the legacy
+    /// renderer integration.
+    aether::Viewport& accessViewport();
+    const aether::Viewport& accessViewport() const;
+    aether::Canvas& accessCanvas();
+    const aether::Canvas& accessCanvas() const;
 
     /// Shared teardown for commitPositionPicking/cancelPositionPicking: restores
     /// overlay visibility and clears m_positionPickerActive. Returns the
@@ -852,10 +976,24 @@ private:
         = ruwa::core::canvas::CanvasBoundsMode::Bounded;
     QWidget* m_contentWidget = nullptr;
     QVBoxLayout* m_contentLayout = nullptr;
-    QWidget* m_glPlaceholder = nullptr;
-    bool m_glContentCreated = false;
+    QWidget* m_renderPlaceholder = nullptr;
+    bool m_renderContentCreated = false;
     bool m_loadingOverlayDecorationsVisible = true;
     CanvasToolStateController* m_toolStateController = nullptr;
+
+    // === Engine binding (Stage 1 decoupling) ===
+    // The binding owns the rendering engine integration: the generic host
+    // widget the layout holds, the renderer-neutral session and the Qt event
+    // relay. It is created by createRenderContent() and destroyed first in the
+    // panel destructor, which tears the engine down deterministically.
+    std::unique_ptr<CanvasEngineQtBinding> m_engineBinding;
+    /// The host widget as the UI sees it (== binding->viewportHostWidget()).
+    QWidget* m_viewportHostWidget = nullptr;
+    /// TRANSITIONAL QUARANTINE (Stage 1): concrete legacy Aether renderer for
+    /// call sites not yet migrated onto session capabilities. Owned by
+    /// m_engineBinding; null until the render content is created. Every file
+    /// still using it is enumerated in docs/renderer-boundary-quarantine.md.
+    aether::OpenGLCanvasWidget* m_glWidget = nullptr;
 
     /// Overlay covering canvas before/during appearance animation (background color, fades out)
     QWidget* m_loadingOverlay = nullptr;
@@ -865,10 +1003,13 @@ private:
     QLabel* m_loadingTitleLabel = nullptr;
     QLabel* m_loadingStatusLabel = nullptr;
 
-    aether::OpenGLCanvasWidget* m_glWidget = nullptr;
-
     // Layer model (stored for deferred application if widget not yet created)
     ruwa::core::layers::LayerModel* m_layerModel = nullptr;
+    CanvasParameterOverlayWidget* m_effectParameterOverlay = nullptr;
+    ruwa::core::layers::LayerId m_effectParameterOverlayLayerId;
+    QUuid m_effectParameterOverlayEffectId;
+    QString m_effectParameterOverlayDragControlId;
+    bool m_effectParameterOverlayDragging = false;
 
     // Brush control overlay (created in createContent for smooth appearance)
     ruwa::ui::widgets::BrushControlOverlay* m_brushOverlay = nullptr;

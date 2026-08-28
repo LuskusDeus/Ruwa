@@ -18,6 +18,7 @@ namespace aether {
 /// Shape of the GL cursor a tool draws.
 enum class ToolCursorStyle {
     None, ///< Tool draws its own cursor (brush, eyedropper) or keeps a system one.
+    Pointer, ///< Plain custom-rendered pointer arrow without a tool badge.
     PointerBadge, ///< Pointer arrow with the tool's icon hanging to its lower right.
     Crosshair, ///< Plain crosshair, for tools that place a shape by its edges.
 };

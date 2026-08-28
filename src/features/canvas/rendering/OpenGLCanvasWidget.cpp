@@ -1893,7 +1893,7 @@ public:
     struct Request {
         uint64_t sequence = 0;
         QUuid layerId;
-        OpenGLCanvasWidget::FillAlgorithm algorithm = OpenGLCanvasWidget::FillAlgorithm::Smart;
+        FillAlgorithm algorithm = FillAlgorithm::Smart;
         SelectionRestoreContext selectionRestore {};
         RawTileMap layerSnapshotTiles;
         RawTileMap selectionMaskTiles;
@@ -1933,7 +1933,7 @@ public:
         // Keep fill computation off the UI thread, but avoid the shared-GL
         // preview path here. Legacy project layers can destabilize the shared
         // OpenGL context; the CPU fill remains the authoritative, stable path.
-        FloodFillResult result = request->algorithm == OpenGLCanvasWidget::FillAlgorithm::Classic
+        FloodFillResult result = request->algorithm == FillAlgorithm::Classic
             ? classicFloodFillRawTiles(request->layerSnapshotTiles, request->origin.x,
                   request->origin.y, request->color.r, request->color.g, request->color.b,
                   request->color.a, request->selectionMaskTiles, request->canvasBounds.width,
@@ -2820,8 +2820,8 @@ void OpenGLCanvasWidget::hideFillProgressPopupImmediate()
     }
 }
 
-void OpenGLCanvasWidget::setCanvasResizeOverlayState(bool active,
-    const QRectF& selectionWorldRect, bool selectingOrMoving, bool suppressCanvasCornerRounding)
+void OpenGLCanvasWidget::setCanvasResizeOverlayState(bool active, const QRectF& selectionWorldRect,
+    bool selectingOrMoving, bool suppressCanvasCornerRounding)
 {
     // Keep last valid rect while fading out to avoid flash/jump.
     if (active || !selectionWorldRect.isEmpty()) {
@@ -4351,8 +4351,8 @@ void OpenGLCanvasWidget::beginStroke(float worldX, float worldY, float pressure,
     }
 }
 
-void OpenGLCanvasWidget::continueStroke(
-    float worldX, float worldY, float pressure, BrushStrokeHost::StrokeInputDevice inputDevice,
+void OpenGLCanvasWidget::continueStroke(float worldX, float worldY, float pressure,
+    BrushStrokeHost::StrokeInputDevice inputDevice,
     const BrushStrokeHost::BrushInputDynamics& inputDynamics)
 {
     if (m_strokeHost) {
@@ -5567,7 +5567,7 @@ bool OpenGLCanvasWidget::copyMergedSelectionPixelsToClipboard(QImage* outFlatten
 
     const TilePixelFormat copyFormat
         = m_layerModel ? m_layerModel->documentTileFormat() : m_canvas.compositionGrid().format();
-    CanvasCaptureOptions captureOptions;
+    ruwa::ui::workspace::CanvasCaptureRequest captureOptions;
     captureOptions.includeCanvasBackground = true;
     captureOptions.highPrecision = copyFormat != TilePixelFormat::RGBA8;
     ruwa::shared::imaging::PixelSurface composite
@@ -8138,19 +8138,21 @@ bool OpenGLCanvasWidget::updateFillPreviewAnimationState()
     return m_fillPreview.active;
 }
 
-bool OpenGLCanvasWidget::performFill(int worldX, int worldY)
+ruwa::core::canvas::CanvasFillRequestResult OpenGLCanvasWidget::performFill(int worldX, int worldY)
 {
+    using ruwa::core::canvas::CanvasFillRequestResult;
+    using ruwa::core::canvas::CanvasFillRequestStatus;
     if (m_transformController.isActive())
-        return false;
+        return { CanvasFillRequestStatus::RejectedNotReady, std::nullopt };
 
     auto* layer = activeLayer();
     if (!isLayerCanvasEditable(layer) || (!layer->isRaster() && !layer->maskIsEditTarget())) {
-        return false;
+        return { CanvasFillRequestStatus::RejectedNoEditableTarget, std::nullopt };
     }
     const bool maskTarget = layer->maskIsEditTarget();
     TileGrid* targetGrid = maskTarget ? layer->maskGrid.get() : layer->tileGrid.get();
     if (!targetGrid) {
-        return false;
+        return { CanvasFillRequestStatus::RejectedNoEditableTarget, std::nullopt };
     }
     notifyCanvasInteraction(true);
 
@@ -8164,7 +8166,7 @@ bool OpenGLCanvasWidget::performFill(int worldX, int worldY)
         = computeFillWorkRect(targetGrid, selectionMask, worldX, worldY, hasFiniteDocumentBounds(),
             static_cast<int>(m_canvas.width()), static_cast<int>(m_canvas.height()));
     if (workRect.width <= 0 || workRect.height <= 0)
-        return false;
+        return { CanvasFillRequestStatus::RejectedOutsideSelection, std::nullopt };
 
     const uint8_t fillR = m_brush->colorR();
     const uint8_t fillG = m_brush->colorG();
@@ -8184,22 +8186,23 @@ bool OpenGLCanvasWidget::performFill(int worldX, int worldY)
     uint8_t seedB = 0;
     uint8_t seedA = 0;
     if (!samplePixelAt(targetGrid, worldX, worldY, seedR, seedG, seedB, seedA)) {
-        return false;
+        return { CanvasFillRequestStatus::RejectedOutsideSelection, std::nullopt };
     }
     if (selectionMask && fillMaskAlphaAt(selectionMask, worldX, worldY) == 0) {
-        return false;
+        return { CanvasFillRequestStatus::RejectedOutsideSelection, std::nullopt };
     }
     if (seedR == pr && seedG == pg && seedB == pb && seedA == fillA) {
-        return false;
+        return { CanvasFillRequestStatus::RejectedSameColor, std::nullopt };
     }
 
     if (hasFiniteDocumentBounds()) {
         const float estimatedRadius
             = aether::estimateFillRadiusFromSeed(targetGrid, selectionMask, FillAlgorithm::Smart,
                 worldX, worldY, workRect.width, workRect.height, kSmartFillMaxEstimatedRadiusPx);
-        if (estimatedRadius >= kSmartFillMaxEstimatedRadiusPx) {
-            aether::showFillRadiusLimitPopup(this, FillAlgorithm::Smart, estimatedRadius);
-            return false;
+        const CanvasFillRequestResult radiusResult = aether::classifyFillRadiusRequest(
+            FillAlgorithm::Smart, estimatedRadius, kSmartFillMaxEstimatedRadiusPx);
+        if (radiusResult.status != CanvasFillRequestStatus::Accepted) {
+            return radiusResult;
         }
     }
 
@@ -8207,22 +8210,25 @@ bool OpenGLCanvasWidget::performFill(int worldX, int worldY)
         FillOrigin { worldX, worldY }, FillColor { pr, pg, pb, fillA },
         FillCanvasBounds { workRect.originX, workRect.originY, workRect.width, workRect.height },
         maskTarget, workRect.forceFinalResultOnly);
-    return true;
+    return { CanvasFillRequestStatus::Accepted, std::nullopt };
 }
 
-bool OpenGLCanvasWidget::performClassicFill(int worldX, int worldY)
+ruwa::core::canvas::CanvasFillRequestResult OpenGLCanvasWidget::performClassicFill(
+    int worldX, int worldY)
 {
+    using ruwa::core::canvas::CanvasFillRequestResult;
+    using ruwa::core::canvas::CanvasFillRequestStatus;
     if (m_transformController.isActive())
-        return false;
+        return { CanvasFillRequestStatus::RejectedNotReady, std::nullopt };
 
     auto* layer = activeLayer();
     if (!isLayerCanvasEditable(layer) || (!layer->isRaster() && !layer->maskIsEditTarget())) {
-        return false;
+        return { CanvasFillRequestStatus::RejectedNoEditableTarget, std::nullopt };
     }
     const bool maskTarget = layer->maskIsEditTarget();
     TileGrid* targetGrid = maskTarget ? layer->maskGrid.get() : layer->tileGrid.get();
     if (!targetGrid) {
-        return false;
+        return { CanvasFillRequestStatus::RejectedNoEditableTarget, std::nullopt };
     }
     notifyCanvasInteraction(true);
 
@@ -8236,7 +8242,7 @@ bool OpenGLCanvasWidget::performClassicFill(int worldX, int worldY)
         = computeFillWorkRect(targetGrid, selectionMask, worldX, worldY, hasFiniteDocumentBounds(),
             static_cast<int>(m_canvas.width()), static_cast<int>(m_canvas.height()));
     if (workRect.width <= 0 || workRect.height <= 0)
-        return false;
+        return { CanvasFillRequestStatus::RejectedOutsideSelection, std::nullopt };
 
     const uint8_t fillR = m_brush->colorR();
     const uint8_t fillG = m_brush->colorG();
@@ -8254,20 +8260,20 @@ bool OpenGLCanvasWidget::performClassicFill(int worldX, int worldY)
     uint8_t seedB = 0;
     uint8_t seedA = 0;
     if (!samplePixelAt(targetGrid, worldX, worldY, seedR, seedG, seedB, seedA)) {
-        return false;
+        return { CanvasFillRequestStatus::RejectedOutsideSelection, std::nullopt };
     }
     if (selectionMask && fillMaskAlphaAt(selectionMask, worldX, worldY) == 0) {
-        return false;
+        return { CanvasFillRequestStatus::RejectedOutsideSelection, std::nullopt };
     }
     if (seedR == pr && seedG == pg && seedB == pb && seedA == fillA) {
-        return false;
+        return { CanvasFillRequestStatus::RejectedSameColor, std::nullopt };
     }
 
     scheduleDeferredFillKickoff(layer->id, FillAlgorithm::Classic, buildCurrentSelectionRestore(),
         FillOrigin { worldX, worldY }, FillColor { pr, pg, pb, fillA },
         FillCanvasBounds { workRect.originX, workRect.originY, workRect.width, workRect.height },
         maskTarget, true);
-    return true;
+    return { CanvasFillRequestStatus::Accepted, std::nullopt };
 }
 
 void OpenGLCanvasWidget::updateTileIndex(const ruwa::core::layers::LayerData* layer,
@@ -8752,6 +8758,32 @@ void OpenGLCanvasWidget::setBrushCursorState(
     update();
 }
 
+void OpenGLCanvasWidget::setParameterCircleOverlayState(
+    std::vector<ParameterCircleOverlayState> circles)
+{
+    const auto nearlyEqual = [](float lhs, float rhs) { return std::abs(lhs - rhs) <= 0.001f; };
+    if (circles.size() == m_cursorOverlayState.parameterCircles.size()) {
+        bool unchanged = true;
+        for (size_t i = 0; i < circles.size(); ++i) {
+            const auto& incoming = circles[i];
+            const auto& current = m_cursorOverlayState.parameterCircles[i];
+            if (!nearlyEqual(incoming.centerX, current.centerX)
+                || !nearlyEqual(incoming.centerY, current.centerY)
+                || !nearlyEqual(incoming.radius, current.radius)
+                || !nearlyEqual(incoming.hoverProgress, current.hoverProgress)
+                || incoming.primaryColor != current.primaryColor) {
+                unchanged = false;
+                break;
+            }
+        }
+        if (unchanged) {
+            return;
+        }
+    }
+    m_cursorOverlayState.parameterCircles = std::move(circles);
+    update();
+}
+
 void OpenGLCanvasWidget::setEyedropperCursorState(
     bool visible, float centerX, float centerY, const QColor& selectedColor)
 {
@@ -8772,9 +8804,7 @@ void OpenGLCanvasWidget::setToolCursorState(bool visible, float centerX, float c
     m_cursorOverlayState.toolCursorCenterX = centerX;
     m_cursorOverlayState.toolCursorCenterY = centerY;
     m_cursorOverlayState.toolCursorStyle = style;
-    if (!toolIconResource.isEmpty()) {
-        m_cursorOverlayState.toolCursorIcon = toolIconResource;
-    }
+    m_cursorOverlayState.toolCursorIcon = toolIconResource;
     update();
 }
 
@@ -9046,7 +9076,7 @@ QImage OpenGLCanvasWidget::grabCanvasImage()
 }
 
 ruwa::shared::imaging::PixelSurface OpenGLCanvasWidget::captureCanvasSurface(
-    const QRect& worldRect, const CanvasCaptureOptions& options)
+    const QRect& worldRect, const ruwa::ui::workspace::CanvasCaptureRequest& request)
 {
     using ruwa::shared::imaging::PixelAlpha;
     using ruwa::shared::imaging::PixelStorage;
@@ -9069,7 +9099,7 @@ ruwa::shared::imaging::PixelSurface OpenGLCanvasWidget::captureCanvasSurface(
     // C*a while keeping alpha intact. Label the surface honestly and let the
     // pipeline divide it back out once, at the very end.
     const PixelStorage storage
-        = options.highPrecision ? PixelStorage::Float32 : PixelStorage::UInt8;
+        = request.highPrecision ? PixelStorage::Float32 : PixelStorage::UInt8;
     PixelSurface surface = PixelSurface::create(totalW, totalH, storage, PixelAlpha::Premultiplied);
     if (surface.isNull()) {
         return {};
@@ -9077,8 +9107,8 @@ ruwa::shared::imaging::PixelSurface OpenGLCanvasWidget::captureCanvasSurface(
 
     synchronizeCompositionForReadback();
 
-    const GLenum internalFormat = options.highPrecision ? GL_RGBA32F : GL_RGBA8;
-    const GLenum readType = options.highPrecision ? GL_FLOAT : GL_UNSIGNED_BYTE;
+    const GLenum internalFormat = request.highPrecision ? GL_RGBA32F : GL_RGBA8;
+    const GLenum readType = request.highPrecision ? GL_FLOAT : GL_UNSIGNED_BYTE;
     const qsizetype bytesPerPixel = ruwa::shared::imaging::storageBytesPerPixel(storage);
 
     // The region is rendered in CHUNKS through one small framebuffer. A single
@@ -9175,7 +9205,7 @@ ruwa::shared::imaging::PixelSurface OpenGLCanvasWidget::captureCanvasSurface(
             glClear(GL_COLOR_BUFFER_BIT);
 
             Color canvasBg;
-            if (options.includeCanvasBackground && m_layerCompositingBuilder
+            if (request.includeCanvasBackground && m_layerCompositingBuilder
                 && m_layerCompositingBuilder->resolveCanvasBackgroundColor(canvasBg)) {
                 glEnable(GL_BLEND);
                 glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
@@ -11626,6 +11656,8 @@ void OpenGLCanvasWidget::paintGL_renderCursorOverlays()
     auto* eyedropperCursorOverlay = m_overlayManager->eyedropperCursorOverlay();
     auto* toolCursorOverlay = m_overlayManager->toolCursorOverlay();
 
+    const bool wantParameterCircles
+        = brushCursorOverlay && !m_cursorOverlayState.parameterCircles.empty();
     // A radius too small to draw a ring is not a reason to skip the cursor: the
     // overlay stands a fixed-size plus in for it.
     const bool wantBrushCursor = brushCursorOverlay && m_cursorOverlayState.brushVisible
@@ -11634,7 +11666,7 @@ void OpenGLCanvasWidget::paintGL_renderCursorOverlays()
         = eyedropperCursorOverlay && m_cursorOverlayState.eyedropperVisible;
     const bool wantToolCursor = toolCursorOverlay && m_cursorOverlayState.toolCursorVisible;
 
-    if (wantBrushCursor) {
+    if (wantParameterCircles || wantBrushCursor) {
         ensureCursorOverlayInitialized(brushCursorOverlay, "brush cursor overlay");
     }
     if (wantEyedropperCursor) {
@@ -11644,6 +11676,13 @@ void OpenGLCanvasWidget::paintGL_renderCursorOverlays()
         ensureCursorOverlayInitialized(toolCursorOverlay, "tool cursor overlay");
     }
 
+    if (wantParameterCircles && brushCursorOverlay->isInitialized()) {
+        for (const ParameterCircleOverlayState& circle : m_cursorOverlayState.parameterCircles) {
+            brushCursorOverlay->renderParameterCircle(circle.centerX, circle.centerY, circle.radius,
+                surfaceWidth, surfaceHeight, m_sceneFboManager.sceneTexture(), circle.primaryColor,
+                circle.hoverProgress, static_cast<float>(devicePixelRatioF()));
+        }
+    }
     if (wantBrushCursor && brushCursorOverlay->isInitialized()) {
         const float cursorRotation = m_brush ? m_brush->previewDabRotationDeltaRadians() : 0.0f;
         brushCursorOverlay->render(m_cursorOverlayState.brushCenterX,
@@ -13326,11 +13365,13 @@ void OpenGLCanvasWidget::paintGL()
     auto* textEditOverlay = m_overlayManager ? m_overlayManager->textEditOverlay() : nullptr;
     const bool wantBrushCursor = !m_skipCursorOverlays && brushCursorOverlay
         && m_cursorOverlayState.brushVisible && m_cursorOverlayState.brushRadius >= 0.0f;
+    const bool wantParameterCircles = !m_skipCursorOverlays && brushCursorOverlay
+        && !m_cursorOverlayState.parameterCircles.empty();
     const bool wantEyedropperCursor = !m_skipCursorOverlays && eyedropperCursorOverlay
         && m_cursorOverlayState.eyedropperVisible;
     const bool wantToolCursor
         = !m_skipCursorOverlays && toolCursorOverlay && m_cursorOverlayState.toolCursorVisible;
-    if (wantBrushCursor) {
+    if (wantParameterCircles || wantBrushCursor) {
         ensureCursorOverlayInitialized(brushCursorOverlay, "brush cursor overlay");
     }
     if (wantEyedropperCursor) {
@@ -13353,6 +13394,8 @@ void OpenGLCanvasWidget::paintGL()
         = textEditOverlay && textEditOverlay->isInitialized() && textEditOverlay->isActive();
     const bool drawBrushCursor
         = wantBrushCursor && brushCursorOverlay && brushCursorOverlay->isInitialized();
+    const bool drawParameterCircles
+        = wantParameterCircles && brushCursorOverlay && brushCursorOverlay->isInitialized();
     const bool drawEyedropperCursor = wantEyedropperCursor && eyedropperCursorOverlay
         && eyedropperCursorOverlay->isInitialized();
     const bool drawToolCursor
@@ -13366,9 +13409,17 @@ void OpenGLCanvasWidget::paintGL()
     // the tool and eyedropper cursors used to force the full-scene path.
     const bool needFullSceneForOverlay
         = drawTransformOverlay || drawCanvasResizeOverlay || drawTextEditOverlay;
-    std::array<CursorCaptureRect, 3> cursorCaptureRects {};
-    int cursorCaptureRectCount = 0;
+    std::vector<CursorCaptureRect> cursorCaptureRects;
+    cursorCaptureRects.reserve(m_cursorOverlayState.parameterCircles.size() + 3);
     if (!needFullSceneForOverlay) {
+        if (drawParameterCircles) {
+            for (const ParameterCircleOverlayState& circle :
+                m_cursorOverlayState.parameterCircles) {
+                cursorCaptureRects.push_back(
+                    BrushCursorOverlayGL::parameterCircleCaptureRect(circle.centerX, circle.centerY,
+                        circle.radius, static_cast<float>(devicePixelRatioF())));
+            }
+        }
         if (drawBrushCursor) {
             // The cursor shader uses linear sampling and its contour is two
             // pixels wide. Keep a small guard band so edge texels never sample
@@ -13380,19 +13431,18 @@ void OpenGLCanvasWidget::paintGL()
                                 BrushCursorOverlayGL::fallbackMarkerExtentPx(
                                     static_cast<float>(devicePixelRatioF())))
                 + kCursorCapturePaddingPx;
-            cursorCaptureRects[cursorCaptureRectCount++]
-                = CursorCaptureRect { m_cursorOverlayState.brushCenterX - r,
-                      m_cursorOverlayState.brushCenterY - r, m_cursorOverlayState.brushCenterX + r,
-                      m_cursorOverlayState.brushCenterY + r };
+            cursorCaptureRects.push_back(CursorCaptureRect { m_cursorOverlayState.brushCenterX - r,
+                m_cursorOverlayState.brushCenterY - r, m_cursorOverlayState.brushCenterX + r,
+                m_cursorOverlayState.brushCenterY + r });
         }
         if (drawEyedropperCursor) {
-            cursorCaptureRects[cursorCaptureRectCount++] = EyedropperCursorOverlayGL::captureRect(
-                m_cursorOverlayState.eyedropperCenterX, m_cursorOverlayState.eyedropperCenterY);
+            cursorCaptureRects.push_back(EyedropperCursorOverlayGL::captureRect(
+                m_cursorOverlayState.eyedropperCenterX, m_cursorOverlayState.eyedropperCenterY));
         }
         if (drawToolCursor) {
-            cursorCaptureRects[cursorCaptureRectCount++]
-                = ToolCursorOverlayGL::captureRect(m_cursorOverlayState.toolCursorCenterX,
-                    m_cursorOverlayState.toolCursorCenterY, m_cursorOverlayState.toolCursorStyle);
+            cursorCaptureRects.push_back(
+                ToolCursorOverlayGL::captureRect(m_cursorOverlayState.toolCursorCenterX,
+                    m_cursorOverlayState.toolCursorCenterY, m_cursorOverlayState.toolCursorStyle));
         }
     }
 
@@ -13403,14 +13453,13 @@ void OpenGLCanvasWidget::paintGL()
 
     paintGL_renderFillPreviewOverlay(layerStack, sceneTarget, defaultFbo);
 
-    if (cursorCaptureRectCount > 0) {
+    if (!cursorCaptureRects.empty()) {
         const QSize surfaceSize = currentSurfacePixelSize(this);
         const int surfaceWidth = surfaceSize.width();
         const int surfaceHeight = surfaceSize.height();
         m_sceneFboManager.ensureSceneFbo(this, surfaceWidth, surfaceHeight);
         if (m_sceneFboManager.sceneFbo() && m_sceneFboManager.sceneTexture()) {
-            for (int i = 0; i < cursorCaptureRectCount; ++i) {
-                const CursorCaptureRect& rect = cursorCaptureRects[i];
+            for (const CursorCaptureRect& rect : cursorCaptureRects) {
                 const int left
                     = std::clamp(static_cast<int>(std::floor(rect.left)), 0, surfaceWidth);
                 const int right

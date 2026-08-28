@@ -57,6 +57,12 @@ public:
     void setCanvasSizeProvider(CanvasSizeProviderFn fn);
     /// Clear the transient effect-card selection without changing the document.
     void clearEffectSelection();
+    /// Entry points for the canvas's declarative parameter controls. They reuse
+    /// the same live-edit/undo path as card sliders and reject stale selections.
+    void applyCanvasOverlayParam(const ruwa::core::layers::LayerId& layerId, const QUuid& effectId,
+        const QString& key, const QVariant& value);
+    void finishCanvasOverlayParamEdit(
+        const ruwa::core::layers::LayerId& layerId, const QUuid& effectId);
 
 signals:
     /// Bubbled up from an effect's colour capsule; WorkspaceTab routes it to the
@@ -66,6 +72,10 @@ signals:
     /// Bubbled up from an effect's position capsule; WorkspaceTab routes it to
     /// CanvasPanel::beginPositionPicking.
     void positionPickerRequested(QWidget* sourceField, const QPointF& currentPosition);
+
+    /// Transient effect selection changed. Canvas controls are views of this
+    /// state and disappear immediately when effectId is null.
+    void effectSelectionChanged(const ruwa::core::layers::LayerId& layerId, const QUuid& effectId);
 
 protected:
     QWidget* createContent() override;

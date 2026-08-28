@@ -40,6 +40,10 @@ constexpr std::size_t kMinEffectStruct = RUWA_ABI_FIELD_END(RuwaEffectDescriptor
 constexpr std::size_t kMinCapabilitiesStruct
     = RUWA_ABI_FIELD_END(RuwaEffectCapabilities, reads_whole_layer);
 constexpr std::size_t kMinParamStruct = RUWA_ABI_FIELD_END(RuwaEffectParamDef, default_binding);
+constexpr std::size_t kMinCanvasControlStruct
+    = RUWA_ABI_FIELD_END(RuwaEffectCanvasControlDef, center_y_key);
+constexpr std::size_t kCanvasControlFieldsEnd
+    = RUWA_ABI_FIELD_END(RuwaEffectDescriptor, canvas_control_count);
 
 #undef RUWA_ABI_FIELD_END
 
@@ -97,6 +101,11 @@ bool validAxis(RuwaEffectPositionAxis axis)
 bool validBinding(RuwaEffectDefaultBinding binding)
 {
     return binding >= RUWA_EFFECT_BIND_NONE && binding <= RUWA_EFFECT_BIND_CANVAS_HALF_HEIGHT;
+}
+
+bool hasCanvasControlFields(const RuwaEffectDescriptor* effect)
+{
+    return effect && effect->struct_size >= kCanvasControlFieldsEnd;
 }
 
 bool validateCapabilities(const RuwaEffectCapabilities& caps, QString& error)
@@ -292,6 +301,74 @@ bool validateEffect(const RuwaEffectDescriptor* effect, const QSet<QString>& see
                 = QStringLiteral("position pair %1 must contain exactly one X and one Y parameter")
                       .arg(it.key());
             return false;
+        }
+    }
+
+    if (hasCanvasControlFields(effect)) {
+        if (effect->canvas_control_count > 4096) {
+            error = QStringLiteral("canvas_control_count exceeds the ABI safety limit");
+            return false;
+        }
+        if (effect->canvas_control_count > 0 && !effect->canvas_controls) {
+            error = QStringLiteral("canvas_control_count > 0 but canvas_controls is null");
+            return false;
+        }
+
+        const auto findParam = [effect](const char* key) -> const RuwaEffectParamDef* {
+            if (!key) {
+                return nullptr;
+            }
+            for (uint32_t i = 0; i < effect->param_count; ++i) {
+                const auto* param = abiArrayElement(effect->params, i);
+                if (param && param->key && std::strcmp(param->key, key) == 0) {
+                    return param;
+                }
+            }
+            return nullptr;
+        };
+        const auto isNumeric = [](const RuwaEffectParamDef* param) {
+            return param
+                && (param->type == RUWA_EFFECT_PARAM_INT || param->type == RUWA_EFFECT_PARAM_REAL);
+        };
+
+        QSet<QString> controlIds;
+        const uint32_t controlStride
+            = effect->canvas_controls ? effect->canvas_controls->struct_size : 0;
+        for (uint32_t i = 0; i < effect->canvas_control_count; ++i) {
+            const auto* control = abiArrayElement(effect->canvas_controls, i);
+            if (!control || control->struct_size != controlStride
+                || control->struct_size < kMinCanvasControlStruct) {
+                error = QStringLiteral(
+                    "canvas control descriptors use an invalid or inconsistent struct_size");
+                return false;
+            }
+            if (!validStableKey(control->id, false)) {
+                error = QStringLiteral("canvas control %1 has an invalid id").arg(i);
+                return false;
+            }
+            const QString id = QString::fromUtf8(control->id);
+            if (controlIds.contains(id)) {
+                error = QStringLiteral("duplicate canvas control id: %1").arg(id);
+                return false;
+            }
+            controlIds.insert(id);
+            if (control->type != RUWA_EFFECT_CANVAS_CONTROL_CIRCLE) {
+                error = QStringLiteral("canvas control %1 has an unknown type").arg(id);
+                return false;
+            }
+            const auto* valueParam = findParam(control->value_key);
+            if (!isNumeric(valueParam) || !isNumeric(findParam(control->center_x_key))
+                || !isNumeric(findParam(control->center_y_key))) {
+                error = QStringLiteral(
+                    "canvas control %1 must reference numeric value and center parameters")
+                            .arg(id);
+                return false;
+            }
+            if (control->type == RUWA_EFFECT_CANVAS_CONTROL_CIRCLE && valueParam->min_value < 0.0) {
+                error = QStringLiteral("circle canvas control %1 requires a non-negative range")
+                            .arg(id);
+                return false;
+            }
         }
     }
     return true;

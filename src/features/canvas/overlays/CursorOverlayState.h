@@ -11,7 +11,10 @@
 
 #include "features/canvas/overlays/ToolCursorIcons.h"
 
+#include <QColor>
 #include <QString>
+
+#include <vector>
 
 namespace aether {
 
@@ -31,10 +34,21 @@ struct CursorCaptureRect {
     float bottom = 0.0f;
 };
 
+/// One extensible canvas-parameter circle, expressed in surface pixels.
+struct ParameterCircleOverlayState {
+    float centerX = 0.0f;
+    float centerY = 0.0f;
+    float radius = 0.0f;
+    float hoverProgress = 0.0f;
+    QColor primaryColor;
+};
+
 /**
  * @brief State for brush and eyedropper cursor overlays.
  */
 struct CursorOverlayState {
+    std::vector<ParameterCircleOverlayState> parameterCircles;
+
     bool brushVisible = false;
     float brushCenterX = 0.0f;
     float brushCenterY = 0.0f;
@@ -48,7 +62,7 @@ struct CursorOverlayState {
     float eyedropperSelectedB = 0.0f;
     float eyedropperSelectedA = 1.0f;
 
-    /// Pointer + badge or crosshair cursor, per tool (see ToolCursorIcons.h).
+    /// Plain pointer, pointer + badge, or crosshair (see ToolCursorIcons.h).
     bool toolCursorVisible = false;
     float toolCursorCenterX = 0.0f;
     float toolCursorCenterY = 0.0f;

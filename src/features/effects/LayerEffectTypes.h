@@ -124,6 +124,22 @@ enum class EffectParamDefaultBinding {
     CanvasHalfHeight
 };
 
+/// Declarative on-canvas editors exposed by an effect.  The definition only
+/// binds visual geometry to parameter keys; interaction and rendering live in
+/// the canvas subsystem, so effect plugins never depend on QWidget/OpenGL UI
+/// implementation details.
+enum class EffectCanvasControlType { Circle };
+
+struct EffectCanvasControlDefinition {
+    QString id;
+    EffectCanvasControlType type = EffectCanvasControlType::Circle;
+    /// Numeric parameter edited by the control (the circle radius for Circle).
+    QString valueParamKey;
+    /// Numeric document-space parameters that anchor the control.
+    QString centerXParamKey;
+    QString centerYParamKey;
+};
+
 struct EffectParamDefinition {
     QString key;
     QString label;
@@ -190,6 +206,7 @@ struct LayerEffectDescriptor {
     quint32 version = 1;
     EffectCapabilities capabilities;
     QList<EffectParamDefinition> params;
+    QList<EffectCanvasControlDefinition> canvasControls;
     /// Legacy tile-granularity expansion. Still honoured, but prefer
     /// pixelExpansionRadius which the renderer uses to size the padded
     /// neighbour source so the effect can read across tile borders.

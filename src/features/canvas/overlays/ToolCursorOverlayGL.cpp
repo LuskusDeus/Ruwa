@@ -173,7 +173,7 @@ void ToolCursorOverlayGL::render(float centerX, float centerY, int viewportWidth
         drawCrosshair(centerX, centerY, mvp, vpW, vpH);
     } else {
         // Badge first, arrow on top: where they touch, the arrow stays unbroken.
-        if (!toolIconResource.isEmpty()) {
+        if (style == ToolCursorStyle::PointerBadge && !toolIconResource.isEmpty()) {
             m_iconRenderer->draw(toolIconResource, kToolIconSizePx, centerX + kToolIconOffsetX,
                 centerY + kToolIconOffsetY, mvp, vpW, vpH);
         }
@@ -200,11 +200,14 @@ CursorCaptureRect ToolCursorOverlayGL::captureRect(
     }
 
     // Pointer: the hotspot is inset into the arrow, so a little of it sits above
-    // and left of the cursor position; the badge hangs to the lower right and is
-    // what sets the far edge.
+    // and left of the cursor position. A badge, when requested, hangs to the
+    // lower right and sets the far edge.
     const float back = kPointerSizePx * std::max(kPointerHotspotU, kPointerHotspotV) + kPadPx;
     const float forward
-        = std::max(kPointerSizePx, std::max(kToolIconOffsetX, kToolIconOffsetY) + kToolIconSizePx)
+        = (style == ToolCursorStyle::PointerBadge
+                  ? std::max(kPointerSizePx,
+                        std::max(kToolIconOffsetX, kToolIconOffsetY) + kToolIconSizePx)
+                  : kPointerSizePx)
         + kPadPx;
     return { centerX - back, centerY - back, centerX + forward, centerY + forward };
 }

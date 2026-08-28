@@ -10,8 +10,10 @@
 #include "shared/types/Result.h"
 #include "shared/types/Types.h"
 #include "features/canvas/CanvasBoundsMode.h"
+#include "features/canvas/engine/CanvasEngineTypes.h"
 #include "features/canvas/scene/Canvas.h"
 #include "features/canvas/scene/Viewport.h"
+#include "features/fill/FillAlgorithm.h"
 #include "features/selection/LassoSelectionManager.h"
 #include "shared/tiles/TileBrush.h"
 #include "features/canvas/undo/DrawCommand.h"
@@ -104,8 +106,6 @@ class OpenGLCanvasWidget : public QOpenGLWidget,
     Q_OBJECT
 
 public:
-    enum class FillAlgorithm { Smart, Classic };
-
     explicit OpenGLCanvasWidget(QWidget* parent = nullptr);
     ~OpenGLCanvasWidget() override;
 
@@ -191,21 +191,17 @@ public:
     /// locked to one axis for its whole life (see BrushStrokeHost::beginStroke).
     void beginStroke(float worldX, float worldY, float pressure = 1.0f,
         BrushStrokeHost::StrokeInputDevice inputDevice = BrushStrokeHost::StrokeInputDevice::Stylus,
-        bool axisConstraint = false,
-        const BrushStrokeHost::BrushInputDynamics& inputDynamics = {});
+        bool axisConstraint = false, const BrushStrokeHost::BrushInputDynamics& inputDynamics = {});
     void continueStroke(float worldX, float worldY, float pressure = 1.0f,
-        BrushStrokeHost::StrokeInputDevice inputDevice
-        = BrushStrokeHost::StrokeInputDevice::Stylus,
+        BrushStrokeHost::StrokeInputDevice inputDevice = BrushStrokeHost::StrokeInputDevice::Stylus,
         const BrushStrokeHost::BrushInputDynamics& inputDynamics = {});
     void continueStrokeAtElapsed(float worldX, float worldY, float pressure,
         float strokeElapsedSeconds,
-        BrushStrokeHost::StrokeInputDevice inputDevice
-        = BrushStrokeHost::StrokeInputDevice::Stylus,
+        BrushStrokeHost::StrokeInputDevice inputDevice = BrushStrokeHost::StrokeInputDevice::Stylus,
         const BrushStrokeHost::BrushInputDynamics& inputDynamics = {});
     void queueStrokeAtElapsed(float worldX, float worldY, float pressure,
         float strokeElapsedSeconds,
-        BrushStrokeHost::StrokeInputDevice inputDevice
-        = BrushStrokeHost::StrokeInputDevice::Stylus,
+        BrushStrokeHost::StrokeInputDevice inputDevice = BrushStrokeHost::StrokeInputDevice::Stylus,
         const BrushStrokeHost::BrushInputDynamics& inputDynamics = {});
     float strokeElapsedSecondsNow() const;
     void translateActiveStroke(float dx, float dy);
@@ -379,10 +375,12 @@ public:
     bool flipActiveTransformHorizontally();
     bool flipActiveTransformVertically();
 
-    /// Fill tool: flood fill at (worldX, worldY) with brush color. Returns true if pixels were
-    /// filled.
-    bool performFill(int worldX, int worldY);
-    bool performClassicFill(int worldX, int worldY);
+    /// Fill tool: flood fill at (worldX, worldY) with brush color. Returns a
+    /// semantic preflight result (plan 7.6.41); Accepted means the fill was
+    /// started. The renderer reports facts — any user messaging is the
+    /// application's decision.
+    ruwa::core::canvas::CanvasFillRequestResult performFill(int worldX, int worldY);
+    ruwa::core::canvas::CanvasFillRequestResult performClassicFill(int worldX, int worldY);
     void cancelFillPreview();
     bool isFillPreviewActive() const
     {
@@ -480,27 +478,19 @@ public:
     void setEyedropperCursorState(bool visible, float centerX, float centerY,
         const QColor& selectedColor = QColor(0, 0, 0, 255));
 
-    /// Tool cursor (GL-rendered pointer arrow plus a tool badge, or a crosshair).
+    /// Tool cursor (GL-rendered pointer arrow, optional tool badge, or crosshair).
     /// @param toolIconResource QRC path of the badge icon, e.g. ":/icons/Move".
     void setToolCursorState(bool visible, float centerX, float centerY,
         ToolCursorStyle style = ToolCursorStyle::PointerBadge,
         const QString& toolIconResource = QString());
 
+    /// Canvas parameter controls rendered through the same scene-inverting GL
+    /// path as brush and tool cursors.
+    void setParameterCircleOverlayState(std::vector<ParameterCircleOverlayState> circles);
+
     /// Sample color from the rendered scene texture at world position (what the user sees).
     /// Returns true if sampling succeeded and out is filled; false if scene FBO unavailable.
     bool sampleColorFromScene(float worldX, float worldY, QColor& out);
-
-    /// Options for a 1:1 offscreen capture of a document region.
-    struct CanvasCaptureOptions {
-        /// Draw the document background layer. When false the area behind the
-        /// content stays fully transparent regardless of the layer's own state.
-        bool includeCanvasBackground = true;
-        /// Render and read back in 32-bit float instead of 8-bit unsigned.
-        /// Costs 4x the memory and is only worth asking for when the result is
-        /// headed somewhere that can carry the extra precision — a 16-bit file,
-        /// or a resampling pass ahead of one.
-        bool highPrecision = false;
-    };
 
     /// Capture a document region at 1:1 into a CPU surface.
     ///
@@ -508,11 +498,8 @@ public:
     /// so GPU memory stays bounded no matter how large the requested region is;
     /// only the destination CPU surface scales with it. Returns a null surface
     /// when GL is not ready or the surface cannot be allocated.
-    /// No default argument on purpose: the nested struct's member initializers
-    /// are not usable inside the enclosing class body, so `= {}` here fails to
-    /// compile. Callers pass a value-initialized options object explicitly.
     ruwa::shared::imaging::PixelSurface captureCanvasSurface(
-        const QRect& worldRect, const CanvasCaptureOptions& options);
+        const QRect& worldRect, const ruwa::ui::workspace::CanvasCaptureRequest& request);
 
     /// Render the full canvas to an image (for export). Returns null QImage if GL not ready.
     QImage grabCanvasImage();
@@ -533,9 +520,8 @@ public:
 
     // Canvas resize overlay (GL-rendered)
     /// suppressCanvasCornerRounding feeds the existing animated corner-effect state while active.
-    void setCanvasResizeOverlayState(
-        bool active, const QRectF& selectionWorldRect, bool selectingOrMoving,
-        bool suppressCanvasCornerRounding = false);
+    void setCanvasResizeOverlayState(bool active, const QRectF& selectionWorldRect,
+        bool selectingOrMoving, bool suppressCanvasCornerRounding = false);
     void setCanvasResizeSnapVisualState(const TransformSnapVisualState& state);
     void setTextEditOverlayState(const TextEditOverlayState& state);
 

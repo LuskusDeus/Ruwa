@@ -55,6 +55,19 @@ typedef struct RuwaEffectParamDef {
     RuwaEffectDefaultBinding default_binding;
 } RuwaEffectParamDef;
 
+/* --- On-canvas parameter controls (§7.2) --------------------------------
+ * A UI-independent binding from a visual control to existing numeric effect
+ * parameters. Circle edits value_key as a document-pixel radius around the
+ * document-space point supplied by center_x_key / center_y_key. */
+typedef struct RuwaEffectCanvasControlDef {
+    uint32_t struct_size;
+    const char* id; /* stable within one effect descriptor */
+    RuwaEffectCanvasControlType type;
+    const char* value_key;
+    const char* center_x_key;
+    const char* center_y_key;
+} RuwaEffectCanvasControlDef;
+
 /* --- Capabilities --------------------------------------------------------
  * Mirrors ruwa::core::effects::EffectCapabilities. */
 typedef struct RuwaEffectCapabilities {
@@ -146,6 +159,11 @@ typedef struct RuwaEffectDescriptor {
      * created. Called on the owning render thread BEFORE the context is
      * destroyed and before the DLL unloads. */
     void(RUWA_EFFECT_CALL* destroy_pass)(void* pass_instance, RuwaEffectGpuContext gpu);
+
+    /* ABI 1.1: optional declarative on-canvas controls. Appended to preserve
+     * the complete 1.0 prefix; older plugins are accepted via struct_size. */
+    const RuwaEffectCanvasControlDef* canvas_controls;
+    uint32_t canvas_control_count;
 } RuwaEffectDescriptor;
 
 /* --- Plugin API table (returned by the query entry point) ---------------- */

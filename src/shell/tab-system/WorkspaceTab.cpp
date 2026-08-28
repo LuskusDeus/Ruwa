@@ -1237,7 +1237,7 @@ void WorkspaceTab::onTransitionFinishedImpl()
     return;
 
     // Heavy work: OpenGL widget, tile content, render
-    const bool glContentCreated = m_canvasPanel && m_canvasPanel->createGLContent();
+    const bool glContentCreated = m_canvasPanel && m_canvasPanel->createRenderContent();
 
     auto* model = m_layersPanel ? m_layersPanel->layerModel() : nullptr;
 
@@ -1637,17 +1637,17 @@ void WorkspaceTab::queuePostTransitionInitialization()
         }
 
         // The initial camera state must be armed before QOpenGLWidget initializes;
-        // otherwise onGLInitialized() renders one frame at the settled zoom before
+        // otherwise onRenderSessionReady() renders one frame at the settled zoom before
         // scheduleNewProjectAppearanceAnimation() resets it to the animation start.
         m_canvasPanel->setDeferredAppearanceAnimation(true);
-        const bool glContentCreated = m_canvasPanel->createGLContent();
+        const bool glContentCreated = m_canvasPanel->createRenderContent();
         m_pendingCanvasAppearanceAnimation = true;
         auto* model = m_layersPanel ? m_layersPanel->layerModel() : nullptr;
         if (m_canvasPanel && model) {
             m_canvasPanel->setLayerModel(model);
         }
 
-        // createGLContent() ends with restoreToolState(), which seeds the GL brush
+        // createRenderContent() ends with restoreToolState(), which seeds the GL brush
         // from the per-tool persisted color. That can disagree with the workspace
         // color state (what the Color panel shows) restored from the project/session,
         // and because GL creation finishes after the dock-layout restore timer, the
@@ -2046,8 +2046,8 @@ void WorkspaceTab::setupPanels()
 
     m_layersPanel->setPushUndoFn([this](std::unique_ptr<aether::IUndoCommand> cmd) {
         if (m_canvasPanel) {
-            m_canvasPanel->createGLContent();
-            m_canvasPanel->canvas().undoManager().push(std::move(cmd));
+            m_canvasPanel->createRenderContent();
+            m_canvasPanel->pushHistoryCommand(std::move(cmd));
         }
     });
     m_layersPanel->setUndoCallbacks(
@@ -2075,20 +2075,20 @@ void WorkspaceTab::setupPanels()
     };
     layerOps.beginUndoTransaction = [this](const QString& text) {
         if (m_canvasPanel) {
-            m_canvasPanel->createGLContent();
-            m_canvasPanel->canvas().undoManager().beginTransaction(text);
+            m_canvasPanel->createRenderContent();
+            m_canvasPanel->beginHistoryTransaction(text);
         }
     };
     layerOps.endUndoTransaction = [this]() {
         if (m_canvasPanel) {
-            m_canvasPanel->canvas().undoManager().endTransaction();
+            m_canvasPanel->endHistoryTransaction();
         }
     };
     m_layersPanel->setCanvasLayerOps(std::move(layerOps));
     m_layerEffectsPanel->setPushUndoFn([this](std::unique_ptr<aether::IUndoCommand> cmd) {
         if (m_canvasPanel) {
-            m_canvasPanel->createGLContent();
-            m_canvasPanel->canvas().undoManager().push(std::move(cmd));
+            m_canvasPanel->createRenderContent();
+            m_canvasPanel->pushHistoryCommand(std::move(cmd));
         }
     });
     m_layerEffectsPanel->setUndoCallbacks(
@@ -2685,7 +2685,7 @@ void WorkspaceTab::connectPanelSignals()
 
     // Connect layer model to canvas (so canvas knows where to draw)
     m_canvasPanel->setLayerModel(m_layersPanel->layerModel());
-    connect(m_canvasPanel, &workspace::CanvasPanel::glContentReady, this, [this]() {
+    connect(m_canvasPanel, &workspace::CanvasPanel::renderContentReady, this, [this]() {
         m_canvasGlReady = true;
         tryFinishAsyncStartup();
     });
@@ -2938,6 +2938,12 @@ void WorkspaceTab::connectPanelSignals()
                     }
                 });
         });
+    connect(m_layerEffectsPanel, &workspace::LayerEffectsPanel::effectSelectionChanged,
+        m_canvasPanel, &workspace::CanvasPanel::setEffectParameterOverlaySelection);
+    connect(m_canvasPanel, &workspace::CanvasPanel::effectParameterOverlayChanged,
+        m_layerEffectsPanel, &workspace::LayerEffectsPanel::applyCanvasOverlayParam);
+    connect(m_canvasPanel, &workspace::CanvasPanel::effectParameterOverlayEditFinished,
+        m_layerEffectsPanel, &workspace::LayerEffectsPanel::finishCanvasOverlayParamEdit);
     connect(m_canvasPanel, &workspace::CanvasPanel::canvasToolInteractionStarted,
         m_layerEffectsPanel, &workspace::LayerEffectsPanel::clearEffectSelection);
 

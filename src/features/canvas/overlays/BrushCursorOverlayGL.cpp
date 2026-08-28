@@ -55,6 +55,15 @@ void main() {
 }
 )";
 
+static const char* kFragmentShaderSolid = R"(
+#version 450 core
+uniform vec4 uColor;
+out vec4 fragColor;
+void main() {
+    fragColor = uColor;
+}
+)";
+
 // ==========================================================================
 //   C O N S T R U C T I O N
 // ==========================================================================
@@ -120,6 +129,20 @@ Result<void> BrushCursorOverlayGL::initialize()
     m_locPassthroughViewportSize
         = m_gl->glGetUniformLocation(m_passthroughProgram, "uViewportSize");
 
+    auto solidProgram
+        = cache.loadOrCreateGraphicsProgram(QStringLiteral("BrushCursorOverlayGL.solid"),
+            QString::fromUtf8(kVertexShader), QString::fromUtf8(kFragmentShaderSolid));
+    if (!solidProgram) {
+        m_gl->glDeleteProgram(m_passthroughProgram);
+        m_gl->glDeleteProgram(m_invertProgram);
+        m_passthroughProgram = 0;
+        m_invertProgram = 0;
+        return { solidProgram.error().code, solidProgram.error().message };
+    }
+    m_solidProgram = solidProgram.value();
+    m_locSolidMVP = m_gl->glGetUniformLocation(m_solidProgram, "uMVP");
+    m_locSolidColor = m_gl->glGetUniformLocation(m_solidProgram, "uColor");
+
     // VAO / VBO
     m_gl->glGenVertexArrays(1, &m_vao);
     m_gl->glGenBuffers(1, &m_vbo);
@@ -154,6 +177,9 @@ void BrushCursorOverlayGL::shutdown()
         if (m_passthroughProgram) {
             m_gl->glDeleteProgram(m_passthroughProgram);
         }
+        if (m_solidProgram) {
+            m_gl->glDeleteProgram(m_solidProgram);
+        }
         if (m_invertProgram) {
             m_gl->glDeleteProgram(m_invertProgram);
         }
@@ -163,6 +189,7 @@ void BrushCursorOverlayGL::shutdown()
     m_vboCapacityBytes = 0;
     m_vao = 0;
     m_passthroughProgram = 0;
+    m_solidProgram = 0;
     m_invertProgram = 0;
     m_locInvertMVP = -1;
     m_locInvertColor = -1;
@@ -171,6 +198,8 @@ void BrushCursorOverlayGL::shutdown()
     m_locPassthroughMVP = -1;
     m_locPassthroughSceneTexture = -1;
     m_locPassthroughViewportSize = -1;
+    m_locSolidMVP = -1;
+    m_locSolidColor = -1;
     m_context.clear();
 
     m_initialized = false;
@@ -233,6 +262,127 @@ void BrushCursorOverlayGL::render(float centerX, float centerY, float radiusPx, 
     }
 
     m_gl->glDisable(GL_BLEND);
+}
+
+void BrushCursorOverlayGL::renderParameterCircle(float centerX, float centerY, float radiusPx,
+    int viewportWidth, int viewportHeight, GLuint sceneTextureId, const QColor& primaryColor,
+    float hoverProgress, float uiScale)
+{
+    if (!m_initialized || !sceneTextureId || radiusPx < 0.0f || viewportWidth <= 0
+        || viewportHeight <= 0) {
+        return;
+    }
+
+    const float scale = std::max(1.0f, uiScale);
+    const float hover = std::clamp(hoverProgress, 0.0f, 1.0f);
+    const float primaryWidth = (2.0f + hover * 1.25f) * scale;
+    const float invertWidth = 1.0f * scale;
+    const float primaryInner = std::max(0.0f, radiusPx - primaryWidth * 0.5f);
+    const float primaryOuter = radiusPx + primaryWidth * 0.5f;
+    const int segments = std::clamp(static_cast<int>(std::ceil(radiusPx * 0.45f)), 64, 256);
+
+    const float invW = 1.0f / static_cast<float>(viewportWidth);
+    const float invH = 1.0f / static_cast<float>(viewportHeight);
+    const std::array<float, 16> mvp
+        = { { 2.0f * invW, 0, 0, 0, 0, -2.0f * invH, 0, 0, 0, 0, -1, 0, -1, 1, 0, 1 } };
+
+    m_gl->glEnable(GL_BLEND);
+    m_gl->glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
+    m_gl->glDisable(GL_DEPTH_TEST);
+
+    m_gl->glUseProgram(m_solidProgram);
+    m_gl->glUniform4f(m_locSolidColor, static_cast<float>(primaryColor.redF()),
+        static_cast<float>(primaryColor.greenF()), static_cast<float>(primaryColor.blueF()),
+        static_cast<float>(primaryColor.alphaF()));
+    drawAnnulus(centerX, centerY, primaryInner, primaryOuter, segments, mvp, m_solidProgram);
+
+    m_gl->glUseProgram(m_invertProgram);
+    m_gl->glUniformMatrix4fv(m_locInvertMVP, 1, GL_FALSE, mvp.data());
+    m_gl->glUniform4f(m_locInvertColor, 0.0f, 0.0f, 0.0f, 0.95f);
+    m_gl->glBindTextureUnit(0, sceneTextureId);
+    m_gl->glUniform1i(m_locInvertSceneTexture, 0);
+    m_gl->glUniform2f(m_locInvertViewportSize, static_cast<float>(viewportWidth),
+        static_cast<float>(viewportHeight));
+    drawAnnulus(
+        centerX, centerY, primaryOuter, primaryOuter + invertWidth, segments, mvp, m_invertProgram);
+    if (primaryInner > 0.0f) {
+        drawAnnulus(centerX, centerY, std::max(0.0f, primaryInner - invertWidth), primaryInner,
+            segments, mvp, m_invertProgram);
+    }
+
+    const float handleRadius = (3.0f + hover) * scale;
+    const float handleX = centerX + radiusPx;
+    drawSolidCircle(handleX, centerY, handleRadius, 32, mvp, primaryColor);
+    drawAnnulus(
+        handleX, centerY, handleRadius, handleRadius + invertWidth, 32, mvp, m_invertProgram);
+
+    m_gl->glDisable(GL_BLEND);
+}
+
+CursorCaptureRect BrushCursorOverlayGL::parameterCircleCaptureRect(
+    float centerX, float centerY, float radiusPx, float uiScale)
+{
+    const float scale = std::max(1.0f, uiScale);
+    const float reach = std::max(0.0f, radiusPx) + 6.0f * scale;
+    return { centerX - reach, centerY - reach, centerX + reach, centerY + reach };
+}
+
+void BrushCursorOverlayGL::drawAnnulus(float cx, float cy, float innerRadius, float outerRadius,
+    int segments, const std::array<float, 16>& mvp, GLuint program)
+{
+    if (outerRadius <= innerRadius || outerRadius <= 0.0f || !program) {
+        return;
+    }
+
+    std::vector<float> vertices;
+    vertices.reserve(static_cast<size_t>(segments + 1) * 4);
+    for (int i = 0; i <= segments; ++i) {
+        const float angle
+            = 2.0f * 3.14159265f * static_cast<float>(i) / static_cast<float>(segments);
+        const float cosAngle = std::cos(angle);
+        const float sinAngle = std::sin(angle);
+        vertices.push_back(cx + outerRadius * cosAngle);
+        vertices.push_back(cy + outerRadius * sinAngle);
+        vertices.push_back(cx + innerRadius * cosAngle);
+        vertices.push_back(cy + innerRadius * sinAngle);
+    }
+
+    m_gl->glUseProgram(program);
+    if (program == m_solidProgram) {
+        m_gl->glUniformMatrix4fv(m_locSolidMVP, 1, GL_FALSE, mvp.data());
+    }
+    m_gl->glBindVertexArray(m_vao);
+    m_gl->glBindBuffer(GL_ARRAY_BUFFER, m_vbo);
+    m_gl->glBufferSubData(GL_ARRAY_BUFFER, 0,
+        static_cast<GLsizeiptr>(vertices.size() * sizeof(float)), vertices.data());
+    m_gl->glDrawArrays(GL_TRIANGLE_STRIP, 0, static_cast<GLsizei>(vertices.size() / 2));
+    m_gl->glBindVertexArray(0);
+}
+
+void BrushCursorOverlayGL::drawSolidCircle(float cx, float cy, float radius, int segments,
+    const std::array<float, 16>& mvp, const QColor& color)
+{
+    std::vector<float> vertices(static_cast<size_t>(segments + 2) * 2);
+    vertices[0] = cx;
+    vertices[1] = cy;
+    for (int i = 0; i <= segments; ++i) {
+        const float angle
+            = 2.0f * 3.14159265f * static_cast<float>(i) / static_cast<float>(segments);
+        vertices[static_cast<size_t>(i + 1) * 2] = cx + radius * std::cos(angle);
+        vertices[static_cast<size_t>(i + 1) * 2 + 1] = cy + radius * std::sin(angle);
+    }
+
+    m_gl->glUseProgram(m_solidProgram);
+    m_gl->glUniformMatrix4fv(m_locSolidMVP, 1, GL_FALSE, mvp.data());
+    m_gl->glUniform4f(m_locSolidColor, static_cast<float>(color.redF()),
+        static_cast<float>(color.greenF()), static_cast<float>(color.blueF()),
+        static_cast<float>(color.alphaF()));
+    m_gl->glBindVertexArray(m_vao);
+    m_gl->glBindBuffer(GL_ARRAY_BUFFER, m_vbo);
+    m_gl->glBufferSubData(GL_ARRAY_BUFFER, 0,
+        static_cast<GLsizeiptr>(vertices.size() * sizeof(float)), vertices.data());
+    m_gl->glDrawArrays(GL_TRIANGLE_FAN, 0, segments + 2);
+    m_gl->glBindVertexArray(0);
 }
 
 void BrushCursorOverlayGL::drawCircle(float cx, float cy, float radius, int segments,

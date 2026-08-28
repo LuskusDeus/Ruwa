@@ -282,14 +282,51 @@ void LayerEffectsPanel::selectEffect(const QUuid& effectId)
     }
     m_selectedEffectId = effectId;
     nextCard->setSelected(true);
+    const LayerData* layer = selectedLayer();
+    emit effectSelectionChanged(layer ? layer->id : LayerId(), m_selectedEffectId);
 }
 
 void LayerEffectsPanel::clearEffectSelection()
 {
+    const bool hadSelection = !m_selectedEffectId.isNull();
     if (EffectCard* selectedCard = m_cardById.value(m_selectedEffectId, nullptr)) {
         selectedCard->setSelected(false);
     }
     m_selectedEffectId = QUuid();
+    if (hadSelection) {
+        emit effectSelectionChanged({}, {});
+    }
+}
+
+void LayerEffectsPanel::applyCanvasOverlayParam(
+    const LayerId& layerId, const QUuid& effectId, const QString& key, const QVariant& value)
+{
+    LayerData* layer = selectedLayer();
+    if (!layer || layer->id != layerId || effectId != m_selectedEffectId) {
+        return;
+    }
+    applyParamLive(effectId, key, value);
+    // The live mutation deliberately suppresses the synchronous model refresh
+    // that would otherwise disturb a dragged card editor. Here the input came
+    // from canvas, so explicitly mirror the new value into the existing card.
+    if (EffectCard* card = m_cardById.value(effectId, nullptr)) {
+        layer = selectedLayer();
+        if (layer) {
+            for (const LayerEffectState& effect : layer->effects) {
+                if (effect.instanceId == effectId) {
+                    card->setEffectState(effect);
+                    break;
+                }
+            }
+        }
+    }
+}
+
+void LayerEffectsPanel::finishCanvasOverlayParamEdit(const LayerId& layerId, const QUuid& effectId)
+{
+    if (m_paramEditActive && m_paramEditLayerId == layerId && m_paramEditEffectId == effectId) {
+        finishParamEditSession();
+    }
 }
 
 void LayerEffectsPanel::removeAllCards()
