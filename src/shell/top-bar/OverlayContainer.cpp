@@ -64,6 +64,7 @@ void OverlayContainer::registerPopup(MenuPopup* popup)
     m_popups.append(popup);
     connect(popup, &MenuPopup::shown, this, &OverlayContainer::scheduleMaskUpdate);
     connect(popup, &MenuPopup::contentChanged, this, &OverlayContainer::scheduleMaskUpdate);
+    connect(popup, &MenuPopup::hidden, this, &OverlayContainer::scheduleMaskUpdate);
 }
 
 void OverlayContainer::registerLayoutPresetsPopup(LayoutPresetsPopup* popup)
@@ -85,6 +86,7 @@ void OverlayContainer::unregisterPopup(MenuPopup* popup)
     if (popup) {
         disconnect(popup, &MenuPopup::shown, this, &OverlayContainer::scheduleMaskUpdate);
         disconnect(popup, &MenuPopup::contentChanged, this, &OverlayContainer::scheduleMaskUpdate);
+        disconnect(popup, &MenuPopup::hidden, this, &OverlayContainer::scheduleMaskUpdate);
     }
     m_popups.removeAll(popup);
 }
@@ -159,14 +161,15 @@ void OverlayContainer::scheduleMaskUpdate()
 bool OverlayContainer::hasActivePopups() const
 {
     for (const auto& popup : m_popups) {
-        if (popup && popup->isPopupVisible()) {
+        if (popup && (popup->isPopupVisible() || popup->isHiding())) {
             return true;
         }
     }
-    if (m_layoutPresetsPopup && m_layoutPresetsPopup->isPopupVisible()) {
+    if (m_layoutPresetsPopup
+        && (m_layoutPresetsPopup->isPopupVisible() || m_layoutPresetsPopup->isHiding())) {
         return true;
     }
-    if (m_messagePopup && m_messagePopup->isPopupVisible()) {
+    if (m_messagePopup && (m_messagePopup->isPopupVisible() || m_messagePopup->isHiding())) {
         return true;
     }
     for (const auto& popup : m_genericPopups) {

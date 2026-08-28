@@ -518,6 +518,26 @@ void MenuPopup::ensureHeightAnim()
     if (!m_heightAnim) {
         m_heightAnim = new QPropertyAnimation(this, "displayHeight", this);
         m_heightAnim->setEasingCurve(QEasingCurve::OutCubic);
+        connect(m_heightAnim, &QPropertyAnimation::finished, this, [this]() {
+            m_isAnimatingHeight = false;
+
+            if (!m_isHiding) {
+                m_cachedHeight = m_targetHeight;
+                return;
+            }
+
+            // Top-level menus use the height animation as their close animation.
+            // Keep this completion path attached to the animation itself so hover-close,
+            // watchdog-close and command-close all finish identically.
+            if (!m_isSubmenu) {
+                m_isHiding = false;
+                hide();
+                m_displayHeight = m_targetHeight;
+                setFixedHeight(m_targetHeight);
+                m_cachedHeight = m_targetHeight;
+                emit hidden();
+            }
+        });
     }
 }
 
@@ -823,6 +843,7 @@ void MenuPopup::showBelow(QWidget* anchor, bool slideFromTop)
         return;
 
     m_isVisible = true;
+    m_isHiding = false;
     // Size is set by setItems/rebuildItems before this is called; ensure full
     // height so calculatePosition uses the final width for screen clamping.
     m_displayHeight = m_targetHeight;
@@ -868,6 +889,8 @@ void MenuPopup::hidePopup()
 
 void MenuPopup::forceHide()
 {
+    const bool wasActive = isVisible() || m_isVisible || m_isHiding;
+
     stopSubmenuAimPoll();
     m_submenuCloseArmedAt = -1;
     m_hoveredItem = nullptr;
@@ -881,9 +904,14 @@ void MenuPopup::forceHide()
     m_isVisible = false;
     m_isHiding = false;
     m_isAnimatingHeight = false;
+    m_displayHeight = m_targetHeight;
+    setFixedHeight(m_targetHeight);
+    m_cachedHeight = m_targetHeight;
     setPopupOpacity(0.0);
     hide();
-    emit hidden();
+    if (wasActive) {
+        emit hidden();
+    }
 }
 
 void MenuPopup::setPopupOpacity(qreal opacity)
@@ -893,26 +921,15 @@ void MenuPopup::setPopupOpacity(qreal opacity)
         m_opacityEffect->setOpacity(m_opacity);
     }
     update();
-
-    if (qFuzzyIsNull(m_opacity) && !m_isVisible && !m_isHiding) {
-        hide();
-        emit hidden();
-    }
 }
 
 void MenuPopup::setDisplayHeight(int h)
 {
-    m_displayHeight = h;
-    setFixedHeight(h);
+    m_displayHeight = qBound(0, h, qMax(0, m_targetHeight));
+    setFixedHeight(m_displayHeight);
     update();
 
-    if (h == m_targetHeight) {
-        m_isAnimatingHeight = false;
-        // Restore cached height guard to the final target
-        m_cachedHeight = m_targetHeight;
-    }
-
-    if (isVisible() && m_isVisible) {
+    if (isVisible() && (m_isVisible || m_isHiding)) {
         emit contentChanged();
     }
 }
@@ -1062,17 +1079,6 @@ void MenuPopup::startHideAnimation()
         // Top-level menus retract through their existing height animation. Complete the hide
         // from that animation instead of running the disabled opacity effect as a second timer.
         ensureHeightAnim();
-        disconnect(m_heightAnim, &QPropertyAnimation::finished, this, nullptr);
-        connect(m_heightAnim, &QPropertyAnimation::finished, this, [this]() {
-            if (!m_isHiding) {
-                return;
-            }
-            m_isHiding = false;
-            m_isAnimatingHeight = false;
-            hide();
-            emit hidden();
-        });
-
         m_isAnimatingHeight = true;
         m_heightAnim->setDuration(anim::duration(SLIDE_DURATION));
         m_heightAnim->setStartValue(m_displayHeight > 0 ? m_displayHeight : height());
