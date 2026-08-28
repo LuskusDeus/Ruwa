@@ -21,11 +21,14 @@
 #include <optional>
 #include <vector>
 
-namespace aether {
-
 // ==========================================================================
 //   H A N D L E   T Y P E S
 // ==========================================================================
+// Boundary value types (plan 7.16.3): defined in the renderer-neutral
+// workspace namespace; the `aether` aliases below keep the legacy transform
+// internals building unchanged.
+
+namespace ruwa::ui::workspace {
 
 enum class TransformHandle {
     None,
@@ -49,6 +52,18 @@ struct TransformHitResult {
     /// vertex/L scale.
     bool classicCornerRotationAffordance = false;
 };
+
+/// Interaction style of the transform frame. Classic: vertex scales/free-drags,
+/// offset glyphs rotate. Deform: B-spline lattice drag points.
+enum class TransformInteractionMode { Classic, Deform };
+
+} // namespace ruwa::ui::workspace
+
+namespace aether {
+
+using ruwa::ui::workspace::TransformHandle;
+using ruwa::ui::workspace::TransformHitResult;
+using ruwa::ui::workspace::TransformInteractionMode;
 
 // ==========================================================================
 //   T R A N S F O R M   S T A T E

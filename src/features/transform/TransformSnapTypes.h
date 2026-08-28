@@ -72,25 +72,34 @@ struct SnapRelation {
     QString stableKey;
 };
 
+} // namespace aether
+
+// Boundary value types (plan 7.16.3): the visual snap state crosses the
+// renderer-neutral presentation capability, so it is defined in the
+// workspace namespace; the `aether` aliases below keep the legacy snap
+// engine and overlay internals building unchanged.
+
+namespace ruwa::ui::workspace {
+
 struct SnapGuideSegment {
-    Vector2 from {};
-    Vector2 to {};
-    SnapAxis axis = SnapAxis::X;
+    aether::Vector2 from {};
+    aether::Vector2 to {};
+    aether::SnapAxis axis = aether::SnapAxis::X;
 };
 
 struct SnapGuideMarker {
-    Vector2 position {};
+    aether::Vector2 position {};
     bool center = false;
 };
 
 struct SnapSpacingDimension {
-    Vector2 from {};
-    Vector2 to {};
+    aether::Vector2 from {};
+    aether::Vector2 to {};
     float value = 0.0f;
 };
 
 struct SnapMetricLabel {
-    Vector2 position {};
+    aether::Vector2 position {};
     QString text;
 };
 
@@ -106,6 +115,16 @@ struct TransformSnapVisualState {
             || !labels.empty();
     }
 };
+
+} // namespace ruwa::ui::workspace
+
+namespace aether {
+
+using ruwa::ui::workspace::SnapGuideMarker;
+using ruwa::ui::workspace::SnapGuideSegment;
+using ruwa::ui::workspace::SnapMetricLabel;
+using ruwa::ui::workspace::SnapSpacingDimension;
+using ruwa::ui::workspace::TransformSnapVisualState;
 
 struct SnapResult {
     Vector2 correction {};

@@ -3,7 +3,10 @@
 // ==========================================================================
 //   R U W A   |   C U R S O R   O V E R L A Y   S T A T E
 // ==========================================================================
-// Holds brush and eyedropper cursor overlay state for rendering.
+// Renderer-neutral state models for the rendered cursor overlays (brush,
+// eyedropper, tool, parameter circles). The state models live in the
+// renderer-neutral workspace namespace; the `aether` aliases below only keep
+// the legacy GL overlay internals building.
 // ==========================================================================
 
 #ifndef RUWA_FEATURES_CANVAS_OVERLAYS_CURSOROVERLAYSTATE_H
@@ -16,10 +19,10 @@
 
 #include <vector>
 
-namespace aether {
+namespace ruwa::ui::workspace {
 
 /**
- * @brief Surface-pixel rectangle a GL cursor covers (origin top-left).
+ * @brief Surface-pixel rectangle a rendered cursor covers (origin top-left).
  *
  * Every cursor overlay inverts what is under it by sampling the scene texture
  * at gl_FragCoord, so the rectangle it draws into is also the only part of the
@@ -67,8 +70,16 @@ struct CursorOverlayState {
     float toolCursorCenterX = 0.0f;
     float toolCursorCenterY = 0.0f;
     ToolCursorStyle toolCursorStyle = ToolCursorStyle::PointerBadge;
-    QString toolCursorIcon; ///< QRC path of the badge icon.
+    QString toolCursorIcon; ///< Engine-integration badge asset path.
 };
+
+} // namespace ruwa::ui::workspace
+
+namespace aether {
+
+using ruwa::ui::workspace::CursorCaptureRect;
+using ruwa::ui::workspace::CursorOverlayState;
+using ruwa::ui::workspace::ParameterCircleOverlayState;
 
 } // namespace aether
 

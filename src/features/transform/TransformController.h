@@ -34,8 +34,6 @@ namespace aether {
 
 class Canvas;
 
-enum class TransformInteractionMode { Classic, Deform };
-
 /// What the drag in progress is actually doing. The active handle alone does not
 /// answer this: a classic corner drives either scale or rotation depending on
 /// which affordance was grabbed, and the free-quad/deform paths reinterpret it

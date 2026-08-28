@@ -12,9 +12,20 @@
 #include <queue>
 #include <vector>
 
-namespace aether {
+// Boundary value type (plan 7.16.3 / 7.12.3): the input-device classification
+// crosses the renderer-neutral painting capability, so it is defined in the
+// workspace namespace; the `aether` alias keeps the legacy stroke internals
+// building unchanged.
+
+namespace ruwa::ui::workspace {
 
 enum class StrokeInputDevice { Stylus, Mouse };
+
+} // namespace ruwa::ui::workspace
+
+namespace aether {
+
+using ruwa::ui::workspace::StrokeInputDevice;
 
 struct StrokeInputSample {
     float worldX = 0.0f;
