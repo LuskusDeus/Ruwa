@@ -31,6 +31,10 @@
 #include <QWindow>
 #include <QResizeEvent>
 
+#if defined(Q_OS_WIN)
+#include <qt_windows.h>
+#endif
+
 #include <utility>
 
 namespace ruwa::ui::widgets {
@@ -50,6 +54,22 @@ constexpr int kTopBarControlHoverBgInsetHEdgeBase = 6;
 constexpr int kTopBarControlHoverBgInsetHMidBase = 5;
 constexpr int kTopBarLogoLeftPaddingBase = 4;
 constexpr qreal kMessagePopupGlowContourPhase = 0.68;
+
+struct PrimaryMouseState {
+    bool down = false;
+    bool pressedSinceLastCheck = false;
+};
+
+PrimaryMouseState primaryMouseState()
+{
+#if defined(Q_OS_WIN)
+    const SHORT state = GetAsyncKeyState(VK_LBUTTON);
+    return { (state & 0x8000) != 0, (state & 0x0001) != 0 };
+#else
+    const bool down = QApplication::mouseButtons().testFlag(Qt::LeftButton);
+    return { down, false };
+#endif
+}
 
 MenuItem commandMenuItem(QString text, QString commandId)
 {
@@ -385,6 +405,14 @@ TopBar::TopBar(QWidget* parent)
     m_leaveCloseTimer = new QTimer(this);
     m_leaveCloseTimer->setSingleShot(true);
     connect(m_leaveCloseTimer, &QTimer::timeout, this, &TopBar::onLeaveCloseTimer);
+
+    // QWindowKit and native child windows can bypass QApplication mouse delivery. Polling the
+    // physical primary button while a menu session is open makes outside-click dismissal
+    // independent of that routing, without changing the existing hover-close debounce.
+    m_menuMousePoll = new QTimer(this);
+    m_menuMousePoll->setInterval(8);
+    m_menuMousePoll->setTimerType(Qt::PreciseTimer);
+    connect(m_menuMousePoll, &QTimer::timeout, this, &TopBar::onMenuMousePollTimeout);
 
     // Connect to theme changes for scaling support
     connect(&ruwa::ui::core::ThemeManager::instance(), &ruwa::ui::core::ThemeManager::themeChanged,
@@ -1061,6 +1089,20 @@ bool TopBar::eventFilter(QObject* watched, QEvent* event)
     }
 
     if (isMenuPopupSessionOpen()) {
+        if (event->type() == QEvent::MouseButtonPress || event->type() == QEvent::MouseButtonRelease
+            || event->type() == QEvent::MouseButtonDblClick) {
+            auto* me = static_cast<QMouseEvent*>(event);
+            if (MenuButton* btn = menuButtonAt(me->globalPosition().toPoint())) {
+                // The overlay can be returned by QApplication::widgetAt() even though the
+                // visible target is a top-bar menu button. Resolve these buttons by geometry,
+                // keep the hover-selected menu open, and consume the otherwise meaningless
+                // click before it reaches either QPushButton or the popup-close path.
+                showPopupForButton(btn);
+                armMenuCloseWatchdog();
+                return true;
+            }
+        }
+
         if (event->type() == QEvent::MouseMove || event->type() == QEvent::HoverMove) {
             const QPoint globalPos = QCursor::pos();
 
@@ -1089,6 +1131,11 @@ void TopBar::showPopupForButton(MenuButton* button)
 {
     if (!button || !button->popup() || !m_menuContainer)
         return;
+
+    if (!m_menuMousePoll->isActive()) {
+        m_primaryMouseWasDown = primaryMouseState().down;
+        m_menuMousePoll->start();
+    }
 
     if (m_layoutPresetsPopup
         && (m_layoutPresetsPopup->isPopupVisible() || m_layoutPresetsPopup->isHiding())) {
@@ -1147,6 +1194,7 @@ void TopBar::hideAllPopups()
     }
 
     m_leaveCloseTimer->stop();
+    m_menuMousePoll->stop();
     m_anyMenuOpen = false;
     m_currentMenuButton = nullptr;
     updateButtonStates();
@@ -1175,6 +1223,23 @@ void TopBar::onLeaveCloseTimer()
     hideAllPopups();
 }
 
+void TopBar::onMenuMousePollTimeout()
+{
+    if (!isMenuPopupSessionOpen()) {
+        m_menuMousePoll->stop();
+        return;
+    }
+
+    const PrimaryMouseState state = primaryMouseState();
+    const bool newPress = state.pressedSinceLastCheck || (state.down && !m_primaryMouseWasDown);
+    m_primaryMouseWasDown = state.down;
+    if (!newPress || isCursorOverMenuChrome(QCursor::pos())) {
+        return;
+    }
+
+    hideAllPopups();
+}
+
 void TopBar::onPopupHidden()
 {
     syncChromeOverlayState();
@@ -1190,6 +1255,8 @@ void TopBar::syncChromeOverlayState()
     if (menuUp || layoutUp) {
         return;
     }
+
+    m_menuMousePoll->stop();
 
     qApp->removeEventFilter(this);
     if (auto* ovl

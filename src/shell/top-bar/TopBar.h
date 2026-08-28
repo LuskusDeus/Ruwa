@@ -4,10 +4,10 @@
 #ifndef RUWA_UI_WIDGETS_TOPBAR_TOPBAR_H
 #define RUWA_UI_WIDGETS_TOPBAR_TOPBAR_H
 
-#include <QWidget>
 #include <QList>
 #include <QPointer>
 #include <QTimer>
+#include <QWidget>
 #include "MenuPopup.h"
 #include "shared/types/CanvasWidgets.h"
 #include "shell/docking/state/DockLayoutPreset.h"
@@ -213,6 +213,7 @@ private:
     void onLayoutSwitchClicked();
     bool isLayoutPresetsChromeWidget(const QWidget* widget) const;
     void onLeaveCloseTimer();
+    void onMenuMousePollTimeout();
     void startMessagePopupBorderGlow();
     void updateButtonStates();
     QList<MenuItem> getItemsForButton(MenuButton* button);
@@ -311,6 +312,8 @@ private:
     bool m_compactMode = false;
     bool m_anyMenuOpen = false;
     QTimer* m_leaveCloseTimer = nullptr;
+    QTimer* m_menuMousePoll = nullptr;
+    bool m_primaryMouseWasDown = false;
 
     qreal m_borderGlowProgress = 0.0;
     QRectF m_messagePopupGlowRect;

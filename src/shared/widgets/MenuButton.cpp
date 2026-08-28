@@ -5,6 +5,7 @@
 
 #include <QEnterEvent>
 #include <QFontMetrics>
+#include <QMouseEvent>
 #include <QPainter>
 
 namespace ruwa::ui::widgets {
@@ -61,6 +62,24 @@ void MenuButton::enterEvent(QEnterEvent* event)
 {
     BaseAnimatedButton::enterEvent(event);
     emit hoverEntered();
+}
+
+void MenuButton::mousePressEvent(QMouseEvent* event)
+{
+    // Top-bar menus are hover-only. Do not enter QPushButton's pressed state or emit its
+    // pressed/clicked signal sequence; both are redundant here and can disturb hover painting.
+    event->accept();
+}
+
+void MenuButton::mouseReleaseEvent(QMouseEvent* event)
+{
+    event->accept();
+}
+
+void MenuButton::mouseDoubleClickEvent(QMouseEvent* event)
+{
+    // Consume this explicitly so an ignored double-click cannot reach the title bar.
+    event->accept();
 }
 
 void MenuButton::paintEvent(QPaintEvent* event)

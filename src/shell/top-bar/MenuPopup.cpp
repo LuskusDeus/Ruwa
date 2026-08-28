@@ -1088,7 +1088,7 @@ void MenuPopup::startHideAnimation()
         return;
     }
 
-    m_opacityAnim->setDuration(anim::duration(SLIDE_DURATION));
+    m_opacityAnim->setDuration(anim::duration(HIDE_DURATION));
     m_opacityAnim->setStartValue(m_opacity);
     m_opacityAnim->setEndValue(0.0);
     m_opacityAnim->setEasingCurve(QEasingCurve::OutCubic);
@@ -1099,7 +1099,7 @@ void MenuPopup::startHideAnimation()
     const QPoint endPos = m_submenuSlideFromLeft
         ? currentPos + QPoint(SLIDE_OFFSET, 0) // Slide out to the right
         : currentPos - QPoint(SLIDE_OFFSET, 0); // Slide out to the left
-    m_posAnim->setDuration(anim::duration(SLIDE_DURATION));
+    m_posAnim->setDuration(anim::duration(HIDE_DURATION));
     m_posAnim->setStartValue(currentPos);
     m_posAnim->setEndValue(endPos);
     m_posAnim->setEasingCurve(QEasingCurve::OutCubic);
