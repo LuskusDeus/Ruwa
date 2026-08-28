@@ -2,11 +2,6 @@
 
 #include "features/fill/FillProgressivePolicy.h"
 
-#include "shell/top-bar/MessagePopupManager.h"
-
-#include <QCoreApplication>
-#include <QWidget>
-
 #include <algorithm>
 #include <cmath>
 #include <limits>
@@ -51,7 +46,7 @@ bool progressiveMaskHasPixel(const aether::FloodFillResult::RawTileMap& maskTile
 bool canFillProgressivePixel(const aether::FloodFillResult::RawTileMap& sourceTiles,
     const aether::FloodFillResult::RawTileMap& selectionMaskTiles,
     const aether::FloodFillResult::RawTileMap& filledMaskTiles,
-    const aether::PremultPixel& seedPixel, aether::OpenGLCanvasWidget::FillAlgorithm algorithm,
+    const aether::PremultPixel& seedPixel, ruwa::core::canvas::CanvasFillAlgorithm algorithm,
     int x, int y, int canvasW, int canvasH, aether::TilePixelFormat contentFormat)
 {
     if (!progressiveWithinCanvas(x, y, canvasW, canvasH)) {
@@ -65,7 +60,7 @@ bool canFillProgressivePixel(const aether::FloodFillResult::RawTileMap& sourceTi
         && aether::sampleRawAlpha(selectionMaskTiles, x, y, aether::TilePixelFormat::RGBA8) == 0) {
         return false;
     }
-    if (algorithm == aether::OpenGLCanvasWidget::FillAlgorithm::Classic) {
+    if (algorithm == aether::FillAlgorithm::Classic) {
         const aether::PremultPixel px = aether::sampleRawPixel(sourceTiles, x, y, contentFormat);
         return px.r == seedPixel.r && px.g == seedPixel.g && px.b == seedPixel.b
             && px.a == seedPixel.a;
@@ -80,7 +75,7 @@ bool canFillProgressivePixel(const aether::FloodFillResult::RawTileMap& sourceTi
 }
 
 bool canApproxFillPixel(const aether::TileGrid* sourceGrid, const aether::TileGrid* selectionMask,
-    const aether::PremultPixel& seedPixel, aether::OpenGLCanvasWidget::FillAlgorithm algorithm,
+    const aether::PremultPixel& seedPixel, ruwa::core::canvas::CanvasFillAlgorithm algorithm,
     int x, int y, int canvasW, int canvasH)
 {
     if (!sourceGrid || x < 0 || y < 0 || x >= canvasW || y >= canvasH) {
@@ -99,7 +94,7 @@ bool canApproxFillPixel(const aether::TileGrid* sourceGrid, const aether::TileGr
     }
 
     const aether::PremultPixel pixel { r, g, b, a };
-    if (algorithm == aether::OpenGLCanvasWidget::FillAlgorithm::Classic) {
+    if (algorithm == aether::FillAlgorithm::Classic) {
         return pixel.r == seedPixel.r && pixel.g == seedPixel.g && pixel.b == seedPixel.b
             && pixel.a == seedPixel.a;
     }
@@ -110,7 +105,7 @@ bool canApproxFillPixel(const aether::TileGrid* sourceGrid, const aether::TileGr
 }
 
 float estimateFillRadiusFromSeed(const aether::TileGrid* sourceGrid,
-    const aether::TileGrid* selectionMask, aether::OpenGLCanvasWidget::FillAlgorithm algorithm,
+    const aether::TileGrid* selectionMask, ruwa::core::canvas::CanvasFillAlgorithm algorithm,
     int seedX, int seedY, int canvasW, int canvasH, float radiusLimit)
 {
     if (!sourceGrid || radiusLimit <= 0.0f) {
@@ -161,31 +156,22 @@ float estimateFillRadiusFromSeed(const aether::TileGrid* sourceGrid,
     return maxRadius;
 }
 
-void showFillRadiusLimitPopup(
-    QWidget* context, aether::OpenGLCanvasWidget::FillAlgorithm algorithm, float estimatedRadius)
+ruwa::core::canvas::CanvasFillRequestResult classifyFillRadiusRequest(
+    ruwa::core::canvas::CanvasFillAlgorithm algorithm, float estimatedRadius, float radiusLimit)
 {
-    if (!context) {
-        return;
+    using ruwa::core::canvas::CanvasFillLimitInfo;
+    using ruwa::core::canvas::CanvasFillRequestResult;
+    using ruwa::core::canvas::CanvasFillRequestStatus;
+
+    if (estimatedRadius < radiusLimit) {
+        return { CanvasFillRequestStatus::Accepted, std::nullopt };
     }
 
-    const int roundedRadius = static_cast<int>(std::round(std::max(estimatedRadius, 0.0f)));
-    QString message;
-    if (algorithm == aether::OpenGLCanvasWidget::FillAlgorithm::Smart) {
-        message = QCoreApplication::translate("OpenGLCanvasWidget",
-            "Smart Fill is blocked for very large regions.\n"
-            "Estimated radius: about %1 px (limit: 3000 px).\n"
-            "Try Square Selection first, or use Classic Fill for this area.")
-                      .arg(roundedRadius);
-    } else {
-        message = QCoreApplication::translate("OpenGLCanvasWidget",
-            "Classic Fill is blocked for extremely large regions.\n"
-            "Estimated radius: about %1 px (limit: 8000 px).\n"
-            "Try Square Selection first to restrict the area.")
-                      .arg(roundedRadius);
-    }
-
-    ruwa::ui::widgets::MessagePopupManager::show(context, message,
-        { { QCoreApplication::translate("OpenGLCanvasWidget", "OK"), true, []() { } } }, 420);
+    CanvasFillLimitInfo limit;
+    limit.algorithm = algorithm;
+    limit.estimatedRadiusDocumentPx = static_cast<double>(std::max(estimatedRadius, 0.0f));
+    limit.radiusLimitDocumentPx = static_cast<double>(radiusLimit);
+    return { CanvasFillRequestStatus::RejectedRegionTooLarge, limit };
 }
 
 void writeProgressiveFillPixel(const aether::FloodFillResult::RawTileMap& sourceTiles,

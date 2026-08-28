@@ -4,6 +4,8 @@ add_executable(RuwaTests
     ../src/features/brush/color/PigmentLut.cpp
     ../src/features/brush/color/PigmentModel.cpp
     ../src/features/fill/FloodFill.cpp
+    ../src/features/fill/FillProgressivePolicy.cpp
+    ../src/features/fill/FillRawTileOps.cpp
     ../src/features/layers/model/BlendModeUtils.cpp
     ../src/features/project/ProjectSerializer.cpp
     ../src/services/updates/SemanticVersion.cpp
@@ -23,6 +25,7 @@ add_executable(RuwaTests
     dab_shape_falloff_test.cpp
     dock_split_push_drag_test.cpp
     flood_fill_alpha_lock_test.cpp
+    fill_radius_preflight_test.cpp
     pigment_lut_test.cpp
     pigment_model_test.cpp
     project_serializer_test.cpp

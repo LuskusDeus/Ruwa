@@ -3,7 +3,7 @@
 #ifndef AETHER_FILL_PROGRESSIVE_POLICY_H
 #define AETHER_FILL_PROGRESSIVE_POLICY_H
 
-#include "features/canvas/rendering/OpenGLCanvasWidget.h"
+#include "features/fill/FillAlgorithm.h"
 #include "features/fill/FillRawTileOps.h"
 
 #include <algorithm>
@@ -17,8 +17,6 @@
 #include <vector>
 
 #include <QtGlobal>
-
-class QWidget;
 
 namespace aether {
 
@@ -135,16 +133,20 @@ bool progressiveMaskHasPixel(const FloodFillResult::RawTileMap& maskTiles, int x
 bool canFillProgressivePixel(const FloodFillResult::RawTileMap& sourceTiles,
     const FloodFillResult::RawTileMap& selectionMaskTiles,
     const FloodFillResult::RawTileMap& filledMaskTiles, const PremultPixel& seedPixel,
-    OpenGLCanvasWidget::FillAlgorithm algorithm, int x, int y, int canvasW, int canvasH,
+    ruwa::core::canvas::CanvasFillAlgorithm algorithm, int x, int y, int canvasW, int canvasH,
     TilePixelFormat contentFormat = kDefaultTileFormat);
 bool canApproxFillPixel(const TileGrid* sourceGrid, const TileGrid* selectionMask,
-    const PremultPixel& seedPixel, OpenGLCanvasWidget::FillAlgorithm algorithm, int x, int y,
+    const PremultPixel& seedPixel, ruwa::core::canvas::CanvasFillAlgorithm algorithm, int x, int y,
     int canvasW, int canvasH);
 float estimateFillRadiusFromSeed(const TileGrid* sourceGrid, const TileGrid* selectionMask,
-    OpenGLCanvasWidget::FillAlgorithm algorithm, int seedX, int seedY, int canvasW, int canvasH,
+    ruwa::core::canvas::CanvasFillAlgorithm algorithm, int seedX, int seedY, int canvasW, int canvasH,
     float radiusLimit);
-void showFillRadiusLimitPopup(
-    QWidget* context, OpenGLCanvasWidget::FillAlgorithm algorithm, float estimatedRadius);
+/// Pure radius preflight for one fill request (plan 7.6.41): Accepted unless
+/// @p estimatedRadius reaches @p radiusLimit, in which case the result carries
+/// RejectedRegionTooLarge plus the limit facts. The policy supplies facts, not
+/// UI — the application owns any user messaging.
+ruwa::core::canvas::CanvasFillRequestResult classifyFillRadiusRequest(
+    ruwa::core::canvas::CanvasFillAlgorithm algorithm, float estimatedRadius, float radiusLimit);
 /// `capAlpha` is the selection coverage at (x, y) — a per-pixel alpha ceiling
 /// on the previewed pixel, so the progressive preview shows the same soft edge
 /// the commit produces. 255 = fully selected / no selection.
