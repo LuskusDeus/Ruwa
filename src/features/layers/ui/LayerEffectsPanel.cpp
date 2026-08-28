@@ -14,6 +14,7 @@
 
 #include <QHBoxLayout>
 #include <QLabel>
+#include <QMouseEvent>
 #include <QPushButton>
 #include <QTimer>
 #include <QVBoxLayout>
@@ -98,6 +99,7 @@ void LayerEffectsPanel::setCanvasSizeProvider(CanvasSizeProviderFn fn)
 QWidget* LayerEffectsPanel::createContent()
 {
     m_contentWidget = new QWidget();
+    m_contentWidget->installEventFilter(this);
     auto* rootLayout = new QVBoxLayout(m_contentWidget);
     rootLayout->setContentsMargins(contentPadding());
     rootLayout->setSpacing(10);
@@ -141,6 +143,8 @@ QWidget* LayerEffectsPanel::createContent()
 
     // --- Effects list (animated, drag-reorderable) ---
     m_listView = new EffectsListView(m_contentWidget);
+    connect(m_listView, &EffectsListView::emptyAreaClicked, this,
+        &LayerEffectsPanel::clearEffectSelection);
     connect(m_listView, &EffectsListView::reordered, this,
         [this](const QUuid& id, int newIndex) { applyMoveEffect(id, newIndex); });
     rootLayout->addWidget(m_listView, 1);
@@ -153,6 +157,19 @@ QWidget* LayerEffectsPanel::createContent()
 void LayerEffectsPanel::onThemeChanged()
 {
     applyTheme();
+}
+
+bool LayerEffectsPanel::eventFilter(QObject* watched, QEvent* event)
+{
+    if (watched == m_contentWidget && event->type() == QEvent::MouseButtonPress) {
+        auto* mouseEvent = static_cast<QMouseEvent*>(event);
+        const bool hasChildUnderPointer
+            = m_contentWidget->childAt(mouseEvent->position().toPoint()) != nullptr;
+        if (mouseEvent->button() == Qt::LeftButton && !hasChildUnderPointer) {
+            clearEffectSelection();
+        }
+    }
+    return DockPanel::eventFilter(watched, event);
 }
 
 void LayerEffectsPanel::showState(ViewState state, const QString& message)
@@ -248,8 +265,36 @@ LayerData* LayerEffectsPanel::selectedLayer() const
     return m_layerModel ? m_layerModel->selectedLayer() : nullptr;
 }
 
+void LayerEffectsPanel::selectEffect(const QUuid& effectId)
+{
+    EffectCard* nextCard = m_cardById.value(effectId, nullptr);
+    if (!nextCard) {
+        clearEffectSelection();
+        return;
+    }
+    if (m_selectedEffectId == effectId) {
+        nextCard->setSelected(true);
+        return;
+    }
+
+    if (EffectCard* previousCard = m_cardById.value(m_selectedEffectId, nullptr)) {
+        previousCard->setSelected(false);
+    }
+    m_selectedEffectId = effectId;
+    nextCard->setSelected(true);
+}
+
+void LayerEffectsPanel::clearEffectSelection()
+{
+    if (EffectCard* selectedCard = m_cardById.value(m_selectedEffectId, nullptr)) {
+        selectedCard->setSelected(false);
+    }
+    m_selectedEffectId = QUuid();
+}
+
 void LayerEffectsPanel::removeAllCards()
 {
+    clearEffectSelection();
     QList<ruwa::ui::widgets::ReorderableRowWidget*> all;
     for (EffectCard* card : m_cardById) {
         all.append(card);
@@ -277,33 +322,67 @@ EffectCard* LayerEffectsPanel::buildCard(
     card->setContentSpaceSupported(layer && layer->supportsContentSpaceEffects());
 
     const QUuid id = effect.instanceId;
-    connect(card, &EffectCard::dragInitiated, m_listView, &EffectsListView::beginDrag);
-    connect(card, &EffectCard::enabledToggled, this,
-        [this, id](bool enabled) { applyEnabled(id, enabled); });
-    connect(card, &EffectCard::previewToggled, this,
-        [this, id](bool enabled) { applyRealtimePreview(id, enabled); });
-    connect(card, &EffectCard::contentSpaceToggled, this,
-        [this, id](bool contentSpace) { applyContentSpace(id, contentSpace); });
+    connect(card, &EffectCard::selectionRequested, this, [this, id]() { selectEffect(id); });
+    connect(card, &EffectCard::dragInitiated, this, [this, id](const QUuid&, const QPoint& pos) {
+        selectEffect(id);
+        m_listView->beginDrag(id, pos);
+    });
+    connect(card, &EffectCard::enabledToggled, this, [this, id](bool enabled) {
+        selectEffect(id);
+        applyEnabled(id, enabled);
+    });
+    connect(card, &EffectCard::previewToggled, this, [this, id](bool enabled) {
+        selectEffect(id);
+        applyRealtimePreview(id, enabled);
+    });
+    connect(card, &EffectCard::contentSpaceToggled, this, [this, id](bool contentSpace) {
+        selectEffect(id);
+        applyContentSpace(id, contentSpace);
+    });
     // Move actions resolve the current index at click time (order changes).
-    connect(card, &EffectCard::moveUpRequested, this,
-        [this, id]() { applyMoveEffect(id, m_cardOrder.indexOf(id) - 1); });
-    connect(card, &EffectCard::moveDownRequested, this,
-        [this, id]() { applyMoveEffect(id, m_cardOrder.indexOf(id) + 1); });
-    connect(
-        card, &EffectCard::duplicateRequested, this, [this, id]() { applyDuplicateEffect(id); });
-    connect(card, &EffectCard::resetRequested, this, [this, id]() { applyResetEffect(id); });
-    connect(card, &EffectCard::removeRequested, this, [this, id]() { applyRemoveEffect(id); });
+    connect(card, &EffectCard::moveUpRequested, this, [this, id]() {
+        selectEffect(id);
+        applyMoveEffect(id, m_cardOrder.indexOf(id) - 1);
+    });
+    connect(card, &EffectCard::moveDownRequested, this, [this, id]() {
+        selectEffect(id);
+        applyMoveEffect(id, m_cardOrder.indexOf(id) + 1);
+    });
+    connect(card, &EffectCard::duplicateRequested, this, [this, id]() {
+        selectEffect(id);
+        applyDuplicateEffect(id);
+    });
+    connect(card, &EffectCard::resetRequested, this, [this, id]() {
+        selectEffect(id);
+        applyResetEffect(id);
+    });
+    connect(card, &EffectCard::removeRequested, this, [this, id]() {
+        selectEffect(id);
+        applyRemoveEffect(id);
+    });
     connect(card, &EffectCard::paramChanged, this,
-        [this, id](const QString& key, const QVariant& value) { applyParam(id, key, value); });
+        [this, id](const QString& key, const QVariant& value) {
+            selectEffect(id);
+            applyParam(id, key, value);
+        });
     connect(card, &EffectCard::paramLiveChanged, this,
-        [this, id](const QString& key, const QVariant& value) { applyParamLive(id, key, value); });
+        [this, id](const QString& key, const QVariant& value) {
+            selectEffect(id);
+            applyParamLive(id, key, value);
+        });
     connect(card, &EffectCard::paramEditFinished, this, &LayerEffectsPanel::finishParamEditSession);
     // Bubble the colour-picker request up to the overlay (via WorkspaceTab).
-    connect(
-        card, &EffectCard::colorPickerRequested, this, &LayerEffectsPanel::colorPickerRequested);
+    connect(card, &EffectCard::colorPickerRequested, this,
+        [this, id](const QColor& color, QWidget* sourceButton) {
+            selectEffect(id);
+            emit colorPickerRequested(color, sourceButton);
+        });
     // Bubble the position-picker request up to the canvas (via WorkspaceTab).
     connect(card, &EffectCard::positionPickerRequested, this,
-        &LayerEffectsPanel::positionPickerRequested);
+        [this, id](QWidget* sourceField, const QPointF& currentPosition) {
+            selectEffect(id);
+            emit positionPickerRequested(sourceField, currentPosition);
+        });
 
     return card;
 }
@@ -333,10 +412,15 @@ void LayerEffectsPanel::syncCardsToLayer(bool animate)
             card->setMoveEnabled(i > 0, i < n - 1);
             card->setContentSpaceSupported(layer->supportsContentSpaceEffects());
         }
+        card->setSelected(id == m_selectedEffectId);
         order.append(id);
         desired.insert(id);
     }
     m_cardOrder = order;
+
+    if (!m_selectedEffectId.isNull() && !desired.contains(m_selectedEffectId)) {
+        clearEffectSelection();
+    }
 
     // Cards whose effect no longer exists — hand to the view to animate out.
     QList<ruwa::ui::widgets::ReorderableRowWidget*> removedRows;

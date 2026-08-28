@@ -2938,6 +2938,8 @@ void WorkspaceTab::connectPanelSignals()
                     }
                 });
         });
+    connect(m_canvasPanel, &workspace::CanvasPanel::canvasToolInteractionStarted,
+        m_layerEffectsPanel, &workspace::LayerEffectsPanel::clearEffectSelection);
 
     // Tool selection
     connect(

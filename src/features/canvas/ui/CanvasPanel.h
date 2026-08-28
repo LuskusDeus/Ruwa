@@ -574,6 +574,8 @@ signals:
     void canvasContentRegionChanged(const QRect& worldRect);
     void canvasContentTilesChanged(const QList<QPoint>& tilePositions);
     void fillProcessingLayerChanged(const ruwa::core::layers::LayerId& id);
+    /// A pointer press was accepted as a canvas-tool interaction.
+    void canvasToolInteractionStarted();
     void toolModeChanged(ToolId tool);
     void brushSelectionContextChanged(ToolId tool, const QString& brushId);
     void transformModeChanged(bool active);
@@ -771,6 +773,7 @@ private:
     QRectF activeTransformRectInWidget() const;
     void createExportModeContent();
 
+    bool handleCanvasMousePress(QMouseEvent* event);
     void showBlockedDrawMessageForSelectedLayer() override;
     void showDrawOnBackgroundMessage();
     void setCtrlModifierPressed(bool pressed) override { m_ctrlPressed = pressed; }
@@ -784,6 +787,7 @@ private:
     void dispatchSyntheticMousePress(QMouseEvent* event) override;
     void dispatchSyntheticMouseMove(QMouseEvent* event) override;
     void dispatchSyntheticMouseRelease(QMouseEvent* event) override;
+    void notifyCanvasToolInteractionStarted() override { emit canvasToolInteractionStarted(); }
     void notifyCanvasContentChanged() override { emit canvasContentChanged(); }
     void notifyStrokeSessionEnded() override { flushPendingToolStateApply(); }
 
@@ -922,6 +926,7 @@ private:
     bool m_isZoomDragging = false;
     bool m_isRotatingView = false;
     bool m_tabletActive = false;
+    bool m_dispatchingSyntheticMousePress = false;
     Qt::MouseButtons m_prevTabletButtons
         = Qt::NoButton; ///< Previous tablet buttons state for side-button detection
     std::optional<QPointF>

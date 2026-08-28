@@ -213,6 +213,12 @@ void CanvasTabletHandler::handleTabletEvent(QTabletEvent* event)
 
         m_host->endTemporaryTool();
     };
+    const bool wasPositionPickerActive = m_panel->isPositionPickerActive();
+    const auto notifyToolInteraction = [&]() {
+        if (!wasPositionPickerActive && !m_host->isInputPanningActive()) {
+            m_host->notifyCanvasToolInteractionStarted();
+        }
+    };
     // A selection drag (lasso, lasso fill, rectangular/elliptical selection) owns
     // the canvas exactly like a brush stroke does: it holds the panel's mouse grab
     // until release. Without counting it here, dragging the pen across the brush
@@ -246,6 +252,7 @@ void CanvasTabletHandler::handleTabletEvent(QTabletEvent* event)
             QMouseEvent syntheticPress(QEvent::MouseButtonPress, localPos, globalPosF.toPoint(),
                 btn, event->buttons(), event->modifiers());
             m_host->dispatchSyntheticMousePress(&syntheticPress);
+            notifyToolInteraction();
             event->accept();
             return;
         }
@@ -321,6 +328,7 @@ void CanvasTabletHandler::handleTabletEvent(QTabletEvent* event)
                 if (!m_host->isInputDrawingActive()) {
                     m_host->showBlockedDrawMessageForSelectedLayer();
                 }
+                notifyToolInteraction();
                 event->accept();
                 return;
             }
@@ -332,6 +340,7 @@ void CanvasTabletHandler::handleTabletEvent(QTabletEvent* event)
                 QMouseEvent syntheticPress(QEvent::MouseButtonPress, localPos, globalPosF.toPoint(),
                     Qt::LeftButton, tabletButtons, event->modifiers());
                 m_host->dispatchSyntheticMousePress(&syntheticPress);
+                notifyToolInteraction();
                 event->accept();
                 return;
             }
@@ -354,6 +363,7 @@ void CanvasTabletHandler::handleTabletEvent(QTabletEvent* event)
                 if (!m_host->isInputDrawingActive()) {
                     m_host->showBlockedDrawMessageForSelectedLayer();
                 }
+                notifyToolInteraction();
                 event->accept();
                 return;
             }
@@ -370,6 +380,7 @@ void CanvasTabletHandler::handleTabletEvent(QTabletEvent* event)
             QMouseEvent syntheticPress(QEvent::MouseButtonPress, localPos, globalPosF.toPoint(),
                 tabletButton, tabletButtons, event->modifiers());
             m_host->dispatchSyntheticMousePress(&syntheticPress);
+            notifyToolInteraction();
             event->accept();
             return;
         }
@@ -380,6 +391,7 @@ void CanvasTabletHandler::handleTabletEvent(QTabletEvent* event)
             QMouseEvent syntheticPress(QEvent::MouseButtonPress, localPos, globalPosF.toPoint(),
                 tabletButton, tabletButtons, event->modifiers());
             m_host->dispatchSyntheticMousePress(&syntheticPress);
+            notifyToolInteraction();
             event->accept();
             return;
         }

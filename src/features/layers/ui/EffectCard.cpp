@@ -3,6 +3,7 @@
 #include "EffectCard.h"
 
 #include "features/theme/manager/ThemeManager.h"
+#include "shared/style/AnimationPolicy.h"
 #include "shared/resources/IconProvider.h"
 #include "shared/widgets/inputs/AnimatedComboBox.h"
 #include "shared/widgets/inputs/ColorInputButton.h"
@@ -13,6 +14,7 @@
 #include "shell/context-menu/ContextMenuSystem.h"
 
 #include <QApplication>
+#include <QChildEvent>
 #include <QEvent>
 #include <QGraphicsOpacityEffect>
 #include <QHBoxLayout>
@@ -21,6 +23,7 @@
 #include <QMouseEvent>
 #include <QPainter>
 #include <QPushButton>
+#include <QPropertyAnimation>
 #include <QSet>
 #include <QVariantList>
 #include <QVariantMap>
@@ -34,6 +37,14 @@ using ruwa::ui::core::ThemeManager;
 
 namespace {
 constexpr int kCardRadius = 8;
+constexpr int kCardContentHorizontalInset = 8;
+constexpr int kCardContentBottomInset = 8;
+constexpr int kHeaderHorizontalInset = 8;
+constexpr int kHeaderVerticalInset = 2;
+constexpr int kHeaderElementSpacing = 6;
+constexpr int kHeaderButtonSize = 20;
+constexpr int kHeaderIconSize = 14;
+constexpr int kSelectionAnimMs = 200;
 
 // Drag-source dim, matching LayerRowWidget's 0.35 factor so the effects panel
 // reads the same as the layers panel while dragging.
@@ -68,13 +79,24 @@ enum CardAction {
     ActionDelete
 };
 
+void makeLayoutWidgetTransparent(QWidget* widget)
+{
+    if (!widget) {
+        return;
+    }
+    widget->setAttribute(Qt::WA_StyledBackground, false);
+    widget->setAttribute(Qt::WA_TranslucentBackground, true);
+    widget->setAutoFillBackground(false);
+}
+
 /// 2x3 dotted drag handle, purely decorative for now.
 class GripHandle : public QWidget {
 public:
     explicit GripHandle(QWidget* parent)
         : QWidget(parent)
     {
-        setFixedSize(12, 20);
+        makeLayoutWidgetTransparent(this);
+        setFixedSize(ThemeManager::instance().scaled(QSize(12, 16)));
         setCursor(Qt::OpenHandCursor);
     }
 
@@ -86,14 +108,16 @@ protected:
         p.setRenderHint(QPainter::Antialiasing, true);
         p.setPen(Qt::NoPen);
         p.setBrush(c.textMuted);
-        const int cx0 = 3;
-        const int cx1 = 8;
-        const int y0 = 5;
+        const auto& theme = ThemeManager::instance();
+        const int cx0 = theme.scaled(3);
+        const int cx1 = theme.scaled(8);
+        const int y0 = theme.scaled(3);
         for (int col = 0; col < 2; ++col) {
             for (int row = 0; row < 3; ++row) {
                 const int x = (col == 0 ? cx0 : cx1);
-                const int y = y0 + row * 5;
-                p.drawEllipse(QPointF(x, y), 1.1, 1.1);
+                const int y = y0 + row * theme.scaled(5);
+                const qreal radius = theme.scaled(1.1);
+                p.drawEllipse(QPointF(x, y), radius, radius);
             }
         }
     }
@@ -108,18 +132,32 @@ EffectCard::EffectCard(
     , m_instanceId(state.instanceId)
 {
     auto* root = new QVBoxLayout(this);
-    root->setContentsMargins(10, 8, 10, 10);
+    root->setContentsMargins(0, 0, 0, 0);
     // Gaps are inserted explicitly (see below) rather than via a uniform
     // spacing, so the header keeps its own breathing room while param rows
     // pack tightly against each other.
     root->setSpacing(0);
 
     buildHeader(root);
-    root->addSpacing(ThemeManager::instance().scaled(kHeaderToParamsGap));
-    buildParams(root);
 
-    // Re-tint the theme-coloured icons when the palette changes.
+    auto* paramsWidget = new QWidget(this);
+    makeLayoutWidgetTransparent(paramsWidget);
+    auto* paramsLayout = new QVBoxLayout(paramsWidget);
+    const auto& theme = ThemeManager::instance();
+    paramsLayout->setContentsMargins(theme.scaled(kCardContentHorizontalInset),
+        theme.scaled(kHeaderToParamsGap), theme.scaled(kCardContentHorizontalInset),
+        theme.scaled(kCardContentBottomInset));
+    paramsLayout->setSpacing(0);
+    buildParams(paramsLayout);
+    root->addWidget(paramsWidget);
+
+    m_selectionAnim = new QPropertyAnimation(this, "selectionProgress", this);
+    m_selectionAnim->setEasingCurve(QEasingCurve::InOutCubic);
+    installInteractionFilters();
+
+    // Keep theme-coloured header controls in sync when the palette changes.
     connect(&ThemeManager::instance(), &ThemeManager::themeChanged, this, [this]() {
+        refreshHeaderButtonStyle();
         refreshEyeIcon();
         refreshMenuIcon();
         update();
@@ -129,14 +167,17 @@ EffectCard::EffectCard(
 void EffectCard::buildHeader(QVBoxLayout* root)
 {
     const auto& theme = ThemeManager::instance();
-    const auto& c = theme.colors();
 
-    auto* header = new QHBoxLayout();
-    header->setContentsMargins(0, 0, 0, 0);
-    header->setSpacing(8);
+    m_headerWidget = new QWidget(this);
+    makeLayoutWidgetTransparent(m_headerWidget);
+    m_headerWidget->setCursor(Qt::OpenHandCursor);
+    auto* header = new QHBoxLayout(m_headerWidget);
+    header->setContentsMargins(theme.scaled(kHeaderHorizontalInset),
+        theme.scaled(kHeaderVerticalInset), theme.scaled(kHeaderHorizontalInset),
+        theme.scaled(kHeaderVerticalInset));
+    header->setSpacing(theme.scaled(kHeaderElementSpacing));
 
     m_grip = new GripHandle(this);
-    m_grip->installEventFilter(this);
     header->addWidget(m_grip);
 
     m_titleLabel = new QLabel(
@@ -144,18 +185,13 @@ void EffectCard::buildHeader(QVBoxLayout* root)
     QFont titleFont = theme.font(ruwa::ui::core::ThemeFontRole::Body);
     titleFont.setWeight(QFont::DemiBold);
     m_titleLabel->setFont(titleFont);
+    makeLayoutWidgetTransparent(m_titleLabel);
+    m_titleLabel->setCursor(Qt::OpenHandCursor);
     header->addWidget(m_titleLabel, 1);
 
-    const QString iconButtonStyle
-        = QStringLiteral("QPushButton { background: transparent; border: none; border-radius: 5px; "
-                         "color: %1; padding: 0; }"
-                         "QPushButton:hover { background: %2; }")
-              .arg(c.textMuted.name(), c.surfaceHover().name());
-
     m_eyeButton = new QPushButton(this);
-    m_eyeButton->setFixedSize(24, 24);
+    m_eyeButton->setFixedSize(theme.scaled(kHeaderButtonSize), theme.scaled(kHeaderButtonSize));
     m_eyeButton->setCursor(Qt::PointingHandCursor);
-    m_eyeButton->setStyleSheet(iconButtonStyle);
     m_eyeButton->setToolTip(tr("Toggle effect (bypass)"));
     refreshEyeIcon();
     connect(m_eyeButton, &QPushButton::clicked, this, [this]() {
@@ -166,15 +202,32 @@ void EffectCard::buildHeader(QVBoxLayout* root)
     header->addWidget(m_eyeButton);
 
     m_menuButton = new QPushButton(this);
-    m_menuButton->setFixedSize(24, 24);
+    m_menuButton->setFixedSize(theme.scaled(kHeaderButtonSize), theme.scaled(kHeaderButtonSize));
     m_menuButton->setCursor(Qt::PointingHandCursor);
-    m_menuButton->setStyleSheet(iconButtonStyle);
     m_menuButton->setToolTip(tr("More"));
     refreshMenuIcon();
     connect(m_menuButton, &QPushButton::clicked, this, &EffectCard::showOverflowMenu);
     header->addWidget(m_menuButton);
 
-    root->addLayout(header);
+    refreshHeaderButtonStyle();
+    root->addWidget(m_headerWidget);
+}
+
+void EffectCard::refreshHeaderButtonStyle()
+{
+    const auto& c = ThemeManager::instance().colors();
+    const QString style = QStringLiteral(
+        "QPushButton { background: transparent; border: none; border-radius: %1px; "
+        "color: %2; padding: 0; }"
+        "QPushButton:hover { background: %3; }")
+                              .arg(ThemeManager::instance().scaled(5))
+                              .arg(c.textMuted.name(), c.surfaceHover().name());
+    if (m_eyeButton) {
+        m_eyeButton->setStyleSheet(style);
+    }
+    if (m_menuButton) {
+        m_menuButton->setStyleSheet(style);
+    }
 }
 
 void EffectCard::refreshEyeIcon()
@@ -188,7 +241,8 @@ void EffectCard::refreshEyeIcon()
     // Tint to the theme text colour; muted when the effect is bypassed.
     const QColor tint = m_state.enabled ? c.text : c.textMuted;
     m_eyeButton->setIcon(IconProvider::instance().getColoredIcon(icon, tint));
-    m_eyeButton->setIconSize(QSize(15, 15));
+    m_eyeButton->setIconSize(
+        ThemeManager::instance().scaled(QSize(kHeaderIconSize, kHeaderIconSize)));
 }
 
 void EffectCard::refreshMenuIcon()
@@ -199,7 +253,8 @@ void EffectCard::refreshMenuIcon()
     const auto& c = ThemeManager::instance().colors();
     m_menuButton->setIcon(
         IconProvider::instance().getColoredIcon(IconProvider::StandardIcon::Dots, c.textMuted));
-    m_menuButton->setIconSize(QSize(15, 15));
+    m_menuButton->setIconSize(
+        ThemeManager::instance().scaled(QSize(kHeaderIconSize, kHeaderIconSize)));
 }
 
 void EffectCard::buildParams(QVBoxLayout* root)
@@ -246,6 +301,38 @@ QVariant EffectCard::paramValue(const EffectParamDefinition& param) const
 {
     return m_state.params.contains(param.key) ? m_state.params.value(param.key)
                                               : param.defaultValue;
+}
+
+void EffectCard::setSelected(bool selected)
+{
+    if (m_selected == selected) {
+        return;
+    }
+    m_selected = selected;
+    m_selectionAnim->stop();
+    m_selectionAnim->setStartValue(m_selectionProgress);
+    m_selectionAnim->setEndValue(selected ? 1.0 : 0.0);
+    m_selectionAnim->setDuration(ruwa::ui::core::anim::duration(kSelectionAnimMs));
+    ruwa::ui::core::anim::start(m_selectionAnim);
+}
+
+void EffectCard::setSelectionProgress(qreal progress)
+{
+    const qreal bounded = qBound<qreal>(0.0, progress, 1.0);
+    if (qFuzzyCompare(m_selectionProgress, bounded)) {
+        return;
+    }
+    m_selectionProgress = bounded;
+    update();
+}
+
+void EffectCard::installInteractionFilters()
+{
+    installEventFilter(this);
+    const auto descendants = findChildren<QWidget*>();
+    for (QWidget* descendant : descendants) {
+        descendant->installEventFilter(this);
+    }
 }
 
 void EffectCard::setEffectState(const LayerEffectState& state)
@@ -356,6 +443,7 @@ void EffectCard::addParamEditor(QVBoxLayout* parentLayout, const EffectParamDefi
     const auto& c = ThemeManager::instance().colors();
 
     auto* row = new QWidget(this);
+    makeLayoutWidgetTransparent(row);
     // Fixed grid: every param row is exactly one kParamRowUnitHeight tall (a
     // future editor that needs more vertical room can request a whole multiple
     // of it instead — see the constant's comment).
@@ -366,6 +454,7 @@ void EffectCard::addParamEditor(QVBoxLayout* parentLayout, const EffectParamDefi
 
     auto* label = new QLabel(param.label.isEmpty() ? param.key : param.label, row);
     label->setStyleSheet(QStringLiteral("color: %1;").arg(c.textMuted.name()));
+    makeLayoutWidgetTransparent(label);
     // Name column: flexible, fills whatever the fixed-width value column leaves.
     rowLayout->addWidget(label, 1, Qt::AlignVCenter);
 
@@ -389,6 +478,7 @@ void EffectCard::addParamEditor(QVBoxLayout* parentLayout, const EffectParamDefi
         // The switch is inherently small; right-align it within the same fixed
         // value-column width the other editors fill, so the columns still align.
         auto* cell = new QWidget(row);
+        makeLayoutWidgetTransparent(cell);
         cell->setFixedWidth(valueColumnWidth);
         auto* cellLayout = new QHBoxLayout(cell);
         cellLayout->setContentsMargins(0, 0, 0, 0);
@@ -584,6 +674,7 @@ void EffectCard::addPositionParamEditor(QVBoxLayout* parentLayout,
     const auto& c = ThemeManager::instance().colors();
 
     auto* row = new QWidget(this);
+    makeLayoutWidgetTransparent(row);
     row->setFixedHeight(ThemeManager::instance().scaled(kParamRowUnitHeight));
     auto* rowLayout = new QHBoxLayout(row);
     rowLayout->setContentsMargins(0, 0, 0, 0);
@@ -591,6 +682,7 @@ void EffectCard::addPositionParamEditor(QVBoxLayout* parentLayout,
 
     auto* label = new QLabel(xParam.label.isEmpty() ? xParam.key : xParam.label, row);
     label->setStyleSheet(QStringLiteral("color: %1;").arg(c.textMuted.name()));
+    makeLayoutWidgetTransparent(label);
     rowLayout->addWidget(label, 1, Qt::AlignVCenter);
 
     const int valueColumnWidth = ThemeManager::instance().scaled(kParamValueColumnWidth);
@@ -790,14 +882,30 @@ void EffectCard::setRowOpacity(qreal v)
 
 bool EffectCard::eventFilter(QObject* watched, QEvent* event)
 {
-    // Drag reorder is initiated from the grip handle only, so param editors and
-    // the header buttons stay fully interactive.
-    if (watched == m_grip) {
+    if (event->type() == QEvent::ChildAdded) {
+        auto* childEvent = static_cast<QChildEvent*>(event);
+        if (auto* childWidget = qobject_cast<QWidget*>(childEvent->child())) {
+            childWidget->installEventFilter(this);
+        }
+    }
+
+    if (event->type() == QEvent::MouseButtonPress) {
+        auto* mouseEvent = static_cast<QMouseEvent*>(event);
+        if (mouseEvent->button() != Qt::NoButton) {
+            emit selectionRequested();
+        }
+    }
+
+    // The whole passive part of the header is a drag surface. Eye/menu buttons
+    // are deliberately not filtered, so they retain normal click interaction.
+    const bool isHeaderDragSurface
+        = watched == m_headerWidget || watched == m_titleLabel || watched == m_grip;
+    if (isHeaderDragSurface) {
         switch (event->type()) {
         case QEvent::MouseButtonPress: {
             auto* me = static_cast<QMouseEvent*>(event);
             if (me->button() == Qt::LeftButton) {
-                m_gripPressed = true;
+                m_headerPressed = true;
                 m_dragArmed = false;
                 m_pressGlobalPos = me->globalPosition().toPoint();
                 return true;
@@ -805,13 +913,13 @@ bool EffectCard::eventFilter(QObject* watched, QEvent* event)
             break;
         }
         case QEvent::MouseMove: {
-            if (m_gripPressed && !m_dragArmed) {
+            if (m_headerPressed && !m_dragArmed) {
                 auto* me = static_cast<QMouseEvent*>(event);
                 const QPoint gp = me->globalPosition().toPoint();
                 if ((gp - m_pressGlobalPos).manhattanLength()
                     >= QApplication::startDragDistance()) {
                     m_dragArmed = true;
-                    m_gripPressed = false;
+                    m_headerPressed = false;
                     emit dragInitiated(m_instanceId, gp);
                 }
                 return true;
@@ -819,7 +927,7 @@ bool EffectCard::eventFilter(QObject* watched, QEvent* event)
             break;
         }
         case QEvent::MouseButtonRelease:
-            m_gripPressed = false;
+            m_headerPressed = false;
             m_dragArmed = false;
             break;
         default:
@@ -839,8 +947,37 @@ void EffectCard::paintEvent(QPaintEvent*)
     // whole card (children included), so don't multiply the background again.
     p.setOpacity(m_dragging ? 1.0 : m_rowOpacity);
     const QRectF r = QRectF(rect()).adjusted(0.5, 0.5, -0.5, -0.5);
+
+    // Match the unselected Layers panel row exactly: surfaceAlt at 60%.
+    QColor bodyBackground = c.surfaceAlt;
+    bodyBackground.setAlphaF(0.6);
+    p.setPen(Qt::NoPen);
+    p.setBrush(bodyBackground);
+    p.drawRoundedRect(r, kCardRadius, kCardRadius);
+
+    if (m_headerWidget) {
+        // Clip a second rounded-card fill to the header geometry. This preserves
+        // the card's rounded top corners while leaving a straight header edge.
+        const QRectF headerRect(m_headerWidget->geometry());
+        p.save();
+        p.setClipRect(headerRect);
+        p.setBrush(c.surfaceAlt);
+        p.drawRoundedRect(r, kCardRadius, kCardRadius);
+
+        if (m_selectionProgress > 0.0) {
+            QColor selection = c.primary;
+            selection.setAlphaF(0.12 * m_selectionProgress);
+            p.setBrush(selection);
+            p.drawRoundedRect(r, kCardRadius, kCardRadius);
+        }
+        p.restore();
+
+        p.setPen(QPen(c.border, 1));
+        p.drawLine(QPointF(r.left(), headerRect.bottom()), QPointF(r.right(), headerRect.bottom()));
+    }
+
     p.setPen(QPen(c.border, 1));
-    p.setBrush(c.surface);
+    p.setBrush(Qt::NoBrush);
     p.drawRoundedRect(r, kCardRadius, kCardRadius);
 }
 

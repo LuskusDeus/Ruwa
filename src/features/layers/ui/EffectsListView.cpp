@@ -122,6 +122,7 @@ EffectsListView::EffectsListView(QWidget* parent)
     m_scroll->setVerticalScrollBarPolicy(Qt::ScrollBarAsNeeded);
     m_scroll->setContentWidthFixedToViewport(true);
     mainLayout->addWidget(m_scroll);
+    m_scroll->viewport()->installEventFilter(this);
 
     m_content = new QWidget();
     m_content->setObjectName("effects_list_content");
@@ -427,6 +428,17 @@ void EffectsListView::endDragSession()
 
 bool EffectsListView::eventFilter(QObject* watched, QEvent* event)
 {
+    if ((watched == m_content || (m_scroll && watched == m_scroll->viewport()))
+        && event->type() == QEvent::MouseButtonPress) {
+        auto* mouseEvent = static_cast<QMouseEvent*>(event);
+        auto* surface = static_cast<QWidget*>(watched);
+        const bool hasChildUnderPointer
+            = surface->childAt(mouseEvent->position().toPoint()) != nullptr;
+        if (mouseEvent->button() == Qt::LeftButton && !hasChildUnderPointer) {
+            emit emptyAreaClicked();
+        }
+    }
+
     if (watched == m_content && event->type() == QEvent::Resize) {
         const int w = m_content->width();
         for (auto* row : m_rows) {

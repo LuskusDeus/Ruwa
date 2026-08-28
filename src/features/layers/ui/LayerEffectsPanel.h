@@ -55,6 +55,8 @@ public:
     void setPushUndoFn(PushUndoFn fn);
     void setUndoCallbacks(RequestRenderFn requestRender, OnContentChangedFn onContentChanged);
     void setCanvasSizeProvider(CanvasSizeProviderFn fn);
+    /// Clear the transient effect-card selection without changing the document.
+    void clearEffectSelection();
 
 signals:
     /// Bubbled up from an effect's colour capsule; WorkspaceTab routes it to the
@@ -68,6 +70,7 @@ signals:
 protected:
     QWidget* createContent() override;
     void onThemeChanged() override;
+    bool eventFilter(QObject* watched, QEvent* event) override;
 
 private slots:
     void refreshUi();
@@ -80,6 +83,7 @@ private:
 
     bool canEditEffects(const ruwa::core::layers::LayerData* layer) const;
     ruwa::core::layers::LayerData* selectedLayer() const;
+    void selectEffect(const QUuid& effectId);
     /// Delete every card immediately (used when leaving the effects view state).
     void removeAllCards();
     void showState(ViewState state, const QString& message = QString());
@@ -121,6 +125,7 @@ private:
     EffectsListView* m_listView = nullptr;
     QHash<QUuid, EffectCard*> m_cardById; // persistent cards, keyed by effect instance id
     QList<QUuid> m_cardOrder; // current effect order (by instance id)
+    QUuid m_selectedEffectId; // transient UI selection; never serialized into the document
     QPointer<EffectPickerPopup> m_picker;
     PushUndoFn m_pushUndoFn;
     RequestRenderFn m_requestRender;

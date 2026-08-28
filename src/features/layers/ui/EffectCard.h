@@ -18,6 +18,7 @@ class QVBoxLayout;
 class QLabel;
 class QPushButton;
 class QGraphicsOpacityEffect;
+class QPropertyAnimation;
 
 namespace ruwa::ui::workspace {
 
@@ -25,20 +26,26 @@ namespace ruwa::ui::workspace {
  * @brief A single layer-effect card: draggable-style header (grip + name +
  * bypass eye + overflow menu) above the effect's parameter editors.
  *
- * The card owns no model state; it emits intent signals and the owning
- * LayerEffectsPanel routes them through undoable mutations. Dragging the grip
- * starts a reorder (dragInitiated -> EffectsListView); reordering is also
- * available from the overflow menu.
+ * The card owns no model state.
+ *
+ * LayerEffectsPanel routes emitted intents through undoable
+ * mutations.
+ *
+ * Dragging passive header areas starts a reorder; the overflow menu can also
+ * reorder.
  */
 class EffectCard : public ruwa::ui::widgets::ReorderableRowWidget,
                    public ruwa::ui::widgets::IContextMenuProvider {
     Q_OBJECT
+    Q_PROPERTY(qreal selectionProgress READ selectionProgress WRITE setSelectionProgress)
 
 public:
     EffectCard(const ruwa::core::effects::LayerEffectDescriptor& descriptor,
         const ruwa::core::effects::LayerEffectState& state, QWidget* parent = nullptr);
 
     QUuid instanceId() const { return m_instanceId; }
+    bool isSelected() const { return m_selected; }
+    void setSelected(bool selected);
 
     /// Synchronize the persistent card with the current model state. This is
     /// used after undo/redo and other external model mutations; editor signals
@@ -66,6 +73,8 @@ public:
     void handleContextMenuAction(int actionId) override;
 
 signals:
+    /// Any direct interaction with this card should make it the panel's sole selection.
+    void selectionRequested();
     void enabledToggled(bool enabled);
     void previewToggled(bool enabled);
     void contentSpaceToggled(bool contentSpace);
@@ -95,7 +104,7 @@ signals:
     /// PositionInputField::positionChanged.
     void positionPickerRequested(QWidget* sourceField, const QPointF& currentPosition);
 
-    /// Emitted when the user drags the grip past the threshold, to start a reorder.
+    /// Emitted when the user drags the passive header past the threshold.
     void dragInitiated(const QUuid& id, const QPoint& globalPos);
 
 protected:
@@ -111,8 +120,12 @@ private:
         const ruwa::core::effects::EffectParamDefinition& xParam,
         const ruwa::core::effects::EffectParamDefinition& yParam);
     void showOverflowMenu();
+    void refreshHeaderButtonStyle();
     void refreshEyeIcon();
     void refreshMenuIcon();
+    void installInteractionFilters();
+    qreal selectionProgress() const { return m_selectionProgress; }
+    void setSelectionProgress(qreal progress);
     QVariant paramValue(const ruwa::core::effects::EffectParamDefinition& param) const;
 
     ruwa::core::effects::LayerEffectDescriptor m_descriptor;
@@ -120,6 +133,7 @@ private:
     QUuid m_instanceId;
     QHash<QString, QWidget*> m_paramEditorByKey;
 
+    QWidget* m_headerWidget = nullptr;
     QLabel* m_titleLabel = nullptr;
     QPushButton* m_eyeButton = nullptr;
     QPushButton* m_menuButton = nullptr;
@@ -128,13 +142,16 @@ private:
     bool m_canMoveDown = false;
     bool m_contentSpaceSupported = false;
     bool m_syncing = false;
+    bool m_selected = false;
+    qreal m_selectionProgress = 0.0;
+    QPropertyAnimation* m_selectionAnim = nullptr;
 
     // Whole-card drag dim (see setDragging). Owned by setGraphicsEffect.
     QGraphicsOpacityEffect* m_dimEffect = nullptr;
 
-    // Grip drag-initiation state
+    // Header drag-initiation state
     bool m_dragging = false;
-    bool m_gripPressed = false;
+    bool m_headerPressed = false;
     bool m_dragArmed = false;
     QPoint m_pressGlobalPos;
 };

@@ -3608,10 +3608,22 @@ void CanvasPanel::mousePressEvent(QMouseEvent* event)
         DockPanel::mousePressEvent(event);
         return;
     }
-    if (m_mouseHandler && m_mouseHandler->handleMousePress(event)) {
+    if (handleCanvasMousePress(event)) {
         return;
     }
     DockPanel::mousePressEvent(event);
+}
+
+bool CanvasPanel::handleCanvasMousePress(QMouseEvent* event)
+{
+    const bool wasPositionPickerActive = isPositionPickerActive();
+    if (m_mouseHandler && m_mouseHandler->handleMousePress(event)) {
+        if (!wasPositionPickerActive && !m_isPanning && !m_dispatchingSyntheticMousePress) {
+            emit canvasToolInteractionStarted();
+        }
+        return true;
+    }
+    return false;
 }
 
 void CanvasPanel::mouseDoubleClickEvent(QMouseEvent* event)
@@ -3812,8 +3824,7 @@ bool CanvasPanel::eventFilter(QObject* watched, QEvent* event)
     if (canvasInputTarget) {
         switch (event->type()) {
         case QEvent::MouseButtonPress:
-            if (m_mouseHandler
-                && m_mouseHandler->handleMousePress(static_cast<QMouseEvent*>(event))) {
+            if (handleCanvasMousePress(static_cast<QMouseEvent*>(event))) {
                 return true;
             }
             break;
@@ -4208,7 +4219,10 @@ void CanvasPanel::hideBrushPackOverlayIfNotUserMoved()
 
 void CanvasPanel::dispatchSyntheticMousePress(QMouseEvent* event)
 {
+    const bool wasDispatching = m_dispatchingSyntheticMousePress;
+    m_dispatchingSyntheticMousePress = true;
     mousePressEvent(event);
+    m_dispatchingSyntheticMousePress = wasDispatching;
 }
 
 void CanvasPanel::dispatchSyntheticMouseMove(QMouseEvent* event)

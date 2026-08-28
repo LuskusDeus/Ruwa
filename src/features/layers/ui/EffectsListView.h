@@ -30,7 +30,7 @@ namespace ruwa::ui::workspace {
  * A flat-list counterpart to LayerListView built on the same reusable engine
  * (AnimatedListLayout + ListDragDrop). It owns a SmoothScrollArea and positions
  * caller-supplied rows (EffectCards) with slide animations, lets the user
- * reorder them by dragging the card grip, and animates insert/remove.
+ * reorder them by dragging a card header, and animates insert/remove.
  *
  * Rows are persistent: the panel reuses the same row object for an id across
  * refreshes and passes the current ordered set to syncRows(), which diffs it
@@ -64,6 +64,9 @@ public slots:
     void beginDrag(const QUuid& id, const QPoint& globalPos);
 
 signals:
+    /// The user clicked list space that is not occupied by an effect card.
+    void emptyAreaClicked();
+
     /// Emitted when a drag settles on a new position. newIndex is the final
     /// index in the list after the moved item is removed and re-inserted.
     void reordered(const QUuid& movedId, int newIndex);

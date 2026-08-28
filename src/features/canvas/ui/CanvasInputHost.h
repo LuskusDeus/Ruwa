@@ -97,6 +97,7 @@ public:
     virtual void dispatchSyntheticMousePress(QMouseEvent* event) = 0;
     virtual void dispatchSyntheticMouseMove(QMouseEvent* event) = 0;
     virtual void dispatchSyntheticMouseRelease(QMouseEvent* event) = 0;
+    virtual void notifyCanvasToolInteractionStarted() = 0;
 
     virtual aether::Vector2 mapInputToViewportWorld(const QPointF& globalPos) const = 0;
     virtual bool isGlobalOverInputViewport(const QPoint& globalPos) const = 0;
