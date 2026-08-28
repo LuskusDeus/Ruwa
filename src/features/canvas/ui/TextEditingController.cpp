@@ -1,8 +1,10 @@
 // SPDX-License-Identifier: MPL-2.0
 
 #include "features/canvas/ui/TextEditingController.h"
+#include "features/canvas/engine/CanvasEngineSession.h"
 
-#include "features/canvas/rendering/OpenGLCanvasWidget.h"
+#include "features/canvas/overlays/TextEditOverlayState.h"
+#include "features/canvas/engine/CanvasEngineTypes.h"
 #include "features/canvas/rendering/TextRetainedPayloadBuilder.h"
 #include "features/canvas/overlays/TextEditOverlayGL.h"
 #include "features/canvas/ui/CanvasPanel.h"
@@ -886,7 +888,7 @@ void TextEditingController::pushExistingTextCommand(const QString& newText)
     if (!layer || !layer->textData) {
         return;
     }
-    if (auto* undo = m_panel->undoManagerOrNull()) {
+    if (m_panel->m_engineBinding) {
         auto command = std::make_unique<aether::TextLayerContentCommand>(
             m_panel->m_layerModel, m_layerId, m_oldText, newText, m_oldStyleRuns,
             layer->textData->styleRuns, m_oldTransform, layer->textData->transform,
@@ -894,7 +896,7 @@ void TextEditingController::pushExistingTextCommand(const QString& newText)
             [panel = m_panel]() { panel->notifyContentChanged(); });
         command->setTypography(
             m_oldTypography, ruwa::core::layers::captureTextTypography(*layer->textData));
-        undo->push(std::move(command));
+        m_panel->pushHistoryCommand(std::move(command));
     }
 }
 
@@ -903,9 +905,9 @@ void TextEditingController::pushNewLayerCommand(ruwa::core::layers::LayerData* l
     if (!m_panel || !m_panel->m_layerModel || !layer) {
         return;
     }
-    if (auto* undo = m_panel->undoManagerOrNull()) {
+    if (m_panel->m_engineBinding) {
         if (auto clone = ruwa::core::layers::LayerModel::cloneLayerTree(layer, true)) {
-            undo->push(std::make_unique<aether::LayerAddCommand>(
+            m_panel->pushHistoryCommand(std::make_unique<aether::LayerAddCommand>(
                 m_panel->m_layerModel,
                 QList<std::shared_ptr<ruwa::core::layers::LayerData>> { clone },
                 QList<std::pair<ruwa::core::layers::LayerId, int>> {
@@ -1028,11 +1030,11 @@ void TextEditingController::setCaretBlinkRunning(bool running)
 
 void TextEditingController::clearOverlay()
 {
-    if (!m_panel || !m_panel->m_glWidget) {
+    if (!m_panel || !m_panel->m_engineBinding) {
         return;
     }
-    aether::TextEditOverlayState state;
-    m_panel->m_glWidget->setTextEditOverlayState(state);
+    TextEditOverlayState state;
+    m_panel->m_engineBinding->session().presentation().setTextEditOverlayState(state);
 }
 
 aether::TransformState TextEditingController::normalizedTextTransform(
@@ -1057,7 +1059,8 @@ void TextEditingController::updateOverlayState()
 
 void TextEditingController::pushOverlayState()
 {
-    if (!m_active || !m_panel || !m_panel->m_layerModel || !m_panel->m_glWidget || !m_editor) {
+    if (!m_active || !m_panel || !m_panel->m_layerModel || !m_panel->m_engineBinding
+        || !m_editor) {
         return;
     }
     auto* layer = m_panel->m_layerModel->layerById(m_layerId);
@@ -1067,17 +1070,31 @@ void TextEditingController::pushOverlayState()
     }
 
     const QTextCursor cursor = m_editor->textCursor();
-    aether::TextEditOverlayState state;
+    // The overlay state carries document geometry (plan 7.28.3): the source-
+    // space rectangles are mapped through the text transform here, before
+    // crossing the engine boundary — the GL renderer consumes finished quads.
+    const aether::TransformState transform = normalizedTextTransform(layer);
+    TextEditOverlayState state;
     state.active = true;
-    state.transform = normalizedTextTransform(layer);
-    state.sourceBounds = state.transform.contentBounds;
     state.caretVisible = m_caretVisible && !cursor.hasSelection();
-    state.caretSourceRect = aether::computeTextCaretSourceRect(*layer->textData, cursor.position());
-    if (cursor.hasSelection() && !m_colorPickerActive) {
-        state.selectionSourceRects = aether::computeTextSelectionSourceRects(
-            *layer->textData, cursor.selectionStart(), cursor.selectionEnd());
+    if (state.caretVisible) {
+        const aether::Rect caretRect
+            = aether::computeTextCaretSourceRect(*layer->textData, cursor.position());
+        if (caretRect.height > 0.0f) {
+            const float sourceX = caretRect.left() + caretRect.width * 0.5f;
+            state.caretAxis = { transform.transformPoint({ sourceX, caretRect.top() }),
+                transform.transformPoint({ sourceX, caretRect.bottom() }) };
+        } else {
+            state.caretVisible = false;
+        }
     }
-    m_panel->m_glWidget->setTextEditOverlayState(state);
+    if (cursor.hasSelection() && !m_colorPickerActive) {
+        for (const aether::Rect& rect : aether::computeTextSelectionSourceRects(
+                 *layer->textData, cursor.selectionStart(), cursor.selectionEnd())) {
+            state.selectionQuads.push_back(transformedRectCorners(transform, rect));
+        }
+    }
+    m_panel->m_engineBinding->session().presentation().setTextEditOverlayState(state);
 }
 
 ruwa::core::layers::LayerData* TextEditingController::hitTextLayerAt(
@@ -1141,7 +1158,7 @@ bool TextEditingController::handleEditorFocusOut(QFocusEvent* event)
     QWidget* focusWidget = QApplication::focusWidget();
     return m_panel
         && (focusWidget == m_panel || focusWidget == m_panel->m_contentWidget
-            || focusWidget == m_panel->m_glWidget
+            || focusWidget == m_panel->m_viewportHostWidget
             || m_panel->isTextEditingFocusExclusion(focusWidget));
 }
 
