@@ -6,7 +6,7 @@
 
 #include "CanvasPanel.h"
 
-#include "features/canvas/rendering/OpenGLCanvasWidget.h"
+#include "features/canvas/engine/CanvasEngineSession.h"
 #include "features/export/ExportAreaController.h"
 #include "features/export/ExportModeController.h"
 #include "features/export/ExportService.h"
@@ -15,12 +15,12 @@
 #include "features/layers/model/LayerModel.h"
 #include "features/selection/SelectionActionPopup.h"
 #include "platform/Platform.h"
+#include "shared/tiles/TileFormat.h"
 #include "shared/utils/FileDialogMemory.h"
 #include "shared/widgets/overlays/ConfirmationPopup.h"
 #include "shell/top-bar/MessagePopupManager.h"
 
 #include <QCoreApplication>
-#include <QEventLoop>
 #include <QGraphicsOpacityEffect>
 #include <QImage>
 #include <QImageWriter>
@@ -35,10 +35,44 @@
 
 #include <algorithm>
 #include <cmath>
+#include <cstring>
 #include <memory>
 #include <utility>
 
 namespace ruwa::ui::workspace {
+
+namespace {
+
+/// Wrap a captured CPU surface as a Qt image. The bytes are copied as-is and
+/// the alpha semantics travel in the QImage format label — never re-derived.
+QImage surfaceToQImage(const ruwa::shared::imaging::PixelSurface& surface)
+{
+    using ruwa::shared::imaging::PixelAlpha;
+    using ruwa::shared::imaging::PixelStorage;
+
+    if (surface.isNull()) {
+        return QImage();
+    }
+    if (surface.storage() == PixelStorage::Float32) {
+        // UI consumers want 8-bit images; precision reduction happens here,
+        // once, on the way out.
+        return surfaceToQImage(surface.convertedTo(PixelStorage::UInt8));
+    }
+
+    QImage image(surface.width(), surface.height(),
+        surface.alphaMode() == PixelAlpha::Premultiplied ? QImage::Format_RGBA8888_Premultiplied
+                                                         : QImage::Format_RGBA8888);
+    if (image.isNull()) {
+        return QImage();
+    }
+    for (int y = 0; y < surface.height(); ++y) {
+        std::memcpy(image.scanLine(y), surface.scanLine(y),
+            static_cast<size_t>(surface.width()) * 4);
+    }
+    return image;
+}
+
+} // anonymous namespace
 
 QRect CanvasPanel::effectiveDisplayFrame() const
 {
@@ -59,9 +93,11 @@ QRect CanvasPanel::navigatorDisplayFrame() const
     }
 
     QRect bounds;
-    if (m_glWidget && m_glWidget->isInitialized()
-        && m_glWidget->computeNavigatorContentBounds(bounds)) {
-        return bounds;
+    if (isRenderContentReady()) {
+        auto content = inputEngineSession()->capture().navigatorContentBounds();
+        if (content.isOk() && content.value()) {
+            return *content.value();
+        }
     }
 
     if (hasExportFrame()) {
@@ -159,10 +195,11 @@ void CanvasPanel::resizeExportFrame(const QSize& size)
 
 QRect CanvasPanel::computedAutoExportFrame() const
 {
-    QRect bounds;
-    if (m_glWidget && m_glWidget->isInitialized()
-        && m_glWidget->computeExportContentBounds(bounds)) {
-        return bounds;
+    if (isRenderContentReady()) {
+        auto content = inputEngineSession()->capture().exportContentBounds();
+        if (content.isOk() && content.value()) {
+            return *content.value();
+        }
     }
 
     if (hasExportFrame()) {
@@ -206,58 +243,61 @@ void CanvasPanel::publishEffectiveExportFrameIfChanged()
 
 QPixmap CanvasPanel::grabCanvasThumbnail(int maxSize) const
 {
-    if (!m_glWidget || !m_glWidget->isInitialized())
-        return QPixmap();
-
-    auto* glNonConst = const_cast<aether::OpenGLCanvasWidget*>(m_glWidget);
-    const bool prevFlipH = m_glWidget->canvasContentFlipHorizontal();
-    const bool prevFlipV = m_glWidget->canvasContentFlipVertical();
-    glNonConst->setCanvasContentFlipHorizontal(false);
-    glNonConst->setCanvasContentFlipVertical(false);
-
-    m_glWidget->setSkipCursorOverlays(true);
-    m_glWidget->update();
-    QCoreApplication::processEvents(QEventLoop::ExcludeUserInputEvents);
-    const QImage image = m_glWidget->grabFramebuffer();
-    if (image.isNull()) {
-        glNonConst->setCanvasContentFlipHorizontal(prevFlipH);
-        glNonConst->setCanvasContentFlipVertical(prevFlipV);
-        m_glWidget->setSkipCursorOverlays(false);
-        m_glWidget->update();
+    CanvasEngineSession* session = inputEngineSession();
+    if (!session || session->status() != CanvasEngineStatus::Ready) {
         return QPixmap();
     }
 
-    const auto& viewport = m_glWidget->viewport();
-    const auto& canvas = m_glWidget->canvas();
-    const float cw = static_cast<float>(canvas.width());
-    const float ch = static_cast<float>(canvas.height());
+    // The thumbnail captures what the engine presents: the whole transaction
+    // (mirror suppression, cursor suppression, frame pump, readback, restore)
+    // is the engine's atomic capture, not something the UI orchestrates.
+    CanvasPresentedViewCaptureRequest request;
+    request.suppressViewMirror = true;
+    request.includeRenderedPointer = false;
+    auto capture = session->capture().capturePresentedView(request);
+    if (!capture.isOk()) {
+        return QPixmap();
+    }
 
-    const aether::Vector2 p0 = viewport.worldToScreen({ 0.0f, 0.0f });
-    const aether::Vector2 p1 = viewport.worldToScreen({ cw, 0.0f });
-    const aether::Vector2 p2 = viewport.worldToScreen({ cw, ch });
-    const aether::Vector2 p3 = viewport.worldToScreen({ 0.0f, ch });
+    const QImage frame = surfaceToQImage(capture.value().surface);
+    if (frame.isNull()) {
+        return QPixmap();
+    }
 
-    const float left = std::round(std::min({ p0.x, p1.x, p2.x, p3.x }));
-    const float right = std::round(std::max({ p0.x, p1.x, p2.x, p3.x }));
-    const float top = std::round(std::min({ p0.y, p1.y, p2.y, p3.y }));
-    const float bottom = std::round(std::max({ p0.y, p1.y, p2.y, p3.y }));
+    // Project the document rect's corners through the captured presentation's
+    // own view snapshot and crop to their bounding box — the region the canvas
+    // occupied in exactly that frame.
+    const QSizeF documentSize(m_canvasSize.width(), m_canvasSize.height());
+    const QPointF corners[4] = {
+        canvasSurfacePointFromDocument(capture.value().view, QPointF(0.0, 0.0), documentSize),
+        canvasSurfacePointFromDocument(
+            capture.value().view, QPointF(documentSize.width(), 0.0), documentSize),
+        canvasSurfacePointFromDocument(
+            capture.value().view, QPointF(documentSize.width(), documentSize.height()), documentSize),
+        canvasSurfacePointFromDocument(
+            capture.value().view, QPointF(0.0, documentSize.height()), documentSize),
+    };
 
-    const int x = qBound(0, static_cast<int>(left), image.width() - 1);
-    const int w = qBound(1, static_cast<int>(right - left), image.width() - x);
-    const int y = qBound(0, static_cast<int>(top), image.height() - 1);
-    const int h = qBound(1, static_cast<int>(bottom - top), image.height() - y);
+    const float left = static_cast<float>(
+        std::round(std::min({ corners[0].x(), corners[1].x(), corners[2].x(), corners[3].x() })));
+    const float right = static_cast<float>(
+        std::round(std::max({ corners[0].x(), corners[1].x(), corners[2].x(), corners[3].x() })));
+    const float top = static_cast<float>(
+        std::round(std::min({ corners[0].y(), corners[1].y(), corners[2].y(), corners[3].y() })));
+    const float bottom = static_cast<float>(
+        std::round(std::max({ corners[0].y(), corners[1].y(), corners[2].y(), corners[3].y() })));
 
-    glNonConst->setCanvasContentFlipHorizontal(prevFlipH);
-    glNonConst->setCanvasContentFlipVertical(prevFlipV);
-    m_glWidget->setSkipCursorOverlays(false);
-    m_glWidget->update();
+    const int x = qBound(0, static_cast<int>(left), frame.width() - 1);
+    const int w = qBound(1, static_cast<int>(right - left), frame.width() - x);
+    const int y = qBound(0, static_cast<int>(top), frame.height() - 1);
+    const int h = qBound(1, static_cast<int>(bottom - top), frame.height() - y);
 
     if (w <= 0 || h <= 0)
-        return QPixmap::fromImage(image);
+        return QPixmap::fromImage(frame);
 
-    QImage cropped = image.copy(x, y, w, h);
+    QImage cropped = frame.copy(x, y, w, h);
     if (cropped.isNull())
-        return QPixmap::fromImage(image);
+        return QPixmap::fromImage(frame);
 
     QImage scaled = cropped;
     if (cropped.width() > maxSize || cropped.height() > maxSize) {
@@ -268,11 +308,19 @@ QPixmap CanvasPanel::grabCanvasThumbnail(int maxSize) const
 
 QImage CanvasPanel::exportCanvasImage()
 {
-    if (!m_glWidget || !m_glWidget->isInitialized()) {
+    CanvasEngineSession* session = inputEngineSession();
+    if (!session || session->status() != CanvasEngineStatus::Ready) {
         return QImage();
     }
-    const QRect frame = effectiveDisplayFrame();
-    return m_glWidget->grabCanvasImage(frame);
+
+    CanvasDocumentCaptureRequest request;
+    request.region = effectiveDisplayFrame();
+    request.alphaMode = ruwa::shared::imaging::PixelAlpha::Straight;
+    auto capture = session->capture().captureDocumentRegion(request);
+    if (!capture.isOk()) {
+        return QImage();
+    }
+    return surfaceToQImage(capture.value());
 }
 
 bool CanvasPanel::fastExportPng(const QString& suggestedBaseName)
@@ -336,11 +384,20 @@ bool CanvasPanel::copyCanvasToClipboard()
 
 QImage CanvasPanel::getFullCanvasThumbnail(int maxSize) const
 {
-    if (!m_glWidget || !m_glWidget->isInitialized()) {
+    CanvasEngineSession* session = inputEngineSession();
+    if (!session || session->status() != CanvasEngineStatus::Ready) {
         return QImage();
     }
-    const QRect frame = navigatorDisplayFrame();
-    QImage full = m_glWidget->grabCanvasImage(frame);
+
+    CanvasDocumentCaptureRequest request;
+    request.region = navigatorDisplayFrame();
+    request.alphaMode = ruwa::shared::imaging::PixelAlpha::Straight;
+    auto capture = session->capture().captureDocumentRegion(request);
+    if (!capture.isOk()) {
+        return QImage();
+    }
+
+    QImage full = surfaceToQImage(capture.value());
     if (full.isNull())
         return QImage();
     if (full.width() <= maxSize && full.height() <= maxSize) {
@@ -351,7 +408,8 @@ QImage CanvasPanel::getFullCanvasThumbnail(int maxSize) const
 
 QImage CanvasPanel::getCanvasRegionThumbnail(const QRect& worldRect, const QSize& targetSize) const
 {
-    if (!m_glWidget || !m_glWidget->isInitialized()) {
+    CanvasEngineSession* session = inputEngineSession();
+    if (!session || session->status() != CanvasEngineStatus::Ready) {
         return QImage();
     }
 
@@ -360,7 +418,15 @@ QImage CanvasPanel::getCanvasRegionThumbnail(const QRect& worldRect, const QSize
         return QImage();
     }
 
-    QImage image = m_glWidget->grabCanvasImage(normalizedRect);
+    CanvasDocumentCaptureRequest request;
+    request.region = normalizedRect;
+    request.alphaMode = ruwa::shared::imaging::PixelAlpha::Straight;
+    auto capture = session->capture().captureDocumentRegion(request);
+    if (!capture.isOk()) {
+        return QImage();
+    }
+
+    QImage image = surfaceToQImage(capture.value());
     if (image.isNull()) {
         return QImage();
     }
@@ -373,10 +439,19 @@ QImage CanvasPanel::getCanvasRegionThumbnail(const QRect& worldRect, const QSize
 QImage CanvasPanel::renderNavigatorOverviewTile(
     const QRect& worldRect, const QSize& targetSize) const
 {
-    if (!m_glWidget || !m_glWidget->isInitialized()) {
+    CanvasEngineSession* session = inputEngineSession();
+    if (!session || session->status() != CanvasEngineStatus::Ready) {
         return QImage();
     }
-    return m_glWidget->renderCompositedRegion(worldRect, targetSize);
+
+    CanvasResampledCaptureRequest request;
+    request.region = worldRect;
+    request.outputSize = targetSize;
+    auto render = session->capture().renderDocumentRegion(request);
+    if (!render.isOk()) {
+        return QImage();
+    }
+    return surfaceToQImage(render.value());
 }
 
 namespace {
@@ -440,7 +515,8 @@ ruwa::core::exporting::ExportService* CanvasPanel::exportService()
 
 void CanvasPanel::refreshExportPanelSample()
 {
-    if (!m_exportPanel || !m_glWidget || !m_glWidget->isInitialized()) {
+    CanvasEngineSession* session = inputEngineSession();
+    if (!m_exportPanel || !session || session->status() != CanvasEngineStatus::Ready) {
         return;
     }
     const QRect frame = effectiveDisplayFrame();
@@ -459,9 +535,15 @@ void CanvasPanel::refreshExportPanelSample()
     target.setWidth(qMax(1, target.width()));
     target.setHeight(qMax(1, target.height()));
 
-    const QImage sample = m_glWidget->renderCompositedRegion(frame, target);
-    if (!sample.isNull()) {
-        m_exportPanel->setExportContentSample(sample);
+    CanvasResampledCaptureRequest request;
+    request.region = frame;
+    request.outputSize = target;
+    auto render = session->capture().renderDocumentRegion(request);
+    if (render.isOk()) {
+        const QImage sample = surfaceToQImage(render.value());
+        if (!sample.isNull()) {
+            m_exportPanel->setExportContentSample(sample);
+        }
     }
 }
 
@@ -475,7 +557,7 @@ bool CanvasPanel::startExport(ruwa::core::exporting::ExportSettings& settings)
         return false;
     };
 
-    if (!m_glWidget || !m_glWidget->isInitialized()) {
+    if (!isRenderContentReady()) {
         return reject(tr("The canvas is not ready to export yet."));
     }
 
@@ -511,19 +593,27 @@ bool CanvasPanel::startExport(ruwa::core::exporting::ExportSettings& settings)
     const bool wants16Bit = settings.bitDepth == exporting::ExportBitDepth::Bit16
         && exporting::formatCapabilities(settings.format).supports16Bit;
 
-    aether::OpenGLCanvasWidget::CanvasCaptureOptions capture;
-    capture.includeCanvasBackground = settings.includeCanvasBackground;
-    capture.highPrecision = wants16Bit || deepDocument;
+    CanvasDocumentCaptureRequest request;
+    request.region = frame;
+    request.includeCanvasBackground = settings.includeCanvasBackground;
+    request.highPrecision = wants16Bit || deepDocument;
+    // The export pipeline resamples before it converts, and resampling is
+    // only correct on premultiplied data — hand it the readback as-is and let
+    // it convert exactly once, at the end.
+    request.alphaMode = ruwa::shared::imaging::PixelAlpha::Premultiplied;
 
-    ruwa::shared::imaging::PixelSurface surface = m_glWidget->captureCanvasSurface(frame, capture);
-    if (surface.isNull()) {
-        return reject(tr("Not enough memory to capture a %1 x %2 px image.")
-                .arg(frame.width())
-                .arg(frame.height()));
+    auto capture = inputEngineSession()->capture().captureDocumentRegion(request);
+    if (!capture.isOk()) {
+        if (capture.error().code == CanvasErrorCode::OutOfMemory) {
+            return reject(tr("Not enough memory to capture a %1 x %2 px image.")
+                    .arg(frame.width())
+                    .arg(frame.height()));
+        }
+        return reject(tr("The export area could not be captured."));
     }
 
     QString error;
-    if (!exportService()->start(std::move(surface), settings, &error)) {
+    if (!exportService()->start(capture.takeValue(), settings, &error)) {
         if (m_exportPanel) {
             m_exportPanel->setExportInProgress(false);
         }
@@ -555,8 +645,8 @@ void CanvasPanel::setExportModeOverlayProgress(qreal progress)
 {
     m_exportModeOverlayProgress = progress;
     const qreal overlayOpacity = 1.0 - progress;
-    if (m_glWidget) {
-        m_glWidget->setExportPreviewHideBoardLayers(progress > 1e-5);
+    if (CanvasEngineSession* session = inputEngineSession()) {
+        session->view().setExportPreviewHideBoardLayers(progress > 1e-5);
     }
 
     if (m_brushOverlayOpacity) {
@@ -578,8 +668,8 @@ void CanvasPanel::setExportModeOverlayProgress(qreal progress)
 
 void CanvasPanel::setExportPreviewSuppressContentMirror(bool suppress)
 {
-    if (m_glWidget) {
-        m_glWidget->setExportPreviewSuppressContentMirror(suppress);
+    if (CanvasEngineSession* session = inputEngineSession()) {
+        session->view().setExportPreviewSuppressContentMirror(suppress);
     }
 }
 
