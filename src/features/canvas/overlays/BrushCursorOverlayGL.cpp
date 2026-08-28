@@ -276,7 +276,7 @@ void BrushCursorOverlayGL::renderParameterCircle(float centerX, float centerY, f
     const float scale = std::max(1.0f, uiScale);
     const float hover = std::clamp(hoverProgress, 0.0f, 1.0f);
     const float primaryWidth = (2.0f + hover * 1.25f) * scale;
-    const float invertWidth = 1.0f * scale;
+    const float invertWidth = 2.0f * scale;
     const float primaryInner = std::max(0.0f, radiusPx - primaryWidth * 0.5f);
     const float primaryOuter = radiusPx + primaryWidth * 0.5f;
     const int segments = std::clamp(static_cast<int>(std::ceil(radiusPx * 0.45f)), 64, 256);
