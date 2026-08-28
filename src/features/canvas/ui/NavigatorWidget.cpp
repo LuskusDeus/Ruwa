@@ -26,7 +26,7 @@ namespace {
 
 bool canNavigateCamera(const CanvasPanel* panel)
 {
-    return panel && panel->isGLContentReady() && panel->isInteractionEnabled()
+    return panel && panel->isRenderContentReady() && panel->isInteractionEnabled()
         && !panel->isExportMode();
 }
 
@@ -43,7 +43,7 @@ NavigatorWidget::NavigatorWidget(QWidget* parent)
     m_viewportSyncTimer = new QTimer(this);
     m_viewportSyncTimer->setInterval(26);
     connect(m_viewportSyncTimer, &QTimer::timeout, this, [this]() {
-        if (!isVisible() || !m_canvasPanel || !m_canvasPanel->isGLContentReady()) {
+        if (!isVisible() || !m_canvasPanel || !m_canvasPanel->isRenderContentReady()) {
             return;
         }
 
@@ -89,7 +89,7 @@ NavigatorWidget::NavigatorWidget(QWidget* parent)
     m_overviewRefreshTimer->setSingleShot(true);
     m_overviewRefreshTimer->setInterval(32);
     connect(m_overviewRefreshTimer, &QTimer::timeout, this, [this]() {
-        if (!isVisible() || !m_canvasPanel || !m_canvasPanel->isGLContentReady()) {
+        if (!isVisible() || !m_canvasPanel || !m_canvasPanel->isRenderContentReady()) {
             return;
         }
         if (m_canvasPanel->isDrawingActive()) {
@@ -116,7 +116,7 @@ void NavigatorWidget::setCanvasPanel(CanvasPanel* panel)
 
     m_canvasPanel = panel;
     if (m_canvasPanel) {
-        connect(m_canvasPanel, &CanvasPanel::glContentReady, this,
+        connect(m_canvasPanel, &CanvasPanel::renderContentReady, this,
             &NavigatorWidget::scheduleOverviewRefresh, Qt::UniqueConnection);
         connect(m_canvasPanel, &CanvasPanel::canvasContentChanged, this,
             &NavigatorWidget::scheduleOverviewRefresh, Qt::UniqueConnection);
@@ -150,14 +150,14 @@ void NavigatorWidget::refreshOverview()
 
 bool NavigatorWidget::presentationReady() const
 {
-    return m_canvasPanel && m_canvasPanel->isGLContentReady() && m_overviewCache
+    return m_canvasPanel && m_canvasPanel->isRenderContentReady() && m_overviewCache
         && m_overviewCache->isValid() && !m_overviewCache->hasDirtyTiles()
         && !m_overviewCache->hasActiveTransitions();
 }
 
 void NavigatorWidget::invalidateOverviewTiles(const QList<QPoint>& tilePositions)
 {
-    if (!m_canvasPanel || !m_canvasPanel->isGLContentReady()) {
+    if (!m_canvasPanel || !m_canvasPanel->isRenderContentReady()) {
         return;
     }
 
@@ -187,7 +187,7 @@ void NavigatorWidget::invalidateOverviewTiles(const QList<QPoint>& tilePositions
 
 void NavigatorWidget::invalidateAllOverview()
 {
-    if (!m_canvasPanel || !m_canvasPanel->isGLContentReady()) {
+    if (!m_canvasPanel || !m_canvasPanel->isRenderContentReady()) {
         return;
     }
 
@@ -294,7 +294,7 @@ QRectF NavigatorWidget::canvasDisplayRect() const
 QPointF NavigatorWidget::widgetToWorld(const QPointF& widgetPos) const
 {
     const QRectF disp = canvasDisplayRect();
-    if (disp.isEmpty() || !m_canvasPanel || !m_canvasPanel->isGLContentReady()) {
+    if (disp.isEmpty() || !m_canvasPanel || !m_canvasPanel->isRenderContentReady()) {
         return {};
     }
     const QRectF frame = presentedWorldFrame();
@@ -353,26 +353,25 @@ void NavigatorWidget::paintEvent(QPaintEvent* event)
 
 QPolygonF NavigatorWidget::viewportOutline() const
 {
-    if (!m_canvasPanel || !m_canvasPanel->isGLContentReady()) {
+    if (!m_canvasPanel || !m_canvasPanel->isRenderContentReady()) {
         return {};
     }
 
-    const auto& vp = m_canvasPanel->viewport();
-    const float vw = static_cast<float>(vp.width());
-    const float vh = static_cast<float>(vp.height());
+    const QSizeF extent = m_canvasPanel->viewportExtent();
+    const qreal vw = extent.width();
+    const qreal vh = extent.height();
     const QRectF frame = presentedWorldFrame();
     if (vw < 1 || vh < 1 || !frame.isValid() || frame.isEmpty()) {
         return {};
     }
 
-    const aether::Vector2 p0 = vp.screenToWorld({ 0.0f, 0.0f });
-    const aether::Vector2 p1 = vp.screenToWorld({ vw, 0.0f });
-    const aether::Vector2 p2 = vp.screenToWorld({ vw, vh });
-    const aether::Vector2 p3 = vp.screenToWorld({ 0.0f, vh });
+    const QPointF p0 = m_canvasPanel->documentFromViewport(QPointF(0.0, 0.0));
+    const QPointF p1 = m_canvasPanel->documentFromViewport(QPointF(vw, 0.0));
+    const QPointF p2 = m_canvasPanel->documentFromViewport(QPointF(vw, vh));
+    const QPointF p3 = m_canvasPanel->documentFromViewport(QPointF(0.0, vh));
 
     QPolygonF poly;
-    poly << worldToWidget(QPointF(p0.x, p0.y)) << worldToWidget(QPointF(p1.x, p1.y))
-         << worldToWidget(QPointF(p2.x, p2.y)) << worldToWidget(QPointF(p3.x, p3.y));
+    poly << worldToWidget(p0) << worldToWidget(p1) << worldToWidget(p2) << worldToWidget(p3);
     return poly;
 }
 
@@ -386,9 +385,8 @@ void NavigatorWidget::mousePressEvent(QMouseEvent* event)
     if (event->button() == Qt::LeftButton && canNavigateCamera(m_canvasPanel)) {
         m_dragging = true;
         m_dragStartPos = event->pos();
-        auto& cam = m_canvasPanel->viewport().camera();
-        cam.stopAnimation();
-        m_dragStartCameraCenter = QPointF(cam.position().x, cam.position().y);
+        m_canvasPanel->stopCameraAnimation();
+        m_dragStartCameraCenter = m_canvasPanel->cameraPosition();
     }
     QWidget::mousePressEvent(event);
 }
@@ -404,8 +402,8 @@ void NavigatorWidget::mouseMoveEvent(QMouseEvent* event)
         const float dx = worldNow.x() - worldStart.x();
         const float dy = worldNow.y() - worldStart.y();
 
-        auto& cam = m_canvasPanel->viewport().camera();
-        cam.setPosition(m_dragStartCameraCenter.x() + dx, m_dragStartCameraCenter.y() + dy);
+        m_canvasPanel->setCameraPosition(
+            m_dragStartCameraCenter + QPointF(dx, dy));
         m_canvasPanel->requestRender();
     }
     QWidget::mouseMoveEvent(event);
@@ -421,9 +419,7 @@ void NavigatorWidget::mouseReleaseEvent(QMouseEvent* event)
             const QPoint delta = event->pos() - m_dragStartPos;
             if (delta.manhattanLength() < 5) {
                 const QPointF world = widgetToWorld(event->pos());
-                auto& cam = m_canvasPanel->viewport().camera();
-                cam.centerOn(aether::Vector2 {
-                    static_cast<float>(world.x()), static_cast<float>(world.y()) });
+                m_canvasPanel->centerCameraOn(world);
                 m_canvasPanel->requestRender();
             }
             m_dragging = false;

@@ -15,12 +15,6 @@
 
 class QWheelEvent;
 
-namespace aether {
-class Canvas;
-class UndoManager;
-class Viewport;
-} // namespace aether
-
 namespace ruwa::ui::workspace {
 
 class CanvasPanel;
@@ -30,18 +24,12 @@ class CanvasPanel;
  *
  * CanvasPanel still exposes the public API; this controller owns the view logic
  * so input/tools/export code can keep calling CanvasPanel without learning a new
- * object graph.
+ * object graph. The engine's viewport/camera objects do not cross this
+ * controller's boundary — callers use the semantic operations below.
  */
 class CanvasViewController {
 public:
     explicit CanvasViewController(CanvasPanel* panel);
-
-    aether::Viewport& viewport();
-    const aether::Viewport& viewport() const;
-    aether::Canvas& canvas();
-    const aether::Canvas& canvas() const;
-    aether::UndoManager* undoManagerOrNull();
-    aether::UndoManager* activeUndoManagerOrNull();
 
     void setZoom(float zoom);
     void setZoomSmooth(float zoom);
@@ -64,8 +52,8 @@ public:
     aether::Vector2 mapToWorld(const QPointF& globalPos) const;
     aether::Vector2 mapToViewportWorld(const QPoint& globalPos) const;
     aether::Vector2 mapToViewportWorld(const QPointF& globalPos) const;
-    bool isGlobalOverGlViewport(const QPoint& globalPos) const;
-    bool isGlobalOverGlViewport(const QPointF& globalPos) const;
+    bool isGlobalOverViewport(const QPoint& globalPos) const;
+    bool isGlobalOverViewport(const QPointF& globalPos) const;
     QPointF mapWorldToPanel(const aether::Vector2& worldPos) const;
 
 private:

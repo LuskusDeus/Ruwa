@@ -7,8 +7,8 @@
 #include "CanvasResizeCommand.h"
 
 #include "features/canvas/grid/GridRemap.h"
-#include "features/canvas/rendering/OpenGLCanvasWidget.h"
 #include "features/canvas/scene/Canvas.h"
+#include "features/canvas/scene/Viewport.h"
 #include "features/layers/model/LayerModel.h"
 #include "features/layers/model/LayerData.h"
 #include "shared/tiles/TileGrid.h"
@@ -162,13 +162,13 @@ void notifyHostAfterApply(
 //   a p p l y R e s i z e   ( s t a t i c )
 // --------------------------------------------------------------------------
 
-CanvasResizeCommand::Snapshot CanvasResizeCommand::applyResize(OpenGLCanvasWidget* glWidget,
-    ruwa::core::layers::LayerModel* layerModel, QSize oldSize, int offsetX, int offsetY,
-    QSize newSize, const Hooks& hooks)
+CanvasResizeCommand::Snapshot CanvasResizeCommand::applyResize(Canvas& canvas,
+    Viewport& viewport, ruwa::core::layers::LayerModel* layerModel, QSize oldSize, int offsetX,
+    int offsetY, QSize newSize, const Hooks& hooks)
 {
     Snapshot snapshot;
 
-    if (!glWidget || !layerModel) {
+    if (!layerModel) {
         return snapshot;
     }
 
@@ -186,7 +186,7 @@ CanvasResizeCommand::Snapshot CanvasResizeCommand::applyResize(OpenGLCanvasWidge
     collectResizeJobs(layerModel, pixelJobs, transformedLayers);
 
     // ---- Capture pre-resize state (minimal) ----
-    snapshot.cameraPositionBefore = glWidget->viewport().camera().position();
+    snapshot.cameraPositionBefore = viewport.camera().position();
 
     for (auto* layer : transformedLayers) {
         snapshot.transformsBefore[layer->id]
@@ -202,10 +202,9 @@ CanvasResizeCommand::Snapshot CanvasResizeCommand::applyResize(OpenGLCanvasWidge
     }
 
     // ---- Remap undo stack BEFORE mutating the grid ----
-    glWidget->canvas().undoManager().remapForCanvasResize(offsetX, offsetY, newWidth, newHeight);
+    canvas.undoManager().remapForCanvasResize(offsetX, offsetY, newWidth, newHeight);
 
     // ---- Apply the resize ----
-    auto& canvas = glWidget->canvas();
     const auto oldIndexedKeys = canvas.tilePositionIndex().allTileKeys();
 
     applyRemapToLayers(pixelJobs, offsetX, offsetY, newWidth, newHeight);
@@ -215,7 +214,7 @@ CanvasResizeCommand::Snapshot CanvasResizeCommand::applyResize(OpenGLCanvasWidge
 
     rebuildIndicesAndMarkDirty(canvas, layerModel, pixelJobs, transformedLayers, oldIndexedKeys);
 
-    glWidget->viewport().camera().move(-static_cast<float>(offsetX), -static_cast<float>(offsetY));
+    viewport.camera().move(-static_cast<float>(offsetX), -static_cast<float>(offsetY));
 
     notifyHostAfterApply(hooks, newSize, sizeChanged, geometryChanged);
 
@@ -226,10 +225,11 @@ CanvasResizeCommand::Snapshot CanvasResizeCommand::applyResize(OpenGLCanvasWidge
 //   C o n s t r u c t o r
 // --------------------------------------------------------------------------
 
-CanvasResizeCommand::CanvasResizeCommand(OpenGLCanvasWidget* glWidget,
+CanvasResizeCommand::CanvasResizeCommand(Canvas& canvas, Viewport& viewport,
     ruwa::core::layers::LayerModel* layerModel, QSize oldSize, int offsetX, int offsetY,
     QSize newSize, Snapshot snapshot, Hooks hooks)
-    : m_glWidget(glWidget)
+    : m_canvas(canvas)
+    , m_viewport(viewport)
     , m_layerModel(layerModel)
     , m_oldSize(oldSize)
     , m_offsetX(offsetX)
@@ -246,7 +246,7 @@ CanvasResizeCommand::CanvasResizeCommand(OpenGLCanvasWidget* glWidget,
 
 void CanvasResizeCommand::undo()
 {
-    if (!m_glWidget || !m_layerModel) {
+    if (!m_layerModel) {
         return;
     }
 
@@ -259,7 +259,7 @@ void CanvasResizeCommand::undo()
     std::vector<ruwa::core::layers::LayerData*> transformedLayers;
     collectResizeJobs(m_layerModel, pixelJobs, transformedLayers);
 
-    auto& canvas = m_glWidget->canvas();
+    auto& canvas = m_canvas;
 
     // Keep dst-side tile keys around for dirty-marking post-restore.
     const auto prevIndexedKeys = canvas.tilePositionIndex().allTileKeys();
@@ -301,7 +301,7 @@ void CanvasResizeCommand::undo()
 
     rebuildIndicesAndMarkDirty(canvas, m_layerModel, pixelJobs, transformedLayers, prevIndexedKeys);
 
-    m_glWidget->viewport().camera().setPosition(
+    m_viewport.camera().setPosition(
         m_snapshot.cameraPositionBefore.x, m_snapshot.cameraPositionBefore.y);
 
     canvas.undoManager().remapForCanvasResize(invOffsetX, invOffsetY, oldWidth, oldHeight);
@@ -315,7 +315,7 @@ void CanvasResizeCommand::undo()
 
 void CanvasResizeCommand::redo()
 {
-    if (!m_glWidget || !m_layerModel) {
+    if (!m_layerModel) {
         return;
     }
 
@@ -323,7 +323,7 @@ void CanvasResizeCommand::redo()
     std::vector<ruwa::core::layers::LayerData*> transformedLayers;
     collectResizeJobs(m_layerModel, pixelJobs, transformedLayers);
 
-    auto& canvas = m_glWidget->canvas();
+    auto& canvas = m_canvas;
     const auto oldIndexedKeys = canvas.tilePositionIndex().allTileKeys();
 
     canvas.undoManager().remapForCanvasResize(
@@ -337,7 +337,7 @@ void CanvasResizeCommand::redo()
 
     rebuildIndicesAndMarkDirty(canvas, m_layerModel, pixelJobs, transformedLayers, oldIndexedKeys);
 
-    m_glWidget->viewport().camera().move(
+    m_viewport.camera().move(
         -static_cast<float>(m_offsetX), -static_cast<float>(m_offsetY));
 
     notifyHostAfterApply(m_hooks, m_newSize, /*sizeChanged=*/true, /*geometryChanged=*/true);

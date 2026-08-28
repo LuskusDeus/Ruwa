@@ -35,7 +35,7 @@ constexpr int kSliderFillOpacityPercent = 85;
 
 bool canControlZoom(const CanvasPanel* panel)
 {
-    return panel && panel->isGLContentReady() && panel->isInteractionEnabled()
+    return panel && panel->isRenderContentReady() && panel->isInteractionEnabled()
         && !panel->isExportMode();
 }
 
@@ -97,7 +97,7 @@ void NavigatorPanel::setCanvasPanel(CanvasPanel* panel)
             Qt::UniqueConnection);
         connect(m_canvasPanel, &CanvasPanel::zoomLimitsChanged, this,
             &NavigatorPanel::setZoomLimits, Qt::UniqueConnection);
-        connect(m_canvasPanel, &CanvasPanel::glContentReady, this,
+        connect(m_canvasPanel, &CanvasPanel::renderContentReady, this,
             &NavigatorPanel::syncZoomControls, Qt::UniqueConnection);
         connect(m_canvasPanel, &CanvasPanel::canvasSizeChanged, this,
             &NavigatorPanel::syncZoomControls, Qt::UniqueConnection);
@@ -111,10 +111,9 @@ void NavigatorPanel::setCanvasPanel(CanvasPanel* panel)
             }
         });
 
-        if (m_canvasPanel->isGLContentReady()
+        if (m_canvasPanel->isRenderContentReady()
             && !m_canvasPanel->isLoadingAppearanceAnimationActive()) {
-            const auto& camera = m_canvasPanel->viewport().camera();
-            setZoomLimits(camera.minZoom(), camera.maxZoom());
+            setZoomLimits(m_canvasPanel->minZoom(), m_canvasPanel->maxZoom());
         }
     }
 
@@ -189,7 +188,7 @@ void NavigatorPanel::retranslateUi()
 
 void NavigatorPanel::syncZoomControls()
 {
-    const bool ready = m_canvasPanel && m_canvasPanel->isGLContentReady();
+    const bool ready = m_canvasPanel && m_canvasPanel->isRenderContentReady();
     if (m_zoomSlider) {
         m_zoomSlider->setEnabled(ready);
     }
@@ -198,7 +197,7 @@ void NavigatorPanel::syncZoomControls()
     }
 
     if (ready) {
-        syncZoomSlider(m_canvasPanel->viewport().camera().zoom());
+        syncZoomSlider(m_canvasPanel->currentZoom());
     } else {
         syncZoomSlider(1.0);
     }
@@ -217,8 +216,8 @@ void NavigatorPanel::setZoomLimits(qreal minZoom, qreal maxZoom)
 {
     m_minZoom = qMax<qreal>(0.001, minZoom);
     m_maxZoom = qMax(m_minZoom, maxZoom);
-    if (m_canvasPanel && m_canvasPanel->isGLContentReady()) {
-        syncZoomSlider(m_canvasPanel->viewport().camera().zoom());
+    if (m_canvasPanel && m_canvasPanel->isRenderContentReady()) {
+        syncZoomSlider(m_canvasPanel->currentZoom());
     }
 }
 

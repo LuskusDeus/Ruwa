@@ -505,7 +505,7 @@ void CanvasResizeController::updateOverlay()
     m_glWidget->setCanvasResizeOverlayState(
         overlayActive, m_selectionWorld, m_isSelecting || m_isMoving || m_isResizing, true);
     m_glWidget->setCanvasResizeSnapVisualState(
-        m_snapSession ? m_snapSession->visualState() : aether::TransformSnapVisualState {});
+        m_snapSession ? m_snapSession->visualState() : TransformSnapVisualState {});
 
     if (overlayActive && m_callbacks.updateSelectionActionPopup) {
         m_callbacks.updateSelectionActionPopup();
@@ -587,14 +587,15 @@ void CanvasResizeController::applySelection()
             m_callbacks.onContentChanged,
         };
 
-        auto snapshot = aether::CanvasResizeCommand::applyResize(
-            m_glWidget, m_layerModel, oldSize, offsetX, offsetY, newSize, hooks);
+        auto snapshot = aether::CanvasResizeCommand::applyResize(m_glWidget->canvas(),
+            m_glWidget->viewport(), m_layerModel, oldSize, offsetX, offsetY, newSize, hooks);
 
         m_selectionWorld
             = QRectF(0.0, 0.0, static_cast<qreal>(newWidth), static_cast<qreal>(newHeight));
 
-        auto cmd = std::make_unique<aether::CanvasResizeCommand>(m_glWidget, m_layerModel, oldSize,
-            offsetX, offsetY, newSize, std::move(snapshot), std::move(hooks));
+        auto cmd = std::make_unique<aether::CanvasResizeCommand>(m_glWidget->canvas(),
+            m_glWidget->viewport(), m_layerModel, oldSize, offsetX, offsetY, newSize,
+            std::move(snapshot), std::move(hooks));
         m_glWidget->canvas().undoManager().push(std::move(cmd));
     }
 

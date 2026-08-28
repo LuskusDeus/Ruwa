@@ -7,10 +7,7 @@
 #include "ExportModeController.h"
 #include "ExportSettingsPanel.h"
 #include "features/canvas/ui/CanvasPanel.h"
-#include "features/canvas/scene/Canvas.h"
-#include "features/canvas/scene/Viewport.h"
 #include "shared/style/AnimationPolicy.h"
-#include "features/canvas/scene/Camera2D.h"
 
 #include <QVariantAnimation>
 #include <QEasingCurve>
@@ -179,55 +176,54 @@ void ExportModeController::applyProgress(qreal progress)
     }
 
     // Animate camera: shift canvas to the left, zoom to fit, rotate smoothly to 0°
-    if (m_canvasPanel && m_canvasPanel->isGLContentReady() && m_cameraStateSaved) {
-        auto& vp = m_canvasPanel->viewport();
-        auto& cam = vp.camera();
+    if (m_canvasPanel && m_canvasPanel->isRenderContentReady() && m_cameraStateSaved) {
         const QRect displayFrame = m_canvasPanel->exportPreviewCameraFrame();
-        const auto vpSize = vp.size();
-        cam.setZoomLimits(0.001f, cam.maxZoom());
+        const qreal vpWidth = m_canvasPanel->viewportExtent().width();
+        const qreal vpHeight = m_canvasPanel->viewportExtent().height();
+        m_canvasPanel->setCameraZoomLimits(0.001, m_canvasPanel->maxZoom());
 
-        const float p = static_cast<float>(progress);
+        const qreal p = progress;
 
-        const float rotDelta = shortestAngleDeltaRadians(m_savedCameraRotation, 0.0f);
-        cam.setRotation(m_savedCameraRotation + p * rotDelta);
-        cam.stopAnimation();
+        const qreal rotDelta = shortestAngleDeltaRadians(m_savedCameraRotation, 0.0f);
+        m_canvasPanel->setCameraRotationRadians(m_savedCameraRotation + p * rotDelta);
+        m_canvasPanel->stopCameraAnimation();
 
         // Export layout reserves the right third for the settings panel and
         // centers the canvas preview in the left two thirds.
-        const float columns = static_cast<float>(kCanvasAreaColumns + kPanelAreaColumns);
-        const float panelAreaWidth = vpSize.x * (static_cast<float>(kPanelAreaColumns) / columns);
-        const float canvasAreaWidth = vpSize.x - panelAreaWidth;
-        const float reservedPanelWidth = panelAreaWidth * p;
-        const float availableWidth = canvasAreaWidth - 2.0f * kExportZoomPadding;
-        const float availableHeight = vpSize.y - 2.0f * kExportZoomPadding;
+        const qreal columns = kCanvasAreaColumns + kPanelAreaColumns;
+        const qreal panelAreaWidth = vpWidth * (kPanelAreaColumns / columns);
+        const qreal canvasAreaWidth = vpWidth - panelAreaWidth;
+        const qreal reservedPanelWidth = panelAreaWidth * p;
+        const qreal availableWidth = canvasAreaWidth - 2.0 * kExportZoomPadding;
+        const qreal availableHeight = vpHeight - 2.0 * kExportZoomPadding;
 
-        if (availableWidth > 50.0f && availableHeight > 50.0f) {
-            const float frameWidth = std::max(1.0f, static_cast<float>(displayFrame.width()));
-            const float frameHeight = std::max(1.0f, static_cast<float>(displayFrame.height()));
-            const float fitZoomX = availableWidth / frameWidth;
-            const float fitZoomY = availableHeight / frameHeight;
-            const float exportZoom = qMin(fitZoomX, fitZoomY);
+        if (availableWidth > 50.0 && availableHeight > 50.0) {
+            const qreal frameWidth = std::max<qreal>(1.0, displayFrame.width());
+            const qreal frameHeight = std::max<qreal>(1.0, displayFrame.height());
+            const qreal fitZoomX = availableWidth / frameWidth;
+            const qreal fitZoomY = availableHeight / frameHeight;
+            const qreal exportZoom = qMin(fitZoomX, fitZoomY);
 
             // Interpolate zoom
-            const float targetZoom = m_savedCameraZoom + p * (exportZoom - m_savedCameraZoom);
+            const qreal targetZoom = m_savedCameraZoom + p * (exportZoom - m_savedCameraZoom);
 
             // Canvas center in world space
-            const float canvasCenterX = static_cast<float>(displayFrame.x()) + frameWidth * 0.5f;
-            const float canvasCenterY = static_cast<float>(displayFrame.y()) + frameHeight * 0.5f;
+            const qreal canvasCenterX = displayFrame.x() + frameWidth * 0.5;
+            const qreal canvasCenterY = displayFrame.y() + frameHeight * 0.5;
 
             // Offset camera to the right so canvas appears centered in the left portion.
-            // The left area center is at (vpSize.x - reservedPanelWidth) / 2.
-            // The viewport center is at vpSize.x / 2.
+            // The left area center is at (vpWidth - reservedPanelWidth) / 2.
+            // The viewport center is at vpWidth / 2.
             // Screen offset = reservedPanelWidth / 2. World offset = screenOffset / zoom.
-            const float cameraOffsetX = (reservedPanelWidth * 0.5f) / targetZoom;
+            const qreal cameraOffsetX = (reservedPanelWidth * 0.5) / targetZoom;
 
             // Interpolate position
-            const float targetPosX
+            const qreal targetPosX
                 = m_savedCameraPosX + p * (canvasCenterX + cameraOffsetX - m_savedCameraPosX);
-            const float targetPosY = m_savedCameraPosY + p * (canvasCenterY - m_savedCameraPosY);
+            const qreal targetPosY = m_savedCameraPosY + p * (canvasCenterY - m_savedCameraPosY);
 
-            cam.setPosition(targetPosX, targetPosY);
-            cam.setZoom(targetZoom);
+            m_canvasPanel->setCameraPosition(QPointF(targetPosX, targetPosY));
+            m_canvasPanel->setCameraZoom(targetZoom);
         }
         m_canvasPanel->requestRender();
     }
@@ -278,29 +274,27 @@ bool ExportModeController::eventFilter(QObject* watched, QEvent* event)
 
 void ExportModeController::saveCameraState()
 {
-    if (!m_canvasPanel || !m_canvasPanel->isGLContentReady()) {
+    if (!m_canvasPanel || !m_canvasPanel->isRenderContentReady()) {
         return;
     }
-    auto& cam = m_canvasPanel->viewport().camera();
-    cam.stopAnimation();
-    m_savedCameraZoom = cam.zoom();
-    m_savedCameraRotation = cam.rotation();
-    auto pos = cam.position();
-    m_savedCameraPosX = pos.x;
-    m_savedCameraPosY = pos.y;
+    m_canvasPanel->stopCameraAnimation();
+    m_savedCameraZoom = m_canvasPanel->currentZoom();
+    m_savedCameraRotation = m_canvasPanel->cameraRotationRadians();
+    const QPointF pos = m_canvasPanel->cameraPosition();
+    m_savedCameraPosX = pos.x();
+    m_savedCameraPosY = pos.y();
     m_cameraStateSaved = true;
 }
 
 void ExportModeController::restoreCameraState()
 {
-    if (!m_cameraStateSaved || !m_canvasPanel || !m_canvasPanel->isGLContentReady()) {
+    if (!m_cameraStateSaved || !m_canvasPanel || !m_canvasPanel->isRenderContentReady()) {
         return;
     }
     m_canvasPanel->refreshZoomLimits();
-    auto& cam = m_canvasPanel->viewport().camera();
-    cam.setPosition(m_savedCameraPosX, m_savedCameraPosY);
-    cam.setZoom(m_savedCameraZoom);
-    cam.setRotation(m_savedCameraRotation);
+    m_canvasPanel->setCameraPosition(QPointF(m_savedCameraPosX, m_savedCameraPosY));
+    m_canvasPanel->setCameraZoom(m_savedCameraZoom);
+    m_canvasPanel->setCameraRotationRadians(m_savedCameraRotation);
     m_canvasPanel->setExportPreviewSuppressContentMirror(false);
     m_canvasPanel->requestRender();
     m_cameraStateSaved = false;

@@ -54,36 +54,6 @@ CanvasViewController::CanvasViewController(CanvasPanel* panel)
 {
 }
 
-aether::Viewport& CanvasViewController::viewport()
-{
-    return m_panel->m_glWidget->viewport();
-}
-
-const aether::Viewport& CanvasViewController::viewport() const
-{
-    return m_panel->m_glWidget->viewport();
-}
-
-aether::Canvas& CanvasViewController::canvas()
-{
-    return m_panel->m_glWidget->canvas();
-}
-
-const aether::Canvas& CanvasViewController::canvas() const
-{
-    return m_panel->m_glWidget->canvas();
-}
-
-aether::UndoManager* CanvasViewController::undoManagerOrNull()
-{
-    return m_panel->m_glWidget ? &m_panel->m_glWidget->canvas().undoManager() : nullptr;
-}
-
-aether::UndoManager* CanvasViewController::activeUndoManagerOrNull()
-{
-    return m_panel->m_glWidget ? m_panel->m_glWidget->activeUndoManager() : nullptr;
-}
-
 void CanvasViewController::setZoom(float zoom)
 {
     if (!m_panel->isInteractionEnabled() || m_panel->isExportMode()) {
@@ -473,12 +443,12 @@ aether::Vector2 CanvasViewController::mapToViewportWorld(const QPointF& globalPo
     return m_panel->m_glWidget->documentWorldFromScreen({ sx, sy });
 }
 
-bool CanvasViewController::isGlobalOverGlViewport(const QPoint& globalPos) const
+bool CanvasViewController::isGlobalOverViewport(const QPoint& globalPos) const
 {
-    return isGlobalOverGlViewport(QPointF(globalPos));
+    return isGlobalOverViewport(QPointF(globalPos));
 }
 
-bool CanvasViewController::isGlobalOverGlViewport(const QPointF& globalPos) const
+bool CanvasViewController::isGlobalOverViewport(const QPointF& globalPos) const
 {
     if (!m_panel->m_glWidget) {
         return false;

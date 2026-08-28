@@ -24,7 +24,8 @@ class LayerModel;
 
 namespace aether {
 
-class OpenGLCanvasWidget;
+class Canvas;
+class Viewport;
 
 /**
  * @brief Undo command for canvas resize / crop.
@@ -58,12 +59,13 @@ public:
 
     /// Apply the resize synchronously (parallelized internally) and return
     /// a minimal snapshot for undo.
-    static Snapshot applyResize(OpenGLCanvasWidget* glWidget,
+    static Snapshot applyResize(Canvas& canvas, Viewport& viewport,
         ruwa::core::layers::LayerModel* layerModel, QSize oldSize, int offsetX, int offsetY,
         QSize newSize, const Hooks& hooks);
 
-    CanvasResizeCommand(OpenGLCanvasWidget* glWidget, ruwa::core::layers::LayerModel* layerModel,
-        QSize oldSize, int offsetX, int offsetY, QSize newSize, Snapshot snapshot, Hooks hooks);
+    CanvasResizeCommand(Canvas& canvas, Viewport& viewport,
+        ruwa::core::layers::LayerModel* layerModel, QSize oldSize, int offsetX, int offsetY,
+        QSize newSize, Snapshot snapshot, Hooks hooks);
 
     void undo() override;
     void redo() override;
@@ -72,7 +74,11 @@ public:
     bool remapForCanvasResize(int offsetX, int offsetY, int newWidth, int newHeight) override;
 
 private:
-    OpenGLCanvasWidget* m_glWidget = nullptr;
+    /// Document model and camera this command remaps. The command is a
+    /// document/undo-domain object: it deliberately does not know the renderer
+    /// widget (Stage 1 decoupling).
+    Canvas& m_canvas;
+    Viewport& m_viewport;
     ruwa::core::layers::LayerModel* m_layerModel = nullptr;
 
     QSize m_oldSize;
