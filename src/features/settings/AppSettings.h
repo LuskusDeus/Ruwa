@@ -25,8 +25,8 @@ constexpr int normalizedUiScaleIndex(int index)
 {
     return index < 0 ? 0
                      : (index >= static_cast<int>(kUiScaleFactors.size())
-                             ? static_cast<int>(kUiScaleFactors.size()) - 1
-                             : index);
+                               ? static_cast<int>(kUiScaleFactors.size()) - 1
+                               : index);
 }
 
 /**
@@ -42,7 +42,7 @@ struct AppSettings {
     // === APPEARANCE ===
     struct Appearance {
         QUuid themeId; // Selected theme ID
-    int uiScale = kDefaultUiScaleIndex; // 0=85%, 1=100%, 2=125%, 3=175%, 4=225%
+        int uiScale = kDefaultUiScaleIndex; // 0=85%, 1=100%, 2=125%, 3=175%, 4=225%
         QString language = "en"; // UI language: "en", "ru", etc.
         /// Tab strip in title bar: 0=left, 1=centered in available space
         int topBarTabAlignment = 0;

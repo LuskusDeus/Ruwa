@@ -680,9 +680,8 @@ void UpdateMessageOverlay::setupUI()
     heroTextLayout->addWidget(statusLabel);
 
     auto* heroTitleLabel = new WrappedTextLabel(heroText);
-    heroTitleLabel->setText(QCoreApplication::translate("UpdateMessageOverlay",
-        "Six months of Ruwa: export rebuilt, axis-locked strokes, and glass across the "
-        "workspace."));
+    heroTitleLabel->setText(
+        QCoreApplication::translate("UpdateMessageOverlay", "Strokes and details"));
     heroTitleLabel->setFont(theme.font(ruwa::ui::core::ThemeFontRole::H3, QFont::DemiBold));
     heroTitleLabel->setStyleSheet(
         QStringLiteral("QLabel { background: transparent; color: %1; }").arg(colors.text.name()));
@@ -697,9 +696,8 @@ void UpdateMessageOverlay::setupUI()
 
     auto* descriptionLabel = new WrappedTextLabel(leftWidget);
     descriptionLabel->setText(QCoreApplication::translate("UpdateMessageOverlay",
-        "Ruwa's first alpha was released six months ago today. Export as is now a workspace mode "
-        "with a settings panel, a frame on the canvas and a background pipeline. Painting gained "
-        "axis-locked strokes, and liquid glass now serves panels across the interface."));
+        "This release adds brush dynamics driven by pen tilt and stroke speed, copying a "
+        "selection to a new layer, and radius controls for effects on the canvas."));
     descriptionLabel->setFont(theme.font(ruwa::ui::core::ThemeFontRole::Label));
     descriptionLabel->setStyleSheet(QStringLiteral("QLabel { background: transparent; color: %1; }")
             .arg(colors.textMuted.name()));
@@ -714,21 +712,20 @@ void UpdateMessageOverlay::setupUI()
 
     addReleaseHighlightRow(highlightsWidget, highlightsLayout, colors, theme, ChangelogBadge::New,
         QCoreApplication::translate("UpdateMessageOverlay",
-            "Export from a canvas frame with PNG, JPEG and WebP controls while encoding runs in "
-            "the background."));
+            "Pen tilt, stroke speed and adjustable smoothing for brush dynamics."));
+    addReleaseHighlightRow(highlightsWidget, highlightsLayout, colors, theme, ChangelogBadge::New,
+        QCoreApplication::translate("UpdateMessageOverlay",
+            "Copy or cut selected pixels to a new layer; copy the visible result with Copy "
+            "Merged."));
     addReleaseHighlightRow(highlightsWidget, highlightsLayout, colors, theme,
         ChangelogBadge::Updated,
         QCoreApplication::translate("UpdateMessageOverlay",
-            "Hold Shift for an axis-locked stroke; use Shift+Alt to resize the brush sideways."));
-    addReleaseHighlightRow(highlightsWidget, highlightsLayout, colors, theme,
-        ChangelogBadge::Improved,
-        QCoreApplication::translate("UpdateMessageOverlay",
-            "GPU liquid glass reaches the command palette, tooltips, previews and update card."));
+            "Brush cards or a list, adjustable preview sizes and vertical pack navigation."));
     addReleaseHighlightRow(highlightsWidget, highlightsLayout, colors, theme,
         ChangelogBadge::BugFix,
         QCoreApplication::translate("UpdateMessageOverlay",
-            "Soft selections fill consistently, blur stays inside the selection, and effect "
-            "strokes update below 100% zoom."));
+            "Correct brush blending, selection edits across multiple layers, and restored "
+            "floating panels."));
 
     enableHeightForWidth(highlightsWidget);
     leftLayout->addWidget(highlightsWidget);

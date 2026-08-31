@@ -253,8 +253,8 @@ void SettingsManager::loadAppearance(QSettings& settings)
         m_settings.appearance.themeId = QUuid::fromString(themeIdStr);
     }
 
-    m_settings.appearance.uiScale = normalizedUiScaleIndex(
-        settings.value("uiScale", kDefaultUiScaleIndex).toInt());
+    m_settings.appearance.uiScale
+        = normalizedUiScaleIndex(settings.value("uiScale", kDefaultUiScaleIndex).toInt());
     m_settings.appearance.language = settings.value("language", "en").toString();
     const int tabAlign = settings.value("topBarTabAlignment", 0).toInt();
     m_settings.appearance.topBarTabAlignment = (tabAlign == 1) ? 1 : 0;

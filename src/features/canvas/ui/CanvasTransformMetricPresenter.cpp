@@ -9,8 +9,7 @@ namespace ruwa::ui::workspace {
 using ruwa::ui::widgets::CanvasMetricLabelOverlay;
 using ruwa::ui::widgets::MetricSegment;
 
-CanvasTransformMetricPresenter::CanvasTransformMetricPresenter(
-    QWidget* hostParent, QObject* parent)
+CanvasTransformMetricPresenter::CanvasTransformMetricPresenter(QWidget* hostParent, QObject* parent)
     : QObject(parent)
     , m_host(hostParent)
 {
@@ -51,8 +50,7 @@ void CanvasTransformMetricPresenter::presentSnapLabels(
     }
 }
 
-MetricSegment CanvasTransformMetricPresenter::toWidgetSegment(
-    const TransformMetricSegment& segment)
+MetricSegment CanvasTransformMetricPresenter::toWidgetSegment(const TransformMetricSegment& segment)
 {
     // Kind -> icon/width-template mapping. The icons point their default way
     // (left / down / grow); mirroring flips them against the reading. Width
@@ -80,9 +78,8 @@ MetricSegment CanvasTransformMetricPresenter::toWidgetSegment(
     case TransformMetricKind::Scale:
         out.iconResource = segment.negativeDirection ? QStringLiteral(":/icons/TransformSmaller")
                                                      : QStringLiteral(":/icons/TransformBigger");
-        out.widthTemplate = segment.text.contains(QChar(0x00D7))
-            ? QStringLiteral("888.8% × 888.8%")
-            : QStringLiteral("888.8%");
+        out.widthTemplate = segment.text.contains(QChar(0x00D7)) ? QStringLiteral("888.8% × 888.8%")
+                                                                 : QStringLiteral("888.8%");
         break;
     }
     return out;

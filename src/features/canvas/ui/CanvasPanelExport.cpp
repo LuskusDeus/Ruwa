@@ -66,8 +66,8 @@ QImage surfaceToQImage(const ruwa::shared::imaging::PixelSurface& surface)
         return QImage();
     }
     for (int y = 0; y < surface.height(); ++y) {
-        std::memcpy(image.scanLine(y), surface.scanLine(y),
-            static_cast<size_t>(surface.width()) * 4);
+        std::memcpy(
+            image.scanLine(y), surface.scanLine(y), static_cast<size_t>(surface.width()) * 4);
     }
     return image;
 }
@@ -272,8 +272,8 @@ QPixmap CanvasPanel::grabCanvasThumbnail(int maxSize) const
         canvasSurfacePointFromDocument(capture.value().view, QPointF(0.0, 0.0), documentSize),
         canvasSurfacePointFromDocument(
             capture.value().view, QPointF(documentSize.width(), 0.0), documentSize),
-        canvasSurfacePointFromDocument(
-            capture.value().view, QPointF(documentSize.width(), documentSize.height()), documentSize),
+        canvasSurfacePointFromDocument(capture.value().view,
+            QPointF(documentSize.width(), documentSize.height()), documentSize),
         canvasSurfacePointFromDocument(
             capture.value().view, QPointF(0.0, documentSize.height()), documentSize),
     };

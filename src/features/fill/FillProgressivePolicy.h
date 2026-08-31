@@ -139,8 +139,8 @@ bool canApproxFillPixel(const TileGrid* sourceGrid, const TileGrid* selectionMas
     const PremultPixel& seedPixel, ruwa::core::canvas::CanvasFillAlgorithm algorithm, int x, int y,
     int canvasW, int canvasH);
 float estimateFillRadiusFromSeed(const TileGrid* sourceGrid, const TileGrid* selectionMask,
-    ruwa::core::canvas::CanvasFillAlgorithm algorithm, int seedX, int seedY, int canvasW, int canvasH,
-    float radiusLimit);
+    ruwa::core::canvas::CanvasFillAlgorithm algorithm, int seedX, int seedY, int canvasW,
+    int canvasH, float radiusLimit);
 /// Pure radius preflight for one fill request (plan 7.6.41): Accepted unless
 /// @p estimatedRadius reaches @p radiusLimit, in which case the result carries
 /// RejectedRegionTooLarge plus the limit facts. The policy supplies facts, not

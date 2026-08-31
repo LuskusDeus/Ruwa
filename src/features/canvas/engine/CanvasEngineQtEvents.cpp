@@ -4,6 +4,9 @@
 
 namespace ruwa::ui::workspace {
 
-CanvasEngineQtEvents::CanvasEngineQtEvents(QObject* parent) : QObject(parent) { }
+CanvasEngineQtEvents::CanvasEngineQtEvents(QObject* parent)
+    : QObject(parent)
+{
+}
 
 } // namespace ruwa::ui::workspace

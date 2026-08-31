@@ -111,8 +111,7 @@ signals:
     /// Transform metric facts for application-owned QWidget presentation
     /// (plan 7.15.1): snap labels, live drag readout segments and the
     /// viewport-local drag anchor.
-    void transformPresentationChanged(
-        const ruwa::ui::workspace::TransformPresentationState& state);
+    void transformPresentationChanged(const ruwa::ui::workspace::TransformPresentationState& state);
     /// The GPU backdrop pipeline became ready.
     void backdropAvailabilityChanged();
 

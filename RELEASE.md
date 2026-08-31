@@ -58,10 +58,43 @@ Use the same title and introductory paragraph for the public GitHub release.
 Keep that public description concise; the categorized details remain in the
 changelog and in-app release notes.
 
+Also update the current-release row in `README.md` and the example version in
+`docs/SECURE_UPDATES.md`. Keep historical version labels and dates unchanged.
+
 `RUWA_RELEASE_DATE` is a CMake cache variable shown on the About screen. Its
 source default tracks the latest release, but every release build sets it
 explicitly when configuring (see below). The build number is auto-incremented
 into `RuwaBuildInfo.h` on every build and is not committed.
+
+### 0.3.4-alpha release preparation
+
+- Version: **0.3.4-alpha**; release date: **2026-08-31**.
+- Title: **Strokes and details** / **Штрихи и детали**.
+- Public release text: [English](docs/releases/0.3.4-alpha.md) and
+  [Russian](docs/releases/0.3.4-alpha.ru.md). Both use the same title and opening
+  paragraph as the corresponding in-app translation.
+- In an existing Qt Creator build configuration, explicitly set
+  `RUWA_RELEASE_DATE` to `2026-08-31` in the CMake configuration. Changing the
+  source default does not replace a date already stored in the CMake cache.
+- Package the newly built `effects/` and `shaders/` directories with the
+  executable, including in the small update patch. The effect SDK is now ABI
+  1.1; the new canvas radius controls require the updated Standard Distort DLL.
+- Verify the release in Qt Creator and test the packaged application before
+  publishing. Updating these source files does not produce or validate a binary.
+
+In addition to the general smoke test below, check these 0.3.4 flows in the
+packaged application:
+
+- Draw with tilt and speed dynamics at different canvas zoom levels, with
+  stabilization at zero and above zero; compare brush blend previews with the
+  finished stroke on a transparent layer.
+- Use Ctrl+J, Ctrl+Shift+J and Copy Merged on a soft selection. Fill and delete
+  across selected groups containing locked and hidden layers; undo each edit.
+- Drag a Twirl, Pinch or Ripple radius ring, check its panel value, and undo the
+  drag. Check Canvas Resize snapping to canvas and layer edges.
+- Reorder brushes, packs and favorites; save and restore list view, vertical
+  pack navigation and floating panels. Check the update card in both languages
+  and at the largest interface scale.
 
 ## 1. Configure (release)
 
@@ -151,6 +184,16 @@ effects at all**. `windeployqt` does not copy it, so copy it yourself:
 
 ```powershell
 Copy-Item -Recurse -Force build/release/effects "$dist/effects"
+```
+
+### Bundle the runtime shaders
+
+The application loads GLSL files from `shaders/` beside the executable.
+`windeployqt` does not copy this directory either. Copy the shader output from
+the same build as the executable; do not reuse a previous release's folder.
+
+```powershell
+Copy-Item -Recurse -Force build/release/shaders "$dist/shaders"
 ```
 
 ### Verify the package
@@ -272,7 +315,11 @@ Do these in order for each release:
       `CMakeLists.txt`.
 - [ ] Update the release summary in `UpdateMessageOverlay.cpp`.
 - [ ] Add the new version entry to `ReleaseNotesOverlay.cpp`.
+- [ ] Update English and Russian translation entries for the release summary
+      and in-app release notes.
 - [ ] Move the `Unreleased` items into a dated version section in `CHANGELOG.md`.
+- [ ] Update the current release in `README.md`, the packaging examples, and
+      the public release text.
 - [ ] Set `-DRUWA_RELEASE_DATE=<yyyy-mm-dd>` at configure time.
 - [ ] Confirm the updater manifest URL and exact host allowlist are correct for
       the release channel.
@@ -282,6 +329,7 @@ Do these in order for each release:
 - [ ] Run `windeployqt` and verify the package launches with no missing DLLs.
 - [ ] Copy the `effects/` folder (the standard effect plugin DLLs) into the
       package next to `Ruwa.exe`.
+- [ ] Copy the matching `shaders/` folder into the package next to `Ruwa.exe`.
 - [ ] Smoke test core flows (draw, layers, mask, layer effect, Liquify, export).
 - [ ] Confirm the About screen shows the correct version and date.
 - [ ] Confirm `build/release/generated/RuwaVersion.txt` matches the version in

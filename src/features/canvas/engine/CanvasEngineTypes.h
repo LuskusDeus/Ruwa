@@ -154,7 +154,7 @@ struct CanvasViewState {
 /// Render-target/viewport metrics snapshot (plan 7.13.2 / 7.21.1). X/Y scales
 /// are separate on purpose even though DPR is normally uniform.
 struct ViewportMetrics {
-    QSizeF logicalSize;        ///< viewport-logical units
+    QSizeF logicalSize; ///< viewport-logical units
     uint32_t surfaceWidth = 0; ///< backing surface pixels
     uint32_t surfaceHeight = 0;
     double logicalToSurfaceScaleX = 1.0;
@@ -177,8 +177,7 @@ enum class CanvasViewChange : uint32_t {
 // EVERY enum in this namespace (ordinary operator lookup stops at the first
 // scope containing the name, hiding QFlags' global operators — seen live with
 // CanvasOverlayLayout::Caps).
-inline constexpr CanvasViewChange canvasViewChangeJoin(
-    CanvasViewChange a, CanvasViewChange b)
+inline constexpr CanvasViewChange canvasViewChangeJoin(CanvasViewChange a, CanvasViewChange b)
 {
     return static_cast<CanvasViewChange>(static_cast<uint32_t>(a) | static_cast<uint32_t>(b));
 }
@@ -317,8 +316,7 @@ struct CanvasOperationError {
 /// Ruwa-owned value-or-error result (plan 7.21.3). The ownership and error
 /// taxonomy are normative; the container is deliberately a small explicit
 /// type — no exceptions, no backend result types.
-template<typename T>
-class CanvasResult {
+template <typename T> class CanvasResult {
 public:
     static CanvasResult ok(T value) { return CanvasResult(std::move(value), {}); }
     static CanvasResult fail(CanvasOperationError error)
@@ -330,17 +328,34 @@ public:
     explicit operator bool() const { return isOk(); }
 
     /// The success value. Only valid when isOk().
-    const T& value() const { Q_ASSERT(isOk()); return *m_value; }
-    T& value() { Q_ASSERT(isOk()); return *m_value; }
+    const T& value() const
+    {
+        Q_ASSERT(isOk());
+        return *m_value;
+    }
+    T& value()
+    {
+        Q_ASSERT(isOk());
+        return *m_value;
+    }
     /// Move the success value out. Only valid when isOk().
-    T takeValue() { Q_ASSERT(isOk()); return std::move(*m_value); }
+    T takeValue()
+    {
+        Q_ASSERT(isOk());
+        return std::move(*m_value);
+    }
 
     /// The failure description. Only valid when !isOk().
-    const CanvasOperationError& error() const { Q_ASSERT(!isOk()); return m_error; }
+    const CanvasOperationError& error() const
+    {
+        Q_ASSERT(!isOk());
+        return m_error;
+    }
 
 private:
     CanvasResult(std::optional<T> value, CanvasOperationError error)
-        : m_value(std::move(value)), m_error(std::move(error))
+        : m_value(std::move(value))
+        , m_error(std::move(error))
     {
     }
 
@@ -349,8 +364,7 @@ private:
 };
 
 /// Void specialization for operations that only report success/failure.
-template<>
-class CanvasResult<void> {
+template <> class CanvasResult<void> {
 public:
     static CanvasResult ok() { return CanvasResult(std::nullopt); }
     static CanvasResult fail(CanvasOperationError error)
@@ -362,10 +376,17 @@ public:
     explicit operator bool() const { return isOk(); }
 
     /// The failure description. Only valid when !isOk().
-    const CanvasOperationError& error() const { Q_ASSERT(!isOk()); return *m_error; }
+    const CanvasOperationError& error() const
+    {
+        Q_ASSERT(!isOk());
+        return *m_error;
+    }
 
 private:
-    explicit CanvasResult(std::optional<CanvasOperationError> error) : m_error(std::move(error)) { }
+    explicit CanvasResult(std::optional<CanvasOperationError> error)
+        : m_error(std::move(error))
+    {
+    }
 
     std::optional<CanvasOperationError> m_error;
 };
@@ -440,8 +461,8 @@ struct CanvasPresentedViewCaptureResult {
 /// result maps onto backing-surface pixels through the snapshot's
 /// logical-to-surface scales. With the mirror flags unset, @p documentSize
 /// is irrelevant.
-inline QPointF canvasSurfacePointFromDocument(const CanvasViewSnapshot& snapshot,
-    const QPointF& documentPos, const QSizeF& documentSize)
+inline QPointF canvasSurfacePointFromDocument(
+    const CanvasViewSnapshot& snapshot, const QPointF& documentPos, const QSizeF& documentSize)
 {
     qreal x = documentPos.x();
     qreal y = documentPos.y();
@@ -455,10 +476,10 @@ inline QPointF canvasSurfacePointFromDocument(const CanvasViewSnapshot& snapshot
     const qreal dy = y - snapshot.state.cameraCenter.y();
     const qreal c = std::cos(snapshot.state.rotationRadians);
     const qreal s = std::sin(snapshot.state.rotationRadians);
-    const qreal logicalX = (dx * c - dy * s) * snapshot.state.zoom
-        + snapshot.metrics.logicalSize.width() / 2.0;
-    const qreal logicalY = (dx * s + dy * c) * snapshot.state.zoom
-        + snapshot.metrics.logicalSize.height() / 2.0;
+    const qreal logicalX
+        = (dx * c - dy * s) * snapshot.state.zoom + snapshot.metrics.logicalSize.width() / 2.0;
+    const qreal logicalY
+        = (dx * s + dy * c) * snapshot.state.zoom + snapshot.metrics.logicalSize.height() / 2.0;
     return QPointF(logicalX * snapshot.metrics.logicalToSurfaceScaleX,
         logicalY * snapshot.metrics.logicalToSurfaceScaleY);
 }

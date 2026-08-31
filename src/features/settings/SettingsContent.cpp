@@ -363,7 +363,7 @@ void SettingsContent::retranslateUi()
     if (m_uiScaleChoice) {
         m_uiScaleChoice->setLabel(tr("UI Scale"));
         m_uiScaleChoice->setDescription(tr("Adjust the size of UI elements"));
-    m_uiScaleChoice->setOptions({ QStringLiteral("85%"), QStringLiteral("100%"),
+        m_uiScaleChoice->setOptions({ QStringLiteral("85%"), QStringLiteral("100%"),
             QStringLiteral("125%"), QStringLiteral("175%"), QStringLiteral("225%") });
     }
     if (m_languageChoice) {

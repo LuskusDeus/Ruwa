@@ -3170,11 +3170,12 @@ private:
     {
         if (!mask)
             return 1.0f;
-        const int32_t localX = static_cast<int32_t>(pixelIndex % TILE_SIZE);
-        const int32_t localY = static_cast<int32_t>(pixelIndex / TILE_SIZE);
-        const int32_t worldX = tileKey.x * static_cast<int32_t>(TILE_SIZE) + localX;
-        const int32_t worldY = tileKey.y * static_cast<int32_t>(TILE_SIZE) + localY;
-        return static_cast<float>(maskAlphaAt(mask, worldX, worldY)) / 255.0f;
+        // The tile and local pixel are already known. A world-coordinate lookup
+        // would reject negative canvas coordinates and can overflow for distant tiles.
+        const TileData* tile = mask->getTile(tileKey);
+        if (!tile)
+            return 0.0f;
+        return static_cast<float>(tile->pixels()[pixelIndex * TILE_CHANNELS + 3]) / 255.0f;
     }
 
     /// Src-over blend strokeTile onto layerTile (both premultiplied RGBA).

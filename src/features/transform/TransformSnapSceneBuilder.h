@@ -14,8 +14,7 @@ struct LayerData;
 
 namespace aether {
 
-using SnapLayerExclusionPredicate
-    = std::function<bool(const ruwa::core::layers::LayerData*)>;
+using SnapLayerExclusionPredicate = std::function<bool(const ruwa::core::layers::LayerData*)>;
 
 SnapScene buildTransformSnapScene(const ruwa::core::layers::LayerModel* layerModel,
     const Vector2& canvasSize, bool finiteCanvas, bool includeLayers,

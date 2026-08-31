@@ -402,8 +402,7 @@ void NavigatorWidget::mouseMoveEvent(QMouseEvent* event)
         const float dx = worldNow.x() - worldStart.x();
         const float dy = worldNow.y() - worldStart.y();
 
-        m_canvasPanel->setCameraPosition(
-            m_dragStartCameraCenter + QPointF(dx, dy));
+        m_canvasPanel->setCameraPosition(m_dragStartCameraCenter + QPointF(dx, dy));
         m_canvasPanel->requestRender();
     }
     QWidget::mouseMoveEvent(event);

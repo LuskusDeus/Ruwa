@@ -110,8 +110,7 @@ bool CanvasPanel::playNewProjectAppearanceAnimationIfScheduled()
         const QRect displayFrame = effectiveDisplayFrame();
         const int fitWidth = qMax(1, displayFrame.width());
         const int fitHeight = qMax(1, displayFrame.height());
-        const QPointF displayCenter(
-            static_cast<qreal>(displayFrame.center().x()) + 0.5,
+        const QPointF displayCenter(static_cast<qreal>(displayFrame.center().x()) + 0.5,
             static_cast<qreal>(displayFrame.center().y()) + 0.5);
         const QSizeF vpSize = view.viewportExtent();
 
@@ -132,8 +131,8 @@ bool CanvasPanel::playNewProjectAppearanceAnimationIfScheduled()
         const auto [minZoom, maxZoomComputed] = ruwa::core::canvas::computeZoomLimits(
             static_cast<int>(vpSize.width()), static_cast<int>(vpSize.height()), maxBrush);
         (void) maxZoomComputed;
-        const qreal startZoom = std::clamp(
-            static_cast<qreal>(minZoom) * 3.0, 0.001, view.maxZoom());
+        const qreal startZoom
+            = std::clamp(static_cast<qreal>(minZoom) * 3.0, 0.001, view.maxZoom());
         view.centerCameraOn(displayCenter);
         m_loadingAppearanceAnimationRunning = true;
         view.setZoomSmooth(startZoom);

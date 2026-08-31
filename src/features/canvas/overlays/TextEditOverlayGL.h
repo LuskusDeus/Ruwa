@@ -31,8 +31,8 @@ public:
         int surfaceHeight, const std::array<float, 16>* viewProjectionContent = nullptr);
 
 private:
-    void drawCaretAxisSegment(const Vector2& topWorld, const Vector2& bottomWorld, float r,
-        float g, float b, float a, const std::array<float, 16>& vpMatrix, bool invert);
+    void drawCaretAxisSegment(const Vector2& topWorld, const Vector2& bottomWorld, float r, float g,
+        float b, float a, const std::array<float, 16>& vpMatrix, bool invert);
     void drawWorldQuad(const std::array<Vector2, 4>& points, float r, float g, float b, float a,
         const std::array<float, 16>& vpMatrix, bool invert);
 

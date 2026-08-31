@@ -980,8 +980,8 @@ bool PresetMenuListWidget::eventFilter(QObject* watched, QEvent* event)
         auto* mouseEvent = static_cast<QMouseEvent*>(event);
         if (mouseEvent->button() == Qt::LeftButton
             && row->canStartDragAt(mouseEvent->position().toPoint())
-            && draggableItem(row->userData())
-            && m_itemMoveHandler && searchText().trimmed().isEmpty()) {
+            && draggableItem(row->userData()) && m_itemMoveHandler
+            && searchText().trimmed().isEmpty()) {
             m_dragCandidateRow = row;
             m_dragPressGlobalPos = mouseEvent->globalPosition().toPoint();
         }
@@ -1416,9 +1416,9 @@ void PresetMenuListWidget::finishItemDrag(bool accepted, const QPoint& globalPos
         return;
     }
 
-    m_dragGhost->animateToTracked([guard]() {
-        return guard ? guard->draggedRowGhostPosition() : QPoint();
-    }, accepted ? DragGhostWidget::Transition::Settle : DragGhostWidget::Transition::Return,
+    m_dragGhost->animateToTracked(
+        [guard]() { return guard ? guard->draggedRowGhostPosition() : QPoint(); },
+        accepted ? DragGhostWidget::Transition::Settle : DragGhostWidget::Transition::Return,
         std::move(finish));
 }
 

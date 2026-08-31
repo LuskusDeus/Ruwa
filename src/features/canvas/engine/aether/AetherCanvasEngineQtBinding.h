@@ -63,7 +63,6 @@ private:
     bool m_shuttingDown = false;
 };
 
-
 } // namespace ruwa::ui::workspace
 
 #endif // RUWA_FEATURES_CANVAS_ENGINE_AETHER_AETHERCANVASENGINEQTBINDING_H

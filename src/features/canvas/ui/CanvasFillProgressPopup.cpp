@@ -28,7 +28,8 @@ constexpr int kFillProgressPopupMargin = 8;
 constexpr int kFillProgressPopupOffsetY = 18;
 } // namespace
 
-CanvasFillProgressPopup::CanvasFillProgressPopup(QWidget* parent) : QWidget(parent)
+CanvasFillProgressPopup::CanvasFillProgressPopup(QWidget* parent)
+    : QWidget(parent)
 {
     setAttribute(Qt::WA_TranslucentBackground);
     setAttribute(Qt::WA_NoSystemBackground);
@@ -68,8 +69,8 @@ CanvasFillProgressPopup::CanvasFillProgressPopup(QWidget* parent) : QWidget(pare
             return;
         }
         const QPoint anchor = anchorPointForFillOrigin();
-        showProcessingAt(anchor,
-            QCoreApplication::translate("OpenGLCanvasWidget", "please wait"), 120);
+        showProcessingAt(
+            anchor, QCoreApplication::translate("OpenGLCanvasWidget", "please wait"), 120);
         updateAnchor();
     });
 
@@ -91,10 +92,9 @@ void CanvasFillProgressPopup::setDocumentToViewport(DocumentToViewport mapper)
 
 void CanvasFillProgressPopup::presentFillActivity(const CanvasFillActivityState& state)
 {
-    const bool wasWaiting = m_lastActivity.waitingForFinalResult
-        && m_lastActivity.phase != CanvasFillPhase::Idle;
-    const bool isWaiting
-        = state.waitingForFinalResult && state.phase != CanvasFillPhase::Idle;
+    const bool wasWaiting
+        = m_lastActivity.waitingForFinalResult && m_lastActivity.phase != CanvasFillPhase::Idle;
+    const bool isWaiting = state.waitingForFinalResult && state.phase != CanvasFillPhase::Idle;
     const bool originChanged = state.origin != m_lastActivity.origin;
     m_lastActivity = state;
 
@@ -123,11 +123,11 @@ void CanvasFillProgressPopup::updateAnchor()
     int x = anchor.x() - popupSize.width() / 2;
     int y = anchor.y() - popupSize.height() - kFillProgressPopupOffsetY;
     x = qBound(kFillProgressPopupMargin, x,
-        qMax(kFillProgressPopupMargin, parentWidget()->width() - popupSize.width()
-                - kFillProgressPopupMargin));
+        qMax(kFillProgressPopupMargin,
+            parentWidget()->width() - popupSize.width() - kFillProgressPopupMargin));
     y = qBound(kFillProgressPopupMargin, y,
-        qMax(kFillProgressPopupMargin, parentWidget()->height() - popupSize.height()
-                - kFillProgressPopupMargin));
+        qMax(kFillProgressPopupMargin,
+            parentWidget()->height() - popupSize.height() - kFillProgressPopupMargin));
 
     if (m_posAnim->state() == QAbstractAnimation::Running) {
         m_posAnim->setEndValue(QPoint(x, y));
@@ -154,11 +154,11 @@ QPoint CanvasFillProgressPopup::popupTopLeftForAnchor(
 
     if (auto* parent = parentWidget()) {
         x = qBound(kFillProgressPopupMargin, x,
-            qMax(kFillProgressPopupMargin, parent->width() - popupSize.width()
-                    - kFillProgressPopupMargin));
+            qMax(kFillProgressPopupMargin,
+                parent->width() - popupSize.width() - kFillProgressPopupMargin));
         y = qBound(kFillProgressPopupMargin, y,
-            qMax(kFillProgressPopupMargin, parent->height() - popupSize.height()
-                    - kFillProgressPopupMargin));
+            qMax(kFillProgressPopupMargin,
+                parent->height() - popupSize.height() - kFillProgressPopupMargin));
     }
 
     return QPoint(x, y);

@@ -860,6 +860,16 @@ Try Square Selection first to restrict the area.</source>
 <context>
     <name>ReleaseNotesOverlay</name>
     <message>
+        <location filename="../src/shell/update-message/ReleaseNotesOverlay.cpp" line="61"/>
+        <source>Strokes and details</source>
+        <translation>Strokes and details</translation>
+    </message>
+    <message>
+        <location filename="../src/shell/update-message/ReleaseNotesOverlay.cpp" line="64"/>
+        <source>&lt;p&gt;&lt;b&gt;This release adds brush dynamics driven by pen tilt and stroke speed, copying a selection to a new layer, and radius controls for effects on the canvas.&lt;/b&gt;&lt;/p&gt;&lt;p&gt;&lt;b&gt;New&lt;/b&gt;&lt;/p&gt;&lt;ul&gt;&lt;li&gt;Pen Tilt and Stroke Speed are new brush dynamics sources with editable response curves. Pen Tilt uses the direction of the tilted pen on supported tablets; speed is measured in screen space so zoom does not change the response to the same hand movement.&lt;/li&gt;&lt;li&gt;A Smoothing page lets each brush parameter filter changes in its dynamics, with a strength control and a response curve. At zero strength the filter is disabled.&lt;/li&gt;&lt;li&gt;The Brushes panel offers cards or a list with brush names, preview sizes from 50% to 200%, and horizontal or vertical pack navigation. These options are available in the panel context menu and saved with the workspace layout.&lt;/li&gt;&lt;li&gt;Drag brushes to reorder them within a pack or move them between packs, both in the Brushes panel and in the Brush Editor. Favorites keep a separate order without rearranging their source packs.&lt;/li&gt;&lt;li&gt;Brush packs can also be reordered by dragging. Brush and pack order changes are saved and shared across workspace tabs.&lt;/li&gt;&lt;li&gt;Layer via Copy (Ctrl+J) copies selected pixels from a raster layer to a new layer at the same position, without using the clipboard. With no pixel selection, it still duplicates the selected layers. Layer via Cut (Ctrl+Shift+J) moves the selected pixels to a new layer in one undo step.&lt;/li&gt;&lt;li&gt;The Edit menu adds 90-degree and 180-degree rotations and direct access to Warp. Rotation and flip commands act on the pixel selection when one exists, or on the selected layer otherwise, and also work during an active transform.&lt;/li&gt;&lt;li&gt;Canvas Resize snaps its frame to finite canvas edges and visible layer or group bounds while drawing, moving or resizing it. It uses the existing canvas and layer snap settings and displays alignment guides.&lt;/li&gt;&lt;li&gt;Selecting Twirl, Pinch or Ripple displays a radius ring on the canvas. Drag the ring to change the radius with a live preview; the corresponding panel value stays in sync and the drag creates one undo step.&lt;/li&gt;&lt;/ul&gt;&lt;p&gt;&lt;b&gt;Improved&lt;/b&gt;&lt;/p&gt;&lt;ul&gt;&lt;li&gt;Copy Merged (Ctrl+Shift+C) replaces the Camera command. It copies the visible result inside the selection, including layer effects and transparency, and respects soft selection edges. Custom shortcuts assigned to Camera are retained.&lt;/li&gt;&lt;li&gt;Effect cards now highlight the selected effect. Cards have a distinct header and parameter area, and can be reordered by dragging the header as well as the grip.&lt;/li&gt;&lt;li&gt;Settings and first-run setup now offer interface scales of 85%, 100%, 125%, 175% and 225%.&lt;/li&gt;&lt;li&gt;The theme editor places the theme name and favorite toggle beside Apply and Save. Names can be edited there, are limited to 32 characters, and receive a unique suffix when needed.&lt;/li&gt;&lt;li&gt;Fill (Shift+F5) now opens a confirmation window before filling the selection with the current foreground colour.&lt;/li&gt;&lt;li&gt;Large top-bar menus no longer use an extra opacity pass during their opening and closing animations.&lt;/li&gt;&lt;li&gt;Glass has stronger colour dispersion, and the reset-settings action uses the theme colour for destructive actions.&lt;/li&gt;&lt;/ul&gt;&lt;p&gt;&lt;b&gt;Fixes&lt;/b&gt;&lt;/p&gt;&lt;ul&gt;&lt;li&gt;At 0% stabilization, strokes no longer retain the extra geometry smoothing delay. With stabilization enabled, the stroke catches up to the pointer more evenly.&lt;/li&gt;&lt;li&gt;Brush blend modes now blend against pixels in the target layer, rather than the merged visible image. Live previews and finished strokes use the same result, including on transparent areas and with opacity, soft selections or alpha lock.&lt;/li&gt;&lt;li&gt;Fill and Delete Content now process all selected editable layers, including layers inside selected groups. Hidden or locked layers and their descendants are skipped; required rasterization is confirmed before any edits. The whole operation is one undo step. Fill follows mask focus, while Delete Content edits layer pixels.&lt;/li&gt;&lt;li&gt;Delete no longer swallows text edits in input fields. In the Layers panel it deletes the selected layer or mask; on the canvas it deletes selected pixels.&lt;/li&gt;&lt;li&gt;Interface fonts and controls now follow Ruwa's scale consistently. Sidebars and dropdowns keep the correct geometry after scaling.&lt;/li&gt;&lt;li&gt;Floating panels are visible again after restoring a workspace layout.&lt;/li&gt;&lt;li&gt;Top-bar menus close reliably on outside clicks, including on the frameless window border.&lt;/li&gt;&lt;li&gt;The Welcome banner crop window displays liquid glass again.&lt;/li&gt;&lt;/ul&gt;</source>
+        <translation>&lt;p&gt;&lt;b&gt;This release adds brush dynamics driven by pen tilt and stroke speed, copying a selection to a new layer, and radius controls for effects on the canvas.&lt;/b&gt;&lt;/p&gt;&lt;p&gt;&lt;b&gt;New&lt;/b&gt;&lt;/p&gt;&lt;ul&gt;&lt;li&gt;Pen Tilt and Stroke Speed are new brush dynamics sources with editable response curves. Pen Tilt uses the direction of the tilted pen on supported tablets; speed is measured in screen space so zoom does not change the response to the same hand movement.&lt;/li&gt;&lt;li&gt;A Smoothing page lets each brush parameter filter changes in its dynamics, with a strength control and a response curve. At zero strength the filter is disabled.&lt;/li&gt;&lt;li&gt;The Brushes panel offers cards or a list with brush names, preview sizes from 50% to 200%, and horizontal or vertical pack navigation. These options are available in the panel context menu and saved with the workspace layout.&lt;/li&gt;&lt;li&gt;Drag brushes to reorder them within a pack or move them between packs, both in the Brushes panel and in the Brush Editor. Favorites keep a separate order without rearranging their source packs.&lt;/li&gt;&lt;li&gt;Brush packs can also be reordered by dragging. Brush and pack order changes are saved and shared across workspace tabs.&lt;/li&gt;&lt;li&gt;Layer via Copy (Ctrl+J) copies selected pixels from a raster layer to a new layer at the same position, without using the clipboard. With no pixel selection, it still duplicates the selected layers. Layer via Cut (Ctrl+Shift+J) moves the selected pixels to a new layer in one undo step.&lt;/li&gt;&lt;li&gt;The Edit menu adds 90-degree and 180-degree rotations and direct access to Warp. Rotation and flip commands act on the pixel selection when one exists, or on the selected layer otherwise, and also work during an active transform.&lt;/li&gt;&lt;li&gt;Canvas Resize snaps its frame to finite canvas edges and visible layer or group bounds while drawing, moving or resizing it. It uses the existing canvas and layer snap settings and displays alignment guides.&lt;/li&gt;&lt;li&gt;Selecting Twirl, Pinch or Ripple displays a radius ring on the canvas. Drag the ring to change the radius with a live preview; the corresponding panel value stays in sync and the drag creates one undo step.&lt;/li&gt;&lt;/ul&gt;&lt;p&gt;&lt;b&gt;Improved&lt;/b&gt;&lt;/p&gt;&lt;ul&gt;&lt;li&gt;Copy Merged (Ctrl+Shift+C) replaces the Camera command. It copies the visible result inside the selection, including layer effects and transparency, and respects soft selection edges. Custom shortcuts assigned to Camera are retained.&lt;/li&gt;&lt;li&gt;Effect cards now highlight the selected effect. Cards have a distinct header and parameter area, and can be reordered by dragging the header as well as the grip.&lt;/li&gt;&lt;li&gt;Settings and first-run setup now offer interface scales of 85%, 100%, 125%, 175% and 225%.&lt;/li&gt;&lt;li&gt;The theme editor places the theme name and favorite toggle beside Apply and Save. Names can be edited there, are limited to 32 characters, and receive a unique suffix when needed.&lt;/li&gt;&lt;li&gt;Fill (Shift+F5) now opens a confirmation window before filling the selection with the current foreground colour.&lt;/li&gt;&lt;li&gt;Large top-bar menus no longer use an extra opacity pass during their opening and closing animations.&lt;/li&gt;&lt;li&gt;Glass has stronger colour dispersion, and the reset-settings action uses the theme colour for destructive actions.&lt;/li&gt;&lt;/ul&gt;&lt;p&gt;&lt;b&gt;Fixes&lt;/b&gt;&lt;/p&gt;&lt;ul&gt;&lt;li&gt;At 0% stabilization, strokes no longer retain the extra geometry smoothing delay. With stabilization enabled, the stroke catches up to the pointer more evenly.&lt;/li&gt;&lt;li&gt;Brush blend modes now blend against pixels in the target layer, rather than the merged visible image. Live previews and finished strokes use the same result, including on transparent areas and with opacity, soft selections or alpha lock.&lt;/li&gt;&lt;li&gt;Fill and Delete Content now process all selected editable layers, including layers inside selected groups. Hidden or locked layers and their descendants are skipped; required rasterization is confirmed before any edits. The whole operation is one undo step. Fill follows mask focus, while Delete Content edits layer pixels.&lt;/li&gt;&lt;li&gt;Delete no longer swallows text edits in input fields. In the Layers panel it deletes the selected layer or mask; on the canvas it deletes selected pixels.&lt;/li&gt;&lt;li&gt;Interface fonts and controls now follow Ruwa's scale consistently. Sidebars and dropdowns keep the correct geometry after scaling.&lt;/li&gt;&lt;li&gt;Floating panels are visible again after restoring a workspace layout.&lt;/li&gt;&lt;li&gt;Top-bar menus close reliably on outside clicks, including on the frameless window border.&lt;/li&gt;&lt;li&gt;The Welcome banner crop window displays liquid glass again.&lt;/li&gt;&lt;/ul&gt;</translation>
+    </message>
+    <message>
         <location filename="../src/shell/update-message/ReleaseNotesOverlay.cpp" line="60"/>
         <source>A radial menu, real selection commands, and cursors drawn on the canvas</source>
         <translation type="unfinished"></translation>
@@ -1277,6 +1287,36 @@ Try Square Selection first to restrict the area.</source>
 <context>
     <name>UpdateMessageOverlay</name>
     <message>
+        <location filename="../src/shell/update-message/UpdateMessageOverlay.cpp" line="684"/>
+        <source>Strokes and details</source>
+        <translation>Strokes and details</translation>
+    </message>
+    <message>
+        <location filename="../src/shell/update-message/UpdateMessageOverlay.cpp" line="699"/>
+        <source>This release adds brush dynamics driven by pen tilt and stroke speed, copying a selection to a new layer, and radius controls for effects on the canvas.</source>
+        <translation>This release adds brush dynamics driven by pen tilt and stroke speed, copying a selection to a new layer, and radius controls for effects on the canvas.</translation>
+    </message>
+    <message>
+        <location filename="../src/shell/update-message/UpdateMessageOverlay.cpp" line="717"/>
+        <source>Pen tilt, stroke speed and adjustable smoothing for brush dynamics.</source>
+        <translation>Pen tilt, stroke speed and adjustable smoothing for brush dynamics.</translation>
+    </message>
+    <message>
+        <location filename="../src/shell/update-message/UpdateMessageOverlay.cpp" line="721"/>
+        <source>Copy or cut selected pixels to a new layer; copy the visible result with Copy Merged.</source>
+        <translation>Copy or cut selected pixels to a new layer; copy the visible result with Copy Merged.</translation>
+    </message>
+    <message>
+        <location filename="../src/shell/update-message/UpdateMessageOverlay.cpp" line="726"/>
+        <source>Brush cards or a list, adjustable preview sizes and vertical pack navigation.</source>
+        <translation>Brush cards or a list, adjustable preview sizes and vertical pack navigation.</translation>
+    </message>
+    <message>
+        <location filename="../src/shell/update-message/UpdateMessageOverlay.cpp" line="730"/>
+        <source>Correct brush blending, selection edits across multiple layers, and restored floating panels.</source>
+        <translation>Correct brush blending, selection edits across multiple layers, and restored floating panels.</translation>
+    </message>
+    <message>
         <location filename="../src/shell/update-message/UpdateMessageOverlay.cpp" line="109"/>
         <source>NEW</source>
         <translation>NEW</translation>
@@ -1305,36 +1345,6 @@ Try Square Selection first to restrict the area.</source>
         <location filename="../src/shell/update-message/UpdateMessageOverlay.cpp" line="762"/>
         <source>YOU&apos;RE UP TO DATE!</source>
         <translation>YOU&apos;RE UP TO DATE!</translation>
-    </message>
-    <message>
-        <location filename="../src/shell/update-message/UpdateMessageOverlay.cpp" line="771"/>
-        <source>A radial menu, real selection commands, and cursors drawn on the canvas.</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <location filename="../src/shell/update-message/UpdateMessageOverlay.cpp" line="788"/>
-        <source>Right-clicking the canvas opens a configurable radial menu, the selection operations became commands with a home in the Edit menu, and the cursor is now drawn by the canvas itself.</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <location filename="../src/shell/update-message/UpdateMessageOverlay.cpp" line="805"/>
-        <source>A configurable radial menu opens on canvas right-click, with pages of commands around a hub.</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <location filename="../src/shell/update-message/UpdateMessageOverlay.cpp" line="810"/>
-        <source>Select All, Invert and Reselect, and a Selection submenu in Edit for the rest.</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <location filename="../src/shell/update-message/UpdateMessageOverlay.cpp" line="814"/>
-        <source>The canvas draws its own cursors, and the overlay glass refracts what is behind it.</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <location filename="../src/shell/update-message/UpdateMessageOverlay.cpp" line="819"/>
-        <source>No more ghost tiles after undo, and a shortcut bound under a Cyrillic layout finally fires.</source>
-        <translation type="unfinished"></translation>
     </message>
     <message>
         <location filename="../src/shell/update-message/UpdateMessageOverlay.cpp" line="833"/>

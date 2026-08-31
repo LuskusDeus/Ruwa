@@ -101,8 +101,7 @@ bool CanvasPanel::createRenderContent()
     createInfo.rasterizationDecisionProvider
         = [this](const QString& title, const QString& message) {
               return ruwa::ui::widgets::MessagePopupManager::showBlocking(
-                  this, title + QStringLiteral("\n\n") + message, tr("Yes"), tr("No"), 360,
-                  true);
+                  this, title + QStringLiteral("\n\n") + message, tr("Yes"), tr("No"), 360, true);
           };
     m_engineBinding = runtime->createBinding(createInfo, m_contentWidget);
 
@@ -225,18 +224,16 @@ bool CanvasPanel::createRenderContent()
     // the renderer publishes state, these presenters own the QWidget chrome.
     m_transformMetricPresenter = new CanvasTransformMetricPresenter(m_viewportHostWidget, this);
     m_transformMetricPresenter->setDocumentToViewport([this](const QPointF& documentPos) {
-        return m_engineBinding
-            ? m_engineBinding->session().view().viewportFromDocument(documentPos)
-            : documentPos;
+        return m_engineBinding ? m_engineBinding->session().view().viewportFromDocument(documentPos)
+                               : documentPos;
     });
     connect(&events, &CanvasEngineQtEvents::transformPresentationChanged,
         m_transformMetricPresenter, &CanvasTransformMetricPresenter::present);
 
     m_fillProgressPopup = new CanvasFillProgressPopup(m_viewportHostWidget);
     m_fillProgressPopup->setDocumentToViewport([this](const QPointF& documentPos) {
-        return m_engineBinding
-            ? m_engineBinding->session().view().viewportFromDocument(documentPos)
-            : documentPos;
+        return m_engineBinding ? m_engineBinding->session().view().viewportFromDocument(documentPos)
+                               : documentPos;
     });
     connect(&events, &CanvasEngineQtEvents::fillActivityChanged, m_fillProgressPopup,
         &CanvasFillProgressPopup::presentFillActivity);
@@ -525,8 +522,7 @@ bool CanvasPanel::createRenderContent()
         const float centerX = static_cast<float>(static_cast<qreal>(localPos.x()) * scaleX);
         const float centerY = static_cast<float>(static_cast<qreal>(localPos.y()) * scaleY);
         if (m_effectParameterOverlayDragging || effectParameterOverlayHitTest(*globalPos) >= 0) {
-            presentation.setToolCursorState(
-                true, centerX, centerY, ToolCursorStyle::Pointer);
+            presentation.setToolCursorState(true, centerX, centerY, ToolCursorStyle::Pointer);
             return;
         }
         const ToolId cursorTool = toolMode();

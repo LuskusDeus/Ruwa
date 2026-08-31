@@ -192,15 +192,15 @@ public:
         painter->setBrush(colors.overlayBase());
         painter->drawRoundedRect(QRectF(previewRect), 5, 5);
 
-        QFont previewFont = ruwa::ui::core::ThemeManager::instance().font(
-            ruwa::ui::core::ThemeFontRole::H6);
+        QFont previewFont
+            = ruwa::ui::core::ThemeManager::instance().font(ruwa::ui::core::ThemeFontRole::H6);
         previewFont.setFamily(family);
         painter->setFont(previewFont);
         painter->setPen(colors.text);
         painter->drawText(previewRect, Qt::AlignCenter, QStringLiteral("Aa"));
 
-        QFont nameFont = ruwa::ui::core::ThemeManager::instance().font(
-            ruwa::ui::core::ThemeFontRole::Body);
+        QFont nameFont
+            = ruwa::ui::core::ThemeManager::instance().font(ruwa::ui::core::ThemeFontRole::Body);
         nameFont.setFamily(family);
         painter->setFont(nameFont);
         painter->setPen(colors.text);

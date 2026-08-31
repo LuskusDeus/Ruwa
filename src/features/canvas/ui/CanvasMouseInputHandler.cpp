@@ -121,24 +121,23 @@ MousePointerSample sampleMousePointer(QMouseEvent* event)
     return sample;
 }
 
-ruwa::core::brushes::BrushInputDynamics pointerInputDynamics(const CanvasInputHost* host,
-    const QPointF& globalPos, const MousePointerSample& sample)
+ruwa::core::brushes::BrushInputDynamics pointerInputDynamics(
+    const CanvasInputHost* host, const QPointF& globalPos, const MousePointerSample& sample)
 {
     ruwa::core::brushes::BrushInputDynamics result;
     if (!host || !sample.tiltAvailable) {
         return result;
     }
     const aether::Vector2 origin = host->mapInputToViewportWorld(globalPos);
-    const aether::Vector2 projected
-        = host->mapInputToViewportWorld(globalPos + sample.tiltVector);
+    const aether::Vector2 projected = host->mapInputToViewportWorld(globalPos + sample.tiltVector);
     const float dx = projected.x - origin.x;
     const float dy = projected.y - origin.y;
     if (std::hypot(dx, dy) <= 0.000001f) {
         return result;
     }
     constexpr float kPi = 3.14159265358979323846f;
-    const float degrees = ruwa::core::brushes::normalizeAngleDegrees(
-        std::atan2(dy, dx) * 180.0f / kPi);
+    const float degrees
+        = ruwa::core::brushes::normalizeAngleDegrees(std::atan2(dy, dx) * 180.0f / kPi);
     result.penTilt = degrees / 360.0f;
     result.penTiltAvailable = true;
     return result;
@@ -310,7 +309,8 @@ void CanvasMouseInputHandler::applyBrushSizeAdjustOverlay()
     }
     const float zoom = static_cast<float>(view->zoom());
     const float radiusViewport = painting->brushRadius() * zoom * m_brushSizeCursorScale;
-    presentation->setBrushCursorState(true, m_brushSizeAnchorVx, m_brushSizeAnchorVy, radiusViewport);
+    presentation->setBrushCursorState(
+        true, m_brushSizeAnchorVx, m_brushSizeAnchorVy, radiusViewport);
 }
 
 void CanvasMouseInputHandler::endBrushSizeAdjust()
@@ -380,8 +380,8 @@ bool CanvasMouseInputHandler::handleMousePress(QMouseEvent* event)
     // the size gesture needs both modifiers to stay out of its way.
     if (event->button() == Qt::LeftButton && event->modifiers().testFlag(Qt::ShiftModifier)
         && event->modifiers().testFlag(Qt::AltModifier) && !m_brushSizeAdjust
-        && !m_host->isInputDrawingActive() && !m_panel->m_tabletActive
-        && !transform->isActive() && isPaintingLikeTool()) {
+        && !m_host->isInputDrawingActive() && !m_panel->m_tabletActive && !transform->isActive()
+        && isPaintingLikeTool()) {
         return beginBrushSizeAdjust(event);
     }
 
@@ -436,20 +436,20 @@ bool CanvasMouseInputHandler::handleMousePress(QMouseEvent* event)
                 classicAction.insert(QStringLiteral("id"),
                     static_cast<int>(CanvasPanel::TransformActionModeClassic));
                 classicAction.insert(QStringLiteral("text"), QObject::tr("Classic"));
-                classicAction.insert(QStringLiteral("checked"),
-                    currentMode == TransformInteractionMode::Classic);
-                classicAction.insert(QStringLiteral("enabled"),
-                    currentMode != TransformInteractionMode::Classic);
+                classicAction.insert(
+                    QStringLiteral("checked"), currentMode == TransformInteractionMode::Classic);
+                classicAction.insert(
+                    QStringLiteral("enabled"), currentMode != TransformInteractionMode::Classic);
                 actions.push_back(classicAction);
 
                 QVariantMap deformAction;
                 deformAction.insert(
                     QStringLiteral("id"), static_cast<int>(CanvasPanel::TransformActionModeDeform));
                 deformAction.insert(QStringLiteral("text"), QObject::tr("Warp"));
-                deformAction.insert(QStringLiteral("checked"),
-                    currentMode == TransformInteractionMode::Deform);
-                deformAction.insert(QStringLiteral("enabled"),
-                    currentMode != TransformInteractionMode::Deform);
+                deformAction.insert(
+                    QStringLiteral("checked"), currentMode == TransformInteractionMode::Deform);
+                deformAction.insert(
+                    QStringLiteral("enabled"), currentMode != TransformInteractionMode::Deform);
                 actions.push_back(deformAction);
 
                 // Mirroring shares the eased flip the selection popup plays, so it
@@ -551,8 +551,8 @@ bool CanvasMouseInputHandler::handleMousePress(QMouseEvent* event)
             if (pickLayerByContent && m_panel->m_layerModel) {
                 const aether::Vector2 worldPos
                     = m_panel->mapToWorld(event->globalPosition().toPoint());
-                const QUuid hitLayerId
-                    = m_host->inputHitTesting()->movableContentLayerAt(QPointF(worldPos.x, worldPos.y));
+                const QUuid hitLayerId = m_host->inputHitTesting()->movableContentLayerAt(
+                    QPointF(worldPos.x, worldPos.y));
                 if (!hitLayerId.isNull() && !m_panel->m_layerModel->isSelected(hitLayerId)) {
                     m_pendingMoveToolContentHit = true;
                     m_pendingMoveToolContentLayerId = hitLayerId;
@@ -597,8 +597,8 @@ bool CanvasMouseInputHandler::handleMousePress(QMouseEvent* event)
             m_panel->m_isZoomDragging = true;
             m_panel->m_zoomDragStartPos = localPos;
             m_panel->m_zoomDragStartValue = static_cast<float>(view->zoom());
-            QPoint localPos
-                = m_host->inputViewportHostWidget()->mapFromGlobal(event->globalPosition().toPoint());
+            QPoint localPos = m_host->inputViewportHostWidget()->mapFromGlobal(
+                event->globalPosition().toPoint());
             m_panel->m_zoomAnchorScreen = aether::Vector2(localPos.x(), localPos.y());
             m_panel->showZoomInfoOverlay();
             event->accept();
@@ -905,8 +905,7 @@ bool CanvasMouseInputHandler::handleMouseMove(QMouseEvent* event)
             const float zoom = static_cast<float>(view->zoom());
             const auto hit = transform->hitTest(QPointF(worldPos.x, worldPos.y), zoom);
             cursorManager->setRequestedCursor(detail::cursorForTransformHandle(hit,
-                transform->cornersActAsRotationHandles(),
-                transform->isScaleMirroredHorizontally(),
+                transform->cornersActAsRotationHandles(), transform->isScaleMirroredHorizontally(),
                 transform->isScaleMirroredVertically(), view->contentFlipHorizontal(),
                 view->contentFlipVertical()));
         }
@@ -951,8 +950,8 @@ bool CanvasMouseInputHandler::handleMouseMove(QMouseEvent* event)
             if (transform->enterMoveOnly()) {
                 const float zoom = static_cast<float>(view->zoom());
                 transform->beginUndoStep();
-                if (transform->pointerPress(QPointF(pressWorldPos.x, pressWorldPos.y), zoom,
-                        pressModifiers)) {
+                if (transform->pointerPress(
+                        QPointF(pressWorldPos.x, pressWorldPos.y), zoom, pressModifiers)) {
                     transform->beginSnapSession();
                     m_panel->m_transformDragCursorValid = true;
                     m_panel->m_transformDragCursor = Qt::SizeAllCursor;
@@ -1019,15 +1018,15 @@ bool CanvasMouseInputHandler::handleMouseMove(QMouseEvent* event)
         return true;
     }
     if (m_panel->m_isRectSelecting) {
-        dispatchUncoalescedWorldMoves(
-            event, [this](float x, float y) { m_panel->inputEditing()->updateRectSelection(x, y); });
+        dispatchUncoalescedWorldMoves(event,
+            [this](float x, float y) { m_panel->inputEditing()->updateRectSelection(x, y); });
         m_panel->updateSelectionSizeOverlay();
         event->accept();
         return true;
     }
     if (m_panel->m_isCircleSelecting) {
-        dispatchUncoalescedWorldMoves(
-            event, [this](float x, float y) { m_panel->inputEditing()->updateCircleSelection(x, y); });
+        dispatchUncoalescedWorldMoves(event,
+            [this](float x, float y) { m_panel->inputEditing()->updateCircleSelection(x, y); });
         event->accept();
         return true;
     }
@@ -1167,8 +1166,7 @@ bool CanvasMouseInputHandler::handleMouseMove(QMouseEvent* event)
         const bool nativeDispatch = stylusInput.isDispatchingNativeInput();
         const std::optional<float> nativeElapsed
             = nativeDispatch ? stylusInput.dispatchStrokeElapsedSeconds() : std::nullopt;
-        const float currentElapsedSec
-            = nativeElapsed.value_or(painting->strokeElapsedSecondsNow());
+        const float currentElapsedSec = nativeElapsed.value_or(painting->strokeElapsedSecondsNow());
 
         // Recover intermediate OS mouse positions. Skip this only while WinTab
         // owns the pointer; its packet buffer already contains those samples.
@@ -1250,9 +1248,8 @@ bool CanvasMouseInputHandler::handleMouseMove(QMouseEvent* event)
             // burst. Feed it into the engine's existing time-budgeted
             // queue so the native routing loop remains cheap and painting can
             // interleave with rasterization.
-            painting->queueStrokeAtElapsed(worldPos.x, worldPos.y,
-                pointerSample.pressure, currentElapsedSec,
-                strokeInputDeviceForSample(pointerSample), inputDynamics);
+            painting->queueStrokeAtElapsed(worldPos.x, worldPos.y, pointerSample.pressure,
+                currentElapsedSec, strokeInputDeviceForSample(pointerSample), inputDynamics);
         } else {
             painting->continueStroke(worldPos.x, worldPos.y, pointerSample.pressure,
                 strokeInputDeviceForSample(pointerSample), inputDynamics);
@@ -1284,8 +1281,7 @@ bool CanvasMouseInputHandler::handleMouseMove(QMouseEvent* event)
         // (beginPanSampling/endPanSampling): it reads the live pointer once
         // per VSync, so pan is synchronous with the display refresh.
         m_panel->m_lastMousePos = event->globalPosition();
-        if (m_panel->m_canvasResizeController
-            && m_panel->m_canvasResizeController->isActive()) {
+        if (m_panel->m_canvasResizeController && m_panel->m_canvasResizeController->isActive()) {
             m_panel->m_canvasResizeController->updateOverlay();
         }
         if (m_panel->m_textEditingController && m_panel->m_textEditingController->isEditing()) {
@@ -1348,8 +1344,7 @@ bool CanvasMouseInputHandler::handleMouseRelease(QMouseEvent* event)
         m_textSelecting = false;
         // Don't consume — let other handlers run, but selection extension stops here.
     }
-    if (transform->isActive() && transform->isDragging()
-        && event->button() == Qt::LeftButton) {
+    if (transform->isActive() && transform->isDragging() && event->button() == Qt::LeftButton) {
         const bool hadTransformGuides
             = transform->isMoveAxisGuideActive() || transform->isSnapGuideActive();
         transform->pointerRelease();
@@ -1417,8 +1412,7 @@ bool CanvasMouseInputHandler::handleMouseRelease(QMouseEvent* event)
     }
     if (m_panel->m_isRotatingView && event->button() == Qt::LeftButton) {
         m_panel->m_isRotatingView = false;
-        if (view->snapRotationRadiansSmooth(
-                static_cast<qreal>(kRotateViewSnapIncrement),
+        if (view->snapRotationRadiansSmooth(static_cast<qreal>(kRotateViewSnapIncrement),
                 static_cast<qreal>(kRotateViewSnapCaptureDistance))) {
             m_panel->requestRender();
         }

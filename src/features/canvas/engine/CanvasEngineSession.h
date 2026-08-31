@@ -181,8 +181,7 @@ public:
         const ruwa::core::brushes::BrushInputDynamics& inputDynamics)
         = 0;
     virtual void continueStroke(float documentX, float documentY, float pressure,
-        StrokeInputDevice inputDevice,
-        const ruwa::core::brushes::BrushInputDynamics& inputDynamics)
+        StrokeInputDevice inputDevice, const ruwa::core::brushes::BrushInputDynamics& inputDynamics)
         = 0;
     /// Continue with an explicit stroke-relative timestamp (real device sample
     /// time) instead of the engine clock — tablet path.
@@ -240,26 +239,20 @@ public:
 
     // --- interactive selection dragging (document space) ---
     /// @p add / @p subtract are the Shift/Alt combine modes held at drag start.
-    virtual void beginLasso(
-        float documentX, float documentY, bool add, bool subtract)
-        = 0;
+    virtual void beginLasso(float documentX, float documentY, bool add, bool subtract) = 0;
     virtual void updateLasso(float documentX, float documentY) = 0;
     virtual void endLasso(bool add, bool subtract) = 0;
     virtual void beginLassoFill(float documentX, float documentY) = 0;
     virtual void updateLassoFill(float documentX, float documentY) = 0;
     virtual void endLassoFill() = 0;
-    virtual void beginRectSelection(
-        float documentX, float documentY, bool add, bool subtract)
-        = 0;
+    virtual void beginRectSelection(float documentX, float documentY, bool add, bool subtract) = 0;
     virtual void updateRectSelection(float documentX, float documentY) = 0;
     virtual void endRectSelection(bool add, bool subtract) = 0;
-    virtual void beginCircleSelection(
-        float documentX, float documentY, bool add, bool subtract)
+    virtual void beginCircleSelection(float documentX, float documentY, bool add, bool subtract)
         = 0;
     virtual void updateCircleSelection(float documentX, float documentY) = 0;
     virtual void endCircleSelection(bool add, bool subtract) = 0;
-    virtual void performMagicWandSelection(
-        int documentX, int documentY, bool add, bool subtract)
+    virtual void performMagicWandSelection(int documentX, int documentY, bool add, bool subtract)
         = 0;
 
     // --- fill tool ---
@@ -350,9 +343,7 @@ public:
     // needs for handle hit ranges and snap math.
     /// Which part of the transform frame @p documentPos would grab. Pure
     /// query; used for cursor choice before a press.
-    virtual TransformHitResult hitTest(
-        const QPointF& documentPos, qreal viewportZoom) const
-        = 0;
+    virtual TransformHitResult hitTest(const QPointF& documentPos, qreal viewportZoom) const = 0;
     /// Start a pointer drag. False when nothing was grabbed (caller discards
     /// the undo step it opened for the attempt).
     virtual bool pointerPress(
@@ -420,8 +411,7 @@ public:
     // --- rendered pointer cursors ---
     /// Brush cursor ring. Center in viewport-logical units, radius in the
     /// same logical space after zoom.
-    virtual void setBrushCursorState(
-        bool visible, float centerX, float centerY, float radiusPx)
+    virtual void setBrushCursorState(bool visible, float centerX, float centerY, float radiusPx)
         = 0;
     virtual bool isBrushCursorVisible() const = 0;
     /// Eyedropper ring with the sampled document colour it shows. The colour
@@ -434,13 +424,11 @@ public:
     /// badge is identified by the semantic tool, never by a resource path —
     /// the engine integration maps the identifier to its own assets.
     virtual void setToolCursorState(bool visible, float centerX, float centerY,
-        ToolCursorStyle style = ToolCursorStyle::PointerBadge,
-        ToolId tool = ToolId::Brush)
+        ToolCursorStyle style = ToolCursorStyle::PointerBadge, ToolId tool = ToolId::Brush)
         = 0;
     /// Canvas parameter controls rendered through the same scene-inverting
     /// path as brush and tool cursors.
-    virtual void setParameterCircleOverlayState(
-        std::vector<ParameterCircleOverlayState> circles)
+    virtual void setParameterCircleOverlayState(std::vector<ParameterCircleOverlayState> circles)
         = 0;
 
     // --- display/style/motion state (plan 7.28) ---
@@ -456,8 +444,7 @@ public:
     virtual void setCanvasResizeOverlayState(bool active, const QRectF& selectionDocumentRect,
         bool selectingOrMoving, bool suppressCanvasCornerRounding = false)
         = 0;
-    virtual void setCanvasResizeSnapVisualState(const TransformSnapVisualState& state)
-        = 0;
+    virtual void setCanvasResizeSnapVisualState(const TransformSnapVisualState& state) = 0;
     virtual void setTextEditOverlayState(const TextEditOverlayState& state) = 0;
 
     // --- same-frame GPU backdrop coordination ---

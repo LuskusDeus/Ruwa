@@ -40,14 +40,17 @@ locked features.
 
 ## Highlights
 
-- **Customizable brushes.** Organize presets with favorites and pack filters,
-  tune starred controls in the dockable Brush Settings panel, or open the full
-  Brush Editor for shape, procedural textures, spacing, flow, and dynamics.
+- **Customizable brushes.** Reorder brushes and packs by dragging, choose cards
+  or a list, and keep favorites in their own order. Tune starred controls in the
+  dockable Brush Settings panel, or open the full Brush Editor for shape,
+  procedural textures, spacing, flow, and dynamics driven by pressure, pen tilt
+  or stroke speed.
 - **Spectral pigment mixing.** Wet brushes use Ruwa's custom pigment model for
   richer, more convincing colour mixing.
 - **Non-destructive editing.** Layer effects, adjustment layers, and masks stay
   editable, while Smart, Board, and text layers retain their source content
-  through transforms.
+  through transforms. Adjust the radius of Twirl, Pinch and Ripple directly on
+  the canvas.
 - **Smart objects with a document inside.** A smart object opens in its own tab
   as a full layer stack, duplicates share their contents as instances, and
   filters can run in content space so they follow the object's placement.
@@ -65,7 +68,7 @@ locked features.
   encoding, and the file write to a dedicated background pipeline.
 - **Precise placement.** Auto snapping aligns moves and transforms to the canvas,
   to other layers, and to equal spacing between neighbours, with live guides and
-  measurements.
+  measurements. Canvas Resize also snaps its frame to canvas and layer edges.
 - **Tablet-oriented input.** Ruwa supports stylus workflows and includes a
   custom Windows WinTab backend.
 - **Native effect plugins.** A stable C ABI lets bundled and third-party effects
@@ -75,7 +78,7 @@ locked features.
 
 | Item | Detail |
 | --- | --- |
-| Current release | `0.3.3-alpha` |
+| Current release | `0.3.4-alpha` |
 | Primary platform | Windows 10/11 x64 |
 | Graphics requirement | OpenGL 4.5 |
 | Technology | C++23, Qt 6, CMake |

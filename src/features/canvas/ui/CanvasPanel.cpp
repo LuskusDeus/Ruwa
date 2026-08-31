@@ -4872,8 +4872,7 @@ void CanvasPanel::updateCursorManagerOverlay()
     const bool useEyedropper
         = !parameterCursorActive && !transformActive && (currentTool == ToolId::Eyedropper);
     const bool useToolCursor = parameterCursorActive
-        || (!transformActive
-            && toolCursorStyle(currentTool) != ToolCursorStyle::None);
+        || (!transformActive && toolCursorStyle(currentTool) != ToolCursorStyle::None);
     m_cursorManager->setUseRenderedBrushCursor(useBrush);
     m_cursorManager->setUseRenderedEyedropperCursor(useEyedropper);
     m_cursorManager->setUseRenderedToolCursor(useToolCursor);

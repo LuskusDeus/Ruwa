@@ -447,19 +447,18 @@ void BrushEditorLayoutWidget::setupSignals()
                 restoreLibraryScroll(savedScroll);
             });
         });
-    m_libraryList->setItemMoveHandler(
-        [this](const QVariant& itemData, const QVariant& targetGroupData, int targetIndex) {
-            QString brushId;
-            QString targetPresetId;
-            if (!extractLibraryKeyId(itemData, QStringLiteral("brush:"), &brushId)
-                || !extractLibraryKeyId(
-                    targetGroupData, QStringLiteral("pack:"), &targetPresetId)) {
-                return false;
-            }
+    m_libraryList->setItemMoveHandler([this](const QVariant& itemData,
+                                          const QVariant& targetGroupData, int targetIndex) {
+        QString brushId;
+        QString targetPresetId;
+        if (!extractLibraryKeyId(itemData, QStringLiteral("brush:"), &brushId)
+            || !extractLibraryKeyId(targetGroupData, QStringLiteral("pack:"), &targetPresetId)) {
+            return false;
+        }
 
-            QScopedValueRollback<bool> moveGuard(m_libraryMoveInFlight, true);
-            return BrushManager::instance().moveBrush(brushId, targetPresetId, targetIndex);
-        });
+        QScopedValueRollback<bool> moveGuard(m_libraryMoveInFlight, true);
+        return BrushManager::instance().moveBrush(brushId, targetPresetId, targetIndex);
+    });
     connect(m_libraryList, &widgets::PresetMenuListWidget::itemMoveFinished, this,
         [this](bool accepted) {
             if (!accepted) {

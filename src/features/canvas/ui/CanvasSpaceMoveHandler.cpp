@@ -86,8 +86,7 @@ void CanvasSpaceMoveHandler::beginSpaceStrokeMove()
 
 void CanvasSpaceMoveHandler::moveActiveStrokeWithSpace(const QPoint& globalPos)
 {
-    if (!m_panel->m_spaceStrokeMoveActive || !m_panel->m_engineBinding
-        || !m_panel->m_isDrawing) {
+    if (!m_panel->m_spaceStrokeMoveActive || !m_panel->m_engineBinding || !m_panel->m_isDrawing) {
         return;
     }
     if (globalPos == m_panel->m_spaceStrokeMoveLastGlobalPos)

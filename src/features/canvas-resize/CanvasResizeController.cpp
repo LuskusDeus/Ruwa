@@ -160,9 +160,8 @@ bool CanvasResizeController::handleMousePress(const aether::Vector2& worldPos,
     m_overlayActive = true;
     m_dragDetected = false;
     if (!wasActive) {
-        m_selectionWorld
-            = QRectF(static_cast<qreal>(m_startWorld.x), static_cast<qreal>(m_startWorld.y), 0.5,
-                0.5);
+        m_selectionWorld = QRectF(
+            static_cast<qreal>(m_startWorld.x), static_cast<qreal>(m_startWorld.y), 0.5, 0.5);
         startOverlayFadeIn();
     }
     updateOverlay();
@@ -653,8 +652,8 @@ void CanvasResizeController::beginSnapSession()
         { static_cast<float>(m_canvasSize.width()), static_cast<float>(m_canvasSize.height()) },
         m_glWidget->hasFiniteDocumentBounds(), settings.layersEnabled);
 
-    m_snapSession = std::make_unique<aether::TransformSnapSession>(settings, std::move(scene),
-        aether::SnapCoordinatePolicy::Continuous);
+    m_snapSession = std::make_unique<aether::TransformSnapSession>(
+        settings, std::move(scene), aether::SnapCoordinatePolicy::Continuous);
 }
 
 void CanvasResizeController::endSnapSession()
@@ -666,9 +665,8 @@ void CanvasResizeController::endSnapSession()
     }
 }
 
-aether::Vector2 CanvasResizeController::snapPoint(
-    const aether::Vector2& point, bool allowX, bool allowY,
-    std::optional<float> excludedTargetX, std::optional<float> excludedTargetY)
+aether::Vector2 CanvasResizeController::snapPoint(const aether::Vector2& point, bool allowX,
+    bool allowY, std::optional<float> excludedTargetX, std::optional<float> excludedTargetY)
 {
     if (!m_snapSession || !m_glWidget) {
         return point;
@@ -680,9 +678,8 @@ aether::Vector2 CanvasResizeController::snapPoint(
     }
 
     const auto& viewport = m_glWidget->viewport();
-    const aether::SnapResult result = m_snapSession->solvePoint(
-        point, &viewport, viewport.camera().zoom(), false, allowX, allowY, excludedTargetX,
-        excludedTargetY);
+    const aether::SnapResult result = m_snapSession->solvePoint(point, &viewport,
+        viewport.camera().zoom(), false, allowX, allowY, excludedTargetX, excludedTargetY);
     return { point.x + result.correction.x, point.y + result.correction.y };
 }
 

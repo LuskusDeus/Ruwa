@@ -146,7 +146,9 @@ TEST_CASE("Merged selection extraction retains HDR values in deep tile formats")
     REQUIRE(tile);
     float pixel[4];
     aether::readTilePixelF(*tile, 0, 0, pixel);
-    REQUIRE(pixel[0] == Catch::Approx(1.0f).margin(0.001f));
-    REQUIRE(pixel[1] == Catch::Approx(0.25f).margin(0.001f));
-    REQUIRE(pixel[3] == Catch::Approx(0.5f).margin(0.001f));
+    // The RGBA8 mask quantizes 0.5 to 128/255 before the HDR pixels are multiplied.
+    constexpr float maskCoverage = 128.0f / 255.0f;
+    REQUIRE(pixel[0] == Catch::Approx(2.0f * maskCoverage).margin(0.001f));
+    REQUIRE(pixel[1] == Catch::Approx(0.5f * maskCoverage).margin(0.001f));
+    REQUIRE(pixel[3] == Catch::Approx(maskCoverage).margin(0.001f));
 }

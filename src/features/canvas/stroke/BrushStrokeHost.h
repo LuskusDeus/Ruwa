@@ -211,8 +211,8 @@ private:
     double stepStabilizerClock(double realMs, double wallMs, bool isRealPenSample);
     // Separate clock for Stroke Speed measurement. Repeated packet timestamps
     // are reconstructed here without feeding their cadence back into geometry.
-    double stepStrokeSpeedClock(double realMs, double wallMs, bool isRealPenSample,
-        bool inputTimestampReliable = true);
+    double stepStrokeSpeedClock(
+        double realMs, double wallMs, bool isRealPenSample, bool inputTimestampReliable = true);
     // Stroke time carried by DABS (the `Time` dynamics input). Integrates the
     // forward motion of the synthetic clock above onto the stroke's own origin.
     // synthNowMs is a stepStabilizerClock result; realMs is the raw input clock,

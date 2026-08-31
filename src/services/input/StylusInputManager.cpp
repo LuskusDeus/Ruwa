@@ -225,8 +225,7 @@ QWidget* directChildCanvasAtGlobalPos(QWidget* widget, const QPoint& globalPos)
         return nullptr;
     }
 
-    const auto children
-        = widget->findChildren<QWidget*>(QString(), Qt::FindDirectChildrenOnly);
+    const auto children = widget->findChildren<QWidget*>(QString(), Qt::FindDirectChildrenOnly);
     for (auto* child : children) {
         // UI-semantic canvas identification: a direct child either IS a canvas
         // panel (use its viewport host) or IS the viewport host itself.

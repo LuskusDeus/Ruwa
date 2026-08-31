@@ -55,8 +55,7 @@ using CanvasDecisionProvider = std::function<bool(const QString& title, const QS
 /// Construction-time configuration for one per-canvas binding.
 struct CanvasEngineCreateInfo {
     QSize initialCanvasSize;
-    ruwa::core::canvas::CanvasBoundsMode boundsMode
-        = ruwa::core::canvas::CanvasBoundsMode::Bounded;
+    ruwa::core::canvas::CanvasBoundsMode boundsMode = ruwa::core::canvas::CanvasBoundsMode::Bounded;
     float lassoStabilization = 0.0f;
     float lassoFillStabilization = 0.0f;
     /// Application-owned rasterization decision provider (plan 7.15.4).

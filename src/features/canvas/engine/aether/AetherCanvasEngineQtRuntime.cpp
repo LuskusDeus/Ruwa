@@ -95,8 +95,8 @@ bool AetherCanvasEngineQtRuntime::warmUpShaders(const CanvasEngineWarmupSink& pr
         return false;
     }
 
-    auto warmupResult = aether::warmUpOpenGLShaderPrograms(m_glContext, m_glSurface,
-        [progress](const QString& message, int percentage) {
+    auto warmupResult = aether::warmUpOpenGLShaderPrograms(
+        m_glContext, m_glSurface, [progress](const QString& message, int percentage) {
             if (progress) {
                 progress({ message, percentage });
             }

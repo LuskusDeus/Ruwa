@@ -24,7 +24,7 @@ class QMouseEvent;
 namespace aether {
 class OpenGLCanvasWidget;
 class TransformSnapSession;
-}
+} // namespace aether
 
 namespace ruwa::core::layers {
 class LayerModel;

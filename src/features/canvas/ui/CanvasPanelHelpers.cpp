@@ -426,8 +426,7 @@ Qt::CursorShape cursorForTransformHandle(const TransformHitResult& hit,
     return cursor == Qt::SizeFDiagCursor ? Qt::SizeBDiagCursor : Qt::SizeFDiagCursor;
 }
 
-Qt::CursorShape cursorForTransformHandle(
-    TransformHandle handle, bool cornersActAsRotationHandles)
+Qt::CursorShape cursorForTransformHandle(TransformHandle handle, bool cornersActAsRotationHandles)
 {
     Q_UNUSED(cornersActAsRotationHandles);
     switch (handle) {

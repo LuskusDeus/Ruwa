@@ -202,12 +202,11 @@ SnapResult TransformSnapSession::solvePoint(const Vector2& point, const Viewport
     constexpr float exclusionEpsilon = 0.001f;
     candidates.erase(std::remove_if(candidates.begin(), candidates.end(),
                          [&](const SnapRelation& relation) {
-                             const std::optional<float>& excluded = relation.axis == SnapAxis::X
-                                 ? excludedTargetX
-                                 : excludedTargetY;
+                             const std::optional<float>& excluded
+                                 = relation.axis == SnapAxis::X ? excludedTargetX : excludedTargetY;
                              return excluded
                                  && std::abs(relation.targetCoordinate - *excluded)
-                                     <= exclusionEpsilon;
+                                 <= exclusionEpsilon;
                          }),
         candidates.end());
     SnapResult result;

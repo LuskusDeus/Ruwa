@@ -111,10 +111,10 @@ CanvasViewSnapshot buildCurrentViewSnapshot(const aether::OpenGLCanvasWidget* wi
     snapshot.metrics.logicalSize = QSizeF(static_cast<qreal>(widget->viewport().width()),
         static_cast<qreal>(widget->viewport().height()));
     const qreal surfaceScale = widget->devicePixelRatioF();
-    snapshot.metrics.surfaceWidth = static_cast<uint32_t>(
-        std::llround(static_cast<double>(widget->width()) * surfaceScale));
-    snapshot.metrics.surfaceHeight = static_cast<uint32_t>(
-        std::llround(static_cast<double>(widget->height()) * surfaceScale));
+    snapshot.metrics.surfaceWidth
+        = static_cast<uint32_t>(std::llround(static_cast<double>(widget->width()) * surfaceScale));
+    snapshot.metrics.surfaceHeight
+        = static_cast<uint32_t>(std::llround(static_cast<double>(widget->height()) * surfaceScale));
     snapshot.metrics.logicalToSurfaceScaleX = surfaceScale;
     snapshot.metrics.logicalToSurfaceScaleY = surfaceScale;
     return snapshot;
@@ -144,8 +144,8 @@ ruwa::shared::imaging::PixelSurface pixelSurfaceFromImage(const QImage& image)
         return {};
     }
     for (int y = 0; y < source.height(); ++y) {
-        std::memcpy(surface.scanLine(y), source.constScanLine(y),
-            static_cast<size_t>(source.width()) * 4);
+        std::memcpy(
+            surface.scanLine(y), source.constScanLine(y), static_cast<size_t>(source.width()) * 4);
     }
     return surface;
 }
@@ -164,7 +164,10 @@ ruwa::shared::imaging::PixelSurface pixelSurfaceFromImage(const QImage& image)
 /// unique_ptr in the binding must see one and the same class.
 class AetherCanvasSession final : public CanvasEngineSession {
 public:
-    explicit AetherCanvasSession(aether::OpenGLCanvasWidget* widget) : m_widget(widget) { }
+    explicit AetherCanvasSession(aether::OpenGLCanvasWidget* widget)
+        : m_widget(widget)
+    {
+    }
 
     CanvasEngineStatus status() const override
     {
@@ -192,12 +195,12 @@ public:
 
     class View final : public CanvasViewCapability {
     public:
-        explicit View(aether::OpenGLCanvasWidget* widget) : m_widget(widget) { }
-
-        QSizeF viewportExtent() const override
+        explicit View(aether::OpenGLCanvasWidget* widget)
+            : m_widget(widget)
         {
-            return toQt(m_widget->viewport().extent());
         }
+
+        QSizeF viewportExtent() const override { return toQt(m_widget->viewport().extent()); }
         qreal zoom() const override
         {
             return static_cast<qreal>(m_widget->viewport().camera().zoom());
@@ -258,18 +261,18 @@ public:
         }
         void setZoomSmooth(qreal zoom) override
         {
-            m_widget->viewport().camera().setZoomSmooth(static_cast<float>(zoom),
-                m_widget->viewport().size());
+            m_widget->viewport().camera().setZoomSmooth(
+                static_cast<float>(zoom), m_widget->viewport().size());
         }
         void zoomAtViewportPoint(qreal factor, const QPointF& viewportPos) override
         {
-            m_widget->viewport().camera().zoomAt(static_cast<float>(factor), toAether(viewportPos),
-                m_widget->viewport().size());
+            m_widget->viewport().camera().zoomAt(
+                static_cast<float>(factor), toAether(viewportPos), m_widget->viewport().size());
         }
         void zoomAtViewportPointSmooth(qreal factor, const QPointF& viewportPos) override
         {
-            m_widget->viewport().camera().zoomAtSmooth(static_cast<float>(factor),
-                toAether(viewportPos), m_widget->viewport().size());
+            m_widget->viewport().camera().zoomAtSmooth(
+                static_cast<float>(factor), toAether(viewportPos), m_widget->viewport().size());
         }
         void setZoomLimits(qreal minZoom, qreal maxZoom) override
         {
@@ -296,8 +299,8 @@ public:
         {
             m_widget->viewport().camera().setRotationSmooth(static_cast<float>(radians));
         }
-        bool snapRotationRadiansSmooth(qreal incrementRadians, qreal captureDistanceRadians)
-            override
+        bool snapRotationRadiansSmooth(
+            qreal incrementRadians, qreal captureDistanceRadians) override
         {
             return m_widget->viewport().camera().snapRotationSmooth(
                 static_cast<float>(incrementRadians), static_cast<float>(captureDistanceRadians));
@@ -306,10 +309,7 @@ public:
         {
             m_widget->viewport().camera().centerOn(toAether(documentPoint));
         }
-        void stopCameraAnimation() override
-        {
-            m_widget->viewport().camera().stopAnimation();
-        }
+        void stopCameraAnimation() override { m_widget->viewport().camera().stopAnimation(); }
         void setContentFlipHorizontal(bool flip) override
         {
             m_widget->setCanvasContentFlipHorizontal(flip);
@@ -337,7 +337,10 @@ public:
 
     class Painting final : public CanvasPaintingCapability {
     public:
-        explicit Painting(aether::OpenGLCanvasWidget* widget) : m_widget(widget) { }
+        explicit Painting(aether::OpenGLCanvasWidget* widget)
+            : m_widget(widget)
+        {
+        }
 
         bool isDrawing() const override { return m_widget->isDrawing(); }
         bool hasPendingStrokeFinalization() const override
@@ -353,8 +356,8 @@ public:
         {
             // Quantize to the legacy brush implementation; the contract stays
             // value-based (plan 7.21.4).
-            m_widget->brush().setColor(quantize(color.r), quantize(color.g),
-                quantize(color.b), quantize(color.a));
+            m_widget->brush().setColor(
+                quantize(color.r), quantize(color.g), quantize(color.b), quantize(color.a));
         }
         void setBrushRadius(float radiusPx) override { m_widget->brush().setRadius(radiusPx); }
         float brushRadius() const override { return m_widget->brush().radius(); }
@@ -382,15 +385,15 @@ public:
             float strokeElapsedSeconds, StrokeInputDevice inputDevice,
             const ruwa::core::brushes::BrushInputDynamics& inputDynamics) override
         {
-            m_widget->continueStrokeAtElapsed(documentX, documentY, pressure, strokeElapsedSeconds,
-                inputDevice, inputDynamics);
+            m_widget->continueStrokeAtElapsed(
+                documentX, documentY, pressure, strokeElapsedSeconds, inputDevice, inputDynamics);
         }
         void queueStrokeAtElapsed(float documentX, float documentY, float pressure,
             float strokeElapsedSeconds, StrokeInputDevice inputDevice,
             const ruwa::core::brushes::BrushInputDynamics& inputDynamics) override
         {
-            m_widget->queueStrokeAtElapsed(documentX, documentY, pressure, strokeElapsedSeconds,
-                inputDevice, inputDynamics);
+            m_widget->queueStrokeAtElapsed(
+                documentX, documentY, pressure, strokeElapsedSeconds, inputDevice, inputDynamics);
         }
         void endStroke() override { m_widget->endStroke(); }
         float strokeElapsedSecondsNow() const override
@@ -398,10 +401,7 @@ public:
             return m_widget->strokeElapsedSecondsNow();
         }
 
-        void setLiquifyToolMode(int mode) override
-        {
-            m_widget->brush().setLiquifyToolMode(mode);
-        }
+        void setLiquifyToolMode(int mode) override { m_widget->brush().setLiquifyToolMode(mode); }
 
     private:
         static uint8_t quantize(float channel)
@@ -413,7 +413,10 @@ public:
 
     class Editing final : public CanvasEditingCapability {
     public:
-        explicit Editing(aether::OpenGLCanvasWidget* widget) : m_widget(widget) { }
+        explicit Editing(aether::OpenGLCanvasWidget* widget)
+            : m_widget(widget)
+        {
+        }
 
         void clearSelectionMask() override { m_widget->clearSelectionMask(); }
         bool selectAll() override { return m_widget->selectAll(); }
@@ -449,10 +452,7 @@ public:
         {
             m_widget->updateLasso(documentX, documentY);
         }
-        void endLasso(bool add, bool subtract) override
-        {
-            m_widget->endLasso(add, subtract);
-        }
+        void endLasso(bool add, bool subtract) override { m_widget->endLasso(add, subtract); }
         void beginLassoFill(float documentX, float documentY) override
         {
             m_widget->beginLassoFill(documentX, documentY);
@@ -462,8 +462,7 @@ public:
             m_widget->updateLassoFill(documentX, documentY);
         }
         void endLassoFill() override { m_widget->endLassoFill(); }
-        void beginRectSelection(float documentX, float documentY, bool add, bool subtract)
-            override
+        void beginRectSelection(float documentX, float documentY, bool add, bool subtract) override
         {
             m_widget->beginRectSelection(documentX, documentY, add, subtract);
         }
@@ -475,8 +474,8 @@ public:
         {
             m_widget->endRectSelection(add, subtract);
         }
-        void beginCircleSelection(float documentX, float documentY, bool add, bool subtract)
-            override
+        void beginCircleSelection(
+            float documentX, float documentY, bool add, bool subtract) override
         {
             m_widget->beginCircleSelection(documentX, documentY, add, subtract);
         }
@@ -488,19 +487,19 @@ public:
         {
             m_widget->endCircleSelection(add, subtract);
         }
-        void performMagicWandSelection(int documentX, int documentY, bool add, bool subtract)
-            override
+        void performMagicWandSelection(
+            int documentX, int documentY, bool add, bool subtract) override
         {
             m_widget->performMagicWandSelection(documentX, documentY, add, subtract);
         }
 
-        ruwa::core::canvas::CanvasFillRequestResult performFill(int documentX, int documentY)
-            override
+        ruwa::core::canvas::CanvasFillRequestResult performFill(
+            int documentX, int documentY) override
         {
             return m_widget->performFill(documentX, documentY);
         }
-        ruwa::core::canvas::CanvasFillRequestResult performClassicFill(int documentX, int documentY)
-            override
+        ruwa::core::canvas::CanvasFillRequestResult performClassicFill(
+            int documentX, int documentY) override
         {
             return m_widget->performClassicFill(documentX, documentY);
         }
@@ -509,16 +508,13 @@ public:
 
         bool sampleSceneColor(const QPointF& documentPos, QColor& out) override
         {
-            return m_widget->sampleColorFromScene(static_cast<float>(documentPos.x()),
-                static_cast<float>(documentPos.y()), out);
+            return m_widget->sampleColorFromScene(
+                static_cast<float>(documentPos.x()), static_cast<float>(documentPos.y()), out);
         }
 
         bool flipContentHorizontally() override { return m_widget->flipContentHorizontally(); }
         bool flipContentVertically() override { return m_widget->flipContentVertically(); }
-        bool rotateContent90Clockwise() override
-        {
-            return m_widget->rotateContent90Clockwise();
-        }
+        bool rotateContent90Clockwise() override { return m_widget->rotateContent90Clockwise(); }
         bool rotateContent90Counterclockwise() override
         {
             return m_widget->rotateContent90Counterclockwise();
@@ -531,7 +527,10 @@ public:
 
     class Transform final : public CanvasTransformCapability {
     public:
-        explicit Transform(aether::OpenGLCanvasWidget* widget) : m_widget(widget) { }
+        explicit Transform(aether::OpenGLCanvasWidget* widget)
+            : m_widget(widget)
+        {
+        }
 
         void setSnapPolicy(const CanvasTransformSnapPolicy& policy) override
         {
@@ -557,10 +556,7 @@ public:
         {
             return m_widget->moveSelectedContentBy(toAether(documentDelta));
         }
-        void beginInteractiveContentMove() override
-        {
-            m_widget->beginInteractiveContentMove();
-        }
+        void beginInteractiveContentMove() override { m_widget->beginInteractiveContentMove(); }
         void endInteractiveContentMove() override { m_widget->endInteractiveContentMove(); }
         bool isInteractiveContentMoveActive() const override
         {
@@ -573,31 +569,25 @@ public:
         void beginSnapSession() override { m_widget->beginTransformSnapSession(); }
         void syncMetricOverlays() override { m_widget->syncTransformMetricOverlays(); }
 
-        TransformHitResult hitTest(const QPointF& documentPos, qreal viewportZoom)
-            const override
+        TransformHitResult hitTest(const QPointF& documentPos, qreal viewportZoom) const override
         {
             return m_widget->transformController().hitTestDetailed(
                 toAether(documentPos), static_cast<float>(viewportZoom));
         }
-        bool pointerPress(
-            const QPointF& documentPos, qreal viewportZoom, Qt::KeyboardModifiers modifiers)
-            override
+        bool pointerPress(const QPointF& documentPos, qreal viewportZoom,
+            Qt::KeyboardModifiers modifiers) override
         {
             return m_widget->transformController().mousePress(
                 toAether(documentPos), static_cast<float>(viewportZoom), modifiers);
         }
-        bool pointerMove(
-            const QPointF& documentPos, qreal viewportZoom, Qt::KeyboardModifiers modifiers)
-            override
+        bool pointerMove(const QPointF& documentPos, qreal viewportZoom,
+            Qt::KeyboardModifiers modifiers) override
         {
             return m_widget->transformController().mouseMove(toAether(documentPos),
                 static_cast<float>(viewportZoom), modifiers, &m_widget->viewport());
         }
         void pointerRelease() override { m_widget->transformController().mouseRelease(); }
-        bool isDragging() const override
-        {
-            return m_widget->transformController().isDragging();
-        }
+        bool isDragging() const override { return m_widget->transformController().isDragging(); }
         bool hasPendingDiscreteActionAnimation() const override
         {
             return m_widget->transformController().hasPendingDiscreteActionAnimation();
@@ -644,7 +634,10 @@ public:
 
     class HitTestingCapability final : public CanvasHitTesting {
     public:
-        explicit HitTestingCapability(aether::OpenGLCanvasWidget* widget) : m_widget(widget) { }
+        explicit HitTestingCapability(aether::OpenGLCanvasWidget* widget)
+            : m_widget(widget)
+        {
+        }
 
         QUuid movableContentLayerAt(const QPointF& documentPos) const override
         {
@@ -657,21 +650,19 @@ public:
 
     class Presentation final : public CanvasPresentationCapability {
     public:
-        explicit Presentation(aether::OpenGLCanvasWidget* widget) : m_widget(widget) { }
+        explicit Presentation(aether::OpenGLCanvasWidget* widget)
+            : m_widget(widget)
+        {
+        }
 
         void setBrushCursorState(
-            bool visible, float centerX, float centerY, float radiusPx)
-            override
+            bool visible, float centerX, float centerY, float radiusPx) override
         {
             m_widget->setBrushCursorState(visible, centerX, centerY, radiusPx);
         }
-        bool isBrushCursorVisible() const override
-        {
-            return m_widget->isBrushCursorVisible();
-        }
+        bool isBrushCursorVisible() const override { return m_widget->isBrushCursorVisible(); }
         void setEyedropperCursorState(bool visible, float centerX, float centerY,
-            const std::optional<CanvasColorValue>& sampledColor)
-            override
+            const std::optional<CanvasColorValue>& sampledColor) override
         {
             QColor selectedColor(0, 0, 0, 255);
             if (sampledColor) {
@@ -680,14 +671,13 @@ public:
             }
             m_widget->setEyedropperCursorState(visible, centerX, centerY, selectedColor);
         }
-        void setToolCursorState(bool visible, float centerX, float centerY,
-            ToolCursorStyle style, ToolId tool)
-            override
+        void setToolCursorState(
+            bool visible, float centerX, float centerY, ToolCursorStyle style, ToolId tool) override
         {
             // The QRC asset mapping is an Aether integration detail; the
             // boundary carries the semantic tool (plan 7.12.6).
-            m_widget->setToolCursorState(visible, centerX, centerY, style,
-                badgeIconResourceForTool(tool));
+            m_widget->setToolCursorState(
+                visible, centerX, centerY, style, badgeIconResourceForTool(tool));
         }
         void setDisplayStyle(const CanvasDisplayStyle& style) override
         {
@@ -705,21 +695,18 @@ public:
             m_widget->setMotionPolicy(policy);
         }
         void setParameterCircleOverlayState(
-            std::vector<ParameterCircleOverlayState> circles)
-            override
+            std::vector<ParameterCircleOverlayState> circles) override
         {
             m_widget->setParameterCircleOverlayState(std::move(circles));
         }
 
         void setCanvasResizeOverlayState(bool active, const QRectF& selectionDocumentRect,
-            bool selectingOrMoving, bool suppressCanvasCornerRounding)
-            override
+            bool selectingOrMoving, bool suppressCanvasCornerRounding) override
         {
             m_widget->setCanvasResizeOverlayState(
                 active, selectionDocumentRect, selectingOrMoving, suppressCanvasCornerRounding);
         }
-        void setCanvasResizeSnapVisualState(const TransformSnapVisualState& state)
-            override
+        void setCanvasResizeSnapVisualState(const TransformSnapVisualState& state) override
         {
             m_widget->setCanvasResizeSnapVisualState(state);
         }
@@ -746,7 +733,10 @@ public:
 
     class Capture final : public CanvasCaptureCapability {
     public:
-        explicit Capture(aether::OpenGLCanvasWidget* widget) : m_widget(widget) { }
+        explicit Capture(aether::OpenGLCanvasWidget* widget)
+            : m_widget(widget)
+        {
+        }
 
         CanvasResult<ruwa::shared::imaging::PixelSurface> captureDocumentRegion(
             const CanvasDocumentCaptureRequest& request) override
@@ -920,7 +910,10 @@ private:
 /// (plan 7.30.1).
 class AetherHistoryFacade final : public CanvasHistoryFacade {
 public:
-    explicit AetherHistoryFacade(aether::OpenGLCanvasWidget* widget) : m_widget(widget) { }
+    explicit AetherHistoryFacade(aether::OpenGLCanvasWidget* widget)
+        : m_widget(widget)
+    {
+    }
 
     bool canUndo() const override { return m_widget->canvas().undoManager().canUndo(); }
     bool canRedo() const override { return m_widget->canvas().undoManager().canRedo(); }
@@ -939,10 +932,7 @@ public:
     {
         m_widget->canvas().undoManager().push(std::move(command));
     }
-    aether::UndoManager* legacyUndoManager() override
-    {
-        return &m_widget->canvas().undoManager();
-    }
+    aether::UndoManager* legacyUndoManager() override { return &m_widget->canvas().undoManager(); }
 
 private:
     aether::OpenGLCanvasWidget* m_widget = nullptr;
@@ -952,7 +942,10 @@ private:
 /// (plan 7.30.2).
 class AetherDocumentFacade final : public CanvasDocumentFacade {
 public:
-    explicit AetherDocumentFacade(aether::OpenGLCanvasWidget* widget) : m_widget(widget) { }
+    explicit AetherDocumentFacade(aether::OpenGLCanvasWidget* widget)
+        : m_widget(widget)
+    {
+    }
 
     bool clearLayerPixelContent(const QUuid& layerId) override
     {
@@ -973,16 +966,12 @@ public:
         return m_widget->replaceSmartLayerContents(
             layerId, std::move(contentGrid), sourcePath, sourceHash);
     }
-    bool applySmartContentDocument(
-        const QUuid& contentId, std::shared_ptr<ruwa::core::layers::SmartDocument> document)
-        override
+    bool applySmartContentDocument(const QUuid& contentId,
+        std::shared_ptr<ruwa::core::layers::SmartDocument> document) override
     {
         return m_widget->applySmartContentDocument(contentId, std::move(document));
     }
-    bool applyLayerMask(const QUuid& layerId) override
-    {
-        return m_widget->applyLayerMask(layerId);
-    }
+    bool applyLayerMask(const QUuid& layerId) override { return m_widget->applyLayerMask(layerId); }
     bool invertLayerMask(const QUuid& layerId) override
     {
         return m_widget->invertLayerMask(layerId);
@@ -1073,8 +1062,8 @@ AetherCanvasEngineQtBinding::AetherCanvasEngineQtBinding(
     auto* events = m_events.get();
     QObject::connect(m_widget, &aether::OpenGLCanvasWidget::initialized, events,
         &CanvasEngineQtEvents::engineReady);
-    QObject::connect(m_widget, &QOpenGLWidget::frameSwapped, events,
-        &CanvasEngineQtEvents::framePresented);
+    QObject::connect(
+        m_widget, &QOpenGLWidget::frameSwapped, events, &CanvasEngineQtEvents::framePresented);
     QObject::connect(m_widget, &aether::OpenGLCanvasWidget::surfaceResized, events,
         &CanvasEngineQtEvents::viewportMetricsChanged);
     QObject::connect(m_widget, &aether::OpenGLCanvasWidget::cameraZoomChanged, events,
@@ -1135,9 +1124,8 @@ AetherCanvasEngineQtBinding::AetherCanvasEngineQtBinding(
     // adapter only; the implementation never escapes.
     auto lastSnapshot = std::make_shared<CanvasViewSnapshot>();
     auto revision = std::make_shared<uint64_t>(0);
-    auto widgetSnapshot = [this]() -> CanvasViewSnapshot {
-        return buildCurrentViewSnapshot(m_widget);
-    };
+    auto widgetSnapshot
+        = [this]() -> CanvasViewSnapshot { return buildCurrentViewSnapshot(m_widget); };
     // Sender is the host widget, so these connections die with it in
     // shutdown() before the captured adapter pointer can dangle.
     QObject::connect(m_widget, &QOpenGLWidget::aboutToCompose, events,

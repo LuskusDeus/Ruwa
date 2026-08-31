@@ -2484,8 +2484,7 @@ void OpenGLCanvasWidget::setRasterizationConfirmCallback(
     m_rasterizationConfirmCallback = std::move(fn);
 }
 
-void OpenGLCanvasWidget::setPointerSource(
-    const ruwa::ui::workspace::CanvasPointerSource& source)
+void OpenGLCanvasWidget::setPointerSource(const ruwa::ui::workspace::CanvasPointerSource& source)
 {
     m_pointerSource = source;
 }
@@ -7564,7 +7563,6 @@ bool OpenGLCanvasWidget::commitFillPreviewResult()
         std::move(m_fillPreview.selectionRestore), m_fillPreview.maskTarget);
 }
 
-
 ruwa::ui::workspace::CanvasFillActivityState OpenGLCanvasWidget::currentFillActivityState() const
 {
     using ruwa::ui::workspace::CanvasFillActivityState;
@@ -7574,8 +7572,7 @@ ruwa::ui::workspace::CanvasFillActivityState OpenGLCanvasWidget::currentFillActi
     if (m_pendingFillKickoff.pending) {
         activity.phase = CanvasFillPhase::Queued;
         activity.layer = m_pendingFillKickoff.layerId;
-        activity.origin
-            = QPointF(m_pendingFillKickoff.origin.x, m_pendingFillKickoff.origin.y);
+        activity.origin = QPointF(m_pendingFillKickoff.origin.x, m_pendingFillKickoff.origin.y);
         activity.algorithm = m_pendingFillKickoff.algorithm;
         activity.waitingForFinalResult = m_pendingFillKickoff.forceFinalResultOnly;
         return activity;
@@ -8577,8 +8574,8 @@ bool OpenGLCanvasWidget::computeNavigatorContentBounds(QRect& outBounds)
     return outBounds.isValid() && !outBounds.isEmpty();
 }
 
-QImage OpenGLCanvasWidget::renderCompositedRegion(const QRect& worldRect, const QSize& targetSize,
-    bool includeCanvasBackground)
+QImage OpenGLCanvasWidget::renderCompositedRegion(
+    const QRect& worldRect, const QSize& targetSize, bool includeCanvasBackground)
 {
     if (!m_initialized || !m_renderer || !targetSize.isValid() || targetSize.isEmpty()) {
         return {};
@@ -9446,8 +9443,8 @@ OpenGLCanvasWidget::buildTransformPresentationState() const
 void OpenGLCanvasWidget::publishTransformPresentation()
 {
     auto state = buildTransformPresentationState();
-    const bool empty = state.snapLabels.empty() && state.dragSegments.empty()
-        && !state.dragAnchor.has_value();
+    const bool empty
+        = state.snapLabels.empty() && state.dragSegments.empty() && !state.dragAnchor.has_value();
     if (empty && !m_transformPresentationPublished) {
         return;
     }
@@ -10514,11 +10511,11 @@ void OpenGLCanvasWidget::cancelTransform(std::optional<bool> moveOnlyStateForOve
 void OpenGLCanvasWidget::initializeGL()
 {
     if (!initializeOpenGLFunctions()) {
-        m_lastFailure = ruwa::ui::workspace::CanvasEngineDiagnostic {
-            QStringLiteral("GLFunctions"), QStringLiteral("OpenGL functions unavailable") };
+        m_lastFailure = ruwa::ui::workspace::CanvasEngineDiagnostic { QStringLiteral("GLFunctions"),
+            QStringLiteral("OpenGL functions unavailable") };
         qCritical() << "Canvas renderer initialization failed: OpenGL functions unavailable";
-        emit rendererFailed(QStringLiteral("GLFunctions"),
-            QStringLiteral("OpenGL functions unavailable"));
+        emit rendererFailed(
+            QStringLiteral("GLFunctions"), QStringLiteral("OpenGL functions unavailable"));
         return;
     }
 
@@ -10536,8 +10533,7 @@ void OpenGLCanvasWidget::initializeGL()
 
     m_renderer = std::make_unique<GLRenderer>(static_cast<QOpenGLFunctions_4_5_Core*>(this));
 
-    const auto reportInitializationFailure = [this](const QString& code,
-                                                 const QString& message) {
+    const auto reportInitializationFailure = [this](const QString& code, const QString& message) {
         // Failure presentation is application policy (plan 7.15.5): record the
         // owned diagnostic, log, and report — no renderer-owned dialog.
         m_lastFailure = ruwa::ui::workspace::CanvasEngineDiagnostic { code, message };
@@ -10560,8 +10556,8 @@ void OpenGLCanvasWidget::initializeGL()
 
     auto result = m_renderer->initialize(finalShaderDir);
     if (!result) {
-        reportInitializationFailure(QStringLiteral("RendererInit"),
-            QString::fromStdString(result.error().message));
+        reportInitializationFailure(
+            QStringLiteral("RendererInit"), QString::fromStdString(result.error().message));
         return;
     }
 
@@ -10577,8 +10573,8 @@ void OpenGLCanvasWidget::initializeGL()
     auto overlayResult
         = m_overlayManager->initialize(static_cast<QOpenGLFunctions_4_5_Core*>(this));
     if (!overlayResult) {
-        reportInitializationFailure(QStringLiteral("OverlayInit"),
-            QString::fromStdString(overlayResult.error().message));
+        reportInitializationFailure(
+            QStringLiteral("OverlayInit"), QString::fromStdString(overlayResult.error().message));
         m_overlayManager->shutdown();
         m_overlayManager.reset();
         return;
@@ -10646,15 +10642,14 @@ void OpenGLCanvasWidget::paintGL_updateCameraAndEmitSignals()
     // high-refresh displays where pointer poll rate and VSync rate don't
     // divide evenly. The pointer source is injected (plan 7.15.6).
     if (m_panSamplingActive) {
-        const std::optional<QPointF> currentPointer
-            = m_pointerSource.systemPointerViewportLocal
-                ? m_pointerSource.systemPointerViewportLocal()
-                : std::nullopt;
-        if (currentPointer && m_panSamplingLastPointerPos && *currentPointer != *m_panSamplingLastPointerPos) {
+        const std::optional<QPointF> currentPointer = m_pointerSource.systemPointerViewportLocal
+            ? m_pointerSource.systemPointerViewportLocal()
+            : std::nullopt;
+        if (currentPointer && m_panSamplingLastPointerPos
+            && *currentPointer != *m_panSamplingLastPointerPos) {
             auto& cam = m_viewport.camera();
             const aether::Vector2 viewportSize = m_viewport.size();
-            const aether::Vector2 prevScreen(
-                static_cast<float>(m_panSamplingLastPointerPos->x()),
+            const aether::Vector2 prevScreen(static_cast<float>(m_panSamplingLastPointerPos->x()),
                 static_cast<float>(m_panSamplingLastPointerPos->y()));
             const aether::Vector2 currScreen(
                 static_cast<float>(currentPointer->x()), static_cast<float>(currentPointer->y()));
@@ -11218,10 +11213,9 @@ void OpenGLCanvasWidget::paintGL_syncCursorToLivePointer()
     // (plan 7.15.6): the direct WinTab position while native routing owns the
     // stylus, the system pointer otherwise, nullopt while the pointer is not
     // ours or is off the canvas.
-    const std::optional<QPointF> renderedPointer
-        = m_pointerSource.renderedPointerViewportLocal
-            ? m_pointerSource.renderedPointerViewportLocal()
-            : std::nullopt;
+    const std::optional<QPointF> renderedPointer = m_pointerSource.renderedPointerViewportLocal
+        ? m_pointerSource.renderedPointerViewportLocal()
+        : std::nullopt;
     if (!renderedPointer) {
         // Off the canvas. Visibility is the cursor manager's call, not this
         // frame's — leave the last position alone and let it hide the cursor.

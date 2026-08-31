@@ -34,10 +34,7 @@ struct OrientationResolution {
     float azimuthUnitsPerDegree = 0.0f;
     float altitudeUnitsPerDegree = 0.0f;
 
-    bool isValid() const
-    {
-        return azimuthUnitsPerDegree > 0.0f && altitudeUnitsPerDegree > 0.0f;
-    }
+    bool isValid() const { return azimuthUnitsPerDegree > 0.0f && altitudeUnitsPerDegree > 0.0f; }
 };
 
 #ifdef Q_OS_WIN
@@ -342,8 +339,8 @@ bool WinTabBackend::attach(void* hwnd)
     context.lcOutExtY = -GetSystemMetrics(SM_CYVIRTUALSCREEN) * kScreenCoordinateScale;
 
     m_data->context = m_data->wtOpenA(window, &context, TRUE);
-    m_data->tiltPacketData = m_data->context != nullptr
-        && (context.lcPktData & kTiltPacketData) == kTiltPacketData;
+    m_data->tiltPacketData
+        = m_data->context != nullptr && (context.lcPktData & kTiltPacketData) == kTiltPacketData;
     m_data->extendedPacketData = m_data->tiltPacketData;
     if (m_data->context && !m_data->tiltPacketData) {
         // A context that silently grants a different field layout cannot be
@@ -441,8 +438,7 @@ bool WinTabBackend::attach(void* hwnd)
             static_cast<int>(pressureAxis.axMax) };
         return range.isValid() ? range : PressureRange {};
     };
-    const auto orientationResolutionForDevice
-        = [this](UINT device) -> OrientationResolution {
+    const auto orientationResolutionForDevice = [this](UINT device) -> OrientationResolution {
         AXIS orientationAxes[3] {};
         if (m_data->wtInfoA(WTI_DEVICES + device, DVC_ORIENTATION, orientationAxes) == 0) {
             return {};
@@ -450,10 +446,9 @@ bool WinTabBackend::attach(void* hwnd)
         // TU_CIRCLE resolution is expressed as raw increments per full turn,
         // while ORIENTATION needs conversion to degrees.
         constexpr float kDegreesPerCircle = 360.0f;
-        OrientationResolution resolution {
-            fixed32ToFloat(orientationAxes[0].axResolution) / kDegreesPerCircle,
-            fixed32ToFloat(orientationAxes[1].axResolution) / kDegreesPerCircle
-        };
+        OrientationResolution resolution { fixed32ToFloat(orientationAxes[0].axResolution)
+                / kDegreesPerCircle,
+            fixed32ToFloat(orientationAxes[1].axResolution) / kDegreesPerCircle };
         return resolution.isValid() ? resolution : OrientationResolution {};
     };
 
@@ -471,8 +466,7 @@ bool WinTabBackend::attach(void* hwnd)
         if (m_data->wtInfoA(WTI_INTERFACE, IFC_NDEVICES, &deviceCount) > 0) {
             for (UINT device = 0; device < deviceCount; ++device) {
                 const PressureRange range = pressureRangeForDevice(device);
-                const OrientationResolution orientation
-                    = orientationResolutionForDevice(device);
+                const OrientationResolution orientation = orientationResolutionForDevice(device);
                 if (!range.isValid() && !orientation.isValid()) {
                     continue;
                 }
@@ -540,9 +534,8 @@ bool WinTabBackend::attach(void* hwnd)
             + QString::number(context.lcOptions, 16) + QStringLiteral(" lcPktData=0x")
             + QString::number(context.lcPktData, 16) + QStringLiteral(" requestedPktData=0x")
             + QString::number(m_data->tiltPacketData ? kTiltPacketData
-                                                     : m_data->extendedPacketData
-                    ? kExtendedPacketData
-                    : kBasicPacketData,
+                    : m_data->extendedPacketData     ? kExtendedPacketData
+                                                     : kBasicPacketData,
                 16)
             + QStringLiteral(" lcMoveMask=0x") + QString::number(context.lcMoveMask, 16)
             + QStringLiteral(" lcDevice=") + QString::number(context.lcDevice));
@@ -633,8 +626,8 @@ bool WinTabBackend::handleNativeEvent(void* message)
         // be lost when WT_PACKET messages are dropped from the Windows message queue.
         constexpr int kDrainChunkSize = 64;
 
-        const auto processPacket
-            = [this](const Packet& packet, bool hasMetadata, const ORIENTATION* orientation) {
+        const auto processPacket = [this](const Packet& packet, bool hasMetadata,
+                                       const ORIENTATION* orientation) {
             // A packet sitting on the exact origin of the mapped output area while
             // reporting no contact and no buttons is not a position a user can aim
             // at. It is what some drivers emit for a cursor they have stopped

@@ -162,9 +162,9 @@ void notifyHostAfterApply(
 //   a p p l y R e s i z e   ( s t a t i c )
 // --------------------------------------------------------------------------
 
-CanvasResizeCommand::Snapshot CanvasResizeCommand::applyResize(Canvas& canvas,
-    Viewport& viewport, ruwa::core::layers::LayerModel* layerModel, QSize oldSize, int offsetX,
-    int offsetY, QSize newSize, const Hooks& hooks)
+CanvasResizeCommand::Snapshot CanvasResizeCommand::applyResize(Canvas& canvas, Viewport& viewport,
+    ruwa::core::layers::LayerModel* layerModel, QSize oldSize, int offsetX, int offsetY,
+    QSize newSize, const Hooks& hooks)
 {
     Snapshot snapshot;
 
@@ -337,8 +337,7 @@ void CanvasResizeCommand::redo()
 
     rebuildIndicesAndMarkDirty(canvas, m_layerModel, pixelJobs, transformedLayers, oldIndexedKeys);
 
-    m_viewport.camera().move(
-        -static_cast<float>(m_offsetX), -static_cast<float>(m_offsetY));
+    m_viewport.camera().move(-static_cast<float>(m_offsetX), -static_cast<float>(m_offsetY));
 
     notifyHostAfterApply(m_hooks, m_newSize, /*sizeChanged=*/true, /*geometryChanged=*/true);
 }

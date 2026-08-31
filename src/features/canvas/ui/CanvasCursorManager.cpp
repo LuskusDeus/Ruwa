@@ -443,7 +443,8 @@ void CanvasCursorManager::applyOverlayState(bool overCanvas)
         if (m_activeOverlay) {
             m_activeOverlay->hide();
         }
-    } else if (overCanvas && (m_useRenderedBrushCursor || m_useRenderedEyedropperCursor || m_useRenderedToolCursor)) {
+    } else if (overCanvas
+        && (m_useRenderedBrushCursor || m_useRenderedEyedropperCursor || m_useRenderedToolCursor)) {
         applyCursor(QCursor(Qt::BlankCursor));
         if (m_activeOverlay) {
             m_activeOverlay->hide();

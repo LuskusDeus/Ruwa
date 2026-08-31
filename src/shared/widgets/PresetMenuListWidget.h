@@ -43,9 +43,8 @@ class PresetMenuListWidget : public QWidget, public ruwa::ui::widgets::IContextM
     Q_OBJECT
 
 public:
-    using ItemMoveHandler
-        = std::function<bool(const QVariant& itemData, const QVariant& targetGroupData,
-            int targetIndex)>;
+    using ItemMoveHandler = std::function<bool(
+        const QVariant& itemData, const QVariant& targetGroupData, int targetIndex)>;
 
     explicit PresetMenuListWidget(QWidget* parent = nullptr);
     ~PresetMenuListWidget() override;

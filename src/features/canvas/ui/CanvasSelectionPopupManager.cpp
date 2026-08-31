@@ -165,8 +165,7 @@ void CanvasSelectionPopupManager::updateSelectionActionPopup(bool forceShow)
         return;
     }
 
-    const bool hasSelection
-        = m_panel->m_engineBinding->session().editing().hasSelectionMask();
+    const bool hasSelection = m_panel->m_engineBinding->session().editing().hasSelectionMask();
     if (!hasSelection) {
         m_panel->m_selectionActionPopupDismissed = false;
         m_panel->m_selectionPopupWorldCenterValid = false;

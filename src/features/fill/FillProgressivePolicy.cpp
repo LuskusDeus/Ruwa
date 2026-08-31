@@ -46,8 +46,8 @@ bool progressiveMaskHasPixel(const aether::FloodFillResult::RawTileMap& maskTile
 bool canFillProgressivePixel(const aether::FloodFillResult::RawTileMap& sourceTiles,
     const aether::FloodFillResult::RawTileMap& selectionMaskTiles,
     const aether::FloodFillResult::RawTileMap& filledMaskTiles,
-    const aether::PremultPixel& seedPixel, ruwa::core::canvas::CanvasFillAlgorithm algorithm,
-    int x, int y, int canvasW, int canvasH, aether::TilePixelFormat contentFormat)
+    const aether::PremultPixel& seedPixel, ruwa::core::canvas::CanvasFillAlgorithm algorithm, int x,
+    int y, int canvasW, int canvasH, aether::TilePixelFormat contentFormat)
 {
     if (!progressiveWithinCanvas(x, y, canvasW, canvasH)) {
         return false;
@@ -75,8 +75,8 @@ bool canFillProgressivePixel(const aether::FloodFillResult::RawTileMap& sourceTi
 }
 
 bool canApproxFillPixel(const aether::TileGrid* sourceGrid, const aether::TileGrid* selectionMask,
-    const aether::PremultPixel& seedPixel, ruwa::core::canvas::CanvasFillAlgorithm algorithm,
-    int x, int y, int canvasW, int canvasH)
+    const aether::PremultPixel& seedPixel, ruwa::core::canvas::CanvasFillAlgorithm algorithm, int x,
+    int y, int canvasW, int canvasH)
 {
     if (!sourceGrid || x < 0 || y < 0 || x >= canvasW || y >= canvasH) {
         return false;

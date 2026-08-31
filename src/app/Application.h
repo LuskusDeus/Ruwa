@@ -45,10 +45,7 @@ public:
     /// The selected canvas engine runtime (composition-root owned). Engine
     /// bootstrap/warm-up lives behind this neutral interface; generic
     /// application code never names the concrete engine (plan 7.31.1).
-    ui::workspace::CanvasEngineQtRuntime* engineRuntime() const
-    {
-        return m_engineRuntime.get();
-    }
+    ui::workspace::CanvasEngineQtRuntime* engineRuntime() const { return m_engineRuntime.get(); }
 
     // Initialize managers (fonts, themes, commands)
     // Called by StartupController during startup sequence

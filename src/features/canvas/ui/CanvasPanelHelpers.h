@@ -83,9 +83,8 @@ Qt::CursorShape cursorForTransformHandle(const TransformHitResult& hit,
 /// signs arrive as explicit flags instead of a TransformState reference
 /// (plan 7.6.22 — input code holds no transform state object).
 Qt::CursorShape cursorForTransformHandle(const TransformHitResult& hit,
-    bool cornersActAsRotationHandles, bool scaleMirroredHorizontal,
-    bool scaleMirroredVertical, bool canvasContentFlipHorizontal,
-    bool canvasContentFlipVertical);
+    bool cornersActAsRotationHandles, bool scaleMirroredHorizontal, bool scaleMirroredVertical,
+    bool canvasContentFlipHorizontal, bool canvasContentFlipVertical);
 Qt::CursorShape cursorForTransformHandle(
     TransformHandle handle, bool cornersActAsRotationHandles = false);
 

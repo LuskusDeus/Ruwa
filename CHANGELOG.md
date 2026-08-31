@@ -15,6 +15,97 @@ a release.
 
 ## [Unreleased]
 
+## [0.3.4-alpha] — 2026-08-31 — "Strokes and details"
+
+This release adds brush dynamics driven by pen tilt and stroke speed, copying a
+selection to a new layer, and radius controls for effects on the canvas.
+
+### Added
+
+- Pen Tilt and Stroke Speed are new brush dynamics sources with editable response
+  curves. Pen Tilt uses the direction of the tilted pen on supported tablets; speed is
+  measured in screen space so zoom does not change the response to the same hand
+  movement.
+- A Smoothing page lets each brush parameter filter changes in its dynamics, with a
+  strength control and a response curve. At zero strength the filter is disabled.
+- The Brushes panel offers cards or a list with brush names, preview sizes from 50% to
+  200%, and horizontal or vertical pack navigation. These options are available in the
+  panel context menu and saved with the workspace layout.
+- Drag brushes to reorder them within a pack or move them between packs, both in the
+  Brushes panel and in the Brush Editor. Favorites keep a separate order without
+  rearranging their source packs.
+- Brush packs can also be reordered by dragging. Brush and pack order changes are saved
+  and shared across workspace tabs.
+- Layer via Copy (Ctrl+J) copies selected pixels from a raster layer to a new layer at
+  the same position, without using the clipboard. With no pixel selection, it still
+  duplicates the selected layers. Layer via Cut (Ctrl+Shift+J) moves the selected pixels
+  to a new layer in one undo step.
+- The Edit menu adds 90-degree and 180-degree rotations and direct access to Warp.
+  Rotation and flip commands act on the pixel selection when one exists, or on the
+  selected layer otherwise, and also work during an active transform.
+- Canvas Resize snaps its frame to finite canvas edges and visible layer or group bounds
+  while drawing, moving or resizing it. It uses the existing canvas and layer snap
+  settings and displays alignment guides.
+- Selecting Twirl, Pinch or Ripple displays a radius ring on the canvas. Drag the ring
+  to change the radius with a live preview; the corresponding panel value stays in sync
+  and the drag creates one undo step.
+- The effect SDK advances to ABI 1.1 with optional declarative canvas controls. The host
+  accepts ABI 1.0 descriptors through their struct_size prefix; plugins can opt into
+  radius controls without implementing a separate widget.
+- Regression coverage was added for brush blending, stroke input, selection extraction,
+  multi-layer edits, transform actions, snapping, fill preflight and the shader
+  catalogue.
+
+### Changed
+
+- Copy Merged (Ctrl+Shift+C) replaces the Camera command. It copies the visible result
+  inside the selection, including layer effects and transparency, and respects soft
+  selection edges. Custom shortcuts assigned to Camera are retained.
+- Effect cards now highlight the selected effect. Cards have a distinct header and
+  parameter area, and can be reordered by dragging the header as well as the grip.
+- Settings and first-run setup now offer interface scales of 85%, 100%, 125%, 175% and
+  225%.
+- The theme editor places the theme name and favorite toggle beside Apply and Save.
+  Names can be edited there, are limited to 32 characters, and receive a unique suffix
+  when needed.
+- Fill (Shift+F5) now opens a confirmation window before filling the selection with the
+  current foreground colour.
+- Large top-bar menus no longer use an extra opacity pass during their opening and
+  closing animations.
+- Glass has stronger colour dispersion, and the reset-settings action uses the theme
+  colour for destructive actions.
+- Canvas input, navigation, capture and presentation now use a renderer-neutral engine
+  contract backed by the existing Aether/OpenGL renderer. This is the first stage of the
+  separation: document/history facades and five renderer-dependent UI files remain
+  transitional, as listed in docs/renderer-boundary-quarantine.md. No alternative
+  renderer ships in this release.
+- Shader discovery and startup warm-up validate the full runtime shader catalogue,
+  including overlays and selections.
+
+### Fixed
+
+- At 0% stabilization, strokes no longer retain the extra geometry smoothing delay. With
+  stabilization enabled, the stroke catches up to the pointer more evenly.
+- Brush blend modes now blend against pixels in the target layer, rather than the merged
+  visible image. Live previews and finished strokes use the same result, including on
+  transparent areas and with opacity, soft selections or alpha lock.
+- Fill and Delete Content now process all selected editable layers, including layers
+  inside selected groups. Hidden or locked layers and their descendants are skipped;
+  required rasterization is confirmed before any edits. The whole operation is one undo
+  step. Fill follows mask focus, while Delete Content edits layer pixels.
+- Delete no longer swallows text edits in input fields. In the Layers panel it deletes
+  the selected layer or mask; on the canvas it deletes selected pixels.
+- Interface fonts and controls now follow Ruwa's scale consistently. Sidebars and
+  dropdowns keep the correct geometry after scaling.
+- Floating panels are visible again after restoring a workspace layout.
+- Top-bar menus close reliably on outside clicks, including on the frameless window
+  border.
+- The Welcome banner crop window displays liquid glass again.
+
+### Removed
+
+- Unused backdrop, blur and smudge shader files have been removed.
+
 ## [0.3.3-alpha] — 2026-08-24 — "Six months of Ruwa: export rebuilt, axis-locked strokes, and glass across the workspace"
 
 Ruwa's first alpha was released six months ago today. Export as is now a

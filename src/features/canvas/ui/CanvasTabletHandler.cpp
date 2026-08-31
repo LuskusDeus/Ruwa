@@ -66,8 +66,7 @@ ruwa::core::brushes::BrushInputDynamics inputDynamicsFromScreenTilt(
 
     constexpr double kPi = 3.14159265358979323846;
     const aether::Vector2 origin = host->mapInputToViewportWorld(globalPos);
-    const aether::Vector2 projected
-        = host->mapInputToViewportWorld(globalPos + screenDirection);
+    const aether::Vector2 projected = host->mapInputToViewportWorld(globalPos + screenDirection);
     const float worldDx = projected.x - origin.x;
     const float worldDy = projected.y - origin.y;
     if (std::hypot(worldDx, worldDy) <= 0.000001f) {
@@ -320,8 +319,8 @@ void CanvasTabletHandler::handleTabletEvent(QTabletEvent* event)
                 m_strokeTimestampBaseMs = event->timestamp();
                 m_lastTabletElapsedSec = 0.0f;
                 m_host->inputPainting()->beginStroke(worldPos.x, worldPos.y, pressure,
-                    StrokeInputDevice::Stylus,
-                    event->modifiers().testFlag(Qt::ShiftModifier), inputDynamics);
+                    StrokeInputDevice::Stylus, event->modifiers().testFlag(Qt::ShiftModifier),
+                    inputDynamics);
                 m_host->setInputDrawingActive(m_host->inputPainting()->isDrawing());
                 if (!m_host->isInputDrawingActive()) {
                     m_host->showBlockedDrawMessageForSelectedLayer();
@@ -355,8 +354,8 @@ void CanvasTabletHandler::handleTabletEvent(QTabletEvent* event)
                 m_strokeTimestampBaseMs = event->timestamp();
                 m_lastTabletElapsedSec = 0.0f;
                 m_host->inputPainting()->beginStroke(worldPos.x, worldPos.y, pressure,
-                    StrokeInputDevice::Stylus,
-                    event->modifiers().testFlag(Qt::ShiftModifier), inputDynamics);
+                    StrokeInputDevice::Stylus, event->modifiers().testFlag(Qt::ShiftModifier),
+                    inputDynamics);
                 m_host->setInputDrawingActive(m_host->inputPainting()->isDrawing());
                 if (!m_host->isInputDrawingActive()) {
                     m_host->showBlockedDrawMessageForSelectedLayer();
@@ -482,8 +481,7 @@ void CanvasTabletHandler::handleTabletEvent(QTabletEvent* event)
                         const float pktElapsed
                             = prevElapsed + span * (static_cast<float>(idx) / total);
                         const auto packetInputDynamics = pkt.tiltAvailable
-                            ? inputDynamicsFromScreenTilt(
-                                  m_host, pkt.globalPos, pkt.tiltVector)
+                            ? inputDynamicsFromScreenTilt(m_host, pkt.globalPos, pkt.tiltVector)
                             : inputDynamics;
                         // Queued, not rasterized inline: this burst is however
                         // many packets the driver buffered since the last Qt
@@ -491,18 +489,15 @@ void CanvasTabletHandler::handleTabletEvent(QTabletEvent* event)
                         // the event handler. The queue applies the frame budget;
                         // the real sample below drains it in the same call, so
                         // nothing is postponed.
-                        m_host->inputPainting()->queueStrokeAtElapsed(
-                            wp.x, wp.y, pkt.pressure, pktElapsed,
-                            StrokeInputDevice::Stylus,
-                            packetInputDynamics);
+                        m_host->inputPainting()->queueStrokeAtElapsed(wp.x, wp.y, pkt.pressure,
+                            pktElapsed, StrokeInputDevice::Stylus, packetInputDynamics);
                     }
                 }
             }
 
             aether::Vector2 worldPos = m_host->mapInputToViewportWorld(globalPosF);
-            m_host->inputPainting()->continueStrokeAtElapsed(
-                worldPos.x, worldPos.y, pressure, curElapsedSec,
-                StrokeInputDevice::Stylus, inputDynamics);
+            m_host->inputPainting()->continueStrokeAtElapsed(worldPos.x, worldPos.y, pressure,
+                curElapsedSec, StrokeInputDevice::Stylus, inputDynamics);
             m_lastTabletElapsedSec = curElapsedSec;
             m_host->notifyCanvasContentChanged();
             event->accept();

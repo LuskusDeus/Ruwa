@@ -512,8 +512,8 @@ public:
     ruwa::shared::imaging::PixelSurface captureCanvasSurface(
         const ruwa::ui::workspace::CanvasDocumentCaptureRequest& request);
 
-    QImage renderCompositedRegion(const QRect& worldRect, const QSize& targetSize,
-        bool includeCanvasBackground = true);
+    QImage renderCompositedRegion(
+        const QRect& worldRect, const QSize& targetSize, bool includeCanvasBackground = true);
     bool computeExportContentBounds(QRect& outBounds);
     bool computeNavigatorContentBounds(QRect& outBounds);
 
@@ -576,8 +576,7 @@ signals:
     /// Renderer initialization failure with an owned diagnostic (plan 7.15.5).
     void rendererFailed(const QString& code, const QString& message);
     /// Transform metric facts for application-owned QWidget presentation.
-    void transformPresentationChanged(
-        const ruwa::ui::workspace::TransformPresentationState& state);
+    void transformPresentationChanged(const ruwa::ui::workspace::TransformPresentationState& state);
     void transformModeEntered();
     void transformModeExited(bool applied);
     void cameraZoomChanged(qreal zoom);

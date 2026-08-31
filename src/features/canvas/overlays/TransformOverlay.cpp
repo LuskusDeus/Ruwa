@@ -326,8 +326,8 @@ void TransformOverlay::setPresentationStyle(
     flipped.resize(static_cast<size_t>(icon.bytesPerLine()) * icon.height());
     for (int y = 0; y < icon.height(); ++y) {
         const uint8_t* src = icon.scanLine(y);
-        uint8_t* dst = flipped.data()
-            + static_cast<size_t>(icon.height() - 1 - y) * icon.bytesPerLine();
+        uint8_t* dst
+            = flipped.data() + static_cast<size_t>(icon.height() - 1 - y) * icon.bytesPerLine();
         std::memcpy(dst, src, static_cast<size_t>(icon.bytesPerLine()));
     }
 

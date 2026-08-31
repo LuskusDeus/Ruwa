@@ -216,13 +216,9 @@ QWidget* CanvasPanel::createContent()
             m_overlayLayoutManager->layoutToolStateOverlay();
         });
     connect(m_toolStateOverlay, &ruwa::ui::widgets::CanvasToolStateOverlay::undoRequested, this,
-        [this]() {
-            historyUndo();
-        });
+        [this]() { historyUndo(); });
     connect(m_toolStateOverlay, &ruwa::ui::widgets::CanvasToolStateOverlay::redoRequested, this,
-        [this]() {
-            historyRedo();
-        });
+        [this]() { historyRedo(); });
     connect(m_toolStateOverlay, &ruwa::ui::widgets::CanvasToolStateOverlay::copyCanvasRequested,
         this, [this]() { copyCanvasToClipboard(); });
     connect(m_toolStateOverlay,

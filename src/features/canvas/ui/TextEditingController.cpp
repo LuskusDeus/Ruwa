@@ -1059,8 +1059,7 @@ void TextEditingController::updateOverlayState()
 
 void TextEditingController::pushOverlayState()
 {
-    if (!m_active || !m_panel || !m_panel->m_layerModel || !m_panel->m_engineBinding
-        || !m_editor) {
+    if (!m_active || !m_panel || !m_panel->m_layerModel || !m_panel->m_engineBinding || !m_editor) {
         return;
     }
     auto* layer = m_panel->m_layerModel->layerById(m_layerId);
