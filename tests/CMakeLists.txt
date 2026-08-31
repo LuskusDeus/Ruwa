@@ -67,7 +67,11 @@ include(Catch)
 # the directory of the imported Qt6::Core target (its bin/) plus the compiler's
 # own bin/ (libstdc++ / libgcc / libwinpthread).
 get_filename_component(RUWA_MINGW_BIN_DIR "${CMAKE_CXX_COMPILER}" DIRECTORY)
+
+# LayerData tests need QGuiApplication for QPixmap, but no display or GL context.
+# Use Qt's offscreen platform so CTest also works on headless Linux runners.
 catch_discover_tests(RuwaTests
+    PROPERTIES ENVIRONMENT "QT_QPA_PLATFORM=offscreen"
     DL_PATHS
         "$<TARGET_FILE_DIR:Qt6::Core>"
         "${RUWA_MINGW_BIN_DIR}"
