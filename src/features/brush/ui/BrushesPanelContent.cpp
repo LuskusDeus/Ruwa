@@ -14,7 +14,6 @@
 #include "shared/widgets/layout/AnimatedStackedWidget.h"
 #include "shared/widgets/layout/SmoothScrollArea.h"
 #include "shared/widgets/reorderlist/ListDragDrop.h"
-#include "shell/docking/widgets/DockPanel.h"
 
 #include <QAbstractButton>
 #include <QApplication>
@@ -209,6 +208,26 @@ void BrushesPanelContent::setCanvasPanel(CanvasPanel* canvasPanel)
         [this](ToolId, const QString&) { syncSelectionFromCanvas(); });
 
     syncSelectionFromCanvas();
+}
+
+void BrushesPanelContent::setBrushButtonBaseSize(int size)
+{
+    const int clamped = qMax(1, size);
+    if (m_brushButtonBaseSize == clamped) {
+        return;
+    }
+
+    if (m_brushDragActive || m_brushDragSettling) {
+        cleanupBrushDrag();
+    }
+    m_brushButtonBaseSize = clamped;
+    for (FilterPage& page : m_filterPages) {
+        for (BrushPackListSection* section : std::as_const(page.sections)) {
+            section->setBrushButtonBaseSize(m_brushButtonBaseSize);
+        }
+    }
+    // SmoothScrollArea observes the child resize/layout events and the flow's
+    // height callbacks; do not force the final geometry ahead of the animation.
 }
 
 void BrushesPanelContent::reloadFromManager()
@@ -663,13 +682,16 @@ void BrushesPanelContent::onThemeChanged()
     if (m_brushDragActive) {
         cleanupBrushDrag();
     }
-    const QMargins outerMargins = ruwa::ui::docking::DockPanel::contentPadding();
-    const int spacing = ruwa::ui::core::ThemeManager::instance().scaled(8);
+    const auto& theme = ruwa::ui::core::ThemeManager::instance();
+    const int margin = theme.scaled(kBrushesPanelContentMargin);
+    // Keep the panel inset outside the scroll area, as in LayersPanel, so it
+    // does not add another gap between the content and the scrollbar.
+    layout()->setContentsMargins(margin, margin, margin, margin);
+    const int spacing = theme.scaled(8);
     for (FilterPage& page : m_filterPages) {
         if (!page.scrollLayout) {
             continue;
         }
-        page.scrollLayout->setContentsMargins(outerMargins);
         page.scrollLayout->setSpacing(spacing);
     }
 
@@ -1117,7 +1139,7 @@ void BrushesPanelContent::createFilterPage(const QString& pageKey, int stackInde
     page.scrollContent->setAutoFillBackground(false);
     page.scrollContent->setStyleSheet(QStringLiteral("background: transparent;"));
     page.scrollLayout = new QVBoxLayout(page.scrollContent);
-    page.scrollLayout->setContentsMargins(ruwa::ui::docking::DockPanel::contentPadding());
+    page.scrollLayout->setContentsMargins(0, 0, 0, 0);
     page.scrollLayout->setSpacing(ruwa::ui::core::ThemeManager::instance().scaled(8));
     page.scrollArea->setWidget(page.scrollContent);
 
@@ -1286,6 +1308,7 @@ void BrushesPanelContent::addPackSection(
     const QString& pageKey, FilterPage& page, const BrushListPackData& pack, bool forceExpanded)
 {
     auto* section = new BrushPackListSection(page.scrollContent);
+    section->setBrushButtonBaseSize(m_brushButtonBaseSize);
     section->setPackData(pack);
     section->setBrushDragEnabled(true);
     section->setExpanded(forceExpanded || !s_collapsedPackIds.contains(pack.id), false);
@@ -1365,8 +1388,8 @@ void BrushesPanelContent::refreshScrollGeometry(const QString& pageKey)
         return;
     }
 
-    pageIt->scrollContent->adjustSize();
-    pageIt->scrollContent->updateGeometry();
+    // SmoothScrollArea activates the layout and owns the content size. An
+    // adjustSize() here would shrink it before the viewport resizes it again.
     pageIt->scrollArea->refreshScrollGeometry();
 }
 

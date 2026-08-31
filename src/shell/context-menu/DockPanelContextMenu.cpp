@@ -2,17 +2,19 @@
 
 #include "DockPanelContextMenu.h"
 
+#include "features/brush/ui/BrushesPanel.h"
 #include "features/layers/ui/LayersPanel.h"
 #include "features/tools/ToolsPanel.h"
 #include "shell/docking/widgets/DockPanel.h"
 #include "shared/resources/IconProvider.h"
 #include "shared/widgets/BaseStyledWidget.h"
 #include "shared/widgets/inputs/ToggleSwitch.h"
+#include "shared/widgets/inputs/ProgressHandleSlider.h"
 #include "shared/widgets/HorizontalSeparator.h"
 #include "features/theme/manager/ThemeManager.h"
 
 #include <QGridLayout>
-#include <QHBoxLayout>
+#include <QFontMetrics>
 #include <QLabel>
 #include <QMouseEvent>
 #include <QSignalBlocker>
@@ -21,6 +23,10 @@
 namespace ruwa::ui::widgets {
 
 namespace {
+
+constexpr int kIconColumn = 0;
+constexpr int kLabelColumn = 2;
+constexpr int kControlColumn = 4;
 
 class BehaviorToggleRow final : public QWidget {
 public:
@@ -64,8 +70,6 @@ DockPanelContextMenu::DockPanelContextMenu(QWidget* parent)
 
     connect(&ruwa::ui::core::ThemeManager::instance(), &ruwa::ui::core::ThemeManager::themeChanged,
         this, &DockPanelContextMenu::applyChrome);
-
-    updateMenuSize();
 }
 
 void DockPanelContextMenu::applyChrome()
@@ -86,6 +90,16 @@ void DockPanelContextMenu::applyChrome()
         }
     }
 
+    if (m_hudSizeSlider) {
+        m_hudSizeSlider->setFixedHeight(theme.scaled(22));
+        m_hudSizeSlider->setMinimumWidth(theme.scaled(180));
+        m_hudSizeLabel->setFont(theme.font(ruwa::ui::core::ThemeFontRole::Body));
+        QPalette palette = m_hudSizeLabel->palette();
+        palette.setColor(QPalette::WindowText, colors.textMuted);
+        m_hudSizeLabel->setPalette(palette);
+        m_sepBeforeBrushes->setMargins(theme.scaled(4), theme.scaled(4));
+    }
+
     const int rr = theme.scaled(4);
     const QString hoverBg = colors.surfaceHover().name(QColor::HexArgb);
     const QString sheet = QStringLiteral(
@@ -101,6 +115,10 @@ void DockPanelContextMenu::applyChrome()
     }
 
     updateToggleRowsChrome();
+    updateControlColumns();
+    // Re-measure after fonts and column constraints change, including a live
+    // theme-scale change while the menu is open.
+    setContentMargins(theme.scaled(QMargins(6, 6, 6, 6)));
 }
 
 void DockPanelContextMenu::updateToggleRowsChrome()
@@ -116,11 +134,63 @@ void DockPanelContextMenu::updateToggleRowsChrome()
         }
         const bool rowActive = br.toggle->isEnabled();
         const QColor fg = rowActive ? colors.textMuted : colors.textDisabled();
+        br.textLabel->setFont(theme.font(ruwa::ui::core::ThemeFontRole::Body));
+        br.iconLabel->setFixedSize(iconPx, iconPx);
         QPalette pal = br.textLabel->palette();
         pal.setColor(QPalette::WindowText, fg);
         br.textLabel->setPalette(pal);
         br.iconLabel->setPixmap(icons.getColoredIcon(br.iconKind, fg).pixmap(iconPx, iconPx));
     }
+}
+
+void DockPanelContextMenu::updateControlColumns()
+{
+    const auto& theme = ruwa::ui::core::ThemeManager::instance();
+    const bool sharedColumns = !m_brushesPanel.isNull();
+    const auto isBehaviorRow = [this](const BehaviorToggleRowDesc& row) {
+        return row.toggle == m_movableToggle || row.toggle == m_dockableToggle
+            || row.toggle == m_resizableToggle;
+    };
+
+    const auto naturalTextWidth = [](const QLabel* label) {
+        // Measure the text, not the previous fixed column width.
+        return label->fontMetrics().size(Qt::TextSingleLine, label->text()).width();
+    };
+    int labelWidth = naturalTextWidth(m_hudSizeLabel);
+    for (const BehaviorToggleRowDesc& row : m_toggleRows) {
+        if (isBehaviorRow(row)) {
+            labelWidth = qMax(labelWidth, naturalTextWidth(row.textLabel));
+        }
+    }
+
+    const auto setColumns = [&theme, labelWidth](QGridLayout* grid, QLabel* label, bool shared) {
+        grid->setContentsMargins(theme.scaled(QMargins(10, 5, 10, 5)));
+        grid->setSpacing(0);
+        grid->setColumnMinimumWidth(kIconColumn, theme.scaled(16));
+        grid->setColumnMinimumWidth(1, theme.scaled(6));
+        grid->setColumnMinimumWidth(kLabelColumn, shared ? labelWidth : 0);
+        grid->setColumnMinimumWidth(3, theme.scaled(shared ? 12 : 6));
+        grid->setColumnMinimumWidth(kControlColumn, shared ? theme.scaled(180) : 0);
+        grid->setColumnStretch(kLabelColumn, shared ? 0 : 1);
+        grid->setColumnStretch(kControlColumn, shared ? 1 : 0);
+        if (shared) {
+            label->setFixedWidth(labelWidth);
+        } else {
+            label->setMinimumWidth(0);
+            label->setMaximumWidth(QWIDGETSIZE_MAX);
+        }
+    };
+
+    for (const BehaviorToggleRowDesc& row : m_toggleRows) {
+        auto* grid = static_cast<QGridLayout*>(row.rowWidget->layout());
+        setColumns(grid, row.textLabel, sharedColumns && isBehaviorRow(row));
+    }
+    // HUD Size spans the unused icon and label columns, starting at the row's
+    // left inset while preserving the shared boundary before the slider.
+    auto* hudGrid = static_cast<QGridLayout*>(m_brushesSectionHost->layout());
+    setColumns(hudGrid, m_hudSizeLabel, true);
+    m_hudSizeLabel->setFixedWidth(hudGrid->columnMinimumWidth(kIconColumn)
+        + hudGrid->columnMinimumWidth(1) + hudGrid->columnMinimumWidth(kLabelColumn));
 }
 
 QWidget* DockPanelContextMenu::createToggleRow(QWidget* parent,
@@ -134,11 +204,14 @@ QWidget* DockPanelContextMenu::createToggleRow(QWidget* parent,
     row->setAttribute(Qt::WA_TranslucentBackground);
     row->setAccessibleName(text);
 
-    auto* rowLayout = new QHBoxLayout(row);
+    auto* rowLayout = new QGridLayout(row);
     // Horizontal inset matches StandardContextMenuAction basePadding (10), scaled.
     rowLayout->setContentsMargins(
         theme.scaled(10), theme.scaled(5), theme.scaled(10), theme.scaled(5));
-    rowLayout->setSpacing(theme.scaled(6));
+    rowLayout->setSpacing(0);
+    rowLayout->setColumnMinimumWidth(1, theme.scaled(6));
+    rowLayout->setColumnMinimumWidth(3, theme.scaled(6));
+    rowLayout->setColumnStretch(kLabelColumn, 1);
 
     const int iconPx = theme.scaled(16);
 
@@ -165,9 +238,9 @@ QWidget* DockPanelContextMenu::createToggleRow(QWidget* parent,
     }
     row->setToggleTarget(outToggle);
 
-    rowLayout->addWidget(iconLabel, 0, Qt::AlignVCenter);
-    rowLayout->addWidget(label, 1, Qt::AlignVCenter);
-    rowLayout->addWidget(outToggle, 0, Qt::AlignVCenter);
+    rowLayout->addWidget(iconLabel, 0, kIconColumn, Qt::AlignVCenter);
+    rowLayout->addWidget(label, 0, kLabelColumn, Qt::AlignVCenter);
+    rowLayout->addWidget(outToggle, 0, kControlColumn, Qt::AlignRight | Qt::AlignVCenter);
 
     BehaviorToggleRowDesc desc;
     desc.rowWidget = row;
@@ -249,6 +322,34 @@ void DockPanelContextMenu::buildUi()
             m_panel->ungroupPanel();
         }
         hideAnimated();
+    });
+
+    using BrushesPanel = ruwa::ui::workspace::BrushesPanel;
+    m_sepBeforeBrushes = new HorizontalSeparator(contentWidget());
+    contentLayout()->addWidget(m_sepBeforeBrushes);
+    m_brushesSectionHost = new QWidget(contentWidget());
+    m_brushesSectionHost->setAttribute(Qt::WA_TranslucentBackground);
+    auto* brushesLayout = new QGridLayout(m_brushesSectionHost);
+    m_hudSizeLabel = new QLabel(tr("HUD Size"), m_brushesSectionHost);
+    m_hudSizeLabel->setAlignment(Qt::AlignLeft | Qt::AlignVCenter);
+    brushesLayout->addWidget(m_hudSizeLabel, 0, kIconColumn, 1, kLabelColumn - kIconColumn + 1,
+        Qt::AlignLeft | Qt::AlignVCenter);
+
+    m_hudSizeSlider = new ProgressHandleSlider(m_brushesSectionHost);
+    m_hudSizeSlider->setAccessibleName(tr("HUD Size"));
+    m_hudSizeSlider->setRange(BrushesPanel::kMinimumHudSize, BrushesPanel::kMaximumHudSize);
+    m_hudSizeSlider->setValueDisplayMode(ProgressHandleSlider::ValueDisplayMode::RawValue);
+    m_hudSizeSlider->setValueTextSuffix(QStringLiteral("%"));
+    m_hudSizeSlider->setValue(BrushesPanel::kDefaultHudSize);
+    brushesLayout->addWidget(m_hudSizeSlider, 0, kControlColumn);
+    contentLayout()->addWidget(m_brushesSectionHost);
+    m_brushesSectionHost->hide();
+    m_sepBeforeBrushes->hide();
+
+    connect(m_hudSizeSlider, &ProgressHandleSlider::valueChanged, this, [this](int value) {
+        if (m_brushesPanel) {
+            m_brushesPanel->setHudSize(value);
+        }
     });
 
     m_sepBeforeClose = new HorizontalSeparator(contentWidget());
@@ -366,6 +467,16 @@ void DockPanelContextMenu::buildUi()
     m_layerButtonsSectionHost->hide();
 }
 
+QSize DockPanelContextMenu::expandMenuContentHint(const QSize& hint) const
+{
+    QSize expanded = StandardContextMenu::expandMenuContentHint(hint);
+    if (m_brushesPanel) {
+        expanded.setWidth(
+            qMax(expanded.width(), ruwa::ui::core::ThemeManager::instance().scaled(340)));
+    }
+    return expanded;
+}
+
 void DockPanelContextMenu::rebuildStandardMenu()
 {
     const QVariantMap ctx = context();
@@ -374,6 +485,18 @@ void DockPanelContextMenu::rebuildStandardMenu()
     m_panel = reinterpret_cast<ruwa::ui::docking::DockPanel*>(panelPtr);
     m_toolsPanel = qobject_cast<ruwa::ui::workspace::ToolsPanel*>(m_panel.data());
     m_layersPanel = qobject_cast<ruwa::ui::workspace::LayersPanel*>(m_panel.data());
+    m_brushesPanel = qobject_cast<ruwa::ui::workspace::BrushesPanel*>(m_panel.data());
+
+    const bool hasBrushesPanel = !m_brushesPanel.isNull();
+    m_brushesSectionHost->setVisible(hasBrushesPanel);
+    m_sepBeforeBrushes->setVisible(hasBrushesPanel);
+    {
+        const QSignalBlocker blocker(m_hudSizeSlider);
+        m_hudSizeSlider->setEnabled(hasBrushesPanel);
+        m_hudSizeSlider->setValue(hasBrushesPanel
+                ? m_brushesPanel->hudSize()
+                : ruwa::ui::workspace::BrushesPanel::kDefaultHudSize);
+    }
 
     const bool hasPanel = !m_panel.isNull();
     const bool isFloating = hasPanel && m_panel->isFloating();
@@ -435,7 +558,6 @@ void DockPanelContextMenu::rebuildStandardMenu()
     }
 
     applyChrome();
-    updateMenuSize();
 }
 
 } // namespace ruwa::ui::widgets

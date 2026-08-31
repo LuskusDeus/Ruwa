@@ -20,6 +20,7 @@
 #include <QFontMetrics>
 #include <QHBoxLayout>
 #include <QPainter>
+#include <QSignalBlocker>
 #include <QTimer>
 
 namespace ruwa::ui::workspace {
@@ -133,13 +134,13 @@ protected:
     }
 };
 
-int singleBrushMinimumPanelWidth()
+int singleBrushMinimumPanelWidth(int buttonBaseSize)
 {
     auto& theme = ruwa::ui::core::ThemeManager::instance();
 
-    // One brush button, its 6 + 2 px flow insets, the content's
-    // scaled 8 px margins, the 12 px scrollbar, and the panel's 1 px frame.
-    return theme.scaled(kBrushListButtonBaseSize) + 8 + (theme.scaled(8) * 2) + 12 + 2;
+    // One brush button, the content's outer margins, the 12 px scrollbar,
+    // and the panel's 1 px frame. The brush flow has no additional insets.
+    return theme.scaled(buttonBaseSize) + (theme.scaled(kBrushesPanelContentMargin) * 2) + 12 + 2;
 }
 
 } // namespace
@@ -149,7 +150,7 @@ BrushesPanel::BrushesPanel(QWidget* parent)
 {
     setTranslatableTitle(QT_TR_NOOP("Brushes"));
     setIconType(ruwa::ui::core::IconProvider::StandardIcon::Brushpack);
-    setMinimumPanelSize(singleBrushMinimumPanelWidth(), 180);
+    setMinimumPanelSize(singleBrushMinimumPanelWidth(brushButtonBaseSize()), 180);
     setPreferredPanelSize(280, 340);
     setClosable(true);
     setFloatable(true);
@@ -157,6 +158,26 @@ BrushesPanel::BrushesPanel(QWidget* parent)
 }
 
 BrushesPanel::~BrushesPanel() = default;
+
+int BrushesPanel::brushButtonBaseSize() const
+{
+    return qRound(kBrushListButtonBaseSize * m_hudSize / 100.0);
+}
+
+void BrushesPanel::setHudSize(int percent)
+{
+    const int clamped = qBound(kMinimumHudSize, percent, kMaximumHudSize);
+    if (m_hudSize == clamped) {
+        return;
+    }
+
+    m_hudSize = clamped;
+    setMinimumPanelSize(singleBrushMinimumPanelWidth(brushButtonBaseSize()), 180);
+    if (m_contentWidget) {
+        m_contentWidget->setBrushButtonBaseSize(brushButtonBaseSize());
+    }
+    emit panelStateChanged();
+}
 
 void BrushesPanel::setCanvasPanel(CanvasPanel* canvasPanel)
 {
@@ -198,6 +219,7 @@ bool BrushesPanel::visiblePreviewsReady() const
 QWidget* BrushesPanel::createContent()
 {
     m_contentWidget = new BrushesPanelContent(this);
+    m_contentWidget->setBrushButtonBaseSize(brushButtonBaseSize());
     m_contentWidget->setCanvasPanel(m_canvasPanel);
     connect(m_contentWidget, &BrushesPanelContent::stateChanged, this,
         &BrushesPanel::panelStateChanged);
@@ -221,7 +243,7 @@ QWidget* BrushesPanel::createContent()
 void BrushesPanel::onThemeChanged()
 {
     DockPanel::onThemeChanged();
-    setMinimumPanelSize(singleBrushMinimumPanelWidth(), 180);
+    setMinimumPanelSize(singleBrushMinimumPanelWidth(brushButtonBaseSize()), 180);
     if (m_filterScrollArea && !m_filterBarInitializing) {
         m_filterScrollArea->setFixedHeight(ThemeManager::instance().scaled(26));
         if (m_filterLayout) {
@@ -236,16 +258,17 @@ void BrushesPanel::onThemeChanged()
 
 QJsonObject BrushesPanel::savePanelState() const
 {
-    if (m_contentWidget) {
-        return m_contentWidget->saveState();
-    }
-
-    return m_pendingPanelState;
+    QJsonObject state = m_contentWidget ? m_contentWidget->saveState() : m_pendingPanelState;
+    state[QStringLiteral("hudSize")] = m_hudSize;
+    return state;
 }
 
 void BrushesPanel::restorePanelState(const QJsonObject& state)
 {
     m_pendingPanelState = state;
+    // Restoring a layout must not schedule a new save through the public setter.
+    const QSignalBlocker blocker(this);
+    setHudSize(state.value(QStringLiteral("hudSize")).toInt(kDefaultHudSize));
     if (m_contentWidget) {
         m_contentWidget->restoreState(state);
     }

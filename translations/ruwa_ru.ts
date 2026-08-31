@@ -3153,6 +3153,10 @@ Ruwa использует фреймворк Qt (версия %1), динами�
 <context>
     <name>ruwa::ui::widgets::DockPanelContextMenu</name>
     <message>
+        <source>HUD Size</source>
+        <translation>Размер HUD</translation>
+    </message>
+    <message>
         <location filename="../src/shell/context-menu/DockPanelContextMenu.cpp" line="195"/>
         <source>Behavior</source>
         <translation>Поведение</translation>

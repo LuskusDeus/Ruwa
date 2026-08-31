@@ -56,6 +56,7 @@ public:
 
     void setPackData(const BrushListPackData& pack);
     const BrushListPackData& packData() const { return m_pack; }
+    void setBrushButtonBaseSize(int size);
 
     /// Update the pack's displayed name in place (header repaint only; brush
     /// rows and their previews are untouched).
@@ -138,6 +139,7 @@ private:
     QString m_selectedBrushId;
     bool m_expanded = false;
     int m_contentHeight = 0;
+    int m_brushButtonBaseSize = kBrushListButtonBaseSize;
 
     ruwa::ui::widgets::SectionHeaderButton* m_headerButton = nullptr;
     ruwa::ui::widgets::AnimatedFlowWidget* m_contentContainer = nullptr;

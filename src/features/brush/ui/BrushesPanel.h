@@ -36,6 +36,13 @@ public:
     void prepareVisiblePreviews();
     bool visiblePreviewsReady() const;
 
+    static constexpr int kMinimumHudSize = 50;
+    static constexpr int kMaximumHudSize = 200;
+    static constexpr int kDefaultHudSize = 100;
+    /// Brush button scale in percent, multiplied by the theme's UI scale.
+    int hudSize() const { return m_hudSize; }
+    void setHudSize(int percent);
+
 signals:
     void panelStateChanged();
     void visiblePreviewStateChanged();
@@ -47,6 +54,7 @@ protected:
     void restorePanelState(const QJsonObject& state) override;
 
 private:
+    int brushButtonBaseSize() const;
     void setupFilterBar();
     void rebuildFilterButtons(const QStringList& packIds, const QStringList& packNames);
     void activateFilter(const QString& filterId);
@@ -63,6 +71,7 @@ private:
     QStringList m_packFilterNames;
     QString m_activeFilterId;
     bool m_filterBarInitializing = false;
+    int m_hudSize = kDefaultHudSize;
     QJsonObject m_pendingPanelState;
 };
 

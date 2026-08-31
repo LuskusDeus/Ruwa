@@ -3126,6 +3126,10 @@ Ruwa uses the Qt framework (version %1), dynamically linked under the GNU Lesser
 <context>
     <name>ruwa::ui::widgets::DockPanelContextMenu</name>
     <message>
+        <source>HUD Size</source>
+        <translation>HUD Size</translation>
+    </message>
+    <message>
         <location filename="../src/shell/context-menu/DockPanelContextMenu.cpp" line="195"/>
         <source>Behavior</source>
         <translation type="unfinished"></translation>

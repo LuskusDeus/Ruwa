@@ -39,6 +39,8 @@ public:
     void setItems(const QList<QWidget*>& flowItems, const QList<QWidget*>& pinnedItems = {},
         bool animateReorder = false);
     void clearItems(ItemDisposal disposal = ItemDisposal::Keep);
+    /// Recompute slots after item sizes change, using the same transition as resize.
+    void refreshLayout();
 
     void setHeightCallback(std::function<void(int)> callback);
     void setReflowAnimated(bool animated) { m_reflowAnimated = animated; }

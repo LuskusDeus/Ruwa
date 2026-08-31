@@ -217,6 +217,14 @@ void AnimatedFlowWidget::resizeEvent(QResizeEvent* event)
         return;
     }
 
+    refreshLayout();
+}
+
+void AnimatedFlowWidget::refreshLayout()
+{
+    if (m_shuttingDown) {
+        return;
+    }
     relayout(m_initialized && isVisible() && m_reflowAnimated);
     m_initialized = true;
 }

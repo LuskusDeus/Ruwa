@@ -302,12 +302,6 @@ public:
     }
 
 protected:
-    void resizeEvent(QResizeEvent* event) override
-    {
-        BaseAnimatedButton::resizeEvent(event);
-        invalidatePreviewCache();
-    }
-
     void paintEvent(QPaintEvent* event) override
     {
         Q_UNUSED(event);
@@ -650,9 +644,16 @@ private:
 BrushPackListSection::BrushPackListSection(QWidget* parent)
     : QWidget(parent)
 {
+    // Match CollapsibleSection: the parent must not stretch a section beyond
+    // its header and current animated content height.
+    setSizePolicy(QSizePolicy::Preferred, QSizePolicy::Fixed);
+
     auto* rootLayout = new QVBoxLayout(this);
     rootLayout->setContentsMargins(0, 0, 0, 0);
     rootLayout->setSpacing(2);
+    // During shrink the parent can still have the previous frame's height.
+    // Leave that slack below the content instead of moving the header.
+    rootLayout->setAlignment(Qt::AlignTop);
 
     m_headerButton = new ruwa::ui::widgets::SectionHeaderButton(this);
     rootLayout->addWidget(m_headerButton);
@@ -662,7 +663,7 @@ BrushPackListSection::BrushPackListSection(QWidget* parent)
     m_contentContainer->setSizePolicy(QSizePolicy::Expanding, QSizePolicy::Fixed);
     m_contentContainer->setMinimumHeight(0);
     m_contentContainer->setMaximumHeight(0);
-    m_contentContainer->setContentsMargins(6, 0, 2, 0);
+    m_contentContainer->setContentsMargins(0, 0, 0, 0);
     m_contentContainer->setFlowSpacing(2, 2);
     // While reflowing on a width change, glide the section's content height in
     // lockstep with the wrapping rows — but never fight the expand/collapse
@@ -715,6 +716,28 @@ void BrushPackListSection::resizeEvent(QResizeEvent* event)
     // The flow widget animates the row buttons and drives the content height
     // through its callback on a width change. Only when the expand/collapse
     // animation currently owns the height do we retarget it to the new width.
+    if (m_expandAnimation->state() == QAbstractAnimation::Running) {
+        scheduleExpandedHeightRefresh();
+    }
+}
+
+void BrushPackListSection::setBrushButtonBaseSize(int size)
+{
+    const int clamped = qMax(1, size);
+    if (m_brushButtonBaseSize == clamped) {
+        return;
+    }
+
+    m_brushButtonBaseSize = clamped;
+    const int pixels = ThemeManager::instance().scaled(m_brushButtonBaseSize);
+    // The preview source does not depend on button geometry; keep the existing
+    // rows and preview sessions while the slider updates their display size.
+    for (QWidget* row : std::as_const(m_brushRows)) {
+        row->setFixedSize(pixels, pixels);
+    }
+    // Keep positions and height under the flow animation's control, exactly as
+    // on a panel resize. Replacing the items also schedules a final-height snap.
+    m_contentContainer->refreshLayout();
     if (m_expandAnimation->state() == QAbstractAnimation::Running) {
         scheduleExpandedHeightRefresh();
     }
@@ -1134,8 +1157,7 @@ void BrushPackListSection::setContentHeight(int height)
     }
 
     m_contentHeight = clampedHeight;
-    m_contentContainer->setMinimumHeight(clampedHeight);
-    m_contentContainer->setMaximumHeight(clampedHeight);
+    m_contentContainer->setFixedHeight(clampedHeight);
     emit contentGeometryChanged();
 }
 
@@ -1262,6 +1284,8 @@ void BrushPackListSection::configureBrushRow(QWidget* row, const BrushListBrushD
     }
 
     auto* rowButton = static_cast<PackBrushRowButton*>(row);
+    const int pixels = ThemeManager::instance().scaled(m_brushButtonBaseSize);
+    rowButton->setFixedSize(pixels, pixels);
     row->removeEventFilter(this);
     QObject::disconnect(rowButton, nullptr, this, nullptr);
     rowButton->setOwningPackId(brush.packId);

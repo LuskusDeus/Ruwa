@@ -34,6 +34,8 @@ class BrushEditorWindow;
 
 namespace ruwa::ui::workspace {
 
+inline constexpr int kBrushesPanelContentMargin = 4;
+
 class CanvasPanel;
 
 class BrushesPanelContent : public QWidget {
@@ -44,6 +46,7 @@ public:
     ~BrushesPanelContent() override;
 
     void setCanvasPanel(CanvasPanel* canvasPanel);
+    void setBrushButtonBaseSize(int size);
     void reloadFromManager();
     QJsonObject saveState() const;
     void restoreState(const QJsonObject& state);
@@ -135,6 +138,7 @@ private:
 private:
     widgets::AnimatedStackedWidget* m_pageStack = nullptr;
     CanvasPanel* m_canvasPanel = nullptr;
+    int m_brushButtonBaseSize = kBrushListButtonBaseSize;
 
     QVector<BrushListPackData> m_packs;
     QHash<QString, FilterPage> m_filterPages;

@@ -20,12 +20,14 @@ class DockPanel;
 namespace ruwa::ui::workspace {
 class ToolsPanel;
 class LayersPanel;
+class BrushesPanel;
 } // namespace ruwa::ui::workspace
 
 namespace ruwa::ui::widgets {
 
 class HorizontalSeparator;
 class ToggleSwitch;
+class ProgressHandleSlider;
 
 class DockPanelContextMenu : public StandardContextMenu {
     Q_OBJECT
@@ -36,11 +38,13 @@ public:
 
 protected:
     void rebuildStandardMenu() override;
+    QSize expandMenuContentHint(const QSize& hint) const override;
 
 private:
     void buildUi();
     void applyChrome();
     void updateToggleRowsChrome();
+    void updateControlColumns();
     QWidget* createToggleRow(QWidget* parent, ruwa::ui::core::IconProvider::StandardIcon iconKind,
         const QString& text, ToggleSwitch*& outToggle);
 
@@ -68,6 +72,11 @@ private:
     QPointer<ruwa::ui::docking::DockPanel> m_panel;
     QPointer<ruwa::ui::workspace::ToolsPanel> m_toolsPanel;
     QPointer<ruwa::ui::workspace::LayersPanel> m_layersPanel;
+    QPointer<ruwa::ui::workspace::BrushesPanel> m_brushesPanel;
+    ProgressHandleSlider* m_hudSizeSlider = nullptr;
+    QLabel* m_hudSizeLabel = nullptr;
+    QWidget* m_brushesSectionHost = nullptr;
+    HorizontalSeparator* m_sepBeforeBrushes = nullptr;
     ToggleSwitch* m_movableToggle = nullptr;
     ToggleSwitch* m_resizableToggle = nullptr;
     ToggleSwitch* m_dockableToggle = nullptr;
