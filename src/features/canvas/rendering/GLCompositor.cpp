@@ -362,9 +362,7 @@ void GLCompositor::compositeTile(const TileKey& key, const std::vector<Composite
 
 GLuint GLCompositor::compositeLayerStack(const TileKey& key,
     const std::vector<CompositeLayerInfo>& layers, GLTileRenderer* tileRenderer,
-    float parentOpacity, bool useSrcAtop, const Color& backdropColor,
-    GLuint strokeBlendOuterBaseTex, int strokeBlendLayerMode, float strokeBlendLayerOpacity,
-    const Color& strokeBlendBackdropColor)
+    float parentOpacity, bool useSrcAtop, const Color& backdropColor)
 {
     const GLuint transparentTex = transparentTexture();
     GLuint activeClipBaseTex = transparentTex;
@@ -639,12 +637,6 @@ GLuint GLCompositor::compositeLayerStack(const TileKey& key,
             bp.radialRevealRadius = layer.radialRevealRadius;
             bp.radialRevealFeather = layer.radialRevealFeather;
             bp.backdropColor = backdropColor;
-            if (layer.useStrokeBlendBackdrop && strokeBlendOuterBaseTex) {
-                bp.programmaticBlendBaseTex
-                    = renderStrokeBlendBase(strokeBlendOuterBaseTex, currentBase(), key,
-                        strokeBlendLayerMode, strokeBlendLayerOpacity, strokeBlendBackdropColor);
-                bp.useProgrammaticBlendBase = bp.programmaticBlendBaseTex != 0;
-            }
             return bp;
         };
 
@@ -894,7 +886,6 @@ GLuint GLCompositor::compositeLayerStack(const TileKey& key,
                 int savedPing = m_currentPing;
                 GLuint savedTex0 = m_pingPongTex[0];
                 GLuint savedTex1 = m_pingPongTex[1];
-                const GLuint outerCompositeTex = currentBase();
                 const size_t frameDepth = m_groupCompositeDepth++;
                 GroupCompositeFrame& frame = ensureGroupCompositeFrame(frameDepth);
 
@@ -907,8 +898,7 @@ GLuint GLCompositor::compositeLayerStack(const TileKey& key,
                 clearTexture(m_pingPongTex[0]);
 
                 compositeLayerStack(key, layer.children, tileRenderer, 1.0f,
-                    /*useSrcAtop=*/false, Color::transparent(), outerCompositeTex, layer.blendMode,
-                    effectiveOpacity, backdropColor);
+                    /*useSrcAtop=*/false, Color::transparent());
 
                 GLuint groupResult = currentBase();
 
@@ -1249,25 +1239,6 @@ void GLCompositor::clearTexture(GLuint tex)
     m_gl->glClear(GL_COLOR_BUFFER_BIT);
 }
 
-GLuint GLCompositor::renderStrokeBlendBase(GLuint outerBaseTex, GLuint layerContentTex,
-    const TileKey& key, int layerBlendMode, float layerOpacity, const Color& backdropColor)
-{
-    if (!outerBaseTex || !layerContentTex || !m_programmaticBlendBaseTex) {
-        return 0;
-    }
-
-    BlendPassParams bp;
-    bp.baseTex = outerBaseTex;
-    bp.srcTex = layerContentTex;
-    bp.targetTex = m_programmaticBlendBaseTex;
-    bp.key = key;
-    bp.blendMode = layerBlendMode;
-    bp.opacity = layerOpacity;
-    bp.backdropColor = backdropColor;
-    blendPass(bp);
-    return m_programmaticBlendBaseTex;
-}
-
 void GLCompositor::blendPass(const BlendPassParams& p)
 {
     m_gl->glBindFramebuffer(GL_FRAMEBUFFER, m_fbo);
@@ -1293,7 +1264,6 @@ void GLCompositor::blendPass(const BlendPassParams& p)
     m_compositeProgram->setUniform("uReplaceBase", p.replaceBase ? 1 : 0);
     m_compositeProgram->setUniform("uReplaceBaseMixReveal", p.replaceBaseMixReveal ? 1 : 0);
     m_compositeProgram->setUniform("uUseGroupComposite", p.useGroupComposite ? 1 : 0);
-    m_compositeProgram->setUniform("uUseProgrammaticBlendBase", p.useProgrammaticBlendBase ? 1 : 0);
     m_compositeProgram->setUniform("uSrcAtop", p.srcAtop ? 1 : 0);
     m_compositeProgram->setUniform("uUseRadialReveal", p.useRadialReveal ? 1 : 0);
     m_compositeProgram->setUniform("uRadialRevealInvert", p.radialRevealInvert ? 1 : 0);
@@ -1326,8 +1296,6 @@ void GLCompositor::blendPass(const BlendPassParams& p)
     m_gl->glBindTextureUnit(1, p.srcTex);
 
     m_gl->glBindTextureUnit(2, p.useClipMask ? p.clipMaskTex : 0);
-
-    m_gl->glBindTextureUnit(3, p.useProgrammaticBlendBase ? p.programmaticBlendBaseTex : 0);
 
     m_gl->glBindTextureUnit(4, p.useClipMask2 ? p.clipMaskTex2 : 0);
 
@@ -2736,7 +2704,6 @@ uint64_t GLCompositor::layerContentRevision(const CompositeLayerInfo& layer) con
     combine(layer.forceIsolation);
     combine(layer.preserveBaseAlpha);
     combine(layer.replaceBase);
-    combine(layer.useStrokeBlendBackdrop);
     combine(layer.clipMaskAlphaOnly);
     combine(layer.clipMaskAsAlphaCap);
     combine(layer.clipMaskLuminanceReveal);

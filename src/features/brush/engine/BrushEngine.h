@@ -93,10 +93,8 @@ public:
         TileGrid* selectionMask, bool preferGpu);
 
     std::unordered_set<TileKey, TileKeyHash> flattenStroke(TileBrush& brush, TileGrid& layerGrid,
-        bool usedGpuPath, bool alphaLock = false, TileGrid* strokeBlendBackdrop = nullptr,
-        const Color& strokeBlendBackdropColor = Color::transparent(),
-        TileGrid* finalSourceMask = nullptr, bool selectionAlphaCap = false,
-        bool maskErase = false);
+        bool usedGpuPath, bool alphaLock = false, TileGrid* finalSourceMask = nullptr,
+        bool selectionAlphaCap = false, bool maskErase = false);
 
     GLsync startAsyncReadback(TileGrid& grid, const std::vector<TileKey>& keys, bool usedGpuPath);
     bool isReadbackComplete(GLsync fence) const;

@@ -80,10 +80,6 @@ public:
         std::function<void(
             const QUuid&, const std::unordered_set<TileKey, TileKeyHash>&, bool, float)>
             queueDeferredStrokeCommit;
-        std::function<std::shared_ptr<TileGrid>(
-            const QUuid&, const std::unordered_set<TileKey, TileKeyHash>&)>
-            buildStrokeBlendBackdrop;
-        std::function<Color()> getStrokeBlendBackdropColor;
         std::function<void(SyncCommit&&)> commitSynchronousStroke;
         std::function<void(PendingStrokeFinalization&, const SelectionState&, bool)>
             finalizePendingStroke;

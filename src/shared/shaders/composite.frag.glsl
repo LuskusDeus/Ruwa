@@ -23,7 +23,6 @@
 layout(binding = 0) uniform sampler2D uBaseTexture;   // current composited result (premultiplied)
 layout(binding = 1) uniform sampler2D uSrcTexture;    // layer tile being blended (premultiplied)
 layout(binding = 2) uniform sampler2D uClipMaskTexture; // optional alpha mask for clipping
-layout(binding = 3) uniform sampler2D uProgrammaticBlendBaseTexture; // visible base used by stroke preview blend modes
 layout(binding = 4) uniform sampler2D uClipMaskTexture2; // secondary clip mask (mask-edit preview: committed mask)
 uniform int       uBlendMode;     // blend mode index
 uniform float     uOpacity;       // layer opacity [0..1]
@@ -64,7 +63,6 @@ uniform int       uUseGroupComposite;
 layout(binding = 5) uniform sampler2D uGroupPassThroughTexture;
 layout(binding = 6) uniform sampler2D uGroupCoverageTexture;
 layout(binding = 7) uniform sampler2D uGroupSourceCoverageTexture;
-uniform int       uUseProgrammaticBlendBase; // 1 = match commit-time stroke blend flattening
 uniform int       uSrcAtop;       // 1 = Porter-Duff src-atop (ao = ab) for clip-group passes
 uniform int       uUseRadialReveal;
 uniform int       uRadialRevealInvert;
@@ -584,30 +582,6 @@ void compositeBody() {
 
     if (uBlendMode == 100) {
         outColor = vec4(base.rgb * (1.0 - as), ab * (1.0 - as));
-        return;
-    }
-
-    if (uUseProgrammaticBlendBase != 0) {
-        vec4 blendBase = texture(uProgrammaticBlendBaseTexture, fragTexCoord);
-        vec4 backdrop = vec4(uBackdropColor.rgb * uBackdropColor.a, uBackdropColor.a);
-        vec4 visibleBlendBase = blendBase + backdrop * (1.0 - blendBase.a);
-        float visibleBlendBaseAlpha = visibleBlendBase.a;
-        vec3 Cb = (visibleBlendBaseAlpha > 0.0)
-            ? visibleBlendBase.rgb / visibleBlendBaseAlpha
-            : vec3(0.0);
-        vec3 B = blendByMode(Cb, Cs, uBlendMode);
-        vec3 strokeColor = mix(Cs, B, visibleBlendBaseAlpha);
-
-        if (uPreserveBaseAlpha != 0) {
-            vec3 CbLocked = (ab > 0.0) ? base.rgb / ab : vec3(0.0);
-            vec3 CoLocked = ab * (as * strokeColor + (1.0 - as) * CbLocked);
-            outColor = vec4(clamp(CoLocked, vec3(0.0), vec3(ab)), ab);
-            return;
-        }
-
-        vec3 Co = as * strokeColor + (1.0 - as) * base.rgb;
-        float ao = as + ab * (1.0 - as);
-        outColor = applySelectionAlphaCap(vec4(clamp(Co, vec3(0.0), vec3(ao)), ao), clipAlpha);
         return;
     }
 

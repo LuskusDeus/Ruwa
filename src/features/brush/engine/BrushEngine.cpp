@@ -322,21 +322,18 @@ bool BrushExecutionBackend::rebuildStrokeRangeFromDabs(TileBrush& brush, size_t 
 }
 
 std::unordered_set<TileKey, TileKeyHash> BrushExecutionBackend::flattenStroke(TileBrush& brush,
-    TileGrid& layerGrid, bool usedGpuPath, bool alphaLock, TileGrid* strokeBlendBackdrop,
-    const Color& strokeBlendBackdropColor, TileGrid* finalSourceMask, bool selectionAlphaCap,
-    bool maskErase)
+    TileGrid& layerGrid, bool usedGpuPath, bool alphaLock, TileGrid* finalSourceMask,
+    bool selectionAlphaCap, bool maskErase)
 {
     if (usedGpuPath && m_brushRenderer && m_tileRenderer) {
         return m_brushRenderer->flattenStrokeGPU(brush.strokeBuffer(), layerGrid, m_tileRenderer,
             brush.isEraseMode(), brush.strokeOpacity(), brush.strokeBlendMode(), alphaLock,
             brush.isBlurMode() || brush.isSmudgeMode() || brush.isWetMode()
                 || brush.isLiquifyMode(),
-            strokeBlendBackdrop, strokeBlendBackdropColor, finalSourceMask, selectionAlphaCap,
-            maskErase);
+            finalSourceMask, selectionAlphaCap, maskErase);
     }
 
-    return brush.endStroke(layerGrid, alphaLock, strokeBlendBackdrop, strokeBlendBackdropColor,
-        finalSourceMask, selectionAlphaCap, maskErase);
+    return brush.endStroke(layerGrid, alphaLock, finalSourceMask, selectionAlphaCap, maskErase);
 }
 
 GLsync BrushExecutionBackend::startAsyncReadback(

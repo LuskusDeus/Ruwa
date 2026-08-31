@@ -835,11 +835,9 @@ public:
         clearStrokeTime();
     }
 
-    /// Flatten stroke buffer onto target layer grid (CPU src-over blend),
+    /// Flatten stroke buffer using only the target layer pixels as the blend base,
     /// then clear the buffer. Returns set of affected tile keys.
     std::unordered_set<TileKey, TileKeyHash> endStroke(TileGrid& targetGrid, bool alphaLock = false,
-        const TileGrid* strokeBlendBackdrop = nullptr,
-        const Color& strokeBlendBackdropColor = Color::transparent(),
         const TileGrid* finalSourceMask = nullptr, bool selectionAlphaCap = false,
         bool maskErase = false)
     {
@@ -869,11 +867,8 @@ public:
                     flattenTile(strokeTile, layerTile, finalOpacity, key, finalSourceMask, false);
                 } else if (!m_blurMode && !m_smudgeMode
                     && m_strokeBlendMode != ruwa::core::layers::BlendMode::Normal) {
-                    const TileData* backdropTile
-                        = strokeBlendBackdrop ? strokeBlendBackdrop->getTile(key) : nullptr;
-                    flattenTileWithBlendMode(strokeTile, backdropTile, layerTile, finalOpacity,
-                        m_strokeBlendMode, alphaLock, key, strokeBlendBackdropColor,
-                        finalSourceMask);
+                    flattenTileWithBlendMode(strokeTile, layerTile, finalOpacity, m_strokeBlendMode,
+                        alphaLock, key, finalSourceMask);
                 } else if (alphaLock) {
                     flattenTileAlphaLocked(strokeTile, layerTile, finalOpacity);
                 } else {
@@ -3286,9 +3281,8 @@ private:
         }
     }
 
-    static void flattenTileWithBlendMode(const TileData& src, const TileData* blendBase,
-        TileData& dst, float opacity, ruwa::core::layers::BlendMode mode, bool alphaLock,
-        const TileKey& tileKey, const Color& backdropColor = Color::transparent(),
+    static void flattenTileWithBlendMode(const TileData& src, TileData& dst, float opacity,
+        ruwa::core::layers::BlendMode mode, bool alphaLock, const TileKey& tileKey,
         const TileGrid* finalSourceMask = nullptr)
     {
         const uint8_t* sp = src.pixels();
@@ -3318,46 +3312,21 @@ private:
             if (as <= 0.0f)
                 continue;
 
-            const uint8_t* bp = blendBase ? blendBase->pixels() : dp;
-            const float ab = static_cast<float>(bp[idx + 3]) / 255.0f;
-            const float backdropAlpha = std::clamp(backdropColor.a, 0.0f, 1.0f);
             const float dstAlpha = static_cast<float>(dp[idx + 3]) / 255.0f;
             const Float3 srcColor { static_cast<float>(sp[idx + 0]) / 255.0f / asRaw,
                 static_cast<float>(sp[idx + 1]) / 255.0f / asRaw,
                 static_cast<float>(sp[idx + 2]) / 255.0f / asRaw };
-            const Float3 basePremul = (ab > 0.0f)
-                ? Float3 { static_cast<float>(bp[idx + 0]) / 255.0f,
-                      static_cast<float>(bp[idx + 1]) / 255.0f,
-                      static_cast<float>(bp[idx + 2]) / 255.0f }
-                : Float3 { 0.0f, 0.0f, 0.0f };
-            const Float3 backdropPremul { std::clamp(backdropColor.r, 0.0f, 1.0f) * backdropAlpha,
-                std::clamp(backdropColor.g, 0.0f, 1.0f) * backdropAlpha,
-                std::clamp(backdropColor.b, 0.0f, 1.0f) * backdropAlpha };
-            const float visibleBaseAlpha = ab + backdropAlpha * (1.0f - ab);
-            const Float3 visibleBasePremul { basePremul[0] + backdropPremul[0] * (1.0f - ab),
-                basePremul[1] + backdropPremul[1] * (1.0f - ab),
-                basePremul[2] + backdropPremul[2] * (1.0f - ab) };
-            const Float3 baseColor = (visibleBaseAlpha > 0.0f)
-                ? Float3 { visibleBasePremul[0] / visibleBaseAlpha,
-                      visibleBasePremul[1] / visibleBaseAlpha,
-                      visibleBasePremul[2] / visibleBaseAlpha }
-                : Float3 { 0.0f, 0.0f, 0.0f };
             const Float3 dstColor = (dstAlpha > 0.0f)
                 ? Float3 { static_cast<float>(dp[idx + 0]) / 255.0f / dstAlpha,
                       static_cast<float>(dp[idx + 1]) / 255.0f / dstAlpha,
                       static_cast<float>(dp[idx + 2]) / 255.0f / dstAlpha }
                 : Float3 { 0.0f, 0.0f, 0.0f };
-            const Float3 blended = blendModeColor(baseColor, srcColor, mode);
-            const Float3 blendedOverBackdrop { (1.0f - visibleBaseAlpha) * srcColor[0]
-                    + visibleBaseAlpha * blended[0],
-                (1.0f - visibleBaseAlpha) * srcColor[1] + visibleBaseAlpha * blended[1],
-                (1.0f - visibleBaseAlpha) * srcColor[2] + visibleBaseAlpha * blended[2] };
+            const Float3 blended = blendModeColor(dstColor, srcColor, mode);
 
             if (alphaLock) {
-                const Float3 outColor { dstAlpha
-                        * (as * blendedOverBackdrop[0] + (1.0f - as) * dstColor[0]),
-                    dstAlpha * (as * blendedOverBackdrop[1] + (1.0f - as) * dstColor[1]),
-                    dstAlpha * (as * blendedOverBackdrop[2] + (1.0f - as) * dstColor[2]) };
+                const Float3 outColor { dstAlpha * (as * blended[0] + (1.0f - as) * dstColor[0]),
+                    dstAlpha * (as * blended[1] + (1.0f - as) * dstColor[1]),
+                    dstAlpha * (as * blended[2] + (1.0f - as) * dstColor[2]) };
                 dp[idx + 0] = static_cast<uint8_t>(
                     std::lround(std::clamp(outColor[0], 0.0f, dstAlpha) * 255.0f));
                 dp[idx + 1] = static_cast<uint8_t>(
@@ -3367,13 +3336,14 @@ private:
                 continue;
             }
 
+            const Float3 strokeColor { (1.0f - dstAlpha) * srcColor[0] + dstAlpha * blended[0],
+                (1.0f - dstAlpha) * srcColor[1] + dstAlpha * blended[1],
+                (1.0f - dstAlpha) * srcColor[2] + dstAlpha * blended[2] };
             const float ao = as + dstAlpha * (1.0f - as);
-            const Float3 outColor { as * blendedOverBackdrop[0]
+            const Float3 outColor { as * strokeColor[0]
                     + (1.0f - as) * static_cast<float>(dp[idx + 0]) / 255.0f,
-                as * blendedOverBackdrop[1]
-                    + (1.0f - as) * static_cast<float>(dp[idx + 1]) / 255.0f,
-                as * blendedOverBackdrop[2]
-                    + (1.0f - as) * static_cast<float>(dp[idx + 2]) / 255.0f };
+                as * strokeColor[1] + (1.0f - as) * static_cast<float>(dp[idx + 1]) / 255.0f,
+                as * strokeColor[2] + (1.0f - as) * static_cast<float>(dp[idx + 2]) / 255.0f };
 
             dp[idx + 0]
                 = static_cast<uint8_t>(std::lround(std::clamp(outColor[0], 0.0f, ao) * 255.0f));

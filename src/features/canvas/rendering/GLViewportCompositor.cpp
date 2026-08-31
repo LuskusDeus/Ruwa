@@ -285,7 +285,6 @@ GLuint GLViewportCompositor::applyLuminanceRevealMask(
     m_compositeProgram->setUniform("uReplaceBase", 1);
     m_compositeProgram->setUniform("uReplaceBaseMixReveal", 0);
     m_compositeProgram->setUniform("uUseGroupComposite", 0);
-    m_compositeProgram->setUniform("uUseProgrammaticBlendBase", 0);
     m_compositeProgram->setUniform("uSrcAtop", 0);
     m_compositeProgram->setUniform("uUseRadialReveal", 0);
     m_compositeProgram->setUniform("uRadialRevealInvert", 0);
@@ -309,7 +308,6 @@ GLuint GLViewportCompositor::applyLuminanceRevealMask(
     m_compositeProgram->setUniform("uClipMaskEditPreview", 0);
     m_compositeProgram->setUniform("uClipMaskEditReplace", 0);
     m_compositeProgram->setUniform("uClipMaskAsAlphaCap", 0);
-    m_compositeProgram->setUniform("uUseProgrammaticBlendBase", 0);
     m_compositeProgram->setUniform("uUseGroupComposite", 0);
     m_compositeProgram->setUniform("uReplaceBase", 0);
 
@@ -770,7 +768,6 @@ void GLViewportCompositor::blendPass(const BlendPassParams& params)
     m_compositeProgram->setUniform("uClipMaskEditPreview", 0);
     m_compositeProgram->setUniform("uClipMaskEditReplace", 0);
     m_compositeProgram->setUniform("uClipMaskAsAlphaCap", 0);
-    m_compositeProgram->setUniform("uUseProgrammaticBlendBase", 0);
     m_compositeProgram->setUniform("uPreserveBaseAlpha", params.preserveBaseAlpha ? 1 : 0);
     m_compositeProgram->setUniform("uReplaceBase", params.replaceBase ? 1 : 0);
     m_compositeProgram->setUniform("uReplaceBaseMixReveal", params.replaceBaseMixReveal ? 1 : 0);

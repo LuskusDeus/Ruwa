@@ -1645,7 +1645,6 @@ Result<void> GLBrushRenderer::initialize(const QString& shaderDir)
         // src-over and clamps result alpha to the mask alpha (or preserves dst when
         // dst.a > mask_alpha).
         "uniform int uClipMaskAsAlphaCap;\n"
-        "uniform vec4 uBackdropColor;\n"
         "uniform vec2 uTileWorldOrigin;\n"
         "uniform int uQuantizeTo8Bit;\n"
         "in vec2 fragTexCoord;\n"
@@ -1790,26 +1789,21 @@ Result<void> GLBrushRenderer::initialize(const QString& shaderDir)
         "        outColor = src * opacity;\n"
         "        return;\n"
         "    }\n"
-        "    vec4 base = texture(uBaseTexture, fragTexCoord);\n"
         "    vec4 dst = texture(uDstTexture, fragTexCoord);\n"
-        "    float ab = base.a;\n"
         "    float ad = dst.a;\n"
         "    float asRaw = src.a;\n"
         "    float as = (uStrokeBlendMode == 12) ? dissolveAlpha(asRaw * opacity) : clamp(asRaw * "
         "opacity, 0.0, 1.0);\n"
         "    vec3 Cs = (asRaw > 0.0) ? src.rgb / asRaw : vec3(0.0);\n"
-        "    vec4 backdrop = vec4(uBackdropColor.rgb * uBackdropColor.a, uBackdropColor.a);\n"
-        "    vec4 visibleBase = base + backdrop * (1.0 - ab);\n"
-        "    float visibleBaseAlpha = visibleBase.a;\n"
-        "    vec3 Cb = (visibleBaseAlpha > 0.0) ? visibleBase.rgb / visibleBaseAlpha : vec3(0.0);\n"
+        // Brush blending reads only the target layer, before layer compositing.
         "    vec3 Cd = (ad > 0.0) ? dst.rgb / ad : vec3(0.0);\n"
-        "    vec3 B = blendColor(Cb, Cs, uStrokeBlendMode);\n"
-        "    vec3 strokeColor = mix(Cs, B, visibleBaseAlpha);\n"
+        "    vec3 B = blendColor(Cd, Cs, uStrokeBlendMode);\n"
         "    if (uAlphaLock != 0) {\n"
-        "        vec3 coLocked = ad * (as * strokeColor + (1.0 - as) * Cd);\n"
+        "        vec3 coLocked = ad * as * B + (1.0 - as) * dst.rgb;\n"
         "        outColor = vec4(clamp(coLocked, vec3(0.0), vec3(ad)), ad);\n"
         "        return;\n"
         "    }\n"
+        "    vec3 strokeColor = mix(Cs, B, ad);\n"
         "    vec3 co = as * strokeColor + (1.0 - as) * dst.rgb;\n"
         "    float ao = as + ad * (1.0 - as);\n"
         "    outColor = vec4(clamp(co, vec3(0.0), vec3(ao)), ao);\n"
@@ -3877,8 +3871,7 @@ void GLBrushRenderer::rebuildStrokeBufferRangeFromDabsGPU(TileGrid& strokeBuffer
 std::unordered_set<TileKey, TileKeyHash> GLBrushRenderer::flattenStrokeGPU(TileGrid& strokeBuffer,
     TileGrid& layerGrid, GLTileRenderer* tileRenderer, bool eraseMode, float strokeOpacity,
     ruwa::core::layers::BlendMode strokeBlendMode, bool alphaLock, bool blurMode,
-    TileGrid* strokeBlendBackdrop, const Color& strokeBlendBackdropColor, TileGrid* finalSourceMask,
-    bool selectionAlphaCap, bool maskErase)
+    TileGrid* finalSourceMask, bool selectionAlphaCap, bool maskErase)
 {
     std::unordered_set<TileKey, TileKeyHash> affectedKeys;
     // End of stroke — drop any smudge carry buffer so the next stroke starts fresh.
@@ -3974,8 +3967,6 @@ std::unordered_set<TileKey, TileKeyHash> GLBrushRenderer::flattenStrokeGPU(TileG
     m_flattenProgram->setUniform("uStrokeBlendMode", static_cast<int>(strokeBlendMode));
     m_flattenProgram->setUniform("uAlphaLock", alphaLock ? 1 : 0);
     m_flattenProgram->setUniform("uClipMaskAsAlphaCap", useAlphaCap ? 1 : 0);
-    m_flattenProgram->setUniform("uBackdropColor", strokeBlendBackdropColor.r,
-        strokeBlendBackdropColor.g, strokeBlendBackdropColor.b, strokeBlendBackdropColor.a);
 
     for (const auto& key : keysVec) {
         TileData* strokeTile = strokeBuffer.getTile(key);
@@ -4061,18 +4052,7 @@ std::unordered_set<TileKey, TileKeyHash> GLBrushRenderer::flattenStrokeGPU(TileG
 
         m_gl->glBindTextureUnit(0, strokeTile->textureId());
         if (needsBaseReadTexture) {
-            TileData* blendBaseTile = (programmaticStrokeBlend && strokeBlendBackdrop)
-                ? strokeBlendBackdrop->getTile(key)
-                : nullptr;
-            if (blendBaseTile && !blendBaseTile->hasTexture()) {
-                tileRenderer->ensureTileTexture(*blendBaseTile);
-                tileRenderer->uploadTileData(*blendBaseTile);
-            } else if (blendBaseTile && blendBaseTile->isDirty()) {
-                tileRenderer->uploadTileData(*blendBaseTile);
-            }
-            m_gl->glBindTextureUnit(1,
-                (blendBaseTile && blendBaseTile->hasTexture()) ? blendBaseTile->textureId()
-                                                               : m_blurReadTex);
+            m_gl->glBindTextureUnit(1, m_blurReadTex);
             m_gl->glBindTextureUnit(2, m_blurReadTex);
             if (blurMode && m_blurLinearSampler) {
                 m_gl->glBindSampler(1, m_blurLinearSampler);

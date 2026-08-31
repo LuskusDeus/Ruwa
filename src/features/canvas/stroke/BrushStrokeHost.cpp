@@ -2361,32 +2361,13 @@ void BrushStrokeHost::completeEndStrokeAfterQueueDrain()
     // eraser's opacity carries through the normal flatten unchanged.
     const bool maskErase
         = completedEraseMode && layer->maskEditActive && layer->maskGrid != nullptr;
-    std::shared_ptr<TileGrid> strokeBlendBackdrop;
-    Color strokeBlendBackdropColor = Color::transparent();
-    const bool needsStrokeBlendBackdrop = !completedEraseMode && !currentBrush->isBlurMode()
-        && !currentBrush->isSmudgeMode() && !currentBrush->isWetMode()
-        && !currentBrush->isLiquifyMode()
-        && currentBrush->strokeBlendMode() != ruwa::core::layers::BlendMode::Normal
-        && m_callbacks.buildStrokeBlendBackdrop;
-    if (needsStrokeBlendBackdrop) {
-        if (m_callbacks.getStrokeBlendBackdropColor) {
-            strokeBlendBackdropColor = m_callbacks.getStrokeBlendBackdropColor();
-        }
-        std::unordered_set<TileKey, TileKeyHash> strokeKeys;
-        strokeKeys.reserve(currentBrush->strokeBuffer().tileCount());
-        for (const auto& [key, tile] : currentBrush->strokeBuffer().tiles()) {
-            strokeKeys.insert(key);
-        }
-        strokeBlendBackdrop = m_callbacks.buildStrokeBlendBackdrop(completedLayerId, strokeKeys);
-    }
 
     if (m_useGPUBrush && executionBackend) {
         if (m_callbacks.makeCurrent) {
             m_callbacks.makeCurrent();
         }
         auto flattenedKeys = executionBackend->flattenStroke(*currentBrush, *grid, true,
-            useAlphaLockFlatten, strokeBlendBackdrop.get(), strokeBlendBackdropColor,
-            finalSourceMask, selectionAlphaCap, maskErase);
+            useAlphaLockFlatten, finalSourceMask, selectionAlphaCap, maskErase);
         std::vector<TileKey> readbackKeys(flattenedKeys.begin(), flattenedKeys.end());
         if (m_callbacks.cleanupStrokeTextures) {
             m_callbacks.cleanupStrokeTextures();
@@ -2436,10 +2417,9 @@ void BrushStrokeHost::completeEndStrokeAfterQueueDrain()
 
         auto flattenedKeys = executionBackend
             ? executionBackend->flattenStroke(*currentBrush, *grid, false, useAlphaLockFlatten,
-                  strokeBlendBackdrop.get(), strokeBlendBackdropColor, finalSourceMask,
-                  selectionAlphaCap, maskErase)
-            : currentBrush->endStroke(*grid, useAlphaLockFlatten, strokeBlendBackdrop.get(),
-                  strokeBlendBackdropColor, finalSourceMask, selectionAlphaCap, maskErase);
+                  finalSourceMask, selectionAlphaCap, maskErase)
+            : currentBrush->endStroke(
+                  *grid, useAlphaLockFlatten, finalSourceMask, selectionAlphaCap, maskErase);
 
         // Wait for any in-flight async BEFORE-snapshot memcpys to settle
         // before we hand the map off to the pending finalization.

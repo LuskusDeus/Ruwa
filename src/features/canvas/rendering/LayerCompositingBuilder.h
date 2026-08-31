@@ -94,9 +94,6 @@ public:
     /// Build the visual-only layer stack that should render outside document bounds and stay out of
     /// export.
     const std::vector<CompositeLayerInfo>& buildBoardLayerStack() const;
-    /// Build a stack from the document bottom through the target layer content,
-    /// excluding active stroke preview and all layers above the target.
-    std::vector<CompositeLayerInfo> buildStackThroughLayer(const QUuid& targetLayerId) const;
 
     /**
      * @brief Build a compositing stack for a layer list that is NOT the live

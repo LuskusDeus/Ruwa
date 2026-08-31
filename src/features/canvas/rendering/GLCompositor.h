@@ -57,8 +57,6 @@ struct CompositeLayerInfo {
     bool forceIsolation = false; // Composite children against transparency before the parent
     bool preserveBaseAlpha = false; // alpha-lock style preview compositing
     bool replaceBase = false; // src already stores final pixels for this tile
-    bool useStrokeBlendBackdrop
-        = false; // match commit-time stroke blend against visible layer backdrop
     TileGrid* externalClipMaskGrid = nullptr; // optional explicit clip mask grid
     bool clipMaskAlphaOnly = false; // apply explicit clip only to src alpha
     /// Treat externalClipMaskGrid as a per-pixel alpha *cap* on the result
@@ -242,9 +240,7 @@ private:
     //             of src-over (used for clipped-layer sub-passes inside a clip group).
     GLuint compositeLayerStack(const TileKey& key, const std::vector<CompositeLayerInfo>& layers,
         GLTileRenderer* tileRenderer, float parentOpacity, bool useSrcAtop = false,
-        const Color& backdropColor = Color::transparent(), GLuint strokeBlendOuterBaseTex = 0,
-        int strokeBlendLayerMode = 0, float strokeBlendLayerOpacity = 1.0f,
-        const Color& strokeBlendBackdropColor = Color::transparent());
+        const Color& backdropColor = Color::transparent());
 
     void ensurePingPongTextures();
     void swapPingPong();
@@ -294,8 +290,6 @@ private:
         GLuint groupPassThroughTex = 0;
         GLuint groupSourceCoverageTex = 0;
         GLuint groupCoverageTex = 0;
-        bool useProgrammaticBlendBase = false;
-        GLuint programmaticBlendBaseTex = 0;
         bool srcAtop = false;
         bool useRadialReveal = false;
         bool radialRevealInvert = false;
@@ -489,8 +483,6 @@ private:
     bool effectsRequireBackdrop(const QList<ruwa::core::effects::LayerEffectState>& effects) const;
     void resetEffectBlockCache();
     void destroyEffectBlockCache();
-    GLuint renderStrokeBlendBase(GLuint outerBaseTex, GLuint layerContentTex, const TileKey& key,
-        int layerBlendMode, float layerOpacity, const Color& backdropColor);
     GLuint transparentTexture();
     GLuint solidColorTexture(const Color& color);
     // Dedicated 1x1 solid-color textures for the clip-mask slots. Separate from

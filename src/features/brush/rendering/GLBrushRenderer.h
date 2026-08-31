@@ -96,15 +96,14 @@ public:
 
     // ----- GPU Flatten (no readback — GPU textures only) -----
 
-    /// Flatten stroke onto layer via FBO blend. Returns affected keys.
+    /// Flatten stroke onto layer via FBO blend, using only this layer as the blend base.
+    /// Returns affected keys.
     /// Layer tile GPU textures updated. CPU pixels NOT synced.
     std::unordered_set<TileKey, TileKeyHash> flattenStrokeGPU(TileGrid& strokeBuffer,
         TileGrid& layerGrid, GLTileRenderer* tileRenderer, bool eraseMode, float strokeOpacity,
         ruwa::core::layers::BlendMode strokeBlendMode = ruwa::core::layers::BlendMode::Normal,
-        bool alphaLock = false, bool blurMode = false, TileGrid* strokeBlendBackdrop = nullptr,
-        const Color& strokeBlendBackdropColor = Color::transparent(),
-        TileGrid* finalSourceMask = nullptr, bool selectionAlphaCap = false,
-        bool maskErase = false);
+        bool alphaLock = false, bool blurMode = false, TileGrid* finalSourceMask = nullptr,
+        bool selectionAlphaCap = false, bool maskErase = false);
 
     // ----- Async PBO Readback (split into start / poll / finish) -----
 

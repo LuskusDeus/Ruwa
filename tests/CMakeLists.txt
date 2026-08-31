@@ -22,6 +22,7 @@ add_executable(RuwaTests
     camera_rotation_test.cpp
     merged_selection_extractor_test.cpp
     brush_click_dab_test.cpp
+    brush_blend_mode_test.cpp
     dab_shape_falloff_test.cpp
     dock_split_push_drag_test.cpp
     flood_fill_alpha_lock_test.cpp

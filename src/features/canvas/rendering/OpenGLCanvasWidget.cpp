@@ -2000,41 +2000,6 @@ OpenGLCanvasWidget::OpenGLCanvasWidget(QWidget* parent)
                 emit contentRegionChanged(worldRectFromTileKeys(expandedDirtyVec));
                 emit contentTilesChanged(qPointsFromTileKeys(expandedDirtyVec));
             },
-            [this](const QUuid& layerId, const std::unordered_set<TileKey, TileKeyHash>& strokeKeys)
-                -> std::shared_ptr<TileGrid> {
-                if (layerId.isNull() || strokeKeys.empty() || !m_initialized || !m_renderer
-                    || !m_layerCompositingBuilder) {
-                    return nullptr;
-                }
-
-                std::vector<TileKey> keys(strokeKeys.begin(), strokeKeys.end());
-                auto stack = m_layerCompositingBuilder->buildStackThroughLayer(layerId);
-                if (stack.empty()) {
-                    return nullptr;
-                }
-                CompositionCache backdropCache;
-                Color canvasBackdrop = Color::transparent();
-                m_layerCompositingBuilder->resolveCanvasBackgroundColor(canvasBackdrop);
-
-                makeCurrent();
-                m_renderer->compositeDirtyKeys(stack, backdropCache, keys, canvasBackdrop);
-                auto backdropGrid = std::make_shared<TileGrid>(std::move(backdropCache.grid()));
-                if (auto* backend = m_renderer->brushExecutionBackend()) {
-                    GLsync fence = backend->startAsyncReadback(*backdropGrid, keys, true);
-                    if (fence) {
-                        backend->finishReadback(fence, *backdropGrid, keys, true);
-                    }
-                }
-                doneCurrent();
-                return backdropGrid;
-            },
-            [this]() {
-                Color canvasBackdrop = Color::transparent();
-                if (m_layerCompositingBuilder) {
-                    m_layerCompositingBuilder->resolveCanvasBackgroundColor(canvasBackdrop);
-                }
-                return canvasBackdrop;
-            },
             [this](BrushStrokeHost::SyncCommit&& commit) {
                 if (!commit.flattenedKeys.empty()) {
                     if (!commit.eraseMode) {

@@ -54,27 +54,6 @@ QString transformRenderKey(const TransformState& transform)
     return key;
 }
 
-bool appendStackThroughLayer(const std::vector<CompositeLayerInfo>& source,
-    const QUuid& targetLayerId, std::vector<CompositeLayerInfo>& out)
-{
-    for (const auto& layer : source) {
-        CompositeLayerInfo copy = layer;
-        if (layer.isGroup) {
-            copy.children.clear();
-            if (appendStackThroughLayer(layer.children, targetLayerId, copy.children)) {
-                out.push_back(std::move(copy));
-                return true;
-            }
-        } else {
-            out.push_back(copy);
-            if (layer.id == targetLayerId) {
-                return true;
-            }
-        }
-    }
-    return false;
-}
-
 /// The backdrop colour a Background layer stands for. Shared by the live
 /// document and by an offscreen nested-document composite, so the two can never
 /// disagree about what "background" means.
@@ -148,19 +127,6 @@ const std::vector<CompositeLayerInfo>& LayerCompositingBuilder::buildLayerStack(
 const std::vector<CompositeLayerInfo>& LayerCompositingBuilder::buildBoardLayerStack() const
 {
     return cachedStack(true);
-}
-
-std::vector<CompositeLayerInfo> LayerCompositingBuilder::buildStackThroughLayer(
-    const QUuid& targetLayerId) const
-{
-    std::vector<CompositeLayerInfo> result;
-    if (targetLayerId.isNull()) {
-        return result;
-    }
-    if (!appendStackThroughLayer(buildLayerStack(), targetLayerId, result)) {
-        result.clear();
-    }
-    return result;
 }
 
 LassoFillPreviewPlan LayerCompositingBuilder::buildLassoFillPreviewPlan(
@@ -514,6 +480,8 @@ std::vector<CompositeLayerInfo> LayerCompositingBuilder::buildLayerStackRecursiv
             strokePreviewGroup.visible = layerVisible;
             strokePreviewGroup.isGroup = true;
             strokePreviewGroup.clippedToBelow = layerData->clippedToBelow;
+            // Blend the stroke with raw pixels of this layer against transparency.
+            // Layer opacity, blend mode, effects and masks apply to the group result.
             strokePreviewGroup.forceIsolation = true;
 
             CompositeLayerInfo layerContent;
@@ -539,8 +507,6 @@ std::vector<CompositeLayerInfo> LayerCompositingBuilder::buildLayerStackRecursiv
             strokeLayer.blendMode
                 = isEraseMode ? kCompositeBlendModeErase : (isBlurPreview ? 0 : strokeBlendMode);
             strokeLayer.visible = true;
-            strokeLayer.useStrokeBlendBackdrop
-                = !isEraseMode && !isBlurPreview && strokeBlendMode != 0;
             strokeLayer.preserveBaseAlpha = !isBlurPreview && activeLayerAlphaLockPreview;
             strokeLayer.replaceBase = isBlurPreview;
             if (!isBlurPreview && !strokeLayer.preserveBaseAlpha && selectionMaskGrid) {
