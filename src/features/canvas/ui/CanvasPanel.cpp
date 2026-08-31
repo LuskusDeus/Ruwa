@@ -3313,7 +3313,18 @@ bool CanvasPanel::copyMergedSelectionPixels()
 
 bool CanvasPanel::cutSelectionPixels()
 {
-    return copySelectionPixels() && deleteSelectionContent();
+    if (!copySelectionPixels() || !m_glWidget || !m_layerModel) {
+        return false;
+    }
+    // Copy extracts only the active raster layer. Never erase secondary layers
+    // (or its focused mask) that were not copied into the clipboard.
+    const auto* sourceLayer = m_layerModel->selectedLayer();
+    const bool cleared = sourceLayer && m_glWidget->clearSelectionPixelsOnLayer(sourceLayer->id);
+    if (cleared) {
+        emit canvasContentChanged();
+    }
+    updateSelectionActionPopup(true);
+    return cleared;
 }
 
 bool CanvasPanel::canCreateLayerFromSelection(bool cutFromSource) const
@@ -3350,7 +3361,8 @@ bool CanvasPanel::createLayerFromSelection(bool cutFromSource)
         undoManager->beginTransaction(QStringLiteral("Layer via Cut"));
     }
 
-    const bool sourcePrepared = !cutFromSource || m_glWidget->clearSelectionContent();
+    const bool sourcePrepared = !cutFromSource
+        || (sourceLayer && m_glWidget->clearSelectionPixelsOnLayer(sourceLayer->id));
     const bool added = sourcePrepared
         && addPixelLayer(std::move(extractedGrid), layerName,
             cutFromSource ? QStringLiteral("Layer via Cut") : QStringLiteral("Layer via Copy"),

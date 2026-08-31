@@ -4728,9 +4728,78 @@ void OpenGLCanvasWidget::selectActiveLayerMask()
 
 bool OpenGLCanvasWidget::doFillSelectionWithColor(const QColor& color)
 {
+    return editSelectedLayerContent(
+        QStringLiteral("Fill Selection"),
+        [this, &color](auto* layer) { return fillSelectionOnLayer(layer, color); },
+        /*editMasks=*/true);
+}
+
+bool OpenGLCanvasWidget::doClearSelectionContent()
+{
+    return editSelectedLayerContent(QStringLiteral("Delete Selection Content"),
+        [this](auto* layer) { return clearSelectionOnLayer(layer); });
+}
+
+bool OpenGLCanvasWidget::editSelectedLayerContent(const QString& undoText,
+    const std::function<bool(ruwa::core::layers::LayerData*)>& editLayer, bool editMasks)
+{
+    if (!m_layerModel || !m_selectionController || !hasSelectionMask())
+        return false;
+
+    const auto targets = selectionContentEditTargets(m_layerModel->selectedLayers(), editMasks);
+    if (targets.isEmpty())
+        return false;
+
+    QStringList rasterizeNames;
+    // Fill follows mask focus; Delete Content, like clipboard extraction,
+    // operates on layer pixels regardless of which thumbnail is focused.
+    const auto requiresRasterization = [editMasks](const auto* layer) {
+        return editMasks ? pixelEditsRequireRasterization(layer)
+                         : layerRequiresRasterizationForPixelEdits(layer);
+    };
+    for (const auto& layerId : targets) {
+        const auto* layer = m_layerModel->layerById(layerId);
+        if (requiresRasterization(layer)) {
+            rasterizeNames.append(layer->name);
+        }
+    }
+    // Decide for the entire operation before changing any pixels or layer types.
+    // Reuse the application's confirmation UI and the existing undoable conversion.
+    if (!rasterizeNames.isEmpty()) {
+        const QString message = tr("The following layers must be rasterized to edit pixels "
+                                   "inside the selection:\n%1\n\n"
+                                   "Rasterize these layers and continue?")
+                                    .arg(rasterizeNames.join(QLatin1Char('\n')));
+        if (!m_rasterizationConfirmCallback
+            || !m_rasterizationConfirmCallback(tr("Rasterize Layers"), message)) {
+            return false;
+        }
+    }
+
+    notifyCanvasInteraction(true);
+    auto& undoManager = m_canvas.undoManager();
+    undoManager.beginTransaction(undoText);
+    bool changed = false;
+    for (const auto& layerId : targets) {
+        auto* layer = m_layerModel->layerById(layerId);
+        if (!layer)
+            continue;
+        if (requiresRasterization(layer)) {
+            rasterizeSmartLayer(layer);
+            changed = true;
+        }
+        // Do not short-circuit: every target must receive the edit.
+        changed = editLayer(layer) || changed;
+    }
+    undoManager.endTransaction();
+    return changed;
+}
+
+bool OpenGLCanvasWidget::fillSelectionOnLayer(
+    ruwa::core::layers::LayerData* layer, const QColor& color)
+{
     if (!m_selectionController)
         return false;
-    auto* layer = activeLayer();
     // Filling the MASK works on any mask-capable layer (the mask is a plain grid);
     // filling the pixels still requires a raster layer.
     if (!isLayerCanvasEditable(layer) || (!layer->isRaster() && !layer->maskIsEditTarget()))
@@ -4739,7 +4808,6 @@ bool OpenGLCanvasWidget::doFillSelectionWithColor(const QColor& color)
     TileGrid* targetGrid = maskTarget ? layer->maskGrid.get() : layer->tileGrid.get();
     if (!targetGrid)
         return false;
-    notifyCanvasInteraction(true);
 
     const auto& selectionMask = m_selectionController->lassoSelection().mask();
 
@@ -4955,12 +5023,11 @@ bool OpenGLCanvasWidget::doFillSelectionWithColor(const QColor& color)
     return true;
 }
 
-bool OpenGLCanvasWidget::doClearSelectionContent()
+bool OpenGLCanvasWidget::clearSelectionOnLayer(ruwa::core::layers::LayerData* layer)
 {
-    if (!canClearSelectionContent())
+    if (!m_selectionController || !hasSelectionMask() || !isLayerCanvasEditable(layer)
+        || !layer->isRaster() || !layer->tileGrid)
         return false;
-    auto* layer = activeLayer();
-    notifyCanvasInteraction(true);
 
     auto& targetGrid = *layer->tileGrid;
     // Content snapshots sized by the grid's own pixel format (RGBA8/16F/32F) so
@@ -5040,6 +5107,9 @@ bool OpenGLCanvasWidget::doClearSelectionContent()
     if (dirtyKeys.empty())
         return false;
 
+    for (const auto& key : dirtyKeys) {
+        targetGrid.markDirty(key);
+    }
     targetGrid.pruneEmpty();
 
     for (const auto& key : dirtyKeys) {
@@ -5294,14 +5364,25 @@ bool OpenGLCanvasWidget::fillSelectionWithColor(const QColor& color)
 
 bool OpenGLCanvasWidget::canClearSelectionContent() const
 {
-    const auto* layer = activeLayer();
-    return m_selectionController && hasSelectionMask() && isLayerCanvasEditable(layer)
-        && layer->isRaster() && layer->tileGrid;
+    return m_layerModel && m_selectionController && hasSelectionMask()
+        && !selectionContentEditTargets(m_layerModel->selectedLayers()).isEmpty();
 }
 
 bool OpenGLCanvasWidget::clearSelectionContent()
 {
     return m_selectionController && m_selectionController->clearSelectionContent();
+}
+
+bool OpenGLCanvasWidget::clearSelectionPixelsOnLayer(const QUuid& layerId)
+{
+    if (!m_layerModel || isTransformActive() || !hasSelectionMask())
+        return false;
+    auto* layer = m_layerModel->layerById(layerId);
+    if (!layer || !layer->isRaster() || !layer->tileGrid
+        || selectionContentEditTargets({ layer }).isEmpty())
+        return false;
+    notifyCanvasInteraction(true);
+    return clearSelectionOnLayer(layer);
 }
 
 bool OpenGLCanvasWidget::rasterizeSmartLayerById(const QUuid& layerId)

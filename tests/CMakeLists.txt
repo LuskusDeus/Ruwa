@@ -16,11 +16,13 @@ add_executable(RuwaTests
     ../src/features/canvas/scene/Camera2D.cpp
     ../src/features/canvas/scene/Viewport.cpp
     ../src/features/canvas/clipboard/MergedSelectionExtractor.cpp
+    ../src/features/canvas/selection/SelectionMaskOps.cpp
     ../src/shared/imaging/PixelSurface.cpp
     ../src/shell/docking/layout/DockLayoutCalculator.cpp
     ../src/shell/docking/layout/DockSplitNode.cpp
     camera_rotation_test.cpp
     merged_selection_extractor_test.cpp
+    selection_content_targets_test.cpp
     brush_click_dab_test.cpp
     brush_blend_mode_test.cpp
     dab_shape_falloff_test.cpp

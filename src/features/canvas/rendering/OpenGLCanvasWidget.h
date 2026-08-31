@@ -278,9 +278,11 @@ public:
     bool hasSelectionMask() const;
     bool selectionBoundsWorld(QRectF& outBounds) const;
     bool fillSelectionWithColor(const QColor& color);
-    /// True when clearSelectionContent() has an editable raster target.
+    /// True when a selected layer or group descendant can be edited, after rasterization if needed.
     bool canClearSelectionContent() const;
     bool clearSelectionContent();
+    /// Clear only the copied raster source for Cut / Layer via Cut, ignoring mask focus.
+    bool clearSelectionPixelsOnLayer(const QUuid& layerId);
     /// Lift the pixels under the active selection out of the active raster layer
     /// into the edit clipboard; the layer itself is left untouched. Fills
     /// @p outFlattenedImage (when non-null) with the same region as an image for
@@ -816,6 +818,11 @@ private:
     // Called by CanvasSelectionController for fill/clear operations
     bool doFillSelectionWithColor(const QColor& color);
     bool doClearSelectionContent();
+    bool editSelectedLayerContent(const QString& undoText,
+        const std::function<bool(ruwa::core::layers::LayerData*)>& editLayer,
+        bool editMasks = false);
+    bool fillSelectionOnLayer(ruwa::core::layers::LayerData* layer, const QColor& color);
+    bool clearSelectionOnLayer(ruwa::core::layers::LayerData* layer);
 
 private slots:
     // LayerModel signal handlers

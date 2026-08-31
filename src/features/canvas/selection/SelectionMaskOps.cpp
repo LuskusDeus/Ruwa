@@ -5,6 +5,7 @@
 #include "features/layers/model/LayerData.h"
 #include "shared/tiles/TileGrid.h"
 
+#include <QSet>
 #include <vector>
 
 namespace aether {
@@ -12,6 +13,44 @@ namespace aether {
 bool isLayerCanvasEditable(const ruwa::core::layers::LayerData* layer)
 {
     return layer && layer->visible && !layer->locked;
+}
+
+QList<QUuid> selectionContentEditTargets(
+    const QList<ruwa::core::layers::LayerData*>& selectedLayers, bool editMasks)
+{
+    QList<ruwa::core::layers::LayerData*> candidates;
+    for (auto* layer : selectedLayers) {
+        if (!layer)
+            continue;
+        candidates.append(layer);
+        if (layer->isGroup() && !(editMasks && layer->maskIsEditTarget())) {
+            layer->flatten(candidates, /*respectExpansion=*/false);
+        }
+    }
+
+    QList<QUuid> targets;
+    QSet<QUuid> seen;
+    for (auto* layer : candidates) {
+        if (!layer || seen.contains(layer->id))
+            continue;
+        seen.insert(layer->id);
+
+        bool editable = true;
+        for (auto* current = layer; current; current = current->parent) {
+            if (!isLayerCanvasEditable(current)) {
+                editable = false;
+                break;
+            }
+        }
+        if (!editable || layer->isBackground())
+            continue;
+
+        if ((editMasks && layer->maskIsEditTarget()) || (layer->isRaster() && layer->tileGrid)
+            || layer->isIsolatedPixelLayer() || layer->isText()) {
+            targets.append(layer->id);
+        }
+    }
+    return targets;
 }
 
 void binarizeSelectionMask(aether::TileGrid& grid)
