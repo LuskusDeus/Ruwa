@@ -114,8 +114,9 @@ public:
         update();
     }
 
-    void refreshScaledSizes()
+    void refreshScaledSizes(int baseHeight)
     {
+        m_baseHeight = baseHeight;
         updateScaledSizes();
         updateGeometry();
         update();
@@ -125,7 +126,7 @@ public:
     {
         const auto& theme = ruwa::ui::core::ThemeManager::instance();
         const DisplayMode effectiveMode = resolvedMode();
-        const int height = theme.scaled(BASE_SELECTOR_HEIGHT - BASE_TRACK_PADDING * 2);
+        const int height = theme.scaled(m_baseHeight);
         const int iconSize = theme.scaled(BASE_ICON_SIZE);
         const int spacing = theme.scaled(BASE_ICON_TEXT_GAP);
         const int horizontalPadding = theme.scaled(BASE_ITEM_PADDING_X);
@@ -261,6 +262,7 @@ private:
     Option m_option;
     DisplayMode m_displayMode { DisplayMode::Auto };
     bool m_selected { false };
+    int m_baseHeight { BASE_SELECTOR_HEIGHT - BASE_TRACK_PADDING * 2 };
     int m_iconSize { BASE_ICON_SIZE };
     int m_iconTextGap { BASE_ICON_TEXT_GAP };
 };
@@ -442,6 +444,19 @@ void SegmentedOptionSelector::setDisplayMode(DisplayMode mode)
     updateGeometry();
 }
 
+void SegmentedOptionSelector::setBaseHeight(int height)
+{
+    const int clamped = qMax(BASE_ICON_SIZE + BASE_TRACK_PADDING * 2, height);
+    if (m_baseHeight == clamped) {
+        return;
+    }
+
+    m_baseHeight = clamped;
+    updateScaledSizes();
+    updateGeometry();
+    updateIndicatorGeometry(false);
+}
+
 void SegmentedOptionSelector::setOptionText(int index, const QString& text)
 {
     if (index < 0 || index >= m_options.size()) {
@@ -480,7 +495,7 @@ void SegmentedOptionSelector::setOptionData(int index, const QVariant& data)
 QSize SegmentedOptionSelector::sizeHint() const
 {
     const auto& theme = ruwa::ui::core::ThemeManager::instance();
-    const int height = theme.scaled(BASE_SELECTOR_HEIGHT);
+    const int height = theme.scaled(m_baseHeight);
     if (m_buttons.isEmpty()) {
         return QSize(theme.scaled(96), height);
     }
@@ -560,9 +575,10 @@ void SegmentedOptionSelector::refreshButtonStates()
 void SegmentedOptionSelector::updateScaledSizes()
 {
     const auto& theme = ruwa::ui::core::ThemeManager::instance();
-    setFixedHeight(theme.scaled(BASE_SELECTOR_HEIGHT));
+    setFixedHeight(theme.scaled(m_baseHeight));
     if (m_backgroundPanel) {
-        m_backgroundPanel->setFixedHeight(theme.scaled(BASE_SELECTOR_HEIGHT));
+        m_backgroundPanel->setFixedHeight(theme.scaled(m_baseHeight));
+        m_backgroundPanel->style().metrics.baseCornerRadius = m_baseHeight / 2;
         m_backgroundPanel->applyStyleChanges();
     }
 
@@ -574,11 +590,13 @@ void SegmentedOptionSelector::updateScaledSizes()
 
     for (auto* button : m_buttons) {
         if (button) {
-            button->refreshScaledSizes();
+            button->refreshScaledSizes(m_baseHeight - BASE_TRACK_PADDING * 2);
         }
     }
 
     if (m_indicatorPanel) {
+        m_indicatorPanel->style().metrics.baseCornerRadius
+            = (m_baseHeight - BASE_TRACK_PADDING * 2) / 2;
         m_indicatorPanel->applyStyleChanges();
     }
 }

@@ -230,6 +230,24 @@ void BrushesPanelContent::setBrushButtonBaseSize(int size)
     // height callbacks; do not force the final geometry ahead of the animation.
 }
 
+void BrushesPanelContent::setBrushViewMode(BrushListViewMode mode)
+{
+    if (m_brushViewMode == mode) {
+        return;
+    }
+
+    if (m_brushDragActive || m_brushDragSettling) {
+        cleanupBrushDrag();
+    }
+    m_brushViewMode = mode;
+    for (FilterPage& page : m_filterPages) {
+        for (BrushPackListSection* section : std::as_const(page.sections)) {
+            section->setViewMode(mode);
+        }
+    }
+    // Keep the rows and preview sessions alive; geometry callbacks update scrolling.
+}
+
 void BrushesPanelContent::reloadFromManager()
 {
     if (m_brushDragActive) {
@@ -1309,6 +1327,7 @@ void BrushesPanelContent::addPackSection(
 {
     auto* section = new BrushPackListSection(page.scrollContent);
     section->setBrushButtonBaseSize(m_brushButtonBaseSize);
+    section->setViewMode(m_brushViewMode);
     section->setPackData(pack);
     section->setBrushDragEnabled(true);
     section->setExpanded(forceExpanded || !s_collapsedPackIds.contains(pack.id), false);

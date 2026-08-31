@@ -8,6 +8,7 @@
 #define RUWA_UI_WORKSPACE_BRUSHPACKLISTSECTION_H
 
 #include "features/brush/manager/BrushManager.h"
+#include "features/brush/ui/BrushListViewMode.h"
 
 #include <QHash>
 #include <QPoint>
@@ -57,6 +58,7 @@ public:
     void setPackData(const BrushListPackData& pack);
     const BrushListPackData& packData() const { return m_pack; }
     void setBrushButtonBaseSize(int size);
+    void setViewMode(BrushListViewMode mode);
 
     /// Update the pack's displayed name in place (header repaint only; brush
     /// rows and their previews are untouched).
@@ -124,6 +126,7 @@ private:
     void rebuildBrushRows();
     QWidget* createBrushRow(const BrushListBrushData& brush);
     void configureBrushRow(QWidget* row, const BrushListBrushData& brush);
+    void updateBrushRowGeometry();
     void ensureEmptyLabel();
     void removeEmptyLabel();
     void updateExpandedVisualState(bool animated);
@@ -140,6 +143,7 @@ private:
     bool m_expanded = false;
     int m_contentHeight = 0;
     int m_brushButtonBaseSize = kBrushListButtonBaseSize;
+    BrushListViewMode m_viewMode = BrushListViewMode::Cards;
 
     ruwa::ui::widgets::SectionHeaderButton* m_headerButton = nullptr;
     ruwa::ui::widgets::AnimatedFlowWidget* m_contentContainer = nullptr;

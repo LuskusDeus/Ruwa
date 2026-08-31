@@ -47,6 +47,7 @@ public:
 
     void setCanvasPanel(CanvasPanel* canvasPanel);
     void setBrushButtonBaseSize(int size);
+    void setBrushViewMode(BrushListViewMode mode);
     void reloadFromManager();
     QJsonObject saveState() const;
     void restoreState(const QJsonObject& state);
@@ -139,6 +140,7 @@ private:
     widgets::AnimatedStackedWidget* m_pageStack = nullptr;
     CanvasPanel* m_canvasPanel = nullptr;
     int m_brushButtonBaseSize = kBrushListButtonBaseSize;
+    BrushListViewMode m_brushViewMode = BrushListViewMode::Cards;
 
     QVector<BrushListPackData> m_packs;
     QHash<QString, FilterPage> m_filterPages;

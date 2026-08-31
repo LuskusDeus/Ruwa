@@ -28,6 +28,7 @@ namespace ruwa::ui::widgets {
 class HorizontalSeparator;
 class ToggleSwitch;
 class ProgressHandleSlider;
+class SegmentedOptionSelector;
 
 class DockPanelContextMenu : public StandardContextMenu {
     Q_OBJECT
@@ -75,6 +76,10 @@ private:
     QPointer<ruwa::ui::workspace::BrushesPanel> m_brushesPanel;
     ProgressHandleSlider* m_hudSizeSlider = nullptr;
     QLabel* m_hudSizeLabel = nullptr;
+    SegmentedOptionSelector* m_brushViewSelector = nullptr;
+    QLabel* m_brushViewLabel = nullptr;
+    SegmentedOptionSelector* m_packOrientationSelector = nullptr;
+    QLabel* m_packOrientationLabel = nullptr;
     QWidget* m_brushesSectionHost = nullptr;
     HorizontalSeparator* m_sepBeforeBrushes = nullptr;
     ToggleSwitch* m_movableToggle = nullptr;

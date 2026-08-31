@@ -47,6 +47,8 @@ constexpr int kStrokePreviewReferenceWidth = 108;
 constexpr int kStrokePreviewReferenceHeight = 36;
 constexpr int kStrokePreviewRenderInset = 3;
 constexpr int kStrokePreviewSupersampling = 2;
+constexpr int kBrushListRowBaseHeight = 36;
+constexpr int kBrushListRowVerticalInset = 4;
 constexpr int kExpandAnimationMinMs = 170;
 constexpr int kExpandAnimationMaxMs = 320;
 constexpr qreal kExpandAnimationMsPerPixel = 0.85;
@@ -112,6 +114,28 @@ public:
     }
 
     QString brushId() const { return m_brush.id; }
+
+    void setPresentation(BrushListViewMode mode, int buttonBaseSize)
+    {
+        m_viewMode = mode;
+        const auto& theme = ThemeManager::instance();
+        if (mode == BrushListViewMode::List) {
+            setMinimumWidth(0);
+            setMaximumWidth(QWIDGETSIZE_MAX);
+            const int rowHeight = theme.scaled(qRound(
+                kBrushListRowBaseHeight * buttonBaseSize / double(kBrushListButtonBaseSize)));
+            const int textHeight = QFontMetrics(theme.font(ThemeFontRole::Small)).height();
+            setFixedHeight(
+                qMax(rowHeight, textHeight + 2 * theme.scaled(kBrushListRowVerticalInset)));
+            setSizePolicy(QSizePolicy::Expanding, QSizePolicy::Fixed);
+        } else {
+            const int pixels = theme.scaled(buttonBaseSize);
+            setFixedSize(pixels, pixels);
+            setSizePolicy(QSizePolicy::Fixed, QSizePolicy::Fixed);
+        }
+        // Presentation never changes the preview spec or invalidates its cached image.
+        update();
+    }
 
     void setOwningPackId(const QString& packId) { m_brush.packId = packId; }
 
@@ -325,16 +349,39 @@ protected:
         painter.drawRoundedRect(rowRect, radius, radius);
         drawDisplayColorBackgroundAccent(painter, rowRect, radius, colors);
 
-        const QRectF previewRect = rowRect.adjusted(1.0, 1.0, -1.0, -1.0);
-        drawPreview(painter, previewRect, radius, colors);
-        drawPreviewColorWash(painter, rowRect, radius, colors);
+        const auto& theme = ThemeManager::instance();
+        const bool listView = m_viewMode == BrushListViewMode::List;
+        const bool favorite = ruwa::core::SettingsManager::instance().isBrushFavorite(m_brush.id);
+        const int listPadding = theme.scaled(8);
+        const int listItemGap = theme.scaled(8);
+        const QRect favoriteRect = listView
+            ? QRect(listPadding, 0, theme.scaled(12), height())
+            : QRect(0, theme.scaled(5), width() - theme.scaled(7), theme.scaled(14));
+        QRectF previewRect = rowRect.adjusted(1.0, 1.0, -1.0, -1.0);
+        if (listView) {
+            const int inset = theme.scaled(kBrushListRowVerticalInset);
+            const int starSpace = favorite ? favoriteRect.width() + listItemGap : 0;
+            const int side = qMax(1, height() - inset * 2);
+            previewRect = QRectF(listPadding + starSpace, inset, side, side);
+            painter.setBrush(colors.surfaceAlt);
+            painter.drawRoundedRect(previewRect, theme.scaled(4), theme.scaled(4));
+        }
+        const qreal previewRadius = listView ? theme.scaled(4) : radius;
+        drawPreview(painter, previewRect, previewRadius, colors);
+        drawPreviewColorWash(painter, listView ? previewRect : rowRect, previewRadius, colors);
         drawDisplayColorBorderAccent(painter, rowRect, radius, colors);
-        drawSelectionBorder(painter, rowRect, radius, colors);
+        if (!listView) {
+            drawSelectionBorder(painter, rowRect, radius, colors);
+        }
 
         const int leftOffset = ThemeManager::instance().scaled(10);
         QRect textRect(leftOffset, ThemeManager::instance().scaled(12),
             width() - leftOffset - ThemeManager::instance().scaled(8),
             height() - ThemeManager::instance().scaled(15));
+        if (listView) {
+            const int textLeft = qRound(previewRect.right()) + listItemGap;
+            textRect = QRect(textLeft, 0, qMax(0, width() - textLeft - listPadding), height());
+        }
 
         painter.setFont(ThemeManager::instance().font(
             ThemeFontRole::Small, activeProgress() > 0.5 ? QFont::Medium : QFont::Normal));
@@ -344,19 +391,18 @@ protected:
         QColor textColor = ThemeColors::interpolate(baseText, hoverText, hoverProgress());
         textColor = ThemeColors::interpolate(textColor, activeText, activeProgress());
         painter.setPen(textColor);
-        painter.drawText(textRect, Qt::AlignLeft | Qt::AlignBottom,
+        painter.drawText(textRect, Qt::AlignLeft | (listView ? Qt::AlignVCenter : Qt::AlignBottom),
             painter.fontMetrics().elidedText(
                 translatedBrushText(m_brush.name), Qt::ElideRight, textRect.width()));
 
-        if (ruwa::core::SettingsManager::instance().isBrushFavorite(m_brush.id)) {
+        if (favorite) {
             painter.setFont(ThemeManager::instance().font(ThemeFontRole::Small, QFont::DemiBold));
             QColor favoriteColor = ThemeColors::interpolate(colors.textMuted, colors.primary, 0.82);
             favoriteColor.setAlpha(220);
             painter.setPen(favoriteColor);
-            painter.drawText(QRect(0, ThemeManager::instance().scaled(5),
-                                 width() - ThemeManager::instance().scaled(7),
-                                 ThemeManager::instance().scaled(14)),
-                Qt::AlignRight | Qt::AlignTop, QStringLiteral("\u2605"));
+            painter.drawText(favoriteRect,
+                listView ? Qt::AlignCenter : Qt::AlignRight | Qt::AlignTop,
+                QStringLiteral("\u2605"));
         }
     }
 
@@ -587,6 +633,12 @@ private:
         painter.drawImage(drawnRect, m_previewImage, sourceRect);
         painter.setOpacity(1.0);
 
+        // Cards fade behind the overlaid title; list titles sit outside the preview.
+        if (m_viewMode == BrushListViewMode::List) {
+            painter.restore();
+            return;
+        }
+
         QLinearGradient fade(rect.topLeft(), rect.topRight());
         QColor fadeStart = colors.surface;
         QColor fadeMid = colors.surface;
@@ -607,6 +659,7 @@ private:
     }
 
     BrushListBrushData m_brush;
+    BrushListViewMode m_viewMode = BrushListViewMode::Cards;
     ruwa::core::brushes::BrushPreviewSession* m_previewSession = nullptr;
     QImage m_previewImage;
     int m_previewWidth = 0;
@@ -729,14 +782,32 @@ void BrushPackListSection::setBrushButtonBaseSize(int size)
     }
 
     m_brushButtonBaseSize = clamped;
-    const int pixels = ThemeManager::instance().scaled(m_brushButtonBaseSize);
-    // The preview source does not depend on button geometry; keep the existing
-    // rows and preview sessions while the slider updates their display size.
-    for (QWidget* row : std::as_const(m_brushRows)) {
-        row->setFixedSize(pixels, pixels);
+    updateBrushRowGeometry();
+}
+
+void BrushPackListSection::setViewMode(BrushListViewMode mode)
+{
+    if (m_viewMode == mode) {
+        return;
     }
+    clearBrushDropPlaceholder();
+    m_viewMode = mode;
+    updateBrushRowGeometry();
+}
+
+void BrushPackListSection::updateBrushRowGeometry()
+{
+    // The preview source does not depend on button geometry; keep the existing
+    // rows and preview sessions when changing their size or presentation.
+    for (QWidget* row : std::as_const(m_brushRows)) {
+        static_cast<PackBrushRowButton*>(row)->setPresentation(m_viewMode, m_brushButtonBaseSize);
+    }
+    using Flow = ruwa::ui::widgets::AnimatedFlowWidget;
+    m_contentContainer->setLayoutStyle(m_viewMode == BrushListViewMode::List
+            ? Flow::LayoutStyle::VerticalList
+            : Flow::LayoutStyle::UniformWrap);
     // Keep positions and height under the flow animation's control, exactly as
-    // on a panel resize. Replacing the items also schedules a final-height snap.
+    // on a panel resize.
     m_contentContainer->refreshLayout();
     if (m_expandAnimation->state() == QAbstractAnimation::Running) {
         scheduleExpandedHeightRefresh();
@@ -819,6 +890,14 @@ int BrushPackListSection::brushInsertIndexAtGlobal(
     }
 
     const QPoint contentPos = m_contentContainer->mapFromGlobal(globalPos);
+    if (m_viewMode == BrushListViewMode::List) {
+        for (const Placement& placement : placements) {
+            if (contentPos.y() < placement.rect.center().y()) {
+                return placement.index;
+            }
+        }
+        return stationaryCount;
+    }
     if (contentPos.y() < placements.front().rect.top()) {
         return 0;
     }
@@ -861,6 +940,10 @@ void BrushPackListSection::showBrushDropPlaceholder(
     const QString previewDraggedBrushId = reordersExistingRow ? draggedBrushId : QString();
     if (!reordersExistingRow && !m_dropPlaceholder) {
         m_dropPlaceholder = new BrushDropPlaceholder(snapshot, m_contentContainer);
+        if (m_viewMode == BrushListViewMode::List) {
+            m_dropPlaceholder->setMinimumWidth(0);
+            m_dropPlaceholder->setMaximumWidth(QWIDGETSIZE_MAX);
+        }
     }
     if (m_dropInsertIndex == boundedIndex && m_dropDraggedBrushId == previewDraggedBrushId
         && (reordersExistingRow || (m_dropPlaceholder && m_dropPlaceholder->isVisible()))) {
@@ -1284,8 +1367,7 @@ void BrushPackListSection::configureBrushRow(QWidget* row, const BrushListBrushD
     }
 
     auto* rowButton = static_cast<PackBrushRowButton*>(row);
-    const int pixels = ThemeManager::instance().scaled(m_brushButtonBaseSize);
-    rowButton->setFixedSize(pixels, pixels);
+    rowButton->setPresentation(m_viewMode, m_brushButtonBaseSize);
     row->removeEventFilter(this);
     QObject::disconnect(rowButton, nullptr, this, nullptr);
     rowButton->setOwningPackId(brush.packId);

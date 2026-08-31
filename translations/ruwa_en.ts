@@ -3126,6 +3126,30 @@ Ruwa uses the Qt framework (version %1), dynamically linked under the GNU Lesser
 <context>
     <name>ruwa::ui::widgets::DockPanelContextMenu</name>
     <message>
+        <source>Packs</source>
+        <translation>Packs</translation>
+    </message>
+    <message>
+        <source>Horizontal</source>
+        <translation>Horizontal</translation>
+    </message>
+    <message>
+        <source>Vertical</source>
+        <translation>Vertical</translation>
+    </message>
+    <message>
+        <source>View</source>
+        <translation>View</translation>
+    </message>
+    <message>
+        <source>Cards</source>
+        <translation>Cards</translation>
+    </message>
+    <message>
+        <source>List</source>
+        <translation>List</translation>
+    </message>
+    <message>
         <source>HUD Size</source>
         <translation>HUD Size</translation>
     </message>
@@ -5529,6 +5553,14 @@ Ruwa uses the Qt framework (version %1), dynamically linked under the GNU Lesser
 </context>
 <context>
     <name>ruwa::ui::workspace::BrushesPanel</name>
+    <message>
+        <source>Favorite Brushes</source>
+        <translation>Favorite Brushes</translation>
+    </message>
+    <message>
+        <source>All Brushes</source>
+        <translation>All Brushes</translation>
+    </message>
     <message>
         <location filename="../src/features/brush/ui/BrushesPanel.cpp" line="142"/>
         <location filename="../src/features/brush/ui/BrushesPanel.cpp" line="144"/>

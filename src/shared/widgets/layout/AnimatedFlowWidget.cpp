@@ -34,7 +34,7 @@ AnimatedFlowWidget::AnimatedFlowWidget(LayoutStyle style, QWidget* parent)
     m_animationTimer.setInterval(16);
     connect(&m_animationTimer, &QTimer::timeout, this, [this]() { advanceAnimation(); });
 
-    if (m_style == LayoutStyle::UniformWrap) {
+    if (m_style != LayoutStyle::PinnedToolbar) {
         setSizePolicy(QSizePolicy::Expanding, QSizePolicy::Fixed);
     } else {
         QSizePolicy policy(QSizePolicy::Expanding, QSizePolicy::Preferred);
@@ -46,6 +46,20 @@ AnimatedFlowWidget::AnimatedFlowWidget(LayoutStyle style, QWidget* parent)
 AnimatedFlowWidget::~AnimatedFlowWidget()
 {
     shutdown();
+}
+
+void AnimatedFlowWidget::setLayoutStyle(LayoutStyle style)
+{
+    if (m_style == style) {
+        return;
+    }
+    m_style = style;
+    QSizePolicy policy(QSizePolicy::Expanding,
+        style == LayoutStyle::PinnedToolbar ? QSizePolicy::Preferred : QSizePolicy::Fixed);
+    policy.setHeightForWidth(style == LayoutStyle::PinnedToolbar);
+    setSizePolicy(policy);
+    refreshLayout();
+    updateGeometry();
 }
 
 void AnimatedFlowWidget::setFlowSpacing(int horizontal, int vertical)
@@ -213,7 +227,8 @@ void AnimatedFlowWidget::resizeEvent(QResizeEvent* event)
     if (m_shuttingDown) {
         return;
     }
-    if (m_style == LayoutStyle::UniformWrap && event->size().width() == event->oldSize().width()) {
+    if (m_style != LayoutStyle::PinnedToolbar
+        && event->size().width() == event->oldSize().width()) {
         return;
     }
 
@@ -312,6 +327,11 @@ int AnimatedFlowWidget::pinnedBlockWidth() const
 
 int AnimatedFlowWidget::naturalWidth() const
 {
+    if (m_style == LayoutStyle::VerticalList) {
+        const QMargins margins = contentsMargins();
+        return maxItemWidth() + margins.left() + margins.right();
+    }
+
     int width = 0;
     for (const QPointer<QWidget>& item : m_flowItems) {
         if (item) {
@@ -354,8 +374,11 @@ int AnimatedFlowWidget::buildUniformPlacements(int width, QList<Placement>* plac
         if (!widget) {
             continue;
         }
-        const QSize size = itemSize(widget);
-        if (!rowEmpty && x + size.width() > right) {
+        QSize size = itemSize(widget);
+        if (m_style == LayoutStyle::VerticalList) {
+            size.setWidth(qMax(1, right - left));
+        }
+        if (!rowEmpty && (m_style == LayoutStyle::VerticalList || x + size.width() > right)) {
             x = left;
             y += itemRowHeight + m_verticalSpacing;
             rowEmpty = true;
@@ -495,7 +518,7 @@ void AnimatedFlowWidget::relayout(bool animate)
         m_targetHeight = totalHeight;
         if (m_currentHeight < 0 || !animate || !isVisible()) {
             m_currentHeight = totalHeight;
-            if (m_style == LayoutStyle::UniformWrap) {
+            if (m_style != LayoutStyle::PinnedToolbar) {
                 if (m_heightCallback) {
                     m_heightCallback(m_currentHeight);
                 }
@@ -542,7 +565,7 @@ void AnimatedFlowWidget::advanceAnimation()
     bool heightBusy = false;
     if (m_currentHeight >= 0 && m_currentHeight != m_targetHeight) {
         m_currentHeight = advanceValue(m_currentHeight, m_targetHeight);
-        if (m_style == LayoutStyle::UniformWrap) {
+        if (m_style != LayoutStyle::PinnedToolbar) {
             if (m_heightCallback) {
                 m_heightCallback(m_currentHeight);
             }

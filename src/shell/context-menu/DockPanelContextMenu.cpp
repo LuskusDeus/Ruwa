@@ -8,6 +8,7 @@
 #include "shell/docking/widgets/DockPanel.h"
 #include "shared/resources/IconProvider.h"
 #include "shared/widgets/BaseStyledWidget.h"
+#include "shared/widgets/SegmentedOptionSelector.h"
 #include "shared/widgets/inputs/ToggleSwitch.h"
 #include "shared/widgets/inputs/ProgressHandleSlider.h"
 #include "shared/widgets/HorizontalSeparator.h"
@@ -93,10 +94,14 @@ void DockPanelContextMenu::applyChrome()
     if (m_hudSizeSlider) {
         m_hudSizeSlider->setFixedHeight(theme.scaled(22));
         m_hudSizeSlider->setMinimumWidth(theme.scaled(180));
-        m_hudSizeLabel->setFont(theme.font(ruwa::ui::core::ThemeFontRole::Body));
-        QPalette palette = m_hudSizeLabel->palette();
-        palette.setColor(QPalette::WindowText, colors.textMuted);
-        m_hudSizeLabel->setPalette(palette);
+        m_brushViewSelector->setMinimumWidth(theme.scaled(180));
+        m_packOrientationSelector->setMinimumWidth(theme.scaled(180));
+        for (QLabel* label : { m_hudSizeLabel, m_brushViewLabel, m_packOrientationLabel }) {
+            label->setFont(theme.font(ruwa::ui::core::ThemeFontRole::Body));
+            QPalette palette = label->palette();
+            palette.setColor(QPalette::WindowText, colors.textMuted);
+            label->setPalette(palette);
+        }
         m_sepBeforeBrushes->setMargins(theme.scaled(4), theme.scaled(4));
     }
 
@@ -156,7 +161,8 @@ void DockPanelContextMenu::updateControlColumns()
         // Measure the text, not the previous fixed column width.
         return label->fontMetrics().size(Qt::TextSingleLine, label->text()).width();
     };
-    int labelWidth = naturalTextWidth(m_hudSizeLabel);
+    int labelWidth = qMax(naturalTextWidth(m_hudSizeLabel), naturalTextWidth(m_brushViewLabel));
+    labelWidth = qMax(labelWidth, naturalTextWidth(m_packOrientationLabel));
     for (const BehaviorToggleRowDesc& row : m_toggleRows) {
         if (isBehaviorRow(row)) {
             labelWidth = qMax(labelWidth, naturalTextWidth(row.textLabel));
@@ -185,12 +191,15 @@ void DockPanelContextMenu::updateControlColumns()
         auto* grid = static_cast<QGridLayout*>(row.rowWidget->layout());
         setColumns(grid, row.textLabel, sharedColumns && isBehaviorRow(row));
     }
-    // HUD Size spans the unused icon and label columns, starting at the row's
-    // left inset while preserving the shared boundary before the slider.
+    // Brush settings span the unused icon and label columns, preserving the
+    // shared boundary before the selector and slider.
     auto* hudGrid = static_cast<QGridLayout*>(m_brushesSectionHost->layout());
     setColumns(hudGrid, m_hudSizeLabel, true);
-    m_hudSizeLabel->setFixedWidth(hudGrid->columnMinimumWidth(kIconColumn)
-        + hudGrid->columnMinimumWidth(1) + hudGrid->columnMinimumWidth(kLabelColumn));
+    hudGrid->setVerticalSpacing(theme.scaled(6));
+    for (QLabel* label : { m_hudSizeLabel, m_brushViewLabel, m_packOrientationLabel }) {
+        label->setFixedWidth(hudGrid->columnMinimumWidth(kIconColumn)
+            + hudGrid->columnMinimumWidth(1) + hudGrid->columnMinimumWidth(kLabelColumn));
+    }
 }
 
 QWidget* DockPanelContextMenu::createToggleRow(QWidget* parent,
@@ -330,9 +339,39 @@ void DockPanelContextMenu::buildUi()
     m_brushesSectionHost = new QWidget(contentWidget());
     m_brushesSectionHost->setAttribute(Qt::WA_TranslucentBackground);
     auto* brushesLayout = new QGridLayout(m_brushesSectionHost);
+    m_brushViewLabel = new QLabel(tr("View"), m_brushesSectionHost);
+    m_brushViewLabel->setAlignment(Qt::AlignLeft | Qt::AlignVCenter);
+    brushesLayout->addWidget(m_brushViewLabel, 0, kIconColumn, 1, kLabelColumn - kIconColumn + 1,
+        Qt::AlignLeft | Qt::AlignVCenter);
+
+    m_brushViewSelector = new SegmentedOptionSelector(m_brushesSectionHost);
+    m_brushViewSelector->setAccessibleName(tr("View"));
+    m_brushViewSelector->setSizePolicy(QSizePolicy::Expanding, QSizePolicy::Fixed);
+    m_brushViewSelector->setBaseHeight(26);
+    m_brushViewSelector->setDisplayMode(SegmentedOptionSelector::DisplayMode::TextOnly);
+    m_brushViewSelector->addOption(tr("Cards"));
+    m_brushViewSelector->addOption(tr("List"));
+    m_brushViewSelector->setCurrentIndex(0, false);
+    brushesLayout->addWidget(m_brushViewSelector, 0, kControlColumn);
+
+    m_packOrientationLabel = new QLabel(tr("Packs"), m_brushesSectionHost);
+    m_packOrientationLabel->setAlignment(Qt::AlignLeft | Qt::AlignVCenter);
+    brushesLayout->addWidget(m_packOrientationLabel, 1, kIconColumn, 1,
+        kLabelColumn - kIconColumn + 1, Qt::AlignLeft | Qt::AlignVCenter);
+
+    m_packOrientationSelector = new SegmentedOptionSelector(m_brushesSectionHost);
+    m_packOrientationSelector->setAccessibleName(tr("Packs"));
+    m_packOrientationSelector->setSizePolicy(QSizePolicy::Expanding, QSizePolicy::Fixed);
+    m_packOrientationSelector->setBaseHeight(26);
+    m_packOrientationSelector->setDisplayMode(SegmentedOptionSelector::DisplayMode::TextOnly);
+    m_packOrientationSelector->addOption(tr("Horizontal"));
+    m_packOrientationSelector->addOption(tr("Vertical"));
+    m_packOrientationSelector->setCurrentIndex(0, false);
+    brushesLayout->addWidget(m_packOrientationSelector, 1, kControlColumn);
+
     m_hudSizeLabel = new QLabel(tr("HUD Size"), m_brushesSectionHost);
     m_hudSizeLabel->setAlignment(Qt::AlignLeft | Qt::AlignVCenter);
-    brushesLayout->addWidget(m_hudSizeLabel, 0, kIconColumn, 1, kLabelColumn - kIconColumn + 1,
+    brushesLayout->addWidget(m_hudSizeLabel, 2, kIconColumn, 1, kLabelColumn - kIconColumn + 1,
         Qt::AlignLeft | Qt::AlignVCenter);
 
     m_hudSizeSlider = new ProgressHandleSlider(m_brushesSectionHost);
@@ -341,10 +380,26 @@ void DockPanelContextMenu::buildUi()
     m_hudSizeSlider->setValueDisplayMode(ProgressHandleSlider::ValueDisplayMode::RawValue);
     m_hudSizeSlider->setValueTextSuffix(QStringLiteral("%"));
     m_hudSizeSlider->setValue(BrushesPanel::kDefaultHudSize);
-    brushesLayout->addWidget(m_hudSizeSlider, 0, kControlColumn);
+    brushesLayout->addWidget(m_hudSizeSlider, 2, kControlColumn);
     contentLayout()->addWidget(m_brushesSectionHost);
     m_brushesSectionHost->hide();
     m_sepBeforeBrushes->hide();
+
+    connect(
+        m_brushViewSelector, &SegmentedOptionSelector::selectionChanged, this, [this](int index) {
+            if (m_brushesPanel) {
+                using ruwa::ui::workspace::BrushListViewMode;
+                m_brushesPanel->setViewMode(
+                    index == 1 ? BrushListViewMode::List : BrushListViewMode::Cards);
+            }
+        });
+
+    connect(m_packOrientationSelector, &SegmentedOptionSelector::selectionChanged, this,
+        [this](int index) {
+            if (m_brushesPanel) {
+                m_brushesPanel->setPackOrientation(index == 1 ? Qt::Vertical : Qt::Horizontal);
+            }
+        });
 
     connect(m_hudSizeSlider, &ProgressHandleSlider::valueChanged, this, [this](int value) {
         if (m_brushesPanel) {
@@ -490,6 +545,21 @@ void DockPanelContextMenu::rebuildStandardMenu()
     const bool hasBrushesPanel = !m_brushesPanel.isNull();
     m_brushesSectionHost->setVisible(hasBrushesPanel);
     m_sepBeforeBrushes->setVisible(hasBrushesPanel);
+    {
+        const QSignalBlocker blocker(m_brushViewSelector);
+        m_brushViewSelector->setEnabled(hasBrushesPanel);
+        m_brushViewSelector->setCurrentIndex(hasBrushesPanel
+                    && m_brushesPanel->viewMode() == ruwa::ui::workspace::BrushListViewMode::List
+                ? 1
+                : 0,
+            false);
+    }
+    {
+        const QSignalBlocker blocker(m_packOrientationSelector);
+        m_packOrientationSelector->setEnabled(hasBrushesPanel);
+        m_packOrientationSelector->setCurrentIndex(
+            hasBrushesPanel && m_brushesPanel->packOrientation() == Qt::Vertical ? 1 : 0, false);
+    }
     {
         const QSignalBlocker blocker(m_hudSizeSlider);
         m_hudSizeSlider->setEnabled(hasBrushesPanel);

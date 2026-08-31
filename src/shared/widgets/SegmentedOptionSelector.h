@@ -58,6 +58,10 @@ public:
     void setDisplayMode(DisplayMode mode);
     DisplayMode displayMode() const { return m_displayMode; }
 
+    /// Height before theme scaling; defaults to 32 and is clamped to at least 24.
+    void setBaseHeight(int height);
+    int baseHeight() const { return m_baseHeight; }
+
     void setOptionText(int index, const QString& text);
     void setOptionIcon(int index, const QIcon& icon);
     void setOptionData(int index, const QVariant& data);
@@ -96,6 +100,7 @@ private:
 
     int m_currentIndex { -1 };
     DisplayMode m_displayMode { DisplayMode::Auto };
+    int m_baseHeight { 32 };
 };
 
 } // namespace ruwa::ui::widgets

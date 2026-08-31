@@ -8,12 +8,14 @@
 #define RUWA_UI_WORKSPACE_PANELS_BRUSHESPANEL_H
 
 #include "shell/docking/widgets/DockPanel.h"
+#include "features/brush/ui/BrushListViewMode.h"
 
 #include <QHash>
 #include <QStringList>
 
 class QWidget;
 class QHBoxLayout;
+class QBoxLayout;
 
 namespace ruwa::ui::widgets {
 class BaseAnimatedButton;
@@ -42,6 +44,10 @@ public:
     /// Brush button scale in percent, multiplied by the theme's UI scale.
     int hudSize() const { return m_hudSize; }
     void setHudSize(int percent);
+    BrushListViewMode viewMode() const { return m_viewMode; }
+    void setViewMode(BrushListViewMode mode);
+    Qt::Orientation packOrientation() const { return m_packOrientation; }
+    void setPackOrientation(Qt::Orientation orientation);
 
 signals:
     void panelStateChanged();
@@ -55,7 +61,9 @@ protected:
 
 private:
     int brushButtonBaseSize() const;
+    void updateMinimumPanelSize();
     void setupFilterBar();
+    void applyFilterBarLayout();
     void rebuildFilterButtons(const QStringList& packIds, const QStringList& packNames);
     void activateFilter(const QString& filterId);
     void updateFilterSelection();
@@ -63,15 +71,19 @@ private:
 
     CanvasPanel* m_canvasPanel = nullptr;
     BrushesPanelContent* m_contentWidget = nullptr;
+    QHBoxLayout* m_contentLayout = nullptr;
+    QWidget* m_filterBar = nullptr;
     widgets::SmoothScrollArea* m_filterScrollArea = nullptr;
     QWidget* m_filterContent = nullptr;
-    QHBoxLayout* m_filterLayout = nullptr;
+    QBoxLayout* m_filterLayout = nullptr;
     QHash<QString, widgets::BaseAnimatedButton*> m_filterButtons;
     QStringList m_packFilterIds;
     QStringList m_packFilterNames;
     QString m_activeFilterId;
     bool m_filterBarInitializing = false;
     int m_hudSize = kDefaultHudSize;
+    BrushListViewMode m_viewMode = BrushListViewMode::Cards;
+    Qt::Orientation m_packOrientation = Qt::Horizontal;
     QJsonObject m_pendingPanelState;
 };
 

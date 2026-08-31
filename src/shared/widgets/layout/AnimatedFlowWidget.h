@@ -23,6 +23,7 @@ class AnimatedFlowWidget final : public QWidget {
 public:
     enum class LayoutStyle {
         UniformWrap,
+        VerticalList,
         PinnedToolbar,
     };
 
@@ -35,6 +36,8 @@ public:
     ~AnimatedFlowWidget() override;
 
     void setFlowSpacing(int horizontal, int vertical);
+    /// Change placement without replacing items or their animation state.
+    void setLayoutStyle(LayoutStyle style);
     /// Replaces the ordered items. Existing widgets glide to their new slots when requested.
     void setItems(const QList<QWidget*>& flowItems, const QList<QWidget*>& pinnedItems = {},
         bool animateReorder = false);

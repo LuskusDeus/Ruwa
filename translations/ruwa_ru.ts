@@ -3153,6 +3153,30 @@ Ruwa использует фреймворк Qt (версия %1), динами�
 <context>
     <name>ruwa::ui::widgets::DockPanelContextMenu</name>
     <message>
+        <source>Packs</source>
+        <translation>Наборы</translation>
+    </message>
+    <message>
+        <source>Horizontal</source>
+        <translation>Горизонтально</translation>
+    </message>
+    <message>
+        <source>Vertical</source>
+        <translation>Вертикально</translation>
+    </message>
+    <message>
+        <source>View</source>
+        <translation>Вид</translation>
+    </message>
+    <message>
+        <source>Cards</source>
+        <translation>Карточки</translation>
+    </message>
+    <message>
+        <source>List</source>
+        <translation>Список</translation>
+    </message>
+    <message>
         <source>HUD Size</source>
         <translation>Размер HUD</translation>
     </message>
@@ -5584,6 +5608,14 @@ Ruwa использует фреймворк Qt (версия %1), динами�
 </context>
 <context>
     <name>ruwa::ui::workspace::BrushesPanel</name>
+    <message>
+        <source>Favorite Brushes</source>
+        <translation>Избранные кисти</translation>
+    </message>
+    <message>
+        <source>All Brushes</source>
+        <translation>Все кисти</translation>
+    </message>
     <message>
         <location filename="../src/features/brush/ui/BrushesPanel.cpp" line="142"/>
         <location filename="../src/features/brush/ui/BrushesPanel.cpp" line="144"/>
