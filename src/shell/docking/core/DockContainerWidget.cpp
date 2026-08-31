@@ -418,6 +418,10 @@ void DockContainerWidget::floatPanel(DockPanel* panel, const QPoint& pos, bool e
 
     container->setAnimationDuration(m_animationDuration);
 
+    // Restored panels may have been explicitly hidden by the default layout.
+    // Showing the floating frame alone does not show an explicitly hidden child.
+    panel->show();
+
     // Animate appearance if enabled and we have source geometry
     QPoint localPos = mapFromGlobal(pos);
     if (m_animationsEnabled && sourceGeom.isValid() && !exactPosition) {
