@@ -21,6 +21,9 @@
 namespace {
 
 constexpr float kQuickLineMovementEpsilon = 0.05f;
+// Minimum screen-space travel that makes a path-derived signal observable.
+// Shared by Stroke Speed startup and stabilized Direction extraction.
+constexpr float kStrokeMotionEvidenceScreenPx = 0.25f;
 constexpr double kRealtimePreviewSamplingEnableRateHz = 140.0;
 constexpr double kRealtimePreviewSamplingTargetHz = 90.0;
 constexpr size_t kRealtimePreviewSamplingMinDabs = 48;
@@ -373,17 +376,16 @@ float BrushStrokeHost::sampleSmoothedStrokeSpeed(float worldX, float worldY, dou
     // the first point that actually travelled, then wait for a second travelled
     // interval before declaring startup velocity observable. This prevents pen
     // dwell/report-rate packets from accidentally validating a zero-speed head.
-    constexpr float kStartupMotionEpsilonScreenPx = 0.25f;
     bool startupEstimateBecameReliable = false;
     if (!m_initialStrokeSpeedSeeded && !m_strokeSpeedFirstMotionValid
-        && segmentScreenDistance > kStartupMotionEpsilonScreenPx) {
+        && segmentScreenDistance > kStrokeMotionEvidenceScreenPx) {
         m_strokeSpeedFirstMotionSampleTimeMs = sampleTimeMs;
         m_strokeSpeedFirstMotionScreenDistance = m_strokeSpeedCumulativeScreenDistance;
         m_strokeSpeedFirstMotionValid = true;
     } else if (!m_initialStrokeSpeedSeeded && m_strokeSpeedFirstMotionValid
         && !m_strokeSpeedStartupEstimateReliable
         && m_strokeSpeedCumulativeScreenDistance - m_strokeSpeedFirstMotionScreenDistance
-            > kStartupMotionEpsilonScreenPx
+            > kStrokeMotionEvidenceScreenPx
         && sampleTimeMs > m_strokeSpeedFirstMotionSampleTimeMs) {
         m_strokeSpeedStartupEstimateReliable = true;
         startupEstimateBecameReliable = true;
@@ -571,9 +573,13 @@ void BrushStrokeHost::beginStroke(float worldX, float worldY, float pressure,
     currentBrush->setPressure(pressure);
     currentBrush->setInputDynamics(initialInputDynamics);
     currentBrush->setStrokeElapsedSeconds(0.0f, true);
-    const auto stabilizedStartPoint
-        = ruwa::core::brushes::sampleStrokeStabilizer(m_stabilizationState, worldX, worldY,
-            ruwa::core::brushes::stabilizationTauMs(currentBrush->stabilization()), 0.0, true);
+    const float initialStabilizationLagMs
+        = ruwa::core::brushes::stabilizationTauMs(currentBrush->stabilization());
+    const auto stabilizedStartPoint = ruwa::core::brushes::sampleStrokeStabilizer(
+        m_stabilizationState, worldX, worldY, initialStabilizationLagMs, 0.0, true);
+    updateDirectionOnlyStabilization(
+        initialInputDynamics, worldX, worldY, initialStabilizationLagMs, 0.0, true);
+    currentBrush->setInputDynamics(initialInputDynamics);
     const Vector2 stabilizedStart { stabilizedStartPoint.x, stabilizedStartPoint.y };
     m_autoInputSmoothingValid = true;
     m_autoInputSmoothingPoint = { worldX, worldY };
@@ -1434,6 +1440,65 @@ float BrushStrokeHost::advanceDabDynamicsClockIdle(double realMs)
     return static_cast<float>(m_dabClockElapsedMs / 1000.0);
 }
 
+void BrushStrokeHost::updateDirectionOnlyStabilization(BrushInputDynamics& inputDynamics,
+    float worldX, float worldY, float regularStabilizationLagMs, double nowMs, bool reset)
+{
+    TileBrush* currentBrush = brush();
+    const bool directionBound = currentBrush
+        && currentBrush->hasActiveDynamicsBinding(
+            ruwa::core::brushes::BrushInputSourceKey::StrokeDirection);
+    const bool enabled = directionBound && regularStabilizationLagMs <= 0.0f;
+
+    inputDynamics.strokeDirection = 0.0f;
+    inputDynamics.strokeDirectionAvailable = false;
+    if (!enabled) {
+        ruwa::core::brushes::clearStrokeStabilizer(m_directionStabilizationState);
+        m_previousDirectionStabilizedPoint = {};
+        m_previousDirectionStabilizedPointValid = false;
+        m_stabilizedStrokeDirection = 0.0f;
+        m_stabilizedStrokeDirectionAvailable = false;
+        return;
+    }
+
+    // Stroke Speed is already the host's smoothed, zoom-independent signal.
+    // Scale the stabilizer SETTING (not its output angle), preserving the exact
+    // stabilization curve while making fast motion progressively latency-free.
+    const float directionStabilization
+        = ruwa::core::brushes::directionOnlyStabilizationForStrokeSpeed(
+            inputDynamics.strokeSpeed, inputDynamics.strokeSpeedAvailable);
+    const float lagMs = ruwa::core::brushes::stabilizationTauMs(directionStabilization);
+    const auto stabilized = ruwa::core::brushes::sampleStrokeStabilizer(
+        m_directionStabilizationState, worldX, worldY, lagMs, nowMs, reset);
+    if (reset || !m_previousDirectionStabilizedPointValid) {
+        m_previousDirectionStabilizedPoint = stabilized;
+        m_previousDirectionStabilizedPointValid = true;
+    } else {
+        const float dx = stabilized.x - m_previousDirectionStabilizedPoint.x;
+        const float dy = stabilized.y - m_previousDirectionStabilizedPoint.y;
+        // atan2 is not meaningful for an arbitrarily tiny displacement: even a
+        // stabilized point can settle backward by a few thousandths of a pixel,
+        // which used to look like a full 180-degree direction reset. Keep the
+        // anchor until a quarter SCREEN pixel of coherent output has accumulated.
+        // This rejects numerical/tablet reversal without filtering the angle and
+        // remains invariant under canvas zoom.
+        const float directionEvidenceWorldPx
+            = kStrokeMotionEvidenceScreenPx / std::max(viewportZoom(), 0.001f);
+        const float directionEvidenceSq = directionEvidenceWorldPx * directionEvidenceWorldPx;
+        if (dx * dx + dy * dy >= directionEvidenceSq) {
+            constexpr float kTwoPi = 6.28318530717958647692f;
+            m_stabilizedStrokeDirection = std::atan2(dy, dx) / kTwoPi;
+            if (m_stabilizedStrokeDirection < 0.0f) {
+                m_stabilizedStrokeDirection += 1.0f;
+            }
+            m_stabilizedStrokeDirectionAvailable = true;
+            m_previousDirectionStabilizedPoint = stabilized;
+        }
+    }
+
+    inputDynamics.strokeDirection = m_stabilizedStrokeDirection;
+    inputDynamics.strokeDirectionAvailable = m_stabilizedStrokeDirectionAvailable;
+}
+
 void BrushStrokeHost::continueStrokeImmediate(float worldX, float worldY, float pressure,
     float strokeElapsedSeconds, const BrushInputDynamics& inputDynamics,
     bool requestRenderAfterStep, bool isRealPenSample, bool inputTimestampReliable)
@@ -1512,6 +1577,8 @@ void BrushStrokeHost::continueStrokeImmediate(float worldX, float worldY, float 
         sampledInputDynamics.strokeSpeed
             = sampleSmoothedStrokeSpeed(worldX, worldY, strokeSpeedNowMs);
         sampledInputDynamics.strokeSpeedAvailable = true;
+        updateDirectionOnlyStabilization(
+            sampledInputDynamics, worldX, worldY, stabLagMs, stabilizerNowMs);
         currentBrush->setPressure(pressure);
         currentBrush->setInputDynamics(sampledInputDynamics);
         currentBrush->setStrokeElapsedSeconds(dabElapsedSeconds, true);
@@ -1584,6 +1651,8 @@ void BrushStrokeHost::continueStrokeImmediate(float worldX, float worldY, float 
     sampledInputDynamics.strokeSpeed
         = sampleSmoothedStrokeSpeed(resolved.x, resolved.y, strokeSpeedNowMs);
     sampledInputDynamics.strokeSpeedAvailable = true;
+    updateDirectionOnlyStabilization(
+        sampledInputDynamics, worldX, worldY, stabLagMs, stabilizerNowMs);
     currentBrush->setPressure(emitPressure);
     currentBrush->setInputDynamics(sampledInputDynamics);
     currentBrush->setStrokeElapsedSeconds(dabElapsedSeconds, true);
@@ -1649,12 +1718,21 @@ void BrushStrokeHost::continueStrokeWithResolvedPoint(float worldX, float worldY
             || (inputDynamics.strokeSpeedAvailable
                 && std::abs(inputDynamics.strokeSpeed - m_lastRawStrokeInputDynamics.strokeSpeed)
                     > 0.001f));
+    const bool strokeDirectionBound = currentBrush->hasActiveDynamicsBinding(
+        ruwa::core::brushes::BrushInputSourceKey::StrokeDirection);
+    const bool strokeDirectionChanged = strokeDirectionBound
+        && (inputDynamics.strokeDirectionAvailable
+                != m_lastRawStrokeInputDynamics.strokeDirectionAvailable
+            || (inputDynamics.strokeDirectionAvailable
+                && normalizedAngleDistance(
+                       inputDynamics.strokeDirection, m_lastRawStrokeInputDynamics.strokeDirection)
+                    > (0.5f / 360.0f)));
     const bool inputDynamicsChanged
         = inputDynamics.penTiltAvailable != m_lastRawStrokeInputDynamics.penTiltAvailable
         || (inputDynamics.penTiltAvailable
             && normalizedAngleDistance(inputDynamics.penTilt, m_lastRawStrokeInputDynamics.penTilt)
                 > (0.5f / 360.0f))
-        || strokeSpeedChanged;
+        || strokeSpeedChanged || strokeDirectionChanged;
     const bool movementBelowThreshold = (moveDx * moveDx + moveDy * moveDy)
         < (kQuickLineMovementEpsilon * kQuickLineMovementEpsilon);
     const bool hasMeaningfulMovement = !movementBelowThreshold;
@@ -2030,6 +2108,11 @@ void BrushStrokeHost::translateActiveStroke(float dx, float dy)
     m_strokeSpeedSampleX += dx;
     m_strokeSpeedSampleY += dy;
     ruwa::core::brushes::translateStrokeStabilizer(m_stabilizationState, dx, dy);
+    ruwa::core::brushes::translateStrokeStabilizer(m_directionStabilizationState, dx, dy);
+    if (m_previousDirectionStabilizedPointValid) {
+        m_previousDirectionStabilizedPoint.x += dx;
+        m_previousDirectionStabilizedPoint.y += dy;
+    }
 
     auto* layer = activeLayer();
     TileGrid* paintMask = effectivePaintMask(layer, grid);
@@ -2112,6 +2195,7 @@ void BrushStrokeHost::completeEndStrokeAfterQueueDrain()
     m_stabilizerCatchupTimer.stop();
     m_isDrawing = false;
     ruwa::core::brushes::clearStrokeStabilizer(m_stabilizationState);
+    ruwa::core::brushes::clearStrokeStabilizer(m_directionStabilizationState);
     m_lastRealtimeTaperTailStart = std::numeric_limits<size_t>::max();
     m_lastRealtimeTaperPreviewDabCount = 0;
     m_lastRealtimeTaperPreviewWasSampled = false;
@@ -2491,6 +2575,11 @@ void BrushStrokeHost::clearStrokeRuntimeState()
     decltype(m_strokeSnapshotted) {}.swap(m_strokeSnapshotted);
     decltype(m_prevStrokePreviewKeys) {}.swap(m_prevStrokePreviewKeys);
     ruwa::core::brushes::clearStrokeStabilizer(m_stabilizationState);
+    ruwa::core::brushes::clearStrokeStabilizer(m_directionStabilizationState);
+    m_previousDirectionStabilizedPoint = {};
+    m_previousDirectionStabilizedPointValid = false;
+    m_stabilizedStrokeDirection = 0.0f;
+    m_stabilizedStrokeDirectionAvailable = false;
     m_quickLineStrokeModified = false;
     m_endStrokeRequested = false;
     m_endStrokeQuickShapeWasActive = false;

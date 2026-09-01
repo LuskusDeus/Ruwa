@@ -56,6 +56,14 @@ constexpr float kBrushStrokeSpeedMaxScreenPxPerSecond = 4000.0f;
 /// enough tablet packets to represent the deliberate motion while keeping a
 /// speed-driven brush responsive to acceleration and direction changes.
 constexpr float kBrushStrokeSpeedFilterTimeSeconds = 0.150f;
+/// Maximum private stabilization applied only to Stroke Direction when the
+/// actual stroke geometry is unstabilized. Stroke Speed scales it down to zero.
+constexpr float kBrushDirectionOnlyMaxStabilization = 0.15f;
+/// Characteristic screen speed for the deliberately steep Direction-only
+/// stabilization falloff. One hundred pixels per second retains most of the
+/// stabilizer during genuinely slow motion, while the terminal factor below
+/// still removes practically all latency from fast strokes.
+constexpr float kBrushDirectionStabilizationFalloffScreenPxPerSecond = 100.0f;
 /// Maximum full-range traversal time of the per-setting dynamics post-filter.
 /// The UI exposes this as 0-100%; zero bypasses the filter completely.
 constexpr float kBrushInputFilterMaxDurationSeconds = 2.0f;
@@ -83,6 +91,12 @@ enum class BrushTimeEndAction : uint8_t { Stop = 0, Reverse, Restart, Count };
 /// normalized domain as curve x coordinates; availability is explicit because
 /// an upright pen has no meaningful azimuth and a press has no speed yet.
 struct BrushInputDynamics {
+    /// Candidate path direction supplied by the stroke host when direction-only
+    /// stabilization is active. TileBrush feeds it through its normal spatial
+    /// direction accumulator; it is not a final dynamics-value override. The
+    /// painted geometry therefore remains zero-latency.
+    float strokeDirection = 0.0f;
+    bool strokeDirectionAvailable = false;
     float penTilt = 0.0f;
     bool penTiltAvailable = false;
     float strokeSpeed = 0.0f;
@@ -171,6 +185,22 @@ inline float normalizeBrushStrokeSpeed(float screenPixelsPerSecond)
     return clamp01(screenPixelsPerSecond / kBrushStrokeSpeedMaxScreenPxPerSecond);
 }
 
+inline float directionOnlyStabilizationForStrokeSpeed(
+    float normalizedStrokeSpeed, bool strokeSpeedAvailable)
+{
+    const float speed = strokeSpeedAvailable && std::isfinite(normalizedStrokeSpeed)
+        ? clamp01(normalizedStrokeSpeed)
+        : 0.0f;
+    const float screenPixelsPerSecond = speed * kBrushStrokeSpeedMaxScreenPxPerSecond;
+    const float lowSpeedFalloff = 1.0f
+        / std::sqrt(
+            1.0f + screenPixelsPerSecond / kBrushDirectionStabilizationFalloffScreenPxPerSecond);
+    // The terminal factor guarantees an exact 0% at the Stroke Speed endpoint;
+    // the inverse-square-root factor makes the curve steep at low speeds while
+    // remaining continuous and monotonic.
+    return kBrushDirectionOnlyMaxStabilization * (1.0f - speed) * lowSpeedFalloff;
+}
+
 inline float interpolateNormalizedAngle(float from, float to, float amount)
 {
     from = clamp01(from);
@@ -194,6 +224,14 @@ inline BrushInputDynamics interpolateBrushInputDynamics(const BrushInputDynamics
 {
     BrushInputDynamics result;
     amount = clamp01(amount);
+    result.strokeDirectionAvailable = from.strokeDirectionAvailable || to.strokeDirectionAvailable;
+    if (from.strokeDirectionAvailable && to.strokeDirectionAvailable) {
+        result.strokeDirection
+            = interpolateNormalizedAngle(from.strokeDirection, to.strokeDirection, amount);
+    } else {
+        result.strokeDirection = to.strokeDirectionAvailable ? clamp01(to.strokeDirection)
+                                                             : clamp01(from.strokeDirection);
+    }
     result.penTiltAvailable = from.penTiltAvailable || to.penTiltAvailable;
     if (from.penTiltAvailable && to.penTiltAvailable) {
         result.penTilt = interpolateNormalizedAngle(from.penTilt, to.penTilt, amount);

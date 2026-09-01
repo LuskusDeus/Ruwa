@@ -2,6 +2,7 @@
 
 #include "features/canvas/stroke/StrokeInputQueue.h"
 
+#include <catch2/catch_approx.hpp>
 #include <catch2/catch_test_macros.hpp>
 
 #include <algorithm>
@@ -177,6 +178,49 @@ TEST_CASE("pen tilt interpolation follows the shortest circular arc", "[brush][d
     const float midpoint = ruwa::core::brushes::interpolateNormalizedAngle(from, to, 0.5f);
 
     CHECK(std::min(std::abs(midpoint), std::abs(1.0f - midpoint)) < 0.000001f);
+}
+
+TEST_CASE("host-provided stroke direction interpolation follows the shortest circular arc",
+    "[brush][dynamics][direction]")
+{
+    ruwa::core::brushes::BrushInputDynamics from;
+    from.strokeDirection = 350.0f / 360.0f;
+    from.strokeDirectionAvailable = true;
+    ruwa::core::brushes::BrushInputDynamics to;
+    to.strokeDirection = 10.0f / 360.0f;
+    to.strokeDirectionAvailable = true;
+
+    const auto midpoint = ruwa::core::brushes::interpolateBrushInputDynamics(from, to, 0.5f);
+
+    REQUIRE(midpoint.strokeDirectionAvailable);
+    CHECK(std::min(std::abs(midpoint.strokeDirection), std::abs(1.0f - midpoint.strokeDirection))
+        < 0.000001f);
+}
+
+TEST_CASE("direction-only stabilization falls to zero with stroke speed",
+    "[brush][dynamics][direction][speed]")
+{
+    using namespace ruwa::core::brushes;
+
+    CHECK(directionOnlyStabilizationForStrokeSpeed(0.0f, true)
+        == Catch::Approx(kBrushDirectionOnlyMaxStabilization));
+    const float at10PxPerSecond
+        = directionOnlyStabilizationForStrokeSpeed(normalizeBrushStrokeSpeed(10.0f), true);
+    const float at100PxPerSecond
+        = directionOnlyStabilizationForStrokeSpeed(normalizeBrushStrokeSpeed(100.0f), true);
+    const float at1000PxPerSecond
+        = directionOnlyStabilizationForStrokeSpeed(normalizeBrushStrokeSpeed(1000.0f), true);
+    // Regression: the earlier 7.5 px/s falloff collapsed stabilization even
+    // during a slow stroke and exposed raw alternating tablet deltas again.
+    CHECK(at10PxPerSecond >= 0.14f);
+    CHECK(at100PxPerSecond <= 0.11f);
+    CHECK(at1000PxPerSecond <= 0.04f);
+    CHECK(at10PxPerSecond > at100PxPerSecond);
+    CHECK(at100PxPerSecond > at1000PxPerSecond);
+    CHECK(directionOnlyStabilizationForStrokeSpeed(1.0f, true) == Catch::Approx(0.0f));
+    CHECK(directionOnlyStabilizationForStrokeSpeed(2.0f, true) == Catch::Approx(0.0f));
+    CHECK(directionOnlyStabilizationForStrokeSpeed(1.0f, false)
+        == Catch::Approx(kBrushDirectionOnlyMaxStabilization));
 }
 
 TEST_CASE("stroke speed interpolation carries a continuous spatial derivative",

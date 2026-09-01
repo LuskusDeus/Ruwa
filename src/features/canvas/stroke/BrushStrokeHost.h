@@ -222,6 +222,8 @@ private:
     // Same clock, entry point for ticks that carry no pen sample (the liquify
     // dwell): advances in real time without touching the period estimate.
     float advanceDabDynamicsClockIdle(double realMs);
+    void updateDirectionOnlyStabilization(BrushInputDynamics& inputDynamics, float worldX,
+        float worldY, float regularStabilizationLagMs, double nowMs, bool reset = false);
     // dabElapsedSeconds is the DAB clock (stepDabDynamicsClock), not the raw
     // input clock — everything this writes ends up on a dab.
     void continueStrokeWithResolvedPoint(float worldX, float worldY, float pressure,
@@ -385,6 +387,15 @@ private:
     BrushInputDynamics m_prevEmittedInputDynamics {};
 
     ruwa::core::brushes::StrokeStabilizerState m_stabilizationState;
+    // At literal 0% geometry stabilization, Direction dynamics still needs a
+    // stable trajectory at slow tablet speeds. Reuse the exact position
+    // stabilizer on a private coordinate stream and expose only its direction;
+    // its output never replaces the point used to rasterize the stroke.
+    ruwa::core::brushes::StrokeStabilizerState m_directionStabilizationState;
+    ruwa::core::brushes::StrokeStabilizerPoint m_previousDirectionStabilizedPoint {};
+    bool m_previousDirectionStabilizedPointValid = false;
+    float m_stabilizedStrokeDirection = 0.0f;
+    bool m_stabilizedStrokeDirectionAvailable = false;
     // Pressure delayed in lockstep with the position stabilizer (2-stage EWMA,
     // same alpha) so dabs drawn at the lagged position carry the pressure the
     // pen had there — see continueStrokeImmediate. Without this the stabilizer

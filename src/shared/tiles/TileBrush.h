@@ -444,6 +444,7 @@ public:
     void setInputDynamics(const ruwa::core::brushes::BrushInputDynamics& inputDynamics)
     {
         m_inputDynamics = inputDynamics;
+        m_inputDynamics.strokeDirection = std::clamp(m_inputDynamics.strokeDirection, 0.0f, 1.0f);
         m_inputDynamics.penTilt = std::clamp(m_inputDynamics.penTilt, 0.0f, 1.0f);
         m_inputDynamics.strokeSpeed = std::clamp(m_inputDynamics.strokeSpeed, 0.0f, 1.0f);
     }
@@ -829,6 +830,10 @@ public:
         m_strokeDirSin = 0.0f;
         m_strokeDirSumX = 0.0f;
         m_strokeDirSumY = 0.0f;
+        m_strokeTurnCandidateX = 0.0f;
+        m_strokeTurnCandidateY = 0.0f;
+        m_strokeTurnCandidateTravel = 0.0f;
+        m_strokeTurnCandidateSamples = 0;
         m_strokeTravelTotal = 0.0f;
         m_strokeDirInitialized = false;
         m_dynamicsFilterState.reset();
@@ -891,6 +896,10 @@ public:
         m_strokeActive = false;
         m_strokeDirSumX = 0.0f;
         m_strokeDirSumY = 0.0f;
+        m_strokeTurnCandidateX = 0.0f;
+        m_strokeTurnCandidateY = 0.0f;
+        m_strokeTurnCandidateTravel = 0.0f;
+        m_strokeTurnCandidateSamples = 0;
         m_strokeTravelTotal = 0.0f;
         m_strokeDirInitialized = false;
         m_dynamicsFilterState.reset();
@@ -1311,6 +1320,10 @@ public:
         m_strokeActive = false;
         m_strokeDirSumX = 0.0f;
         m_strokeDirSumY = 0.0f;
+        m_strokeTurnCandidateX = 0.0f;
+        m_strokeTurnCandidateY = 0.0f;
+        m_strokeTurnCandidateTravel = 0.0f;
+        m_strokeTurnCandidateSamples = 0;
         m_strokeTravelTotal = 0.0f;
         m_strokeDirInitialized = false;
         m_dynamicsFilterState.reset();
@@ -1324,6 +1337,15 @@ public:
     DabPoint recordDabPoint(float worldX, float worldY, float radiusOverride = -1.0f,
         float strokeDirection = 0.0f, bool strokeDirectionAvailable = false)
     {
+        // A pressure/tilt-only packet may legitimately re-evaluate a stationary
+        // non-accumulating dab without supplying a new geometric segment. Once
+        // the stroke has established a direction, "no new direction" means the
+        // heading is unchanged; treating it as unavailable would intermittently
+        // fall back to the brush's base angle.
+        if (!strokeDirectionAvailable && m_strokeDirInitialized) {
+            strokeDirection = currentStrokeDirectionNormalized();
+            strokeDirectionAvailable = true;
+        }
         const uint32_t randomSeed = dabRandomSeed(m_strokeDabs.size());
         const int32_t ix = static_cast<int32_t>(std::floor(worldX));
         const int32_t iy = static_cast<int32_t>(std::floor(worldY));
@@ -1501,7 +1523,26 @@ public:
             }
             return;
         }
-        // Leaky integrator over RAW delta vectors (not unit vectors). A 0.5 px
+        // At 0% geometry stabilization the host supplies the heading of a
+        // private stabilized trajectory. Treat it as this segment's direction
+        // VECTOR, weighted by the real segment travel, and feed it through the
+        // same accumulator/corner logic used by ordinarily stabilized geometry.
+        // This is deliberately not a final angle override: bypassing the
+        // accumulator made every tiny residual turn rotate a dab immediately.
+        float directionDx = dx;
+        float directionDy = dy;
+        const bool suppliedDirectionAvailable = toInputDynamics.strokeDirectionAvailable
+            || fromInputDynamics.strokeDirectionAvailable;
+        if (suppliedDirectionAvailable) {
+            constexpr float kTwoPi = 6.28318530717958647692f;
+            const float suppliedDirection = toInputDynamics.strokeDirectionAvailable
+                ? toInputDynamics.strokeDirection
+                : fromInputDynamics.strokeDirection;
+            const float radians = std::clamp(suppliedDirection, 0.0f, 1.0f) * kTwoPi;
+            directionDx = std::cos(radians) * dist;
+            directionDy = std::sin(radians) * dist;
+        }
+        // Leaky integrator over segment delta vectors (not unit vectors). A 0.5 px
         // jitter delta contributes magnitude 0.5; a clean 30 px segment
         // contributes magnitude 30. Sub-pixel startup noise therefore cannot
         // dominate the accumulator the way unit-vector EMA let it.
@@ -1520,8 +1561,8 @@ public:
         const float prevSumX = m_strokeDirSumX;
         const float prevSumY = m_strokeDirSumY;
         const float decay = std::exp(-dist / kDirectionSmoothingPixels);
-        m_strokeDirSumX = prevSumX * decay + dx;
-        m_strokeDirSumY = prevSumY * decay + dy;
+        m_strokeDirSumX = prevSumX * decay + directionDx;
+        m_strokeDirSumY = prevSumY * decay + directionDy;
         m_strokeTravelTotal += dist;
 
         auto unitFrom = [](float sx, float sy, float* outCos, float* outSin) -> bool {
@@ -1551,31 +1592,99 @@ public:
         // in the post-corner segment uses the new direction, producing a
         // visible vertex that matches the geometry the user actually drew.
         //
-        // Crucial: compare the segment's RAW direction against the prev
+        // Crucial: compare the segment's pre-accumulator direction against the prev
         // SMOOTHED direction, not new vs prev (both smoothed). At a real
         // corner formed across several short segments, the integrator's
         // new state has only partially rotated toward the post-corner
         // direction — comparing smoothed-to-smoothed never crosses the
-        // threshold and the curl artifact returns. Raw-vs-smoothed catches
-        // the user's intent on the first segment that turns.
+        // threshold and the curl artifact returns. Segment-vs-smoothed detects
+        // the turn immediately; the evidence gate below distinguishes that
+        // turn from an isolated input jitter packet.
         //
         // dot is cos(turn angle); 0.5 corresponds to 60°.
-        const float rawCos = dx / dist;
-        const float rawSin = dy / dist;
-        const float prevToRawDot = prevAvail ? prevCos * rawCos + prevSin * rawSin : 1.0f;
+        const float segmentCos = directionDx / dist;
+        const float segmentSin = directionDy / dist;
+        const float prevToSegmentDot
+            = prevAvail ? prevCos * segmentCos + prevSin * segmentSin : 1.0f;
         constexpr float kHardCornerCosThreshold = 0.5f;
-        const bool hardCorner = prevAvail && prevToRawDot < kHardCornerCosThreshold;
+        constexpr float kHardCornerEvidenceTravelPx = 1.0f;
+        constexpr float kHardCornerCandidateCoherence = 0.75f;
 
-        // Snap the integrator to the raw input direction at a hard corner.
+        const auto clearTurnCandidate = [this]() {
+            m_strokeTurnCandidateX = 0.0f;
+            m_strokeTurnCandidateY = 0.0f;
+            m_strokeTurnCandidateTravel = 0.0f;
+            m_strokeTurnCandidateSamples = 0;
+        };
+
+        bool hardCorner = false;
+        if (prevAvail && prevToSegmentDot < kHardCornerCosThreshold) {
+            // A segment is only a corner candidate. At 0% stabilization the
+            // tablet stream can contain tiny alternating deltas; direction alone
+            // must not let one of them replace the complete 6 px integrator.
+            // Accumulate spatially coherent evidence so the decision remains
+            // independent of packet rate. One pixel is also the renderer's
+            // minimum dab step, so a real corner is confirmed before it can lag
+            // by more than one drawable interval.
+            bool continuesCandidate = false;
+            const float candidateLength
+                = std::hypot(m_strokeTurnCandidateX, m_strokeTurnCandidateY);
+            if (m_strokeTurnCandidateSamples > 0 && candidateLength > 1e-6f) {
+                const float candidateCos = m_strokeTurnCandidateX / candidateLength;
+                const float candidateSin = m_strokeTurnCandidateY / candidateLength;
+                continuesCandidate = candidateCos * segmentCos + candidateSin * segmentSin
+                    >= kHardCornerCosThreshold;
+            }
+
+            if (!continuesCandidate) {
+                m_strokeTurnCandidateX = directionDx;
+                m_strokeTurnCandidateY = directionDy;
+                m_strokeTurnCandidateTravel = dist;
+                m_strokeTurnCandidateSamples = 1;
+            } else {
+                m_strokeTurnCandidateX += directionDx;
+                m_strokeTurnCandidateY += directionDy;
+                m_strokeTurnCandidateTravel += dist;
+                ++m_strokeTurnCandidateSamples;
+            }
+
+            const float accumulatedLength
+                = std::hypot(m_strokeTurnCandidateX, m_strokeTurnCandidateY);
+            const float coherence = accumulatedLength
+                / std::max(m_strokeTurnCandidateTravel, std::numeric_limits<float>::epsilon());
+            const float candidateCos = accumulatedLength > 1e-6f
+                ? m_strokeTurnCandidateX / accumulatedLength
+                : segmentCos;
+            const float candidateSin = accumulatedLength > 1e-6f
+                ? m_strokeTurnCandidateY / accumulatedLength
+                : segmentSin;
+            const bool candidateStillTurns
+                = prevCos * candidateCos + prevSin * candidateSin < kHardCornerCosThreshold;
+            // A segment as long as the complete smoothing window is decisive on
+            // its own. Shorter input needs corroboration from another packet,
+            // which rejects the common forward/backward jitter pair.
+            const bool corroborated
+                = m_strokeTurnCandidateSamples >= 2 || dist >= kDirectionSmoothingPixels;
+            hardCorner = corroborated && m_strokeTurnCandidateTravel >= kHardCornerEvidenceTravelPx
+                && coherence >= kHardCornerCandidateCoherence && candidateStillTurns;
+
+            if (hardCorner) {
+                newCos = candidateCos;
+                newSin = candidateSin;
+            }
+        } else {
+            clearTurnCandidate();
+        }
+
+        // Snap the integrator to the confirmed turn direction at a hard corner.
         // Without this, newDir is only the partially-rotated smoothed state,
         // and the post-corner dabs would still be biased toward the pre-
         // corner heading. The snap also seeds the next segment from the
         // actual post-corner direction so subsequent smoothing is clean.
         if (hardCorner) {
-            m_strokeDirSumX = dx;
-            m_strokeDirSumY = dy;
-            newCos = rawCos;
-            newSin = rawSin;
+            m_strokeDirSumX = newCos * m_strokeTurnCandidateTravel;
+            m_strokeDirSumY = newSin * m_strokeTurnCandidateTravel;
+            clearTurnCandidate();
         }
 
         if (newAvail) {
@@ -1766,10 +1875,7 @@ public:
             return 0.0f;
         }
 
-        float strokeDirDeg = std::atan2(m_strokeDirSin, m_strokeDirCos) * (180.0f / kPi);
-        if (strokeDirDeg < 0.0f)
-            strokeDirDeg += 360.0f;
-        const float strokeDirNorm = strokeDirDeg / 360.0f;
+        const float strokeDirNorm = currentStrokeDirectionNormalized();
 
         auto withDir = currentInputContext(0.0f, 0.0f);
         withDir.strokeDirection = std::clamp(strokeDirNorm, 0.0f, 1.0f);
@@ -2118,6 +2224,16 @@ private:
         }
         return ruwa::core::brushes::evaluateBrushDynamics(
             m_brushSettingsModel, inputContext, &m_dynamicsFilterState, true);
+    }
+
+    float currentStrokeDirectionNormalized() const
+    {
+        constexpr float kPi = 3.14159265358979323846f;
+        float degrees = std::atan2(m_strokeDirSin, m_strokeDirCos) * (180.0f / kPi);
+        if (degrees < 0.0f) {
+            degrees += 360.0f;
+        }
+        return degrees / 360.0f;
     }
 
     ruwa::core::brushes::BrushEvaluatedState evaluateDynamicsForPressure(float pressure,
@@ -3477,11 +3593,10 @@ private:
     std::vector<DabPoint> m_strokeDabs;
     float m_spacingDistanceSinceLastDab = 0.0f;
     bool m_strokeActive = false;
-    // Stroke direction is smoothed across segments to avoid per-event
-    // angular noise at low pointer speeds (short segments give a noisy
-    // atan2(dy,dx)). EMA on the unit direction vector, length-weighted:
-    // alpha = clamp(segLen / m_radius, 0, 1). Fast strokes (segLen >= radius)
-    // adopt the new direction immediately; slow strokes accumulate smoothly.
+    // Stroke direction is smoothed across segments to avoid per-event angular
+    // noise at low pointer speeds (short segments give a noisy atan2(dy,dx)).
+    // The fixed-distance leaky delta-vector integrator above makes its response
+    // spatial and independent of brush radius.
     // Smoothed direction vector exposed for cursor preview (unit-length).
     float m_strokeDirCos = 1.0f;
     float m_strokeDirSin = 0.0f;
@@ -3490,6 +3605,13 @@ private:
     // in a wrong heading.
     float m_strokeDirSumX = 0.0f;
     float m_strokeDirSumY = 0.0f;
+    // A hard corner must be supported by coherent travel, not merely by the
+    // angle of one raw tablet packet. These fields collect that spatial evidence
+    // without changing the normal leaky direction integrator.
+    float m_strokeTurnCandidateX = 0.0f;
+    float m_strokeTurnCandidateY = 0.0f;
+    float m_strokeTurnCandidateTravel = 0.0f;
+    uint32_t m_strokeTurnCandidateSamples = 0;
     // Total distance traveled since stroke start. Used to decide when the
     // previous smoothed direction is reliable enough for per-dab interpolation;
     // early segments still draw immediately using their current direction.
