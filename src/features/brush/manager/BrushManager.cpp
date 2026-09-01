@@ -41,10 +41,10 @@ const PixelBrushModule& pixelModule()
     return static_cast<const PixelBrushModule&>(*BrushEngineRegistry::instance().pixelModule());
 }
 
-QVariantMap readEngineSettingsGroup(QSettings& settings)
+QVariantMap readSettingsGroup(QSettings& settings, const QString& groupName)
 {
     QVariantMap engineSettings;
-    settings.beginGroup(QStringLiteral("engineSettings"));
+    settings.beginGroup(groupName);
     const QStringList keys = settings.allKeys();
     for (const QString& key : keys) {
         engineSettings.insert(key, settings.value(key));
@@ -53,10 +53,11 @@ QVariantMap readEngineSettingsGroup(QSettings& settings)
     return engineSettings;
 }
 
-void writeEngineSettingsGroup(QSettings& settings, const QVariantMap& engineSettings)
+void writeSettingsGroup(
+    QSettings& settings, const QString& groupName, const QVariantMap& engineSettings)
 {
-    settings.remove(QStringLiteral("engineSettings"));
-    settings.beginGroup(QStringLiteral("engineSettings"));
+    settings.remove(groupName);
+    settings.beginGroup(groupName);
     for (auto it = engineSettings.cbegin(); it != engineSettings.cend(); ++it) {
         settings.setValue(it.key(), it.value());
     }
@@ -179,9 +180,19 @@ void normalizeBrushData(BrushData& brush)
     }
 
     if (const auto* module = BrushEngineRegistry::instance().module(brush.engineId)) {
-        brush.engineSettings = module->upgradeSettings(brush.engineVersion, brush.engineSettings);
+        const int storedEngineVersion = brush.engineVersion;
+        brush.engineSettings = module->upgradeSettings(storedEngineVersion, brush.engineSettings);
         brush.engineSettings = module->normalizeSettings(brush.engineSettings);
+        if (brush.baseEngineSettings.isEmpty()) {
+            brush.baseEngineSettings = brush.engineSettings;
+        } else {
+            brush.baseEngineSettings
+                = module->upgradeSettings(storedEngineVersion, brush.baseEngineSettings);
+            brush.baseEngineSettings = module->normalizeSettings(brush.baseEngineSettings);
+        }
         brush.engineVersion = module->currentVersion();
+    } else if (brush.baseEngineSettings.isEmpty()) {
+        brush.baseEngineSettings = brush.engineSettings;
     }
 
     syncCompatibilitySettings(brush);
@@ -285,6 +296,16 @@ QJsonObject brushToJsonObject(const BrushData& brush, const QStringList& starred
     if (QDir::isAbsolutePath(customImagePath)) {
         portableEngineSettings.insert(QStringLiteral("dab.customImage"), QString());
     }
+    QVariantMap portableBaseEngineSettings = brush.baseEngineSettings;
+    const QString baseCustomImagePath
+        = portableBaseEngineSettings.value(QStringLiteral("dab.customImage")).toString();
+    const bool baseUsesDabImage
+        = !customImagePath.isEmpty() && baseCustomImagePath == customImagePath;
+    const QJsonObject baseDabImage
+        = baseUsesDabImage ? QJsonObject {} : embeddedDabImageObject(brush.baseEngineSettings);
+    if (QDir::isAbsolutePath(baseCustomImagePath)) {
+        portableBaseEngineSettings.insert(QStringLiteral("dab.customImage"), QString());
+    }
 
     QJsonObject object;
     object.insert(QStringLiteral("name"), brush.name);
@@ -293,9 +314,16 @@ QJsonObject brushToJsonObject(const BrushData& brush, const QStringList& starred
     object.insert(QStringLiteral("engineVersion"), brush.engineVersion);
     object.insert(
         QStringLiteral("engineSettings"), QJsonObject::fromVariantMap(portableEngineSettings));
+    object.insert(QStringLiteral("baseEngineSettings"),
+        QJsonObject::fromVariantMap(portableBaseEngineSettings));
 
     if (!dabImage.isEmpty()) {
         object.insert(QStringLiteral("dabImage"), dabImage);
+    }
+    if (!baseDabImage.isEmpty()) {
+        object.insert(QStringLiteral("baseDabImage"), baseDabImage);
+    } else if (baseUsesDabImage && !dabImage.isEmpty()) {
+        object.insert(QStringLiteral("baseUsesDabImage"), true);
     }
 
     // Starred ("fav") settings are a per-brush UI preference kept outside
@@ -366,6 +394,8 @@ bool readBrushesFromFile(
         brush.engineVersion = object.value(QStringLiteral("engineVersion")).toInt(1);
         brush.engineSettings
             = object.value(QStringLiteral("engineSettings")).toObject().toVariantMap();
+        brush.baseEngineSettings
+            = object.value(QStringLiteral("baseEngineSettings")).toObject().toVariantMap();
         if (brush.engineSettings.isEmpty()
             && brush.engineId == QLatin1String(kPixelBrushEngineId)) {
             brush.engineSettings = pixelModule().defaultSettings();
@@ -374,12 +404,26 @@ bool readBrushesFromFile(
         // Restore the embedded dab tip (if any) into a local asset file and
         // repoint dab.customImage at it, so the texture survives the trip to a
         // machine that never had the original file.
+        QString materializedDabImagePath;
         const QJsonObject dabImage = object.value(QStringLiteral("dabImage")).toObject();
         if (!dabImage.isEmpty()) {
-            const QString materialized = materializeEmbeddedDabImage(dabImage);
-            if (!materialized.isEmpty()) {
-                brush.engineSettings.insert(QStringLiteral("dab.customImage"), materialized);
+            materializedDabImagePath = materializeEmbeddedDabImage(dabImage);
+            if (!materializedDabImagePath.isEmpty()) {
+                brush.engineSettings.insert(
+                    QStringLiteral("dab.customImage"), materializedDabImagePath);
             }
+        }
+
+        const QJsonObject baseDabImage = object.value(QStringLiteral("baseDabImage")).toObject();
+        if (!baseDabImage.isEmpty()) {
+            const QString materialized = materializeEmbeddedDabImage(baseDabImage);
+            if (!materialized.isEmpty()) {
+                brush.baseEngineSettings.insert(QStringLiteral("dab.customImage"), materialized);
+            }
+        } else if (object.value(QStringLiteral("baseUsesDabImage")).toBool()
+            && !materializedDabImagePath.isEmpty()) {
+            brush.baseEngineSettings.insert(
+                QStringLiteral("dab.customImage"), materializedDabImagePath);
         }
 
         // Keep the author's starred ("fav") setting keys on the brush data so
@@ -483,7 +527,10 @@ void writeBrushPacksToSettings(const QVector<BrushPresetData>& presets,
                 settings.setValue(
                     QStringLiteral("starred"), canonicalStarredKeys(brushes[j].starredKeys));
             }
-            writeEngineSettingsGroup(settings, brushes[j].engineSettings);
+            writeSettingsGroup(
+                settings, QStringLiteral("engineSettings"), brushes[j].engineSettings);
+            writeSettingsGroup(
+                settings, QStringLiteral("baseEngineSettings"), brushes[j].baseEngineSettings);
         }
         settings.endArray();
     }
@@ -593,6 +640,7 @@ QString BrushManager::createBrush(const QString& presetId)
     brush.engineId = QLatin1String(kPixelBrushEngineId);
     brush.engineVersion = pixelModule().currentVersion();
     brush.engineSettings = pixelModule().defaultSettings();
+    brush.baseEngineSettings = brush.engineSettings;
     brush.starredKeys
         = canonicalStarredKeys(defaultStarredKeys(pixelModule().descriptor().settingsTabs));
     brush.hasStarredKeys = true;
@@ -748,6 +796,49 @@ bool BrushManager::updateBrushSettings(const QString& brushId, const BrushSettin
                 emit brushSettingsUpdated(it.key(), brushId, normalized);
                 return true;
             }
+        }
+    }
+    return false;
+}
+
+bool BrushManager::saveBrushSettingsAsBase(const QString& brushId)
+{
+    ensureLoaded();
+    for (auto it = m_brushesByPreset.begin(); it != m_brushesByPreset.end(); ++it) {
+        for (BrushData& brush : it.value()) {
+            if (brush.id != brushId) {
+                continue;
+            }
+            if (brush.baseEngineSettings == brush.engineSettings) {
+                return true;
+            }
+
+            brush.baseEngineSettings = brush.engineSettings;
+            m_deferredSavePending = true;
+            flushDeferredSave();
+            return true;
+        }
+    }
+    return false;
+}
+
+bool BrushManager::resetBrushSettingsToBase(const QString& brushId)
+{
+    ensureLoaded();
+    for (auto it = m_brushesByPreset.begin(); it != m_brushesByPreset.end(); ++it) {
+        for (BrushData& brush : it.value()) {
+            if (brush.id != brushId) {
+                continue;
+            }
+            if (brush.engineSettings == brush.baseEngineSettings) {
+                return true;
+            }
+
+            brush.engineSettings = brush.baseEngineSettings;
+            syncCompatibilitySettings(brush);
+            scheduleDeferredSave();
+            emit brushSettingsUpdated(it.key(), brushId, brush.settings);
+            return true;
         }
     }
     return false;
@@ -1225,6 +1316,7 @@ void BrushManager::load()
 
     m_presets.clear();
     m_brushesByPreset.clear();
+    bool brushStorageNeedsBaseMigration = false;
 
     const int packCount = settings.beginReadArray(QStringLiteral("BrushPacks"));
     for (int i = 0; i < packCount; ++i) {
@@ -1257,7 +1349,14 @@ void BrushManager::load()
                 brush.engineSettings = readLegacyPixelSettings(settings);
             } else {
                 brush.engineVersion = settings.value(QStringLiteral("engineVersion"), 1).toInt();
-                brush.engineSettings = readEngineSettingsGroup(settings);
+                brush.engineSettings
+                    = readSettingsGroup(settings, QStringLiteral("engineSettings"));
+            }
+            if (settings.childGroups().contains(QStringLiteral("baseEngineSettings"))) {
+                brush.baseEngineSettings
+                    = readSettingsGroup(settings, QStringLiteral("baseEngineSettings"));
+            } else {
+                brushStorageNeedsBaseMigration = true;
             }
             if (settings.contains(QStringLiteral("starred"))) {
                 brush.starredKeys = canonicalStarredKeys(
@@ -1316,7 +1415,7 @@ void BrushManager::load()
     if (m_presets.isEmpty()) {
         loadDefaults();
         save();
-    } else if (brushStorageNeedsStarredMigration) {
+    } else if (brushStorageNeedsStarredMigration || brushStorageNeedsBaseMigration) {
         save();
     }
 

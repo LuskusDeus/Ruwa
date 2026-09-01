@@ -700,11 +700,16 @@ void BrushEditorLayoutWidget::onResetClicked()
         return;
     clearPendingParameterDynamicsUpdates();
     m_dabSessionSelections.remove(m_selectedBrushId);
-    m_currentSettings = BrushSettingsData {};
-    distributeSettings();
     m_localSettingsEditInFlight = true;
-    BrushManager::instance().updateBrushSettings(m_selectedBrushId, m_currentSettings);
+    const bool reset = BrushManager::instance().resetBrushSettingsToBase(m_selectedBrushId);
     m_localSettingsEditInFlight = false;
+    if (!reset)
+        return;
+    const auto settings = BrushManager::instance().brushSettings(m_selectedBrushId);
+    if (!settings.has_value())
+        return;
+    m_currentSettings = *settings;
+    distributeSettings();
     updatePreview();
 }
 
@@ -715,7 +720,9 @@ void BrushEditorLayoutWidget::onSaveClicked()
     commitBrushNameFromInput();
     flushPendingParameterDynamicsCommit();
     clearPendingParameterDynamicsUpdates();
-    BrushManager::instance().updateBrushSettings(m_selectedBrushId, m_currentSettings);
+    if (BrushManager::instance().updateBrushSettings(m_selectedBrushId, m_currentSettings)) {
+        BrushManager::instance().saveBrushSettingsAsBase(m_selectedBrushId);
+    }
 }
 
 void BrushEditorLayoutWidget::commitBrushNameFromInput()

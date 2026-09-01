@@ -34,6 +34,9 @@ struct BrushData {
     BrushEngineId engineId = QLatin1String(kPixelBrushEngineId);
     int engineVersion = kPixelBrushEngineVersion;
     QVariantMap engineSettings;
+    // Author-defined baseline stored with the brush. Live settings may change
+    // independently; Reset restores this snapshot and Save replaces it.
+    QVariantMap baseEngineSettings;
     BrushSettingsData settings;
 
     // Starred ("fav") setting keys belong to the brush preset and are persisted
@@ -73,6 +76,8 @@ public:
     bool removeBrushOrPreset(const QString& brushId);
     bool renameBrush(const QString& brushId, const QString& newName);
     bool updateBrushSettings(const QString& brushId, const BrushSettingsData& settings);
+    bool saveBrushSettingsAsBase(const QString& brushId);
+    bool resetBrushSettingsToBase(const QString& brushId);
     bool exportBrushesToFile(const QString& filePath, const QVector<BrushData>& brushes,
         const QString& packName, QString* errorMessage = nullptr) const;
     static BrushImportResult readBrushFileForImport(const QString& filePath);
