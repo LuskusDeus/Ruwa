@@ -435,6 +435,22 @@ public:
         return pair;
     }
 
+    /// The edge opposite `pair`, preserving which side of the quad each corner
+    /// belongs to. Each input corner is matched with its only adjacent corner
+    /// outside the input edge. Unlike matching by shortest distance, this
+    /// correspondence cannot flip abruptly while a turn angle changes.
+    static std::array<int, 2> oppositeDabQuadPair(const std::array<int, 2>& pair)
+    {
+        std::array<int, 2> opposite {};
+        for (int side = 0; side < 2; ++side) {
+            const int corner = pair[side];
+            const int before = (corner + 3) % 4;
+            const int after = (corner + 1) % 4;
+            opposite[side] = (before != pair[0] && before != pair[1]) ? before : after;
+        }
+        return opposite;
+    }
+
     /// Where the stretch from `from` to `to` puts their shared edge.
     ///
     /// Which pair of a quad leads or trails is decided per quad, from that
@@ -516,30 +532,13 @@ public:
                 // The successor meets this dab on `front.points` whatever
                 // happens here, so the outgoing edge must land there or the
                 // ribbon tears - which is what a bail-out on a sharp turn did.
-                // Only WHICH corners give way is ours to pick: the pair
+                // Only WHICH corners give way is ours to pick: the edge
                 // opposite the incoming joint always leaves a quad (on a
-                // hairpin both joints would otherwise claim the same edge),
-                // and the two points go to the two corners by proximity so the
-                // shape cannot cross over itself.
-                std::array<int, 2> frontPair {};
-                int found = 0;
-                for (int corner = 0; corner < 4; ++corner) {
-                    if (corner != back.toTrailing[0] && corner != back.toTrailing[1]) {
-                        frontPair[found++] = corner;
-                    }
-                }
-                const auto distanceSquared = [](const Vector2& a, const Vector2& b) {
-                    const float dx = a.x - b.x;
-                    const float dy = a.y - b.y;
-                    return dx * dx + dy * dy;
-                };
-                const float asIs = distanceSquared(outQuad[frontPair[0]], front.points[0])
-                    + distanceSquared(outQuad[frontPair[1]], front.points[1]);
-                const float swapped = distanceSquared(outQuad[frontPair[0]], front.points[1])
-                    + distanceSquared(outQuad[frontPair[1]], front.points[0]);
-                if (swapped < asIs) {
-                    std::swap(frontPair[0], frontPair[1]);
-                }
+                // hairpin both joints would otherwise claim the same edge).
+                // Keep the corner correspondence topological. A nearest-point
+                // match flips the two outgoing vertices at a finite turn angle
+                // and turns the cyclic quad into a bow tie.
+                const std::array<int, 2> frontPair = oppositeDabQuadPair(back.toTrailing);
                 outQuad[frontPair[0]] = front.points[0];
                 outQuad[frontPair[1]] = front.points[1];
             }

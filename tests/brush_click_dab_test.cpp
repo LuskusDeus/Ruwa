@@ -412,6 +412,60 @@ TEST_CASE("a refined joint stays shared through a right-angle turn", "[brush][st
     }
 }
 
+TEST_CASE("a refined sharp turn keeps the quad corners in cyclic order",
+    "[brush][stroke][geometry]")
+{
+    using namespace ruwa::core::brushes;
+
+    BrushSettingsData settings;
+    settings.connectDabs = true;
+    settings.refineDabJoints = true;
+
+    aether::TileBrush brush;
+    brush.setBrushSettings(settings);
+
+    // At 120 degrees the old nearest-point match preferred swapping the two
+    // free corners. That shorter correspondence crossed edges 0-1 and 2-3,
+    // producing the visible X exactly when the preference changed. The
+    // topological match keeps each end of the outgoing joint on the same side
+    // of the original cyclic quad.
+    aether::TileBrush::DabPoint previous;
+    previous.worldX = 10.0f;
+    previous.worldY = 20.0f;
+    previous.radius = 4.0f;
+
+    aether::TileBrush::DabPoint current = previous;
+    current.worldX = 30.0f;
+
+    aether::TileBrush::DabPoint next = current;
+    constexpr float kTurnDegrees = 120.0f;
+    constexpr float kPi = 3.14159265358979323846f;
+    const float turnRadians = kTurnDegrees * kPi / 180.0f;
+    next.worldX += 20.0f * std::cos(turnRadians);
+    next.worldY += 20.0f * std::sin(turnRadians);
+    next.angleDegrees = kTurnDegrees;
+
+    aether::TileBrush::DabQuad refined;
+    REQUIRE(brush.dabStretchedQuad(previous, current, &next, refined));
+
+    const auto side = [](const aether::Vector2& a, const aether::Vector2& b,
+                          const aether::Vector2& point) {
+        return (b.x - a.x) * (point.y - a.y) - (b.y - a.y) * (point.x - a.x);
+    };
+    const auto properlyCross = [&side](const aether::Vector2& a, const aether::Vector2& b,
+                                   const aether::Vector2& c, const aether::Vector2& d) {
+        const float abC = side(a, b, c);
+        const float abD = side(a, b, d);
+        const float cdA = side(c, d, a);
+        const float cdB = side(c, d, b);
+        return abC * abD < 0.0f && cdA * cdB < 0.0f;
+    };
+
+    CHECK_FALSE(properlyCross(refined[0], refined[1], refined[2], refined[3]));
+    CHECK_FALSE(properlyCross(refined[1], refined[2], refined[3], refined[0]));
+    CHECK(refined[1].x > refined[2].x);
+}
+
 TEST_CASE(
     "joint refinement holds the newest dab back until the stroke ends", "[brush][stroke][geometry]")
 {
