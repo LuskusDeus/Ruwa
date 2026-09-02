@@ -971,6 +971,8 @@ void BrushPresetPage::rebuildSettingsWidget()
             categoryIcon = IconProvider::StandardIcon::Lasso;
         } else if (tabId == QLatin1String("stroke")) {
             categoryIcon = IconProvider::StandardIcon::Pencil;
+        } else if (tabId == QLatin1String("rendering")) {
+            categoryIcon = IconProvider::StandardIcon::Appearance;
         }
 
         QLabel* categoryIconLabel = new QLabel(categoryHeader);

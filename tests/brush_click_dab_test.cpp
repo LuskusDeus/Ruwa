@@ -5,6 +5,8 @@
 #include <catch2/catch_approx.hpp>
 #include <catch2/catch_test_macros.hpp>
 
+#include <array>
+#include <utility>
 #include <vector>
 
 namespace {
@@ -37,6 +39,23 @@ void enableStrokeDirectionAngle(ruwa::core::brushes::BrushSettingsData& settings
     binding.curve.normalize(binding.setting, binding.mode);
 }
 
+uint8_t strokeAlphaAt(const aether::TileBrush& brush, int worldX, int worldY)
+{
+    const aether::TileKey key
+        = aether::worldToTile(static_cast<float>(worldX) + 0.5f, static_cast<float>(worldY) + 0.5f);
+    const auto* tile = brush.strokeBuffer().getTile(key);
+    if (!tile)
+        return 0;
+    float originX = 0.0f;
+    float originY = 0.0f;
+    aether::tileWorldOrigin(key, originX, originY);
+    const uint32_t localX = static_cast<uint32_t>(worldX - static_cast<int>(originX));
+    const uint32_t localY = static_cast<uint32_t>(worldY - static_cast<int>(originY));
+    uint8_t r = 0, g = 0, b = 0, a = 0;
+    tile->getPixel(localX, localY, r, g, b, a);
+    return a;
+}
+
 } // namespace
 
 TEST_CASE(
@@ -61,6 +80,197 @@ TEST_CASE(
     // Direction is unknowable at pen-down, so the established dynamics
     // fallback keeps the base angle until a real segment supplies direction.
     CHECK(brush.strokeDabs().front().angleDegrees == Catch::Approx(settings.angle));
+}
+
+TEST_CASE(
+    "a stretched dab spans the whole gap to the previous dab center", "[brush][stroke][geometry]")
+{
+    using namespace ruwa::core::brushes;
+
+    auto renderTwoDabs = [](bool connectDabs) {
+        BrushSettingsData settings;
+        settings.connectDabs = connectDabs;
+        settings.brushFeather = false;
+        settings.hardness = 1.0f;
+
+        aether::TileBrush brush;
+        brush.setBrushSettings(settings);
+        brush.setRadius(4.0f);
+        brush.beginStroke();
+        brush.recordDabPoint(16.0f, 32.0f);
+        brush.recordDabPoint(80.0f, 32.0f);
+        brush.rebuildStrokeBufferFromDabs();
+        return std::array<uint8_t, 2> { strokeAlphaAt(brush, 48, 32),
+            strokeAlphaAt(brush, 48, 38) };
+    };
+
+    const auto disconnected = renderTwoDabs(false);
+    const auto connected = renderTwoDabs(true);
+
+    CHECK(disconnected[0] == 0);
+    CHECK(connected[0] > 0);
+    CHECK(connected[1] == 0);
+}
+
+TEST_CASE("a stretched dab transforms the opaque content bounds, not transparent padding",
+    "[brush][stroke][geometry]")
+{
+    using namespace ruwa::core::brushes;
+
+    auto renderTwoDabs = [](bool connectDabs) {
+        BrushSettingsData settings;
+        settings.connectDabs = connectDabs;
+        settings.brushFeather = false;
+        settings.hardness = 1.0f;
+        settings.dabType = 1;
+
+        // The visible 3x3 square occupies only the center of the 9x9 dab
+        // texture. Its canonical content bounds are [-0.25, 0.25], not the
+        // texture bounds [-1, 1].
+        std::array<uint8_t, 81> alpha {};
+        for (int y = 3; y <= 5; ++y) {
+            for (int x = 3; x <= 5; ++x) {
+                alpha[static_cast<size_t>(y * 9 + x)] = 255;
+            }
+        }
+
+        aether::TileBrush brush;
+        brush.setBrushSettings(settings);
+        brush.setDabShapeMask(alpha.data(), 9, 9);
+        brush.setRadius(8.0f);
+        brush.beginStroke();
+        brush.recordDabPoint(16.0f, 32.0f);
+        brush.recordDabPoint(48.0f, 32.0f);
+        brush.rebuildStrokeBufferFromDabs();
+
+        const auto bounds = brush.dabShapeContentBounds(1.0f);
+        return std::pair { bounds, strokeAlphaAt(brush, 22, 33) };
+    };
+
+    const auto disconnected = renderTwoDabs(false);
+    const auto connected = renderTwoDabs(true);
+
+    CHECK(connected.first.minX == Catch::Approx(-0.25f));
+    CHECK(connected.first.minY == Catch::Approx(-0.25f));
+    CHECK(connected.first.maxX == Catch::Approx(0.25f));
+    CHECK(connected.first.maxY == Catch::Approx(0.25f));
+    CHECK(disconnected.second == 0);
+    CHECK(connected.second > 0);
+}
+
+TEST_CASE("a stretched dab moves its trailing corners onto the previous dab's leading ones",
+    "[brush][stroke][geometry]")
+{
+    aether::TileBrush brush;
+    brush.setRoundness(0.5f);
+
+    aether::TileBrush::DabPoint previous;
+    previous.worldX = 10.0f;
+    previous.worldY = 20.0f;
+    previous.radius = 4.0f;
+    previous.roundness = 0.5f;
+
+    aether::TileBrush::DabPoint current = previous;
+    current.worldX = 30.0f;
+
+    aether::TileBrush::DabQuad stretchQuad;
+    REQUIRE(brush.dabStretchedQuad(previous, current, stretchQuad));
+    CHECK(stretchQuad[0].x == Catch::Approx(14.0f));
+    CHECK(stretchQuad[0].y == Catch::Approx(18.0f));
+    CHECK(stretchQuad[1].x == Catch::Approx(34.0f));
+    CHECK(stretchQuad[1].y == Catch::Approx(18.0f));
+    CHECK(stretchQuad[2].x == Catch::Approx(34.0f));
+    CHECK(stretchQuad[2].y == Catch::Approx(22.0f));
+    CHECK(stretchQuad[3].x == Catch::Approx(14.0f));
+    CHECK(stretchQuad[3].y == Catch::Approx(22.0f));
+}
+
+TEST_CASE("a stretched dab keeps corner identity when the shape is rotated across the travel",
+    "[brush][stroke][geometry]")
+{
+    aether::TileBrush brush;
+    brush.setRoundness(0.5f);
+
+    // The dab is turned 90 degrees, so the stroke travels along the shape's own
+    // y axis: the trailing pair is now the (maxX,maxY)/(minX,maxY) corners, and
+    // both land on the previous dab's leading corners on their own side.
+    aether::TileBrush::DabPoint previous;
+    previous.worldX = 10.0f;
+    previous.worldY = 20.0f;
+    previous.radius = 4.0f;
+    previous.roundness = 0.5f;
+    previous.angleDegrees = 90.0f;
+
+    aether::TileBrush::DabPoint current = previous;
+    current.worldX = 30.0f;
+
+    aether::TileBrush::DabQuad stretchQuad;
+    REQUIRE(brush.dabStretchedQuad(previous, current, stretchQuad));
+    CHECK(stretchQuad[0].x == Catch::Approx(32.0f));
+    CHECK(stretchQuad[0].y == Catch::Approx(16.0f));
+    CHECK(stretchQuad[1].x == Catch::Approx(32.0f));
+    CHECK(stretchQuad[1].y == Catch::Approx(24.0f));
+    CHECK(stretchQuad[2].x == Catch::Approx(12.0f));
+    CHECK(stretchQuad[2].y == Catch::Approx(24.0f));
+    CHECK(stretchQuad[3].x == Catch::Approx(12.0f));
+    CHECK(stretchQuad[3].y == Catch::Approx(16.0f));
+}
+
+TEST_CASE("a dab that rotated since its predecessor still anchors on that dab's leading edge",
+    "[brush][stroke][geometry]")
+{
+    aether::TileBrush brush;
+
+    // A sharp turn with the angle driven by stroke direction: the two dabs are
+    // rotated 90 degrees apart, so reading the previous dab's corners through
+    // the current dab's axes would anchor on a side edge of it and fold the
+    // stretched shape. The joint has to sit on the previous dab's own leading
+    // edge (x = 14) and stay parallel to the current dab's cross-section.
+    aether::TileBrush::DabPoint previous;
+    previous.worldX = 10.0f;
+    previous.worldY = 20.0f;
+    previous.radius = 4.0f;
+    previous.angleDegrees = 0.0f;
+
+    aether::TileBrush::DabPoint current = previous;
+    current.worldX = 30.0f;
+    current.angleDegrees = 90.0f;
+
+    aether::TileBrush::DabQuad stretchQuad;
+    REQUIRE(brush.dabStretchedQuad(previous, current, stretchQuad));
+    CHECK(stretchQuad[0].x == Catch::Approx(34.0f));
+    CHECK(stretchQuad[0].y == Catch::Approx(16.0f));
+    CHECK(stretchQuad[1].x == Catch::Approx(34.0f));
+    CHECK(stretchQuad[1].y == Catch::Approx(24.0f));
+    CHECK(stretchQuad[2].x == Catch::Approx(14.0f));
+    CHECK(stretchQuad[2].y == Catch::Approx(24.0f));
+    CHECK(stretchQuad[3].x == Catch::Approx(14.0f));
+    CHECK(stretchQuad[3].y == Catch::Approx(16.0f));
+}
+
+TEST_CASE("connected dab range reports tiles touched only by the stretch back to the previous dab",
+    "[brush][stroke][geometry][invalidation]")
+{
+    using namespace ruwa::core::brushes;
+
+    BrushSettingsData settings;
+    settings.connectDabs = true;
+    settings.hardness = 1.0f;
+
+    aether::TileBrush brush;
+    brush.setBrushSettings(settings);
+    brush.setRadius(4.0f);
+    brush.beginStroke();
+    brush.recordDabPoint(16.0f, 32.0f);
+    brush.recordDabPoint(528.0f, 32.0f);
+
+    std::unordered_set<aether::TileKey, aether::TileKeyHash> coveredTiles;
+    brush.collectStrokeDabRangeCoveredTiles(1, 1, coveredTiles);
+
+    // The second dab itself is in tile 2. Tile 1 is touched exclusively by
+    // the stretchQuad from the preceding dab, so omitting it leaves the GPU
+    // pixels hidden in the realtime composition until another dab dirties it.
+    CHECK(coveredTiles.contains(aether::TileKey { 1, 0 }));
 }
 
 TEST_CASE(

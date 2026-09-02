@@ -65,6 +65,9 @@ IconProvider::StandardIcon iconForTab(const QString& tabId)
     if (tabId == QLatin1String("stroke")) {
         return IconProvider::StandardIcon::Pencil;
     }
+    if (tabId == QLatin1String("rendering")) {
+        return IconProvider::StandardIcon::Appearance;
+    }
     return IconProvider::StandardIcon::Settings;
 }
 

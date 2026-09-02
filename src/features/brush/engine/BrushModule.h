@@ -18,7 +18,7 @@ namespace ruwa::core::brushes {
 using BrushEngineId = QString;
 
 inline constexpr auto kPixelBrushEngineId = "pixel";
-inline constexpr int kPixelBrushEngineVersion = 9;
+inline constexpr int kPixelBrushEngineVersion = 10;
 
 enum class BrushToolMode {
     Paint = 0,

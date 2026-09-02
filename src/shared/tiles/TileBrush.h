@@ -13,6 +13,7 @@
 #include "TileGrid.h"
 #include "features/brush/manager/BrushSettings.h"
 #include "features/layers/model/BlendModeUtils.h"
+#include "shared/geometry/BilinearQuad.h"
 #include "shared/types/Types.h"
 
 #include <cmath>
@@ -82,6 +83,7 @@ public:
         setSpacing(m_brushSettingsModel.spacing);
         setFlow(m_brushSettingsModel.flow);
         setFlowBlendMode(m_brushSettingsModel.flowBlendMode);
+        setConnectDabs(m_brushSettingsModel.connectDabs);
         setRoundness(m_brushSettingsModel.roundness);
         setAngleDegrees(m_brushSettingsModel.angle);
         setSizePressureEnabled(m_brushSettingsModel.sizePressureEnabled);
@@ -165,6 +167,8 @@ public:
             ? ruwa::core::brushes::BrushSettingsData::FlowBlendSrcOver
             : ruwa::core::brushes::BrushSettingsData::FlowBlendMax;
     }
+    void setConnectDabs(bool enabled) { m_connectDabs = enabled; }
+    bool connectsDabs() const { return m_connectDabs; }
     bool usesNonAccumulatingDabBlend() const { return useMaxBlendForCurrentMode(); }
     void setTextureAmount(float v)
     {
@@ -318,6 +322,128 @@ public:
         return computeDabCoverageBounds(radius, hardness, roundness, 0.0f, includeRasterPadding)
             .rotationInvariantExtent;
     }
+    using DabQuad = std::array<Vector2, 4>;
+    // Non-zero mask bounds in the same canonical [-1, 1] coordinates used by
+    // sampleCanonicalDabFalloff(). Transparent image padding is outside them.
+    struct DabContentBounds {
+        float minX = -1.0f;
+        float minY = -1.0f;
+        float maxX = 1.0f;
+        float maxY = 1.0f;
+
+        std::array<float, 4> asArray() const { return { minX, minY, maxX, maxY }; }
+    };
+
+    DabContentBounds dabShapeContentBounds(float hardness) const
+    {
+        if (!hasDabShapeMask()) {
+            return {};
+        }
+
+        // The rendered mask blends base and prefiltered alpha by hardness, so
+        // its transformed bounds follow the same blend instead of snapping.
+        const float softness = 1.0f - std::clamp(hardness, 0.0f, 1.0f);
+        const auto blend
+            = [softness](float base, float soft) { return base + (soft - base) * softness; };
+        return { blend(m_dabShapeContentBounds.minX, m_dabShapeSoftContentBounds.minX),
+            blend(m_dabShapeContentBounds.minY, m_dabShapeSoftContentBounds.minY),
+            blend(m_dabShapeContentBounds.maxX, m_dabShapeSoftContentBounds.maxX),
+            blend(m_dabShapeContentBounds.maxY, m_dabShapeSoftContentBounds.maxY) };
+    }
+
+    DabQuad dabQuadCorners(const DabPoint& dab, float radiusOverride = -1.0f) const
+    {
+        const float radius = radiusOverride > 0.0f ? radiusOverride : dab.radius;
+        const float roundness = std::max(0.01f, std::clamp(dab.roundness, 0.0f, 1.0f));
+        const float halfShapeX = radius * m_dabXScale;
+        const float halfShapeY = radius * m_dabYScale;
+        const DabContentBounds contentBounds = dabShapeContentBounds(dab.hardness);
+        constexpr float kDegToRad = 3.14159265358979323846f / 180.0f;
+        const float brushAngle = dab.angleDegrees * kDegToRad;
+        const float shapeAngle = m_dabRotation * kDegToRad;
+        const float brushCos = std::cos(brushAngle);
+        const float brushSin = std::sin(brushAngle);
+        const float shapeCos = std::cos(shapeAngle);
+        const float shapeSin = std::sin(shapeAngle);
+
+        auto corner = [&](float shapeX, float shapeY) {
+            const float brushX = shapeX * shapeCos + shapeY * shapeSin;
+            const float brushY = (-shapeX * shapeSin + shapeY * shapeCos) * roundness;
+            return Vector2 { dab.worldX + brushX * brushCos - brushY * brushSin,
+                dab.worldY + brushX * brushSin + brushY * brushCos };
+        };
+        return { corner(contentBounds.minX * halfShapeX, contentBounds.minY * halfShapeY),
+            corner(contentBounds.maxX * halfShapeX, contentBounds.minY * halfShapeY),
+            corner(contentBounds.maxX * halfShapeX, contentBounds.maxY * halfShapeY),
+            corner(contentBounds.minX * halfShapeX, contentBounds.maxY * halfShapeY) };
+    }
+    /// The current dab deformed back onto the previous one: its two trailing
+    /// corners are moved onto the previous dab's leading edge, the two leading
+    /// ones stay put, so consecutive stretched dabs meet edge to edge without a
+    /// gap and without reaching back over their predecessor. Corner identity is
+    /// preserved, so the dab image is stretched across those four vertices
+    /// instead of an extra shape being inserted. Returns false for coincident
+    /// dabs, which are stamped unstretched.
+    bool dabStretchedQuad(const DabPoint& previous, const DabPoint& current, DabQuad& outQuad,
+        float previousRadiusOverride = -1.0f, float currentRadiusOverride = -1.0f) const
+    {
+        const float dx = current.worldX - previous.worldX;
+        const float dy = current.worldY - previous.worldY;
+        const float distance = std::hypot(dx, dy);
+        if (distance <= 0.0001f) {
+            return false;
+        }
+        const Vector2 travel { dx / distance, dy / distance };
+        const Vector2 across { -travel.y, travel.x };
+
+        const DabQuad previousQuad = dabQuadCorners(previous, previousRadiusOverride);
+        const DabQuad currentQuad = dabQuadCorners(current, currentRadiusOverride);
+
+        // Which corner pair of a quad trails or leads is decided per quad, from
+        // that quad's OWN axes: a dab whose angle follows the stroke direction
+        // is rotated differently from its predecessor, and reading the previous
+        // dab's corners through the current dab's axes picks a side edge of it
+        // at a sharp turn - that mismatch is what breaks the ribbon there.
+        const auto facingPair = [](const DabQuad& quad, const Vector2& direction, bool leading) {
+            const auto travelAlong = [&direction](const Vector2& axis) {
+                const float length = std::hypot(axis.x, axis.y);
+                if (length <= 0.0001f) {
+                    return 0.0f;
+                }
+                return (direction.x * axis.x + direction.y * axis.y) / length;
+            };
+            // Corner order is (minX,minY), (maxX,minY), (maxX,maxY), (minX,maxY).
+            const float alongX = travelAlong(quad[1] - quad[0]);
+            const float alongY = travelAlong(quad[3] - quad[0]);
+            if (std::abs(alongX) >= std::abs(alongY)) {
+                const bool towardMaxX = (alongX >= 0.0f) == leading;
+                return towardMaxX ? std::array<int, 2> { 1, 2 } : std::array<int, 2> { 0, 3 };
+            }
+            const bool towardMaxY = (alongY >= 0.0f) == leading;
+            return towardMaxY ? std::array<int, 2> { 3, 2 } : std::array<int, 2> { 0, 1 };
+        };
+
+        // Both pairs are ordered by which side of the stroke they sit on, so a
+        // rotating dab can never cross them into a bow tie.
+        const auto orderAcross = [&](const DabQuad& quad, std::array<int, 2> pair) {
+            const float first = quad[pair[0]].x * across.x + quad[pair[0]].y * across.y;
+            const float second = quad[pair[1]].x * across.x + quad[pair[1]].y * across.y;
+            if (first > second) {
+                std::swap(pair[0], pair[1]);
+            }
+            return pair;
+        };
+        const auto trailing = orderAcross(currentQuad, facingPair(currentQuad, travel, false));
+        const auto leading = orderAcross(previousQuad, facingPair(previousQuad, travel, true));
+
+        // The two trailing vertices land exactly ON the previous dab's two
+        // leading vertices - one shared point each, no bevel and no offset, so
+        // the shape carries the previous dab's width across the joint.
+        outQuad = currentQuad;
+        outQuad[trailing[0]] = previousQuad[leading[0]];
+        outQuad[trailing[1]] = previousQuad[leading[1]];
+        return true;
+    }
     void setDabXScale(float v) { m_dabXScale = std::clamp(v, 0.0f, 1.0f); }
     void setDabYScale(float v) { m_dabYScale = std::clamp(v, 0.0f, 1.0f); }
     float dabXScale() const { return m_dabXScale; }
@@ -348,6 +474,8 @@ public:
             m_dabShapeSoftAlpha.clear();
             m_dabShapeW = 0;
             m_dabShapeH = 0;
+            m_dabShapeContentBounds = {};
+            m_dabShapeSoftContentBounds = {};
             return;
         }
         const size_t n = static_cast<size_t>(width * height);
@@ -359,6 +487,8 @@ public:
         }
         m_dabShapeW = width;
         m_dabShapeH = height;
+        m_dabShapeContentBounds = contentBoundsForMask(m_dabShapeAlpha, width, height);
+        m_dabShapeSoftContentBounds = contentBoundsForMask(m_dabShapeSoftAlpha, width, height);
     }
     void setScatterPosition(float v) { m_scatterPosition = std::clamp(v, 0.0f, 1.0f); }
     void setBrushFeather(bool enabled) { m_brushFeather = enabled; }
@@ -924,6 +1054,10 @@ public:
         const size_t endDabIndex = std::min(startDabIndex + dabCount, m_strokeDabs.size());
         for (size_t i = startDabIndex; i < endDabIndex; ++i) {
             collectDabCoveredTiles(m_strokeDabs[i], outTiles, includeBaseExtent);
+            if (m_connectDabs && i > 0) {
+                collectStretchedDabCoveredTiles(
+                    m_strokeDabs[i - 1], m_strokeDabs[i], outTiles, includeBaseExtent);
+            }
         }
     }
 
@@ -1244,11 +1378,17 @@ public:
             m_strokeBuffer.markDirty(key);
         }
 
-        auto rasterizeByIndex = [this, selectionMask](size_t idx) {
+        const DabPoint* previousRenderedDab = nullptr;
+        auto rasterizeByIndex = [this, selectionMask, &previousRenderedDab](size_t idx) {
             const DabPoint& dab = m_strokeDabs[idx];
-            if (dab.alpha == 0 || dab.radius <= 0.0f)
+            const DabPoint* stretchStart = m_connectDabs ? previousRenderedDab : nullptr;
+            if (dab.radius <= 0.0f || (dab.alpha == 0 && !stretchStart)) {
+                previousRenderedDab = &dab;
                 return;
-            rasterizeDab(m_strokeBuffer, dab, selectionMask, dab.useMaxBlend);
+            }
+            rasterizeDab(
+                m_strokeBuffer, dab, selectionMask, dab.useMaxBlend, nullptr, stretchStart);
+            previousRenderedDab = &dab;
         };
 
         if (maxDabs > 2 && m_strokeDabs.size() > maxDabs) {
@@ -1290,6 +1430,14 @@ public:
         rebuildTiles.reserve((endDabIndex - startDabIndex) * 4u);
         for (size_t i = startDabIndex; i < endDabIndex; ++i) {
             collectDabCoveredTiles(m_strokeDabs[i], rebuildTiles, true);
+            if (m_connectDabs && i > 0) {
+                collectStretchedDabCoveredTiles(
+                    m_strokeDabs[i - 1], m_strokeDabs[i], rebuildTiles, true);
+            }
+            if (m_connectDabs && i + 1 < m_strokeDabs.size()) {
+                collectStretchedDabCoveredTiles(
+                    m_strokeDabs[i], m_strokeDabs[i + 1], rebuildTiles, true);
+            }
         }
         if (rebuildTiles.empty())
             return;
@@ -1302,12 +1450,22 @@ public:
             m_strokeBuffer.markDirty(key);
         }
 
+        const DabPoint* previousDab = nullptr;
         for (const DabPoint& dab : m_strokeDabs) {
-            if (dab.alpha == 0 || dab.radius <= 0.0f)
+            const DabPoint* stretchStart = m_connectDabs ? previousDab : nullptr;
+            const bool stretchIntersects
+                = stretchStart && stretchedDabIntersectsTileSet(*stretchStart, dab, rebuildTiles);
+            if (dab.radius <= 0.0f || (dab.alpha == 0 && !stretchStart)) {
+                previousDab = &dab;
                 continue;
-            if (!dabIntersectsTileSet(dab, rebuildTiles, false))
+            }
+            if (!stretchIntersects && !dabIntersectsTileSet(dab, rebuildTiles, false)) {
+                previousDab = &dab;
                 continue;
-            rasterizeDab(m_strokeBuffer, dab, selectionMask, dab.useMaxBlend, &rebuildTiles);
+            }
+            rasterizeDab(
+                m_strokeBuffer, dab, selectionMask, dab.useMaxBlend, &rebuildTiles, stretchStart);
+            previousDab = &dab;
         }
     }
 
@@ -1426,7 +1584,7 @@ public:
             dab.worldY += ry * maxOffset;
         }
 
-        if (m_strokeActive && dab.alpha != 0) {
+        if (m_strokeActive && (dab.alpha != 0 || m_connectDabs)) {
             m_strokeDabs.push_back(dab);
         }
 
@@ -1441,10 +1599,13 @@ public:
     {
         TileGrid& target = m_strokeActive ? m_strokeBuffer : grid;
         DabPoint dab = recordDabPoint(worldX, worldY);
-        if (dab.alpha == 0)
+        const DabPoint* previousDab = (m_connectDabs && m_strokeActive && m_strokeDabs.size() > 1)
+            ? &m_strokeDabs[m_strokeDabs.size() - 2]
+            : nullptr;
+        if (dab.alpha == 0 && !previousDab)
             return;
         const bool maxBlend = m_strokeActive ? dab.useMaxBlend : false;
-        rasterizeDab(target, dab, selectionMask, maxBlend);
+        rasterizeDab(target, dab, selectionMask, maxBlend, nullptr, previousDab);
     }
 
     /// Stroke from pointA to pointB with spacing
@@ -1464,9 +1625,16 @@ public:
             fromStrokeElapsedSeconds, toStrokeElapsedSeconds, strokeTimeAvailable,
             fromInputDynamics, toInputDynamics);
         TileGrid& target = m_strokeActive ? m_strokeBuffer : grid;
-        for (const DabPoint& dab : segmentDabs) {
+        const size_t firstStoredIndex
+            = m_strokeActive ? m_strokeDabs.size() - segmentDabs.size() : 0;
+        for (size_t i = 0; i < segmentDabs.size(); ++i) {
+            const DabPoint& dab = segmentDabs[i];
             const bool maxBlend = m_strokeActive ? dab.useMaxBlend : false;
-            rasterizeDab(target, dab, selectionMask, maxBlend);
+            const size_t storedIndex = firstStoredIndex + i;
+            const DabPoint* previousDab = (m_connectDabs && m_strokeActive && storedIndex > 0)
+                ? &m_strokeDabs[storedIndex - 1]
+                : nullptr;
+            rasterizeDab(target, dab, selectionMask, maxBlend, nullptr, previousDab);
         }
     }
 
@@ -1488,9 +1656,16 @@ public:
             fromStrokeElapsedSeconds, toStrokeElapsedSeconds, strokeTimeAvailable,
             fromInputDynamics, toInputDynamics);
         TileGrid& target = m_strokeActive ? m_strokeBuffer : grid;
-        for (const DabPoint& dab : segmentDabs) {
+        const size_t firstStoredIndex
+            = m_strokeActive ? m_strokeDabs.size() - segmentDabs.size() : 0;
+        for (size_t i = 0; i < segmentDabs.size(); ++i) {
+            const DabPoint& dab = segmentDabs[i];
             const bool maxBlend = m_strokeActive ? dab.useMaxBlend : false;
-            rasterizeDab(target, dab, selectionMask, maxBlend);
+            const size_t storedIndex = firstStoredIndex + i;
+            const DabPoint* previousDab = (m_connectDabs && m_strokeActive && storedIndex > 0)
+                ? &m_strokeDabs[storedIndex - 1]
+                : nullptr;
+            rasterizeDab(target, dab, selectionMask, maxBlend, nullptr, previousDab);
         }
     }
 
@@ -1517,7 +1692,7 @@ public:
                 setStrokeElapsedSeconds(toStrokeElapsedSeconds, strokeTimeAvailable);
                 setInputDynamics(toInputDynamics);
                 DabPoint dab = recordDabPoint(toX, toY);
-                if (dab.alpha != 0) {
+                if (dab.alpha != 0 || m_connectDabs) {
                     outDabs.push_back(dab);
                 }
             }
@@ -1764,7 +1939,7 @@ public:
             bool avail0 = false;
             directionAt(0.0f, &dir0, &avail0);
             DabPoint initialDab = recordDabPoint(fromX, fromY, -1.0f, dir0, avail0);
-            if (initialDab.alpha != 0) {
+            if (initialDab.alpha != 0 || m_connectDabs) {
                 outDabs.push_back(initialDab);
             }
             sinceLast = 0.0f;
@@ -1790,7 +1965,7 @@ public:
             bool availT = false;
             directionAt(t, &dirT, &availT);
             DabPoint dab = recordDabPoint(x, y, -1.0f, dirT, availT);
-            if (dab.alpha != 0) {
+            if (dab.alpha != 0 || m_connectDabs) {
                 outDabs.push_back(dab);
             }
             sinceLast = 0.0f;
@@ -1920,6 +2095,38 @@ public:
     }
 
 private:
+    static DabContentBounds contentBoundsForMask(
+        const std::vector<uint8_t>& alpha, int width, int height)
+    {
+        int minX = width;
+        int minY = height;
+        int maxX = -1;
+        int maxY = -1;
+        for (int y = 0; y < height; ++y) {
+            for (int x = 0; x < width; ++x) {
+                if (alpha[static_cast<size_t>(y * width + x)] == 0) {
+                    continue;
+                }
+                minX = std::min(minX, x);
+                minY = std::min(minY, y);
+                maxX = std::max(maxX, x);
+                maxY = std::max(maxY, y);
+            }
+        }
+        if (maxX < minX || maxY < minY) {
+            return { 0.0f, 0.0f, 0.0f, 0.0f };
+        }
+
+        const auto canonicalCoordinate = [](int coordinate, int extent) {
+            if (extent <= 1) {
+                return 0.0f;
+            }
+            return static_cast<float>(coordinate) * 2.0f / static_cast<float>(extent - 1) - 1.0f;
+        };
+        return { canonicalCoordinate(minX, width), canonicalCoordinate(minY, height),
+            canonicalCoordinate(maxX, width), canonicalCoordinate(maxY, height) };
+    }
+
     void setTextureGeneratorValue(float& target, float value, float minimum, float maximum)
     {
         const float normalized = std::clamp(value, minimum, maximum);
@@ -1944,9 +2151,6 @@ private:
         }
 
         const float rasterPadding = includeRasterPadding ? 1.0f : 0.0f;
-        if (m_dabType <= 0) {
-            return { radius + rasterPadding, radius + rasterPadding };
-        }
         if (m_dabXScale <= 0.0001f || m_dabYScale <= 0.0001f) {
             return { rasterPadding, rasterPadding };
         }
@@ -2757,24 +2961,7 @@ private:
         shapeY /= m_dabYScale;
 
         if (m_dabType > 0 && !m_dabShapeAlpha.empty() && m_dabShapeW > 0 && m_dabShapeH > 0) {
-            if (std::abs(shapeX) > 1.0f || std::abs(shapeY) > 1.0f) {
-                return 0.0f;
-            }
-
-            const float u = (shapeX + 1.0f) * 0.5f;
-            const float v = (shapeY + 1.0f) * 0.5f;
-            const int maskX
-                = std::clamp(static_cast<int>(u * (m_dabShapeW - 1)), 0, m_dabShapeW - 1);
-            const int maskY
-                = std::clamp(static_cast<int>(v * (m_dabShapeH - 1)), 0, m_dabShapeH - 1);
-            const size_t maskIndex = static_cast<size_t>(maskY * m_dabShapeW + maskX);
-
-            if (m_dabInterpolation == 1) {
-                const float alpha = static_cast<float>(m_dabShapeAlpha[maskIndex]) / 255.0f;
-                const float softAlpha = static_cast<float>(m_dabShapeSoftAlpha[maskIndex]) / 255.0f;
-                return dab_shape_falloff::softenAlpha(alpha, softAlpha, hardness);
-            }
-            return sampleDabShapeSoftAlpha(u, v, hardness);
+            return sampleCanonicalDabFalloff(shapeX, shapeY, hardness);
         }
 
         const float t = std::sqrt(shapeX * shapeX + shapeY * shapeY);
@@ -2782,6 +2969,33 @@ private:
             return 0.0f;
         }
         return hardnessFalloffFromEdgeDistance(std::max(0.0f, 1.0f - t), hardness);
+    }
+
+    float sampleCanonicalDabFalloff(float shapeX, float shapeY, float hardness) const
+    {
+        if (std::abs(shapeX) > 1.0f || std::abs(shapeY) > 1.0f) {
+            return 0.0f;
+        }
+        if (m_dabType > 0 && !m_dabShapeAlpha.empty() && m_dabShapeW > 0 && m_dabShapeH > 0) {
+            const float u = (shapeX + 1.0f) * 0.5f;
+            const float v = (shapeY + 1.0f) * 0.5f;
+            if (m_dabInterpolation == 1) {
+                const int maskX
+                    = std::clamp(static_cast<int>(u * (m_dabShapeW - 1)), 0, m_dabShapeW - 1);
+                const int maskY
+                    = std::clamp(static_cast<int>(v * (m_dabShapeH - 1)), 0, m_dabShapeH - 1);
+                const size_t maskIndex = static_cast<size_t>(maskY * m_dabShapeW + maskX);
+                const float alpha = static_cast<float>(m_dabShapeAlpha[maskIndex]) / 255.0f;
+                const float softAlpha = static_cast<float>(m_dabShapeSoftAlpha[maskIndex]) / 255.0f;
+                return dab_shape_falloff::softenAlpha(alpha, softAlpha, hardness);
+            }
+            return sampleDabShapeSoftAlpha(u, v, hardness);
+        }
+        const float distance = std::hypot(shapeX, shapeY);
+        if (distance > 1.0f) {
+            return 0.0f;
+        }
+        return hardnessFalloffFromEdgeDistance(std::max(0.0f, 1.0f - distance), hardness);
     }
 
     uint8_t textureAlphaFactorAt(const TileKey& key, uint32_t localX, uint32_t localY) const
@@ -2891,6 +3105,51 @@ private:
         }
     }
 
+    void collectStretchedDabCoveredTiles(const DabPoint& previous, const DabPoint& current,
+        std::unordered_set<TileKey, TileKeyHash>& outTiles, bool includeBaseExtent) const
+    {
+        const float previousRadius
+            = includeBaseExtent ? std::max(previous.radius, previous.baseRadius) : previous.radius;
+        const float currentRadius
+            = includeBaseExtent ? std::max(current.radius, current.baseRadius) : current.radius;
+        DabQuad stretchQuad;
+        if (!dabStretchedQuad(previous, current, stretchQuad, previousRadius, currentRadius)) {
+            return;
+        }
+        float minX = stretchQuad[0].x;
+        float minY = stretchQuad[0].y;
+        float maxX = stretchQuad[0].x;
+        float maxY = stretchQuad[0].y;
+        for (const Vector2& corner : stretchQuad) {
+            minX = std::min(minX, corner.x);
+            minY = std::min(minY, corner.y);
+            maxX = std::max(maxX, corner.x);
+            maxY = std::max(maxY, corner.y);
+        }
+        constexpr float kRasterPadding = 1.0f;
+        const int32_t tMinX = static_cast<int32_t>(std::floor((minX - kRasterPadding) / TILE_SIZE));
+        const int32_t tMinY = static_cast<int32_t>(std::floor((minY - kRasterPadding) / TILE_SIZE));
+        const int32_t tMaxX = static_cast<int32_t>(std::floor((maxX + kRasterPadding) / TILE_SIZE));
+        const int32_t tMaxY = static_cast<int32_t>(std::floor((maxY + kRasterPadding) / TILE_SIZE));
+        for (int32_t ty = tMinY; ty <= tMaxY; ++ty) {
+            for (int32_t tx = tMinX; tx <= tMaxX; ++tx) {
+                outTiles.insert(TileKey { tx, ty });
+            }
+        }
+    }
+
+    bool stretchedDabIntersectsTileSet(const DabPoint& previous, const DabPoint& current,
+        const std::unordered_set<TileKey, TileKeyHash>& tiles) const
+    {
+        std::unordered_set<TileKey, TileKeyHash> stretchTiles;
+        collectStretchedDabCoveredTiles(previous, current, stretchTiles, false);
+        for (const TileKey& key : stretchTiles) {
+            if (tiles.find(key) != tiles.end())
+                return true;
+        }
+        return false;
+    }
+
     bool dabIntersectsTileSet(const DabPoint& dab,
         const std::unordered_set<TileKey, TileKeyHash>& tiles, bool includeBaseExtent) const
     {
@@ -2924,26 +3183,37 @@ private:
     }
 
     void rasterizeDab(TileGrid& target, const DabPoint& dab, const TileGrid* selectionMask,
-        bool maxBlend, const std::unordered_set<TileKey, TileKeyHash>* allowedTiles = nullptr)
+        bool maxBlend, const std::unordered_set<TileKey, TileKeyHash>* allowedTiles = nullptr,
+        const DabPoint* previousDab = nullptr)
     {
         if (dab.radius <= 0.0f)
             return;
         const float r = dab.radius;
-        const float hardness = std::clamp(dab.hardness, 0.0f, 1.0f);
-        const float roundness = std::max(0.01f, std::clamp(dab.roundness, 0.0f, 1.0f));
-        const float angleRadians = dab.angleDegrees * (3.14159265358979323846f / 180.0f);
-        const float cosA = std::cos(angleRadians);
-        const float sinA = std::sin(angleRadians);
         const bool useMask = (selectionMask != nullptr);
         const bool roundLowAlpha
             = m_flowBlendMode == ruwa::core::brushes::BrushSettingsData::FlowBlendSrcOver;
+        DabQuad stretchQuad;
+        const bool connectFromPrevious = previousDab && previousDab->radius > 0.0f
+            && dabStretchedQuad(*previousDab, dab, stretchQuad);
         const float rasterExtent
-            = dabCoverageExtent(r, hardness, roundness, dab.angleDegrees, true);
+            = dabCoverageExtent(r, dab.hardness, dab.roundness, dab.angleDegrees, true);
+        float boundsMinX = dab.worldX - rasterExtent;
+        float boundsMinY = dab.worldY - rasterExtent;
+        float boundsMaxX = dab.worldX + rasterExtent;
+        float boundsMaxY = dab.worldY + rasterExtent;
+        if (connectFromPrevious) {
+            for (const Vector2& corner : stretchQuad) {
+                boundsMinX = std::min(boundsMinX, corner.x - 1.0f);
+                boundsMinY = std::min(boundsMinY, corner.y - 1.0f);
+                boundsMaxX = std::max(boundsMaxX, corner.x + 1.0f);
+                boundsMaxY = std::max(boundsMaxY, corner.y + 1.0f);
+            }
+        }
 
-        int32_t tMinX = static_cast<int32_t>(std::floor((dab.worldX - rasterExtent) / TILE_SIZE));
-        int32_t tMinY = static_cast<int32_t>(std::floor((dab.worldY - rasterExtent) / TILE_SIZE));
-        int32_t tMaxX = static_cast<int32_t>(std::floor((dab.worldX + rasterExtent) / TILE_SIZE));
-        int32_t tMaxY = static_cast<int32_t>(std::floor((dab.worldY + rasterExtent) / TILE_SIZE));
+        int32_t tMinX = static_cast<int32_t>(std::floor(boundsMinX / TILE_SIZE));
+        int32_t tMinY = static_cast<int32_t>(std::floor(boundsMinY / TILE_SIZE));
+        int32_t tMaxX = static_cast<int32_t>(std::floor(boundsMaxX / TILE_SIZE));
+        int32_t tMaxY = static_cast<int32_t>(std::floor(boundsMaxY / TILE_SIZE));
 
         for (int32_t ty = tMinY; ty <= tMaxY; ++ty) {
             for (int32_t tx = tMinX; tx <= tMaxX; ++tx) {
@@ -2954,14 +3224,14 @@ private:
                 float tileOriginX = tx * static_cast<float>(TILE_SIZE);
                 float tileOriginY = ty * static_cast<float>(TILE_SIZE);
 
-                int32_t localMinX = std::max(
-                    0, static_cast<int32_t>(std::floor(dab.worldX - rasterExtent - tileOriginX)));
-                int32_t localMinY = std::max(
-                    0, static_cast<int32_t>(std::floor(dab.worldY - rasterExtent - tileOriginY)));
+                int32_t localMinX
+                    = std::max(0, static_cast<int32_t>(std::floor(boundsMinX - tileOriginX)));
+                int32_t localMinY
+                    = std::max(0, static_cast<int32_t>(std::floor(boundsMinY - tileOriginY)));
                 int32_t localMaxX = std::min(static_cast<int32_t>(TILE_SIZE) - 1,
-                    static_cast<int32_t>(std::ceil(dab.worldX + rasterExtent - tileOriginX)));
+                    static_cast<int32_t>(std::ceil(boundsMaxX - tileOriginX)));
                 int32_t localMaxY = std::min(static_cast<int32_t>(TILE_SIZE) - 1,
-                    static_cast<int32_t>(std::ceil(dab.worldY + rasterExtent - tileOriginY)));
+                    static_cast<int32_t>(std::ceil(boundsMaxY - tileOriginY)));
 
                 bool modified = false;
                 TileData* tilePtr = nullptr;
@@ -2970,16 +3240,60 @@ private:
                     for (int32_t lx = localMinX; lx <= localMaxX; ++lx) {
                         const float sampleX = tileOriginX + static_cast<float>(lx) + 0.5f;
                         const float sampleY = tileOriginY + static_cast<float>(ly) + 0.5f;
-                        const float dx = sampleX - dab.worldX;
-                        const float dy = sampleY - dab.worldY;
-                        const float brushX = dx * cosA + dy * sinA;
-                        const float brushY = (-dx * sinA + dy * cosA) / roundness;
-                        const float coverage = sampleDabFalloff(dab, brushX, brushY, hardness, r);
+                        DabPoint sampledDab = dab;
+                        float coverage = 0.0f;
+
+                        if (connectFromPrevious) {
+                            // The stretched quad IS this dab: it runs from the
+                            // previous dab's leading edge to this dab's own, so
+                            // the unstretched shape is never stamped on top and
+                            // no extra shape fills the gap.
+                            float st[2] {};
+                            if (!geometry::inverseBilinearPoint(
+                                    Vector2 { sampleX, sampleY }, stretchQuad, st)) {
+                                continue;
+                            }
+                            const float stretchT = st[0];
+                            const auto lerp = [stretchT](float from, float to) {
+                                return from + (to - from) * stretchT;
+                            };
+                            const auto lerpByte = [&lerp](uint8_t from, uint8_t to) {
+                                return static_cast<uint8_t>(std::lround(
+                                    lerp(static_cast<float>(from), static_cast<float>(to))));
+                            };
+                            sampledDab.hardness = lerp(previousDab->hardness, dab.hardness);
+                            sampledDab.alpha = lerpByte(previousDab->alpha, dab.alpha);
+                            sampledDab.colorR = lerpByte(previousDab->colorR, dab.colorR);
+                            sampledDab.colorG = lerpByte(previousDab->colorG, dab.colorG);
+                            sampledDab.colorB = lerpByte(previousDab->colorB, dab.colorB);
+                            const DabContentBounds stretchContentBounds
+                                = dabShapeContentBounds(sampledDab.hardness);
+                            const float stretchShapeX = stretchContentBounds.minX
+                                + (stretchContentBounds.maxX - stretchContentBounds.minX) * st[0];
+                            const float stretchShapeY = stretchContentBounds.minY
+                                + (stretchContentBounds.maxY - stretchContentBounds.minY) * st[1];
+                            coverage = sampleCanonicalDabFalloff(
+                                stretchShapeX, stretchShapeY, sampledDab.hardness);
+                        } else {
+                            const float hardness = std::clamp(sampledDab.hardness, 0.0f, 1.0f);
+                            const float roundness
+                                = std::max(0.01f, std::clamp(sampledDab.roundness, 0.0f, 1.0f));
+                            const float angleRadians
+                                = sampledDab.angleDegrees * (3.14159265358979323846f / 180.0f);
+                            const float cosA = std::cos(angleRadians);
+                            const float sinA = std::sin(angleRadians);
+                            const float dx = sampleX - sampledDab.worldX;
+                            const float dy = sampleY - sampledDab.worldY;
+                            const float brushX = dx * cosA + dy * sinA;
+                            const float brushY = (-dx * sinA + dy * cosA) / roundness;
+                            coverage = sampleDabFalloff(
+                                sampledDab, brushX, brushY, hardness, sampledDab.radius);
+                        }
                         if (coverage <= 0.0001f)
                             continue;
 
-                        const float coveredAlpha
-                            = std::clamp(static_cast<float>(dab.alpha) * coverage, 0.0f, 255.0f);
+                        const float coveredAlpha = std::clamp(
+                            static_cast<float>(sampledDab.alpha) * coverage, 0.0f, 255.0f);
                         uint8_t alpha = roundLowAlpha
                             ? static_cast<uint8_t>(std::lround(coveredAlpha))
                             : static_cast<uint8_t>(coveredAlpha);
@@ -2998,10 +3312,10 @@ private:
                         if (alpha == 0)
                             continue;
 
-                        if (dabUsesProceduralTexture(dab)) {
-                            const float edgeBoost = dab.textureEdgeBoost;
+                        if (dabUsesProceduralTexture(sampledDab)) {
+                            const float edgeBoost = sampledDab.textureEdgeBoost;
                             float textureA
-                                = static_cast<float>(textureAlphaFactorAt(dab, key,
+                                = static_cast<float>(textureAlphaFactorAt(sampledDab, key,
                                       static_cast<uint32_t>(lx), static_cast<uint32_t>(ly)))
                                 / 255.0f;
                             if (edgeBoost > 0.0001f) {
@@ -3028,11 +3342,11 @@ private:
 
                         if (maxBlend) {
                             uint8_t prevA = pixels[idx + 3];
-                            blendMax(pixels, idx, dab, alpha, colorScale);
+                            blendMax(pixels, idx, sampledDab, alpha, colorScale);
                             if (pixels[idx + 3] != prevA)
                                 modified = true;
                         } else {
-                            blendSrcOver(pixels, idx, dab, alpha, colorScale);
+                            blendSrcOver(pixels, idx, sampledDab, alpha, colorScale);
                             modified = true;
                         }
                     }
@@ -3509,6 +3823,7 @@ private:
     float m_spacing = 0.25f; // fraction of radius between stamps
     float m_flow = 1.0f; // 0..1 alpha multiplier, independent of color alpha
     int m_flowBlendMode = ruwa::core::brushes::BrushSettingsData::FlowBlendMax;
+    bool m_connectDabs = false;
     float m_textureAmount = 0.0f;
     float m_textureScale = 1.0f;
     float m_textureContrast = 0.5f;
@@ -3536,6 +3851,8 @@ private:
     std::vector<uint8_t> m_dabShapeSoftAlpha; // prefiltered alpha for custom-dab hardness
     int m_dabShapeW = 0;
     int m_dabShapeH = 0;
+    DabContentBounds m_dabShapeContentBounds;
+    DabContentBounds m_dabShapeSoftContentBounds;
     QString m_dabCustomImagePath;
     float m_dabXScale = 1.0f;
     float m_dabYScale = 1.0f;

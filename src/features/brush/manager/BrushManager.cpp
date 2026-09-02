@@ -208,7 +208,10 @@ void setError(QString* errorMessage, const QString& message)
 QStringList canonicalStarredKeys(const QStringList& keys)
 {
     QSet<QString> uniqueKeys;
-    for (const QString& key : keys) {
+    for (QString key : keys) {
+        if (key == QLatin1String("shape.flowBlendMode")) {
+            key = QStringLiteral("rendering.flowBlendMode");
+        }
         if (!key.isEmpty()) {
             uniqueKeys.insert(key);
         }
@@ -1221,7 +1224,8 @@ void BrushManager::loadStarredSettings()
     const QStringList brushIds = settings.childGroups();
     for (const QString& brushId : brushIds) {
         settings.beginGroup(brushId);
-        const QStringList keys = settings.value(QStringLiteral("keys")).toStringList();
+        const QStringList keys
+            = canonicalStarredKeys(settings.value(QStringLiteral("keys")).toStringList());
         m_starredSettingsByBrush.insert(brushId, QSet<QString>(keys.begin(), keys.end()));
         settings.endGroup();
     }

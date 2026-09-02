@@ -25,7 +25,9 @@ namespace aether {
 
 namespace {
 
-constexpr int kRebuildBatchMaxDabs = 64;
+// Current + previous dab state for connected ribbons must fit the OpenGL 4.5
+// minimum fragment-uniform budget on every supported GPU.
+constexpr int kRebuildBatchMaxDabs = 32;
 
 /// Bumps a stroke buffer's content version when a stamp entry point returns.
 /// Dabs are rendered straight into the tiles' GPU textures, which no TileGrid
@@ -131,6 +133,42 @@ float dabRotationInvariantCoverageExtent(const TileBrush& brush, float radius, f
 {
     return brush.dabRotationInvariantCoverageExtent(
         radius, hardness, roundness, includeRasterPadding);
+}
+
+/// World box a dab can touch, including its stretch back to the previous dab.
+/// The stretched quad is taken as drawn rather than approximated by the two dab
+/// centers: on a turn its joint backs off past the previous dab's leading edge,
+/// which a center-plus-extent box would not always contain.
+struct DabWorldBounds {
+    float minX = 0.0f;
+    float minY = 0.0f;
+    float maxX = 0.0f;
+    float maxY = 0.0f;
+};
+
+DabWorldBounds stretchedDabWorldBounds(
+    const TileBrush& brush, const TileBrush::DabPoint& dab, const TileBrush::DabPoint* stretchStart)
+{
+    DabWorldBounds bounds { dab.worldX, dab.worldY, dab.worldX, dab.worldY };
+    if (!stretchStart) {
+        return bounds;
+    }
+    bounds.minX = std::min(bounds.minX, stretchStart->worldX);
+    bounds.minY = std::min(bounds.minY, stretchStart->worldY);
+    bounds.maxX = std::max(bounds.maxX, stretchStart->worldX);
+    bounds.maxY = std::max(bounds.maxY, stretchStart->worldY);
+
+    TileBrush::DabQuad stretchQuad {};
+    if (!brush.dabStretchedQuad(*stretchStart, dab, stretchQuad)) {
+        return bounds;
+    }
+    for (const Vector2& corner : stretchQuad) {
+        bounds.minX = std::min(bounds.minX, corner.x);
+        bounds.minY = std::min(bounds.minY, corner.y);
+        bounds.maxX = std::max(bounds.maxX, corner.x);
+        bounds.maxY = std::max(bounds.maxY, corner.y);
+    }
+    return bounds;
 }
 
 // Square reservoir texture pair. Grows geometrically across strokes to
@@ -247,8 +285,8 @@ const QString kBatchRebuildVert
                      "uniform vec2 uQuadMin;\n"
                      "uniform vec2 uQuadMax;\n"
                      "uniform int uInstancedDabs;\n"
-                     "uniform vec2 uDabCenter[64];\n"
-                     "uniform float uDabExtent[64];\n"
+                     "uniform vec2 uDabCenter[32];\n"
+                     "uniform float uDabExtent[32];\n"
                      "out vec2 fragPixelCoord;\n"
                      "flat out int fragDabIndex;\n"
                      "vec2 positions[6] = vec2[](\n"
@@ -275,9 +313,14 @@ const QString kBatchRebuildVert
 const QString kBatchRebuildFrag = QStringLiteral(
     "#version 450 core\n"
     "uniform int uDabCount;\n"
-    "uniform vec2 uDabCenter[64];\n"
-    "uniform vec4 uDabParams[64]; // radius, hardness, roundness, angle\n"
-    "uniform vec4 uDabColor[64];  // premultiplied rgba\n"
+    "uniform vec2 uDabCenter[32];\n"
+    "uniform vec4 uDabParams[32]; // radius, hardness, roundness, angle\n"
+    "uniform vec4 uDabColor[32];  // premultiplied rgba\n"
+    "uniform vec4 uPreviousDabParams[32];\n"
+    "uniform vec4 uPreviousDabColor[32];\n"
+    "uniform vec4 uStretchQuad01[32]; // q0.xy, q1.xy\n"
+    "uniform vec4 uStretchQuad23[32]; // q2.xy, q3.xy\n"
+    "uniform int uDabHasPrevious[32];\n"
     "uniform int uBlendMode; // 0=src-over, 1=max\n"
     "uniform sampler2D uMaskTexture;\n"
     "uniform sampler2D uTextureTile;\n"
@@ -287,6 +330,9 @@ const QString kBatchRebuildFrag = QStringLiteral(
     "uniform int uUseTexture;\n"
     "uniform int uUseDabShapeTexture;\n"
     "uniform vec2 uDabShapeScale;\n"
+    "uniform float uDabShapeRotationRad;\n"
+    "uniform vec4 uDabContentBounds; // minX, minY, maxX, maxY\n"
+    "uniform vec4 uDabSoftContentBounds;\n"
     "uniform float uTextureEdgeBoost;\n"
     // Shaping of the sampled grain. The procedural texture cache stores raw
     // grain so these four stay out of textureRevision(); duplicated verbatim in
@@ -367,6 +413,71 @@ const QString kBatchRebuildFrag = QStringLiteral(
     "    float softness = max(1.0 - clamp(hardness, 0.0, 1.0), 0.0);\n"
     "    return mix(baseAlpha, softAlpha, softness);\n"
     "}\n"
+    "vec4 dabContentBounds(float hardness) {\n"
+    "    float softness = 1.0 - clamp(hardness, 0.0, 1.0);\n"
+    "    return mix(uDabContentBounds, uDabSoftContentBounds, softness);\n"
+    "}\n"
+    // This is the same analytical inverse-bilinear mapping used by Free
+    // Corners. A stretched dab is one real transformed quad, not a center-line
+    // projection or another row of synthetic dabs inserted into the gap.
+    "float cross2d(vec2 a, vec2 b) { return a.x*b.y - a.y*b.x; }\n"
+    "bool tryStretchST(vec2 E, vec2 F, vec2 G, vec2 h, float t, out vec2 st) {\n"
+    "    const float margin = 0.002;\n"
+    "    if (t < -margin || t > 1.0 + margin) return false;\n"
+    "    vec2 denom = E + G * t;\n"
+    "    float s;\n"
+    "    if (abs(denom.x) > abs(denom.y)) {\n"
+    "        if (abs(denom.x) < 1e-8) return false;\n"
+    "        s = (h.x - F.x * t) / denom.x;\n"
+    "    } else {\n"
+    "        if (abs(denom.y) < 1e-8) return false;\n"
+    "        s = (h.y - F.y * t) / denom.y;\n"
+    "    }\n"
+    "    if (s < -margin || s > 1.0 + margin) return false;\n"
+    "    st = clamp(vec2(s, t), vec2(0.0), vec2(1.0));\n"
+    "    return true;\n"
+    "}\n"
+    "bool inverseStretchQuad(vec2 P, vec2 q0, vec2 q1, vec2 q2, vec2 q3, out vec2 st) {\n"
+    "    vec2 E0 = q1 - q0;\n"
+    "    vec2 F0 = q3 - q0;\n"
+    "    float quadScale = max(max(length(E0), length(F0)),\n"
+    "                          max(length(q2 - q1), length(q2 - q3)));\n"
+    "    float invScale = 1.0 / max(quadScale, 1e-6);\n"
+    "    vec2 E = E0 * invScale;\n"
+    "    vec2 F = F0 * invScale;\n"
+    "    vec2 G = (q0 - q1 + q2 - q3) * invScale;\n"
+    "    vec2 h = (P - q0) * invScale;\n"
+    "    float k2 = cross2d(G, F);\n"
+    "    float k1 = cross2d(E, F) + cross2d(h, G);\n"
+    "    float k0 = cross2d(h, E);\n"
+    "    if (abs(k2) < 1e-8) {\n"
+    "        if (abs(k1) < 1e-8) return false;\n"
+    "        return tryStretchST(E, F, G, h, -k0 / k1, st);\n"
+    "    }\n"
+    "    float disc = k1*k1 - 4.0*k0*k2;\n"
+    "    if (disc < 0.0) return false;\n"
+    "    float root = sqrt(disc);\n"
+    "    float qStable = -0.5 * (k1 + ((k1 >= 0.0) ? root : -root));\n"
+    "    if (tryStretchST(E, F, G, h, qStable / k2, st)) return true;\n"
+    "    return abs(qStable) > 1e-8\n"
+    "        && tryStretchST(E, F, G, h, k0 / qStable, st);\n"
+    "}\n"
+    "float shapeCoverage(vec2 shapeLocal, float hardness, out float edgeFactor) {\n"
+    "    edgeFactor = 0.0;\n"
+    "    if (abs(shapeLocal.x) > 1.0 || abs(shapeLocal.y) > 1.0) return 0.0;\n"
+    "    if (uUseDabShapeTexture != 0) {\n"
+    "        vec2 uv = (shapeLocal + 1.0) * 0.5;\n"
+    "        float baseAlpha = sampleDabShapeSafe(uv).r;\n"
+    "        float falloff = sampleCustomDabCoverage(uv, hardness);\n"
+    "        edgeFactor = max(0.0, falloff - baseAlpha);\n"
+    "        return falloff;\n"
+    "    }\n"
+    "    float distanceToCenter = length(shapeLocal);\n"
+    "    if (distanceToCenter > 1.0) return 0.0;\n"
+    "    edgeFactor = smoothstep(clamp(hardness + 0.05, 0.05, 0.95),\n"
+    "                            1.0, distanceToCenter);\n"
+    "    return hardnessFalloff(max(0.0, 1.0 - distanceToCenter), hardness);\n"
+    "}\n"
     "void main() {\n"
     "    float maskScale = 1.0;\n"
     "    if (uUseMask != 0) {\n"
@@ -382,62 +493,58 @@ const QString kBatchRebuildFrag = QStringLiteral(
     "    vec4 accum = vec4(0.0);\n"
     "    int firstDab = (fragDabIndex >= 0) ? fragDabIndex : 0;\n"
     "    int lastDab = (fragDabIndex >= 0) ? (fragDabIndex + 1) : uDabCount;\n"
-    "    for (int i = firstDab; i < 64; ++i) {\n"
+    "    for (int i = firstDab; i < 32; ++i) {\n"
     "        if (i >= lastDab) break;\n"
-    "        vec2 delta = fragPixelCoord - uDabCenter[i];\n"
-    "        float radius = uDabParams[i].x;\n"
-    "        float hardness = uDabParams[i].y;\n"
-    "        float roundness = max(0.01, clamp(uDabParams[i].z, 0.0, 1.0));\n"
-    "        float angle = uDabParams[i].w;\n"
-    "        float c = cos(angle);\n"
-    "        float s = sin(angle);\n"
-    "        vec2 local = vec2(delta.x * c + delta.y * s,\n"
-    "                         (-delta.x * s + delta.y * c) / roundness);\n"
-    "        vec2 shapeLocal = local / radius;\n"
-    "        shapeLocal /= max(uDabShapeScale, vec2(0.0001));\n"
-    "        float edgeDistance = 0.0;\n"
+    "        vec2 center = uDabCenter[i];\n"
+    "        vec4 dabParams = uDabParams[i];\n"
+    "        vec4 dabColor = uDabColor[i];\n"
     "        float edgeFactor = 0.0;\n"
-    "        if (uUseDabShapeTexture != 0) {\n"
-    "            if (abs(shapeLocal.x) > 1.0 || abs(shapeLocal.y) > 1.0) "
-    "continue;\n"
-    "            vec2 uv = (shapeLocal + 1.0) * 0.5;\n"
-    "            float baseAlpha = sampleDabShapeSafe(uv).r;\n"
-    "            float falloff = sampleCustomDabCoverage(uv, hardness);\n"
-    "            if (falloff <= 0.0) continue;\n"
-    "            edgeFactor = max(0.0, falloff - baseAlpha);\n"
-    "            float dabTextureA = textureA;\n"
-    "            if (uUseTexture != 0 && uTextureEdgeBoost > 0.0) {\n"
-    "                float contrast = 1.0 + edgeFactor * uTextureEdgeBoost * 8.0;\n"
-    "                dabTextureA = clamp(0.5 + (dabTextureA - 0.5) * contrast, 0.0, 1.0);\n"
-    "            }\n"
-    "            float alpha = uDabColor[i].a * falloff * dabTextureA;\n"
-    "            float colorScale = maskScale;\n"
-    "            if (uMaskAffectsAlpha != 0) { colorScale = 1.0; }\n"
-    "            if (alpha <= 0.0) continue;\n"
-    "            vec4 src = vec4(uDabColor[i].rgb * falloff * dabTextureA * colorScale, alpha);\n"
-    "            if (uBlendMode == 0) {\n"
-    "                accum = src + accum * (1.0 - src.a);\n"
-    "            } else {\n"
-    "                if (src.a > accum.a) accum = src;\n"
-    "            }\n"
-    "            continue;\n"
+    "        float falloff = 0.0;\n"
+    "        if (uDabHasPrevious[i] != 0) {\n"
+    // The stretched quad IS this dab: it runs from the previous dab's
+    // leading edge to this dab's own, so the unstretched shape is never
+    // stamped on top of it and nothing extra fills the gap.
+    "            vec4 quad01 = uStretchQuad01[i];\n"
+    "            vec4 quad23 = uStretchQuad23[i];\n"
+    "            vec2 stretchST;\n"
+    "            if (!inverseStretchQuad(fragPixelCoord, quad01.xy, quad01.zw,\n"
+    "                    quad23.xy, quad23.zw, stretchST)) continue;\n"
+    "            dabParams = mix(uPreviousDabParams[i], dabParams, stretchST.x);\n"
+    "            dabColor = mix(uPreviousDabColor[i], dabColor, stretchST.x);\n"
+    "            vec4 contentBounds = dabContentBounds(dabParams.y);\n"
+    "            vec2 stretchShape = vec2(\n"
+    "                mix(contentBounds.x, contentBounds.z, stretchST.x),\n"
+    "                mix(contentBounds.y, contentBounds.w, stretchST.y));\n"
+    "            falloff = shapeCoverage(stretchShape, dabParams.y, edgeFactor);\n"
     "        } else {\n"
-    "            float t = length(local) / radius;\n"
-    "            if (t > 1.0) continue;\n"
-    "            edgeDistance = max(0.0, 1.0 - t);\n"
-    "            edgeFactor = smoothstep(clamp(hardness + 0.05, 0.05, 0.95), 1.0, t);\n"
+    "            vec2 delta = fragPixelCoord - center;\n"
+    "            float radius = dabParams.x;\n"
+    "            float hardness = dabParams.y;\n"
+    "            float roundness = max(0.01, clamp(dabParams.z, 0.0, 1.0));\n"
+    "            float angle = dabParams.w;\n"
+    "            float c = cos(angle);\n"
+    "            float s = sin(angle);\n"
+    "            vec2 local = vec2(delta.x * c + delta.y * s,\n"
+    "                             (-delta.x * s + delta.y * c) / roundness);\n"
+    "            vec2 shapeLocal = local / radius;\n"
+    "            float shapeC = cos(uDabShapeRotationRad);\n"
+    "            float shapeS = sin(uDabShapeRotationRad);\n"
+    "            shapeLocal = vec2(shapeLocal.x * shapeC - shapeLocal.y * shapeS,\n"
+    "                              shapeLocal.x * shapeS + shapeLocal.y * shapeC);\n"
+    "            shapeLocal /= max(uDabShapeScale, vec2(0.0001));\n"
+    "            falloff = shapeCoverage(shapeLocal, hardness, edgeFactor);\n"
     "        }\n"
-    "        float falloff = hardnessFalloff(edgeDistance, hardness);\n"
+    "        if (falloff <= 0.0) continue;\n"
     "        float dabTextureA = textureA;\n"
     "        if (uUseTexture != 0 && uTextureEdgeBoost > 0.0) {\n"
     "            float contrast = 1.0 + edgeFactor * uTextureEdgeBoost * 8.0;\n"
     "            dabTextureA = clamp(0.5 + (dabTextureA - 0.5) * contrast, 0.0, 1.0);\n"
     "        }\n"
-    "        float alpha = uDabColor[i].a * falloff * dabTextureA;\n"
+    "        float alpha = dabColor.a * falloff * dabTextureA;\n"
     "        float colorScale = maskScale;\n"
     "        if (uMaskAffectsAlpha != 0) { colorScale = 1.0; }\n"
     "        if (alpha <= 0.0) continue;\n"
-    "        vec4 src = vec4(uDabColor[i].rgb * falloff * dabTextureA * colorScale, alpha);\n"
+    "        vec4 src = vec4(dabColor.rgb * falloff * dabTextureA * colorScale, alpha);\n"
     "        if (uBlendMode == 0) {\n"
     "            accum = src + accum * (1.0 - src.a);\n"
     "        } else {\n"
@@ -3103,6 +3210,8 @@ void GLBrushRenderer::stampGPU(TileGrid& strokeBuffer, GLTileRenderer* tileRende
     prog->setUniform("uTextureAmount", brush.textureAmount());
     prog->setUniform("uUseDabShapeTexture", useDabShape ? 1 : 0);
     prog->setUniform("uDabShapeScale", brush.dabXScale(), brush.dabYScale());
+    prog->setUniform(
+        "uDabShapeRotationRad", brush.dabRotation() * (3.14159265358979323846f / 180.0f));
 
     if (useSelectionMask) {
         prog->setUniform("uMaskTexture", 1);
@@ -3230,7 +3339,8 @@ void GLBrushRenderer::stampGPU(TileGrid& strokeBuffer, GLTileRenderer* tileRende
 
 bool GLBrushRenderer::stampDabSegmentGPU(TileGrid& strokeBuffer, GLTileRenderer* tileRenderer,
     const TileBrush& brush, const std::vector<TileBrush::DabPoint>& dabs, TileGrid* selectionMask,
-    bool useSelectionMask, uint32_t canvasWidth, uint32_t canvasHeight)
+    bool useSelectionMask, uint32_t canvasWidth, uint32_t canvasHeight,
+    const TileBrush::DabPoint* previousDab)
 {
     const StrokeBufferVersionBump versionBump { strokeBuffer };
     if (!m_initialized || !m_rebuildBatchProgram || !tileRenderer)
@@ -3266,15 +3376,26 @@ bool GLBrushRenderer::stampDabSegmentGPU(TileGrid& strokeBuffer, GLTileRenderer*
 
     for (size_t idx = 0; idx < dabs.size(); ++idx) {
         const auto& dab = dabs[idx];
-        if (dab.alpha == 0 || dab.radius <= 0.0f)
+        const TileBrush::DabPoint* stretchStart
+            = brush.connectsDabs() ? (idx > 0 ? &dabs[idx - 1] : previousDab) : nullptr;
+        if (dab.radius <= 0.0f || (dab.alpha == 0 && !stretchStart))
             continue;
-
-        const float rasterExtent = dabCoverageExtent(
-            brush, dab.radius, dab.hardness, dab.roundness, dab.angleDegrees, true);
-        int32_t tMinX = static_cast<int32_t>(std::floor((dab.worldX - rasterExtent) / TILE_SIZE));
-        int32_t tMinY = static_cast<int32_t>(std::floor((dab.worldY - rasterExtent) / TILE_SIZE));
-        int32_t tMaxX = static_cast<int32_t>(std::floor((dab.worldX + rasterExtent) / TILE_SIZE));
-        int32_t tMaxY = static_cast<int32_t>(std::floor((dab.worldY + rasterExtent) / TILE_SIZE));
+        const float rasterExtent = stretchStart
+            ? std::max(dabRotationInvariantCoverageExtent(
+                           brush, dab.radius, dab.hardness, dab.roundness, true),
+                  dabRotationInvariantCoverageExtent(brush, stretchStart->radius,
+                      stretchStart->hardness, stretchStart->roundness, true))
+            : dabCoverageExtent(
+                  brush, dab.radius, dab.hardness, dab.roundness, dab.angleDegrees, true);
+        const DabWorldBounds dabBounds = stretchedDabWorldBounds(brush, dab, stretchStart);
+        const float minWorldX = dabBounds.minX;
+        const float minWorldY = dabBounds.minY;
+        const float maxWorldX = dabBounds.maxX;
+        const float maxWorldY = dabBounds.maxY;
+        int32_t tMinX = static_cast<int32_t>(std::floor((minWorldX - rasterExtent) / TILE_SIZE));
+        int32_t tMinY = static_cast<int32_t>(std::floor((minWorldY - rasterExtent) / TILE_SIZE));
+        int32_t tMaxX = static_cast<int32_t>(std::floor((maxWorldX + rasterExtent) / TILE_SIZE));
+        int32_t tMaxY = static_cast<int32_t>(std::floor((maxWorldY + rasterExtent) / TILE_SIZE));
 
         if (clipToCanvas) {
             const int32_t canvasMaxX = static_cast<int32_t>((canvasWidth - 1u) / TILE_SIZE);
@@ -3296,10 +3417,10 @@ bool GLBrushRenderer::stampDabSegmentGPU(TileGrid& strokeBuffer, GLTileRenderer*
                 const float tileOriginY = static_cast<float>(ty) * static_cast<float>(TILE_SIZE);
                 // Same rasterExtent that decided tile membership above, so the
                 // box can never exclude a texel this dab could have touched.
-                batch.minX = std::min(batch.minX, dab.worldX - rasterExtent - tileOriginX);
-                batch.minY = std::min(batch.minY, dab.worldY - rasterExtent - tileOriginY);
-                batch.maxX = std::max(batch.maxX, dab.worldX + rasterExtent - tileOriginX);
-                batch.maxY = std::max(batch.maxY, dab.worldY + rasterExtent - tileOriginY);
+                batch.minX = std::min(batch.minX, minWorldX - rasterExtent - tileOriginX);
+                batch.minY = std::min(batch.minY, minWorldY - rasterExtent - tileOriginY);
+                batch.maxX = std::max(batch.maxX, maxWorldX + rasterExtent - tileOriginX);
+                batch.maxY = std::max(batch.maxY, maxWorldY + rasterExtent - tileOriginY);
             }
         }
     }
@@ -3333,6 +3454,12 @@ bool GLBrushRenderer::stampDabSegmentGPU(TileGrid& strokeBuffer, GLTileRenderer*
     m_rebuildBatchProgram->setUniform("uTextureBlend", brush.textureBlend());
     m_rebuildBatchProgram->setUniform("uTextureAmount", brush.textureAmount());
     m_rebuildBatchProgram->setUniform("uDabShapeScale", brush.dabXScale(), brush.dabYScale());
+    m_rebuildBatchProgram->setUniform(
+        "uDabShapeRotationRad", brush.dabRotation() * (3.14159265358979323846f / 180.0f));
+    m_rebuildBatchProgram->setUniform(
+        "uDabContentBounds", brush.dabShapeContentBounds(1.0f).asArray());
+    m_rebuildBatchProgram->setUniform(
+        "uDabSoftContentBounds", brush.dabShapeContentBounds(0.0f).asArray());
     m_rebuildBatchProgram->setUniform("uInvTileSize", 1.0f / static_cast<float>(TILE_SIZE));
     m_rebuildBatchProgram->setUniform("uQuantizeTo8Bit", quantizeTo8BitFlag(strokeBuffer));
 
@@ -3404,8 +3531,8 @@ bool GLBrushRenderer::stampDabSegmentGPU(TileGrid& strokeBuffer, GLTileRenderer*
 
         const float tileOriginX = static_cast<float>(key.x) * static_cast<float>(TILE_SIZE);
         const float tileOriginY = static_cast<float>(key.y) * static_cast<float>(TILE_SIZE);
-        renderDabBatchForTile(
-            brush, dabs, indices, tileOriginX, tileOriginY, batchUniforms, batchScratch);
+        renderDabBatchForTile(brush, dabs, indices, tileOriginX, tileOriginY, batchUniforms,
+            batchScratch, previousDab);
 
         tile.clearDirty();
         strokeBuffer.removeDirty(key);
@@ -3448,7 +3575,7 @@ void GLBrushRenderer::rebuildStrokeBufferFromDabsGPU(TileGrid& strokeBuffer,
     std::vector<size_t> dabIndices;
     dabIndices.reserve(dabs.size());
     if (!maskBlocksAll) {
-        if (maxDabs > 2 && dabs.size() > maxDabs) {
+        if (!brush.connectsDabs() && maxDabs > 2 && dabs.size() > maxDabs) {
             const size_t last = dabs.size() - 1;
             size_t prev = static_cast<size_t>(-1);
             for (size_t i = 0; i < maxDabs; ++i) {
@@ -3472,14 +3599,25 @@ void GLBrushRenderer::rebuildStrokeBufferFromDabsGPU(TileGrid& strokeBuffer,
     tileDabs.reserve(dabIndices.size() * 2);
     for (size_t idx : dabIndices) {
         const auto& dab = dabs[idx];
-        if (dab.alpha == 0 || dab.radius <= 0.0f)
+        const TileBrush::DabPoint* stretchStart
+            = brush.connectsDabs() && idx > 0 ? &dabs[idx - 1] : nullptr;
+        if (dab.radius <= 0.0f || (dab.alpha == 0 && !stretchStart))
             continue;
-        const float r
-            = dabCoverageExtent(brush, dab.radius, dab.hardness, dab.roundness, dab.angleDegrees);
-        int32_t tMinX = static_cast<int32_t>(std::floor((dab.worldX - r) / TILE_SIZE));
-        int32_t tMinY = static_cast<int32_t>(std::floor((dab.worldY - r) / TILE_SIZE));
-        int32_t tMaxX = static_cast<int32_t>(std::floor((dab.worldX + r) / TILE_SIZE));
-        int32_t tMaxY = static_cast<int32_t>(std::floor((dab.worldY + r) / TILE_SIZE));
+        const float r = stretchStart
+            ? std::max(dabRotationInvariantCoverageExtent(
+                           brush, dab.radius, dab.hardness, dab.roundness, true),
+                  dabRotationInvariantCoverageExtent(brush, stretchStart->radius,
+                      stretchStart->hardness, stretchStart->roundness, true))
+            : dabCoverageExtent(brush, dab.radius, dab.hardness, dab.roundness, dab.angleDegrees);
+        const DabWorldBounds dabBounds = stretchedDabWorldBounds(brush, dab, stretchStart);
+        const float minWorldX = dabBounds.minX;
+        const float minWorldY = dabBounds.minY;
+        const float maxWorldX = dabBounds.maxX;
+        const float maxWorldY = dabBounds.maxY;
+        int32_t tMinX = static_cast<int32_t>(std::floor((minWorldX - r) / TILE_SIZE));
+        int32_t tMinY = static_cast<int32_t>(std::floor((minWorldY - r) / TILE_SIZE));
+        int32_t tMaxX = static_cast<int32_t>(std::floor((maxWorldX + r) / TILE_SIZE));
+        int32_t tMaxY = static_cast<int32_t>(std::floor((maxWorldY + r) / TILE_SIZE));
         if (clipToCanvas) {
             const int32_t canvasMaxX = static_cast<int32_t>((canvasWidth - 1u) / TILE_SIZE);
             const int32_t canvasMaxY = static_cast<int32_t>((canvasHeight - 1u) / TILE_SIZE);
@@ -3536,6 +3674,12 @@ void GLBrushRenderer::rebuildStrokeBufferFromDabsGPU(TileGrid& strokeBuffer,
     m_rebuildBatchProgram->setUniform("uTextureBlend", brush.textureBlend());
     m_rebuildBatchProgram->setUniform("uTextureAmount", brush.textureAmount());
     m_rebuildBatchProgram->setUniform("uDabShapeScale", brush.dabXScale(), brush.dabYScale());
+    m_rebuildBatchProgram->setUniform(
+        "uDabShapeRotationRad", brush.dabRotation() * (3.14159265358979323846f / 180.0f));
+    m_rebuildBatchProgram->setUniform(
+        "uDabContentBounds", brush.dabShapeContentBounds(1.0f).asArray());
+    m_rebuildBatchProgram->setUniform(
+        "uDabSoftContentBounds", brush.dabShapeContentBounds(0.0f).asArray());
     m_rebuildBatchProgram->setUniform("uInvTileSize", 1.0f / static_cast<float>(TILE_SIZE));
     m_rebuildBatchProgram->setUniform("uQuantizeTo8Bit", quantizeTo8BitFlag(strokeBuffer));
     m_rebuildBatchProgram->setUniform("uQuadMin", 0.0f, 0.0f);
@@ -3642,6 +3786,14 @@ void GLBrushRenderer::rebuildStrokeBufferRangeFromDabsGPU(TileGrid& strokeBuffer
 
     const size_t endDabIndex = std::min(startDabIndex + dabCount, dabs.size());
     if (startDabIndex == 0 && endDabIndex == dabs.size()) {
+        rebuildStrokeBufferFromDabsGPU(strokeBuffer, tileRenderer, brush, dabs, 0, selectionMask,
+            useSelectionMask, canvasWidth, canvasHeight);
+        return;
+    }
+    // A changed dab also changes both adjacent stretched dabs. Rebuilding the
+    // complete connected ribbon keeps those shared boundaries exact and avoids
+    // leaving stale pixels in tiles reached only by an outgoing stretchQuad.
+    if (brush.connectsDabs()) {
         rebuildStrokeBufferFromDabsGPU(strokeBuffer, tileRenderer, brush, dabs, 0, selectionMask,
             useSelectionMask, canvasWidth, canvasHeight);
         return;
@@ -3775,6 +3927,12 @@ void GLBrushRenderer::rebuildStrokeBufferRangeFromDabsGPU(TileGrid& strokeBuffer
     m_rebuildBatchProgram->setUniform("uTextureBlend", brush.textureBlend());
     m_rebuildBatchProgram->setUniform("uTextureAmount", brush.textureAmount());
     m_rebuildBatchProgram->setUniform("uDabShapeScale", brush.dabXScale(), brush.dabYScale());
+    m_rebuildBatchProgram->setUniform(
+        "uDabShapeRotationRad", brush.dabRotation() * (3.14159265358979323846f / 180.0f));
+    m_rebuildBatchProgram->setUniform(
+        "uDabContentBounds", brush.dabShapeContentBounds(1.0f).asArray());
+    m_rebuildBatchProgram->setUniform(
+        "uDabSoftContentBounds", brush.dabShapeContentBounds(0.0f).asArray());
     m_rebuildBatchProgram->setUniform("uInvTileSize", 1.0f / static_cast<float>(TILE_SIZE));
     m_rebuildBatchProgram->setUniform("uQuantizeTo8Bit", quantizeTo8BitFlag(strokeBuffer));
     m_rebuildBatchProgram->setUniform("uQuadMin", 0.0f, 0.0f);
@@ -4369,6 +4527,11 @@ void GLBrushRenderer::DabBatchScratch::resizeForMaxDabs(size_t maxDabs)
     centers.resize(maxDabs * 2u);
     params.resize(maxDabs * 4u);
     colors.resize(maxDabs * 4u);
+    previousParams.resize(maxDabs * 4u);
+    previousColors.resize(maxDabs * 4u);
+    stretchQuad01.resize(maxDabs * 4u);
+    stretchQuad23.resize(maxDabs * 4u);
+    hasPrevious.resize(maxDabs);
     extents.resize(maxDabs);
 }
 
@@ -4384,6 +4547,11 @@ GLBrushRenderer::DabBatchUniforms GLBrushRenderer::resolveDabBatchUniforms() con
     uniforms.dabCenter = m_gl->glGetUniformLocation(program, "uDabCenter");
     uniforms.dabParams = m_gl->glGetUniformLocation(program, "uDabParams");
     uniforms.dabColor = m_gl->glGetUniformLocation(program, "uDabColor");
+    uniforms.previousDabParams = m_gl->glGetUniformLocation(program, "uPreviousDabParams");
+    uniforms.previousDabColor = m_gl->glGetUniformLocation(program, "uPreviousDabColor");
+    uniforms.stretchQuad01 = m_gl->glGetUniformLocation(program, "uStretchQuad01");
+    uniforms.stretchQuad23 = m_gl->glGetUniformLocation(program, "uStretchQuad23");
+    uniforms.dabHasPrevious = m_gl->glGetUniformLocation(program, "uDabHasPrevious");
     uniforms.dabExtent = m_gl->glGetUniformLocation(program, "uDabExtent");
     uniforms.instancedDabs = m_gl->glGetUniformLocation(program, "uInstancedDabs");
     uniforms.tileOriginPx = m_gl->glGetUniformLocation(program, "uTileOriginPx");
@@ -4394,11 +4562,16 @@ GLBrushRenderer::DabBatchUniforms GLBrushRenderer::resolveDabBatchUniforms() con
 void GLBrushRenderer::renderDabBatchForTile(const TileBrush& brush,
     const std::vector<TileBrush::DabPoint>& dabs, const std::vector<uint32_t>& indices,
     float tileOriginX, float tileOriginY, const DabBatchUniforms& uniforms,
-    DabBatchScratch& scratch)
+    DabBatchScratch& scratch, const TileBrush::DabPoint* previousDab)
 {
     std::vector<float>& centers = scratch.centers;
     std::vector<float>& params = scratch.params;
     std::vector<float>& colors = scratch.colors;
+    std::vector<float>& previousParams = scratch.previousParams;
+    std::vector<float>& previousColors = scratch.previousColors;
+    std::vector<float>& stretchQuad01 = scratch.stretchQuad01;
+    std::vector<float>& stretchQuad23 = scratch.stretchQuad23;
+    std::vector<GLint>& hasPrevious = scratch.hasPrevious;
 
     m_gl->glUniform2f(uniforms.tileOriginPx, tileOriginX, tileOriginY);
 
@@ -4430,7 +4603,7 @@ void GLBrushRenderer::renderDabBatchForTile(const TileBrush& brush,
         //    src-over accumulates, and instancing would round the tile to its
         //    storage format after every dab. A long run of low-flow dabs would
         //    then drift away from the float accumulation the loop performs.
-        bool instanced = blendAsMax;
+        bool instanced = blendAsMax && !brush.connectsDabs();
         if (instanced) {
             const TileBrush::DabPoint& first = dabs[indices[cursor]];
             for (size_t i = cursor + 1; i < runEnd; ++i) {
@@ -4487,6 +4660,41 @@ void GLBrushRenderer::renderDabBatchForTile(const TileBrush& brush,
                 colors[vec4Base + 2] = bPremul;
                 colors[vec4Base + 3] = alpha;
 
+                const uint32_t dabIndex = indices[runCursor + i];
+                const TileBrush::DabPoint* stretchStart = nullptr;
+                if (brush.connectsDabs()) {
+                    stretchStart = dabIndex > 0 ? &dabs[dabIndex - 1] : previousDab;
+                }
+                TileBrush::DabQuad stretchQuad {};
+                const bool hasStretch
+                    = stretchStart && brush.dabStretchedQuad(*stretchStart, dab, stretchQuad);
+                hasPrevious[i] = hasStretch ? 1 : 0;
+                const TileBrush::DabPoint& previous = stretchStart ? *stretchStart : dab;
+                previousParams[vec4Base + 0] = previous.radius;
+                previousParams[vec4Base + 1] = std::clamp(previous.hardness, 0.0f, 1.0f);
+                previousParams[vec4Base + 2] = std::clamp(previous.roundness, 0.0f, 1.0f);
+                previousParams[vec4Base + 3]
+                    = previous.angleDegrees * (3.14159265358979323846f / 180.0f);
+                const float previousAlpha = static_cast<float>(previous.alpha) / 255.0f;
+                previousColors[vec4Base + 0]
+                    = (static_cast<float>(previous.colorR) / 255.0f) * previousAlpha;
+                previousColors[vec4Base + 1]
+                    = (static_cast<float>(previous.colorG) / 255.0f) * previousAlpha;
+                previousColors[vec4Base + 2]
+                    = (static_cast<float>(previous.colorB) / 255.0f) * previousAlpha;
+                previousColors[vec4Base + 3] = previousAlpha;
+                if (!hasStretch) {
+                    stretchQuad.fill(Vector2 { dab.worldX, dab.worldY });
+                }
+                stretchQuad01[vec4Base + 0] = stretchQuad[0].x - tileOriginX;
+                stretchQuad01[vec4Base + 1] = stretchQuad[0].y - tileOriginY;
+                stretchQuad01[vec4Base + 2] = stretchQuad[1].x - tileOriginX;
+                stretchQuad01[vec4Base + 3] = stretchQuad[1].y - tileOriginY;
+                stretchQuad23[vec4Base + 0] = stretchQuad[2].x - tileOriginX;
+                stretchQuad23[vec4Base + 1] = stretchQuad[2].y - tileOriginY;
+                stretchQuad23[vec4Base + 2] = stretchQuad[3].x - tileOriginX;
+                stretchQuad23[vec4Base + 3] = stretchQuad[3].y - tileOriginY;
+
                 if (instanced) {
                     // Same conservative bound the tile assignment uses, so an
                     // instance's quad can never clip its own coverage.
@@ -4502,6 +4710,16 @@ void GLBrushRenderer::renderDabBatchForTile(const TileBrush& brush,
                 uniforms.dabCenter, static_cast<GLsizei>(chunkCount), centers.data());
             m_gl->glUniform4fv(uniforms.dabParams, static_cast<GLsizei>(chunkCount), params.data());
             m_gl->glUniform4fv(uniforms.dabColor, static_cast<GLsizei>(chunkCount), colors.data());
+            m_gl->glUniform4fv(uniforms.previousDabParams, static_cast<GLsizei>(chunkCount),
+                previousParams.data());
+            m_gl->glUniform4fv(
+                uniforms.previousDabColor, static_cast<GLsizei>(chunkCount), previousColors.data());
+            m_gl->glUniform4fv(
+                uniforms.stretchQuad01, static_cast<GLsizei>(chunkCount), stretchQuad01.data());
+            m_gl->glUniform4fv(
+                uniforms.stretchQuad23, static_cast<GLsizei>(chunkCount), stretchQuad23.data());
+            m_gl->glUniform1iv(
+                uniforms.dabHasPrevious, static_cast<GLsizei>(chunkCount), hasPrevious.data());
 
             if (instanced) {
                 m_gl->glUniform1fv(

@@ -56,7 +56,7 @@ public:
     bool stampDabSegmentGPU(TileGrid& strokeBuffer, GLTileRenderer* tileRenderer,
         const TileBrush& brush, const std::vector<TileBrush::DabPoint>& dabs,
         TileGrid* selectionMask = nullptr, bool useSelectionMask = false, uint32_t canvasWidth = 0,
-        uint32_t canvasHeight = 0);
+        uint32_t canvasHeight = 0, const TileBrush::DabPoint* previousDab = nullptr);
 
     /// Batched smudge: process a whole stroke segment of dabs in one go,
     /// with a single ROI snapshot and a ping-pong work buffer instead of
@@ -172,6 +172,11 @@ private:
         GLint dabCenter = -1;
         GLint dabParams = -1;
         GLint dabColor = -1;
+        GLint previousDabParams = -1;
+        GLint previousDabColor = -1;
+        GLint stretchQuad01 = -1;
+        GLint stretchQuad23 = -1;
+        GLint dabHasPrevious = -1;
         GLint dabExtent = -1;
         GLint instancedDabs = -1;
         GLint tileOriginPx = -1;
@@ -183,12 +188,18 @@ private:
         std::vector<float> centers;
         std::vector<float> params;
         std::vector<float> colors;
+        std::vector<float> previousParams;
+        std::vector<float> previousColors;
+        std::vector<float> stretchQuad01;
+        std::vector<float> stretchQuad23;
+        std::vector<GLint> hasPrevious;
         std::vector<float> extents;
         void resizeForMaxDabs(size_t maxDabs);
     };
     void renderDabBatchForTile(const TileBrush& brush, const std::vector<TileBrush::DabPoint>& dabs,
         const std::vector<uint32_t>& indices, float tileOriginX, float tileOriginY,
-        const DabBatchUniforms& uniforms, DabBatchScratch& scratch);
+        const DabBatchUniforms& uniforms, DabBatchScratch& scratch,
+        const TileBrush::DabPoint* previousDab = nullptr);
     DabBatchUniforms resolveDabBatchUniforms() const;
     bool ensureBlurScratchSize(GLsizei width, GLsizei height, TilePixelFormat contentFormat);
     // Re-format the fixed TILE_SIZE blur read texture to match a document tile

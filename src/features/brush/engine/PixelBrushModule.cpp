@@ -372,9 +372,6 @@ QVector<BrushTabDef> pixelBrushTabDefinitions()
                 dynamicInfoDef("opacity.multiplier", QT_TR_NOOP("Opacity"),
                     QT_TR_NOOP("This parameter is dynamic"),
                     pressureTimeRandomDynamicsTarget(BrushDynamicsSettingKey::OpacityMultiplier)),
-                separatorDef(),
-                segmentedDef("shape.flowBlendMode", QT_TR_NOOP("Flow Blend"),
-                    BrushSettingsData::FlowBlendMax, { QT_TR_NOOP("src_over"), QT_TR_NOOP("max") }),
                 sliderDef("shape.hardness", QT_TR_NOOP("Hardness"), 0.7f, 0.0f, 1.0f, 0.01f, 100, 0,
                     "%", pressureTimeRandomDynamicsTarget(BrushDynamicsSettingKey::ShapeHardness)),
                 sliderDef("shape.spacing", QT_TR_NOOP("Spacing"), 0.25f, kBrushSpacingMin,
@@ -390,6 +387,15 @@ QVector<BrushTabDef> pixelBrushTabDefinitions()
                     pressureTimeRandomDynamicsTarget(BrushDynamicsSettingKey::ShapeAngle)),
                 toggleDef("shape.brushFeather", QT_TR_NOOP("Brush Feather"), true,
                     QT_TR_NOOP("Slight edge softening so brush is not pixel-perfect")),
+            } },
+        { "rendering", QT_TR_NOOP("Stroke Rendering"),
+            QT_TR_NOOP("How consecutive brush dabs form and blend a stroke"),
+            {
+                segmentedDef("rendering.flowBlendMode", QT_TR_NOOP("Flow Blend"),
+                    BrushSettingsData::FlowBlendMax, { QT_TR_NOOP("src_over"), QT_TR_NOOP("max") }),
+                toggleDef("rendering.connectDabs", QT_TR_NOOP("Connect Dabs"), false,
+                    QT_TR_NOOP("Stretch every dab back to the previous one so the stroke stays "
+                               "continuous")),
             } },
         { "color", QT_TR_NOOP("Color"), QT_TR_NOOP("Brush color adjustments"),
             {
@@ -952,7 +958,8 @@ QImage PixelBrushModule::buildCursorStamp(const BrushCursorRequest& request) con
 QVariantMap PixelBrushModule::settingsToVariantMap(const BrushSettingsData& settings)
 {
     QVariantMap map = {
-        { QStringLiteral("shape.flowBlendMode"), settings.flowBlendMode },
+        { QStringLiteral("rendering.flowBlendMode"), settings.flowBlendMode },
+        { QStringLiteral("rendering.connectDabs"), settings.connectDabs },
         { QStringLiteral("shape.hardness"), settings.hardness },
         { QStringLiteral("shape.spacing"), settings.spacing },
         { QStringLiteral("shape.flow"), settings.flow },
@@ -1034,7 +1041,12 @@ BrushSettingsData PixelBrushModule::settingsFromVariantMap(const QVariantMap& se
 {
     BrushSettingsData out;
     out.flowBlendMode
-        = settings.value(QStringLiteral("shape.flowBlendMode"), out.flowBlendMode).toInt();
+        = settings
+              .value(QStringLiteral("rendering.flowBlendMode"),
+                  settings.value(QStringLiteral("shape.flowBlendMode"), out.flowBlendMode))
+              .toInt();
+    out.connectDabs
+        = settings.value(QStringLiteral("rendering.connectDabs"), out.connectDabs).toBool();
     out.hardness = clampUnit(
         settings.value(QStringLiteral("shape.hardness"), out.hardness).toDouble(), out.hardness);
     out.spacing = clampSpacing(

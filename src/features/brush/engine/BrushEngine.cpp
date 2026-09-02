@@ -90,8 +90,12 @@ bool BrushExecutionBackend::stamp(TileBrush& brush, TileGrid& layerGrid, float w
 {
     brush.setStrokeElapsedSeconds(strokeElapsedSeconds, strokeTimeAvailable);
     if (preferGpu && hasGpuBackend()) {
+        std::optional<TileBrush::DabPoint> previousDab;
+        if (brush.connectsDabs() && !brush.strokeDabs().empty()) {
+            previousDab = brush.strokeDabs().back();
+        }
         TileBrush::DabPoint dab = brush.recordDabPoint(worldX, worldY);
-        if (dab.alpha == 0)
+        if (dab.alpha == 0 && !previousDab)
             return true;
 
         brush.setPressure(dab.pressure);
@@ -103,6 +107,15 @@ bool BrushExecutionBackend::stamp(TileBrush& brush, TileGrid& layerGrid, float w
         // coverage) but no warp is applied here — that happens in strokeTo().
         if (brush.isLiquifyMode()) {
             return true;
+        }
+
+        if (previousDab && !brush.isBlurMode() && !brush.isSmudgeMode() && !brush.isWetMode()) {
+            const std::vector<TileBrush::DabPoint> dabs { dab };
+            if (m_brushRenderer->stampDabSegmentGPU(brush.strokeBuffer(), m_tileRenderer, brush,
+                    dabs, selectionMask, selectionMask != nullptr, m_canvasWidth, m_canvasHeight,
+                    &*previousDab)) {
+                return true;
+            }
         }
 
         m_brushRenderer->stampGPU(brush.strokeBuffer(), m_tileRenderer, brush, dab.worldX,
@@ -132,6 +145,10 @@ bool BrushExecutionBackend::strokeTo(TileBrush& brush, TileGrid& layerGrid, floa
     const ruwa::core::brushes::BrushInputDynamics& toInputDynamics)
 {
     if (preferGpu && hasGpuBackend()) {
+        std::optional<TileBrush::DabPoint> segmentPreviousDab;
+        if (brush.connectsDabs() && !brush.strokeDabs().empty()) {
+            segmentPreviousDab = brush.strokeDabs().back();
+        }
         std::vector<TileBrush::DabPoint> segmentDabs;
         brush.appendInterpolatedStrokeDabs(fromX, fromY, toX, toY, fromPressure, toPressure,
             segmentDabs, fromStrokeElapsedSeconds, toStrokeElapsedSeconds, strokeTimeAvailable,
@@ -186,6 +203,9 @@ bool BrushExecutionBackend::strokeTo(TileBrush& brush, TileGrid& layerGrid, floa
         // deferring the draw cannot change what those dabs look like.
         if (plainPaint && m_dabBatchActive) {
             if (!segmentDabs.empty()) {
+                if (m_pendingBatchDabs.empty()) {
+                    m_pendingBatchPreviousDab = segmentPreviousDab;
+                }
                 m_pendingBatchDabs.insert(
                     m_pendingBatchDabs.end(), segmentDabs.begin(), segmentDabs.end());
                 const auto& last = segmentDabs.back();
@@ -196,10 +216,10 @@ bool BrushExecutionBackend::strokeTo(TileBrush& brush, TileGrid& layerGrid, floa
             return true;
         }
 
-        if (plainPaint && segmentDabs.size() >= 8
+        if (plainPaint && !segmentDabs.empty() && (segmentDabs.size() >= 8 || brush.connectsDabs())
             && m_brushRenderer->stampDabSegmentGPU(brush.strokeBuffer(), m_tileRenderer, brush,
-                segmentDabs, selectionMask, selectionMask != nullptr, m_canvasWidth,
-                m_canvasHeight)) {
+                segmentDabs, selectionMask, selectionMask != nullptr, m_canvasWidth, m_canvasHeight,
+                segmentPreviousDab ? &*segmentPreviousDab : nullptr)) {
             const auto& last = segmentDabs.back();
             brush.setPressure(last.pressure);
             brush.setStrokeElapsedSeconds(last.strokeElapsedSeconds, last.strokeTimeAvailable);
@@ -235,6 +255,7 @@ void BrushExecutionBackend::beginDabBatch(const TileBrush& brush)
 {
     m_dabBatchActive = false;
     m_pendingBatchDabs.clear();
+    m_pendingBatchPreviousDab.reset();
     if (!hasGpuBackend()) {
         return;
     }
@@ -256,15 +277,16 @@ void BrushExecutionBackend::endDabBatch(TileBrush& brush, TileGrid* selectionMas
     m_dabBatchActive = false;
     if (m_pendingBatchDabs.empty() || !hasGpuBackend()) {
         m_pendingBatchDabs.clear();
+        m_pendingBatchPreviousDab.reset();
         return;
     }
 
     // Same threshold the un-batched path applies to a single segment, so spans
     // short enough to have stayed on the per-dab route before still do.
-    const bool batched = m_pendingBatchDabs.size() >= 8
+    const bool batched = (m_pendingBatchDabs.size() >= 8 || brush.connectsDabs())
         && m_brushRenderer->stampDabSegmentGPU(brush.strokeBuffer(), m_tileRenderer, brush,
             m_pendingBatchDabs, selectionMask, selectionMask != nullptr, m_canvasWidth,
-            m_canvasHeight);
+            m_canvasHeight, m_pendingBatchPreviousDab ? &*m_pendingBatchPreviousDab : nullptr);
 
     if (!batched) {
         m_brushRenderer->beginStampBatch();
@@ -287,6 +309,7 @@ void BrushExecutionBackend::endDabBatch(TileBrush& brush, TileGrid* selectionMas
     }
 
     m_pendingBatchDabs.clear();
+    m_pendingBatchPreviousDab.reset();
 }
 
 bool BrushExecutionBackend::rebuildStrokeFromDabs(

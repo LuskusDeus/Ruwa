@@ -9,9 +9,10 @@
 
 #include <QOpenGLFunctions_4_5_Core>
 
-#include <vector>
-#include <unordered_set>
 #include <cstdint>
+#include <optional>
+#include <unordered_set>
+#include <vector>
 
 namespace aether {
 
@@ -116,6 +117,7 @@ private:
 
     // Dab coalescing across the micro-segments of one input span.
     std::vector<TileBrush::DabPoint> m_pendingBatchDabs;
+    std::optional<TileBrush::DabPoint> m_pendingBatchPreviousDab;
     bool m_dabBatchActive = false;
 };
 

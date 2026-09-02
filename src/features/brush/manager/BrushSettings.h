@@ -413,8 +413,11 @@ struct BrushSettingsData {
         FlowBlendMax = 1,
     };
 
-    // ---- Shape ----
+    // ---- Stroke rendering ----
     int flowBlendMode = FlowBlendMax;
+    bool connectDabs = false;
+
+    // ---- Shape ----
     float hardness = 0.7f;
     float spacing = 0.25f;
     float flow = 1.0f;

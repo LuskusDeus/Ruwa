@@ -23,6 +23,7 @@ uniform int   uMaskAffectsAlpha;
 uniform int   uUseTexture;
 uniform int   uUseDabShapeTexture;
 uniform vec2  uDabShapeScale;
+uniform float uDabShapeRotationRad;
 uniform float uTextureEdgeBoost;
 // Shaping applied to the sampled procedural grain. The texture cache stores
 // RAW grain so these four stay out of TileBrush::textureRevision() — otherwise
@@ -151,6 +152,12 @@ void main() {
     );
 
     vec2 shapeLocal = local / uBrushRadius;
+    float shapeC = cos(uDabShapeRotationRad);
+    float shapeS = sin(uDabShapeRotationRad);
+    shapeLocal = vec2(
+        shapeLocal.x * shapeC - shapeLocal.y * shapeS,
+        shapeLocal.x * shapeS + shapeLocal.y * shapeC
+    );
     shapeLocal /= max(uDabShapeScale, vec2(0.0001));
     float edgeDistance = 0.0;
     float edgeFactor = 0.0;

@@ -12,6 +12,7 @@
 #include "shared/tiles/TileGrid.h"
 #include "shared/tiles/TileData.h"
 #include "shared/tiles/TilePixelAccess.h" // format-aware alpha test
+#include "shared/geometry/BilinearQuad.h"
 
 #include <array>
 #include <cmath>
@@ -1490,64 +1491,7 @@ struct TransformState {
     /// Inverse bilinear: find (s,t) in [0,1]^2 such that P = bilinear(s,t) on quad q.
     static bool inverseBilinear(const Vector2& P, const std::array<Vector2, 4>& q, float st[2])
     {
-        float Ex = q[1].x - q[0].x, Ey = q[1].y - q[0].y;
-        float Fx = q[3].x - q[0].x, Fy = q[3].y - q[0].y;
-        float Gx = q[0].x - q[1].x + q[2].x - q[3].x;
-        float Gy = q[0].y - q[1].y + q[2].y - q[3].y;
-        float hx = P.x - q[0].x, hy = P.y - q[0].y;
-        float k2 = Gx * Fy - Gy * Fx;
-        float k1 = Ex * Fy - Ey * Fx + hx * Gy - hy * Gx;
-        float k0 = hx * Ey - hy * Ex;
-        auto tryComputeS = [&](float t_val, float& s_out) -> bool {
-            float denomX = Ex + Gx * t_val;
-            float denomY = Ey + Gy * t_val;
-            if (std::abs(denomX) > std::abs(denomY)) {
-                if (std::abs(denomX) < 1e-10f)
-                    return false;
-                s_out = (hx - Fx * t_val) / denomX;
-            } else {
-                if (std::abs(denomY) < 1e-10f)
-                    return false;
-                s_out = (hy - Fy * t_val) / denomY;
-            }
-            return true;
-        };
-        constexpr float margin = 0.002f;
-        float s, t;
-        float disc = k1 * k1 - 4.0f * k0 * k2;
-        if (disc < 0.0f)
-            return false;
-        disc = std::sqrt(disc);
-        float signK1 = (k1 >= 0.0f) ? 1.0f : -1.0f;
-        float q_stable = -0.5f * (k1 + signK1 * disc);
-        float t_candidates[2];
-        int nCandidates = 0;
-        if (std::abs(k2) > 1e-10f)
-            t_candidates[nCandidates++] = q_stable / k2;
-        if (std::abs(q_stable) > 1e-10f)
-            t_candidates[nCandidates++] = k0 / q_stable;
-        if (nCandidates == 0) {
-            if (std::abs(k1) < 1e-10f)
-                return false;
-            t_candidates[nCandidates++] = -k0 / k1;
-        }
-        bool found = false;
-        for (int i = 0; i < nCandidates; ++i) {
-            t = t_candidates[i];
-            if (t < -margin || t > 1.0f + margin)
-                continue;
-            if (!tryComputeS(t, s))
-                continue;
-            if (s < -margin || s > 1.0f + margin)
-                continue;
-            found = true;
-            break;
-        }
-        if (!found)
-            return false;
-        st[0] = std::clamp(s, 0.0f, 1.0f);
-        st[1] = std::clamp(t, 0.0f, 1.0f);
-        return true;
+        return geometry::inverseBilinearPoint(P, q, st);
     }
 
     // ---- Compute content bounds from a TileGrid (pixel-level) ----
