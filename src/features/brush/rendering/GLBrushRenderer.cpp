@@ -164,18 +164,27 @@ DabWorldBounds stretchedDabWorldBounds(const TileBrush& brush, const TileBrush::
         bounds.maxY = std::max(bounds.maxY, neighbour->worldY);
     }
 
-    TileBrush::DabQuad stretchQuad {};
+    TileBrush::DabTransform transform {};
     const bool stretched = stretchStart
-        ? brush.dabStretchedQuad(*stretchStart, dab, stretchEnd, stretchQuad)
-        : brush.dabLeadingRefinedQuad(dab, *stretchEnd, stretchQuad);
+        ? brush.dabStretchedTransform(*stretchStart, dab, stretchEnd, transform)
+        : brush.dabLeadingRefinedTransform(dab, *stretchEnd, transform);
     if (!stretched) {
         return bounds;
     }
-    for (const Vector2& corner : stretchQuad) {
+    for (const Vector2& corner : transform.guide) {
         bounds.minX = std::min(bounds.minX, corner.x);
         bounds.minY = std::min(bounds.minY, corner.y);
         bounds.maxX = std::max(bounds.maxX, corner.x);
         bounds.maxY = std::max(bounds.maxY, corner.y);
+    }
+    for (int side = 0; side < 2; ++side) {
+        const Vector2 controls[2] { transform.startControls[side], transform.endControls[side] };
+        for (const Vector2& control : controls) {
+            bounds.minX = std::min(bounds.minX, control.x);
+            bounds.minY = std::min(bounds.minY, control.y);
+            bounds.maxX = std::max(bounds.maxX, control.x);
+            bounds.maxY = std::max(bounds.maxY, control.y);
+        }
     }
     return bounds;
 }
@@ -329,6 +338,7 @@ const QString kBatchRebuildFrag = QStringLiteral(
     "uniform vec4 uPreviousDabColor[32];\n"
     "uniform vec4 uStretchQuad01[32]; // q0.xy, q1.xy\n"
     "uniform vec4 uStretchQuad23[32]; // q2.xy, q3.xy\n"
+    "uniform int uTransformSegments;\n"
     "uniform int uDabHasPrevious[32];\n"
     "uniform int uBlendMode; // 0=src-over, 1=max\n"
     "uniform sampler2D uMaskTexture;\n"
@@ -427,8 +437,8 @@ const QString kBatchRebuildFrag = QStringLiteral(
     "    return mix(uDabContentBounds, uDabSoftContentBounds, softness);\n"
     "}\n"
     // This is the same analytical inverse-bilinear mapping used by Free
-    // Corners. A stretched dab is one real transformed quad, not a center-line
-    // projection or another row of synthetic dabs inserted into the gap.
+    // Corners. A connected dab is one transformed surface split into adjacent
+    // patches, not another row of synthetic paint dabs inserted into the gap.
     "float cross2d(vec2 a, vec2 b) { return a.x*b.y - a.y*b.x; }\n"
     "bool tryStretchST(vec2 E, vec2 F, vec2 G, vec2 h, float t, out vec2 st) {\n"
     "    const float margin = 0.002;\n"
@@ -471,6 +481,11 @@ const QString kBatchRebuildFrag = QStringLiteral(
     "    return abs(qStable) > 1e-8\n"
     "        && tryStretchST(E, F, G, h, k0 / qStable, st);\n"
     "}\n"
+    "vec2 cubicRail(vec2 start, vec2 startControl, vec2 endControl, vec2 end, float t) {\n"
+    "    float u = 1.0 - t;\n"
+    "    return start * (u*u*u) + startControl * (3.0*u*u*t)\n"
+    "         + endControl * (3.0*u*t*t) + end * (t*t*t);\n"
+    "}\n"
     "float shapeCoverage(vec2 shapeLocal, float hardness, out float edgeFactor) {\n"
     "    edgeFactor = 0.0;\n"
     "    if (abs(shapeLocal.x) > 1.0 || abs(shapeLocal.y) > 1.0) return 0.0;\n"
@@ -510,20 +525,51 @@ const QString kBatchRebuildFrag = QStringLiteral(
     "        float edgeFactor = 0.0;\n"
     "        float falloff = 0.0;\n"
     "        if (uDabHasPrevious[i] != 0) {\n"
-    // The stretched quad IS this dab: it runs from the previous dab's
+    // The segmented surface IS this dab: it runs from the previous dab's
     // leading edge to this dab's own, so the unstretched shape is never
     // stamped on top of it and nothing extra fills the gap.
     "            vec4 quad01 = uStretchQuad01[i];\n"
     "            vec4 quad23 = uStretchQuad23[i];\n"
-    "            vec2 stretchST;\n"
-    "            if (!inverseStretchQuad(fragPixelCoord, quad01.xy, quad01.zw,\n"
-    "                    quad23.xy, quad23.zw, stretchST)) continue;\n"
-    "            dabParams = mix(uPreviousDabParams[i], dabParams, stretchST.x);\n"
-    "            dabColor = mix(uPreviousDabColor[i], dabColor, stretchST.x);\n"
+    // In this branch only params.y (hardness) remains semantically live. The
+    // otherwise-unused center/current/previous parameter components carry the
+    // four rail controls without growing the fragment-uniform arrays.
+    "            vec2 startControl0 = center;\n"
+    "            vec2 startControl1 = vec2(dabParams.x, dabParams.z);\n"
+    "            vec2 endControl0 = vec2(dabParams.w, uPreviousDabParams[i].x);\n"
+    "            vec2 endControl1 = uPreviousDabParams[i].zw;\n"
+    "            int transformFlags = uDabHasPrevious[i] - 1;\n"
+    "            bool alongX = (transformFlags & 1) != 0;\n"
+    "            float startAlong = float((transformFlags >> 1) & 1);\n"
+    "            float startAcross = float((transformFlags >> 2) & 1);\n"
+    "            int segmentCount = clamp(uTransformSegments, 1, 10);\n"
+    "            vec2 stretchST = vec2(0.0);\n"
+    "            int hitSegment = -1;\n"
+    "            for (int segment = 0; segment < 10; ++segment) {\n"
+    "                if (segment >= segmentCount) break;\n"
+    "                float t0 = float(segment) / float(segmentCount);\n"
+    "                float t1 = float(segment + 1) / float(segmentCount);\n"
+    "                vec2 start0 = cubicRail(\n"
+    "                    quad01.xy, startControl0, endControl0, quad01.zw, t0);\n"
+    "                vec2 end0 = cubicRail(\n"
+    "                    quad01.xy, startControl0, endControl0, quad01.zw, t1);\n"
+    "                vec2 start1 = cubicRail(\n"
+    "                    quad23.zw, startControl1, endControl1, quad23.xy, t0);\n"
+    "                vec2 end1 = cubicRail(\n"
+    "                    quad23.zw, startControl1, endControl1, quad23.xy, t1);\n"
+    "                if (inverseStretchQuad(fragPixelCoord, start0, end0, end1, start1,\n"
+    "                        stretchST)) { hitSegment = segment; break; }\n"
+    "            }\n"
+    "            if (hitSegment < 0) continue;\n"
+    "            float progress = (float(hitSegment) + stretchST.x) / float(segmentCount);\n"
+    "            float along = mix(startAlong, 1.0 - startAlong, progress);\n"
+    "            float across = mix(startAcross, 1.0 - startAcross, stretchST.y);\n"
+    "            vec2 canonicalST = alongX ? vec2(along, across) : vec2(across, along);\n"
+    "            dabParams = mix(uPreviousDabParams[i], dabParams, progress);\n"
+    "            dabColor = mix(uPreviousDabColor[i], dabColor, progress);\n"
     "            vec4 contentBounds = dabContentBounds(dabParams.y);\n"
     "            vec2 stretchShape = vec2(\n"
-    "                mix(contentBounds.x, contentBounds.z, stretchST.x),\n"
-    "                mix(contentBounds.y, contentBounds.w, stretchST.y));\n"
+    "                mix(contentBounds.x, contentBounds.z, canonicalST.x),\n"
+    "                mix(contentBounds.y, contentBounds.w, canonicalST.y));\n"
     "            falloff = shapeCoverage(stretchShape, dabParams.y, edgeFactor);\n"
     "        } else {\n"
     "            vec2 delta = fragPixelCoord - center;\n"
@@ -4573,6 +4619,7 @@ GLBrushRenderer::DabBatchUniforms GLBrushRenderer::resolveDabBatchUniforms() con
     uniforms.previousDabColor = m_gl->glGetUniformLocation(program, "uPreviousDabColor");
     uniforms.stretchQuad01 = m_gl->glGetUniformLocation(program, "uStretchQuad01");
     uniforms.stretchQuad23 = m_gl->glGetUniformLocation(program, "uStretchQuad23");
+    uniforms.transformSegments = m_gl->glGetUniformLocation(program, "uTransformSegments");
     uniforms.dabHasPrevious = m_gl->glGetUniformLocation(program, "uDabHasPrevious");
     uniforms.dabExtent = m_gl->glGetUniformLocation(program, "uDabExtent");
     uniforms.instancedDabs = m_gl->glGetUniformLocation(program, "uInstancedDabs");
@@ -4692,15 +4739,18 @@ void GLBrushRenderer::renderDabBatchForTile(const TileBrush& brush,
                         stretchEnd = dabIndex + 1u < dabs.size() ? &dabs[dabIndex + 1] : nextDab;
                     }
                 }
-                TileBrush::DabQuad stretchQuad {};
+                TileBrush::DabTransform transform {};
                 bool hasStretch = stretchStart
-                    && brush.dabStretchedQuad(*stretchStart, dab, stretchEnd, stretchQuad);
+                    && brush.dabStretchedTransform(*stretchStart, dab, stretchEnd, transform);
                 if (!hasStretch && !stretchStart && stretchEnd) {
                     // Opening dab of a refined ribbon: it only hands its leading
                     // edge forward, and interpolates from itself.
-                    hasStretch = brush.dabLeadingRefinedQuad(dab, *stretchEnd, stretchQuad);
+                    hasStretch = brush.dabLeadingRefinedTransform(dab, *stretchEnd, transform);
                 }
-                hasPrevious[i] = hasStretch ? 1 : 0;
+                const int transformFlags = (transform.alongX ? 1 : 0)
+                    | (transform.startAlong > 0.5f ? 2 : 0)
+                    | (transform.startAcross > 0.5f ? 4 : 0);
+                hasPrevious[i] = hasStretch ? transformFlags + 1 : 0;
                 const TileBrush::DabPoint& previous
                     = (stretchStart && hasStretch) ? *stretchStart : dab;
                 previousParams[vec4Base + 0] = previous.radius;
@@ -4717,16 +4767,31 @@ void GLBrushRenderer::renderDabBatchForTile(const TileBrush& brush,
                     = (static_cast<float>(previous.colorB) / 255.0f) * previousAlpha;
                 previousColors[vec4Base + 3] = previousAlpha;
                 if (!hasStretch) {
-                    stretchQuad.fill(Vector2 { dab.worldX, dab.worldY });
+                    transform.guide.fill(Vector2 { dab.worldX, dab.worldY });
+                    transform.startControls.fill(Vector2 { dab.worldX, dab.worldY });
+                    transform.endControls.fill(Vector2 { dab.worldX, dab.worldY });
                 }
-                stretchQuad01[vec4Base + 0] = stretchQuad[0].x - tileOriginX;
-                stretchQuad01[vec4Base + 1] = stretchQuad[0].y - tileOriginY;
-                stretchQuad01[vec4Base + 2] = stretchQuad[1].x - tileOriginX;
-                stretchQuad01[vec4Base + 3] = stretchQuad[1].y - tileOriginY;
-                stretchQuad23[vec4Base + 0] = stretchQuad[2].x - tileOriginX;
-                stretchQuad23[vec4Base + 1] = stretchQuad[2].y - tileOriginY;
-                stretchQuad23[vec4Base + 2] = stretchQuad[3].x - tileOriginX;
-                stretchQuad23[vec4Base + 3] = stretchQuad[3].y - tileOriginY;
+                stretchQuad01[vec4Base + 0] = transform.guide[0].x - tileOriginX;
+                stretchQuad01[vec4Base + 1] = transform.guide[0].y - tileOriginY;
+                stretchQuad01[vec4Base + 2] = transform.guide[1].x - tileOriginX;
+                stretchQuad01[vec4Base + 3] = transform.guide[1].y - tileOriginY;
+                stretchQuad23[vec4Base + 0] = transform.guide[2].x - tileOriginX;
+                stretchQuad23[vec4Base + 1] = transform.guide[2].y - tileOriginY;
+                stretchQuad23[vec4Base + 2] = transform.guide[3].x - tileOriginX;
+                stretchQuad23[vec4Base + 3] = transform.guide[3].y - tileOriginY;
+                if (hasStretch) {
+                    // The stretched shader branch only consumes hardness from
+                    // each parameter vec4. Reuse its spare components for the
+                    // rail controls and keep the uniform footprint unchanged.
+                    centers[centerBase + 0] = transform.startControls[0].x - tileOriginX;
+                    centers[centerBase + 1] = transform.startControls[0].y - tileOriginY;
+                    params[vec4Base + 0] = transform.startControls[1].x - tileOriginX;
+                    params[vec4Base + 2] = transform.startControls[1].y - tileOriginY;
+                    params[vec4Base + 3] = transform.endControls[0].x - tileOriginX;
+                    previousParams[vec4Base + 0] = transform.endControls[0].y - tileOriginY;
+                    previousParams[vec4Base + 2] = transform.endControls[1].x - tileOriginX;
+                    previousParams[vec4Base + 3] = transform.endControls[1].y - tileOriginY;
+                }
 
                 if (instanced) {
                     // Same conservative bound the tile assignment uses, so an
@@ -4751,6 +4816,7 @@ void GLBrushRenderer::renderDabBatchForTile(const TileBrush& brush,
                 uniforms.stretchQuad01, static_cast<GLsizei>(chunkCount), stretchQuad01.data());
             m_gl->glUniform4fv(
                 uniforms.stretchQuad23, static_cast<GLsizei>(chunkCount), stretchQuad23.data());
+            m_gl->glUniform1i(uniforms.transformSegments, brush.transformSegments());
             m_gl->glUniform1iv(
                 uniforms.dabHasPrevious, static_cast<GLsizei>(chunkCount), hasPrevious.data());
 

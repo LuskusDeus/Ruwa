@@ -417,6 +417,7 @@ struct BrushSettingsData {
     int flowBlendMode = FlowBlendMax;
     bool connectDabs = false;
     bool refineDabJoints = false;
+    int transformSegments = 2;
 
     // ---- Shape ----
     float hardness = 0.7f;

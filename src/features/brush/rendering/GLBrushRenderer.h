@@ -177,6 +177,7 @@ private:
         GLint previousDabColor = -1;
         GLint stretchQuad01 = -1;
         GLint stretchQuad23 = -1;
+        GLint transformSegments = -1;
         GLint dabHasPrevious = -1;
         GLint dabExtent = -1;
         GLint instancedDabs = -1;

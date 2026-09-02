@@ -419,6 +419,7 @@ QString BrushPreviewManager::cacheKey(
         QString::number(settings.flowBlendMode),
         QString::number(settings.connectDabs ? 1 : 0),
         QString::number(settings.refineDabJoints ? 1 : 0),
+        QString::number(settings.transformSegments),
         n3(settings.hardness),
         n3(settings.flow),
         n3(settings.spacing),

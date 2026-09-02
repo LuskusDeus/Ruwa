@@ -410,6 +410,32 @@ TEST_CASE("a refined joint stays shared through a right-angle turn", "[brush][st
         CHECK(carriesPoint(leaving, point));
         CHECK(carriesPoint(arriving, point));
     }
+
+    // Cubic transform rails also share the derivative at that joint. The
+    // outgoing control is the current leading corner, the incoming control is
+    // the next trailing corner, and the joint is their exact midpoint.
+    aether::TileBrush::DabPoint following = next;
+    following.worldY = 60.0f;
+    aether::TileBrush::DabTransform leavingTransform;
+    aether::TileBrush::DabTransform arrivingTransform;
+    REQUIRE(brush.dabStretchedTransform(previous, current, &next, leavingTransform));
+    REQUIRE(brush.dabStretchedTransform(current, next, &following, arrivingTransform));
+    for (int side = 0; side < 2; ++side) {
+        const int leavingEnd = side == 0 ? 1 : 2;
+        const int arrivingStart = side == 0 ? 0 : 3;
+        CHECK(leavingTransform.guide[leavingEnd].x
+            == Catch::Approx(arrivingTransform.guide[arrivingStart].x).margin(0.001f));
+        CHECK(leavingTransform.guide[leavingEnd].y
+            == Catch::Approx(arrivingTransform.guide[arrivingStart].y).margin(0.001f));
+        const aether::Vector2 leavingDerivative { leavingTransform.guide[leavingEnd].x
+                - leavingTransform.endControls[side].x,
+            leavingTransform.guide[leavingEnd].y - leavingTransform.endControls[side].y };
+        const aether::Vector2 arrivingDerivative { arrivingTransform.startControls[side].x
+                - arrivingTransform.guide[arrivingStart].x,
+            arrivingTransform.startControls[side].y - arrivingTransform.guide[arrivingStart].y };
+        CHECK(leavingDerivative.x == Catch::Approx(arrivingDerivative.x).margin(0.001f));
+        CHECK(leavingDerivative.y == Catch::Approx(arrivingDerivative.y).margin(0.001f));
+    }
 }
 
 TEST_CASE("a refined sharp turn keeps the quad corners in cyclic order",
@@ -464,6 +490,60 @@ TEST_CASE("a refined sharp turn keeps the quad corners in cyclic order",
     CHECK_FALSE(properlyCross(refined[0], refined[1], refined[2], refined[3]));
     CHECK_FALSE(properlyCross(refined[1], refined[2], refined[3], refined[0]));
     CHECK(refined[1].x > refined[2].x);
+}
+
+TEST_CASE("transform segments follow a smooth rotated rail without adding dabs",
+    "[brush][stroke][geometry]")
+{
+    using namespace ruwa::core::brushes;
+
+    BrushSettingsData settings;
+    settings.connectDabs = true;
+    settings.transformSegments = 4;
+
+    aether::TileBrush brush;
+    brush.setBrushSettings(settings);
+
+    aether::TileBrush::DabPoint previous;
+    previous.worldX = 10.0f;
+    previous.worldY = 20.0f;
+    previous.radius = 4.0f;
+
+    aether::TileBrush::DabPoint current = previous;
+    current.worldX = 30.0f;
+    current.angleDegrees = 90.0f;
+
+    aether::TileBrush::DabTransform transform;
+    REQUIRE(brush.dabStretchedTransform(previous, current, nullptr, transform));
+    CHECK(brush.transformSegments() == 4);
+
+    std::array<aether::TileBrush::DabQuad, 4> patches;
+    for (int segment = 0; segment < 4; ++segment) {
+        patches[segment] = aether::TileBrush::dabTransformSegmentQuad(transform, segment, 4);
+    }
+    for (int segment = 0; segment < 3; ++segment) {
+        CHECK(patches[segment][1].x == Catch::Approx(patches[segment + 1][0].x));
+        CHECK(patches[segment][1].y == Catch::Approx(patches[segment + 1][0].y));
+        CHECK(patches[segment][2].x == Catch::Approx(patches[segment + 1][3].x));
+        CHECK(patches[segment][2].y == Catch::Approx(patches[segment + 1][3].y));
+    }
+
+    // The cubic controls are real intermediate transforms, not a linear split
+    // of the original quad. Consequently increasing the segment count improves
+    // the curve approximation without recording another dab.
+    const aether::Vector2 linearFirstControl { transform.guide[0].x
+            + (transform.guide[1].x - transform.guide[0].x) / 3.0f,
+        transform.guide[0].y + (transform.guide[1].y - transform.guide[0].y) / 3.0f };
+    CHECK(std::hypot(transform.startControls[0].x - linearFirstControl.x,
+              transform.startControls[0].y - linearFirstControl.y)
+        > 0.01f);
+    const aether::Vector2 linearMidpoint { (transform.guide[0].x + transform.guide[1].x) * 0.5f,
+        (transform.guide[0].y + transform.guide[1].y) * 0.5f };
+    CHECK(
+        std::hypot(patches[1][1].x - linearMidpoint.x, patches[1][1].y - linearMidpoint.y) > 0.01f);
+
+    brush.setConnectDabs(false);
+    CHECK(brush.transformSegments() == 1);
 }
 
 TEST_CASE(

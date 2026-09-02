@@ -85,6 +85,7 @@ public:
         setFlowBlendMode(m_brushSettingsModel.flowBlendMode);
         setConnectDabs(m_brushSettingsModel.connectDabs);
         setRefineDabJoints(m_brushSettingsModel.refineDabJoints);
+        setTransformSegments(m_brushSettingsModel.transformSegments);
         setRoundness(m_brushSettingsModel.roundness);
         setAngleDegrees(m_brushSettingsModel.angle);
         setSizePressureEnabled(m_brushSettingsModel.sizePressureEnabled);
@@ -171,6 +172,8 @@ public:
     void setConnectDabs(bool enabled) { m_connectDabs = enabled; }
     bool connectsDabs() const { return m_connectDabs; }
     void setRefineDabJoints(bool enabled) { m_refineDabJoints = enabled; }
+    void setTransformSegments(int count) { m_transformSegments = std::clamp(count, 2, 10); }
+    int transformSegments() const { return m_connectDabs ? m_transformSegments : 1; }
     /// True when a joint carries the median of both dabs instead of sitting on
     /// the older one's leading edge. Only connected plain paint stretches dabs
     /// at all - the canvas-reading tools run their own segment paths and never
@@ -571,6 +574,165 @@ public:
         outQuad = dabQuadCorners(current, currentRadiusOverride);
         outQuad[front.fromLeading[0]] = front.points[0];
         outQuad[front.fromLeading[1]] = front.points[1];
+        return true;
+    }
+
+    /// A connected dab represented as two cubic side rails. Rendering the
+    /// rails as several adjacent bilinear patches adds transform vertices, not
+    /// paint dabs: coverage and colour are still evaluated once for this dab.
+    struct DabTransform {
+        // Canonicalized as start-side0, end-side0, end-side1, start-side1.
+        DabQuad guide {};
+        std::array<Vector2, 2> startControls {};
+        std::array<Vector2, 2> endControls {};
+        bool alongX = true;
+        float startAlong = 0.0f;
+        float startAcross = 0.0f;
+    };
+
+    static void finishDabTransformMapping(
+        DabTransform& transform, const std::array<int, 2>& startPair)
+    {
+        constexpr std::array<float, 4> kCornerX { 0.0f, 1.0f, 1.0f, 0.0f };
+        constexpr std::array<float, 4> kCornerY { 0.0f, 0.0f, 1.0f, 1.0f };
+        transform.alongX = kCornerX[startPair[0]] == kCornerX[startPair[1]];
+        transform.startAlong = transform.alongX ? kCornerX[startPair[0]] : kCornerY[startPair[0]];
+        transform.startAcross = transform.alongX ? kCornerY[startPair[0]] : kCornerX[startPair[0]];
+    }
+
+    static Vector2 cubicRailPoint(const Vector2& start, const Vector2& startControl,
+        const Vector2& endControl, const Vector2& end, float t)
+    {
+        const float oneMinusT = 1.0f - t;
+        const float startWeight = oneMinusT * oneMinusT * oneMinusT;
+        const float startControlWeight = 3.0f * oneMinusT * oneMinusT * t;
+        const float endControlWeight = 3.0f * oneMinusT * t * t;
+        const float endWeight = t * t * t;
+        return Vector2 { start.x * startWeight + startControl.x * startControlWeight
+                + endControl.x * endControlWeight + end.x * endWeight,
+            start.y * startWeight + startControl.y * startControlWeight
+                + endControl.y * endControlWeight + end.y * endWeight };
+    }
+
+    static DabQuad dabTransformSegmentQuad(
+        const DabTransform& transform, int segment, int segmentCount)
+    {
+        const float startT = static_cast<float>(segment) / static_cast<float>(segmentCount);
+        const float endT = static_cast<float>(segment + 1) / static_cast<float>(segmentCount);
+        const Vector2 start0 = cubicRailPoint(transform.guide[0], transform.startControls[0],
+            transform.endControls[0], transform.guide[1], startT);
+        const Vector2 end0 = cubicRailPoint(transform.guide[0], transform.startControls[0],
+            transform.endControls[0], transform.guide[1], endT);
+        const Vector2 start1 = cubicRailPoint(transform.guide[3], transform.startControls[1],
+            transform.endControls[1], transform.guide[2], startT);
+        const Vector2 end1 = cubicRailPoint(transform.guide[3], transform.startControls[1],
+            transform.endControls[1], transform.guide[2], endT);
+        return { start0, end0, end1, start1 };
+    }
+
+    static void dabTransformCoordinates(const DabTransform& transform, int segment,
+        int segmentCount, float localAlong, float localAcross, float& progress, float& canonicalX,
+        float& canonicalY)
+    {
+        progress = (static_cast<float>(segment) + localAlong) / static_cast<float>(segmentCount);
+        const float along = transform.startAlong + (1.0f - 2.0f * transform.startAlong) * progress;
+        const float across
+            = transform.startAcross + (1.0f - 2.0f * transform.startAcross) * localAcross;
+        canonicalX = transform.alongX ? along : across;
+        canonicalY = transform.alongX ? across : along;
+    }
+
+    bool dabStretchedTransform(const DabPoint& previous, const DabPoint& current,
+        const DabPoint* next, DabTransform& outTransform, float previousRadiusOverride = -1.0f,
+        float currentRadiusOverride = -1.0f, float nextRadiusOverride = -1.0f) const
+    {
+        DabQuad stretched;
+        if (!dabStretchedQuad(previous, current, next, stretched, previousRadiusOverride,
+                currentRadiusOverride, nextRadiusOverride)) {
+            return false;
+        }
+        const DabJoint back
+            = dabJointEdge(previous, current, previousRadiusOverride, currentRadiusOverride);
+        if (!back.valid) {
+            return false;
+        }
+
+        const std::array<int, 2> startPair = back.toTrailing;
+        const std::array<int, 2> endPair = oppositeDabQuadPair(startPair);
+        outTransform.guide = { stretched[startPair[0]], stretched[endPair[0]],
+            stretched[endPair[1]], stretched[startPair[1]] };
+
+        const DabQuad currentQuad = dabQuadCorners(current, currentRadiusOverride);
+        if (next && refinesDabJoints()) {
+            const DabJoint front
+                = dabJointEdge(current, *next, currentRadiusOverride, nextRadiusOverride);
+            const std::array<int, 2>& endControlPair = front.valid ? front.fromLeading : endPair;
+            for (int side = 0; side < 2; ++side) {
+                outTransform.startControls[side] = currentQuad[startPair[side]];
+                // The topological destination corner can differ from the
+                // current corner that contributed to this joint point. The
+                // latter is the Bezier control that makes both sides share a
+                // tangent at their exact midpoint joint.
+                outTransform.endControls[side] = currentQuad[endControlPair[side]];
+            }
+        } else {
+            const DabQuad previousQuad = dabQuadCorners(previous, previousRadiusOverride);
+            const auto interpolatedCorner = [&](int side, float t) {
+                const Vector2 start = previousQuad[back.fromLeading[side]];
+                const Vector2 end = currentQuad[endPair[side]];
+                const Vector2 startVector { start.x - previous.worldX, start.y - previous.worldY };
+                const Vector2 endVector { end.x - current.worldX, end.y - current.worldY };
+                const float startLength = std::hypot(startVector.x, startVector.y);
+                const float endLength = std::hypot(endVector.x, endVector.y);
+                float startAngle = std::atan2(startVector.y, startVector.x);
+                float angleDelta = std::atan2(endVector.y, endVector.x) - startAngle;
+                constexpr float kPi = 3.14159265358979323846f;
+                while (angleDelta > kPi)
+                    angleDelta -= 2.0f * kPi;
+                while (angleDelta < -kPi)
+                    angleDelta += 2.0f * kPi;
+                const float length = startLength + (endLength - startLength) * t;
+                const float angle = startAngle + angleDelta * t;
+                const float centerX = previous.worldX + (current.worldX - previous.worldX) * t;
+                const float centerY = previous.worldY + (current.worldY - previous.worldY) * t;
+                return Vector2 { centerX + std::cos(angle) * length,
+                    centerY + std::sin(angle) * length };
+            };
+            for (int side = 0; side < 2; ++side) {
+                // Rotate the actual corresponding corner vectors; selecting a
+                // fresh facing edge at an intermediate angle would introduce
+                // a discrete topology switch inside the transform.
+                outTransform.startControls[side] = interpolatedCorner(side, 1.0f / 3.0f);
+                outTransform.endControls[side] = interpolatedCorner(side, 2.0f / 3.0f);
+            }
+        }
+
+        finishDabTransformMapping(outTransform, startPair);
+        return true;
+    }
+
+    bool dabLeadingRefinedTransform(const DabPoint& current, const DabPoint& next,
+        DabTransform& outTransform, float currentRadiusOverride = -1.0f,
+        float nextRadiusOverride = -1.0f) const
+    {
+        DabQuad stretched;
+        if (!dabLeadingRefinedQuad(
+                current, next, stretched, currentRadiusOverride, nextRadiusOverride)) {
+            return false;
+        }
+        const DabJoint front
+            = dabJointEdge(current, next, currentRadiusOverride, nextRadiusOverride);
+        const std::array<int, 2> endPair = front.fromLeading;
+        const std::array<int, 2> startPair = oppositeDabQuadPair(endPair);
+        outTransform.guide = { stretched[startPair[0]], stretched[endPair[0]],
+            stretched[endPair[1]], stretched[startPair[1]] };
+
+        const DabQuad currentQuad = dabQuadCorners(current, currentRadiusOverride);
+        for (int side = 0; side < 2; ++side) {
+            outTransform.startControls[side] = currentQuad[startPair[side]];
+            outTransform.endControls[side] = currentQuad[endPair[side]];
+        }
+        finishDabTransformMapping(outTransform, startPair);
         return true;
     }
     void setDabXScale(float v) { m_dabXScale = std::clamp(v, 0.0f, 1.0f); }
@@ -3343,12 +3505,16 @@ private:
         const auto coverageRadius = [includeBaseExtent](const DabPoint& dab) {
             return includeBaseExtent ? std::max(dab.radius, dab.baseRadius) : dab.radius;
         };
-        DabQuad stretchQuad;
-        if (!dabStretchedQuad(previous, current, next, stretchQuad, coverageRadius(previous),
+        DabTransform transform;
+        if (!dabStretchedTransform(previous, current, next, transform, coverageRadius(previous),
                 coverageRadius(current), next ? coverageRadius(*next) : -1.0f)) {
             return;
         }
-        collectQuadCoveredTiles(stretchQuad, outTiles);
+        const int segmentCount = transformSegments();
+        for (int segment = 0; segment < segmentCount; ++segment) {
+            collectQuadCoveredTiles(
+                dabTransformSegmentQuad(transform, segment, segmentCount), outTiles);
+        }
     }
 
     void collectQuadCoveredTiles(
@@ -3382,12 +3548,16 @@ private:
         const auto coverageRadius = [includeBaseExtent](const DabPoint& dab) {
             return includeBaseExtent ? std::max(dab.radius, dab.baseRadius) : dab.radius;
         };
-        DabQuad quad;
-        if (!dabLeadingRefinedQuad(
-                current, next, quad, coverageRadius(current), coverageRadius(next))) {
+        DabTransform transform;
+        if (!dabLeadingRefinedTransform(
+                current, next, transform, coverageRadius(current), coverageRadius(next))) {
             return;
         }
-        collectQuadCoveredTiles(quad, outTiles);
+        const int segmentCount = transformSegments();
+        for (int segment = 0; segment < segmentCount; ++segment) {
+            collectQuadCoveredTiles(
+                dabTransformSegmentQuad(transform, segment, segmentCount), outTiles);
+        }
     }
 
     bool stretchedDabIntersectsTileSet(const DabPoint& previous, const DabPoint& current,
@@ -3444,19 +3614,27 @@ private:
         const bool useMask = (selectionMask != nullptr);
         const bool roundLowAlpha
             = m_flowBlendMode == ruwa::core::brushes::BrushSettingsData::FlowBlendSrcOver;
-        DabQuad stretchQuad;
+        DabTransform transform;
         const DabPoint* stretchFrom
             = (previousDab && previousDab->radius > 0.0f) ? previousDab : nullptr;
         bool connectFromPrevious
-            = stretchFrom && dabStretchedQuad(*stretchFrom, dab, nextDab, stretchQuad);
+            = stretchFrom && dabStretchedTransform(*stretchFrom, dab, nextDab, transform);
         if (!connectFromPrevious && !stretchFrom && nextDab && nextDab->radius > 0.0f) {
             // Opening dab: it has no predecessor to stretch back onto, only a
             // leading edge to hand forward. Its own parameters fill the quad,
             // so the interpolation below is a no-op.
-            connectFromPrevious = dabLeadingRefinedQuad(dab, *nextDab, stretchQuad);
+            connectFromPrevious = dabLeadingRefinedTransform(dab, *nextDab, transform);
             stretchFrom = &dab;
         }
         const DabPoint& stretchSource = stretchFrom ? *stretchFrom : dab;
+        const int transformSegmentCount = connectFromPrevious ? transformSegments() : 1;
+        std::array<DabQuad, 10> transformQuads {};
+        if (connectFromPrevious) {
+            for (int segment = 0; segment < transformSegmentCount; ++segment) {
+                transformQuads[segment]
+                    = dabTransformSegmentQuad(transform, segment, transformSegmentCount);
+            }
+        }
         const float rasterExtent
             = dabCoverageExtent(r, dab.hardness, dab.roundness, dab.angleDegrees, true);
         float boundsMinX = dab.worldX - rasterExtent;
@@ -3464,11 +3642,21 @@ private:
         float boundsMaxX = dab.worldX + rasterExtent;
         float boundsMaxY = dab.worldY + rasterExtent;
         if (connectFromPrevious) {
-            for (const Vector2& corner : stretchQuad) {
+            for (const Vector2& corner : transform.guide) {
                 boundsMinX = std::min(boundsMinX, corner.x - 1.0f);
                 boundsMinY = std::min(boundsMinY, corner.y - 1.0f);
                 boundsMaxX = std::max(boundsMaxX, corner.x + 1.0f);
                 boundsMaxY = std::max(boundsMaxY, corner.y + 1.0f);
+            }
+            for (int side = 0; side < 2; ++side) {
+                const Vector2 controls[2] { transform.startControls[side],
+                    transform.endControls[side] };
+                for (const Vector2& control : controls) {
+                    boundsMinX = std::min(boundsMinX, control.x - 1.0f);
+                    boundsMinY = std::min(boundsMinY, control.y - 1.0f);
+                    boundsMaxX = std::max(boundsMaxX, control.x + 1.0f);
+                    boundsMaxY = std::max(boundsMaxY, control.y + 1.0f);
+                }
             }
         }
 
@@ -3506,16 +3694,27 @@ private:
                         float coverage = 0.0f;
 
                         if (connectFromPrevious) {
-                            // The stretched quad IS this dab: it runs from the
+                            // The segmented transform IS this dab: it runs from the
                             // previous dab's leading edge to this dab's own, so
                             // the unstretched shape is never stamped on top and
                             // no extra shape fills the gap.
                             float st[2] {};
-                            if (!geometry::inverseBilinearPoint(
-                                    Vector2 { sampleX, sampleY }, stretchQuad, st)) {
+                            int hitSegment = -1;
+                            for (int segment = 0; segment < transformSegmentCount; ++segment) {
+                                if (geometry::inverseBilinearPoint(Vector2 { sampleX, sampleY },
+                                        transformQuads[segment], st)) {
+                                    hitSegment = segment;
+                                    break;
+                                }
+                            }
+                            if (hitSegment < 0) {
                                 continue;
                             }
-                            const float stretchT = st[0];
+                            float stretchT = 0.0f;
+                            float canonicalX = 0.0f;
+                            float canonicalY = 0.0f;
+                            dabTransformCoordinates(transform, hitSegment, transformSegmentCount,
+                                st[0], st[1], stretchT, canonicalX, canonicalY);
                             const auto lerp = [stretchT](float from, float to) {
                                 return from + (to - from) * stretchT;
                             };
@@ -3531,9 +3730,11 @@ private:
                             const DabContentBounds stretchContentBounds
                                 = dabShapeContentBounds(sampledDab.hardness);
                             const float stretchShapeX = stretchContentBounds.minX
-                                + (stretchContentBounds.maxX - stretchContentBounds.minX) * st[0];
+                                + (stretchContentBounds.maxX - stretchContentBounds.minX)
+                                    * canonicalX;
                             const float stretchShapeY = stretchContentBounds.minY
-                                + (stretchContentBounds.maxY - stretchContentBounds.minY) * st[1];
+                                + (stretchContentBounds.maxY - stretchContentBounds.minY)
+                                    * canonicalY;
                             coverage = sampleCanonicalDabFalloff(
                                 stretchShapeX, stretchShapeY, sampledDab.hardness);
                         } else {
@@ -4087,6 +4288,7 @@ private:
     int m_flowBlendMode = ruwa::core::brushes::BrushSettingsData::FlowBlendMax;
     bool m_connectDabs = false;
     bool m_refineDabJoints = false;
+    int m_transformSegments = 2;
     float m_textureAmount = 0.0f;
     float m_textureScale = 1.0f;
     float m_textureContrast = 0.5f;
