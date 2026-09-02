@@ -278,6 +278,181 @@ TEST_CASE("a flat dab leads with its short edge, not with the axis it leans on",
     CHECK(stretchQuad[2].x == Catch::Approx(38.0f));
 }
 
+TEST_CASE("a refined joint sits midway between both dabs' edges", "[brush][stroke][geometry]")
+{
+    using namespace ruwa::core::brushes;
+
+    BrushSettingsData settings;
+    settings.connectDabs = true;
+    settings.refineDabJoints = true;
+
+    aether::TileBrush brush;
+    brush.setBrushSettings(settings);
+
+    // Three dabs on a straight line, half extent 4: the middle one's own quad
+    // runs from x = 26 to x = 34, its predecessor leads at x = 14 and its
+    // successor trails at x = 46. Both joints land halfway.
+    aether::TileBrush::DabPoint previous;
+    previous.worldX = 10.0f;
+    previous.worldY = 20.0f;
+    previous.radius = 4.0f;
+
+    aether::TileBrush::DabPoint current = previous;
+    current.worldX = 30.0f;
+    aether::TileBrush::DabPoint next = previous;
+    next.worldX = 50.0f;
+
+    aether::TileBrush::DabQuad refined;
+    REQUIRE(brush.dabStretchedQuad(previous, current, &next, refined));
+    CHECK(refined[0].x == Catch::Approx(20.0f));
+    CHECK(refined[3].x == Catch::Approx(20.0f));
+    CHECK(refined[1].x == Catch::Approx(40.0f));
+    CHECK(refined[2].x == Catch::Approx(40.0f));
+
+    // Without refinement the same three dabs keep the previous behaviour: the
+    // joint IS the predecessor's leading edge and the leading edge is the dab's
+    // own, successor or not.
+    settings.refineDabJoints = false;
+    brush.setBrushSettings(settings);
+    aether::TileBrush::DabQuad plain;
+    REQUIRE(brush.dabStretchedQuad(previous, current, &next, plain));
+    CHECK(plain[0].x == Catch::Approx(14.0f));
+    CHECK(plain[1].x == Catch::Approx(34.0f));
+}
+
+TEST_CASE("a refined joint takes half of each dab's rotation", "[brush][stroke][geometry]")
+{
+    using namespace ruwa::core::brushes;
+
+    BrushSettingsData settings;
+    settings.connectDabs = true;
+    settings.refineDabJoints = true;
+
+    aether::TileBrush brush;
+    brush.setBrushSettings(settings);
+
+    // The current dab stands on a corner (45 degrees) while its successor is
+    // upright, so their shared edge is what a sharp turn folds: the current
+    // dab's leading edge runs (-4*sqrt2, 4*sqrt2) and the successor's trailing
+    // edge runs (0, 8). The refined joint is the average of the two, so the
+    // ribbon twists half as much at each of its two joints instead of taking
+    // the whole turn on one of them.
+    aether::TileBrush::DabPoint previous;
+    previous.worldX = 10.0f;
+    previous.worldY = 20.0f;
+    previous.radius = 4.0f;
+
+    aether::TileBrush::DabPoint current = previous;
+    current.worldX = 30.0f;
+    current.angleDegrees = 45.0f;
+    aether::TileBrush::DabPoint next = previous;
+    next.worldX = 50.0f;
+
+    aether::TileBrush::DabQuad refined;
+    REQUIRE(brush.dabStretchedQuad(previous, current, &next, refined));
+    const float half = 2.0f * std::sqrt(2.0f);
+    CHECK(refined[2].x - refined[1].x == Catch::Approx(-half).margin(0.001f));
+    CHECK(refined[2].y - refined[1].y == Catch::Approx(half + 4.0f).margin(0.001f));
+
+    // Unrefined, that same edge is the dab's own and carries the whole turn.
+    settings.refineDabJoints = false;
+    brush.setBrushSettings(settings);
+    aether::TileBrush::DabQuad plain;
+    REQUIRE(brush.dabStretchedQuad(previous, current, &next, plain));
+    CHECK(plain[2].x - plain[1].x == Catch::Approx(-2.0f * half).margin(0.001f));
+    CHECK(plain[2].y - plain[1].y == Catch::Approx(2.0f * half).margin(0.001f));
+}
+
+TEST_CASE("a refined joint stays shared through a right-angle turn", "[brush][stroke][geometry]")
+{
+    using namespace ruwa::core::brushes;
+
+    BrushSettingsData settings;
+    settings.connectDabs = true;
+    settings.refineDabJoints = true;
+
+    aether::TileBrush brush;
+    brush.setBrushSettings(settings);
+
+    // A 90 degree corner: the incoming joint claims the dab's minX edge and the
+    // outgoing one its maxY edge, and those two share a corner. Whatever the
+    // quad does about that, both dabs have to meet on the SAME two points -
+    // dropping the outgoing refinement there tore the ribbon at every corner of
+    // a zigzag while a smooth preview stroke never hit the case.
+    aether::TileBrush::DabPoint previous;
+    previous.worldX = 10.0f;
+    previous.worldY = 20.0f;
+    previous.radius = 4.0f;
+
+    aether::TileBrush::DabPoint current = previous;
+    current.worldX = 30.0f;
+    aether::TileBrush::DabPoint next = current;
+    next.worldY = 40.0f;
+
+    const aether::TileBrush::DabJoint joint = brush.dabJointEdge(current, next);
+    REQUIRE(joint.valid);
+
+    aether::TileBrush::DabQuad leaving;
+    aether::TileBrush::DabQuad arriving;
+    REQUIRE(brush.dabStretchedQuad(previous, current, &next, leaving));
+    REQUIRE(brush.dabStretchedQuad(current, next, nullptr, arriving));
+
+    const auto carriesPoint = [](const aether::TileBrush::DabQuad& quad,
+                                  const aether::Vector2& point) {
+        for (const aether::Vector2& corner : quad) {
+            if (std::abs(corner.x - point.x) < 0.001f && std::abs(corner.y - point.y) < 0.001f) {
+                return true;
+            }
+        }
+        return false;
+    };
+    for (const aether::Vector2& point : joint.points) {
+        CHECK(carriesPoint(leaving, point));
+        CHECK(carriesPoint(arriving, point));
+    }
+}
+
+TEST_CASE(
+    "joint refinement holds the newest dab back until the stroke ends", "[brush][stroke][geometry]")
+{
+    using namespace ruwa::core::brushes;
+
+    BrushSettingsData settings;
+    settings.connectDabs = true;
+    settings.refineDabJoints = true;
+    settings.brushFeather = false;
+    settings.hardness = 1.0f;
+
+    aether::TileBrush brush;
+    brush.setBrushSettings(settings);
+    brush.setRadius(4.0f);
+    brush.beginStroke();
+    brush.recordDabPoint(16.0f, 32.0f);
+    brush.recordDabPoint(48.0f, 32.0f);
+    brush.recordDabPoint(80.0f, 32.0f);
+    brush.rebuildStrokeBufferFromDabs();
+
+    // The last dab's leading edge is the joint with a dab that does not exist
+    // yet, so it stays out of the stroke buffer.
+    CHECK(brush.hasUnstampedStrokeDabs());
+    CHECK(strokeAlphaAt(brush, 80, 32) == 0);
+    CHECK(strokeAlphaAt(brush, 48, 32) > 0);
+
+    aether::TileGrid grid;
+    brush.endStroke(grid);
+
+    const aether::TileKey key = aether::worldToTile(80.5f, 32.5f);
+    const auto* tile = grid.getTile(key);
+    REQUIRE(tile != nullptr);
+    float originX = 0.0f;
+    float originY = 0.0f;
+    aether::tileWorldOrigin(key, originX, originY);
+    uint8_t r = 0, g = 0, b = 0, a = 0;
+    tile->getPixel(static_cast<uint32_t>(80 - static_cast<int>(originX)),
+        static_cast<uint32_t>(32 - static_cast<int>(originY)), r, g, b, a);
+    CHECK(a > 0);
+}
+
 TEST_CASE("connected dab range reports tiles touched only by the stretch back to the previous dab",
     "[brush][stroke][geometry][invalidation]")
 {

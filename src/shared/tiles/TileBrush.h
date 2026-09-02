@@ -84,6 +84,7 @@ public:
         setFlow(m_brushSettingsModel.flow);
         setFlowBlendMode(m_brushSettingsModel.flowBlendMode);
         setConnectDabs(m_brushSettingsModel.connectDabs);
+        setRefineDabJoints(m_brushSettingsModel.refineDabJoints);
         setRoundness(m_brushSettingsModel.roundness);
         setAngleDegrees(m_brushSettingsModel.angle);
         setSizePressureEnabled(m_brushSettingsModel.sizePressureEnabled);
@@ -169,6 +170,16 @@ public:
     }
     void setConnectDabs(bool enabled) { m_connectDabs = enabled; }
     bool connectsDabs() const { return m_connectDabs; }
+    void setRefineDabJoints(bool enabled) { m_refineDabJoints = enabled; }
+    /// True when a joint carries the median of both dabs instead of sitting on
+    /// the older one's leading edge. Only connected plain paint stretches dabs
+    /// at all - the canvas-reading tools run their own segment paths and never
+    /// build a ribbon, so the newest dab must not be held back for them.
+    bool refinesDabJoints() const
+    {
+        return m_connectDabs && m_refineDabJoints && !m_blurMode && !m_smudgeMode && !m_liquifyMode
+            && !isWetMode();
+    }
     bool usesNonAccumulatingDabBlend() const { return useMaxBlendForCurrentMode(); }
     void setTextureAmount(float v)
     {
@@ -377,73 +388,190 @@ public:
             corner(contentBounds.maxX * halfShapeX, contentBounds.maxY * halfShapeY),
             corner(contentBounds.minX * halfShapeX, contentBounds.maxY * halfShapeY) };
     }
-    /// The current dab deformed back onto the previous one: its two trailing
-    /// corners are moved onto the previous dab's leading edge, the two leading
-    /// ones stay put, so consecutive stretched dabs meet edge to edge without a
-    /// gap and without reaching back over their predecessor. Corner identity is
-    /// preserved, so the dab image is stretched across those four vertices
-    /// instead of an extra shape being inserted. Returns false for coincident
-    /// dabs, which are stamped unstretched.
-    bool dabStretchedQuad(const DabPoint& previous, const DabPoint& current, DabQuad& outQuad,
-        float previousRadiusOverride = -1.0f, float currentRadiusOverride = -1.0f) const
+    /// The edge two consecutive dabs meet on, and the corner pair each of them
+    /// gives up to it.
+    struct DabJoint {
+        std::array<Vector2, 2> points {};
+        std::array<int, 2> fromLeading {};
+        std::array<int, 2> toTrailing {};
+        bool valid = false;
+    };
+
+    /// Which corner pair of `quad` runs ahead of the rest along `direction`
+    /// (or behind it, with `leading` false).
+    ///
+    /// The axes stay UNNORMALIZED: an edge leads by how far its midpoint
+    /// reaches along the travel, which is the axis length times its alignment.
+    /// Comparing bare directions instead picks the long side edge of any dab
+    /// that is not square - a wide dab moving at 60 degrees leans more on its
+    /// y axis, yet it is still its short x edge that runs ahead.
+    static std::array<int, 2> dabQuadFacingPair(
+        const DabQuad& quad, const Vector2& direction, bool leading)
     {
-        const float dx = current.worldX - previous.worldX;
-        const float dy = current.worldY - previous.worldY;
+        const auto travelAlong = [&direction](const Vector2& axis) {
+            return direction.x * axis.x + direction.y * axis.y;
+        };
+        // Corner order is (minX,minY), (maxX,minY), (maxX,maxY), (minX,maxY).
+        const float alongX = travelAlong(quad[1] - quad[0]);
+        const float alongY = travelAlong(quad[3] - quad[0]);
+        if (std::abs(alongX) >= std::abs(alongY)) {
+            const bool towardMaxX = (alongX >= 0.0f) == leading;
+            return towardMaxX ? std::array<int, 2> { 1, 2 } : std::array<int, 2> { 0, 3 };
+        }
+        const bool towardMaxY = (alongY >= 0.0f) == leading;
+        return towardMaxY ? std::array<int, 2> { 3, 2 } : std::array<int, 2> { 0, 1 };
+    }
+
+    /// Order a corner pair by which side of the stroke it sits on, so a
+    /// rotating dab can never cross a joint into a bow tie.
+    static std::array<int, 2> orderDabQuadPairAcross(
+        const DabQuad& quad, std::array<int, 2> pair, const Vector2& across)
+    {
+        const float first = quad[pair[0]].x * across.x + quad[pair[0]].y * across.y;
+        const float second = quad[pair[1]].x * across.x + quad[pair[1]].y * across.y;
+        if (first > second) {
+            std::swap(pair[0], pair[1]);
+        }
+        return pair;
+    }
+
+    /// Where the stretch from `from` to `to` puts their shared edge.
+    ///
+    /// Which pair of a quad leads or trails is decided per quad, from that
+    /// quad's OWN axes: a dab whose angle follows the stroke direction is
+    /// rotated differently from its predecessor, and reading one dab's corners
+    /// through the other's axes picks a side edge at a sharp turn - that
+    /// mismatch is what breaks the ribbon there.
+    ///
+    /// Without joint refinement the shared edge IS the leading edge of `from`,
+    /// so the stretch never reaches back over its predecessor. With refinement
+    /// it is the median of that edge and the trailing edge of `to`, corner by
+    /// corner: the joint then carries half of each dab's position and rotation
+    /// instead of all of the older one's, which is what unfolds a sharp turn.
+    /// The price is that `from` has to be stretched forward onto it as well, so
+    /// a dab can only be stamped once its successor is known.
+    DabJoint dabJointEdge(const DabPoint& from, const DabPoint& to,
+        float fromRadiusOverride = -1.0f, float toRadiusOverride = -1.0f) const
+    {
+        DabJoint joint;
+        const float dx = to.worldX - from.worldX;
+        const float dy = to.worldY - from.worldY;
         const float distance = std::hypot(dx, dy);
         if (distance <= 0.0001f) {
-            return false;
+            return joint;
         }
         const Vector2 travel { dx / distance, dy / distance };
         const Vector2 across { -travel.y, travel.x };
 
-        const DabQuad previousQuad = dabQuadCorners(previous, previousRadiusOverride);
-        const DabQuad currentQuad = dabQuadCorners(current, currentRadiusOverride);
+        const DabQuad fromQuad = dabQuadCorners(from, fromRadiusOverride);
+        const DabQuad toQuad = dabQuadCorners(to, toRadiusOverride);
+        joint.fromLeading
+            = orderDabQuadPairAcross(fromQuad, dabQuadFacingPair(fromQuad, travel, true), across);
+        joint.toTrailing
+            = orderDabQuadPairAcross(toQuad, dabQuadFacingPair(toQuad, travel, false), across);
 
-        // Which corner pair of a quad trails or leads is decided per quad, from
-        // that quad's OWN axes: a dab whose angle follows the stroke direction
-        // is rotated differently from its predecessor, and reading the previous
-        // dab's corners through the current dab's axes picks a side edge of it
-        // at a sharp turn - that mismatch is what breaks the ribbon there.
-        const auto facingPair = [](const DabQuad& quad, const Vector2& direction, bool leading) {
-            // The axes stay UNNORMALIZED: an edge leads by how far its midpoint
-            // reaches along the travel, which is the axis length times its
-            // alignment. Comparing bare directions instead picks the long side
-            // edge of any dab that is not square - a wide dab moving at 60
-            // degrees leans more on its y axis, yet it is still its short x
-            // edge that runs ahead.
-            const auto travelAlong = [&direction](const Vector2& axis) {
-                return direction.x * axis.x + direction.y * axis.y;
-            };
-            // Corner order is (minX,minY), (maxX,minY), (maxX,maxY), (minX,maxY).
-            const float alongX = travelAlong(quad[1] - quad[0]);
-            const float alongY = travelAlong(quad[3] - quad[0]);
-            if (std::abs(alongX) >= std::abs(alongY)) {
-                const bool towardMaxX = (alongX >= 0.0f) == leading;
-                return towardMaxX ? std::array<int, 2> { 1, 2 } : std::array<int, 2> { 0, 3 };
+        const bool refine = refinesDabJoints();
+        for (int side = 0; side < 2; ++side) {
+            const Vector2& leading = fromQuad[joint.fromLeading[side]];
+            if (!refine) {
+                joint.points[side] = leading;
+                continue;
             }
-            const bool towardMaxY = (alongY >= 0.0f) == leading;
-            return towardMaxY ? std::array<int, 2> { 3, 2 } : std::array<int, 2> { 0, 1 };
-        };
+            const Vector2& trailing = toQuad[joint.toTrailing[side]];
+            joint.points[side]
+                = Vector2 { (leading.x + trailing.x) * 0.5f, (leading.y + trailing.y) * 0.5f };
+        }
+        joint.valid = true;
+        return joint;
+    }
 
-        // Both pairs are ordered by which side of the stroke they sit on, so a
-        // rotating dab can never cross them into a bow tie.
-        const auto orderAcross = [&](const DabQuad& quad, std::array<int, 2> pair) {
-            const float first = quad[pair[0]].x * across.x + quad[pair[0]].y * across.y;
-            const float second = quad[pair[1]].x * across.x + quad[pair[1]].y * across.y;
-            if (first > second) {
-                std::swap(pair[0], pair[1]);
+    /// The current dab deformed onto its neighbours: its two trailing corners
+    /// are moved onto the joint with the previous dab and, when joint
+    /// refinement is on and the following dab is known, its two leading corners
+    /// move onto the joint with that one. Consecutive stretched dabs meet edge
+    /// to edge without a gap and without an inserted shape, and corner identity
+    /// is preserved, so the dab image is stretched across those four vertices.
+    /// Returns false for coincident dabs, which are stamped unstretched.
+    bool dabStretchedQuad(const DabPoint& previous, const DabPoint& current, const DabPoint* next,
+        DabQuad& outQuad, float previousRadiusOverride = -1.0f, float currentRadiusOverride = -1.0f,
+        float nextRadiusOverride = -1.0f) const
+    {
+        const DabJoint back
+            = dabJointEdge(previous, current, previousRadiusOverride, currentRadiusOverride);
+        if (!back.valid) {
+            return false;
+        }
+
+        // The two trailing vertices land exactly ON the joint - one shared
+        // point each, no bevel and no offset, so the shape carries the joint's
+        // width across it.
+        outQuad = dabQuadCorners(current, currentRadiusOverride);
+        outQuad[back.toTrailing[0]] = back.points[0];
+        outQuad[back.toTrailing[1]] = back.points[1];
+
+        if (next && refinesDabJoints()) {
+            const DabJoint front
+                = dabJointEdge(current, *next, currentRadiusOverride, nextRadiusOverride);
+            if (front.valid) {
+                // The successor meets this dab on `front.points` whatever
+                // happens here, so the outgoing edge must land there or the
+                // ribbon tears - which is what a bail-out on a sharp turn did.
+                // Only WHICH corners give way is ours to pick: the pair
+                // opposite the incoming joint always leaves a quad (on a
+                // hairpin both joints would otherwise claim the same edge),
+                // and the two points go to the two corners by proximity so the
+                // shape cannot cross over itself.
+                std::array<int, 2> frontPair {};
+                int found = 0;
+                for (int corner = 0; corner < 4; ++corner) {
+                    if (corner != back.toTrailing[0] && corner != back.toTrailing[1]) {
+                        frontPair[found++] = corner;
+                    }
+                }
+                const auto distanceSquared = [](const Vector2& a, const Vector2& b) {
+                    const float dx = a.x - b.x;
+                    const float dy = a.y - b.y;
+                    return dx * dx + dy * dy;
+                };
+                const float asIs = distanceSquared(outQuad[frontPair[0]], front.points[0])
+                    + distanceSquared(outQuad[frontPair[1]], front.points[1]);
+                const float swapped = distanceSquared(outQuad[frontPair[0]], front.points[1])
+                    + distanceSquared(outQuad[frontPair[1]], front.points[0]);
+                if (swapped < asIs) {
+                    std::swap(frontPair[0], frontPair[1]);
+                }
+                outQuad[frontPair[0]] = front.points[0];
+                outQuad[frontPair[1]] = front.points[1];
             }
-            return pair;
-        };
-        const auto trailing = orderAcross(currentQuad, facingPair(currentQuad, travel, false));
-        const auto leading = orderAcross(previousQuad, facingPair(previousQuad, travel, true));
+        }
+        return true;
+    }
 
-        // The two trailing vertices land exactly ON the previous dab's two
-        // leading vertices - one shared point each, no bevel and no offset, so
-        // the shape carries the previous dab's width across the joint.
-        outQuad = currentQuad;
-        outQuad[trailing[0]] = previousQuad[leading[0]];
-        outQuad[trailing[1]] = previousQuad[leading[1]];
+    /// Same, for the callers that have no successor dab to refine against.
+    bool dabStretchedQuad(const DabPoint& previous, const DabPoint& current, DabQuad& outQuad,
+        float previousRadiusOverride = -1.0f, float currentRadiusOverride = -1.0f) const
+    {
+        return dabStretchedQuad(
+            previous, current, nullptr, outQuad, previousRadiusOverride, currentRadiusOverride);
+    }
+
+    /// The opening dab of a refined ribbon: nothing behind it moves, but its
+    /// leading edge still has to reach forward onto the joint its successor
+    /// shares with it, or the ribbon starts with a gap half a joint wide.
+    bool dabLeadingRefinedQuad(const DabPoint& current, const DabPoint& next, DabQuad& outQuad,
+        float currentRadiusOverride = -1.0f, float nextRadiusOverride = -1.0f) const
+    {
+        if (!refinesDabJoints()) {
+            return false;
+        }
+        const DabJoint front
+            = dabJointEdge(current, next, currentRadiusOverride, nextRadiusOverride);
+        if (!front.valid) {
+            return false;
+        }
+        outQuad = dabQuadCorners(current, currentRadiusOverride);
+        outQuad[front.fromLeading[0]] = front.points[0];
+        outQuad[front.fromLeading[1]] = front.points[1];
         return true;
     }
     void setDabXScale(float v) { m_dabXScale = std::clamp(v, 0.0f, 1.0f); }
@@ -950,6 +1078,7 @@ public:
     {
         m_strokeBuffer.clear();
         m_strokeDabs.clear();
+        m_stampedStrokeDabs = 0;
         // At small spacing (0.5%) dab counts grow into the thousands within a
         // single stroke; pre-reserve so push_back during the hot path doesn't
         // realloc/copy DabPoint (~140 bytes each) repeatedly.
@@ -979,6 +1108,15 @@ public:
         bool maskErase = false)
     {
         std::unordered_set<TileKey, TileKeyHash> affected;
+        // Joint refinement holds the newest dab back until its successor gives
+        // it a leading edge; the stroke is over, so it takes its own. The host
+        // normally flushes with the paint mask before getting here - this is the
+        // net for the paths that do not, and the flatten below still applies
+        // finalSourceMask over whatever it stamps. Only refinement holds a dab
+        // back, and only then is m_stampedStrokeDabs maintained at all.
+        if (refinesDabJoints()) {
+            stampStrokeDabsInto(m_strokeBuffer, nullptr, true);
+        }
         const float finalOpacity = strokeOpacity();
 
         for (auto& [key, strokeTile] : m_strokeBuffer.tiles()) {
@@ -1024,6 +1162,7 @@ public:
 
         m_strokeBuffer.clear();
         m_strokeDabs.clear();
+        m_stampedStrokeDabs = 0;
         m_spacingDistanceSinceLastDab = 0.0f;
         m_strokeActive = false;
         m_strokeDirSumX = 0.0f;
@@ -1045,6 +1184,54 @@ public:
     const TileGrid& strokeBuffer() const { return m_strokeBuffer; }
     std::vector<DabPoint>& strokeDabs() { return m_strokeDabs; }
     const std::vector<DabPoint>& strokeDabs() const { return m_strokeDabs; }
+
+    /// Index of the first stroke dab that is not in the stroke buffer yet.
+    size_t firstUnstampedStrokeDab() const { return m_stampedStrokeDabs; }
+
+    /// How many leading stroke dabs may be stamped right now. Joint refinement
+    /// keeps the newest one out: its leading edge is the joint with the dab
+    /// that has not arrived yet, and stamping it early would either leave that
+    /// joint unrefined or need the same pixels drawn twice. `includeNewest`
+    /// releases it when the stroke ends.
+    size_t stampableStrokeDabCount(bool includeNewest) const
+    {
+        const size_t total = m_strokeDabs.size();
+        if (includeNewest || !refinesDabJoints() || total == 0) {
+            return total;
+        }
+        return total - 1;
+    }
+
+    /// True when a dab is waiting for the successor that decides its leading
+    /// edge. Only joint refinement ever holds one back, and only then is the
+    /// stamped count maintained at all.
+    bool hasUnstampedStrokeDabs() const
+    {
+        return refinesDabJoints() && m_stampedStrokeDabs < m_strokeDabs.size();
+    }
+
+    /// Record that the dabs below `count` are now in the stroke buffer. The GPU
+    /// backend stamps them itself and reports back through this.
+    void markStrokeDabsStamped(size_t count)
+    {
+        m_stampedStrokeDabs = std::min(std::max(count, m_stampedStrokeDabs), m_strokeDabs.size());
+    }
+
+    /// Stamp every stroke dab that is ready (see stampableStrokeDabCount) into
+    /// `target`, carrying each one's neighbours so the joints line up.
+    void stampStrokeDabsInto(TileGrid& target, const TileGrid* selectionMask, bool includeNewest)
+    {
+        const size_t end = stampableStrokeDabCount(includeNewest);
+        for (size_t i = m_stampedStrokeDabs; i < end; ++i) {
+            const DabPoint& dab = m_strokeDabs[i];
+            const DabPoint* previous = (m_connectDabs && i > 0) ? &m_strokeDabs[i - 1] : nullptr;
+            const DabPoint* next = (i + 1 < m_strokeDabs.size()) ? &m_strokeDabs[i + 1] : nullptr;
+            if (dab.radius > 0.0f && (dab.alpha != 0 || previous)) {
+                rasterizeDab(target, dab, selectionMask, dab.useMaxBlend, nullptr, previous, next);
+            }
+        }
+        markStrokeDabsStamped(end);
+    }
     static constexpr size_t kMaxTaperAffectedDabs = stroke_taper::kMaxAffectedDabs;
 
     void collectStrokeDabRangeCoveredTiles(size_t startDabIndex, size_t dabCount,
@@ -1053,12 +1240,30 @@ public:
         if (dabCount == 0 || startDabIndex >= m_strokeDabs.size())
             return;
 
+        // The dab held back by joint refinement is stamped with the next batch,
+        // one index BEFORE the range the caller knows about - a caller asking
+        // which tiles its new dabs changed would leave that dab's tiles clean
+        // and its pixels invisible until something else dirties them.
+        if (refinesDabJoints() && startDabIndex > 0) {
+            --startDabIndex;
+            ++dabCount;
+        }
+
         const size_t endDabIndex = std::min(startDabIndex + dabCount, m_strokeDabs.size());
         for (size_t i = startDabIndex; i < endDabIndex; ++i) {
             collectDabCoveredTiles(m_strokeDabs[i], outTiles, includeBaseExtent);
-            if (m_connectDabs && i > 0) {
+            if (!m_connectDabs) {
+                continue;
+            }
+            // A refined dab also reaches forward onto the joint with its
+            // successor, so that quad decides its coverage too.
+            const DabPoint* next = (i + 1 < m_strokeDabs.size()) ? &m_strokeDabs[i + 1] : nullptr;
+            if (i > 0) {
                 collectStretchedDabCoveredTiles(
-                    m_strokeDabs[i - 1], m_strokeDabs[i], outTiles, includeBaseExtent);
+                    m_strokeDabs[i - 1], m_strokeDabs[i], next, outTiles, includeBaseExtent);
+            } else if (next && refinesDabJoints()) {
+                collectLeadingRefinedDabCoveredTiles(
+                    m_strokeDabs[i], *next, outTiles, includeBaseExtent);
             }
         }
     }
@@ -1380,6 +1585,15 @@ public:
             m_strokeBuffer.markDirty(key);
         }
 
+        m_stampedStrokeDabs = 0;
+        if (refinesDabJoints()) {
+            // Every joint moves when a dab does, so a refined ribbon is always
+            // replayed whole - and its newest dab stays held back, exactly as
+            // during live stamping.
+            stampStrokeDabsInto(m_strokeBuffer, selectionMask, false);
+            return;
+        }
+
         const DabPoint* previousRenderedDab = nullptr;
         auto rasterizeByIndex = [this, selectionMask, &previousRenderedDab](size_t idx) {
             const DabPoint& dab = m_strokeDabs[idx];
@@ -1423,7 +1637,10 @@ public:
             return;
 
         const size_t endDabIndex = std::min(startDabIndex + dabCount, m_strokeDabs.size());
-        if (startDabIndex == 0 && endDabIndex == m_strokeDabs.size()) {
+        if ((startDabIndex == 0 && endDabIndex == m_strokeDabs.size()) || refinesDabJoints()) {
+            // A refined joint is shared by both dabs it belongs to, so a moved
+            // dab reshapes its neighbours' quads as well - the ribbon is only
+            // exact when it is replayed as a whole.
             rebuildStrokeBufferFromDabs(selectionMask);
             return;
         }
@@ -1434,11 +1651,11 @@ public:
             collectDabCoveredTiles(m_strokeDabs[i], rebuildTiles, true);
             if (m_connectDabs && i > 0) {
                 collectStretchedDabCoveredTiles(
-                    m_strokeDabs[i - 1], m_strokeDabs[i], rebuildTiles, true);
+                    m_strokeDabs[i - 1], m_strokeDabs[i], nullptr, rebuildTiles, true);
             }
             if (m_connectDabs && i + 1 < m_strokeDabs.size()) {
                 collectStretchedDabCoveredTiles(
-                    m_strokeDabs[i], m_strokeDabs[i + 1], rebuildTiles, true);
+                    m_strokeDabs[i], m_strokeDabs[i + 1], nullptr, rebuildTiles, true);
             }
         }
         if (rebuildTiles.empty())
@@ -1455,8 +1672,8 @@ public:
         const DabPoint* previousDab = nullptr;
         for (const DabPoint& dab : m_strokeDabs) {
             const DabPoint* stretchStart = m_connectDabs ? previousDab : nullptr;
-            const bool stretchIntersects
-                = stretchStart && stretchedDabIntersectsTileSet(*stretchStart, dab, rebuildTiles);
+            const bool stretchIntersects = stretchStart
+                && stretchedDabIntersectsTileSet(*stretchStart, dab, nullptr, rebuildTiles);
             if (dab.radius <= 0.0f || (dab.alpha == 0 && !stretchStart)) {
                 previousDab = &dab;
                 continue;
@@ -1476,6 +1693,7 @@ public:
     {
         m_strokeBuffer.clear();
         m_strokeDabs.clear();
+        m_stampedStrokeDabs = 0;
         m_spacingDistanceSinceLastDab = 0.0f;
         m_strokeActive = false;
         m_strokeDirSumX = 0.0f;
@@ -1601,6 +1819,10 @@ public:
     {
         TileGrid& target = m_strokeActive ? m_strokeBuffer : grid;
         DabPoint dab = recordDabPoint(worldX, worldY);
+        if (m_strokeActive && refinesDabJoints()) {
+            stampStrokeDabsInto(target, selectionMask, false);
+            return;
+        }
         const DabPoint* previousDab = (m_connectDabs && m_strokeActive && m_strokeDabs.size() > 1)
             ? &m_strokeDabs[m_strokeDabs.size() - 2]
             : nullptr;
@@ -1627,6 +1849,10 @@ public:
             fromStrokeElapsedSeconds, toStrokeElapsedSeconds, strokeTimeAvailable,
             fromInputDynamics, toInputDynamics);
         TileGrid& target = m_strokeActive ? m_strokeBuffer : grid;
+        if (m_strokeActive && refinesDabJoints()) {
+            stampStrokeDabsInto(target, selectionMask, false);
+            return;
+        }
         const size_t firstStoredIndex
             = m_strokeActive ? m_strokeDabs.size() - segmentDabs.size() : 0;
         for (size_t i = 0; i < segmentDabs.size(); ++i) {
@@ -1658,6 +1884,10 @@ public:
             fromStrokeElapsedSeconds, toStrokeElapsedSeconds, strokeTimeAvailable,
             fromInputDynamics, toInputDynamics);
         TileGrid& target = m_strokeActive ? m_strokeBuffer : grid;
+        if (m_strokeActive && refinesDabJoints()) {
+            stampStrokeDabsInto(target, selectionMask, false);
+            return;
+        }
         const size_t firstStoredIndex
             = m_strokeActive ? m_strokeDabs.size() - segmentDabs.size() : 0;
         for (size_t i = 0; i < segmentDabs.size(); ++i) {
@@ -3108,21 +3338,28 @@ private:
     }
 
     void collectStretchedDabCoveredTiles(const DabPoint& previous, const DabPoint& current,
-        std::unordered_set<TileKey, TileKeyHash>& outTiles, bool includeBaseExtent) const
+        const DabPoint* next, std::unordered_set<TileKey, TileKeyHash>& outTiles,
+        bool includeBaseExtent) const
     {
-        const float previousRadius
-            = includeBaseExtent ? std::max(previous.radius, previous.baseRadius) : previous.radius;
-        const float currentRadius
-            = includeBaseExtent ? std::max(current.radius, current.baseRadius) : current.radius;
+        const auto coverageRadius = [includeBaseExtent](const DabPoint& dab) {
+            return includeBaseExtent ? std::max(dab.radius, dab.baseRadius) : dab.radius;
+        };
         DabQuad stretchQuad;
-        if (!dabStretchedQuad(previous, current, stretchQuad, previousRadius, currentRadius)) {
+        if (!dabStretchedQuad(previous, current, next, stretchQuad, coverageRadius(previous),
+                coverageRadius(current), next ? coverageRadius(*next) : -1.0f)) {
             return;
         }
-        float minX = stretchQuad[0].x;
-        float minY = stretchQuad[0].y;
-        float maxX = stretchQuad[0].x;
-        float maxY = stretchQuad[0].y;
-        for (const Vector2& corner : stretchQuad) {
+        collectQuadCoveredTiles(stretchQuad, outTiles);
+    }
+
+    void collectQuadCoveredTiles(
+        const DabQuad& quad, std::unordered_set<TileKey, TileKeyHash>& outTiles) const
+    {
+        float minX = quad[0].x;
+        float minY = quad[0].y;
+        float maxX = quad[0].x;
+        float maxY = quad[0].y;
+        for (const Vector2& corner : quad) {
             minX = std::min(minX, corner.x);
             minY = std::min(minY, corner.y);
             maxX = std::max(maxX, corner.x);
@@ -3140,11 +3377,25 @@ private:
         }
     }
 
+    void collectLeadingRefinedDabCoveredTiles(const DabPoint& current, const DabPoint& next,
+        std::unordered_set<TileKey, TileKeyHash>& outTiles, bool includeBaseExtent) const
+    {
+        const auto coverageRadius = [includeBaseExtent](const DabPoint& dab) {
+            return includeBaseExtent ? std::max(dab.radius, dab.baseRadius) : dab.radius;
+        };
+        DabQuad quad;
+        if (!dabLeadingRefinedQuad(
+                current, next, quad, coverageRadius(current), coverageRadius(next))) {
+            return;
+        }
+        collectQuadCoveredTiles(quad, outTiles);
+    }
+
     bool stretchedDabIntersectsTileSet(const DabPoint& previous, const DabPoint& current,
-        const std::unordered_set<TileKey, TileKeyHash>& tiles) const
+        const DabPoint* next, const std::unordered_set<TileKey, TileKeyHash>& tiles) const
     {
         std::unordered_set<TileKey, TileKeyHash> stretchTiles;
-        collectStretchedDabCoveredTiles(previous, current, stretchTiles, false);
+        collectStretchedDabCoveredTiles(previous, current, next, stretchTiles, false);
         for (const TileKey& key : stretchTiles) {
             if (tiles.find(key) != tiles.end())
                 return true;
@@ -3186,7 +3437,7 @@ private:
 
     void rasterizeDab(TileGrid& target, const DabPoint& dab, const TileGrid* selectionMask,
         bool maxBlend, const std::unordered_set<TileKey, TileKeyHash>* allowedTiles = nullptr,
-        const DabPoint* previousDab = nullptr)
+        const DabPoint* previousDab = nullptr, const DabPoint* nextDab = nullptr)
     {
         if (dab.radius <= 0.0f)
             return;
@@ -3195,8 +3446,18 @@ private:
         const bool roundLowAlpha
             = m_flowBlendMode == ruwa::core::brushes::BrushSettingsData::FlowBlendSrcOver;
         DabQuad stretchQuad;
-        const bool connectFromPrevious = previousDab && previousDab->radius > 0.0f
-            && dabStretchedQuad(*previousDab, dab, stretchQuad);
+        const DabPoint* stretchFrom
+            = (previousDab && previousDab->radius > 0.0f) ? previousDab : nullptr;
+        bool connectFromPrevious
+            = stretchFrom && dabStretchedQuad(*stretchFrom, dab, nextDab, stretchQuad);
+        if (!connectFromPrevious && !stretchFrom && nextDab && nextDab->radius > 0.0f) {
+            // Opening dab: it has no predecessor to stretch back onto, only a
+            // leading edge to hand forward. Its own parameters fill the quad,
+            // so the interpolation below is a no-op.
+            connectFromPrevious = dabLeadingRefinedQuad(dab, *nextDab, stretchQuad);
+            stretchFrom = &dab;
+        }
+        const DabPoint& stretchSource = stretchFrom ? *stretchFrom : dab;
         const float rasterExtent
             = dabCoverageExtent(r, dab.hardness, dab.roundness, dab.angleDegrees, true);
         float boundsMinX = dab.worldX - rasterExtent;
@@ -3263,11 +3524,11 @@ private:
                                 return static_cast<uint8_t>(std::lround(
                                     lerp(static_cast<float>(from), static_cast<float>(to))));
                             };
-                            sampledDab.hardness = lerp(previousDab->hardness, dab.hardness);
-                            sampledDab.alpha = lerpByte(previousDab->alpha, dab.alpha);
-                            sampledDab.colorR = lerpByte(previousDab->colorR, dab.colorR);
-                            sampledDab.colorG = lerpByte(previousDab->colorG, dab.colorG);
-                            sampledDab.colorB = lerpByte(previousDab->colorB, dab.colorB);
+                            sampledDab.hardness = lerp(stretchSource.hardness, dab.hardness);
+                            sampledDab.alpha = lerpByte(stretchSource.alpha, dab.alpha);
+                            sampledDab.colorR = lerpByte(stretchSource.colorR, dab.colorR);
+                            sampledDab.colorG = lerpByte(stretchSource.colorG, dab.colorG);
+                            sampledDab.colorB = lerpByte(stretchSource.colorB, dab.colorB);
                             const DabContentBounds stretchContentBounds
                                 = dabShapeContentBounds(sampledDab.hardness);
                             const float stretchShapeX = stretchContentBounds.minX
@@ -3826,6 +4087,7 @@ private:
     float m_flow = 1.0f; // 0..1 alpha multiplier, independent of color alpha
     int m_flowBlendMode = ruwa::core::brushes::BrushSettingsData::FlowBlendMax;
     bool m_connectDabs = false;
+    bool m_refineDabJoints = false;
     float m_textureAmount = 0.0f;
     float m_textureScale = 1.0f;
     float m_textureContrast = 0.5f;
@@ -3910,6 +4172,9 @@ private:
     mutable std::unordered_map<TileKey, ProceduralTextureTile, TileKeyHash>
         m_proceduralTextureTiles;
     std::vector<DabPoint> m_strokeDabs;
+    // How many leading stroke dabs are already in the stroke buffer. Only joint
+    // refinement ever leaves a gap to the end of m_strokeDabs.
+    size_t m_stampedStrokeDabs = 0;
     float m_spacingDistanceSinceLastDab = 0.0f;
     bool m_strokeActive = false;
     // Stroke direction is smoothed across segments to avoid per-event angular

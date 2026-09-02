@@ -2414,6 +2414,22 @@ void BrushStrokeHost::completeEndStrokeAfterQueueDrain()
         }
     }
 
+    // Joint refinement keeps the newest dab out of the stroke buffer: its
+    // leading edge is the joint with the dab that follows it. Nothing follows
+    // now, so it is stamped with its own leading edge before the flatten reads
+    // the buffer - and its tiles still have to reach the undo snapshot.
+    if (currentBrush->hasUnstampedStrokeDabs() && executionBackend) {
+        if (m_useGPUBrush && m_callbacks.makeCurrent) {
+            m_callbacks.makeCurrent();
+        }
+        executionBackend->stampHeldStrokeDabs(*currentBrush, paintMask, m_useGPUBrush);
+        if (m_useGPUBrush && m_callbacks.doneCurrent) {
+            m_callbacks.doneCurrent();
+        }
+        snapshotNewTiles(currentBrush->strokeBuffer(), grid);
+        markRebuiltPreviewDirty();
+    }
+
     const bool completedEraseMode = currentBrush->isEraseMode();
     const float completedStrokeOpacity = currentBrush->strokeOpacity();
     const QUuid completedLayerId = layer->id;

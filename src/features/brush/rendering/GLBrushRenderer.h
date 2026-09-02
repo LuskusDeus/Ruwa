@@ -56,7 +56,8 @@ public:
     bool stampDabSegmentGPU(TileGrid& strokeBuffer, GLTileRenderer* tileRenderer,
         const TileBrush& brush, const std::vector<TileBrush::DabPoint>& dabs,
         TileGrid* selectionMask = nullptr, bool useSelectionMask = false, uint32_t canvasWidth = 0,
-        uint32_t canvasHeight = 0, const TileBrush::DabPoint* previousDab = nullptr);
+        uint32_t canvasHeight = 0, const TileBrush::DabPoint* previousDab = nullptr,
+        const TileBrush::DabPoint* nextDab = nullptr);
 
     /// Batched smudge: process a whole stroke segment of dabs in one go,
     /// with a single ROI snapshot and a ping-pong work buffer instead of
@@ -199,7 +200,8 @@ private:
     void renderDabBatchForTile(const TileBrush& brush, const std::vector<TileBrush::DabPoint>& dabs,
         const std::vector<uint32_t>& indices, float tileOriginX, float tileOriginY,
         const DabBatchUniforms& uniforms, DabBatchScratch& scratch,
-        const TileBrush::DabPoint* previousDab = nullptr);
+        const TileBrush::DabPoint* previousDab = nullptr,
+        const TileBrush::DabPoint* nextDab = nullptr);
     DabBatchUniforms resolveDabBatchUniforms() const;
     bool ensureBlurScratchSize(GLsizei width, GLsizei height, TilePixelFormat contentFormat);
     // Re-format the fixed TILE_SIZE blur read texture to match a document tile

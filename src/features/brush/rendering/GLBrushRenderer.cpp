@@ -146,20 +146,29 @@ struct DabWorldBounds {
     float maxY = 0.0f;
 };
 
-DabWorldBounds stretchedDabWorldBounds(
-    const TileBrush& brush, const TileBrush::DabPoint& dab, const TileBrush::DabPoint* stretchStart)
+DabWorldBounds stretchedDabWorldBounds(const TileBrush& brush, const TileBrush::DabPoint& dab,
+    const TileBrush::DabPoint* stretchStart, const TileBrush::DabPoint* stretchEnd)
 {
     DabWorldBounds bounds { dab.worldX, dab.worldY, dab.worldX, dab.worldY };
-    if (!stretchStart) {
+    if (!stretchStart && !stretchEnd) {
         return bounds;
     }
-    bounds.minX = std::min(bounds.minX, stretchStart->worldX);
-    bounds.minY = std::min(bounds.minY, stretchStart->worldY);
-    bounds.maxX = std::max(bounds.maxX, stretchStart->worldX);
-    bounds.maxY = std::max(bounds.maxY, stretchStart->worldY);
+    const TileBrush::DabPoint* neighbours[2] { stretchStart, stretchEnd };
+    for (const TileBrush::DabPoint* neighbour : neighbours) {
+        if (!neighbour) {
+            continue;
+        }
+        bounds.minX = std::min(bounds.minX, neighbour->worldX);
+        bounds.minY = std::min(bounds.minY, neighbour->worldY);
+        bounds.maxX = std::max(bounds.maxX, neighbour->worldX);
+        bounds.maxY = std::max(bounds.maxY, neighbour->worldY);
+    }
 
     TileBrush::DabQuad stretchQuad {};
-    if (!brush.dabStretchedQuad(*stretchStart, dab, stretchQuad)) {
+    const bool stretched = stretchStart
+        ? brush.dabStretchedQuad(*stretchStart, dab, stretchEnd, stretchQuad)
+        : brush.dabLeadingRefinedQuad(dab, *stretchEnd, stretchQuad);
+    if (!stretched) {
         return bounds;
     }
     for (const Vector2& corner : stretchQuad) {
@@ -3340,7 +3349,7 @@ void GLBrushRenderer::stampGPU(TileGrid& strokeBuffer, GLTileRenderer* tileRende
 bool GLBrushRenderer::stampDabSegmentGPU(TileGrid& strokeBuffer, GLTileRenderer* tileRenderer,
     const TileBrush& brush, const std::vector<TileBrush::DabPoint>& dabs, TileGrid* selectionMask,
     bool useSelectionMask, uint32_t canvasWidth, uint32_t canvasHeight,
-    const TileBrush::DabPoint* previousDab)
+    const TileBrush::DabPoint* previousDab, const TileBrush::DabPoint* nextDab)
 {
     const StrokeBufferVersionBump versionBump { strokeBuffer };
     if (!m_initialized || !m_rebuildBatchProgram || !tileRenderer)
@@ -3378,6 +3387,9 @@ bool GLBrushRenderer::stampDabSegmentGPU(TileGrid& strokeBuffer, GLTileRenderer*
         const auto& dab = dabs[idx];
         const TileBrush::DabPoint* stretchStart
             = brush.connectsDabs() ? (idx > 0 ? &dabs[idx - 1] : previousDab) : nullptr;
+        const TileBrush::DabPoint* stretchEnd = brush.refinesDabJoints()
+            ? (idx + 1 < dabs.size() ? &dabs[idx + 1] : nextDab)
+            : nullptr;
         if (dab.radius <= 0.0f || (dab.alpha == 0 && !stretchStart))
             continue;
         const float rasterExtent = stretchStart
@@ -3387,7 +3399,8 @@ bool GLBrushRenderer::stampDabSegmentGPU(TileGrid& strokeBuffer, GLTileRenderer*
                       stretchStart->hardness, stretchStart->roundness, true))
             : dabCoverageExtent(
                   brush, dab.radius, dab.hardness, dab.roundness, dab.angleDegrees, true);
-        const DabWorldBounds dabBounds = stretchedDabWorldBounds(brush, dab, stretchStart);
+        const DabWorldBounds dabBounds
+            = stretchedDabWorldBounds(brush, dab, stretchStart, stretchEnd);
         const float minWorldX = dabBounds.minX;
         const float minWorldY = dabBounds.minY;
         const float maxWorldX = dabBounds.maxX;
@@ -3532,7 +3545,7 @@ bool GLBrushRenderer::stampDabSegmentGPU(TileGrid& strokeBuffer, GLTileRenderer*
         const float tileOriginX = static_cast<float>(key.x) * static_cast<float>(TILE_SIZE);
         const float tileOriginY = static_cast<float>(key.y) * static_cast<float>(TILE_SIZE);
         renderDabBatchForTile(brush, dabs, indices, tileOriginX, tileOriginY, batchUniforms,
-            batchScratch, previousDab);
+            batchScratch, previousDab, nextDab);
 
         tile.clearDirty();
         strokeBuffer.removeDirty(key);
@@ -3587,7 +3600,13 @@ void GLBrushRenderer::rebuildStrokeBufferFromDabsGPU(TileGrid& strokeBuffer,
                 prev = idx;
             }
         } else {
-            for (size_t i = 0; i < dabs.size(); ++i) {
+            // Joint refinement holds the newest dab back: its leading edge is
+            // the joint with the dab that has not arrived yet. TileBrush counts
+            // the same way (stampableStrokeDabCount), so a replay leaves the
+            // ribbon exactly where live stamping would.
+            const size_t stampable
+                = brush.refinesDabJoints() && !dabs.empty() ? dabs.size() - 1u : dabs.size();
+            for (size_t i = 0; i < stampable; ++i) {
                 dabIndices.push_back(i);
             }
         }
@@ -3601,6 +3620,8 @@ void GLBrushRenderer::rebuildStrokeBufferFromDabsGPU(TileGrid& strokeBuffer,
         const auto& dab = dabs[idx];
         const TileBrush::DabPoint* stretchStart
             = brush.connectsDabs() && idx > 0 ? &dabs[idx - 1] : nullptr;
+        const TileBrush::DabPoint* stretchEnd
+            = brush.refinesDabJoints() && idx + 1u < dabs.size() ? &dabs[idx + 1] : nullptr;
         if (dab.radius <= 0.0f || (dab.alpha == 0 && !stretchStart))
             continue;
         const float r = stretchStart
@@ -3609,7 +3630,8 @@ void GLBrushRenderer::rebuildStrokeBufferFromDabsGPU(TileGrid& strokeBuffer,
                   dabRotationInvariantCoverageExtent(brush, stretchStart->radius,
                       stretchStart->hardness, stretchStart->roundness, true))
             : dabCoverageExtent(brush, dab.radius, dab.hardness, dab.roundness, dab.angleDegrees);
-        const DabWorldBounds dabBounds = stretchedDabWorldBounds(brush, dab, stretchStart);
+        const DabWorldBounds dabBounds
+            = stretchedDabWorldBounds(brush, dab, stretchStart, stretchEnd);
         const float minWorldX = dabBounds.minX;
         const float minWorldY = dabBounds.minY;
         const float maxWorldX = dabBounds.maxX;
@@ -4562,7 +4584,8 @@ GLBrushRenderer::DabBatchUniforms GLBrushRenderer::resolveDabBatchUniforms() con
 void GLBrushRenderer::renderDabBatchForTile(const TileBrush& brush,
     const std::vector<TileBrush::DabPoint>& dabs, const std::vector<uint32_t>& indices,
     float tileOriginX, float tileOriginY, const DabBatchUniforms& uniforms,
-    DabBatchScratch& scratch, const TileBrush::DabPoint* previousDab)
+    DabBatchScratch& scratch, const TileBrush::DabPoint* previousDab,
+    const TileBrush::DabPoint* nextDab)
 {
     std::vector<float>& centers = scratch.centers;
     std::vector<float>& params = scratch.params;
@@ -4662,14 +4685,24 @@ void GLBrushRenderer::renderDabBatchForTile(const TileBrush& brush,
 
                 const uint32_t dabIndex = indices[runCursor + i];
                 const TileBrush::DabPoint* stretchStart = nullptr;
+                const TileBrush::DabPoint* stretchEnd = nullptr;
                 if (brush.connectsDabs()) {
                     stretchStart = dabIndex > 0 ? &dabs[dabIndex - 1] : previousDab;
+                    if (brush.refinesDabJoints()) {
+                        stretchEnd = dabIndex + 1u < dabs.size() ? &dabs[dabIndex + 1] : nextDab;
+                    }
                 }
                 TileBrush::DabQuad stretchQuad {};
-                const bool hasStretch
-                    = stretchStart && brush.dabStretchedQuad(*stretchStart, dab, stretchQuad);
+                bool hasStretch = stretchStart
+                    && brush.dabStretchedQuad(*stretchStart, dab, stretchEnd, stretchQuad);
+                if (!hasStretch && !stretchStart && stretchEnd) {
+                    // Opening dab of a refined ribbon: it only hands its leading
+                    // edge forward, and interpolates from itself.
+                    hasStretch = brush.dabLeadingRefinedQuad(dab, *stretchEnd, stretchQuad);
+                }
                 hasPrevious[i] = hasStretch ? 1 : 0;
-                const TileBrush::DabPoint& previous = stretchStart ? *stretchStart : dab;
+                const TileBrush::DabPoint& previous
+                    = (stretchStart && hasStretch) ? *stretchStart : dab;
                 previousParams[vec4Base + 0] = previous.radius;
                 previousParams[vec4Base + 1] = std::clamp(previous.hardness, 0.0f, 1.0f);
                 previousParams[vec4Base + 2] = std::clamp(previous.roundness, 0.0f, 1.0f);

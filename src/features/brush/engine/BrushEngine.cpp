@@ -85,6 +85,53 @@ void BrushExecutionBackend::prepareStrokeBuffer(
         useGpu ? strokeBufferFormatFor(brush, targetGrid.format()) : targetGrid.format());
 }
 
+bool BrushExecutionBackend::stampReadyRefinedDabsGPU(
+    TileBrush& brush, TileGrid* selectionMask, bool includeNewest)
+{
+    const std::vector<TileBrush::DabPoint>& stored = brush.strokeDabs();
+    const size_t start = brush.firstUnstampedStrokeDab();
+    const size_t end = brush.stampableStrokeDabCount(includeNewest);
+    if (start >= end) {
+        // Only the held-back dab has arrived so far; it is stamped once the
+        // dab that decides its leading edge does.
+        return true;
+    }
+
+    const std::vector<TileBrush::DabPoint> ready(stored.data() + start, stored.data() + end);
+    const TileBrush::DabPoint* previousDab = start > 0 ? &stored[start - 1] : nullptr;
+    const TileBrush::DabPoint* nextDab = end < stored.size() ? &stored[end] : nullptr;
+
+    if (!m_brushRenderer->stampDabSegmentGPU(brush.strokeBuffer(), m_tileRenderer, brush, ready,
+            selectionMask, selectionMask != nullptr, m_canvasWidth, m_canvasHeight, previousDab,
+            nextDab)) {
+        // The batch path refused (it owns every prerequisite check). The dabs
+        // still have to land, so they go down one by one as plain shapes.
+        m_brushRenderer->beginStampBatch();
+        for (const auto& dab : ready) {
+            m_brushRenderer->stampGPU(brush.strokeBuffer(), m_tileRenderer, brush, dab.worldX,
+                dab.worldY, dab.radius, dab.hardness, dab.roundness, dab.angleDegrees,
+                dab.useMaxBlend, dab.colorR, dab.colorG, dab.colorB, dab.alpha, selectionMask,
+                selectionMask != nullptr, m_canvasWidth, m_canvasHeight, nullptr);
+        }
+        m_brushRenderer->endStampBatch();
+    }
+    brush.markStrokeDabsStamped(end);
+    return true;
+}
+
+void BrushExecutionBackend::stampHeldStrokeDabs(
+    TileBrush& brush, TileGrid* selectionMask, bool preferGpu)
+{
+    if (!brush.refinesDabJoints() || !brush.hasUnstampedStrokeDabs()) {
+        return;
+    }
+    if (preferGpu && hasGpuBackend()) {
+        stampReadyRefinedDabsGPU(brush, selectionMask, true);
+        return;
+    }
+    brush.stampStrokeDabsInto(brush.strokeBuffer(), selectionMask, true);
+}
+
 bool BrushExecutionBackend::stamp(TileBrush& brush, TileGrid& layerGrid, float worldX, float worldY,
     TileGrid* selectionMask, bool preferGpu, float strokeElapsedSeconds, bool strokeTimeAvailable)
 {
@@ -107,6 +154,10 @@ bool BrushExecutionBackend::stamp(TileBrush& brush, TileGrid& layerGrid, float w
         // coverage) but no warp is applied here — that happens in strokeTo().
         if (brush.isLiquifyMode()) {
             return true;
+        }
+
+        if (brush.refinesDabJoints() && brush.hasActiveStroke()) {
+            return stampReadyRefinedDabsGPU(brush, selectionMask, false);
         }
 
         if (previousDab && !brush.isBlurMode() && !brush.isSmudgeMode() && !brush.isWetMode()) {
@@ -196,6 +247,24 @@ bool BrushExecutionBackend::strokeTo(TileBrush& brush, TileGrid& layerGrid, floa
         const bool plainPaint = !brush.isBlurMode() && !brush.isSmudgeMode() && !brush.isWetMode()
             && !brush.isLiquifyMode();
 
+        // A refined ribbon is addressed by stored dab index, so it needs no dab
+        // list of its own - open coalescing window or not, whatever has arrived
+        // is stamped straight out of the brush (here, or at endDabBatch()).
+        // Brush state still advances to the last dab immediately, because the
+        // following micro-segment's appendInterpolatedStrokeDabs reads it.
+        if (plainPaint && brush.refinesDabJoints() && brush.hasActiveStroke()) {
+            if (!segmentDabs.empty()) {
+                const auto& last = segmentDabs.back();
+                brush.setPressure(last.pressure);
+                brush.setStrokeElapsedSeconds(last.strokeElapsedSeconds, last.strokeTimeAvailable);
+                brush.setInputDynamics(last.inputDynamics);
+            }
+            if (!m_dabBatchActive) {
+                stampReadyRefinedDabsGPU(brush, selectionMask, false);
+            }
+            return true;
+        }
+
         // Coalescing window open: hand the dabs to the pending batch instead of
         // stamping now. Brush state still advances to the last dab immediately,
         // because the following micro-segment's appendInterpolatedStrokeDabs
@@ -275,6 +344,12 @@ void BrushExecutionBackend::endDabBatch(TileBrush& brush, TileGrid* selectionMas
         return;
     }
     m_dabBatchActive = false;
+    if (brush.refinesDabJoints() && hasGpuBackend() && brush.hasActiveStroke()) {
+        stampReadyRefinedDabsGPU(brush, selectionMask, false);
+        m_pendingBatchDabs.clear();
+        m_pendingBatchPreviousDab.reset();
+        return;
+    }
     if (m_pendingBatchDabs.empty() || !hasGpuBackend()) {
         m_pendingBatchDabs.clear();
         m_pendingBatchPreviousDab.reset();

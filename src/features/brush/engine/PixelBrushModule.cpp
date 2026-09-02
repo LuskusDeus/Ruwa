@@ -396,6 +396,12 @@ QVector<BrushTabDef> pixelBrushTabDefinitions()
                 toggleDef("rendering.connectDabs", QT_TR_NOOP("Connect Dabs"), false,
                     QT_TR_NOOP("Stretch every dab back to the previous one so the stroke stays "
                                "continuous")),
+                withEnabledWhen(
+                    toggleDef("rendering.refineDabJoints", QT_TR_NOOP("Refine Previous Dab"), false,
+                        QT_TR_NOOP("Stretch the previous dab forward as well and put their shared "
+                                   "edge at the median position and angle of both, so a sharp turn "
+                                   "does not fold the stroke")),
+                    { enabledWhenToggleOn("rendering.connectDabs") }),
             } },
         { "color", QT_TR_NOOP("Color"), QT_TR_NOOP("Brush color adjustments"),
             {
@@ -960,6 +966,7 @@ QVariantMap PixelBrushModule::settingsToVariantMap(const BrushSettingsData& sett
     QVariantMap map = {
         { QStringLiteral("rendering.flowBlendMode"), settings.flowBlendMode },
         { QStringLiteral("rendering.connectDabs"), settings.connectDabs },
+        { QStringLiteral("rendering.refineDabJoints"), settings.refineDabJoints },
         { QStringLiteral("shape.hardness"), settings.hardness },
         { QStringLiteral("shape.spacing"), settings.spacing },
         { QStringLiteral("shape.flow"), settings.flow },
@@ -1047,6 +1054,8 @@ BrushSettingsData PixelBrushModule::settingsFromVariantMap(const QVariantMap& se
               .toInt();
     out.connectDabs
         = settings.value(QStringLiteral("rendering.connectDabs"), out.connectDabs).toBool();
+    out.refineDabJoints
+        = settings.value(QStringLiteral("rendering.refineDabJoints"), out.refineDabJoints).toBool();
     out.hardness = clampUnit(
         settings.value(QStringLiteral("shape.hardness"), out.hardness).toDouble(), out.hardness);
     out.spacing = clampSpacing(

@@ -83,6 +83,12 @@ public:
     void beginDabBatch(const TileBrush& brush);
     void endDabBatch(TileBrush& brush, TileGrid* selectionMask);
 
+    /// Stamp the dab joint refinement is holding back. That dab's leading edge
+    /// is the joint with its successor, so it waits for one - call this when
+    /// the stroke ends (before flatten) and it takes its own leading edge
+    /// instead. No-op for every brush that does not refine joints.
+    void stampHeldStrokeDabs(TileBrush& brush, TileGrid* selectionMask, bool preferGpu);
+
     // Rebuild in-progress stroke buffer from stored dabs.
     // Returns true when GPU path was used.
     bool rebuildStrokeFromDabs(
@@ -107,6 +113,10 @@ public:
 
 private:
     bool hasGpuBackend() const;
+    /// Stamp the stored stroke dabs that are ready, carrying the neighbours
+    /// each of their joints needs. Returns true (the GPU path is the only one
+    /// here; a refused batch falls back to per-dab stamps).
+    bool stampReadyRefinedDabsGPU(TileBrush& brush, TileGrid* selectionMask, bool includeNewest);
 
 private:
     GLBrushRenderer* m_brushRenderer = nullptr; // non-owning

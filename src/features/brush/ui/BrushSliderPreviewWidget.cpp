@@ -72,9 +72,9 @@ bool brushSettingsEqual(const ruwa::core::brushes::BrushSettingsData& a,
     const ruwa::core::brushes::BrushSettingsData& b)
 {
     return a.flowBlendMode == b.flowBlendMode && a.connectDabs == b.connectDabs
-        && a.hardness == b.hardness && a.spacing == b.spacing && a.flow == b.flow
-        && a.roundness == b.roundness && a.angle == b.angle
-        && a.sizePressureEnabled == b.sizePressureEnabled
+        && a.refineDabJoints == b.refineDabJoints && a.hardness == b.hardness
+        && a.spacing == b.spacing && a.flow == b.flow && a.roundness == b.roundness
+        && a.angle == b.angle && a.sizePressureEnabled == b.sizePressureEnabled
         && a.opacityPressureEnabled == b.opacityPressureEnabled && a.brushFeather == b.brushFeather
         && a.opacityPressureMin == b.opacityPressureMin
         && a.opacityPressureMax == b.opacityPressureMax && a.sizePressureMin == b.sizePressureMin
