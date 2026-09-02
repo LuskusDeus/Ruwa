@@ -6,6 +6,7 @@
 #include <catch2/catch_test_macros.hpp>
 
 #include <array>
+#include <cmath>
 #include <utility>
 #include <vector>
 
@@ -246,6 +247,35 @@ TEST_CASE("a dab that rotated since its predecessor still anchors on that dab's 
     CHECK(stretchQuad[2].y == Catch::Approx(24.0f));
     CHECK(stretchQuad[3].x == Catch::Approx(14.0f));
     CHECK(stretchQuad[3].y == Catch::Approx(16.0f));
+}
+
+TEST_CASE("a flat dab leads with its short edge, not with the axis it leans on",
+    "[brush][stroke][geometry]")
+{
+    aether::TileBrush brush;
+
+    // Half extents 8 x 2, travelling at 60 degrees: the dab leans more on its
+    // y axis (sin 60 > cos 60), but its x edge still reaches 8 * cos 60 = 4
+    // ahead against 2 * sin 60 = 1.7, so the joint belongs on the x edge. The
+    // long top edge is a side edge here, and anchoring on it folds the ribbon.
+    aether::TileBrush::DabPoint previous;
+    previous.worldX = 20.0f;
+    previous.worldY = 20.0f;
+    previous.radius = 8.0f;
+    previous.roundness = 0.25f;
+
+    aether::TileBrush::DabPoint current = previous;
+    current.worldX = 30.0f;
+    current.worldY = 20.0f + 10.0f * std::sqrt(3.0f);
+
+    aether::TileBrush::DabQuad stretchQuad;
+    REQUIRE(brush.dabStretchedQuad(previous, current, stretchQuad));
+    CHECK(stretchQuad[0].x == Catch::Approx(28.0f));
+    CHECK(stretchQuad[0].y == Catch::Approx(18.0f));
+    CHECK(stretchQuad[3].x == Catch::Approx(28.0f));
+    CHECK(stretchQuad[3].y == Catch::Approx(22.0f));
+    CHECK(stretchQuad[1].x == Catch::Approx(38.0f));
+    CHECK(stretchQuad[2].x == Catch::Approx(38.0f));
 }
 
 TEST_CASE("connected dab range reports tiles touched only by the stretch back to the previous dab",

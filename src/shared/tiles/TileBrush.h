@@ -405,12 +405,14 @@ public:
         // dab's corners through the current dab's axes picks a side edge of it
         // at a sharp turn - that mismatch is what breaks the ribbon there.
         const auto facingPair = [](const DabQuad& quad, const Vector2& direction, bool leading) {
+            // The axes stay UNNORMALIZED: an edge leads by how far its midpoint
+            // reaches along the travel, which is the axis length times its
+            // alignment. Comparing bare directions instead picks the long side
+            // edge of any dab that is not square - a wide dab moving at 60
+            // degrees leans more on its y axis, yet it is still its short x
+            // edge that runs ahead.
             const auto travelAlong = [&direction](const Vector2& axis) {
-                const float length = std::hypot(axis.x, axis.y);
-                if (length <= 0.0001f) {
-                    return 0.0f;
-                }
-                return (direction.x * axis.x + direction.y * axis.y) / length;
+                return direction.x * axis.x + direction.y * axis.y;
             };
             // Corner order is (minX,minY), (maxX,minY), (maxX,maxY), (minX,maxY).
             const float alongX = travelAlong(quad[1] - quad[0]);
