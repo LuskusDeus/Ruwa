@@ -577,28 +577,17 @@ public:
         return true;
     }
 
-    /// A connected dab represented as two cubic side rails. Rendering the
-    /// rails as several adjacent bilinear patches adds transform vertices, not
-    /// paint dabs: coverage and colour are still evaluated once for this dab.
+    /// A connected dab represented as two cubic side rails. Refined rails are
+    /// exact cubic representations of a quadratic spline through the dab's
+    /// cross-sections. Rendering them as adjacent bilinear patches adds
+    /// transform vertices, not paint dabs: coverage and colour are still
+    /// evaluated once for this dab.
     struct DabTransform {
         // Canonicalized as start-side0, end-side0, end-side1, start-side1.
         DabQuad guide {};
         std::array<Vector2, 2> startControls {};
         std::array<Vector2, 2> endControls {};
-        bool alongX = true;
-        float startAlong = 0.0f;
-        float startAcross = 0.0f;
     };
-
-    static void finishDabTransformMapping(
-        DabTransform& transform, const std::array<int, 2>& startPair)
-    {
-        constexpr std::array<float, 4> kCornerX { 0.0f, 1.0f, 1.0f, 0.0f };
-        constexpr std::array<float, 4> kCornerY { 0.0f, 0.0f, 1.0f, 1.0f };
-        transform.alongX = kCornerX[startPair[0]] == kCornerX[startPair[1]];
-        transform.startAlong = transform.alongX ? kCornerX[startPair[0]] : kCornerY[startPair[0]];
-        transform.startAcross = transform.alongX ? kCornerY[startPair[0]] : kCornerX[startPair[0]];
-    }
 
     static Vector2 cubicRailPoint(const Vector2& start, const Vector2& startControl,
         const Vector2& endControl, const Vector2& end, float t)
@@ -612,6 +601,71 @@ public:
                 + endControl.x * endControlWeight + end.x * endWeight,
             start.y * startWeight + startControl.y * startControlWeight
                 + endControl.y * endControlWeight + end.y * endWeight };
+    }
+
+    struct DabTransformSections {
+        std::array<Vector2, 2> trailing {};
+        std::array<Vector2, 2> center {};
+        std::array<Vector2, 2> leading {};
+    };
+
+    DabTransformSections dabTransformSections(
+        const DabPoint& dab, float radiusOverride = -1.0f) const
+    {
+        const DabQuad quad = dabQuadCorners(dab, radiusOverride);
+        return { { quad[0], quad[3] },
+            { Vector2 { (quad[0].x + quad[1].x) * 0.5f, (quad[0].y + quad[1].y) * 0.5f },
+                Vector2 { (quad[3].x + quad[2].x) * 0.5f, (quad[3].y + quad[2].y) * 0.5f } },
+            { quad[1], quad[2] } };
+    }
+
+    static Vector2 midpoint(const Vector2& a, const Vector2& b)
+    {
+        return Vector2 { (a.x + b.x) * 0.5f, (a.y + b.y) * 0.5f };
+    }
+
+    static void setQuadraticRail(DabTransform& transform, int side, const Vector2& start,
+        const Vector2& control, const Vector2& end)
+    {
+        // Exact quadratic-to-cubic conversion. Consecutive refined dabs use
+        // the same midpoint as an endpoint and the two adjacent dab sections
+        // as quadratic controls, so their first derivatives match there.
+        transform.startControls[side] = Vector2 { start.x + (control.x - start.x) * (2.0f / 3.0f),
+            start.y + (control.y - start.y) * (2.0f / 3.0f) };
+        transform.endControls[side] = Vector2 { end.x + (control.x - end.x) * (2.0f / 3.0f),
+            end.y + (control.y - end.y) * (2.0f / 3.0f) };
+    }
+
+    bool dabRefinedTransform(const DabPoint* previous, const DabPoint& current,
+        const DabPoint* next, DabTransform& outTransform, float previousRadiusOverride,
+        float currentRadiusOverride, float nextRadiusOverride) const
+    {
+        if (!refinesDabJoints() || (!previous && !next)) {
+            return false;
+        }
+
+        const DabTransformSections currentSections
+            = dabTransformSections(current, currentRadiusOverride);
+        const DabTransformSections previousSections = previous
+            ? dabTransformSections(*previous, previousRadiusOverride)
+            : DabTransformSections {};
+        const DabTransformSections nextSections
+            = next ? dabTransformSections(*next, nextRadiusOverride) : DabTransformSections {};
+
+        for (int side = 0; side < 2; ++side) {
+            const Vector2 start = previous
+                ? midpoint(previousSections.center[side], currentSections.center[side])
+                : currentSections.trailing[side];
+            const Vector2 end = next
+                ? midpoint(currentSections.center[side], nextSections.center[side])
+                : currentSections.leading[side];
+            const int startIndex = side == 0 ? 0 : 3;
+            const int endIndex = side == 0 ? 1 : 2;
+            outTransform.guide[startIndex] = start;
+            outTransform.guide[endIndex] = end;
+            setQuadraticRail(outTransform, side, start, currentSections.center[side], end);
+        }
+        return true;
     }
 
     static DabQuad dabTransformSegmentQuad(
@@ -630,22 +684,23 @@ public:
         return { start0, end0, end1, start1 };
     }
 
-    static void dabTransformCoordinates(const DabTransform& transform, int segment,
-        int segmentCount, float localAlong, float localAcross, float& progress, float& canonicalX,
-        float& canonicalY)
+    static void dabTransformCoordinates(const DabTransform&, int segment, int segmentCount,
+        float localAlong, float localAcross, float& progress, float& canonicalX, float& canonicalY)
     {
         progress = (static_cast<float>(segment) + localAlong) / static_cast<float>(segmentCount);
-        const float along = transform.startAlong + (1.0f - 2.0f * transform.startAlong) * progress;
-        const float across
-            = transform.startAcross + (1.0f - 2.0f * transform.startAcross) * localAcross;
-        canonicalX = transform.alongX ? along : across;
-        canonicalY = transform.alongX ? across : along;
+        canonicalX = progress;
+        canonicalY = localAcross;
     }
 
     bool dabStretchedTransform(const DabPoint& previous, const DabPoint& current,
         const DabPoint* next, DabTransform& outTransform, float previousRadiusOverride = -1.0f,
         float currentRadiusOverride = -1.0f, float nextRadiusOverride = -1.0f) const
     {
+        if (refinesDabJoints()) {
+            return dabRefinedTransform(&previous, current, next, outTransform,
+                previousRadiusOverride, currentRadiusOverride, nextRadiusOverride);
+        }
+
         DabQuad stretched;
         if (!dabStretchedQuad(previous, current, next, stretched, previousRadiusOverride,
                 currentRadiusOverride, nextRadiusOverride)) {
@@ -663,51 +718,36 @@ public:
             stretched[endPair[1]], stretched[startPair[1]] };
 
         const DabQuad currentQuad = dabQuadCorners(current, currentRadiusOverride);
-        if (next && refinesDabJoints()) {
-            const DabJoint front
-                = dabJointEdge(current, *next, currentRadiusOverride, nextRadiusOverride);
-            const std::array<int, 2>& endControlPair = front.valid ? front.fromLeading : endPair;
-            for (int side = 0; side < 2; ++side) {
-                outTransform.startControls[side] = currentQuad[startPair[side]];
-                // The topological destination corner can differ from the
-                // current corner that contributed to this joint point. The
-                // latter is the Bezier control that makes both sides share a
-                // tangent at their exact midpoint joint.
-                outTransform.endControls[side] = currentQuad[endControlPair[side]];
-            }
-        } else {
-            const DabQuad previousQuad = dabQuadCorners(previous, previousRadiusOverride);
-            const auto interpolatedCorner = [&](int side, float t) {
-                const Vector2 start = previousQuad[back.fromLeading[side]];
-                const Vector2 end = currentQuad[endPair[side]];
-                const Vector2 startVector { start.x - previous.worldX, start.y - previous.worldY };
-                const Vector2 endVector { end.x - current.worldX, end.y - current.worldY };
-                const float startLength = std::hypot(startVector.x, startVector.y);
-                const float endLength = std::hypot(endVector.x, endVector.y);
-                float startAngle = std::atan2(startVector.y, startVector.x);
-                float angleDelta = std::atan2(endVector.y, endVector.x) - startAngle;
-                constexpr float kPi = 3.14159265358979323846f;
-                while (angleDelta > kPi)
-                    angleDelta -= 2.0f * kPi;
-                while (angleDelta < -kPi)
-                    angleDelta += 2.0f * kPi;
-                const float length = startLength + (endLength - startLength) * t;
-                const float angle = startAngle + angleDelta * t;
-                const float centerX = previous.worldX + (current.worldX - previous.worldX) * t;
-                const float centerY = previous.worldY + (current.worldY - previous.worldY) * t;
-                return Vector2 { centerX + std::cos(angle) * length,
-                    centerY + std::sin(angle) * length };
-            };
-            for (int side = 0; side < 2; ++side) {
-                // Rotate the actual corresponding corner vectors; selecting a
-                // fresh facing edge at an intermediate angle would introduce
-                // a discrete topology switch inside the transform.
-                outTransform.startControls[side] = interpolatedCorner(side, 1.0f / 3.0f);
-                outTransform.endControls[side] = interpolatedCorner(side, 2.0f / 3.0f);
-            }
+        const DabQuad previousQuad = dabQuadCorners(previous, previousRadiusOverride);
+        const auto interpolatedCorner = [&](int side, float t) {
+            const Vector2 start = previousQuad[back.fromLeading[side]];
+            const Vector2 end = currentQuad[endPair[side]];
+            const Vector2 startVector { start.x - previous.worldX, start.y - previous.worldY };
+            const Vector2 endVector { end.x - current.worldX, end.y - current.worldY };
+            const float startLength = std::hypot(startVector.x, startVector.y);
+            const float endLength = std::hypot(endVector.x, endVector.y);
+            float startAngle = std::atan2(startVector.y, startVector.x);
+            float angleDelta = std::atan2(endVector.y, endVector.x) - startAngle;
+            constexpr float kPi = 3.14159265358979323846f;
+            while (angleDelta > kPi)
+                angleDelta -= 2.0f * kPi;
+            while (angleDelta < -kPi)
+                angleDelta += 2.0f * kPi;
+            const float length = startLength + (endLength - startLength) * t;
+            const float angle = startAngle + angleDelta * t;
+            const float centerX = previous.worldX + (current.worldX - previous.worldX) * t;
+            const float centerY = previous.worldY + (current.worldY - previous.worldY) * t;
+            return Vector2 { centerX + std::cos(angle) * length,
+                centerY + std::sin(angle) * length };
+        };
+        for (int side = 0; side < 2; ++side) {
+            // Rotate the actual corresponding corner vectors; selecting a
+            // fresh facing edge at an intermediate angle would introduce
+            // a discrete topology switch inside the transform.
+            outTransform.startControls[side] = interpolatedCorner(side, 1.0f / 3.0f);
+            outTransform.endControls[side] = interpolatedCorner(side, 2.0f / 3.0f);
         }
 
-        finishDabTransformMapping(outTransform, startPair);
         return true;
     }
 
@@ -715,25 +755,8 @@ public:
         DabTransform& outTransform, float currentRadiusOverride = -1.0f,
         float nextRadiusOverride = -1.0f) const
     {
-        DabQuad stretched;
-        if (!dabLeadingRefinedQuad(
-                current, next, stretched, currentRadiusOverride, nextRadiusOverride)) {
-            return false;
-        }
-        const DabJoint front
-            = dabJointEdge(current, next, currentRadiusOverride, nextRadiusOverride);
-        const std::array<int, 2> endPair = front.fromLeading;
-        const std::array<int, 2> startPair = oppositeDabQuadPair(endPair);
-        outTransform.guide = { stretched[startPair[0]], stretched[endPair[0]],
-            stretched[endPair[1]], stretched[startPair[1]] };
-
-        const DabQuad currentQuad = dabQuadCorners(current, currentRadiusOverride);
-        for (int side = 0; side < 2; ++side) {
-            outTransform.startControls[side] = currentQuad[startPair[side]];
-            outTransform.endControls[side] = currentQuad[endPair[side]];
-        }
-        finishDabTransformMapping(outTransform, startPair);
-        return true;
+        return dabRefinedTransform(nullptr, current, &next, outTransform, -1.0f,
+            currentRadiusOverride, nextRadiusOverride);
     }
     void setDabXScale(float v) { m_dabXScale = std::clamp(v, 0.0f, 1.0f); }
     void setDabYScale(float v) { m_dabYScale = std::clamp(v, 0.0f, 1.0f); }
@@ -3694,10 +3717,9 @@ private:
                         float coverage = 0.0f;
 
                         if (connectFromPrevious) {
-                            // The segmented transform IS this dab: it runs from the
-                            // previous dab's leading edge to this dab's own, so
-                            // the unstretched shape is never stamped on top and
-                            // no extra shape fills the gap.
+                            // The segmented transform IS this dab's assigned
+                            // ribbon span, so the unstretched shape is never
+                            // stamped on top and no extra shape fills the gap.
                             float st[2] {};
                             int hitSegment = -1;
                             for (int segment = 0; segment < transformSegmentCount; ++segment) {

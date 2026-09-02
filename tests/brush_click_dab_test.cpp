@@ -5,6 +5,7 @@
 #include <catch2/catch_approx.hpp>
 #include <catch2/catch_test_macros.hpp>
 
+#include <algorithm>
 #include <array>
 #include <cmath>
 #include <utility>
@@ -411,9 +412,8 @@ TEST_CASE("a refined joint stays shared through a right-angle turn", "[brush][st
         CHECK(carriesPoint(arriving, point));
     }
 
-    // Cubic transform rails also share the derivative at that joint. The
-    // outgoing control is the current leading corner, the incoming control is
-    // the next trailing corner, and the joint is their exact midpoint.
+    // Cubic transform rails also share the derivative at that joint. They are
+    // the exact cubic representation of adjacent quadratic dab-spline spans.
     aether::TileBrush::DabPoint following = next;
     following.worldY = 60.0f;
     aether::TileBrush::DabTransform leavingTransform;
@@ -544,6 +544,69 @@ TEST_CASE("transform segments follow a smooth rotated rail without adding dabs",
 
     brush.setConnectDabs(false);
     CHECK(brush.transformSegments() == 1);
+}
+
+TEST_CASE(
+    "refined transform segments converge on the curved dab spline", "[brush][stroke][geometry]")
+{
+    using namespace ruwa::core::brushes;
+
+    BrushSettingsData settings;
+    settings.connectDabs = true;
+    settings.refineDabJoints = true;
+
+    aether::TileBrush brush;
+    brush.setBrushSettings(settings);
+
+    aether::TileBrush::DabPoint previous;
+    previous.worldX = 0.0f;
+    previous.worldY = 0.0f;
+    previous.radius = 4.0f;
+
+    aether::TileBrush::DabPoint current = previous;
+    current.worldX = 20.0f;
+
+    aether::TileBrush::DabPoint next = current;
+    next.worldY = 20.0f;
+    next.angleDegrees = 90.0f;
+
+    aether::TileBrush::DabTransform transform;
+    REQUIRE(brush.dabStretchedTransform(previous, current, &next, transform));
+
+    constexpr float sampleT = 0.25f;
+    const aether::Vector2 exact = aether::TileBrush::cubicRailPoint(transform.guide[0],
+        transform.startControls[0], transform.endControls[0], transform.guide[1], sampleT);
+    const auto approximateAt = [&](int segmentCount) {
+        const float scaled = sampleT * static_cast<float>(segmentCount);
+        const int segment = std::min(static_cast<int>(scaled), segmentCount - 1);
+        const float local = scaled - static_cast<float>(segment);
+        const aether::TileBrush::DabQuad patch
+            = aether::TileBrush::dabTransformSegmentQuad(transform, segment, segmentCount);
+        return aether::Vector2 { patch[0].x + (patch[1].x - patch[0].x) * local,
+            patch[0].y + (patch[1].y - patch[0].y) * local };
+    };
+    const aether::Vector2 withTwo = approximateAt(2);
+    const aether::Vector2 withTen = approximateAt(10);
+    const float twoError = std::hypot(withTwo.x - exact.x, withTwo.y - exact.y);
+    const float tenError = std::hypot(withTen.x - exact.x, withTen.y - exact.y);
+
+    CHECK(twoError > 0.01f);
+    CHECK(tenError < twoError);
+}
+
+TEST_CASE("segmented dab coordinates stay continuous along the transformed ribbon",
+    "[brush][stroke][geometry]")
+{
+    aether::TileBrush::DabTransform transform;
+    float progress = 0.0f;
+    float canonicalX = 0.0f;
+    float canonicalY = 0.0f;
+    aether::TileBrush::dabTransformCoordinates(
+        transform, 1, 4, 0.5f, 0.25f, progress, canonicalX, canonicalY);
+
+    CHECK(progress == Catch::Approx(0.375f));
+    CHECK(canonicalX == Catch::Approx(0.375f));
+    CHECK(canonicalY == Catch::Approx(0.25f));
 }
 
 TEST_CASE(

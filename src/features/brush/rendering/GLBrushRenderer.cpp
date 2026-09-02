@@ -525,9 +525,9 @@ const QString kBatchRebuildFrag = QStringLiteral(
     "        float edgeFactor = 0.0;\n"
     "        float falloff = 0.0;\n"
     "        if (uDabHasPrevious[i] != 0) {\n"
-    // The segmented surface IS this dab: it runs from the previous dab's
-    // leading edge to this dab's own, so the unstretched shape is never
-    // stamped on top of it and nothing extra fills the gap.
+    // The segmented surface IS this dab's assigned ribbon span, so the
+    // unstretched shape is never stamped on top of it and nothing extra fills
+    // the gap.
     "            vec4 quad01 = uStretchQuad01[i];\n"
     "            vec4 quad23 = uStretchQuad23[i];\n"
     // In this branch only params.y (hardness) remains semantically live. The
@@ -537,10 +537,6 @@ const QString kBatchRebuildFrag = QStringLiteral(
     "            vec2 startControl1 = vec2(dabParams.x, dabParams.z);\n"
     "            vec2 endControl0 = vec2(dabParams.w, uPreviousDabParams[i].x);\n"
     "            vec2 endControl1 = uPreviousDabParams[i].zw;\n"
-    "            int transformFlags = uDabHasPrevious[i] - 1;\n"
-    "            bool alongX = (transformFlags & 1) != 0;\n"
-    "            float startAlong = float((transformFlags >> 1) & 1);\n"
-    "            float startAcross = float((transformFlags >> 2) & 1);\n"
     "            int segmentCount = clamp(uTransformSegments, 1, 10);\n"
     "            vec2 stretchST = vec2(0.0);\n"
     "            int hitSegment = -1;\n"
@@ -561,9 +557,7 @@ const QString kBatchRebuildFrag = QStringLiteral(
     "            }\n"
     "            if (hitSegment < 0) continue;\n"
     "            float progress = (float(hitSegment) + stretchST.x) / float(segmentCount);\n"
-    "            float along = mix(startAlong, 1.0 - startAlong, progress);\n"
-    "            float across = mix(startAcross, 1.0 - startAcross, stretchST.y);\n"
-    "            vec2 canonicalST = alongX ? vec2(along, across) : vec2(across, along);\n"
+    "            vec2 canonicalST = vec2(progress, stretchST.y);\n"
     "            dabParams = mix(uPreviousDabParams[i], dabParams, progress);\n"
     "            dabColor = mix(uPreviousDabColor[i], dabColor, progress);\n"
     "            vec4 contentBounds = dabContentBounds(dabParams.y);\n"
@@ -4747,10 +4741,7 @@ void GLBrushRenderer::renderDabBatchForTile(const TileBrush& brush,
                     // edge forward, and interpolates from itself.
                     hasStretch = brush.dabLeadingRefinedTransform(dab, *stretchEnd, transform);
                 }
-                const int transformFlags = (transform.alongX ? 1 : 0)
-                    | (transform.startAlong > 0.5f ? 2 : 0)
-                    | (transform.startAcross > 0.5f ? 4 : 0);
-                hasPrevious[i] = hasStretch ? transformFlags + 1 : 0;
+                hasPrevious[i] = hasStretch ? 1 : 0;
                 const TileBrush::DabPoint& previous
                     = (stretchStart && hasStretch) ? *stretchStart : dab;
                 previousParams[vec4Base + 0] = previous.radius;
