@@ -27,7 +27,22 @@ namespace {
 
 // Current + previous dab state for connected ribbons must fit the OpenGL 4.5
 // minimum fragment-uniform budget on every supported GPU.
-constexpr int kRebuildBatchMaxDabs = 32;
+constexpr int kPlainBatchMaxDabs = 64;
+constexpr int kConnectedBatchMaxDabs = 32;
+
+QString batchShaderVariant(const QString& source, bool connectedDabs)
+{
+    constexpr auto versionLine = "#version 450 core\n";
+    Q_ASSERT(source.startsWith(QLatin1String(versionLine)));
+    const QString defines = QStringLiteral("#define RUWA_CONNECTED_DABS %1\n"
+                                           "#define RUWA_BATCH_MAX_DABS %2\n")
+                                .arg(connectedDabs ? 1 : 0)
+                                .arg(connectedDabs ? kConnectedBatchMaxDabs
+                                                   : kPlainBatchMaxDabs);
+    return source.left(static_cast<qsizetype>(std::char_traits<char>::length(versionLine)))
+        + defines
+        + source.mid(static_cast<qsizetype>(std::char_traits<char>::length(versionLine)));
+}
 
 /// Bumps a stroke buffer's content version when a stamp entry point returns.
 /// Dabs are rendered straight into the tiles' GPU textures, which no TileGrid
@@ -303,8 +318,8 @@ const QString kBatchRebuildVert
                      "uniform vec2 uQuadMin;\n"
                      "uniform vec2 uQuadMax;\n"
                      "uniform int uInstancedDabs;\n"
-                     "uniform vec2 uDabCenter[32];\n"
-                     "uniform float uDabExtent[32];\n"
+                     "uniform vec2 uDabCenter[RUWA_BATCH_MAX_DABS];\n"
+                     "uniform float uDabExtent[RUWA_BATCH_MAX_DABS];\n"
                      "out vec2 fragPixelCoord;\n"
                      "flat out int fragDabIndex;\n"
                      "vec2 positions[6] = vec2[](\n"
@@ -331,15 +346,17 @@ const QString kBatchRebuildVert
 const QString kBatchRebuildFrag = QStringLiteral(
     "#version 450 core\n"
     "uniform int uDabCount;\n"
-    "uniform vec2 uDabCenter[32];\n"
-    "uniform vec4 uDabParams[32]; // radius, hardness, roundness, angle\n"
-    "uniform vec4 uDabColor[32];  // premultiplied rgba\n"
-    "uniform vec4 uPreviousDabParams[32];\n"
-    "uniform vec4 uPreviousDabColor[32];\n"
-    "uniform vec4 uStretchQuad01[32]; // q0.xy, q1.xy\n"
-    "uniform vec4 uStretchQuad23[32]; // q2.xy, q3.xy\n"
+    "uniform vec2 uDabCenter[RUWA_BATCH_MAX_DABS];\n"
+    "uniform vec4 uDabParams[RUWA_BATCH_MAX_DABS]; // radius, hardness, roundness, angle\n"
+    "uniform vec4 uDabColor[RUWA_BATCH_MAX_DABS];  // premultiplied rgba\n"
+    "#if RUWA_CONNECTED_DABS\n"
+    "uniform vec4 uPreviousDabParams[RUWA_BATCH_MAX_DABS];\n"
+    "uniform vec4 uPreviousDabColor[RUWA_BATCH_MAX_DABS];\n"
+    "uniform vec4 uStretchQuad01[RUWA_BATCH_MAX_DABS]; // q0.xy, q1.xy\n"
+    "uniform vec4 uStretchQuad23[RUWA_BATCH_MAX_DABS]; // q2.xy, q3.xy\n"
     "uniform int uTransformSegments;\n"
-    "uniform int uDabHasPrevious[32];\n"
+    "uniform int uDabHasPrevious[RUWA_BATCH_MAX_DABS];\n"
+    "#endif\n"
     "uniform int uBlendMode; // 0=src-over, 1=max\n"
     "uniform sampler2D uMaskTexture;\n"
     "uniform sampler2D uTextureTile;\n"
@@ -350,8 +367,10 @@ const QString kBatchRebuildFrag = QStringLiteral(
     "uniform int uUseDabShapeTexture;\n"
     "uniform vec2 uDabShapeScale;\n"
     "uniform float uDabShapeRotationRad;\n"
+    "#if RUWA_CONNECTED_DABS\n"
     "uniform vec4 uDabContentBounds; // minX, minY, maxX, maxY\n"
     "uniform vec4 uDabSoftContentBounds;\n"
+    "#endif\n"
     "uniform float uTextureEdgeBoost;\n"
     // Shaping of the sampled grain. The procedural texture cache stores raw
     // grain so these four stay out of textureRevision(); duplicated verbatim in
@@ -432,13 +451,16 @@ const QString kBatchRebuildFrag = QStringLiteral(
     "    float softness = max(1.0 - clamp(hardness, 0.0, 1.0), 0.0);\n"
     "    return mix(baseAlpha, softAlpha, softness);\n"
     "}\n"
+    "#if RUWA_CONNECTED_DABS\n"
     "vec4 dabContentBounds(float hardness) {\n"
     "    float softness = 1.0 - clamp(hardness, 0.0, 1.0);\n"
     "    return mix(uDabContentBounds, uDabSoftContentBounds, softness);\n"
     "}\n"
+    "#endif\n"
     // This is the same analytical inverse-bilinear mapping used by Free
     // Corners. A connected dab is one transformed surface split into adjacent
     // patches, not another row of synthetic paint dabs inserted into the gap.
+    "#if RUWA_CONNECTED_DABS\n"
     "float cross2d(vec2 a, vec2 b) { return a.x*b.y - a.y*b.x; }\n"
     "bool tryStretchST(vec2 E, vec2 F, vec2 G, vec2 h, float t, out vec2 st) {\n"
     "    const float margin = 0.002;\n"
@@ -486,6 +508,7 @@ const QString kBatchRebuildFrag = QStringLiteral(
     "    return start * (u*u*u) + startControl * (3.0*u*u*t)\n"
     "         + endControl * (3.0*u*t*t) + end * (t*t*t);\n"
     "}\n"
+    "#endif\n"
     "float shapeCoverage(vec2 shapeLocal, float hardness, out float edgeFactor) {\n"
     "    edgeFactor = 0.0;\n"
     "    if (abs(shapeLocal.x) > 1.0 || abs(shapeLocal.y) > 1.0) return 0.0;\n"
@@ -517,13 +540,14 @@ const QString kBatchRebuildFrag = QStringLiteral(
     "    vec4 accum = vec4(0.0);\n"
     "    int firstDab = (fragDabIndex >= 0) ? fragDabIndex : 0;\n"
     "    int lastDab = (fragDabIndex >= 0) ? (fragDabIndex + 1) : uDabCount;\n"
-    "    for (int i = firstDab; i < 32; ++i) {\n"
+    "    for (int i = firstDab; i < RUWA_BATCH_MAX_DABS; ++i) {\n"
     "        if (i >= lastDab) break;\n"
     "        vec2 center = uDabCenter[i];\n"
     "        vec4 dabParams = uDabParams[i];\n"
     "        vec4 dabColor = uDabColor[i];\n"
     "        float edgeFactor = 0.0;\n"
     "        float falloff = 0.0;\n"
+    "#if RUWA_CONNECTED_DABS\n"
     "        if (uDabHasPrevious[i] != 0) {\n"
     // The segmented surface IS this dab's assigned ribbon span, so the
     // unstretched shape is never stamped on top of it and nothing extra fills
@@ -565,7 +589,9 @@ const QString kBatchRebuildFrag = QStringLiteral(
     "                mix(contentBounds.x, contentBounds.z, canonicalST.x),\n"
     "                mix(contentBounds.y, contentBounds.w, canonicalST.y));\n"
     "            falloff = shapeCoverage(stretchShape, dabParams.y, edgeFactor);\n"
-    "        } else {\n"
+    "        } else\n"
+    "#endif\n"
+    "        {\n"
     "            vec2 delta = fragPixelCoord - center;\n"
     "            float radius = dabParams.x;\n"
     "            float hardness = dabParams.y;\n"
@@ -1770,11 +1796,23 @@ Result<void> GLBrushRenderer::initialize(const QString& shaderDir)
         return formatCopyResult;
     }
 
-    m_rebuildBatchProgram = std::make_unique<GLShaderProgram>(m_gl);
-    auto batchResult = m_rebuildBatchProgram->loadFromSource(kBatchRebuildVert, kBatchRebuildFrag);
-    if (!batchResult) {
-        return batchResult;
+    m_plainBatchProgram = std::make_unique<GLShaderProgram>(m_gl);
+    auto plainBatchResult = m_plainBatchProgram->loadFromSource(
+        batchShaderVariant(kBatchRebuildVert, false), batchShaderVariant(kBatchRebuildFrag, false));
+    if (!plainBatchResult) {
+        return { plainBatchResult.error().code,
+            "Plain dab batch: " + plainBatchResult.error().message };
     }
+    m_plainBatchUniforms = resolveDabBatchUniforms(*m_plainBatchProgram, false);
+
+    m_connectedBatchProgram = std::make_unique<GLShaderProgram>(m_gl);
+    auto connectedBatchResult = m_connectedBatchProgram->loadFromSource(
+        batchShaderVariant(kBatchRebuildVert, true), batchShaderVariant(kBatchRebuildFrag, true));
+    if (!connectedBatchResult) {
+        return { connectedBatchResult.error().code,
+            "Connected dab batch: " + connectedBatchResult.error().message };
+    }
+    m_connectedBatchUniforms = resolveDabBatchUniforms(*m_connectedBatchProgram, true);
 
     static const QString flattenVert
         = QStringLiteral("#version 450 core\n"
@@ -2123,7 +2161,10 @@ void GLBrushRenderer::shutdown()
     m_blurPremaskProgram.reset();
     m_blurDownsampleMaskedProgram.reset();
     m_formatCopyProgram.reset();
-    m_rebuildBatchProgram.reset();
+    m_plainBatchProgram.reset();
+    m_connectedBatchProgram.reset();
+    m_plainBatchUniforms = {};
+    m_connectedBatchUniforms = {};
     m_flattenProgram.reset();
 
     for (auto& [key, gpuTile] : m_proceduralTextureGpuTiles) {
@@ -3400,7 +3441,14 @@ bool GLBrushRenderer::stampDabSegmentGPU(TileGrid& strokeBuffer, GLTileRenderer*
     const TileBrush::DabPoint* previousDab, const TileBrush::DabPoint* nextDab)
 {
     const StrokeBufferVersionBump versionBump { strokeBuffer };
-    if (!m_initialized || !m_rebuildBatchProgram || !tileRenderer)
+    const bool connectedDabs = brush.connectsDabs();
+    GLShaderProgram* batchProgram
+        = connectedDabs ? m_connectedBatchProgram.get() : m_plainBatchProgram.get();
+    const DabBatchUniforms& batchUniforms
+        = connectedDabs ? m_connectedBatchUniforms : m_plainBatchUniforms;
+    const size_t maxBatchDabs = static_cast<size_t>(
+        connectedDabs ? kConnectedBatchMaxDabs : kPlainBatchMaxDabs);
+    if (!m_initialized || !batchProgram || !tileRenderer)
         return false;
     if (dabs.empty())
         return true;
@@ -3499,48 +3547,43 @@ bool GLBrushRenderer::stampDabSegmentGPU(TileGrid& strokeBuffer, GLTileRenderer*
     m_gl->glBindVertexArray(m_emptyVAO);
     m_gl->glEnable(GL_BLEND);
 
-    m_rebuildBatchProgram->use();
-    m_rebuildBatchProgram->setUniform("uMaskTexture", 1);
-    m_rebuildBatchProgram->setUniform("uTextureTile", 2);
-    m_rebuildBatchProgram->setUniform("uUseMask", useSelectionMask ? 1 : 0);
-    m_rebuildBatchProgram->setUniform(
+    batchProgram->use();
+    batchProgram->setUniform("uMaskTexture", 1);
+    batchProgram->setUniform("uTextureTile", 2);
+    batchProgram->setUniform("uUseMask", useSelectionMask ? 1 : 0);
+    batchProgram->setUniform(
         "uMaskAffectsAlpha", brush.selectionMaskAffectsAlpha() ? 1 : 0);
     const bool useTexture = brush.usesProceduralTexture();
-    m_rebuildBatchProgram->setUniform("uUseTexture", useTexture ? 1 : 0);
+    batchProgram->setUniform("uUseTexture", useTexture ? 1 : 0);
     const bool useDabShape = (brush.dabType() > 0);
-    m_rebuildBatchProgram->setUniform("uUseDabShapeTexture", useDabShape ? 1 : 0);
-    m_rebuildBatchProgram->setUniform("uTextureEdgeBoost", brush.textureEdgeBoost());
-    m_rebuildBatchProgram->setUniform("uTextureContrast", brush.textureContrast());
-    m_rebuildBatchProgram->setUniform("uTextureDepth", brush.textureDepth());
-    m_rebuildBatchProgram->setUniform("uTextureBlend", brush.textureBlend());
-    m_rebuildBatchProgram->setUniform("uTextureAmount", brush.textureAmount());
-    m_rebuildBatchProgram->setUniform("uDabShapeScale", brush.dabXScale(), brush.dabYScale());
-    m_rebuildBatchProgram->setUniform(
+    batchProgram->setUniform("uUseDabShapeTexture", useDabShape ? 1 : 0);
+    batchProgram->setUniform("uTextureEdgeBoost", brush.textureEdgeBoost());
+    batchProgram->setUniform("uTextureContrast", brush.textureContrast());
+    batchProgram->setUniform("uTextureDepth", brush.textureDepth());
+    batchProgram->setUniform("uTextureBlend", brush.textureBlend());
+    batchProgram->setUniform("uTextureAmount", brush.textureAmount());
+    batchProgram->setUniform("uDabShapeScale", brush.dabXScale(), brush.dabYScale());
+    batchProgram->setUniform(
         "uDabShapeRotationRad", brush.dabRotation() * (3.14159265358979323846f / 180.0f));
-    m_rebuildBatchProgram->setUniform(
-        "uDabContentBounds", brush.dabShapeContentBounds(1.0f).asArray());
-    m_rebuildBatchProgram->setUniform(
-        "uDabSoftContentBounds", brush.dabShapeContentBounds(0.0f).asArray());
-    m_rebuildBatchProgram->setUniform("uInvTileSize", 1.0f / static_cast<float>(TILE_SIZE));
-    m_rebuildBatchProgram->setUniform("uQuantizeTo8Bit", quantizeTo8BitFlag(strokeBuffer));
+    if (connectedDabs) {
+        batchProgram->setUniform(
+            "uDabContentBounds", brush.dabShapeContentBounds(1.0f).asArray());
+        batchProgram->setUniform(
+            "uDabSoftContentBounds", brush.dabShapeContentBounds(0.0f).asArray());
+    }
+    batchProgram->setUniform("uInvTileSize", 1.0f / static_cast<float>(TILE_SIZE));
+    batchProgram->setUniform("uQuantizeTo8Bit", quantizeTo8BitFlag(strokeBuffer));
 
     if (useDabShape) {
-        m_rebuildBatchProgram->setUniform("uDabShapeTexture", 3);
+        batchProgram->setUniform("uDabShapeTexture", 3);
         const GLuint dabTexId = resolveDabTextureId(m_gl, brush);
         if (dabTexId != 0) {
             m_gl->glBindTextureUnit(3, dabTexId);
         }
     }
 
-    const GLuint batchProgram = m_rebuildBatchProgram->handle();
-    const DabBatchUniforms batchUniforms = resolveDabBatchUniforms();
-    // Per-tile now, so the locations are resolved once here instead of going
-    // through the name-keyed setUniform on every tile.
-    const GLint locQuadMin = m_gl->glGetUniformLocation(batchProgram, "uQuadMin");
-    const GLint locQuadMax = m_gl->glGetUniformLocation(batchProgram, "uQuadMax");
-
     DabBatchScratch batchScratch;
-    batchScratch.resizeForMaxDabs(static_cast<size_t>(kRebuildBatchMaxDabs));
+    batchScratch.resizeForMaxDabs(maxBatchDabs, connectedDabs);
 
     for (const auto& [key, batch] : tileDabs) {
         const std::vector<uint32_t>& indices = batch.indices;
@@ -3587,13 +3630,13 @@ bool GLBrushRenderer::stampDabSegmentGPU(TileGrid& strokeBuffer, GLTileRenderer*
             = std::min(static_cast<float>(TILE_SIZE), std::ceil(batch.maxX) + 1.0f);
         const float quadMaxY
             = std::min(static_cast<float>(TILE_SIZE), std::ceil(batch.maxY) + 1.0f);
-        m_gl->glUniform2f(locQuadMin, quadMinX, quadMinY);
-        m_gl->glUniform2f(locQuadMax, quadMaxX, quadMaxY);
+        m_gl->glUniform2f(batchUniforms.quadMin, quadMinX, quadMinY);
+        m_gl->glUniform2f(batchUniforms.quadMax, quadMaxX, quadMaxY);
 
         const float tileOriginX = static_cast<float>(key.x) * static_cast<float>(TILE_SIZE);
         const float tileOriginY = static_cast<float>(key.y) * static_cast<float>(TILE_SIZE);
         renderDabBatchForTile(brush, dabs, indices, tileOriginX, tileOriginY, batchUniforms,
-            batchScratch, previousDab, nextDab);
+            batchScratch, maxBatchDabs, previousDab, nextDab);
 
         tile.clearDirty();
         strokeBuffer.removeDirty(key);
@@ -3620,7 +3663,14 @@ void GLBrushRenderer::rebuildStrokeBufferFromDabsGPU(TileGrid& strokeBuffer,
     bool useSelectionMask, uint32_t canvasWidth, uint32_t canvasHeight)
 {
     const StrokeBufferVersionBump versionBump { strokeBuffer };
-    if (!m_initialized || !m_rebuildBatchProgram || !tileRenderer)
+    const bool connectedDabs = brush.connectsDabs();
+    GLShaderProgram* batchProgram
+        = connectedDabs ? m_connectedBatchProgram.get() : m_plainBatchProgram.get();
+    const DabBatchUniforms& batchUniforms
+        = connectedDabs ? m_connectedBatchUniforms : m_plainBatchUniforms;
+    const size_t maxBatchDabs = static_cast<size_t>(
+        connectedDabs ? kConnectedBatchMaxDabs : kPlainBatchMaxDabs);
+    if (!m_initialized || !batchProgram || !tileRenderer)
         return;
     // Rebuilding the stroke from scratch invalidates any in-flight smudge carry.
     m_smudgePrevValid = false;
@@ -3728,46 +3778,46 @@ void GLBrushRenderer::rebuildStrokeBufferFromDabsGPU(TileGrid& strokeBuffer,
     m_gl->glBindVertexArray(m_emptyVAO);
     m_gl->glEnable(GL_BLEND);
 
-    m_rebuildBatchProgram->use();
-    m_rebuildBatchProgram->setUniform("uMaskTexture", 1);
-    m_rebuildBatchProgram->setUniform("uTextureTile", 2);
-    m_rebuildBatchProgram->setUniform("uUseMask", useSelectionMask ? 1 : 0);
-    m_rebuildBatchProgram->setUniform(
+    batchProgram->use();
+    batchProgram->setUniform("uMaskTexture", 1);
+    batchProgram->setUniform("uTextureTile", 2);
+    batchProgram->setUniform("uUseMask", useSelectionMask ? 1 : 0);
+    batchProgram->setUniform(
         "uMaskAffectsAlpha", brush.selectionMaskAffectsAlpha() ? 1 : 0);
     const bool useTexture = brush.usesProceduralTexture();
-    m_rebuildBatchProgram->setUniform("uUseTexture", useTexture ? 1 : 0);
+    batchProgram->setUniform("uUseTexture", useTexture ? 1 : 0);
     const bool useDabShape = (brush.dabType() > 0);
-    m_rebuildBatchProgram->setUniform("uUseDabShapeTexture", useDabShape ? 1 : 0);
-    m_rebuildBatchProgram->setUniform("uTextureEdgeBoost", brush.textureEdgeBoost());
-    m_rebuildBatchProgram->setUniform("uTextureContrast", brush.textureContrast());
-    m_rebuildBatchProgram->setUniform("uTextureDepth", brush.textureDepth());
-    m_rebuildBatchProgram->setUniform("uTextureBlend", brush.textureBlend());
-    m_rebuildBatchProgram->setUniform("uTextureAmount", brush.textureAmount());
-    m_rebuildBatchProgram->setUniform("uDabShapeScale", brush.dabXScale(), brush.dabYScale());
-    m_rebuildBatchProgram->setUniform(
+    batchProgram->setUniform("uUseDabShapeTexture", useDabShape ? 1 : 0);
+    batchProgram->setUniform("uTextureEdgeBoost", brush.textureEdgeBoost());
+    batchProgram->setUniform("uTextureContrast", brush.textureContrast());
+    batchProgram->setUniform("uTextureDepth", brush.textureDepth());
+    batchProgram->setUniform("uTextureBlend", brush.textureBlend());
+    batchProgram->setUniform("uTextureAmount", brush.textureAmount());
+    batchProgram->setUniform("uDabShapeScale", brush.dabXScale(), brush.dabYScale());
+    batchProgram->setUniform(
         "uDabShapeRotationRad", brush.dabRotation() * (3.14159265358979323846f / 180.0f));
-    m_rebuildBatchProgram->setUniform(
-        "uDabContentBounds", brush.dabShapeContentBounds(1.0f).asArray());
-    m_rebuildBatchProgram->setUniform(
-        "uDabSoftContentBounds", brush.dabShapeContentBounds(0.0f).asArray());
-    m_rebuildBatchProgram->setUniform("uInvTileSize", 1.0f / static_cast<float>(TILE_SIZE));
-    m_rebuildBatchProgram->setUniform("uQuantizeTo8Bit", quantizeTo8BitFlag(strokeBuffer));
-    m_rebuildBatchProgram->setUniform("uQuadMin", 0.0f, 0.0f);
-    m_rebuildBatchProgram->setUniform(
+    if (connectedDabs) {
+        batchProgram->setUniform(
+            "uDabContentBounds", brush.dabShapeContentBounds(1.0f).asArray());
+        batchProgram->setUniform(
+            "uDabSoftContentBounds", brush.dabShapeContentBounds(0.0f).asArray());
+    }
+    batchProgram->setUniform("uInvTileSize", 1.0f / static_cast<float>(TILE_SIZE));
+    batchProgram->setUniform("uQuantizeTo8Bit", quantizeTo8BitFlag(strokeBuffer));
+    batchProgram->setUniform("uQuadMin", 0.0f, 0.0f);
+    batchProgram->setUniform(
         "uQuadMax", static_cast<float>(TILE_SIZE), static_cast<float>(TILE_SIZE));
 
     if (useDabShape) {
-        m_rebuildBatchProgram->setUniform("uDabShapeTexture", 3);
+        batchProgram->setUniform("uDabShapeTexture", 3);
         const GLuint dabTexId = resolveDabTextureId(m_gl, brush);
         if (dabTexId != 0) {
             m_gl->glBindTextureUnit(3, dabTexId);
         }
     }
 
-    const DabBatchUniforms batchUniforms = resolveDabBatchUniforms();
-
     DabBatchScratch batchScratch;
-    batchScratch.resizeForMaxDabs(static_cast<size_t>(kRebuildBatchMaxDabs));
+    batchScratch.resizeForMaxDabs(maxBatchDabs, connectedDabs);
 
     for (const auto& key : touched) {
         auto tileIt = tileDabs.find(key);
@@ -3805,8 +3855,8 @@ void GLBrushRenderer::rebuildStrokeBufferFromDabsGPU(TileGrid& strokeBuffer,
         const float tileOriginX = static_cast<float>(key.x) * static_cast<float>(TILE_SIZE);
         const float tileOriginY = static_cast<float>(key.y) * static_cast<float>(TILE_SIZE);
 
-        renderDabBatchForTile(
-            brush, dabs, tileIt->second, tileOriginX, tileOriginY, batchUniforms, batchScratch);
+        renderDabBatchForTile(brush, dabs, tileIt->second, tileOriginX, tileOriginY, batchUniforms,
+            batchScratch, maxBatchDabs);
 
         tile.clearDirty();
         strokeBuffer.removeDirty(key);
@@ -3847,7 +3897,14 @@ void GLBrushRenderer::rebuildStrokeBufferRangeFromDabsGPU(TileGrid& strokeBuffer
     TileGrid* selectionMask, bool useSelectionMask, uint32_t canvasWidth, uint32_t canvasHeight)
 {
     const StrokeBufferVersionBump versionBump { strokeBuffer };
-    if (!m_initialized || !m_rebuildBatchProgram || !tileRenderer)
+    const bool connectedDabs = brush.connectsDabs();
+    GLShaderProgram* batchProgram
+        = connectedDabs ? m_connectedBatchProgram.get() : m_plainBatchProgram.get();
+    const DabBatchUniforms& batchUniforms
+        = connectedDabs ? m_connectedBatchUniforms : m_plainBatchUniforms;
+    const size_t maxBatchDabs = static_cast<size_t>(
+        connectedDabs ? kConnectedBatchMaxDabs : kPlainBatchMaxDabs);
+    if (!m_initialized || !batchProgram || !tileRenderer)
         return;
     if (dabCount == 0 || startDabIndex >= dabs.size())
         return;
@@ -3981,46 +4038,46 @@ void GLBrushRenderer::rebuildStrokeBufferRangeFromDabsGPU(TileGrid& strokeBuffer
     m_gl->glBindVertexArray(m_emptyVAO);
     m_gl->glEnable(GL_BLEND);
 
-    m_rebuildBatchProgram->use();
-    m_rebuildBatchProgram->setUniform("uMaskTexture", 1);
-    m_rebuildBatchProgram->setUniform("uTextureTile", 2);
-    m_rebuildBatchProgram->setUniform("uUseMask", useSelectionMask ? 1 : 0);
-    m_rebuildBatchProgram->setUniform(
+    batchProgram->use();
+    batchProgram->setUniform("uMaskTexture", 1);
+    batchProgram->setUniform("uTextureTile", 2);
+    batchProgram->setUniform("uUseMask", useSelectionMask ? 1 : 0);
+    batchProgram->setUniform(
         "uMaskAffectsAlpha", brush.selectionMaskAffectsAlpha() ? 1 : 0);
     const bool useTexture = brush.usesProceduralTexture();
-    m_rebuildBatchProgram->setUniform("uUseTexture", useTexture ? 1 : 0);
+    batchProgram->setUniform("uUseTexture", useTexture ? 1 : 0);
     const bool useDabShape = (brush.dabType() > 0);
-    m_rebuildBatchProgram->setUniform("uUseDabShapeTexture", useDabShape ? 1 : 0);
-    m_rebuildBatchProgram->setUniform("uTextureEdgeBoost", brush.textureEdgeBoost());
-    m_rebuildBatchProgram->setUniform("uTextureContrast", brush.textureContrast());
-    m_rebuildBatchProgram->setUniform("uTextureDepth", brush.textureDepth());
-    m_rebuildBatchProgram->setUniform("uTextureBlend", brush.textureBlend());
-    m_rebuildBatchProgram->setUniform("uTextureAmount", brush.textureAmount());
-    m_rebuildBatchProgram->setUniform("uDabShapeScale", brush.dabXScale(), brush.dabYScale());
-    m_rebuildBatchProgram->setUniform(
+    batchProgram->setUniform("uUseDabShapeTexture", useDabShape ? 1 : 0);
+    batchProgram->setUniform("uTextureEdgeBoost", brush.textureEdgeBoost());
+    batchProgram->setUniform("uTextureContrast", brush.textureContrast());
+    batchProgram->setUniform("uTextureDepth", brush.textureDepth());
+    batchProgram->setUniform("uTextureBlend", brush.textureBlend());
+    batchProgram->setUniform("uTextureAmount", brush.textureAmount());
+    batchProgram->setUniform("uDabShapeScale", brush.dabXScale(), brush.dabYScale());
+    batchProgram->setUniform(
         "uDabShapeRotationRad", brush.dabRotation() * (3.14159265358979323846f / 180.0f));
-    m_rebuildBatchProgram->setUniform(
-        "uDabContentBounds", brush.dabShapeContentBounds(1.0f).asArray());
-    m_rebuildBatchProgram->setUniform(
-        "uDabSoftContentBounds", brush.dabShapeContentBounds(0.0f).asArray());
-    m_rebuildBatchProgram->setUniform("uInvTileSize", 1.0f / static_cast<float>(TILE_SIZE));
-    m_rebuildBatchProgram->setUniform("uQuantizeTo8Bit", quantizeTo8BitFlag(strokeBuffer));
-    m_rebuildBatchProgram->setUniform("uQuadMin", 0.0f, 0.0f);
-    m_rebuildBatchProgram->setUniform(
+    if (connectedDabs) {
+        batchProgram->setUniform(
+            "uDabContentBounds", brush.dabShapeContentBounds(1.0f).asArray());
+        batchProgram->setUniform(
+            "uDabSoftContentBounds", brush.dabShapeContentBounds(0.0f).asArray());
+    }
+    batchProgram->setUniform("uInvTileSize", 1.0f / static_cast<float>(TILE_SIZE));
+    batchProgram->setUniform("uQuantizeTo8Bit", quantizeTo8BitFlag(strokeBuffer));
+    batchProgram->setUniform("uQuadMin", 0.0f, 0.0f);
+    batchProgram->setUniform(
         "uQuadMax", static_cast<float>(TILE_SIZE), static_cast<float>(TILE_SIZE));
 
     if (useDabShape) {
-        m_rebuildBatchProgram->setUniform("uDabShapeTexture", 3);
+        batchProgram->setUniform("uDabShapeTexture", 3);
         const GLuint dabTexId = resolveDabTextureId(m_gl, brush);
         if (dabTexId != 0) {
             m_gl->glBindTextureUnit(3, dabTexId);
         }
     }
 
-    const DabBatchUniforms batchUniforms = resolveDabBatchUniforms();
-
     DabBatchScratch batchScratch;
-    batchScratch.resizeForMaxDabs(static_cast<size_t>(kRebuildBatchMaxDabs));
+    batchScratch.resizeForMaxDabs(maxBatchDabs, connectedDabs);
 
     for (const auto& key : rebuildTiles) {
         auto tileIt = tileDabs.find(key);
@@ -4071,8 +4128,8 @@ void GLBrushRenderer::rebuildStrokeBufferRangeFromDabsGPU(TileGrid& strokeBuffer
         const float tileOriginX = static_cast<float>(key.x) * static_cast<float>(TILE_SIZE);
         const float tileOriginY = static_cast<float>(key.y) * static_cast<float>(TILE_SIZE);
 
-        renderDabBatchForTile(
-            brush, dabs, tileIt->second, tileOriginX, tileOriginY, batchUniforms, batchScratch);
+        renderDabBatchForTile(brush, dabs, tileIt->second, tileOriginX, tileOriginY, batchUniforms,
+            batchScratch, maxBatchDabs);
 
         tile.clearDirty();
         strokeBuffer.removeDirty(key);
@@ -4592,37 +4649,44 @@ GLuint GLBrushRenderer::ensureProceduralTextureTile(const TileKey& key, const Ti
     return gpuTile.textureId;
 }
 
-void GLBrushRenderer::DabBatchScratch::resizeForMaxDabs(size_t maxDabs)
+void GLBrushRenderer::DabBatchScratch::resizeForMaxDabs(size_t maxDabs, bool connectedDabs)
 {
     centers.resize(maxDabs * 2u);
     params.resize(maxDabs * 4u);
     colors.resize(maxDabs * 4u);
-    previousParams.resize(maxDabs * 4u);
-    previousColors.resize(maxDabs * 4u);
-    stretchQuad01.resize(maxDabs * 4u);
-    stretchQuad23.resize(maxDabs * 4u);
-    hasPrevious.resize(maxDabs);
+    if (connectedDabs) {
+        previousParams.resize(maxDabs * 4u);
+        previousColors.resize(maxDabs * 4u);
+        stretchQuad01.resize(maxDabs * 4u);
+        stretchQuad23.resize(maxDabs * 4u);
+        hasPrevious.resize(maxDabs);
+    }
     extents.resize(maxDabs);
 }
 
-GLBrushRenderer::DabBatchUniforms GLBrushRenderer::resolveDabBatchUniforms() const
+GLBrushRenderer::DabBatchUniforms GLBrushRenderer::resolveDabBatchUniforms(
+    const GLShaderProgram& programObject, bool connectedDabs) const
 {
     DabBatchUniforms uniforms;
-    if (!m_rebuildBatchProgram) {
+    if (!programObject.isValid()) {
         return uniforms;
     }
-    const GLuint program = m_rebuildBatchProgram->handle();
+    const GLuint program = programObject.handle();
+    uniforms.quadMin = m_gl->glGetUniformLocation(program, "uQuadMin");
+    uniforms.quadMax = m_gl->glGetUniformLocation(program, "uQuadMax");
     uniforms.dabCount = m_gl->glGetUniformLocation(program, "uDabCount");
     uniforms.blendMode = m_gl->glGetUniformLocation(program, "uBlendMode");
     uniforms.dabCenter = m_gl->glGetUniformLocation(program, "uDabCenter");
     uniforms.dabParams = m_gl->glGetUniformLocation(program, "uDabParams");
     uniforms.dabColor = m_gl->glGetUniformLocation(program, "uDabColor");
-    uniforms.previousDabParams = m_gl->glGetUniformLocation(program, "uPreviousDabParams");
-    uniforms.previousDabColor = m_gl->glGetUniformLocation(program, "uPreviousDabColor");
-    uniforms.stretchQuad01 = m_gl->glGetUniformLocation(program, "uStretchQuad01");
-    uniforms.stretchQuad23 = m_gl->glGetUniformLocation(program, "uStretchQuad23");
-    uniforms.transformSegments = m_gl->glGetUniformLocation(program, "uTransformSegments");
-    uniforms.dabHasPrevious = m_gl->glGetUniformLocation(program, "uDabHasPrevious");
+    if (connectedDabs) {
+        uniforms.previousDabParams = m_gl->glGetUniformLocation(program, "uPreviousDabParams");
+        uniforms.previousDabColor = m_gl->glGetUniformLocation(program, "uPreviousDabColor");
+        uniforms.stretchQuad01 = m_gl->glGetUniformLocation(program, "uStretchQuad01");
+        uniforms.stretchQuad23 = m_gl->glGetUniformLocation(program, "uStretchQuad23");
+        uniforms.transformSegments = m_gl->glGetUniformLocation(program, "uTransformSegments");
+        uniforms.dabHasPrevious = m_gl->glGetUniformLocation(program, "uDabHasPrevious");
+    }
     uniforms.dabExtent = m_gl->glGetUniformLocation(program, "uDabExtent");
     uniforms.instancedDabs = m_gl->glGetUniformLocation(program, "uInstancedDabs");
     uniforms.tileOriginPx = m_gl->glGetUniformLocation(program, "uTileOriginPx");
@@ -4633,9 +4697,10 @@ GLBrushRenderer::DabBatchUniforms GLBrushRenderer::resolveDabBatchUniforms() con
 void GLBrushRenderer::renderDabBatchForTile(const TileBrush& brush,
     const std::vector<TileBrush::DabPoint>& dabs, const std::vector<uint32_t>& indices,
     float tileOriginX, float tileOriginY, const DabBatchUniforms& uniforms,
-    DabBatchScratch& scratch, const TileBrush::DabPoint* previousDab,
+    DabBatchScratch& scratch, size_t maxDabs, const TileBrush::DabPoint* previousDab,
     const TileBrush::DabPoint* nextDab)
 {
+    const bool connectedDabs = brush.connectsDabs();
     std::vector<float>& centers = scratch.centers;
     std::vector<float>& params = scratch.params;
     std::vector<float>& colors = scratch.colors;
@@ -4675,7 +4740,7 @@ void GLBrushRenderer::renderDabBatchForTile(const TileBrush& brush,
         //    src-over accumulates, and instancing would round the tile to its
         //    storage format after every dab. A long run of low-flow dabs would
         //    then drift away from the float accumulation the loop performs.
-        bool instanced = blendAsMax && !brush.connectsDabs();
+        bool instanced = blendAsMax && !connectedDabs;
         if (instanced) {
             const TileBrush::DabPoint& first = dabs[indices[cursor]];
             for (size_t i = cursor + 1; i < runEnd; ++i) {
@@ -4690,8 +4755,7 @@ void GLBrushRenderer::renderDabBatchForTile(const TileBrush& brush,
 
         size_t runCursor = cursor;
         while (runCursor < runEnd) {
-            const size_t chunkCount
-                = std::min(static_cast<size_t>(kRebuildBatchMaxDabs), runEnd - runCursor);
+            const size_t chunkCount = std::min(maxDabs, runEnd - runCursor);
 
             if (blendAsMax) {
                 m_gl->glBlendEquation(GL_MAX);
@@ -4732,64 +4796,64 @@ void GLBrushRenderer::renderDabBatchForTile(const TileBrush& brush,
                 colors[vec4Base + 2] = bPremul;
                 colors[vec4Base + 3] = alpha;
 
-                const uint32_t dabIndex = indices[runCursor + i];
-                const TileBrush::DabPoint* stretchStart = nullptr;
-                const TileBrush::DabPoint* stretchEnd = nullptr;
-                if (brush.connectsDabs()) {
+                if (connectedDabs) {
+                    const uint32_t dabIndex = indices[runCursor + i];
+                    const TileBrush::DabPoint* stretchStart = nullptr;
+                    const TileBrush::DabPoint* stretchEnd = nullptr;
                     stretchStart = dabIndex > 0 ? &dabs[dabIndex - 1] : previousDab;
                     if (brush.refinesDabJoints()) {
                         stretchEnd = dabIndex + 1u < dabs.size() ? &dabs[dabIndex + 1] : nextDab;
                     }
-                }
-                TileBrush::DabTransform transform {};
-                bool hasStretch = stretchStart
-                    && brush.dabStretchedTransform(*stretchStart, dab, stretchEnd, transform);
-                if (!hasStretch && !stretchStart && stretchEnd) {
-                    // Opening dab of a refined ribbon: it only hands its leading
-                    // edge forward, and interpolates from itself.
-                    hasStretch = brush.dabLeadingRefinedTransform(dab, *stretchEnd, transform);
-                }
-                hasPrevious[i] = hasStretch ? 1 : 0;
-                const TileBrush::DabPoint& previous
-                    = (stretchStart && hasStretch) ? *stretchStart : dab;
-                previousParams[vec4Base + 0] = previous.radius;
-                previousParams[vec4Base + 1] = std::clamp(previous.hardness, 0.0f, 1.0f);
-                previousParams[vec4Base + 2] = std::clamp(previous.roundness, 0.0f, 1.0f);
-                previousParams[vec4Base + 3]
-                    = previous.angleDegrees * (3.14159265358979323846f / 180.0f);
-                const float previousAlpha = static_cast<float>(previous.alpha) / 255.0f;
-                previousColors[vec4Base + 0]
-                    = (static_cast<float>(previous.colorR) / 255.0f) * previousAlpha;
-                previousColors[vec4Base + 1]
-                    = (static_cast<float>(previous.colorG) / 255.0f) * previousAlpha;
-                previousColors[vec4Base + 2]
-                    = (static_cast<float>(previous.colorB) / 255.0f) * previousAlpha;
-                previousColors[vec4Base + 3] = previousAlpha;
-                if (!hasStretch) {
-                    transform.guide.fill(Vector2 { dab.worldX, dab.worldY });
-                    transform.startControls.fill(Vector2 { dab.worldX, dab.worldY });
-                    transform.endControls.fill(Vector2 { dab.worldX, dab.worldY });
-                }
-                stretchQuad01[vec4Base + 0] = transform.guide[0].x - tileOriginX;
-                stretchQuad01[vec4Base + 1] = transform.guide[0].y - tileOriginY;
-                stretchQuad01[vec4Base + 2] = transform.guide[1].x - tileOriginX;
-                stretchQuad01[vec4Base + 3] = transform.guide[1].y - tileOriginY;
-                stretchQuad23[vec4Base + 0] = transform.guide[2].x - tileOriginX;
-                stretchQuad23[vec4Base + 1] = transform.guide[2].y - tileOriginY;
-                stretchQuad23[vec4Base + 2] = transform.guide[3].x - tileOriginX;
-                stretchQuad23[vec4Base + 3] = transform.guide[3].y - tileOriginY;
-                if (hasStretch) {
-                    // The stretched shader branch only consumes hardness from
-                    // each parameter vec4. Reuse its spare components for the
-                    // rail controls and keep the uniform footprint unchanged.
-                    centers[centerBase + 0] = transform.startControls[0].x - tileOriginX;
-                    centers[centerBase + 1] = transform.startControls[0].y - tileOriginY;
-                    params[vec4Base + 0] = transform.startControls[1].x - tileOriginX;
-                    params[vec4Base + 2] = transform.startControls[1].y - tileOriginY;
-                    params[vec4Base + 3] = transform.endControls[0].x - tileOriginX;
-                    previousParams[vec4Base + 0] = transform.endControls[0].y - tileOriginY;
-                    previousParams[vec4Base + 2] = transform.endControls[1].x - tileOriginX;
-                    previousParams[vec4Base + 3] = transform.endControls[1].y - tileOriginY;
+                    TileBrush::DabTransform transform {};
+                    bool hasStretch = stretchStart
+                        && brush.dabStretchedTransform(*stretchStart, dab, stretchEnd, transform);
+                    if (!hasStretch && !stretchStart && stretchEnd) {
+                        // Opening dab of a refined ribbon: it only hands its leading
+                        // edge forward, and interpolates from itself.
+                        hasStretch = brush.dabLeadingRefinedTransform(dab, *stretchEnd, transform);
+                    }
+                    hasPrevious[i] = hasStretch ? 1 : 0;
+                    const TileBrush::DabPoint& previous
+                        = (stretchStart && hasStretch) ? *stretchStart : dab;
+                    previousParams[vec4Base + 0] = previous.radius;
+                    previousParams[vec4Base + 1] = std::clamp(previous.hardness, 0.0f, 1.0f);
+                    previousParams[vec4Base + 2] = std::clamp(previous.roundness, 0.0f, 1.0f);
+                    previousParams[vec4Base + 3]
+                        = previous.angleDegrees * (3.14159265358979323846f / 180.0f);
+                    const float previousAlpha = static_cast<float>(previous.alpha) / 255.0f;
+                    previousColors[vec4Base + 0]
+                        = (static_cast<float>(previous.colorR) / 255.0f) * previousAlpha;
+                    previousColors[vec4Base + 1]
+                        = (static_cast<float>(previous.colorG) / 255.0f) * previousAlpha;
+                    previousColors[vec4Base + 2]
+                        = (static_cast<float>(previous.colorB) / 255.0f) * previousAlpha;
+                    previousColors[vec4Base + 3] = previousAlpha;
+                    if (!hasStretch) {
+                        transform.guide.fill(Vector2 { dab.worldX, dab.worldY });
+                        transform.startControls.fill(Vector2 { dab.worldX, dab.worldY });
+                        transform.endControls.fill(Vector2 { dab.worldX, dab.worldY });
+                    }
+                    stretchQuad01[vec4Base + 0] = transform.guide[0].x - tileOriginX;
+                    stretchQuad01[vec4Base + 1] = transform.guide[0].y - tileOriginY;
+                    stretchQuad01[vec4Base + 2] = transform.guide[1].x - tileOriginX;
+                    stretchQuad01[vec4Base + 3] = transform.guide[1].y - tileOriginY;
+                    stretchQuad23[vec4Base + 0] = transform.guide[2].x - tileOriginX;
+                    stretchQuad23[vec4Base + 1] = transform.guide[2].y - tileOriginY;
+                    stretchQuad23[vec4Base + 2] = transform.guide[3].x - tileOriginX;
+                    stretchQuad23[vec4Base + 3] = transform.guide[3].y - tileOriginY;
+                    if (hasStretch) {
+                        // The stretched shader branch only consumes hardness from
+                        // each parameter vec4. Reuse its spare components for the
+                        // rail controls and keep the uniform footprint unchanged.
+                        centers[centerBase + 0] = transform.startControls[0].x - tileOriginX;
+                        centers[centerBase + 1] = transform.startControls[0].y - tileOriginY;
+                        params[vec4Base + 0] = transform.startControls[1].x - tileOriginX;
+                        params[vec4Base + 2] = transform.startControls[1].y - tileOriginY;
+                        params[vec4Base + 3] = transform.endControls[0].x - tileOriginX;
+                        previousParams[vec4Base + 0] = transform.endControls[0].y - tileOriginY;
+                        previousParams[vec4Base + 2] = transform.endControls[1].x - tileOriginX;
+                        previousParams[vec4Base + 3] = transform.endControls[1].y - tileOriginY;
+                    }
                 }
 
                 if (instanced) {
@@ -4807,17 +4871,19 @@ void GLBrushRenderer::renderDabBatchForTile(const TileBrush& brush,
                 uniforms.dabCenter, static_cast<GLsizei>(chunkCount), centers.data());
             m_gl->glUniform4fv(uniforms.dabParams, static_cast<GLsizei>(chunkCount), params.data());
             m_gl->glUniform4fv(uniforms.dabColor, static_cast<GLsizei>(chunkCount), colors.data());
-            m_gl->glUniform4fv(uniforms.previousDabParams, static_cast<GLsizei>(chunkCount),
-                previousParams.data());
-            m_gl->glUniform4fv(
-                uniforms.previousDabColor, static_cast<GLsizei>(chunkCount), previousColors.data());
-            m_gl->glUniform4fv(
-                uniforms.stretchQuad01, static_cast<GLsizei>(chunkCount), stretchQuad01.data());
-            m_gl->glUniform4fv(
-                uniforms.stretchQuad23, static_cast<GLsizei>(chunkCount), stretchQuad23.data());
-            m_gl->glUniform1i(uniforms.transformSegments, brush.transformSegments());
-            m_gl->glUniform1iv(
-                uniforms.dabHasPrevious, static_cast<GLsizei>(chunkCount), hasPrevious.data());
+            if (connectedDabs) {
+                m_gl->glUniform4fv(uniforms.previousDabParams, static_cast<GLsizei>(chunkCount),
+                    previousParams.data());
+                m_gl->glUniform4fv(uniforms.previousDabColor, static_cast<GLsizei>(chunkCount),
+                    previousColors.data());
+                m_gl->glUniform4fv(uniforms.stretchQuad01, static_cast<GLsizei>(chunkCount),
+                    stretchQuad01.data());
+                m_gl->glUniform4fv(uniforms.stretchQuad23, static_cast<GLsizei>(chunkCount),
+                    stretchQuad23.data());
+                m_gl->glUniform1i(uniforms.transformSegments, brush.transformSegments());
+                m_gl->glUniform1iv(
+                    uniforms.dabHasPrevious, static_cast<GLsizei>(chunkCount), hasPrevious.data());
+            }
 
             if (instanced) {
                 m_gl->glUniform1fv(

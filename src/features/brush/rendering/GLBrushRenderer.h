@@ -165,9 +165,12 @@ private:
     bool copyColorRegion(GLuint sourceTexture, TilePixelFormat sourceFormat, GLint sourceX,
         GLint sourceY, GLuint targetTexture, TilePixelFormat targetFormat, GLint targetX,
         GLint targetY, GLsizei width, GLsizei height);
-    // Uniform locations of the shared dab-batch program, resolved once per
-    // entry point instead of per tile.
+    // Uniform locations are resolved once after linking. Plain and connected
+    // batches are separate program specializations and therefore own separate
+    // location tables.
     struct DabBatchUniforms {
+        GLint quadMin = -1;
+        GLint quadMax = -1;
         GLint dabCount = -1;
         GLint blendMode = -1;
         GLint dabCenter = -1;
@@ -196,14 +199,15 @@ private:
         std::vector<float> stretchQuad23;
         std::vector<GLint> hasPrevious;
         std::vector<float> extents;
-        void resizeForMaxDabs(size_t maxDabs);
+        void resizeForMaxDabs(size_t maxDabs, bool connectedDabs);
     };
     void renderDabBatchForTile(const TileBrush& brush, const std::vector<TileBrush::DabPoint>& dabs,
         const std::vector<uint32_t>& indices, float tileOriginX, float tileOriginY,
-        const DabBatchUniforms& uniforms, DabBatchScratch& scratch,
+        const DabBatchUniforms& uniforms, DabBatchScratch& scratch, size_t maxDabs,
         const TileBrush::DabPoint* previousDab = nullptr,
         const TileBrush::DabPoint* nextDab = nullptr);
-    DabBatchUniforms resolveDabBatchUniforms() const;
+    DabBatchUniforms resolveDabBatchUniforms(
+        const GLShaderProgram& program, bool connectedDabs) const;
     bool ensureBlurScratchSize(GLsizei width, GLsizei height, TilePixelFormat contentFormat);
     // Re-format the fixed TILE_SIZE blur read texture to match a document tile
     // before glCopyImageSubData (format-compatibility). No-op when unchanged.
@@ -251,7 +255,10 @@ private:
     std::unique_ptr<GLShaderProgram> m_liquifyFieldProgram;
     std::unique_ptr<GLShaderProgram> m_liquifyResolveProgram;
     std::unique_ptr<GLShaderProgram> m_formatCopyProgram;
-    std::unique_ptr<GLShaderProgram> m_rebuildBatchProgram;
+    std::unique_ptr<GLShaderProgram> m_plainBatchProgram;
+    std::unique_ptr<GLShaderProgram> m_connectedBatchProgram;
+    DabBatchUniforms m_plainBatchUniforms;
+    DabBatchUniforms m_connectedBatchUniforms;
     std::unique_ptr<GLShaderProgram> m_flattenProgram;
     std::unique_ptr<GLShaderProgram> m_proceduralTextureProgram;
 

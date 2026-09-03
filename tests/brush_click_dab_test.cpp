@@ -84,6 +84,25 @@ TEST_CASE(
     CHECK(brush.strokeDabs().front().angleDegrees == Catch::Approx(settings.angle));
 }
 
+TEST_CASE("the built-in dab keeps its conservative radius bound",
+    "[brush][stroke][geometry][performance]")
+{
+    aether::TileBrush brush;
+    brush.setDabType(0);
+    brush.setDabXScale(0.25f);
+    brush.setDabYScale(0.5f);
+    brush.setDabRotation(37.0f);
+
+    // Scale, roundness and rotation may shrink the circular footprint but can
+    // never extend it beyond the radius. Raster padding is an independent pixel.
+    CHECK(brush.dabCoverageExtent(12.0f, 0.4f, 0.2f, 73.0f)
+        == Catch::Approx(12.0f));
+    CHECK(brush.dabCoverageExtent(12.0f, 0.4f, 0.2f, 73.0f, true)
+        == Catch::Approx(13.0f));
+    CHECK(brush.dabRotationInvariantCoverageExtent(12.0f, 0.4f, 0.2f)
+        == Catch::Approx(12.0f));
+}
+
 TEST_CASE(
     "a stretched dab spans the whole gap to the previous dab center", "[brush][stroke][geometry]")
 {

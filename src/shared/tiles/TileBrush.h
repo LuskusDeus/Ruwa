@@ -77,7 +77,7 @@ public:
         m_brushSettingsModel = settings;
         m_useBrushSettingsModel = true;
         m_dynamicsFilterState.reset();
-        refreshRandomBoundSettingMask();
+        refreshDynamicsBindingMasks();
 
         setHardness(m_brushSettingsModel.hardness);
         setSpacing(m_brushSettingsModel.spacing);
@@ -2418,15 +2418,13 @@ public:
 
     bool hasActiveDynamicsBinding(ruwa::core::brushes::BrushInputSourceKey source) const
     {
-        if (!m_useBrushSettingsModel) {
+        const auto sourceIndex = static_cast<uint32_t>(source);
+        const auto sourceCount
+            = static_cast<uint32_t>(ruwa::core::brushes::BrushInputSourceKey::Count);
+        if (!m_useBrushSettingsModel || sourceIndex == 0u || sourceIndex >= sourceCount) {
             return false;
         }
-        for (const auto& slot : m_brushSettingsModel.dynamics.settingSlots) {
-            if (slot.binding(source).isActive()) {
-                return true;
-            }
-        }
-        return false;
+        return (m_activeDynamicsSourceMask & (1u << sourceIndex)) != 0u;
     }
 
     bool hasActiveStrokeDirectionDynamicsBinding() const
@@ -2567,6 +2565,14 @@ private:
         }
 
         const float rasterPadding = includeRasterPadding ? 1.0f : 0.0f;
+        // The built-in dab is a circle whose optional scale/roundness transforms
+        // can only shrink it. Its radius is therefore already a conservative
+        // bound, independent of rotation. Keep the more expensive transformed
+        // corner calculation exclusively for custom dab masks.
+        if (m_dabType <= 0) {
+            const float extent = radius + rasterPadding;
+            return { extent, extent };
+        }
         if (m_dabXScale <= 0.0001f || m_dabYScale <= 0.0001f) {
             return { rasterPadding, rasterPadding };
         }
@@ -2748,7 +2754,7 @@ private:
     {
         // Per-dab hot path. We only need a random value for setting slots that
         // actually have an active binding to BrushInputSourceKey::RandomValue.
-        // m_randomBoundSettingMask is precomputed by refreshRandomBoundSettingMask()
+        // m_randomBoundSettingMask is precomputed by refreshDynamicsBindingMasks()
         // when settings change. Slots without a random binding stay marked
         // unavailable, which causes brushInputSourceValue() to fall back to the
         // shared inputContext.randomValue without consulting this array.
@@ -2773,22 +2779,33 @@ private:
         }
     }
 
-    void refreshRandomBoundSettingMask()
+    void refreshDynamicsBindingMasks()
     {
-        uint32_t mask = 0u;
+        uint32_t randomSettingMask = 0u;
+        uint32_t activeSourceMask = 0u;
         if (!m_useBrushSettingsModel) {
             m_randomBoundSettingMask = 0u;
+            m_activeDynamicsSourceMask = 0u;
             return;
         }
         const auto& settingSlotsArr = m_brushSettingsModel.dynamics.settingSlots;
+        const auto sourceCount
+            = static_cast<uint32_t>(ruwa::core::brushes::BrushInputSourceKey::Count);
         for (std::size_t i = 0; i < settingSlotsArr.size(); ++i) {
-            const auto& randomBinding
-                = settingSlotsArr[i].binding(ruwa::core::brushes::BrushInputSourceKey::RandomValue);
-            if (randomBinding.isActive()) {
-                mask |= (1u << i);
+            for (uint32_t sourceIndex = 1u; sourceIndex < sourceCount; ++sourceIndex) {
+                const auto source
+                    = static_cast<ruwa::core::brushes::BrushInputSourceKey>(sourceIndex);
+                if (!settingSlotsArr[i].binding(source).isActive()) {
+                    continue;
+                }
+                activeSourceMask |= (1u << sourceIndex);
+                if (source == ruwa::core::brushes::BrushInputSourceKey::RandomValue) {
+                    randomSettingMask |= (1u << i);
+                }
             }
         }
-        m_randomBoundSettingMask = mask;
+        m_randomBoundSettingMask = randomSettingMask;
+        m_activeDynamicsSourceMask = activeSourceMask;
     }
 
     ruwa::core::brushes::BrushEvaluatedState evaluateDynamicsForCurrentInput() const
@@ -3658,6 +3675,16 @@ private:
                     = dabTransformSegmentQuad(transform, segment, transformSegmentCount);
             }
         }
+        // These values are invariant across every covered pixel. Keeping them
+        // outside the raster loops avoids repeating clamps and trigonometry for
+        // ordinary (non-connected) dabs without changing the sampled geometry.
+        const float plainHardness = std::clamp(dab.hardness, 0.0f, 1.0f);
+        const float plainRoundness
+            = std::max(0.01f, std::clamp(dab.roundness, 0.0f, 1.0f));
+        const float plainAngleRadians
+            = dab.angleDegrees * (3.14159265358979323846f / 180.0f);
+        const float plainCosAngle = std::cos(plainAngleRadians);
+        const float plainSinAngle = std::sin(plainAngleRadians);
         const float rasterExtent
             = dabCoverageExtent(r, dab.hardness, dab.roundness, dab.angleDegrees, true);
         float boundsMinX = dab.worldX - rasterExtent;
@@ -3713,7 +3740,8 @@ private:
                     for (int32_t lx = localMinX; lx <= localMaxX; ++lx) {
                         const float sampleX = tileOriginX + static_cast<float>(lx) + 0.5f;
                         const float sampleY = tileOriginY + static_cast<float>(ly) + 0.5f;
-                        DabPoint sampledDab = dab;
+                        DabPoint connectedSampledDab;
+                        const DabPoint* sampledDab = &dab;
                         float coverage = 0.0f;
 
                         if (connectFromPrevious) {
@@ -3744,13 +3772,20 @@ private:
                                 return static_cast<uint8_t>(std::lround(
                                     lerp(static_cast<float>(from), static_cast<float>(to))));
                             };
-                            sampledDab.hardness = lerp(stretchSource.hardness, dab.hardness);
-                            sampledDab.alpha = lerpByte(stretchSource.alpha, dab.alpha);
-                            sampledDab.colorR = lerpByte(stretchSource.colorR, dab.colorR);
-                            sampledDab.colorG = lerpByte(stretchSource.colorG, dab.colorG);
-                            sampledDab.colorB = lerpByte(stretchSource.colorB, dab.colorB);
+                            connectedSampledDab = dab;
+                            sampledDab = &connectedSampledDab;
+                            connectedSampledDab.hardness
+                                = lerp(stretchSource.hardness, dab.hardness);
+                            connectedSampledDab.alpha
+                                = lerpByte(stretchSource.alpha, dab.alpha);
+                            connectedSampledDab.colorR
+                                = lerpByte(stretchSource.colorR, dab.colorR);
+                            connectedSampledDab.colorG
+                                = lerpByte(stretchSource.colorG, dab.colorG);
+                            connectedSampledDab.colorB
+                                = lerpByte(stretchSource.colorB, dab.colorB);
                             const DabContentBounds stretchContentBounds
-                                = dabShapeContentBounds(sampledDab.hardness);
+                                = dabShapeContentBounds(connectedSampledDab.hardness);
                             const float stretchShapeX = stretchContentBounds.minX
                                 + (stretchContentBounds.maxX - stretchContentBounds.minX)
                                     * canonicalX;
@@ -3758,27 +3793,21 @@ private:
                                 + (stretchContentBounds.maxY - stretchContentBounds.minY)
                                     * canonicalY;
                             coverage = sampleCanonicalDabFalloff(
-                                stretchShapeX, stretchShapeY, sampledDab.hardness);
+                                stretchShapeX, stretchShapeY, connectedSampledDab.hardness);
                         } else {
-                            const float hardness = std::clamp(sampledDab.hardness, 0.0f, 1.0f);
-                            const float roundness
-                                = std::max(0.01f, std::clamp(sampledDab.roundness, 0.0f, 1.0f));
-                            const float angleRadians
-                                = sampledDab.angleDegrees * (3.14159265358979323846f / 180.0f);
-                            const float cosA = std::cos(angleRadians);
-                            const float sinA = std::sin(angleRadians);
-                            const float dx = sampleX - sampledDab.worldX;
-                            const float dy = sampleY - sampledDab.worldY;
-                            const float brushX = dx * cosA + dy * sinA;
-                            const float brushY = (-dx * sinA + dy * cosA) / roundness;
+                            const float dx = sampleX - dab.worldX;
+                            const float dy = sampleY - dab.worldY;
+                            const float brushX = dx * plainCosAngle + dy * plainSinAngle;
+                            const float brushY
+                                = (-dx * plainSinAngle + dy * plainCosAngle) / plainRoundness;
                             coverage = sampleDabFalloff(
-                                sampledDab, brushX, brushY, hardness, sampledDab.radius);
+                                dab, brushX, brushY, plainHardness, dab.radius);
                         }
                         if (coverage <= 0.0001f)
                             continue;
 
                         const float coveredAlpha = std::clamp(
-                            static_cast<float>(sampledDab.alpha) * coverage, 0.0f, 255.0f);
+                            static_cast<float>(sampledDab->alpha) * coverage, 0.0f, 255.0f);
                         uint8_t alpha = roundLowAlpha
                             ? static_cast<uint8_t>(std::lround(coveredAlpha))
                             : static_cast<uint8_t>(coveredAlpha);
@@ -3797,10 +3826,10 @@ private:
                         if (alpha == 0)
                             continue;
 
-                        if (dabUsesProceduralTexture(sampledDab)) {
-                            const float edgeBoost = sampledDab.textureEdgeBoost;
+                        if (dabUsesProceduralTexture(*sampledDab)) {
+                            const float edgeBoost = sampledDab->textureEdgeBoost;
                             float textureA
-                                = static_cast<float>(textureAlphaFactorAt(sampledDab, key,
+                                = static_cast<float>(textureAlphaFactorAt(*sampledDab, key,
                                       static_cast<uint32_t>(lx), static_cast<uint32_t>(ly)))
                                 / 255.0f;
                             if (edgeBoost > 0.0001f) {
@@ -3827,11 +3856,11 @@ private:
 
                         if (maxBlend) {
                             uint8_t prevA = pixels[idx + 3];
-                            blendMax(pixels, idx, sampledDab, alpha, colorScale);
+                            blendMax(pixels, idx, *sampledDab, alpha, colorScale);
                             if (pixels[idx + 3] != prevA)
                                 modified = true;
                         } else {
-                            blendSrcOver(pixels, idx, sampledDab, alpha, colorScale);
+                            blendSrcOver(pixels, idx, *sampledDab, alpha, colorScale);
                             modified = true;
                         }
                     }
@@ -4431,6 +4460,10 @@ private:
     // to BrushInputSourceKey::RandomValue. Recomputed in setBrushSettings.
     // 22 setting keys → fits easily in uint32_t.
     uint32_t m_randomBoundSettingMask = 0u;
+    // Bitmask of input-source enum values used by at least one active dynamics
+    // binding. Input processing queries direction/speed repeatedly, so settings
+    // changes pay the scan once instead of every tablet packet.
+    uint32_t m_activeDynamicsSourceMask = 0u;
 };
 
 } // namespace aether
