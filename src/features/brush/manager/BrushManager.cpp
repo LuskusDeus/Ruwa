@@ -486,9 +486,13 @@ bool readBrushesForImport(
         for (auto it = tip.settings.cbegin(); it != tip.settings.cend(); ++it) {
             settings.insert(it.key(), it.value());
         }
-        settings.insert(QStringLiteral("dab.customImage"), tip.imagePath);
-        settings.insert(QStringLiteral("dab.threshold"), 0.0f);
-        settings.insert(QStringLiteral("dab.compression"), 1.0f);
+        // A computed round brush has no sampled bitmap; pointing dab.customImage
+        // at an empty path would replace its procedural tip with nothing.
+        if (!tip.imagePath.isEmpty()) {
+            settings.insert(QStringLiteral("dab.customImage"), tip.imagePath);
+            settings.insert(QStringLiteral("dab.threshold"), 0.0f);
+            settings.insert(QStringLiteral("dab.compression"), 1.0f);
+        }
         brush.engineSettings = pixelModule().normalizeSettings(settings);
         normalizeBrushData(brush);
         importedBrushes.append(std::move(brush));
