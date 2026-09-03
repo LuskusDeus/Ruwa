@@ -53,7 +53,7 @@ public:
     /// Set buttons (replaces existing). Call before show().
     void setButtons(const QList<MessageButton>& buttons);
 
-    /// Set popup width (API)
+    /// Set popup base width in logical pixels; the active UI scale is applied when shown.
     void setPopupWidth(int width);
 
     /// Show popup below topbar with height reveal animation.
@@ -89,6 +89,7 @@ protected:
 
 private:
     void rebuildContent();
+    void refreshForThemeChange();
     void updateButtonCallbacks();
     void startShowAnimation();
     void startHideAnimation();

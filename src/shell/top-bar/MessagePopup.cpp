@@ -149,6 +149,13 @@ MessagePopup::MessagePopup(QWidget* parent)
 
     m_timebarAnim = new QPropertyAnimation(this, "timebarProgress", this);
     m_timebarAnim->setEasingCurve(QEasingCurve::Linear);
+
+    // Child controls update their own scale on themeChanged, but this popup has
+    // an animated fixed height. Rebuild its layout as well so the surrounding
+    // panel follows the new content metrics instead of clipping the controls.
+    connect(&ruwa::ui::core::ThemeManager::instance(),
+        &ruwa::ui::core::ThemeManager::themeChanged, this,
+        &MessagePopup::refreshForThemeChange, Qt::QueuedConnection);
 }
 
 MessagePopup::~MessagePopup()
@@ -337,16 +344,19 @@ void MessagePopup::rebuildContent()
     const int outerCornerRadius = theme.scaled(kAttachedOuterCornerRadiusBase);
     const int shadowExtent = theme.scaled(kAttachedShadowExtentBase);
     const int shadowSideExtent = theme.scaled(kAttachedShadowSideExtentBase);
+    const int contentPadding = theme.scaled(16);
 
     // The existing bottom plate strip already houses the timebar (drawn at the body
     // bottom in paintEvent), so no extra reserve is needed for the auto-hide case.
-    m_layout->setContentsMargins(16 + outerCornerRadius + shadowSideExtent, 16,
-        16 + outerCornerRadius + shadowSideExtent, 16 + shadowExtent);
+    m_layout->setContentsMargins(contentPadding + outerCornerRadius + shadowSideExtent,
+        contentPadding, contentPadding + outerCornerRadius + shadowSideExtent,
+        contentPadding + shadowExtent);
+    m_layout->setSpacing(theme.scaled(12));
 
     // Optional image (e.g. for "image copied" toast) - clip to rounded corners like
     // RecentProjectCard
-    constexpr int maxImageSize = 240;
-    constexpr int imageRadius = 8;
+    const int maxImageSize = theme.scaled(240);
+    const int imageRadius = theme.scaled(8);
     if (!m_image.isNull()) {
         QPixmap scaled = m_image.scaled(
             maxImageSize, maxImageSize, Qt::KeepAspectRatio, Qt::SmoothTransformation);
@@ -380,7 +390,7 @@ void MessagePopup::rebuildContent()
     // Buttons row
     if (!m_buttons.isEmpty()) {
         QHBoxLayout* btnLayout = new QHBoxLayout();
-        btnLayout->setSpacing(8);
+        btnLayout->setSpacing(theme.scaled(8));
         btnLayout->addStretch();
 
         for (int i = 0; i < m_buttons.size(); ++i) {
@@ -409,13 +419,47 @@ void MessagePopup::rebuildContent()
 
     m_layout->invalidate();
     m_layout->activate();
-    setFixedWidth(m_width + outerCornerRadius * 2 + shadowSideExtent * 2);
+    const int desiredWidth
+        = theme.scaled(m_width) + outerCornerRadius * 2 + shadowSideExtent * 2;
+    const int availableWidth = parentWidget()
+        ? qMax(1, parentWidget()->width() - theme.scaled(16))
+        : desiredWidth;
+    setFixedWidth(qMin(desiredWidth, availableWidth));
     // Force layout to compute proper sizes; sizeHint can be wrong when widget was previously hidden
     adjustSize();
-    const int minHeight = 80 + shadowExtent;
+    const int minHeight = theme.scaled(80) + shadowExtent;
     int h = m_layout->sizeHint().height();
     m_targetHeight = qMax(h, minHeight);
     setRevealHeight(m_targetHeight);
+}
+
+void MessagePopup::refreshForThemeChange()
+{
+    if (!m_isVisible || m_displayedContentSignature.isEmpty()) {
+        update();
+        return;
+    }
+
+    const bool revealWasRunning
+        = m_heightAnim && m_heightAnim->state() == QAbstractAnimation::Running;
+    const qreal revealProgress = m_targetHeight > 0
+        ? qBound(0.0, static_cast<qreal>(m_revealHeight) / m_targetHeight, 1.0)
+        : 1.0;
+
+    if (m_heightAnim) {
+        m_heightAnim->stop();
+    }
+
+    rebuildContent();
+    move(calculatePosition());
+
+    if (revealWasRunning) {
+        setRevealHeight(qRound(m_targetHeight * revealProgress));
+        startShowAnimation();
+    }
+
+    update();
+    emit contentChanged();
 }
 
 void MessagePopup::updateButtonCallbacks()
@@ -452,7 +496,7 @@ QPoint MessagePopup::calculatePosition() const
 
     QWidget* overlay = parentWidget();
     int x = (overlay->width() - width()) / 2;
-    int y = TOP_OFFSET;
+    int y = ruwa::ui::core::ThemeManager::instance().scaled(TOP_OFFSET);
     if (auto* oc = qobject_cast<OverlayContainer*>(overlay)) {
         y = oc->messagePopupAnchorY();
     }
@@ -478,7 +522,7 @@ void MessagePopup::paintEvent(QPaintEvent* event)
         return;
     }
 
-    constexpr int radius = kAttachedCornerRadius;
+    const int radius = theme.scaled(kAttachedCornerRadius);
     const QPainterPath shape = attachedPopupPath(rect, outerCornerRadius, radius);
 
     // The visible body is inset by outerCornerRadius on the sides (see attachedPopupPath),
@@ -518,12 +562,12 @@ void MessagePopup::paintEvent(QPaintEvent* event)
 
     // Timebar for auto-hide toasts: thick accent line at the body bottom, shrinks over time
     if (m_autoHideDuration > 0 && m_buttons.isEmpty() && m_timebarProgress > 0.001) {
-        const int barHeight = 4;
-        const qreal barMargin = outerCornerRadius + 12;
+        const int barHeight = theme.scaled(4);
+        const qreal barMargin = outerCornerRadius + theme.scaled(12);
         const qreal barMaxWidth = rect.width() - 2 * barMargin;
         const qreal barWidth = qMax(0.0, m_timebarProgress * barMaxWidth);
         if (barWidth > 0.0) {
-            const qreal barY = rect.bottom() - barHeight - 8;
+            const qreal barY = rect.bottom() - barHeight - theme.scaled(8);
             QRectF barRect(rect.left() + barMargin, barY, barWidth, barHeight);
             painter.setPen(Qt::NoPen);
             painter.setBrush(colors.primary);
