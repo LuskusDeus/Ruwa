@@ -8394,16 +8394,16 @@ void OpenGLCanvasWidget::setBrushCursorState(
     update();
 }
 
-void OpenGLCanvasWidget::setParameterCircleOverlayState(
-    std::vector<ParameterCircleOverlayState> circles)
+void OpenGLCanvasWidget::setParameterControlOverlayState(
+    std::vector<ParameterControlOverlayState> controls)
 {
     const auto nearlyEqual = [](float lhs, float rhs) { return std::abs(lhs - rhs) <= 0.001f; };
-    if (circles.size() == m_cursorOverlayState.parameterCircles.size()) {
+    if (controls.size() == m_cursorOverlayState.parameterControls.size()) {
         bool unchanged = true;
-        for (size_t i = 0; i < circles.size(); ++i) {
-            const auto& incoming = circles[i];
-            const auto& current = m_cursorOverlayState.parameterCircles[i];
-            if (!nearlyEqual(incoming.centerX, current.centerX)
+        for (size_t i = 0; i < controls.size(); ++i) {
+            const auto& incoming = controls[i];
+            const auto& current = m_cursorOverlayState.parameterControls[i];
+            if (incoming.type != current.type || !nearlyEqual(incoming.centerX, current.centerX)
                 || !nearlyEqual(incoming.centerY, current.centerY)
                 || !nearlyEqual(incoming.radius, current.radius)
                 || !nearlyEqual(incoming.hoverProgress, current.hoverProgress)
@@ -8416,7 +8416,7 @@ void OpenGLCanvasWidget::setParameterCircleOverlayState(
             return;
         }
     }
-    m_cursorOverlayState.parameterCircles = std::move(circles);
+    m_cursorOverlayState.parameterControls = std::move(controls);
     update();
 }
 
@@ -11275,8 +11275,7 @@ void OpenGLCanvasWidget::paintGL_renderCursorOverlays()
     auto* eyedropperCursorOverlay = m_overlayManager->eyedropperCursorOverlay();
     auto* toolCursorOverlay = m_overlayManager->toolCursorOverlay();
 
-    const bool wantParameterCircles
-        = brushCursorOverlay && !m_cursorOverlayState.parameterCircles.empty();
+    const bool wantParameterControls = !m_cursorOverlayState.parameterControls.empty();
     // A radius too small to draw a ring is not a reason to skip the cursor: the
     // overlay stands a fixed-size plus in for it.
     const bool wantBrushCursor = brushCursorOverlay && m_cursorOverlayState.brushVisible
@@ -11285,21 +11284,29 @@ void OpenGLCanvasWidget::paintGL_renderCursorOverlays()
         = eyedropperCursorOverlay && m_cursorOverlayState.eyedropperVisible;
     const bool wantToolCursor = toolCursorOverlay && m_cursorOverlayState.toolCursorVisible;
 
-    if (wantParameterCircles || wantBrushCursor) {
+    if (wantParameterControls || wantBrushCursor) {
         ensureCursorOverlayInitialized(brushCursorOverlay, "brush cursor overlay");
     }
     if (wantEyedropperCursor) {
         ensureCursorOverlayInitialized(eyedropperCursorOverlay, "eyedropper cursor overlay");
     }
-    if (wantToolCursor) {
+    if (wantParameterControls || wantToolCursor) {
         ensureCursorOverlayInitialized(toolCursorOverlay, "tool cursor overlay");
     }
 
-    if (wantParameterCircles && brushCursorOverlay->isInitialized()) {
-        for (const ParameterCircleOverlayState& circle : m_cursorOverlayState.parameterCircles) {
-            brushCursorOverlay->renderParameterCircle(circle.centerX, circle.centerY, circle.radius,
-                surfaceWidth, surfaceHeight, m_sceneFboManager.sceneTexture(), circle.primaryColor,
-                circle.hoverProgress, static_cast<float>(devicePixelRatioF()));
+    if (wantParameterControls) {
+        for (const ParameterControlOverlayState& control : m_cursorOverlayState.parameterControls) {
+            if (control.type == CanvasParameterControlType::Position) {
+                if (toolCursorOverlay && toolCursorOverlay->isInitialized()) {
+                    toolCursorOverlay->renderParameterPosition(control, surfaceWidth, surfaceHeight,
+                        m_sceneFboManager.sceneTexture(), static_cast<float>(devicePixelRatioF()));
+                }
+            } else if (brushCursorOverlay && brushCursorOverlay->isInitialized()) {
+                brushCursorOverlay->renderParameterCircle(control.centerX, control.centerY,
+                    control.radius, surfaceWidth, surfaceHeight, m_sceneFboManager.sceneTexture(),
+                    control.primaryColor, control.hoverProgress,
+                    static_cast<float>(devicePixelRatioF()));
+            }
         }
     }
     if (wantBrushCursor && brushCursorOverlay->isInitialized()) {
@@ -12984,19 +12991,19 @@ void OpenGLCanvasWidget::paintGL()
     auto* textEditOverlay = m_overlayManager ? m_overlayManager->textEditOverlay() : nullptr;
     const bool wantBrushCursor = !m_skipCursorOverlays && brushCursorOverlay
         && m_cursorOverlayState.brushVisible && m_cursorOverlayState.brushRadius >= 0.0f;
-    const bool wantParameterCircles = !m_skipCursorOverlays && brushCursorOverlay
-        && !m_cursorOverlayState.parameterCircles.empty();
+    const bool wantParameterControls
+        = !m_skipCursorOverlays && !m_cursorOverlayState.parameterControls.empty();
     const bool wantEyedropperCursor = !m_skipCursorOverlays && eyedropperCursorOverlay
         && m_cursorOverlayState.eyedropperVisible;
     const bool wantToolCursor
         = !m_skipCursorOverlays && toolCursorOverlay && m_cursorOverlayState.toolCursorVisible;
-    if (wantParameterCircles || wantBrushCursor) {
+    if (wantParameterControls || wantBrushCursor) {
         ensureCursorOverlayInitialized(brushCursorOverlay, "brush cursor overlay");
     }
     if (wantEyedropperCursor) {
         ensureCursorOverlayInitialized(eyedropperCursorOverlay, "eyedropper cursor overlay");
     }
-    if (wantToolCursor) {
+    if (wantParameterControls || wantToolCursor) {
         ensureCursorOverlayInitialized(toolCursorOverlay, "tool cursor overlay");
     }
     const bool moveAxisGuideActivePre = m_transformController.moveAxisGuideActive();
@@ -13013,8 +13020,6 @@ void OpenGLCanvasWidget::paintGL()
         = textEditOverlay && textEditOverlay->isInitialized() && textEditOverlay->isActive();
     const bool drawBrushCursor
         = wantBrushCursor && brushCursorOverlay && brushCursorOverlay->isInitialized();
-    const bool drawParameterCircles
-        = wantParameterCircles && brushCursorOverlay && brushCursorOverlay->isInitialized();
     const bool drawEyedropperCursor = wantEyedropperCursor && eyedropperCursorOverlay
         && eyedropperCursorOverlay->isInitialized();
     const bool drawToolCursor
@@ -13029,14 +13034,22 @@ void OpenGLCanvasWidget::paintGL()
     const bool needFullSceneForOverlay
         = drawTransformOverlay || drawCanvasResizeOverlay || drawTextEditOverlay;
     std::vector<CursorCaptureRect> cursorCaptureRects;
-    cursorCaptureRects.reserve(m_cursorOverlayState.parameterCircles.size() + 3);
+    cursorCaptureRects.reserve(m_cursorOverlayState.parameterControls.size() + 3);
     if (!needFullSceneForOverlay) {
-        if (drawParameterCircles) {
-            for (const ParameterCircleOverlayState& circle :
-                m_cursorOverlayState.parameterCircles) {
-                cursorCaptureRects.push_back(
-                    BrushCursorOverlayGL::parameterCircleCaptureRect(circle.centerX, circle.centerY,
-                        circle.radius, static_cast<float>(devicePixelRatioF())));
+        if (wantParameterControls) {
+            for (const ParameterControlOverlayState& control :
+                m_cursorOverlayState.parameterControls) {
+                if (control.type == CanvasParameterControlType::Position) {
+                    if (toolCursorOverlay && toolCursorOverlay->isInitialized()) {
+                        cursorCaptureRects.push_back(
+                            ToolCursorOverlayGL::parameterPositionCaptureRect(control.centerX,
+                                control.centerY, static_cast<float>(devicePixelRatioF())));
+                    }
+                } else if (brushCursorOverlay && brushCursorOverlay->isInitialized()) {
+                    cursorCaptureRects.push_back(BrushCursorOverlayGL::parameterCircleCaptureRect(
+                        control.centerX, control.centerY, control.radius,
+                        static_cast<float>(devicePixelRatioF())));
+                }
             }
         }
         if (drawBrushCursor) {

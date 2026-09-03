@@ -58,7 +58,9 @@ typedef struct RuwaEffectParamDef {
 /* --- On-canvas parameter controls (§7.2) --------------------------------
  * A UI-independent binding from a visual control to existing numeric effect
  * parameters. Circle edits value_key as a document-pixel radius around the
- * document-space point supplied by center_x_key / center_y_key. */
+ * document-space point supplied by center_x_key / center_y_key.
+ * Position (ABI 1.2) edits center_x_key / center_y_key directly; value_key
+ * is unused and may be NULL. Both axes must reference distinct numeric params. */
 typedef struct RuwaEffectCanvasControlDef {
     uint32_t struct_size;
     const char* id; /* stable within one effect descriptor */

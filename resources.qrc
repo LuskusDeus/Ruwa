@@ -31,6 +31,7 @@
         <file alias="DMSans18pt-SemiBold">resources/fonts/DMSans_18pt-SemiBold.ttf</file>
     </qresource>
     <qresource prefix="/icons">
+        <file alias="Anchor">resources/icons/Anchor.png</file>
         <file alias="Home">resources/icons/Home.png</file>
         <file alias="NewFile">resources/icons/NewFile.png</file>
         <file alias="Settings">resources/icons/Settings.png</file>

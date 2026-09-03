@@ -128,12 +128,12 @@ enum class EffectParamDefaultBinding {
 /// binds visual geometry to parameter keys; interaction and rendering live in
 /// the canvas subsystem, so effect plugins never depend on QWidget/OpenGL UI
 /// implementation details.
-enum class EffectCanvasControlType { Circle };
+enum class EffectCanvasControlType { Circle, Position };
 
 struct EffectCanvasControlDefinition {
     QString id;
     EffectCanvasControlType type = EffectCanvasControlType::Circle;
-    /// Numeric parameter edited by the control (the circle radius for Circle).
+    /// Circle radius; unused for Position, which edits the two center keys.
     QString valueParamKey;
     /// Numeric document-space parameters that anchor the control.
     QString centerXParamKey;

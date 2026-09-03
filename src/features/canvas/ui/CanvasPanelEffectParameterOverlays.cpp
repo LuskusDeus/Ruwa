@@ -39,6 +39,20 @@ qreal resolvedNumericValue(const LayerEffectState& state, const EffectParamDefin
     return state.params.value(definition.key, definition.defaultValue).toDouble();
 }
 
+qreal constrainedValue(qreal value, qreal minimum, qreal maximum, qreal step)
+{
+    value = std::clamp(value, minimum, maximum);
+    if (step > 0.0) {
+        value = minimum + std::round((value - minimum) / step) * step;
+    }
+    return std::clamp(value, minimum, maximum);
+}
+
+QVariant storedNumericValue(qreal value, bool integral)
+{
+    return integral ? QVariant::fromValue(qRound(value)) : QVariant(value);
+}
+
 } // namespace
 
 using namespace ruwa::core::effects;
@@ -87,7 +101,7 @@ void CanvasPanel::syncEffectParameterOverlayPresentation()
         return;
     }
 
-    std::vector<ParameterCircleOverlayState> states;
+    std::vector<ParameterControlOverlayState> states;
     if (view && m_effectParameterOverlay && m_effectParameterOverlay->isVisible() && m_contentWidget
         && m_viewportHostWidget) {
         const QSizeF extent = view->viewportExtent();
@@ -101,16 +115,17 @@ void CanvasPanel::syncEffectParameterOverlayPresentation()
         const QPoint hostTopLeft = m_viewportHostWidget->mapTo(m_contentWidget, QPoint(0, 0));
         const QColor primary = ruwa::ui::core::ThemeManager::instance().colors().primary;
 
-        states.reserve(static_cast<size_t>(m_effectParameterOverlay->circles().size()));
-        for (int i = 0; i < m_effectParameterOverlay->circles().size(); ++i) {
-            const auto screen = m_effectParameterOverlay->screenCircleAt(i);
+        states.reserve(static_cast<size_t>(m_effectParameterOverlay->controls().size()));
+        for (int i = 0; i < m_effectParameterOverlay->controls().size(); ++i) {
+            const auto screen = m_effectParameterOverlay->screenControlAt(i);
             const QPointF viewportCenter = screen.center - QPointF(hostTopLeft);
             if (!std::isfinite(viewportCenter.x()) || !std::isfinite(viewportCenter.y())
                 || !std::isfinite(screen.radius)) {
                 continue;
             }
 
-            ParameterCircleOverlayState state;
+            ParameterControlOverlayState state;
+            state.type = m_effectParameterOverlay->controlAt(i)->type;
             state.centerX = static_cast<float>(viewportCenter.x() * scaleX);
             state.centerY = static_cast<float>(viewportCenter.y() * scaleY);
             state.radius = static_cast<float>(std::max<qreal>(0.0, screen.radius * radiusScale));
@@ -119,7 +134,7 @@ void CanvasPanel::syncEffectParameterOverlayPresentation()
             states.push_back(std::move(state));
         }
     }
-    presentation->setParameterCircleOverlayState(std::move(states));
+    presentation->setParameterControlOverlayState(std::move(states));
 }
 
 void CanvasPanel::refreshEffectParameterOverlay()
@@ -131,7 +146,7 @@ void CanvasPanel::refreshEffectParameterOverlay()
 
     m_effectParameterOverlay->setGeometry(m_contentWidget->rect());
     const bool controlsWereVisible = m_effectParameterOverlay->isVisible();
-    QList<CanvasParameterCircleControl> circles;
+    QList<CanvasParameterControl> controls;
 
     if (m_layerModel && !m_effectParameterOverlayLayerId.isNull()
         && !m_effectParameterOverlayEffectId.isNull()) {
@@ -151,7 +166,8 @@ void CanvasPanel::refreshEffectParameterOverlay()
             : nullptr;
         if (selectedEffect && descriptor) {
             for (const EffectCanvasControlDefinition& definition : descriptor->canvasControls) {
-                if (definition.type != EffectCanvasControlType::Circle) {
+                if (definition.type != EffectCanvasControlType::Circle
+                    && definition.type != EffectCanvasControlType::Position) {
                     continue;
                 }
                 const auto* valueParam = findParamDefinition(*descriptor, definition.valueParamKey);
@@ -159,37 +175,63 @@ void CanvasPanel::refreshEffectParameterOverlay()
                     = findParamDefinition(*descriptor, definition.centerXParamKey);
                 const auto* centerYParam
                     = findParamDefinition(*descriptor, definition.centerYParamKey);
-                if (!valueParam || !centerXParam || !centerYParam
-                    || (valueParam->type != EffectParamType::Int
-                        && valueParam->type != EffectParamType::Real)) {
+                const auto isNumeric = [](const EffectParamDefinition* param) {
+                    return param
+                        && (param->type == EffectParamType::Int
+                            || param->type == EffectParamType::Real);
+                };
+                if (!isNumeric(centerXParam) || !isNumeric(centerYParam)
+                    || (definition.type == EffectCanvasControlType::Circle
+                        && !isNumeric(valueParam))
+                    || (definition.type == EffectCanvasControlType::Position
+                        && definition.centerXParamKey == definition.centerYParamKey)) {
                     continue;
                 }
 
-                CanvasParameterCircleControl circle;
-                circle.id = definition.id;
-                circle.valueParamKey = definition.valueParamKey;
-                circle.documentCenter
+                CanvasParameterControl control;
+                control.id = definition.id;
+                control.type = definition.type == EffectCanvasControlType::Position
+                    ? CanvasParameterControlType::Position
+                    : CanvasParameterControlType::Circle;
+                control.valueParamKey = definition.valueParamKey;
+                control.centerXParamKey = definition.centerXParamKey;
+                control.centerYParamKey = definition.centerYParamKey;
+                control.documentCenter
                     = QPointF(resolvedNumericValue(*selectedEffect, *centerXParam),
                         resolvedNumericValue(*selectedEffect, *centerYParam));
-                circle.documentRadius = resolvedNumericValue(*selectedEffect, *valueParam);
-                circle.minimumValue = valueParam->minimumValue.toDouble();
-                circle.maximumValue = valueParam->maximumValue.toDouble();
-                circle.stepValue = valueParam->stepValue.toDouble();
-                circle.integralValue = valueParam->type == EffectParamType::Int;
-                circles.append(circle);
+                if (control.type == CanvasParameterControlType::Circle) {
+                    control.documentRadius = resolvedNumericValue(*selectedEffect, *valueParam);
+                    control.minimumValue = valueParam->minimumValue.toDouble();
+                    control.maximumValue = valueParam->maximumValue.toDouble();
+                    control.stepValue = valueParam->stepValue.toDouble();
+                    control.integralValue = valueParam->type == EffectParamType::Int;
+                }
+                control.minimumPosition = QPointF(
+                    centerXParam->minimumValue.toDouble(), centerYParam->minimumValue.toDouble());
+                control.maximumPosition = QPointF(
+                    centerXParam->maximumValue.toDouble(), centerYParam->maximumValue.toDouble());
+                control.positionStep = QPointF(
+                    centerXParam->stepValue.toDouble(), centerYParam->stepValue.toDouble());
+                control.integralX = centerXParam->type == EffectParamType::Int;
+                control.integralY = centerYParam->type == EffectParamType::Int;
+                controls.append(control);
             }
         }
     }
 
     const QString hoveredId = m_effectParameterOverlayDragging
         ? m_effectParameterOverlayDragControlId
-        : (m_effectParameterOverlay->circleAt(m_effectParameterOverlay->hoveredCircle())
-                  ? m_effectParameterOverlay->circleAt(m_effectParameterOverlay->hoveredCircle())
+        : (m_effectParameterOverlay->controlAt(m_effectParameterOverlay->hoveredControl())
+                  ? m_effectParameterOverlay->controlAt(m_effectParameterOverlay->hoveredControl())
                         ->id
                   : QString());
-    m_effectParameterOverlay->setCircles(circles);
-    m_effectParameterOverlay->setHoveredCircle(m_effectParameterOverlay->circleIndex(hoveredId));
-    if (!circles.isEmpty()) {
+    m_effectParameterOverlay->setControls(controls);
+    m_effectParameterOverlay->setHoveredControl(m_effectParameterOverlay->controlIndex(hoveredId));
+    if (m_effectParameterOverlayDragging
+        && m_effectParameterOverlay->controlIndex(m_effectParameterOverlayDragControlId) < 0) {
+        finishEffectParameterOverlayDrag(true);
+    }
+    if (!controls.isEmpty()) {
         m_effectParameterOverlay->raise();
         // Parameter geometry belongs directly above the GL surface, below the
         // canvas's floating UI and loading chrome.
@@ -200,7 +242,7 @@ void CanvasPanel::refreshEffectParameterOverlay()
         }
     }
     syncEffectParameterOverlayPresentation();
-    if (controlsWereVisible != !circles.isEmpty()) {
+    if (controlsWereVisible != !controls.isEmpty()) {
         updateCursorManagerOverlay();
     }
 }
@@ -225,15 +267,18 @@ bool CanvasPanel::handleEffectParameterOverlayMousePress(QMouseEvent* event)
         return false;
     }
     const int hit = effectParameterOverlayHitTest(event->globalPosition());
-    const auto* circle
-        = m_effectParameterOverlay ? m_effectParameterOverlay->circleAt(hit) : nullptr;
-    if (!circle) {
+    const auto* control
+        = m_effectParameterOverlay ? m_effectParameterOverlay->controlAt(hit) : nullptr;
+    if (!control) {
         return false;
     }
 
     m_effectParameterOverlayDragging = true;
-    m_effectParameterOverlayDragControlId = circle->id;
-    m_effectParameterOverlay->setHoveredCircle(hit);
+    m_effectParameterOverlayDragControlId = control->id;
+    const QPointF documentPosition
+        = documentFromViewport(m_viewportHostWidget->mapFromGlobal(event->globalPosition()));
+    m_effectParameterOverlayDragOffset = control->documentCenter - documentPosition;
+    m_effectParameterOverlay->setHoveredControl(hit);
     if (m_cursorManager) {
         updateCursorManagerOverlay();
         m_cursorManager->updateCursorPosition(event->globalPosition().toPoint());
@@ -249,32 +294,53 @@ bool CanvasPanel::handleEffectParameterOverlayMouseMove(QMouseEvent* event)
     }
 
     if (m_effectParameterOverlayDragging) {
-        const int index
-            = m_effectParameterOverlay->circleIndex(m_effectParameterOverlayDragControlId);
-        const auto* circlePointer = m_effectParameterOverlay->circleAt(index);
-        if (!circlePointer) {
+        if (!(event->buttons() & Qt::LeftButton)) {
             finishEffectParameterOverlayDrag(true);
             return false;
         }
-        const CanvasParameterCircleControl circle = *circlePointer;
+        const int index
+            = m_effectParameterOverlay->controlIndex(m_effectParameterOverlayDragControlId);
+        const auto* controlPointer = m_effectParameterOverlay->controlAt(index);
+        if (!controlPointer) {
+            finishEffectParameterOverlayDrag(true);
+            return false;
+        }
+        const CanvasParameterControl control = *controlPointer;
 
         const QPointF viewportPosition
             = m_viewportHostWidget->mapFromGlobal(event->globalPosition());
         const QPointF documentPosition = documentFromViewport(viewportPosition);
-        qreal value = std::hypot(documentPosition.x() - circle.documentCenter.x(),
-            documentPosition.y() - circle.documentCenter.y());
-        value = std::clamp(value, circle.minimumValue, circle.maximumValue);
-        if (circle.stepValue > 0.0) {
-            value = circle.minimumValue
-                + std::round((value - circle.minimumValue) / circle.stepValue) * circle.stepValue;
-            value = std::clamp(value, circle.minimumValue, circle.maximumValue);
+        if (!std::isfinite(documentPosition.x()) || !std::isfinite(documentPosition.y())) {
+            event->accept();
+            return true;
         }
-
-        m_effectParameterOverlay->setCircleRadius(circle.id, value);
-        const QVariant storedValue
-            = circle.integralValue ? QVariant::fromValue(qRound(value)) : QVariant(value);
-        emit effectParameterOverlayChanged(m_effectParameterOverlayLayerId,
-            m_effectParameterOverlayEffectId, circle.valueParamKey, storedValue);
+        if (control.type == CanvasParameterControlType::Position) {
+            const QPointF target = documentPosition + m_effectParameterOverlayDragOffset;
+            const QVariant x
+                = storedNumericValue(constrainedValue(target.x(), control.minimumPosition.x(),
+                                         control.maximumPosition.x(), control.positionStep.x()),
+                    control.integralX);
+            const QVariant y
+                = storedNumericValue(constrainedValue(target.y(), control.minimumPosition.y(),
+                                         control.maximumPosition.y(), control.positionStep.y()),
+                    control.integralY);
+            m_effectParameterOverlay->setControlPosition(
+                control.id, QPointF(x.toDouble(), y.toDouble()));
+            // Reuse the paired position editor's existing live-edit/undo path.
+            const auto layerId = m_effectParameterOverlayLayerId;
+            const auto effectId = m_effectParameterOverlayEffectId;
+            emit effectParameterOverlayChanged(layerId, effectId, control.centerXParamKey, x);
+            emit effectParameterOverlayChanged(layerId, effectId, control.centerYParamKey, y);
+        } else {
+            const qreal value
+                = constrainedValue(std::hypot(documentPosition.x() - control.documentCenter.x(),
+                                       documentPosition.y() - control.documentCenter.y()),
+                    control.minimumValue, control.maximumValue, control.stepValue);
+            m_effectParameterOverlay->setCircleRadius(control.id, value);
+            emit effectParameterOverlayChanged(m_effectParameterOverlayLayerId,
+                m_effectParameterOverlayEffectId, control.valueParamKey,
+                storedNumericValue(value, control.integralValue));
+        }
         if (m_cursorManager) {
             m_cursorManager->updateCursorPosition(event->globalPosition().toPoint());
         }
@@ -283,8 +349,8 @@ bool CanvasPanel::handleEffectParameterOverlayMouseMove(QMouseEvent* event)
     }
 
     const int hit = effectParameterOverlayHitTest(event->globalPosition());
-    const int previousHit = m_effectParameterOverlay->hoveredCircle();
-    m_effectParameterOverlay->setHoveredCircle(hit);
+    const int previousHit = m_effectParameterOverlay->hoveredControl();
+    m_effectParameterOverlay->setHoveredControl(hit);
     if (hit != previousHit) {
         updateCursorManagerOverlay();
     }
@@ -323,7 +389,7 @@ void CanvasPanel::finishEffectParameterOverlayDrag(bool notifyEditor)
     if (m_effectParameterOverlay) {
         const QPoint cursorPosition
             = m_cursorManager ? m_cursorManager->activeCursorPosition() : QCursor::pos();
-        m_effectParameterOverlay->setHoveredCircle(effectParameterOverlayHitTest(cursorPosition));
+        m_effectParameterOverlay->setHoveredControl(effectParameterOverlayHitTest(cursorPosition));
     }
     if (notifyEditor && !layerId.isNull() && !effectId.isNull()) {
         emit effectParameterOverlayEditFinished(layerId, effectId);

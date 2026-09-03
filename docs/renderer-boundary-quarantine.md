@@ -90,7 +90,7 @@ it is converted to semantic panel history operations.
 * **Shared value types crossing the boundary** (plan 7.16.3) — re-homed to
   neutral namespaces, `aether` namespace cleanup complete: `StrokeInputDevice`,
   `TransformHandle`/`TransformHitResult`/`TransformInteractionMode`,
-  `TransformSnapVisualState`, `ToolCursorStyle`, `ParameterCircleOverlayState`,
+  `TransformSnapVisualState`, `ToolCursorStyle`, `ParameterControlOverlayState`,
   `CursorOverlayState` and `TextEditOverlayState` are defined in
   `ruwa::ui::workspace`, and `CanvasBackdropRegion` in
   `ruwa::shared::rendering`. The legacy engine keeps internal `aether`

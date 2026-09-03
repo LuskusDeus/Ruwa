@@ -306,6 +306,9 @@ void LayerEffectsPanel::applyCanvasOverlayParam(
         return;
     }
     applyParamLive(effectId, key, value);
+    // A canvas drag has an explicit release/cancellation boundary. Pausing with
+    // LMB held must not split one gesture into several undo transactions.
+    m_paramSessionTimer->stop();
     // The live mutation deliberately suppresses the synchronous model refresh
     // that would otherwise disturb a dragged card editor. Here the input came
     // from canvas, so explicitly mirror the new value into the existing card.

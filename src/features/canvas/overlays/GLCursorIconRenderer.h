@@ -14,6 +14,7 @@
 #include "shared/types/Result.h"
 
 #include <QHash>
+#include <QColor>
 #include <QOpenGLFunctions_4_5_Core>
 #include <QString>
 #include <QtGui/qopengl.h>
@@ -48,9 +49,12 @@ public:
 
     /// Draws the icon with its top-left corner at (left, top), in widget pixels.
     /// Snaps to whole pixels so the pre-rasterized mask is not resampled again.
+    /// A valid color fills the glyph; outlinePx adds a scene-inverting border.
+    /// Defaults preserve the scene-inverting cursor appearance.
     void draw(const QString& resourcePath, float sizePx, float left, float top,
         const std::array<float, 16>& mvp, float viewportW, float viewportH, float alpha = 1.0f,
-        float edgeLow = kDefaultEdgeLow, float edgeHigh = kDefaultEdgeHigh);
+        float edgeLow = kDefaultEdgeLow, float edgeHigh = kDefaultEdgeHigh,
+        const QColor& color = {}, float outlinePx = 0.0f);
 
     /// Same, but anchored by a hotspot given in normalized icon coordinates
     /// (0,0 = top-left of the artwork), which is placed on (cursorX, cursorY).
@@ -76,6 +80,8 @@ private:
     GLint m_locViewportSize = -1;
     GLint m_locAlpha = -1;
     GLint m_locMaskEdge = -1;
+    GLint m_locColor = -1;
+    GLint m_locOutline = -1;
 
     QHash<QString, GLuint> m_maskCache; ///< Key: "<resource>@<size>". 0 = load failed.
 };

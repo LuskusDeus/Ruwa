@@ -120,6 +120,24 @@ ruwa_effect_plugin_query(uint32_t requested_abi_major, const RuwaEffectHostApi* 
   provided `emit(emit_ctx, key)`. No container crosses the ABI, so whole-layer
   displacement streams thousands of tiles without copying.
 
+## On-canvas parameter controls
+
+`RuwaEffectDescriptor::canvas_controls` (ABI 1.1) declares controls independently
+of the host UI. Each control has a stable, unique `id` within its effect:
+
+- `RUWA_EFFECT_CANVAS_CONTROL_CIRCLE`: edits the numeric `value_key` as a radius
+  around the document-space `center_x_key` / `center_y_key` parameters.
+- `RUWA_EFFECT_CANVAS_CONTROL_POSITION` (ABI 1.2): displays a draggable anchor
+  icon and edits `center_x_key` / `center_y_key`. The axes must be distinct numeric
+  parameters; `value_key` is unused and may be `NULL`. Each axis respects its
+  parameter's range, step and integer/real type.
+
+Controls draw in declaration order; the last overlapping control wins hit
+testing. Place the position control after a radius control to keep the center
+draggable even when the radius is very small. Both can bind to the same center
+keys. Geometry uses document coordinates; the position icon and its hit area
+keep a fixed screen size as the canvas is zoomed or rotated.
+
 ## Minimal plugin skeleton
 
 ```c

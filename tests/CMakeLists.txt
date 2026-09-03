@@ -76,3 +76,18 @@ catch_discover_tests(RuwaTests
         "$<TARGET_FILE_DIR:Qt6::Core>"
         "${RUWA_MINGW_BIN_DIR}"
 )
+
+# Widget-only parameter geometry/animation tests. Keep QApplication separate
+# from the core suite, whose tests intentionally use QGuiApplication.
+add_executable(RuwaCanvasParameterOverlayTests
+    canvas_parameter_overlay_test.cpp
+    ../src/features/canvas/ui/CanvasParameterOverlayWidget.cpp
+)
+target_include_directories(RuwaCanvasParameterOverlayTests PRIVATE ../src)
+target_link_libraries(RuwaCanvasParameterOverlayTests PRIVATE Catch2::Catch2 Qt6::Widgets)
+catch_discover_tests(RuwaCanvasParameterOverlayTests
+    PROPERTIES ENVIRONMENT "QT_QPA_PLATFORM=offscreen"
+    DL_PATHS
+        "$<TARGET_FILE_DIR:Qt6::Core>"
+        "${RUWA_MINGW_BIN_DIR}"
+)

@@ -4103,6 +4103,13 @@ bool CanvasPanel::eventFilter(QObject* watched, QEvent* event)
     // GL widget. This branch intentionally precedes canvasInputTarget: the
     // application filter is the existing cross-widget input arbiter.
     if (m_effectParameterOverlayDragging) {
+        if (event->type() == QEvent::ApplicationDeactivate
+            || (event->type() == QEvent::WindowDeactivate && watched == window())
+            || (event->type() == QEvent::Hide && watched == this) || !isInteractionEnabled()) {
+            finishEffectParameterOverlayDrag(true);
+        }
+    }
+    if (m_effectParameterOverlayDragging) {
         if (event->type() == QEvent::MouseMove
             && handleEffectParameterOverlayMouseMove(static_cast<QMouseEvent*>(event))) {
             return true;
@@ -4863,7 +4870,7 @@ void CanvasPanel::updateCursorManagerOverlay()
     const bool transformActive = m_glWidget && m_glWidget->isTransformActive();
     const ToolId currentTool = toolMode();
     const bool parameterCursorActive = m_effectParameterOverlayDragging
-        || (m_effectParameterOverlay && m_effectParameterOverlay->hoveredCircle() >= 0);
+        || (m_effectParameterOverlay && m_effectParameterOverlay->hoveredControl() >= 0);
     if (!transformActive) {
         m_transformDragCursorValid = false;
     }
@@ -4901,7 +4908,7 @@ void CanvasPanel::updateToolCursor()
     if (!isInteractionEnabled())
         return;
     if (m_effectParameterOverlayDragging
-        || (m_effectParameterOverlay && m_effectParameterOverlay->hoveredCircle() >= 0)) {
+        || (m_effectParameterOverlay && m_effectParameterOverlay->hoveredControl() >= 0)) {
         if (m_cursorManager) {
             updateCursorManagerOverlay();
         }

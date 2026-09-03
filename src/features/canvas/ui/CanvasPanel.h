@@ -1021,6 +1021,7 @@ private:
     ruwa::core::layers::LayerId m_effectParameterOverlayLayerId;
     QUuid m_effectParameterOverlayEffectId;
     QString m_effectParameterOverlayDragControlId;
+    QPointF m_effectParameterOverlayDragOffset;
     bool m_effectParameterOverlayDragging = false;
 
     // Brush control overlay (created in createContent for smooth appearance)

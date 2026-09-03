@@ -352,16 +352,23 @@ bool validateEffect(const RuwaEffectDescriptor* effect, const QSet<QString>& see
                 return false;
             }
             controlIds.insert(id);
-            if (control->type != RUWA_EFFECT_CANVAS_CONTROL_CIRCLE) {
+            if (control->type != RUWA_EFFECT_CANVAS_CONTROL_CIRCLE
+                && control->type != RUWA_EFFECT_CANVAS_CONTROL_POSITION) {
                 error = QStringLiteral("canvas control %1 has an unknown type").arg(id);
                 return false;
             }
             const auto* valueParam = findParam(control->value_key);
-            if (!isNumeric(valueParam) || !isNumeric(findParam(control->center_x_key))
+            if ((control->type == RUWA_EFFECT_CANVAS_CONTROL_CIRCLE && !isNumeric(valueParam))
+                || !isNumeric(findParam(control->center_x_key))
                 || !isNumeric(findParam(control->center_y_key))) {
                 error = QStringLiteral(
-                    "canvas control %1 must reference numeric value and center parameters")
+                    "canvas control %1 must reference numeric parameters for its geometry")
                             .arg(id);
+                return false;
+            }
+            if (control->type == RUWA_EFFECT_CANVAS_CONTROL_POSITION
+                && std::strcmp(control->center_x_key, control->center_y_key) == 0) {
+                error = QStringLiteral("position canvas control %1 requires distinct axes").arg(id);
                 return false;
             }
             if (control->type == RUWA_EFFECT_CANVAS_CONTROL_CIRCLE && valueParam->min_value < 0.0) {

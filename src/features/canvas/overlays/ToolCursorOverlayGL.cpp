@@ -212,6 +212,43 @@ CursorCaptureRect ToolCursorOverlayGL::captureRect(
     return { centerX - back, centerY - back, centerX + forward, centerY + forward };
 }
 
+void ToolCursorOverlayGL::renderParameterPosition(const ParameterControlOverlayState& state,
+    int viewportWidth, int viewportHeight, GLuint sceneTextureId, float uiScale)
+{
+    if (!m_initialized || !m_iconRenderer || !sceneTextureId || viewportWidth <= 0
+        || viewportHeight <= 0) {
+        return;
+    }
+    const float scale = std::max(1.0f, uiScale);
+    const float size = (ruwa::ui::workspace::kParameterPositionSize
+                           + ruwa::ui::workspace::kParameterPositionHoverGrowth
+                               * std::clamp(state.hoverProgress, 0.0f, 1.0f))
+        * scale;
+    const float vpW = static_cast<float>(viewportWidth);
+    const float vpH = static_cast<float>(viewportHeight);
+    const std::array<float, 16> mvp
+        = { { 2.0f / vpW, 0, 0, 0, 0, -2.0f / vpH, 0, 0, 0, 0, -1, 0, -1, 1, 0, 1 } };
+    m_gl->glEnable(GL_BLEND);
+    m_gl->glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
+    m_gl->glDisable(GL_DEPTH_TEST);
+    m_gl->glBindTextureUnit(0, sceneTextureId);
+    m_iconRenderer->draw(QStringLiteral(":/icons/Anchor"), size, state.centerX - size * 0.5f,
+        state.centerY - size * 0.5f, mvp, vpW, vpH, 1.0f, 1.0f, 0.0f, state.primaryColor,
+        1.5f * scale);
+    m_gl->glDisable(GL_BLEND);
+}
+
+CursorCaptureRect ToolCursorOverlayGL::parameterPositionCaptureRect(
+    float centerX, float centerY, float uiScale)
+{
+    const float reach = ((ruwa::ui::workspace::kParameterPositionSize
+                             + ruwa::ui::workspace::kParameterPositionHoverGrowth)
+                                * 0.5f
+                            + 4.0f)
+        * std::max(1.0f, uiScale);
+    return { centerX - reach, centerY - reach, centerX + reach, centerY + reach };
+}
+
 void ToolCursorOverlayGL::drawCrosshair(
     float centerX, float centerY, const std::array<float, 16>& mvp, float vpW, float vpH)
 {

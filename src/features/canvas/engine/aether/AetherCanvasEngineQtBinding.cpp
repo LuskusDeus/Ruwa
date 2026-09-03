@@ -694,10 +694,10 @@ public:
         {
             m_widget->setMotionPolicy(policy);
         }
-        void setParameterCircleOverlayState(
-            std::vector<ParameterCircleOverlayState> circles) override
+        void setParameterControlOverlayState(
+            std::vector<ParameterControlOverlayState> controls) override
         {
-            m_widget->setParameterCircleOverlayState(std::move(circles));
+            m_widget->setParameterControlOverlayState(std::move(controls));
         }
 
         void setCanvasResizeOverlayState(bool active, const QRectF& selectionDocumentRect,

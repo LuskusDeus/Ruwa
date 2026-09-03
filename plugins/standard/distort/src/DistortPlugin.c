@@ -225,6 +225,14 @@ static const RuwaEffectCanvasControlDef k_center_radius_controls[] = {
         .center_x_key = "centerX",
         .center_y_key = "centerY",
     },
+    {
+        .struct_size = sizeof(RuwaEffectCanvasControlDef),
+        .id = "center",
+        .type = RUWA_EFFECT_CANVAS_CONTROL_POSITION,
+        .value_key = NULL,
+        .center_x_key = "centerX",
+        .center_y_key = "centerY",
+    },
 };
 
 static const RuwaEffectDescriptor k_effects[] = {
@@ -245,7 +253,8 @@ static const RuwaEffectDescriptor k_effects[] = {
         .render_pass = distort_twirl_render_pass,
         .destroy_pass = distort_destroy_pass,
         .canvas_controls = k_center_radius_controls,
-        .canvas_control_count = 1u,
+        .canvas_control_count
+        = sizeof(k_center_radius_controls) / sizeof(k_center_radius_controls[0]),
     },
     {
         .struct_size = sizeof(RuwaEffectDescriptor),
@@ -264,7 +273,8 @@ static const RuwaEffectDescriptor k_effects[] = {
         .render_pass = distort_pinch_render_pass,
         .destroy_pass = distort_destroy_pass,
         .canvas_controls = k_center_radius_controls,
-        .canvas_control_count = 1u,
+        .canvas_control_count
+        = sizeof(k_center_radius_controls) / sizeof(k_center_radius_controls[0]),
     },
     {
         .struct_size = sizeof(RuwaEffectDescriptor),
@@ -283,7 +293,8 @@ static const RuwaEffectDescriptor k_effects[] = {
         .render_pass = distort_ripple_render_pass,
         .destroy_pass = distort_destroy_pass,
         .canvas_controls = k_center_radius_controls,
-        .canvas_control_count = 1u,
+        .canvas_control_count
+        = sizeof(k_center_radius_controls) / sizeof(k_center_radius_controls[0]),
     },
     {
         .struct_size = sizeof(RuwaEffectDescriptor),

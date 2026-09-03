@@ -32,7 +32,7 @@
 /* --- ABI version -------------------------------------------------------- */
 
 #define RUWA_EFFECT_ABI_MAJOR 1u
-#define RUWA_EFFECT_ABI_MINOR 1u
+#define RUWA_EFFECT_ABI_MINOR 2u
 
 /* The one exported entry point every plugin DLL must define. */
 #define RUWA_EFFECT_QUERY_SYMBOL_NAME "ruwa_effect_plugin_query"
@@ -139,7 +139,10 @@ enum {
 /* Declarative on-canvas parameter controls. New control shapes are appended
  * as enum values in later ABI-minor revisions. */
 typedef int32_t RuwaEffectCanvasControlType;
-enum { RUWA_EFFECT_CANVAS_CONTROL_CIRCLE = 0 };
+enum {
+    RUWA_EFFECT_CANVAS_CONTROL_CIRCLE = 0,
+    RUWA_EFFECT_CANVAS_CONTROL_POSITION = 1 /* ABI 1.2 */
+};
 
 /* Mirrors EffectEvaluationSpace. */
 typedef int32_t RuwaEffectEvaluationSpace;

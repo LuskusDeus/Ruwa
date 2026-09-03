@@ -41,10 +41,15 @@ uniform sampler2D uMaskTexture;
 uniform vec2 uViewportSize;
 uniform float uAlpha;
 uniform vec2 uMaskEdge;
+uniform vec4 uColor;
+uniform float uOutline;
 in vec2 vUV;
 out vec4 fragColor;
-void main() {
-    float mask = texture(uMaskTexture, vUV).r;
+float coverage(vec2 uv) {
+    if (any(lessThan(uv, vec2(0.0))) || any(greaterThan(uv, vec2(1.0)))) {
+        return 0.0;
+    }
+    float mask = texture(uMaskTexture, uv).r;
     // The glyph is downscaled a long way, which leaves a soft ramp on every edge.
     // Tightening it around the 0.5 contour restores a crisp silhouette; how tight
     // is the caller's call, since a small glyph has little coverage ramp to spare.
@@ -52,13 +57,27 @@ void main() {
     if (uMaskEdge.y > uMaskEdge.x) {
         mask = smoothstep(uMaskEdge.x, uMaskEdge.y, mask);
     }
-    if (mask <= 0.002) {
+    return mask;
+}
+void main() {
+    float mask = coverage(vUV);
+    float outer = mask;
+    if (uOutline > 0.0) {
+        vec2 texel = vec2(uOutline) / vec2(textureSize(uMaskTexture, 0));
+        for (int y = -1; y <= 1; ++y) {
+            for (int x = -1; x <= 1; ++x) {
+                outer = max(outer, coverage(vUV + vec2(x, y) * texel));
+            }
+        }
+    }
+    if (outer <= 0.002) {
         discard;
     }
     vec2 uv = gl_FragCoord.xy / uViewportSize;
     vec4 under = texture(uSceneTexture, uv);
     vec3 displayRGB = (under.a > 0.001) ? (under.rgb / under.a) : vec3(0.0);
-    fragColor = vec4(1.0 - displayRGB, uAlpha * mask);
+    vec3 color = mix(1.0 - displayRGB, uColor.rgb, uColor.a * mask / outer);
+    fragColor = vec4(color, uAlpha * outer);
 }
 )";
 
@@ -97,6 +116,8 @@ Result<void> GLCursorIconRenderer::initialize()
     m_locViewportSize = m_gl->glGetUniformLocation(m_program, "uViewportSize");
     m_locAlpha = m_gl->glGetUniformLocation(m_program, "uAlpha");
     m_locMaskEdge = m_gl->glGetUniformLocation(m_program, "uMaskEdge");
+    m_locColor = m_gl->glGetUniformLocation(m_program, "uColor");
+    m_locOutline = m_gl->glGetUniformLocation(m_program, "uOutline");
 
     // Icon quad: position + UV, rewritten every frame as the cursor moves.
     m_gl->glGenVertexArrays(1, &m_vao);
@@ -146,6 +167,8 @@ void GLCursorIconRenderer::shutdown()
     m_locViewportSize = -1;
     m_locAlpha = -1;
     m_locMaskEdge = -1;
+    m_locColor = -1;
+    m_locOutline = -1;
 }
 
 // ==========================================================================
@@ -205,7 +228,7 @@ GLuint GLCursorIconRenderer::maskTexture(const QString& resourcePath, int sizePx
 
 void GLCursorIconRenderer::draw(const QString& resourcePath, float sizePx, float left, float top,
     const std::array<float, 16>& mvp, float viewportW, float viewportH, float alpha, float edgeLow,
-    float edgeHigh)
+    float edgeHigh, const QColor& color, float outlinePx)
 {
     if (!m_program) {
         return;
@@ -219,13 +242,16 @@ void GLCursorIconRenderer::draw(const QString& resourcePath, float sizePx, float
 
     // Snap to whole pixels: the mask is already rasterized at its final size, so
     // a fractional quad would resample it a second time and smear the edges.
-    const float x0 = std::round(left);
-    const float y0 = std::round(top);
-    const float x1 = x0 + sizePx;
-    const float y1 = y0 + sizePx;
+    const float padding = outlinePx > 0.0f ? std::ceil(outlinePx) + 1.0f : 0.0f;
+    const float x0 = std::round(left) - padding;
+    const float y0 = std::round(top) - padding;
+    const float x1 = x0 + sizePx + 2.0f * padding;
+    const float y1 = y0 + sizePx + 2.0f * padding;
+    const float uv0 = -padding / sizePx;
+    const float uv1 = 1.0f + padding / sizePx;
 
     const float quad[16]
-        = { x0, y0, 0.0f, 0.0f, x1, y0, 1.0f, 0.0f, x0, y1, 0.0f, 1.0f, x1, y1, 1.0f, 1.0f };
+        = { x0, y0, uv0, uv0, x1, y0, uv1, uv0, x0, y1, uv0, uv1, x1, y1, uv1, uv1 };
 
     m_gl->glBindTextureUnit(1, mask);
     m_gl->glUseProgram(m_program);
@@ -235,6 +261,9 @@ void GLCursorIconRenderer::draw(const QString& resourcePath, float sizePx, float
     m_gl->glUniform2f(m_locViewportSize, viewportW, viewportH);
     m_gl->glUniform1f(m_locAlpha, alpha);
     m_gl->glUniform2f(m_locMaskEdge, edgeLow, edgeHigh);
+    m_gl->glUniform4f(m_locColor, color.redF(), color.greenF(), color.blueF(),
+        color.isValid() ? color.alphaF() : 0.0f);
+    m_gl->glUniform1f(m_locOutline, outlinePx);
 
     m_gl->glBindVertexArray(m_vao);
     m_gl->glBindBuffer(GL_ARRAY_BUFFER, m_vbo);

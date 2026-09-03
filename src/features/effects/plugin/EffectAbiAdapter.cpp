@@ -107,6 +107,8 @@ ruwa::core::effects::EffectParamDefaultBinding mapBinding(RuwaEffectDefaultBindi
 EffectCanvasControlType mapCanvasControlType(RuwaEffectCanvasControlType type)
 {
     switch (type) {
+    case RUWA_EFFECT_CANVAS_CONTROL_POSITION:
+        return EffectCanvasControlType::Position;
     case RUWA_EFFECT_CANVAS_CONTROL_CIRCLE:
     default:
         return EffectCanvasControlType::Circle;

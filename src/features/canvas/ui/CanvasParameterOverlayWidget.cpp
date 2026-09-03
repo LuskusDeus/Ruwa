@@ -31,8 +31,8 @@ CanvasParameterOverlayWidget::CanvasParameterOverlayWidget(QWidget* parent)
             notifyPresentationChanged();
         });
     connect(m_hoverAnimation, &QVariantAnimation::finished, this, [this]() {
-        if (m_hoveredCircle < 0 && m_hoverProgress <= 0.0) {
-            m_hoverVisualCircle = -1;
+        if (m_hoveredControl < 0 && m_hoverProgress <= 0.0) {
+            m_hoverVisualControl = -1;
         }
         notifyPresentationChanged();
     });
@@ -51,29 +51,32 @@ void CanvasParameterOverlayWidget::setPresentationChangedFn(PresentationChangedF
     notifyPresentationChanged();
 }
 
-void CanvasParameterOverlayWidget::setCircles(const QList<CanvasParameterCircleControl>& circles)
+void CanvasParameterOverlayWidget::setControls(const QList<CanvasParameterControl>& controls)
 {
-    m_circles = circles;
-    if (m_hoveredCircle >= m_circles.size()) {
-        m_hoveredCircle = -1;
-    }
-    if (m_hoverVisualCircle >= m_circles.size()) {
-        m_hoverVisualCircle = -1;
+    const auto* hovered = controlAt(m_hoveredControl);
+    const QString hoveredId = hovered ? hovered->id : QString();
+    const auto* visual = controlAt(m_hoverVisualControl);
+    const QString visualId = visual ? visual->id : QString();
+    m_controls = controls;
+    m_hoveredControl = controlIndex(hoveredId);
+    m_hoverVisualControl = controlIndex(visualId);
+    if (m_hoverVisualControl < 0) {
+        m_hoverAnimation->stop();
         m_hoverProgress = 0.0;
     }
-    setVisible(!m_circles.isEmpty());
+    setVisible(!m_controls.isEmpty());
     notifyPresentationChanged();
 }
 
-const CanvasParameterCircleControl* CanvasParameterOverlayWidget::circleAt(int index) const
+const CanvasParameterControl* CanvasParameterOverlayWidget::controlAt(int index) const
 {
-    return index >= 0 && index < m_circles.size() ? &m_circles.at(index) : nullptr;
+    return index >= 0 && index < m_controls.size() ? &m_controls.at(index) : nullptr;
 }
 
-int CanvasParameterOverlayWidget::circleIndex(const QString& id) const
+int CanvasParameterOverlayWidget::controlIndex(const QString& id) const
 {
-    for (int i = 0; i < m_circles.size(); ++i) {
-        if (m_circles.at(i).id == id) {
+    for (int i = 0; i < m_controls.size(); ++i) {
+        if (m_controls.at(i).id == id) {
             return i;
         }
     }
@@ -82,25 +85,48 @@ int CanvasParameterOverlayWidget::circleIndex(const QString& id) const
 
 void CanvasParameterOverlayWidget::setCircleRadius(const QString& id, qreal radius)
 {
-    const int index = circleIndex(id);
+    const int index = controlIndex(id);
     if (index < 0) {
         return;
     }
-    m_circles[index].documentRadius = radius;
+    m_controls[index].documentRadius = radius;
     notifyPresentationChanged();
 }
 
-CanvasParameterOverlayWidget::ScreenCircle CanvasParameterOverlayWidget::screenCircle(
-    const CanvasParameterCircleControl& circle) const
+void CanvasParameterOverlayWidget::setControlPosition(const QString& id, const QPointF& position)
+{
+    const auto* control = controlAt(controlIndex(id));
+    if (!control) {
+        return;
+    }
+    const QString xKey = control->centerXParamKey;
+    const QString yKey = control->centerYParamKey;
+    // Keep other controls bound to the same center (e.g. a radius ring) in sync.
+    for (auto& item : m_controls) {
+        if (item.centerXParamKey == xKey) {
+            item.documentCenter.setX(position.x());
+        }
+        if (item.centerYParamKey == yKey) {
+            item.documentCenter.setY(position.y());
+        }
+    }
+    notifyPresentationChanged();
+}
+
+CanvasParameterOverlayWidget::ScreenControl CanvasParameterOverlayWidget::screenControl(
+    const CanvasParameterControl& control) const
 {
     if (!m_documentToLocal) {
         return {};
     }
-    const QPointF center = m_documentToLocal(circle.documentCenter);
+    const QPointF center = m_documentToLocal(control.documentCenter);
+    if (control.type == CanvasParameterControlType::Position) {
+        return { center, 0.0 };
+    }
     const QPointF xEdge
-        = m_documentToLocal(circle.documentCenter + QPointF(circle.documentRadius, 0.0));
+        = m_documentToLocal(control.documentCenter + QPointF(control.documentRadius, 0.0));
     const QPointF yEdge
-        = m_documentToLocal(circle.documentCenter + QPointF(0.0, circle.documentRadius));
+        = m_documentToLocal(control.documentCenter + QPointF(0.0, control.documentRadius));
     const qreal xRadius = std::hypot(xEdge.x() - center.x(), xEdge.y() - center.y());
     const qreal yRadius = std::hypot(yEdge.x() - center.x(), yEdge.y() - center.y());
     return { center, (xRadius + yRadius) * 0.5 };
@@ -108,9 +134,20 @@ CanvasParameterOverlayWidget::ScreenCircle CanvasParameterOverlayWidget::screenC
 
 int CanvasParameterOverlayWidget::hitTest(const QPointF& localPosition) const
 {
+    if (!m_documentToLocal) {
+        return -1;
+    }
     // Last control is visually on top and therefore wins overlapping hits.
-    for (int i = m_circles.size() - 1; i >= 0; --i) {
-        const ScreenCircle screen = screenCircle(m_circles.at(i));
+    for (int i = m_controls.size() - 1; i >= 0; --i) {
+        const ScreenControl screen = screenControl(m_controls.at(i));
+        if (m_controls.at(i).type == CanvasParameterControlType::Position) {
+            const qreal halfSize = (kParameterPositionSize + kParameterPositionHoverGrowth) * 0.5;
+            if (std::abs(localPosition.x() - screen.center.x()) <= halfSize
+                && std::abs(localPosition.y() - screen.center.y()) <= halfSize) {
+                return i;
+            }
+            continue;
+        }
         const qreal pointerRadius = std::hypot(
             localPosition.x() - screen.center.x(), localPosition.y() - screen.center.y());
         if (std::abs(pointerRadius - screen.radius) <= kHitHalfWidthPx) {
@@ -120,17 +157,17 @@ int CanvasParameterOverlayWidget::hitTest(const QPointF& localPosition) const
     return -1;
 }
 
-void CanvasParameterOverlayWidget::setHoveredCircle(int index)
+void CanvasParameterOverlayWidget::setHoveredControl(int index)
 {
-    const int resolved = index >= 0 && index < m_circles.size() ? index : -1;
-    if (m_hoveredCircle == resolved) {
+    const int resolved = index >= 0 && index < m_controls.size() ? index : -1;
+    if (m_hoveredControl == resolved) {
         return;
     }
-    m_hoveredCircle = resolved;
+    m_hoveredControl = resolved;
     m_hoverAnimation->stop();
     if (resolved >= 0) {
-        if (m_hoverVisualCircle != resolved) {
-            m_hoverVisualCircle = resolved;
+        if (m_hoverVisualControl != resolved) {
+            m_hoverVisualControl = resolved;
             m_hoverProgress = 0.0;
         }
         m_hoverAnimation->setEasingCurve(QEasingCurve::OutCubic);
@@ -144,16 +181,16 @@ void CanvasParameterOverlayWidget::setHoveredCircle(int index)
     m_hoverAnimation->start();
 }
 
-CanvasParameterOverlayWidget::ScreenCircle CanvasParameterOverlayWidget::screenCircleAt(
+CanvasParameterOverlayWidget::ScreenControl CanvasParameterOverlayWidget::screenControlAt(
     int index) const
 {
-    return index >= 0 && index < m_circles.size() ? screenCircle(m_circles.at(index))
-                                                  : ScreenCircle {};
+    return index >= 0 && index < m_controls.size() ? screenControl(m_controls.at(index))
+                                                   : ScreenControl {};
 }
 
 qreal CanvasParameterOverlayWidget::hoverProgress(int index) const
 {
-    return index == m_hoverVisualCircle ? m_hoverProgress : 0.0;
+    return index == m_hoverVisualControl ? m_hoverProgress : 0.0;
 }
 
 void CanvasParameterOverlayWidget::notifyPresentationChanged()

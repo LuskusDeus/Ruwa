@@ -4,7 +4,7 @@
 //   R U W A   |   C U R S O R   O V E R L A Y   S T A T E
 // ==========================================================================
 // Renderer-neutral state models for the rendered cursor overlays (brush,
-// eyedropper, tool, parameter circles). The state models live in the
+// eyedropper, tool, parameter controls). The state models live in the
 // renderer-neutral workspace namespace; the `aether` aliases below only keep
 // the legacy GL overlay internals building.
 // ==========================================================================
@@ -37,8 +37,15 @@ struct CursorCaptureRect {
     float bottom = 0.0f;
 };
 
-/// One extensible canvas-parameter circle, expressed in surface pixels.
-struct ParameterCircleOverlayState {
+enum class CanvasParameterControlType { Circle, Position };
+
+/// Fixed logical-pixel geometry shared by rendering and hit testing.
+inline constexpr float kParameterPositionSize = 20.0f;
+inline constexpr float kParameterPositionHoverGrowth = 4.0f;
+
+/// One canvas-parameter control, expressed in surface pixels.
+struct ParameterControlOverlayState {
+    CanvasParameterControlType type = CanvasParameterControlType::Circle;
     float centerX = 0.0f;
     float centerY = 0.0f;
     float radius = 0.0f;
@@ -50,7 +57,7 @@ struct ParameterCircleOverlayState {
  * @brief State for brush and eyedropper cursor overlays.
  */
 struct CursorOverlayState {
-    std::vector<ParameterCircleOverlayState> parameterCircles;
+    std::vector<ParameterControlOverlayState> parameterControls;
 
     bool brushVisible = false;
     float brushCenterX = 0.0f;
@@ -77,9 +84,10 @@ struct CursorOverlayState {
 
 namespace aether {
 
+using ruwa::ui::workspace::CanvasParameterControlType;
 using ruwa::ui::workspace::CursorCaptureRect;
 using ruwa::ui::workspace::CursorOverlayState;
-using ruwa::ui::workspace::ParameterCircleOverlayState;
+using ruwa::ui::workspace::ParameterControlOverlayState;
 
 } // namespace aether
 

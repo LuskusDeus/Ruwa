@@ -428,7 +428,7 @@ public:
         = 0;
     /// Canvas parameter controls rendered through the same scene-inverting
     /// path as brush and tool cursors.
-    virtual void setParameterCircleOverlayState(std::vector<ParameterCircleOverlayState> circles)
+    virtual void setParameterControlOverlayState(std::vector<ParameterControlOverlayState> controls)
         = 0;
 
     // --- display/style/motion state (plan 7.28) ---

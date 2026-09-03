@@ -3,6 +3,8 @@
 #ifndef RUWA_UI_WORKSPACE_CANVASPARAMETEROVERLAYWIDGET_H
 #define RUWA_UI_WORKSPACE_CANVASPARAMETEROVERLAYWIDGET_H
 
+#include "features/canvas/overlays/CursorOverlayState.h"
+
 #include <QList>
 #include <QPointF>
 #include <QString>
@@ -14,17 +16,25 @@ class QVariantAnimation;
 
 namespace ruwa::ui::workspace {
 
-/// Runtime form of a circle control. Values are resolved from the owning
+/// Runtime form of a parameter control. Values are resolved from the owning
 /// feature's declarative parameter bindings before they reach this visual.
-struct CanvasParameterCircleControl {
+struct CanvasParameterControl {
     QString id;
+    CanvasParameterControlType type = CanvasParameterControlType::Circle;
     QString valueParamKey;
+    QString centerXParamKey;
+    QString centerYParamKey;
     QPointF documentCenter;
     qreal documentRadius = 0.0;
     qreal minimumValue = 0.0;
     qreal maximumValue = 0.0;
     qreal stepValue = 1.0;
     bool integralValue = false;
+    QPointF minimumPosition;
+    QPointF maximumPosition;
+    QPointF positionStep;
+    bool integralX = false;
+    bool integralY = false;
 };
 
 /// Passive geometry/animation controller for feature-owned parameter controls.
@@ -36,7 +46,7 @@ public:
     using DocumentToLocalFn = std::function<QPointF(const QPointF&)>;
     using PresentationChangedFn = std::function<void()>;
 
-    struct ScreenCircle {
+    struct ScreenControl {
         QPointF center;
         qreal radius = 0.0;
     };
@@ -45,27 +55,28 @@ public:
 
     void setDocumentToLocalFn(DocumentToLocalFn fn);
     void setPresentationChangedFn(PresentationChangedFn fn);
-    void setCircles(const QList<CanvasParameterCircleControl>& circles);
-    const QList<CanvasParameterCircleControl>& circles() const { return m_circles; }
-    const CanvasParameterCircleControl* circleAt(int index) const;
-    int circleIndex(const QString& id) const;
+    void setControls(const QList<CanvasParameterControl>& controls);
+    const QList<CanvasParameterControl>& controls() const { return m_controls; }
+    const CanvasParameterControl* controlAt(int index) const;
+    int controlIndex(const QString& id) const;
     void setCircleRadius(const QString& id, qreal radius);
+    void setControlPosition(const QString& id, const QPointF& position);
 
     int hitTest(const QPointF& localPosition) const;
-    void setHoveredCircle(int index);
-    int hoveredCircle() const { return m_hoveredCircle; }
-    ScreenCircle screenCircleAt(int index) const;
+    void setHoveredControl(int index);
+    int hoveredControl() const { return m_hoveredControl; }
+    ScreenControl screenControlAt(int index) const;
     qreal hoverProgress(int index) const;
 
 private:
-    ScreenCircle screenCircle(const CanvasParameterCircleControl& circle) const;
+    ScreenControl screenControl(const CanvasParameterControl& control) const;
     void notifyPresentationChanged();
 
     DocumentToLocalFn m_documentToLocal;
     PresentationChangedFn m_presentationChanged;
-    QList<CanvasParameterCircleControl> m_circles;
-    int m_hoveredCircle = -1;
-    int m_hoverVisualCircle = -1;
+    QList<CanvasParameterControl> m_controls;
+    int m_hoveredControl = -1;
+    int m_hoverVisualControl = -1;
     qreal m_hoverProgress = 0.0;
     QVariantAnimation* m_hoverAnimation = nullptr;
 };

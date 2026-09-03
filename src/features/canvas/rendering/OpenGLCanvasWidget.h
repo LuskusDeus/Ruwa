@@ -495,7 +495,7 @@ public:
 
     /// Canvas parameter controls rendered through the same scene-inverting GL
     /// path as brush and tool cursors.
-    void setParameterCircleOverlayState(std::vector<ParameterCircleOverlayState> circles);
+    void setParameterControlOverlayState(std::vector<ParameterControlOverlayState> controls);
 
     /// Sample color from the rendered scene texture at world position (what the user sees).
     /// Returns true if sampling succeeded and out is filled; false if scene FBO unavailable.

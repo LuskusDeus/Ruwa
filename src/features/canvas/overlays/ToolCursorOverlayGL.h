@@ -58,6 +58,12 @@ public:
     /// therefore of every scene texel it samples. See CursorCaptureRect.
     static CursorCaptureRect captureRect(float centerX, float centerY, ToolCursorStyle style);
 
+    /// Fixed-size position handle, using the shared cached icon-mask renderer.
+    void renderParameterPosition(const ParameterControlOverlayState& state, int viewportWidth,
+        int viewportHeight, GLuint sceneTextureId, float uiScale = 1.0f);
+    static CursorCaptureRect parameterPositionCaptureRect(
+        float centerX, float centerY, float uiScale = 1.0f);
+
 private:
     void drawCrosshair(
         float centerX, float centerY, const std::array<float, 16>& mvp, float vpW, float vpH);
