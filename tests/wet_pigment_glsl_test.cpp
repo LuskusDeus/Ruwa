@@ -47,6 +47,10 @@ TEST_CASE("Wet pigment GLSL implements encode mix and decode", "[pigment][gpu]")
     REQUIRE(kLatentGlsl.find("latent.colorSecondMoment * alpha") != std::string_view::npos);
     REQUIRE(kLatentGlsl.find("mix(pigmentLinear, latent.colorMean, endpointWeight)")
         != std::string_view::npos);
+    REQUIRE(kLatentGlsl.find("const float endpointVarianceNoiseFloor = 1.0e-3;")
+        != std::string_view::npos);
+    REQUIRE(kLatentGlsl.find("variance - endpointVarianceNoiseFloor")
+        != std::string_view::npos);
     REQUIRE(kLatentGlsl.find("endpointWeight * latent.correction") == std::string_view::npos);
     REQUIRE(kLatentGlsl.find("linear - wetDecodePigmentsLinear(latent)") == std::string_view::npos);
 }
@@ -64,6 +68,34 @@ TEST_CASE("Wet pickup variants share one four-plane latent update", "[pigment][g
         != std::string_view::npos);
     REQUIRE(kWetPerDabPickupPreamble.find("uniform int uUsePen") != std::string_view::npos);
     REQUIRE(kWetBatchedPickupPreamble.find("uniform int uUsePen") != std::string_view::npos);
+    REQUIRE(kWetPerDabPickupPreamble.find("uniform int uCanvasIsRgba8")
+        != std::string_view::npos);
+    REQUIRE(kWetBatchedPickupPreamble.find("uniform int uCanvasIsRgba8")
+        != std::string_view::npos);
+    REQUIRE(kWetCanvasSamplingGlsl.find("vec4 wetResolveRgba8CanvasPremultiplied(")
+        != std::string_view::npos);
+    REQUIRE(kWetCanvasSamplingGlsl.find("const float fullyTrustedAlpha = 64.5 / 255.0;")
+        != std::string_view::npos);
+    REQUIRE(kWetCanvasSamplingGlsl.find("const float minimumCoverageMass = 24.5 / 255.0;")
+        != std::string_view::npos);
+    REQUIRE(kWetCanvasSamplingGlsl.find("smoothstep(") != std::string_view::npos);
+    REQUIRE(kWetCanvasSamplingGlsl.find("straightColor * center.a, center.a")
+        != std::string_view::npos);
+    REQUIRE(kWetCanvasSamplingGlsl.find(
+                "return center.a >= minimumCenterFallbackAlpha ? center : vec4(0.0);")
+        != std::string_view::npos);
+    REQUIRE(kWetPerDabPickupMain.find("wetResolveRgba8CanvasPremultiplied(")
+        != std::string_view::npos);
+    REQUIRE(kWetBatchedPickupMain.find("wetResolveRgba8CanvasPremultiplied(")
+        != std::string_view::npos);
+    REQUIRE(kWetPerDabPickupMain.find("if (uCanvasIsRgba8 != 0)")
+        != std::string_view::npos);
+    REQUIRE(kWetBatchedPickupMain.find("if (uCanvasIsRgba8 != 0)")
+        != std::string_view::npos);
+    REQUIRE(kWetPerDabPickupMain.find("uInit != 0 && uCanvasIsRgba8")
+        == std::string_view::npos);
+    REQUIRE(kWetBatchedPickupMain.find("uInit != 0 && uCanvasIsRgba8")
+        == std::string_view::npos);
     REQUIRE(kWetPerDabPickupMain.find("wetPickupUpdate(previous, previous, canvas)")
         != std::string_view::npos);
     REQUIRE(kWetBatchedPickupMain.find("wetPickupUpdate(previous, previous, canvas)")
@@ -134,6 +166,22 @@ TEST_CASE("Wet apply variants decode four planes into one canvas output", "[pigm
         != std::string_view::npos);
     REQUIRE(kWetPerDabApplyPreamble.find("uniform int uQuantizeTo8Bit") != std::string_view::npos);
     REQUIRE(kWetBatchedApplyPreamble.find("uniform int uQuantizeTo8Bit") != std::string_view::npos);
+    REQUIRE(kWetPerDabApplyPreamble.find("uniform int uCanvasIsRgba8")
+        != std::string_view::npos);
+    REQUIRE(kWetBatchedApplyPreamble.find("uniform int uCanvasIsRgba8")
+        != std::string_view::npos);
+    REQUIRE(kWetBatchedApplyPreamble.find("uniform vec2 uMaxValidUv")
+        != std::string_view::npos);
+    REQUIRE(kWetPerDabApplyMain.find("wetResolveRgba8CanvasPremultiplied(")
+        != std::string_view::npos);
+    REQUIRE(kWetBatchedApplyMain.find("wetResolveRgba8CanvasPremultiplied(")
+        != std::string_view::npos);
+    REQUIRE(kWetBatchedApplyMain.find(
+                "if (falloff <= 0.0) { outColor = originalCanvas; return; }")
+        != std::string_view::npos);
+    REQUIRE(kWetBatchedApplyMain.find(
+                "if (maskScale <= 0.0) { outColor = originalCanvas; return; }")
+        != std::string_view::npos);
     REQUIRE(kWetApplyCoverageGlsl.find("deposited.a < canvas.a") != std::string_view::npos);
     REQUIRE(kWetApplyCoverageGlsl.find("straightColor * canvas.a") != std::string_view::npos);
     REQUIRE(kWetApplyCoverageGlsl.find("color.rgb = floor") == std::string_view::npos);

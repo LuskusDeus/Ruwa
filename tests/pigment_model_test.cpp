@@ -158,6 +158,24 @@ TEST_CASE("Latent reservoir mixing does not drift after repeated reads", "[pigme
     REQUIRE(distance(PigmentModel::decode(stored), PigmentModel::decode(baseline)) < 1.0e-5f);
 }
 
+TEST_CASE("Wet endpoint ignores the measured GPU quantization variance floor",
+    "[pigment][reservoir][regression]")
+{
+    const PigmentModel::Srgb source { 86.0f / 255.0f, 74.0f / 255.0f, 118.0f / 255.0f };
+    // The concentrations deliberately remain the LUT approximation. Decode
+    // must use the exact affine endpoint while the only variance present fits
+    // inside the RGBA8/half-float pipeline's measured uncertainty budget. Run
+    // the actual feedback shape repeatedly: a one-off error would otherwise be
+    // small but could still become the visible bands from the reported case.
+    auto feedbackColor = source;
+    for (int iteration = 0; iteration < 256; ++iteration) {
+        auto noisyEndpoint = PigmentModel::encode(feedbackColor);
+        noisyEndpoint.colorSecondMoment += 0.75f * PigmentModel::kEndpointVarianceNoiseFloor;
+        feedbackColor = PigmentModel::decode(noisyEndpoint);
+    }
+    REQUIRE(distance(feedbackColor, source) < 1.0e-6f);
+}
+
 TEST_CASE("Latent accumulation is associative", "[pigment][reservoir]")
 {
     const auto red = PigmentModel::encode({ 0.9f, 0.05f, 0.02f });

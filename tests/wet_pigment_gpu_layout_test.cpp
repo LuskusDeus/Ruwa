@@ -6,6 +6,8 @@
 
 #include <catch2/catch_test_macros.hpp>
 
+#include <cmath>
+
 using namespace aether::wet_pigment_gpu;
 
 TEST_CASE("Wet pigment GPU layout has stable plane indices", "[pigment][gpu]")
@@ -52,6 +54,47 @@ TEST_CASE("Wet float working color preserves muted RGB at one-byte alpha", "[pig
     }
     REQUIRE(static_cast<unsigned int>(inv255 * 255.0f + 0.5f) == 1u);
     REQUIRE(aether::floatToHalfBits(inv255) != 0u);
+}
+
+TEST_CASE("One-byte premultiplied RGB cannot supply a stable wet-pickup hue",
+    "[pigment][gpu][regression]")
+{
+    // The same #6D5E74 edge pixel becomes blue or magenta solely from the
+    // rounding offset when alpha has only one byte of coverage. Amplifying any
+    // of these straight colors in the wet reservoir therefore exposes a false
+    // spectrum, not merely the previously dominant black case.
+    constexpr float red = 109.0f / 255.0f;
+    constexpr float green = 94.0f / 255.0f;
+    constexpr float blue = 116.0f / 255.0f;
+    const auto quantizedNumerator = [](float straightChannel, float roundingOffset) {
+        return static_cast<int>(std::floor(straightChannel + roundingOffset));
+    };
+
+    CHECK(quantizedNumerator(red, 0.55f) == 0);
+    CHECK(quantizedNumerator(green, 0.55f) == 0);
+    CHECK(quantizedNumerator(blue, 0.55f) == 1); // false blue
+    CHECK(quantizedNumerator(red, 0.60f) == 1);
+    CHECK(quantizedNumerator(green, 0.60f) == 0);
+    CHECK(quantizedNumerator(blue, 0.60f) == 1); // false magenta
+
+    const auto fract = [](float value) { return value - std::floor(value); };
+    float neighborhood[3] { 0.0f, 0.0f, 0.0f };
+    constexpr float straight[3] { red, green, blue };
+    constexpr float sampleCount = 49.0f;
+    for (int y = 100; y <= 106; ++y) {
+        for (int x = 100; x <= 106; ++x) {
+            const float noise = fract(52.9829189f
+                * fract(static_cast<float>(x) * 0.06711056f
+                    + static_cast<float>(y) * 0.00583715f));
+            for (int channel = 0; channel < 3; ++channel)
+                neighborhood[channel] += std::floor(straight[channel] + noise);
+        }
+    }
+    for (int channel = 0; channel < 3; ++channel) {
+        // Normalized convolution sums premultiplied RGB and alpha before the
+        // divide, recovering the hue that the dither represents spatially.
+        CHECK(std::abs(neighborhood[channel] / sampleCount - straight[channel]) < 0.03f);
+    }
 }
 
 TEST_CASE("Wet pigment GPU names match the shader contract", "[pigment][gpu]")

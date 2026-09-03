@@ -215,8 +215,16 @@ vec4 wetDecodePremultiplied(WetLatent latent) {
     if (latent.alpha <= 1.0e-6) return vec4(0.0);
     float meanSquared = dot(latent.colorMean, latent.colorMean);
     float variance = max(latent.colorSecondMoment - meanSquared, 0.0);
+    // RGBA8 unpremultiplication, neighborhood reconstruction, RGBA16F moment
+    // storage and bilinear reservoir sampling all contribute a small positive
+    // variance even when every sample originated from one color. If spectral
+    // decoding reacts to that numerical floor, every encode/decode feedback
+    // cycle moves the color a little farther from its endpoint. Subtract the
+    // measured noise budget before enabling nonlinear pigment mixing.
+    const float endpointVarianceNoiseFloor = 1.0e-3;
+    float chromaticVariance = max(variance - endpointVarianceNoiseFloor, 0.0);
     vec3 pigmentLinear = wetDecodePigmentsLinear(latent);
-    float endpointWeight = exp(-8.0 * variance);
+    float endpointWeight = exp(-8.0 * chromaticVariance);
     // A residual computed at an endpoint is not valid after nonlinear spectral
     // mixing. The stored linear-RGB mean is affine and provides the exact
     // endpoint anchor without accumulating a dark correction bias.

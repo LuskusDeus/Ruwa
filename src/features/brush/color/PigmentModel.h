@@ -11,6 +11,9 @@ class PigmentModel final {
 public:
     static constexpr std::size_t kSpectralSampleCount = 16;
     static constexpr std::size_t kPigmentCount = 8;
+    // Numerical color variance below this value is attributable to the
+    // premultiplied RGBA8 / half-float wet pipeline, not to a real pigment mix.
+    static constexpr float kEndpointVarianceNoiseFloor = 1.0e-3f;
 
     using Spectrum = std::array<float, kSpectralSampleCount>;
     using Concentrations = std::array<float, kPigmentCount>;

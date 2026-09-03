@@ -1380,18 +1380,22 @@ const QString kSmudgePickupBatchFrag = QStringLiteral(
 
 const QString kWetPerDabPickupFrag = glsl(wet_pigment_gpu::kWetPerDabPickupPreamble)
     + glsl(wet_pigment_gpu::kWetPickupOutputsGlsl) + glsl(wet_pigment_gpu::kLatentGlsl)
+    + glsl(wet_pigment_gpu::kWetCanvasSamplingGlsl)
     + glsl(wet_pigment_gpu::kWetPickupUpdateGlsl) + glsl(wet_pigment_gpu::kWetPerDabPickupMain);
 
 const QString kWetBatchedPickupFrag = glsl(wet_pigment_gpu::kWetBatchedPickupPreamble)
     + glsl(wet_pigment_gpu::kWetPickupOutputsGlsl) + glsl(wet_pigment_gpu::kLatentGlsl)
+    + glsl(wet_pigment_gpu::kWetCanvasSamplingGlsl)
     + glsl(wet_pigment_gpu::kWetPickupUpdateGlsl) + glsl(wet_pigment_gpu::kWetBatchedPickupMain);
 
 const QString kWetPerDabApplyFrag = glsl(wet_pigment_gpu::kWetPerDabApplyPreamble)
-    + glsl(wet_pigment_gpu::kLatentGlsl) + glsl(wet_pigment_gpu::kWetApplyCoverageGlsl)
+    + glsl(wet_pigment_gpu::kLatentGlsl) + glsl(wet_pigment_gpu::kWetCanvasSamplingGlsl)
+    + glsl(wet_pigment_gpu::kWetApplyCoverageGlsl)
     + glsl(wet_pigment_gpu::kWetPerDabApplyMain);
 
 const QString kWetBatchedApplyFrag = glsl(wet_pigment_gpu::kWetBatchedApplyPreamble)
-    + glsl(wet_pigment_gpu::kLatentGlsl) + glsl(wet_pigment_gpu::kWetApplyCoverageGlsl)
+    + glsl(wet_pigment_gpu::kLatentGlsl) + glsl(wet_pigment_gpu::kWetCanvasSamplingGlsl)
+    + glsl(wet_pigment_gpu::kWetApplyCoverageGlsl)
     + glsl(wet_pigment_gpu::kWetBatchedApplyMain);
 
 // ---------------------------------------------------------------------------
@@ -2908,6 +2912,8 @@ void GLBrushRenderer::stampGPU(TileGrid& strokeBuffer, GLTileRenderer* tileRende
             pickupProgram->setUniform("uBrushRoundness", clampedRoundness);
             pickupProgram->setUniform("uBrushAngleRad", brushAngleRad);
             pickupProgram->setUniform("uUsePen", 1);
+            pickupProgram->setUniform(
+                "uCanvasIsRgba8", layerGrid->format() == TilePixelFormat::RGBA8 ? 1 : 0);
         } else {
             pickupProgram->setUniform("uReservoirSrc", 1);
             pickupProgram->setUniform("uPickupRate", std::clamp(brush.wetMix(), 0.0f, 1.0f));
@@ -3056,6 +3062,8 @@ void GLBrushRenderer::stampGPU(TileGrid& strokeBuffer, GLTileRenderer* tileRende
         applyProgram->setUniform("uOriginalTexture", 0);
         if (wetMode) {
             applyProgram->setUniform("uPreserveCanvasAlpha", 0);
+            applyProgram->setUniform(
+                "uCanvasIsRgba8", layerGrid->format() == TilePixelFormat::RGBA8 ? 1 : 0);
             applyProgram->setUniform(
                 "uQuantizeTo8Bit", m_blurScratchFormat == TilePixelFormat::RGBA8 ? 1 : 0);
             // Layering uses a spacing-normalized thin coat. A negative value
@@ -5404,6 +5412,8 @@ bool GLBrushRenderer::stampSmudgeSegmentGPU(TileGrid& strokeBuffer, GLTileRender
     configureCommon(pickupProgram, false);
     if (wetMode) {
         pickupProgram->setUniform("uUsePen", 1);
+        pickupProgram->setUniform(
+            "uCanvasIsRgba8", layerGrid->format() == TilePixelFormat::RGBA8 ? 1 : 0);
     } else {
         pickupProgram->setUniform("uReservoirSrc", 1);
         pickupProgram->setUniform("uPickupRate", std::clamp(brush.wetMix(), 0.0f, 1.0f));
@@ -5422,6 +5432,8 @@ bool GLBrushRenderer::stampSmudgeSegmentGPU(TileGrid& strokeBuffer, GLTileRender
     configureCommon(applyProgram, true);
     if (wetMode) {
         applyProgram->setUniform("uPreserveCanvasAlpha", 0);
+        applyProgram->setUniform(
+            "uCanvasIsRgba8", layerGrid->format() == TilePixelFormat::RGBA8 ? 1 : 0);
         applyProgram->setUniform(
             "uQuantizeTo8Bit", m_smudgeWorkFormat == TilePixelFormat::RGBA8 ? 1 : 0);
     } else {

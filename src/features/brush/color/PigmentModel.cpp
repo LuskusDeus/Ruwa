@@ -185,14 +185,16 @@ PigmentModel::Srgb PigmentModel::decode(const Latent& latent)
         + latent.colorMean.g * latent.colorMean.g + latent.colorMean.b * latent.colorMean.b;
     const float variance = std::max(latent.colorSecondMoment - meanSquared, 0.0f);
     constexpr float kEndpointVarianceFalloff = 8.0f;
-    const float endpointWeight = std::exp(-kEndpointVarianceFalloff * variance);
+    const float chromaticVariance = std::max(variance - kEndpointVarianceNoiseFloor, 0.0f);
+    const float endpointWeight = std::exp(-kEndpointVarianceFalloff * chromaticVariance);
 
     // Spectral decoding is nonlinear, therefore endpoint residuals cannot be
     // averaged and applied to the decoded mixture. Doing that repeatedly can
     // subtract energy from every channel and eventually collapse vivid mixes
     // toward black. colorMean is affine under mixing, so it is the valid color
-    // anchor: exact for an unmixed endpoint and progressively released as the
-    // mixture gains color variance.
+    // anchor: exact for an unmixed endpoint (including the pipeline's numerical
+    // variance floor) and progressively released as a real mixture gains color
+    // variance.
     return { linearToSrgb(base.r + endpointWeight * (latent.colorMean.r - base.r)),
         linearToSrgb(base.g + endpointWeight * (latent.colorMean.g - base.g)),
         linearToSrgb(base.b + endpointWeight * (latent.colorMean.b - base.b)) };

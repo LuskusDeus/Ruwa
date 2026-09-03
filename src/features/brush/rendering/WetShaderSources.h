@@ -13,6 +13,72 @@ layout(location = 2) out vec4 outCorrectionAndAlpha;
 layout(location = 3) out vec4 outColorMoments;
 )glsl";
 
+// Shared by Wet pickup and apply. RGBA8's low-alpha RGB numerators are a spatial
+// dither, so they must be resolved as a neighborhood before any operation raises
+// coverage and makes their individual quantization error visible.
+inline constexpr std::string_view kWetCanvasSamplingGlsl = R"glsl(
+vec4 wetSanitizeCanvasPremultiplied(vec4 color) {
+    color = wetFinite(color, vec4(0.0));
+    color.a = clamp(color.a, 0.0, 1.0);
+    color.rgb = clamp(color.rgb, vec3(0.0), vec3(color.a));
+    return color.a > 1.0e-6 ? color : vec4(0.0);
+}
+vec4 wetResolveRgba8CanvasPremultiplied(
+    sampler2D canvasTexture, vec2 uv, vec2 minUv, vec2 maxUv) {
+    vec4 center = wetSanitizeCanvasPremultiplied(
+        texture(canvasTexture, clamp(uv, minUv, maxUv)));
+    if (center.a <= 1.0e-6) return vec4(0.0);
+
+    // At low coverage, premultiplied RGBA8 has too few RGB numerators to
+    // describe the straight color. Alpha 1/255 permits only 0 or 1 per channel,
+    // so unpremultiplication turns one smooth edge into black/red/blue/magenta
+    // pixels. Wet deposit later raises their alpha and exposes that false
+    // spectrum. Resolve the straight color from a local premultiplied
+    // neighborhood instead: summing RGB and alpha before division reconstructs
+    // the color represented spatially by the existing rounding dither. Retain
+    // the center pixel's original coverage after that resolve.
+    // Below 64 bytes of alpha, a premultiplied RGB numerator carries fewer
+    // than six reliable bits of straight color. Do not switch abruptly at one
+    // alpha value: that merely turns the quantization error into a contour.
+    const float fullyTrustedAlpha = 64.5 / 255.0;
+    if (center.a >= fullyTrustedAlpha)
+        return center;
+
+    vec4 neighborhood = vec4(0.0);
+    vec2 texelSize = 1.0 / vec2(textureSize(canvasTexture, 0));
+    // A 7x7 window has enough independent dither samples to recover a stable
+    // hue even in a one-byte-alpha band, while remaining local to the edge and
+    // avoiding color leakage from unrelated distant shapes. This branch runs
+    // only for non-empty pixels below the trusted-alpha boundary.
+    for (int y = -3; y <= 3; ++y) {
+        for (int x = -3; x <= 3; ++x) {
+            vec2 sampleUv = uv + vec2(float(x), float(y)) * texelSize;
+            if (any(lessThan(sampleUv, minUv)) || any(greaterThan(sampleUv, maxUv)))
+                continue;
+            neighborhood += wetSanitizeCanvasPremultiplied(
+                texture(canvasTexture, sampleUv));
+        }
+    }
+
+    // Require at least 24.5 byte-equivalents of accumulated coverage. Below
+    // that there are too few spatial samples to distinguish hue from rounding
+    // noise at the very edge. A moderately covered isolated detail is already
+    // more trustworthy than that, so preserve its center sample instead.
+    const float minimumCoverageMass = 24.5 / 255.0;
+    const float minimumCenterFallbackAlpha = 8.5 / 255.0;
+    if (neighborhood.a < minimumCoverageMass)
+        return center.a >= minimumCenterFallbackAlpha ? center : vec4(0.0);
+
+    vec3 neighborhoodStraight = neighborhood.rgb / neighborhood.a;
+    vec3 centerStraight = center.rgb / center.a;
+    float centerReliability = smoothstep(
+        minimumCenterFallbackAlpha, fullyTrustedAlpha, center.a);
+    vec3 straightColor = mix(neighborhoodStraight, centerStraight, centerReliability);
+    return wetSanitizeCanvasPremultiplied(
+        vec4(straightColor * center.a, center.a));
+}
+)glsl";
+
 // Both Wet geometry variants call this single latent update. uUsePen retains
 // the optional pen-free latent exchange mode; all contributor weights include
 // premultiplied alpha and wetMix4 performs one normalized resolve.
@@ -86,15 +152,23 @@ uniform vec2 uAdvectPx;
 uniform float uWetFlow;
 uniform float uPenFillGate;
 uniform int uUsePen;
+uniform int uCanvasIsRgba8;
 in vec2 fragPixelCoord;
 )glsl";
 
 inline constexpr std::string_view kWetPerDabPickupMain = R"glsl(
 void main() {
     vec2 local = fragPixelCoord - vec2(uReservoirHalf);
-    vec2 canvasUv = (uBrushWorldPos + local - uRoiOriginPx) * uInvRoiSize;
-    WetLatent canvas = wetEncodePremultiplied(texture(uOriginalTexture,
-        clamp(canvasUv, vec2(0.0), vec2(1.0))));
+    vec2 rawCanvasUv = (uBrushWorldPos + local - uRoiOriginPx) * uInvRoiSize;
+    vec2 halfTexelUv = 0.5 / vec2(textureSize(uOriginalTexture, 0));
+    vec2 minCanvasUv = halfTexelUv;
+    vec2 maxCanvasUv = vec2(1.0) - halfTexelUv;
+    vec2 canvasUv = clamp(rawCanvasUv, minCanvasUv, maxCanvasUv);
+    vec4 canvasColor = texture(uOriginalTexture, canvasUv);
+    if (uCanvasIsRgba8 != 0)
+        canvasColor = wetResolveRgba8CanvasPremultiplied(
+            uOriginalTexture, canvasUv, minCanvasUv, maxCanvasUv);
+    WetLatent canvas = wetEncodePremultiplied(canvasColor);
     if (uInit != 0) {
         wetWritePickup(wetInitialPickup(canvas));
         return;
@@ -147,6 +221,7 @@ uniform vec2 uAdvectPx;
 uniform float uWetFlow;
 uniform float uPenFillGate;
 uniform int uUsePen;
+uniform int uCanvasIsRgba8;
 in vec2 fragPixelCoord;
 )glsl";
 
@@ -158,7 +233,11 @@ void main() {
     vec2 halfTexelUv = 0.5 * uInvTexSize;
     vec2 validMaxUv = max(uMaxValidUv - halfTexelUv, halfTexelUv);
     vec2 canvasUv = clamp((uBrushCenter + local) * uInvTexSize, halfTexelUv, validMaxUv);
-    WetLatent canvas = wetEncodePremultiplied(texture(uOriginalTexture, canvasUv));
+    vec4 canvasColor = texture(uOriginalTexture, canvasUv);
+    if (uCanvasIsRgba8 != 0)
+        canvasColor = wetResolveRgba8CanvasPremultiplied(
+            uOriginalTexture, canvasUv, halfTexelUv, validMaxUv);
+    WetLatent canvas = wetEncodePremultiplied(canvasColor);
     if (uInit != 0) {
         wetWritePickup(wetInitialPickup(canvas));
         return;
@@ -289,6 +368,7 @@ uniform float uCoatPerDab;
 uniform float uDepositRate;
 uniform int uPreserveCanvasAlpha;
 uniform int uQuantizeTo8Bit;
+uniform int uCanvasIsRgba8;
 in vec2 fragPixelCoord;
 layout(location = 0) out vec4 outColor;
 )glsl";
@@ -305,8 +385,15 @@ void main() {
     float maskScale = uUseMask != 0 ? texture(uMaskTexture, fragPixelCoord * uInvTileSize).a : 1.0;
     if (maskScale <= 0.0) discard;
     vec2 worldPixel = uTileOriginPx + fragPixelCoord;
-    vec4 canvas = wetSanitizePremultiplied(texture(uOriginalTexture,
-        (worldPixel - uRoiOriginPx) * uInvRoiSize));
+    vec2 rawCanvasUv = (worldPixel - uRoiOriginPx) * uInvRoiSize;
+    vec2 halfTexelUv = 0.5 / vec2(textureSize(uOriginalTexture, 0));
+    vec2 minCanvasUv = halfTexelUv;
+    vec2 maxCanvasUv = vec2(1.0) - halfTexelUv;
+    vec2 canvasUv = clamp(rawCanvasUv, minCanvasUv, maxCanvasUv);
+    vec4 canvas = wetSanitizePremultiplied(texture(uOriginalTexture, canvasUv));
+    if (uCanvasIsRgba8 != 0)
+        canvas = wetResolveRgba8CanvasPremultiplied(
+            uOriginalTexture, canvasUv, minCanvasUv, maxCanvasUv);
     WetLatent latent = wetSampleReservoir((delta + vec2(uReservoirHalf)) * uInvReservoirPhys);
     vec4 reservoir = wetDecodePremultiplied(latent);
     outColor = wetPreserveCanvasAlpha(wetDitherPremultiplied(
@@ -329,28 +416,37 @@ uniform sampler2D uDabShapeTexture;
 uniform int uUseDabShapeTexture;
 uniform vec2 uDabShapeScale;
 uniform vec2 uInvTexSize;
+uniform vec2 uMaxValidUv;
 uniform float uReservoirHalf;
 uniform vec2 uInvReservoirPhys;
 uniform float uCoatPerDab;
 uniform float uDepositRate;
 uniform int uPreserveCanvasAlpha;
 uniform int uQuantizeTo8Bit;
+uniform int uCanvasIsRgba8;
 in vec2 fragPixelCoord;
 layout(location = 0) out vec4 outColor;
 )glsl";
 
 inline constexpr std::string_view kWetBatchedApplyMain = R"glsl(
 void main() {
-    vec4 canvas = wetSanitizePremultiplied(texture(uOriginalTexture, fragPixelCoord * uInvTexSize));
+    vec2 halfTexelUv = 0.5 * uInvTexSize;
+    vec2 validMaxUv = max(uMaxValidUv - halfTexelUv, halfTexelUv);
+    vec2 canvasUv = clamp(fragPixelCoord * uInvTexSize, halfTexelUv, validMaxUv);
+    vec4 originalCanvas = wetSanitizePremultiplied(texture(uOriginalTexture, canvasUv));
     vec2 delta = fragPixelCoord - uBrushCenter;
     float c = cos(uBrushAngleRad);
     float s = sin(uBrushAngleRad);
     float roundness = max(0.01, clamp(uBrushRoundness, 0.0, 1.0));
     vec2 local = vec2(delta.x * c + delta.y * s, (-delta.x * s + delta.y * c) / roundness);
     float falloff = wetBrushCoverage(local);
-    if (falloff <= 0.0) { outColor = canvas; return; }
+    if (falloff <= 0.0) { outColor = originalCanvas; return; }
     float maskScale = uUseMask != 0 ? texture(uMaskTexture, fragPixelCoord * uInvMaskSize).a : 1.0;
-    if (maskScale <= 0.0) { outColor = canvas; return; }
+    if (maskScale <= 0.0) { outColor = originalCanvas; return; }
+    vec4 canvas = originalCanvas;
+    if (uCanvasIsRgba8 != 0)
+        canvas = wetResolveRgba8CanvasPremultiplied(
+            uOriginalTexture, canvasUv, halfTexelUv, validMaxUv);
     WetLatent latent = wetSampleReservoir((delta + vec2(uReservoirHalf)) * uInvReservoirPhys);
     vec4 reservoir = wetDecodePremultiplied(latent);
     outColor = wetPreserveCanvasAlpha(wetDitherPremultiplied(
