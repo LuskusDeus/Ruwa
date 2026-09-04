@@ -1501,6 +1501,7 @@ void BrushPackPanel::connectSignals()
     connect(&manager, &BrushManager::presetRenamed, this, &BrushPackPanel::onManagerPresetRenamed);
     connect(&manager, &BrushManager::brushCreated, this, &BrushPackPanel::onManagerBrushCreated);
     connect(&manager, &BrushManager::brushRemoved, this, &BrushPackPanel::onManagerBrushRemoved);
+    connect(&manager, &BrushManager::brushMoved, this, &BrushPackPanel::onManagerBrushMoved);
     connect(&manager, &BrushManager::brushRenamed, this, &BrushPackPanel::onManagerBrushRenamed);
     connect(&manager, &BrushManager::brushSettingsUpdated, this,
         &BrushPackPanel::onManagerBrushSettingsUpdated);
@@ -2176,6 +2177,23 @@ void BrushPackPanel::onManagerBrushCreated(const QString& presetId, const QStrin
 void BrushPackPanel::onManagerBrushRemoved(const QString& presetId, const QString& brushId)
 {
     removeBrushFromPreset(presetId, brushId);
+}
+
+void BrushPackPanel::onManagerBrushMoved(
+    const QString& sourcePresetId, const QString& targetPresetId, const QString& brushId)
+{
+    syncPresetPageFromManager(sourcePresetId);
+    if (targetPresetId != sourcePresetId) {
+        syncPresetPageFromManager(targetPresetId);
+    }
+
+    // Keep the active brush selected in its new pack without requesting a
+    // different canvas brush. Other moves only need to refresh page selections.
+    if (m_selectedBrushId == brushId) {
+        applyCanonicalSelection(targetPresetId, brushId, false);
+    } else {
+        propagateCanonicalSelection(false);
+    }
 }
 
 void BrushPackPanel::onManagerBrushRenamed(const QString& brushId, const QString& newName)

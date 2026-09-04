@@ -2,7 +2,6 @@
 
 // NewProjectContent.cpp
 #include "NewProjectContent.h"
-#include "ProjectSettingsField.h"
 #include "ProjectPresetCard.h"
 #include "ProjectPresets.h"
 #include "CanvasThumbnail.h"
@@ -12,6 +11,8 @@
 #include "shared/resources/IconProvider.h"
 #include "shared/i18n/TranslationManager.h"
 #include "shared/widgets/inputs/ColorInputButton.h"
+#include "shared/widgets/inputs/NumericInputField.h"
+#include "shared/widgets/inputs/StyledInputField.h"
 #include "shared/widgets/layout/SmoothScrollArea.h"
 #include "shared/widgets/layout/FlowLayout.h"
 #include "shared/widgets/layout/AnimatedStackedWidget.h"
@@ -22,19 +23,17 @@
 
 #include <QCoreApplication>
 #include <QEvent>
+#include <QGridLayout>
 #include <QHBoxLayout>
 #include <QIcon>
 #include <QLayoutItem>
 #include <QLocale>
 #include <QStringList>
-#include <QSpacerItem>
 #include <QVBoxLayout>
 #include <QLabel>
 #include <QMouseEvent>
 #include <QResizeEvent>
-#include <QShowEvent>
 #include <QSignalBlocker>
-#include <QTimer>
 #include <QtMath>
 #include <algorithm>
 #include <functional>
@@ -356,30 +355,17 @@ void NewProjectContent::setupContent()
     leftLayout->addWidget(m_bitDepthSection);
 
     syncDimensionFieldsEnabledState();
-    QTimer::singleShot(0, this, [this]() { syncLockColumnLayout(); });
 
-    QHBoxLayout* dimensionsLayout = new QHBoxLayout();
-    dimensionsLayout->setContentsMargins(0, 0, 0, 0);
-    dimensionsLayout->setSpacing(theme.scaled(BASE_DIMENSIONS_SPACING));
-    dimensionsLayout->addWidget(m_widthField, 0, Qt::AlignTop);
-
-    // Lock sits in a column with stretch above so it lines up with the spinbox row,
-    // not vertically centered against label+field (cf. reference link icon flex-end).
-    m_lockColumn = new QWidget(leftColumn);
-    // Fixed height is set in syncLockColumnLayout() to match the dimension fields — Expanding here
-    // inflated the whole dimensions row and the left column layout (giant gap above Create).
-    m_lockColumn->setSizePolicy(QSizePolicy::Minimum, QSizePolicy::Fixed);
-    m_lockColumnLayout = new QVBoxLayout(m_lockColumn);
-    m_lockColumnLayout->setContentsMargins(0, 0, 0, 0);
-    m_lockColumnLayout->setSpacing(0);
-    m_lockColumnTopSpacer = new QSpacerItem(0, 1, QSizePolicy::Minimum, QSizePolicy::Fixed);
-    m_lockColumnLayout->addItem(m_lockColumnTopSpacer);
-    m_lockColumnLayout->addWidget(m_aspectLockButton, 0, Qt::AlignHCenter);
-    m_lockColumnLayout->addStretch(1);
-    dimensionsLayout->addWidget(m_lockColumn, 0, Qt::AlignTop);
-
-    dimensionsLayout->addWidget(m_heightField, 0, Qt::AlignTop);
-    leftLayout->addLayout(dimensionsLayout);
+    m_dimensionsLayout = new QGridLayout();
+    m_dimensionsLayout->setContentsMargins(0, 0, 0, 0);
+    m_dimensionsLayout->setColumnStretch(0, 1);
+    m_dimensionsLayout->setColumnStretch(2, 1);
+    m_dimensionsLayout->addWidget(m_widthTitleLabel, 0, 0);
+    m_dimensionsLayout->addWidget(m_heightTitleLabel, 0, 2);
+    m_dimensionsLayout->addWidget(m_widthField, 1, 0);
+    m_dimensionsLayout->addWidget(m_aspectLockButton, 1, 1, Qt::AlignCenter);
+    m_dimensionsLayout->addWidget(m_heightField, 1, 2);
+    leftLayout->addLayout(m_dimensionsLayout);
 
     m_backgroundColorSection = new QWidget(leftColumn);
     QVBoxLayout* backgroundColorLayout = new QVBoxLayout(m_backgroundColorSection);
@@ -472,18 +458,6 @@ void NewProjectContent::changeEvent(QEvent* event)
     // installTranslator (including async Russian load), not only on queued LanguageChange.
 }
 
-void NewProjectContent::resizeEvent(QResizeEvent* event)
-{
-    HomePageContent::resizeEvent(event);
-    syncLockColumnLayout();
-}
-
-void NewProjectContent::showEvent(QShowEvent* event)
-{
-    HomePageContent::showEvent(event);
-    syncLockColumnLayout();
-}
-
 void NewProjectContent::retranslateUi()
 {
     if (m_titleLabel)
@@ -495,10 +469,10 @@ void NewProjectContent::retranslateUi()
         if (cur == "Untitled Project" || cur.isEmpty())
             m_projectNameField->setText(tr("Untitled Project"));
     }
-    if (m_widthField)
-        m_widthField->setLabel(tr("Width"));
-    if (m_heightField)
-        m_heightField->setLabel(tr("Height"));
+    if (m_widthTitleLabel)
+        m_widthTitleLabel->setText(settingsSectionLabel(tr("Width")));
+    if (m_heightTitleLabel)
+        m_heightTitleLabel->setText(settingsSectionLabel(tr("Height")));
     if (m_backgroundColorTitleLabel) {
         m_backgroundColorTitleLabel->setText(settingsSectionLabel(tr("Background Color")));
     }
@@ -538,8 +512,6 @@ void NewProjectContent::retranslateUi()
 
     // Recent cards carry resolved strings (borrowed preset names, tooltips) — rebuild them.
     rebuildRecentPresets();
-
-    QTimer::singleShot(0, this, [this]() { syncLockColumnLayout(); });
 }
 
 QString NewProjectContent::projectName() const
@@ -549,8 +521,8 @@ QString NewProjectContent::projectName() const
 
 QSize NewProjectContent::canvasSize() const
 {
-    const int width = m_widthField ? m_widthField->value() : kDefaultProjectWidth;
-    const int height = m_heightField ? m_heightField->value() : kDefaultProjectHeight;
+    const int width = m_widthField ? qRound(m_widthField->value()) : kDefaultProjectWidth;
+    const int height = m_heightField ? qRound(m_heightField->value()) : kDefaultProjectHeight;
     return QSize(qBound(kMinCanvasDimension, width, kMaxCanvasDimension),
         qBound(kMinCanvasDimension, height, kMaxCanvasDimension));
 }
@@ -588,32 +560,46 @@ aether::TilePixelFormat NewProjectContent::tileFormat() const
 void NewProjectContent::createSettingsPanel(QWidget* fieldParent)
 {
     m_projectNameField
-        = new ProjectSettingsField(tr("Name"), ProjectSettingsField::FieldType::Text, fieldParent);
+        = new StyledInputField(tr("Name"), StyledInputField::FieldType::Text, fieldParent);
     m_projectNameField->setMaxLength(MAX_PROJECT_NAME_CHARS);
     m_projectNameField->setPlaceholder(tr("Untitled Project"));
     m_projectNameField->setText(tr("Untitled Project"));
-    connect(m_projectNameField, &ProjectSettingsField::textChanged, this, [this]() {
+    connect(m_projectNameField, &StyledInputField::textChanged, this, [this]() {
         if (m_canvasThumbnail)
             m_canvasThumbnail->setProjectName(projectName());
     });
 
-    m_widthField = new ProjectSettingsField(
-        tr("Width"), ProjectSettingsField::FieldType::Number, fieldParent);
+    m_widthField = new NumericInputField(fieldParent);
+    m_widthField->setSizePolicy(QSizePolicy::Expanding, QSizePolicy::Fixed);
     m_widthField->setRange(kMinCanvasDimension, kMaxCanvasDimension);
+    m_widthField->setDecimals(0);
+    m_widthField->setSingleStep(1.0);
+    m_widthField->setSuffix(QStringLiteral("px"));
     m_widthField->setValue(kDefaultProjectWidth);
-    connect(m_widthField, &ProjectSettingsField::valueChanged, this,
-        &NewProjectContent::onWidthChanged);
+    connect(m_widthField, &NumericInputField::valueChanged, this,
+        [this](double value) { onWidthChanged(qRound(value)); });
+
+    m_widthTitleLabel = new QLabel(settingsSectionLabel(tr("Width")), fieldParent);
+    m_widthTitleLabel->setBuddy(m_widthField);
+    m_widthTitleLabel->setSizePolicy(QSizePolicy::Preferred, QSizePolicy::Fixed);
 
     m_aspectLockButton = new AspectRatioLockButton(fieldParent);
     connect(
         m_aspectLockButton, &QPushButton::toggled, this, &NewProjectContent::onAspectLockToggled);
 
-    m_heightField = new ProjectSettingsField(
-        tr("Height"), ProjectSettingsField::FieldType::Number, fieldParent);
+    m_heightField = new NumericInputField(fieldParent);
+    m_heightField->setSizePolicy(QSizePolicy::Expanding, QSizePolicy::Fixed);
     m_heightField->setRange(kMinCanvasDimension, kMaxCanvasDimension);
+    m_heightField->setDecimals(0);
+    m_heightField->setSingleStep(1.0);
+    m_heightField->setSuffix(QStringLiteral("px"));
     m_heightField->setValue(kDefaultProjectHeight);
-    connect(m_heightField, &ProjectSettingsField::valueChanged, this,
-        &NewProjectContent::onHeightChanged);
+    connect(m_heightField, &NumericInputField::valueChanged, this,
+        [this](double value) { onHeightChanged(qRound(value)); });
+
+    m_heightTitleLabel = new QLabel(settingsSectionLabel(tr("Height")), fieldParent);
+    m_heightTitleLabel->setBuddy(m_heightField);
+    m_heightTitleLabel->setSizePolicy(QSizePolicy::Preferred, QSizePolicy::Fixed);
 }
 
 void NewProjectContent::createPresets()
@@ -900,7 +886,6 @@ void NewProjectContent::applyRecentPreset(const QString& id)
     }
     updateMemoryLabel();
     setActivePresetCategory(kRecentPresetsCategoryIndex);
-    QTimer::singleShot(0, this, [this]() { syncLockColumnLayout(); });
 }
 
 void NewProjectContent::updateRecentPresetVisibility()
@@ -928,9 +913,9 @@ void NewProjectContent::clearAllInputFocus()
     if (m_projectNameField)
         m_projectNameField->clearInputFocus();
     if (m_widthField)
-        m_widthField->clearInputFocus();
+        m_widthField->clearFocus();
     if (m_heightField)
-        m_heightField->clearInputFocus();
+        m_heightField->clearFocus();
 }
 
 void NewProjectContent::onPresetSelected(const QString& presetName)
@@ -945,7 +930,6 @@ void NewProjectContent::onPresetSelected(const QString& presetName)
         if (m_canvasThumbnail) {
             m_canvasThumbnail->setInfiniteCanvasEnabled(false);
         }
-        QTimer::singleShot(0, this, [this]() { syncLockColumnLayout(); });
     }
 
     if (!m_selectedPreset.isEmpty() && m_presetCards.contains(m_selectedPreset)) {
@@ -1003,7 +987,6 @@ void NewProjectContent::onCanvasBoundsSelectionChanged(int)
     if (m_canvasThumbnail) {
         m_canvasThumbnail->setInfiniteCanvasEnabled(infiniteCanvasEnabled());
     }
-    QTimer::singleShot(0, this, [this]() { syncLockColumnLayout(); });
 }
 
 void NewProjectContent::syncDimensionFieldsEnabledState()
@@ -1013,6 +996,10 @@ void NewProjectContent::syncDimensionFieldsEnabledState()
         m_widthField->setEnabled(classic);
     if (m_heightField)
         m_heightField->setEnabled(classic);
+    if (m_widthTitleLabel)
+        m_widthTitleLabel->setEnabled(classic);
+    if (m_heightTitleLabel)
+        m_heightTitleLabel->setEnabled(classic);
     if (m_aspectLockButton)
         m_aspectLockButton->setEnabled(classic);
 }
@@ -1039,8 +1026,8 @@ void NewProjectContent::updateMemoryLabel()
     if (!m_createButton)
         return;
 
-    int w = m_widthField ? m_widthField->value() : 1920;
-    int h = m_heightField ? m_heightField->value() : 1080;
+    int w = m_widthField ? qRound(m_widthField->value()) : 1920;
+    int h = m_heightField ? qRound(m_heightField->value()) : 1080;
 
     const double bytesPerPixel = static_cast<double>(aether::tileBytesPerPixel(tileFormat()));
     double mb = static_cast<double>(w) * h * bytesPerPixel / (1024.0 * 1024.0);
@@ -1058,9 +1045,10 @@ void NewProjectContent::updateMemoryLabel()
 
 void NewProjectContent::updateThumbnail()
 {
-    int width = m_widthField->value();
-    int height = m_heightField->value();
-    m_canvasThumbnail->setDimensions(width, height);
+    int width = qRound(m_widthField->value());
+    int height = qRound(m_heightField->value());
+    const bool scrubbing = m_widthField->isScrubbing() || m_heightField->isScrubbing();
+    m_canvasThumbnail->setDimensions(width, height, !scrubbing);
     m_canvasThumbnail->setProjectName(projectName());
 }
 
@@ -1112,8 +1100,8 @@ void NewProjectContent::updateLockedAspectRatio()
         m_lockedAspectRatio = 0.0;
         return;
     }
-    const int width = m_widthField->value();
-    const int height = m_heightField->value();
+    const int width = qRound(m_widthField->value());
+    const int height = qRound(m_heightField->value());
     m_lockedAspectRatio
         = (height > 0) ? static_cast<qreal>(width) / static_cast<qreal>(height) : 0.0;
 }
@@ -1196,49 +1184,20 @@ void NewProjectContent::updateScaledSizes()
             theme.scaled(BASE_RECENT_TAB_ICON_SIZE), theme.scaled(BASE_RECENT_TAB_ICON_SIZE)));
         m_recentPresetsTabButton->updateGeometry();
     }
-    if (m_canvasBoundsTitleLabel) {
-        QFont labelFont = theme.font(ThemeFontRole::Body);
-        labelFont.setWeight(QFont::Normal);
-        labelFont.setLetterSpacing(QFont::AbsoluteSpacing, theme.scaled(1.5));
-        m_canvasBoundsTitleLabel->setFont(labelFont);
-        if (m_bitDepthTitleLabel)
-            m_bitDepthTitleLabel->setFont(labelFont);
-        if (m_backgroundColorTitleLabel)
-            m_backgroundColorTitleLabel->setFont(labelFont);
-    } else if (m_backgroundColorTitleLabel) {
-        QFont labelFont = theme.font(ThemeFontRole::Body);
-        labelFont.setWeight(QFont::Normal);
-        labelFont.setLetterSpacing(QFont::AbsoluteSpacing, theme.scaled(1.5));
-        m_backgroundColorTitleLabel->setFont(labelFont);
+    QFont labelFont = theme.font(ThemeFontRole::Body);
+    labelFont.setWeight(QFont::Normal);
+    labelFont.setLetterSpacing(QFont::AbsoluteSpacing, theme.scaled(1.5));
+    for (QLabel* label : { m_canvasBoundsTitleLabel, m_bitDepthTitleLabel,
+             m_backgroundColorTitleLabel, m_widthTitleLabel, m_heightTitleLabel }) {
+        if (label)
+            label->setFont(labelFont);
+    }
+    if (m_dimensionsLayout) {
+        m_dimensionsLayout->setHorizontalSpacing(theme.scaled(BASE_DIMENSIONS_SPACING));
+        m_dimensionsLayout->setVerticalSpacing(theme.scaled(BASE_SETTINGS_FIELD_LABEL_GAP));
     }
 
     updateMemoryLabel();
-
-    // Run after StyledInputField / lock button react to the same theme pass (order is undefined).
-    QTimer::singleShot(0, this, [this]() { syncLockColumnLayout(); });
-}
-
-void NewProjectContent::syncLockColumnLayout()
-{
-    if (!m_lockColumn || !m_lockColumnTopSpacer || !m_lockColumnLayout || !m_widthField
-        || !m_heightField || !m_aspectLockButton)
-        return;
-
-    const int fieldH = qMax(m_widthField->height(), m_heightField->height());
-    if (fieldH <= 0)
-        return;
-
-    m_lockColumn->setFixedHeight(fieldH);
-
-    const int yBox = qMax(m_widthField->boxedInputTopY(), m_heightField->boxedInputTopY());
-    const int boxH = qMax(m_widthField->boxedInputHeight(), m_heightField->boxedInputHeight());
-    const int btnH = m_aspectLockButton->height();
-    const int top = yBox + qMax(0, (boxH - btnH) / 2);
-
-    m_lockColumnTopSpacer->changeSize(0, top, QSizePolicy::Minimum, QSizePolicy::Fixed);
-    m_lockColumnLayout->invalidate();
-    m_lockColumnLayout->activate();
-    m_lockColumn->updateGeometry();
 }
 
 void NewProjectContent::updateThemeColors()
@@ -1249,22 +1208,12 @@ void NewProjectContent::updateThemeColors()
         m_titleLabel->setStyleSheet(
             QString("QLabel { color: %1; background: transparent; }").arg(colors.text.name()));
     }
-    if (m_canvasBoundsTitleLabel) {
-        // Match StyledInputField caption (updateThemeColors): same channel + HexArgb as muted
-        // labels.
-        m_canvasBoundsTitleLabel->setStyleSheet(
-            QString("QLabel { color: %1; background: transparent; }")
-                .arg(colors.textMuted.name(QColor::HexArgb)));
-    }
-    if (m_bitDepthTitleLabel) {
-        m_bitDepthTitleLabel->setStyleSheet(
-            QString("QLabel { color: %1; background: transparent; }")
-                .arg(colors.textMuted.name(QColor::HexArgb)));
-    }
-    if (m_backgroundColorTitleLabel) {
-        m_backgroundColorTitleLabel->setStyleSheet(
-            QString("QLabel { color: %1; background: transparent; }")
-                .arg(colors.textMuted.name(QColor::HexArgb)));
+    for (QLabel* label : { m_canvasBoundsTitleLabel, m_bitDepthTitleLabel,
+             m_backgroundColorTitleLabel, m_widthTitleLabel, m_heightTitleLabel }) {
+        if (label) {
+            label->setStyleSheet(QString("QLabel { color: %1; background: transparent; }")
+                                    .arg(colors.textMuted.name(QColor::HexArgb)));
+        }
     }
     updateMemoryLabel();
 }

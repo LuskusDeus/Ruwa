@@ -29,8 +29,9 @@ public:
     explicit CanvasThumbnail(const QSize& widgetSize, QWidget* parent = nullptr);
     ~CanvasThumbnail() override;
 
-    void setDimensions(const QSize& dimensions);
-    void setDimensions(int width, int height);
+    /// Continuous gestures apply dimensions directly; discrete edits animate by default.
+    void setDimensions(const QSize& dimensions, bool animated = true);
+    void setDimensions(int width, int height, bool animated = true);
     QSize dimensions() const { return m_targetDimensions; }
 
     void setProjectName(const QString& name);
@@ -67,7 +68,7 @@ private:
 
 private:
     QSize m_targetDimensions { 1920, 1080 };
-    QSize m_previousDimensions { 1920, 1080 };
+    QSizeF m_previousDimensions { 1920, 1080 };
     QSize m_baseWidgetSize;
     QString m_projectName;
     bool m_infiniteCanvasEnabled = false;

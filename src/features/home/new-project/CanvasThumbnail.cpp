@@ -116,18 +116,29 @@ QSize CanvasThumbnail::sizeHint() const
 // Public API
 // ============================================================================
 
-void CanvasThumbnail::setDimensions(const QSize& dimensions)
+void CanvasThumbnail::setDimensions(const QSize& dimensions, bool animated)
 {
-    if (m_targetDimensions == dimensions)
+    if (m_targetDimensions == dimensions && (animated || m_morphProgress == 1.0))
         return;
-    m_previousDimensions = m_targetDimensions;
+
+    // Retarget from the displayed size, preserving sub-pixel progress when an edit
+    // arrives before the previous transition finishes.
+    m_previousDimensions
+        = interpolateSize(m_previousDimensions, m_targetDimensions, m_morphProgress);
     m_targetDimensions = dimensions;
+    if (!animated) {
+        m_morphAnimation->stop();
+        m_previousDimensions = dimensions;
+        m_morphProgress = 1.0;
+        update();
+        return;
+    }
     startMorphAnimation();
 }
 
-void CanvasThumbnail::setDimensions(int width, int height)
+void CanvasThumbnail::setDimensions(int width, int height, bool animated)
 {
-    setDimensions(QSize(width, height));
+    setDimensions(QSize(width, height), animated);
 }
 
 void CanvasThumbnail::setProjectName(const QString& name)
@@ -149,6 +160,7 @@ void CanvasThumbnail::setInfiniteCanvasEnabled(bool enabled)
 void CanvasThumbnail::startMorphAnimation()
 {
     auto& mgr = WidgetStyleManager::instance();
+    m_morphAnimation->stop();
 
     if (!mgr.animationsEnabled()) {
         m_morphProgress = 1.0;
@@ -156,7 +168,6 @@ void CanvasThumbnail::startMorphAnimation()
         return;
     }
 
-    m_morphAnimation->stop();
     m_morphAnimation->setDuration(anim::duration(MORPH_ANIM_DURATION));
     m_morphAnimation->setStartValue(0.0);
     m_morphAnimation->setEndValue(1.0);
@@ -212,9 +223,8 @@ QSizeF CanvasThumbnail::interpolateSize(const QSizeF& from, const QSizeF& to, qr
 // previous and target canvas dimensions.
 QRectF CanvasThumbnail::computeGhostRect(const QRectF& area) const
 {
-    const QSizeF prevAspect(m_previousDimensions.width(), m_previousDimensions.height());
-    const QSizeF targAspect(m_targetDimensions.width(), m_targetDimensions.height());
-    const QSizeF curAspect = interpolateSize(prevAspect, targAspect, m_morphProgress);
+    const QSizeF curAspect
+        = interpolateSize(m_previousDimensions, m_targetDimensions, m_morphProgress);
 
     const qreal ch = curAspect.height();
     if (ch <= 0.0)
@@ -413,10 +423,10 @@ void CanvasThumbnail::drawCenteredText(QPainter& painter, const QRectF& ghostRec
     const qreal metadataProgress = qBound<qreal>(0.0, m_metadataProgress, 1.0);
 
     // Interpolated dimension numbers (morph animation)
-    const int dispW = m_previousDimensions.width()
-        + int((m_targetDimensions.width() - m_previousDimensions.width()) * m_morphProgress);
-    const int dispH = m_previousDimensions.height()
-        + int((m_targetDimensions.height() - m_previousDimensions.height()) * m_morphProgress);
+    const QSizeF displayedDimensions
+        = interpolateSize(m_previousDimensions, m_targetDimensions, m_morphProgress);
+    const int dispW = qRound(displayedDimensions.width());
+    const int dispH = qRound(displayedDimensions.height());
 
     const bool hasProjectName = !m_projectName.isEmpty();
     const qreal metadataH = dimH + rowGap + smallH;

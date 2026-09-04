@@ -315,6 +315,8 @@ private slots:
     void onManagerPresetRenamed(const QString& presetId, const QString& newName);
     void onManagerBrushCreated(const QString& presetId, const QString& brushId);
     void onManagerBrushRemoved(const QString& presetId, const QString& brushId);
+    void onManagerBrushMoved(
+        const QString& sourcePresetId, const QString& targetPresetId, const QString& brushId);
     void onManagerBrushRenamed(const QString& brushId, const QString& newName);
     void onManagerBrushSettingsUpdated(
         const QString& presetId, const QString& brushId, const BrushSettingsData& settings);

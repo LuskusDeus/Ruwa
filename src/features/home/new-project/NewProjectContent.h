@@ -13,10 +13,7 @@
 class QLabel;
 class QEvent;
 class QMouseEvent;
-class QResizeEvent;
-class QShowEvent;
-class QVBoxLayout;
-class QSpacerItem;
+class QGridLayout;
 class QWidget;
 
 namespace ruwa::core::serialization {
@@ -25,7 +22,8 @@ struct RecentProjectPresetEntry;
 
 namespace ruwa::ui::widgets {
 
-class ProjectSettingsField;
+class StyledInputField;
+class NumericInputField;
 class ProjectPresetCard;
 class CanvasThumbnail;
 class AspectRatioLockButton;
@@ -67,8 +65,6 @@ signals:
 protected:
     void setupContent() override;
     void changeEvent(QEvent* event) override;
-    void resizeEvent(QResizeEvent* event) override;
-    void showEvent(QShowEvent* event) override;
     void mousePressEvent(QMouseEvent* event) override;
 
 private slots:
@@ -88,7 +84,6 @@ private:
     void clearAllInputFocus();
     void updateThemeColors();
     void updateScaledSizes();
-    void syncLockColumnLayout();
     void updateMemoryLabel();
     void syncLockedHeightFromWidth(int width);
     void syncLockedWidthFromHeight(int height);
@@ -112,9 +107,12 @@ private:
 private:
     CanvasThumbnail* m_canvasThumbnail { nullptr };
 
-    ProjectSettingsField* m_projectNameField { nullptr };
-    ProjectSettingsField* m_widthField { nullptr };
-    ProjectSettingsField* m_heightField { nullptr };
+    StyledInputField* m_projectNameField { nullptr };
+    NumericInputField* m_widthField { nullptr };
+    NumericInputField* m_heightField { nullptr };
+    QLabel* m_widthTitleLabel { nullptr };
+    QLabel* m_heightTitleLabel { nullptr };
+    QGridLayout* m_dimensionsLayout { nullptr };
     ColorInputButton* m_backgroundColorInput { nullptr };
     QWidget* m_backgroundColorSection { nullptr };
     QLabel* m_backgroundColorTitleLabel { nullptr };
@@ -140,9 +138,6 @@ private:
     FlowLayout* m_recentPresetsLayout { nullptr };
     CapsuleButton* m_createButton { nullptr };
     AspectRatioLockButton* m_aspectLockButton { nullptr };
-    QWidget* m_lockColumn { nullptr };
-    QVBoxLayout* m_lockColumnLayout { nullptr };
-    QSpacerItem* m_lockColumnTopSpacer { nullptr };
     qreal m_lockedAspectRatio { 0.0 };
     bool m_syncingLockedDimensions { false };
     QColor m_backgroundColor { 0xD9, 0xD9, 0xD9 };
