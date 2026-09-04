@@ -557,7 +557,14 @@ BrushManager::BrushManager()
 {
     m_deferredSaveTimer.setSingleShot(true);
     m_deferredSaveTimer.setInterval(140);
-    connect(&m_deferredSaveTimer, &QTimer::timeout, this, &BrushManager::flushDeferredSave);
+    connect(&m_deferredSaveTimer, &QTimer::timeout, this, &BrushManager::dispatchPendingSave);
+    connect(&m_asyncSaveWatcher, &QFutureWatcher<void>::finished, this, [this]() {
+        // Preserve the debounce window when edits are still arriving. If it
+        // expired while the writer was busy, dispatch the latest state now.
+        if (!m_deferredSaveTimer.isActive()) {
+            dispatchPendingSave();
+        }
+    });
     if (auto* app = QCoreApplication::instance()) {
         connect(app, &QCoreApplication::aboutToQuit, this, &BrushManager::flushDeferredSave,
             Qt::DirectConnection);
@@ -585,7 +592,7 @@ QString BrushManager::createPreset()
     preset.name = QObject::tr("New Pack %1").arg(m_presets.size() + 1);
     m_presets.append(preset);
     m_brushesByPreset[preset.id] = {};
-    save();
+    saveAsync();
     emit presetCreated(preset.id);
     return preset.id;
 }
@@ -606,7 +613,7 @@ bool BrushManager::removePreset(const QString& presetId)
             if (starredSettingsChanged) {
                 saveStarredSettings();
             }
-            save();
+            saveAsync();
             emit presetRemoved(presetId);
             return true;
         }
@@ -626,7 +633,7 @@ bool BrushManager::renamePreset(const QString& presetId, const QString& newName)
             if (preset.name == trimmed)
                 return true;
             preset.name = trimmed;
-            save();
+            saveAsync();
             emit presetRenamed(presetId, trimmed);
             return true;
         }
@@ -655,7 +662,7 @@ QString BrushManager::createBrush(const QString& presetId)
     m_brushesByPreset[presetId].append(brush);
     m_starredSettingsByBrush.insert(
         brush.id, QSet<QString>(brush.starredKeys.begin(), brush.starredKeys.end()));
-    save();
+    saveAsync();
     emit brushCreated(presetId, brush.id);
     return brush.id;
 }
@@ -677,7 +684,7 @@ bool BrushManager::removeBrush(const QString& brushId)
                     m_starredSettingsByBrush.remove(brushId);
                     saveStarredSettings();
                 }
-                save();
+                saveAsync();
                 emit brushRemoved(presetId, brushId);
                 return true;
             }
@@ -730,7 +737,7 @@ bool BrushManager::moveBrush(const QString& brushId, const QString& targetPreset
     // therefore commits both the source removal and destination insertion
     // together, while keeping favorites, recent history and starred settings
     // intact because the brush id does not change.
-    save();
+    saveAsync();
     emit brushMoved(sourcePresetId, targetPresetId, brushId, resolvedIndex);
     return true;
 }
@@ -821,8 +828,7 @@ bool BrushManager::saveBrushSettingsAsBase(const QString& brushId)
             }
 
             brush.baseEngineSettings = brush.engineSettings;
-            m_deferredSavePending = true;
-            flushDeferredSave();
+            saveAsync();
             return true;
         }
     }
@@ -1422,42 +1428,36 @@ void BrushManager::load()
 
     if (m_presets.isEmpty()) {
         loadDefaults();
-        save();
+        saveAsync();
     } else if (brushStorageNeedsStarredMigration || brushStorageNeedsBaseMigration) {
-        save();
+        saveAsync();
     }
 
     m_loaded = true;
 }
 
-void BrushManager::save() const
+void BrushManager::saveAsync()
 {
-    if (ruwa::Application::isFactoryResetRestartInProgress()) {
-        return;
-    }
-
-    waitForAsyncSave();
-    writeBrushPacksToSettings(m_presets, m_brushesByPreset);
+    m_deferredSavePending = true;
+    m_deferredSaveTimer.stop();
+    dispatchPendingSave();
 }
 
-void BrushManager::saveAsync() const
+void BrushManager::dispatchPendingSave()
 {
-    if (ruwa::Application::isFactoryResetRestartInProgress()) {
+    if (!m_deferredSavePending || m_asyncSaveWatcher.isRunning()
+        || ruwa::Application::isFactoryResetRestartInProgress()) {
         return;
     }
 
-    waitForAsyncSave();
+    // All BrushPacks writes share this one writer. Edits received during a
+    // write remain pending in the model; do not queue obsolete snapshots or
+    // wait for the worker on the GUI thread.
     const QVector<BrushPresetData> presets = m_presets;
     const QHash<QString, QVector<BrushData>> brushesByPreset = m_brushesByPreset;
-    m_asyncSaveFuture = QtConcurrent::run(
-        [presets, brushesByPreset]() { writeBrushPacksToSettings(presets, brushesByPreset); });
-}
-
-void BrushManager::waitForAsyncSave() const
-{
-    if (m_asyncSaveFuture.isRunning()) {
-        m_asyncSaveFuture.waitForFinished();
-    }
+    m_deferredSavePending = false;
+    m_asyncSaveWatcher.setFuture(QtConcurrent::run(
+        [presets, brushesByPreset]() { writeBrushPacksToSettings(presets, brushesByPreset); }));
 }
 
 void BrushManager::scheduleDeferredSave()
@@ -1468,23 +1468,21 @@ void BrushManager::scheduleDeferredSave()
 
 void BrushManager::flushDeferredSave()
 {
+    m_deferredSaveTimer.stop();
+    // aboutToQuit cannot rely on another timer/finished event being delivered.
+    // Drain the active snapshot before writing any newer pending state, even
+    // when a factory-reset restart suppresses that final write.
+    m_asyncSaveWatcher.waitForFinished();
     if (ruwa::Application::isFactoryResetRestartInProgress()) {
         m_deferredSavePending = false;
-        if (m_deferredSaveTimer.isActive()) {
-            m_deferredSaveTimer.stop();
-        }
         return;
     }
 
-    waitForAsyncSave();
     if (!m_deferredSavePending) {
         return;
     }
-    if (m_deferredSaveTimer.isActive()) {
-        m_deferredSaveTimer.stop();
-    }
     m_deferredSavePending = false;
-    save();
+    writeBrushPacksToSettings(m_presets, m_brushesByPreset);
 }
 
 void BrushManager::resetToDefaults()
@@ -1499,8 +1497,7 @@ void BrushManager::resetToDefaults()
     saveRecentBrushes();
 
     loadDefaults();
-    flushDeferredSave();
-    save();
+    saveAsync();
 
     BrushPreviewManager::instance().invalidateCache();
     emit dataReset();

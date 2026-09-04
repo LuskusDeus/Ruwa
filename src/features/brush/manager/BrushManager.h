@@ -7,7 +7,7 @@
 #include "BrushSettings.h"
 
 #include <QObject>
-#include <QFuture>
+#include <QFutureWatcher>
 #include <QVector>
 #include <QString>
 #include <QHash>
@@ -126,9 +126,8 @@ private:
     BrushManager();
     void ensureLoaded();
     void load();
-    void save() const;
-    void saveAsync() const;
-    void waitForAsyncSave() const;
+    void saveAsync();
+    void dispatchPendingSave();
     void loadDefaults();
     void loadStarredSettings();
     void saveStarredSettings() const;
@@ -140,6 +139,7 @@ private:
     void loadRecentBrushes();
     void saveRecentBrushes() const;
     void scheduleDeferredSave();
+    // Shutdown barrier: wait for the active writer, then persist the latest pending state.
     void flushDeferredSave();
 
     QVector<BrushPresetData> m_presets;
@@ -147,7 +147,7 @@ private:
     QMap<QString, QSet<QString>> m_starredSettingsByBrush;
     QVector<QString> m_recentBrushIds;
     QTimer m_deferredSaveTimer;
-    mutable QFuture<void> m_asyncSaveFuture;
+    QFutureWatcher<void> m_asyncSaveWatcher;
     bool m_deferredSavePending = false;
     bool m_loaded = false;
     bool m_starredLoaded = false;
