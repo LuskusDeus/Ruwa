@@ -750,6 +750,9 @@ private:
     GLuint acquireLayerMaskTextureForPreview(
         const CompositeLayerInfo& layer, bool flipH, bool flipV, uint64_t viewportRevision);
     void renderBoardLayers(const std::vector<CompositeLayerInfo>& boardLayerStack);
+    // A null viewport prepares the complete board for offscreen readback.
+    void updateBoardCompositionCache(const std::vector<CompositeLayerInfo>& boardLayerStack,
+        const Viewport* viewport, bool flipH, bool flipV);
     /// Document-space point the display pyramid should rebuild outward from:
     /// the brush cursor when it is on the canvas, otherwise nothing (the pyramid
     /// falls back to the centre of the visible region).

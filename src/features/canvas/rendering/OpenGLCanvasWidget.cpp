@@ -8662,25 +8662,18 @@ QImage OpenGLCanvasWidget::renderCompositedRegion(
 
     if (m_layerCompositingBuilder && !m_exportPreviewHideBoardLayers) {
         const auto& boardLayerStack = m_layerCompositingBuilder->buildBoardLayerStack();
-        if (!boardLayerStack.empty()) {
-            std::unordered_set<TileKey, TileKeyHash> boardKeys;
-            collectCompositeLayerKeys(boardLayerStack, boardKeys);
-            if (!boardKeys.empty()) {
-                CompositionCache boardCache;
-                boardCache.markDirty(boardKeys);
-                m_renderer->compositeAllDirty(boardLayerStack, boardCache);
-                // This cache lives and dies inside this call, so the board slot
-                // starts from nothing both here and on the next interactive
-                // frame: the slot's staleness check is pointer identity and a
-                // local object can reuse an address.
-                m_renderer->resetDisplayPyramid(DisplayPyramidSlot::Board);
-                m_renderer->syncDisplayPyramid(DisplayPyramidSlot::Board, boardCache,
-                    overviewViewport, static_cast<float>(m_canvas.width()),
-                    static_cast<float>(m_canvas.height()), false, false);
-                m_renderer->drawTiles(boardCache.grid(), overviewViewport, 0u, 0u, 0.0f, false,
-                    false, false, Color::transparent(), true, DisplayPyramidSlot::Board);
-                m_renderer->resetDisplayPyramid(DisplayPyramidSlot::Board);
-            }
+        // Navigator tiles share the live board's document-space cache and pyramid.
+        // A temporary cache here rebuilt every board tile after each stroke, then
+        // discarded the live pyramid too. Readback must include offscreen content
+        // (including the pyramid's filter neighbours), but unchanged tiles survive
+        // across overview regions and the next interactive frame.
+        updateBoardCompositionCache(boardLayerStack, nullptr, false, false);
+        if (!m_boardCompositionCache.grid().empty()) {
+            m_renderer->syncDisplayPyramid(DisplayPyramidSlot::Board, m_boardCompositionCache,
+                overviewViewport, static_cast<float>(m_canvas.width()),
+                static_cast<float>(m_canvas.height()), false, false);
+            m_renderer->drawTiles(m_boardCompositionCache.grid(), overviewViewport, 0u, 0u, 0.0f,
+                false, false, false, Color::transparent(), true, DisplayPyramidSlot::Board);
         }
     }
 
@@ -10854,17 +10847,11 @@ void OpenGLCanvasWidget::paintGL_runComposite(const std::vector<CompositeLayerIn
     }
 }
 
-void OpenGLCanvasWidget::renderBoardLayers(const std::vector<CompositeLayerInfo>& boardLayerStack)
+void OpenGLCanvasWidget::updateBoardCompositionCache(
+    const std::vector<CompositeLayerInfo>& boardLayerStack, const Viewport* viewport, bool flipH,
+    bool flipV)
 {
     if (!m_renderer || !m_renderer->compositor() || !m_renderer->tileRenderer()) {
-        return;
-    }
-    // Every path below can decide there is nothing to draw and return without
-    // syncing the board slot. Whatever it still owed died with the board, and
-    // leaving the flag set would keep asking paintGL for a catch-up frame that
-    // can never clear it. The sync, when it happens, sets the flag again.
-    m_renderer->clearDisplayPyramidPending(DisplayPyramidSlot::Board);
-    if (m_exportPreviewHideBoardLayers) {
         return;
     }
     if (boardLayerStack.empty()) {
@@ -10914,10 +10901,8 @@ void OpenGLCanvasWidget::renderBoardLayers(const std::vector<CompositeLayerInfo>
         m_boardCompositionCacheDirty = false;
     }
 
-    // Viewport-culled compositing: only (re)composite board tiles that are
-    // actually visible. Off-screen uncached/dirty tiles stay pending and are
-    // composited lazily when they scroll into view. This bounds per-frame board
-    // composite cost to the visible region instead of the whole board.
+    // Live frames only (re)composite visible board tiles. Readback supplies no
+    // viewport, so it also prepares offscreen tiles, reusing the same dirty state.
     //
     // IMPORTANT: iterate the precomputed m_boardCompositionKeys set (maintained
     // on structural change) rather than rebuilding the key set from the layer
@@ -10927,11 +10912,10 @@ void OpenGLCanvasWidget::renderBoardLayers(const std::vector<CompositeLayerInfo>
     // to the document, but their visibility still uses the real canvas center so
     // mirrored culling matches mirrored rendering.
     {
-        const bool boardFlipH = effectiveContentFlipH();
-        const bool boardFlipV = effectiveContentFlipV();
-        const aether::VisibleTileKeyBounds visibleBounds
-            = aether::visibleTileKeyBounds(m_viewport, static_cast<float>(m_canvas.width()),
-                static_cast<float>(m_canvas.height()), boardFlipH, boardFlipV);
+        const aether::VisibleTileKeyBounds visibleBounds = viewport
+            ? aether::visibleTileKeyBounds(*viewport, static_cast<float>(m_canvas.width()),
+                  static_cast<float>(m_canvas.height()), flipH, flipV)
+            : aether::VisibleTileKeyBounds {};
 
         const auto& cacheGrid = m_boardCompositionCache.grid();
         const auto& dirtyPositions = m_boardCompositionCache.dirtyPositions();
@@ -10939,7 +10923,7 @@ void OpenGLCanvasWidget::renderBoardLayers(const std::vector<CompositeLayerInfo>
 
         std::vector<TileKey> keysToComposite;
         for (const TileKey& key : m_boardCompositionKeys) {
-            if (!aether::isTileKeyVisible(key, visibleBounds)) {
+            if (viewport && !aether::isTileKeyVisible(key, visibleBounds)) {
                 continue;
             }
             // Recomposite when not yet cached, or when marked dirty.
@@ -10953,6 +10937,24 @@ void OpenGLCanvasWidget::renderBoardLayers(const std::vector<CompositeLayerInfo>
                 boardLayerStack, m_boardCompositionCache, keysToComposite);
         }
     }
+}
+
+void OpenGLCanvasWidget::renderBoardLayers(const std::vector<CompositeLayerInfo>& boardLayerStack)
+{
+    if (!m_renderer || !m_renderer->compositor() || !m_renderer->tileRenderer()) {
+        return;
+    }
+    // Every path below can decide there is nothing to draw and return without
+    // syncing the board slot. Whatever it still owed died with the board, and
+    // leaving the flag set would keep asking paintGL for a catch-up frame that
+    // can never clear it. The sync, when it happens, sets the flag again.
+    m_renderer->clearDisplayPyramidPending(DisplayPyramidSlot::Board);
+    if (m_exportPreviewHideBoardLayers) {
+        return;
+    }
+
+    updateBoardCompositionCache(
+        boardLayerStack, &m_viewport, effectiveContentFlipH(), effectiveContentFlipV());
 
     if (m_boardCompositionCache.grid().empty()) {
         return;
