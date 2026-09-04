@@ -127,6 +127,7 @@ private:
 
     void rebuildFromManager();
     TabItem makeItem(ruwa::core::BaseTab* tab);
+    void updateItemIcon(TabItem& item, ruwa::core::BaseTab* tab, const QIcon& icon);
     void destroyItemAnimations(TabItem& item);
     void reindexItems();
     static bool isSmartObjectTab(ruwa::core::BaseTab* tab);
@@ -138,7 +139,7 @@ private:
     int itemIndexOfSmartChild(const QUuid& parentTabId) const;
     /// Make the strip agree with shownSmartObjectTabForParent() for that document.
     void syncSmartSlotForParent(const QUuid& parentTabId, bool animated);
-    void bindTabDisplayTitleSignals(ruwa::core::BaseTab* tab);
+    void bindTabDisplaySignals(ruwa::core::BaseTab* tab);
     void updateLayout();
     [[nodiscard]] qreal computeStripContentWidth() const;
     [[nodiscard]] qreal stripAlignmentTarget() const;
@@ -176,6 +177,7 @@ private:
 private slots:
     void onThemeChanged();
     void refreshManagedTabItemTitle();
+    void refreshManagedTabItemIcon(const QIcon& icon);
 
 private:
     ruwa::core::TabManager* m_tabManager = nullptr;

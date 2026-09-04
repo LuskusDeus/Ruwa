@@ -311,16 +311,7 @@ CustomTabBar::TabItem CustomTabBar::makeItem(ruwa::core::BaseTab* tab)
         item.isSmartObject = true;
         item.parentTabId = wsTab->smartEditDocumentTabId();
     } else {
-        item.icon = tab->icon();
-        item.iconAlias = defaultIconForTabType(tab->type());
-        if (auto* wsTab = qobject_cast<ruwa::ui::tabs::WorkspaceTab*>(tab)) {
-            if (!wsTab->tabIconAlias().isEmpty()) {
-                item.iconAlias = wsTab->tabIconAlias();
-            }
-        }
-        if (item.icon.isNull()) {
-            item.icon = ruwa::ui::core::IconProvider::instance().getIcon(item.iconAlias);
-        }
+        updateItemIcon(item, tab, tab->icon());
     }
 
     item.hoverAnim = new QVariantAnimation(this);
@@ -358,8 +349,22 @@ CustomTabBar::TabItem CustomTabBar::makeItem(ruwa::core::BaseTab* tab)
             }
         });
 
-    bindTabDisplayTitleSignals(tab);
+    bindTabDisplaySignals(tab);
     return item;
+}
+
+void CustomTabBar::updateItemIcon(TabItem& item, ruwa::core::BaseTab* tab, const QIcon& icon)
+{
+    item.icon = icon;
+    item.iconAlias = defaultIconForTabType(tab->type());
+    if (auto* wsTab = qobject_cast<ruwa::ui::tabs::WorkspaceTab*>(tab)) {
+        if (!wsTab->tabIconAlias().isEmpty()) {
+            item.iconAlias = wsTab->tabIconAlias();
+        }
+    }
+    if (item.icon.isNull()) {
+        item.icon = ruwa::ui::core::IconProvider::instance().getIcon(item.iconAlias);
+    }
 }
 
 void CustomTabBar::destroyItemAnimations(TabItem& item)
@@ -532,7 +537,7 @@ void CustomTabBar::rebuildFromManager()
         if (isSmartObjectTab(tab)) {
             auto* wsTab = qobject_cast<ruwa::ui::tabs::WorkspaceTab*>(tab);
             m_smartParentByTab.insert(tab->id(), wsTab->smartEditDocumentTabId());
-            bindTabDisplayTitleSignals(tab);
+            bindTabDisplaySignals(tab);
             continue;
         }
 
@@ -566,7 +571,7 @@ void CustomTabBar::onTabAdded(ruwa::core::BaseTab* tab)
         auto* wsTab = qobject_cast<ruwa::ui::tabs::WorkspaceTab*>(tab);
         const QUuid parentTabId = wsTab->smartEditDocumentTabId();
         m_smartParentByTab.insert(tab->id(), parentTabId);
-        bindTabDisplayTitleSignals(tab);
+        bindTabDisplaySignals(tab);
         // A newly opened smart object takes over its document's slot; whatever was
         // there stays open, just not drawn.
         m_shownSmartByParent.insert(parentTabId, tab->id());
@@ -604,19 +609,9 @@ void CustomTabBar::onTabReplaced(ruwa::core::BaseTab* oldTab, ruwa::core::BaseTa
 
     TabItem& item = m_items[idx];
     item.title = newTab->title();
-    item.icon = newTab->icon();
-    item.iconAlias = defaultIconForTabType(newTab->type());
+    updateItemIcon(item, newTab, newTab->icon());
 
-    if (auto* wsTab = qobject_cast<ruwa::ui::tabs::WorkspaceTab*>(newTab)) {
-        if (!wsTab->tabIconAlias().isEmpty()) {
-            item.iconAlias = wsTab->tabIconAlias();
-        }
-    }
-    if (item.icon.isNull()) {
-        item.icon = ruwa::ui::core::IconProvider::instance().getIcon(item.iconAlias);
-    }
-
-    bindTabDisplayTitleSignals(newTab);
+    bindTabDisplaySignals(newTab);
     updateLayout();
     refreshStripAlignment(m_initialAlignDone);
     update();
@@ -1842,7 +1837,7 @@ void CustomTabBar::onThemeChanged()
     update();
 }
 
-void CustomTabBar::bindTabDisplayTitleSignals(ruwa::core::BaseTab* tab)
+void CustomTabBar::bindTabDisplaySignals(ruwa::core::BaseTab* tab)
 {
     if (!tab) {
         return;
@@ -1851,6 +1846,8 @@ void CustomTabBar::bindTabDisplayTitleSignals(ruwa::core::BaseTab* tab)
         &CustomTabBar::refreshManagedTabItemTitle, Qt::UniqueConnection);
     connect(tab, &ruwa::core::BaseTab::modifiedChanged, this,
         &CustomTabBar::refreshManagedTabItemTitle, Qt::UniqueConnection);
+    connect(tab, &ruwa::core::BaseTab::iconChanged, this,
+        &CustomTabBar::refreshManagedTabItemIcon, Qt::UniqueConnection);
 }
 
 void CustomTabBar::refreshManagedTabItemTitle()
@@ -1872,6 +1869,23 @@ void CustomTabBar::refreshManagedTabItemTitle()
     m_items[idx].title = tab->title();
     updateLayout();
     refreshStripAlignment(m_initialAlignDone);
+    update();
+}
+
+void CustomTabBar::refreshManagedTabItemIcon(const QIcon& icon)
+{
+    auto* tab = qobject_cast<ruwa::core::BaseTab*>(sender());
+    if (!tab || !m_tabManager || m_tabManager->tab(tab->id()) != tab) {
+        return;
+    }
+    const int idx = m_indexById.value(tab->id(), -1);
+    if (idx < 0 || idx >= m_items.size() || m_items[idx].isSmartObject) {
+        return;
+    }
+
+    // Project metadata arrives after the loading placeholder has entered the strip.
+    // Keep both the displayed icon and the context-menu selection in sync.
+    updateItemIcon(m_items[idx], tab, icon);
     update();
 }
 
