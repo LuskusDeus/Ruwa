@@ -82,20 +82,20 @@ static const RuwaEffectParamDef k_stroke_params[] = {
 
 static const RuwaEffectParamDef k_gradient_params[] = {
     { .struct_size = sizeof(RuwaEffectParamDef), .key = "x0", .label = "Start Pos",
-      .type = RUWA_EFFECT_PARAM_REAL, .default_value = 0.0, .min_value = 0.0, .max_value = 16384.0,
+      .type = RUWA_EFFECT_PARAM_REAL, .default_value = 0.0, .min_value = -16384.0, .max_value = 16384.0,
       .step_value = 1.0, .preferred_editor = RUWA_EFFECT_EDITOR_NUMBER_FIELD,
       .position_pair_key = "pos0", .position_axis = RUWA_EFFECT_AXIS_X },
     { .struct_size = sizeof(RuwaEffectParamDef), .key = "y0", .label = "Start Y",
-      .type = RUWA_EFFECT_PARAM_REAL, .default_value = 0.0, .min_value = 0.0, .max_value = 16384.0,
+      .type = RUWA_EFFECT_PARAM_REAL, .default_value = 0.0, .min_value = -16384.0, .max_value = 16384.0,
       .step_value = 1.0, .preferred_editor = RUWA_EFFECT_EDITOR_NUMBER_FIELD,
       .position_pair_key = "pos0", .position_axis = RUWA_EFFECT_AXIS_Y },
     { .struct_size = sizeof(RuwaEffectParamDef), .key = "x1", .label = "End Pos",
-      .type = RUWA_EFFECT_PARAM_REAL, .default_value = 512.0, .min_value = 0.0, .max_value = 16384.0,
+      .type = RUWA_EFFECT_PARAM_REAL, .default_value = 512.0, .min_value = -16384.0, .max_value = 16384.0,
       .step_value = 1.0, .preferred_editor = RUWA_EFFECT_EDITOR_NUMBER_FIELD,
       .position_pair_key = "pos1", .position_axis = RUWA_EFFECT_AXIS_X,
       .default_binding = RUWA_EFFECT_BIND_CANVAS_WIDTH },
     { .struct_size = sizeof(RuwaEffectParamDef), .key = "y1", .label = "End Y",
-      .type = RUWA_EFFECT_PARAM_REAL, .default_value = 512.0, .min_value = 0.0, .max_value = 16384.0,
+      .type = RUWA_EFFECT_PARAM_REAL, .default_value = 512.0, .min_value = -16384.0, .max_value = 16384.0,
       .step_value = 1.0, .preferred_editor = RUWA_EFFECT_EDITOR_NUMBER_FIELD,
       .position_pair_key = "pos1", .position_axis = RUWA_EFFECT_AXIS_Y,
       .default_binding = RUWA_EFFECT_BIND_CANVAS_HEIGHT },
@@ -180,6 +180,27 @@ static const RuwaEffectParamDef k_drop_shadow_params[] = {
       .type = RUWA_EFFECT_PARAM_COLOR, .default_color = { 0.0f, 0.0f, 0.0f, 1.0f } },
 };
 
+/* Independent anchors for the existing gradient endpoints. Colors and
+ * opacity remain card parameters; the overlay edits only document positions. */
+static const RuwaEffectCanvasControlDef k_gradient_controls[] = {
+    {
+        .struct_size = sizeof(RuwaEffectCanvasControlDef),
+        .id = "start",
+        .type = RUWA_EFFECT_CANVAS_CONTROL_POSITION,
+        .value_key = NULL,
+        .center_x_key = "x0",
+        .center_y_key = "y0",
+    },
+    {
+        .struct_size = sizeof(RuwaEffectCanvasControlDef),
+        .id = "end",
+        .type = RUWA_EFFECT_CANVAS_CONTROL_POSITION,
+        .value_key = NULL,
+        .center_x_key = "x1",
+        .center_y_key = "y1",
+    },
+};
+
 static const RuwaEffectDescriptor k_effects[] = {
     { .struct_size = sizeof(RuwaEffectDescriptor), .type_id = "stylize.glow", .display_name = "Glow",
       .category = "Stylize", .version = 1u, .capabilities = &k_expanding_caps,
@@ -198,7 +219,9 @@ static const RuwaEffectDescriptor k_effects[] = {
       .capabilities = &k_overlay_caps, .params = k_gradient_params, .param_count = 7u,
       .user_data = NULL, .pixel_expansion_radius = NULL, .resolve_coverage = NULL,
       .migrate_state = NULL, .create_pass = stylize_gradient_create_pass,
-      .render_pass = stylize_gradient_render_pass, .destroy_pass = stylize_gradient_destroy_pass },
+      .render_pass = stylize_gradient_render_pass, .destroy_pass = stylize_gradient_destroy_pass,
+      .canvas_controls = k_gradient_controls,
+      .canvas_control_count = sizeof(k_gradient_controls) / sizeof(k_gradient_controls[0]) },
     { .struct_size = sizeof(RuwaEffectDescriptor), .type_id = "stylize.halftone",
       .display_name = "Halftone", .category = "Stylize", .version = 1u,
       .capabilities = &k_expanding_caps, .params = k_halftone_params, .param_count = 5u,

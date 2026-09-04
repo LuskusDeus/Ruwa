@@ -138,6 +138,34 @@ draggable even when the radius is very small. Both can bind to the same center
 keys. Geometry uses document coordinates; the position icon and its hit area
 keep a fixed screen size as the canvas is zoomed or rotated.
 
+### Standard effect coverage
+
+The 24 currently shipped effects use these controls where their existing
+parameters describe compatible document-space geometry:
+
+| Effects | Canvas controls |
+|---------|-----------------|
+| Gradient Overlay | Two independent positions: `x0` / `y0` and `x1` / `y1` |
+| Radial Blur | Center position: `centerX` / `centerY` |
+| Twirl, Pinch, Ripple | Center position and radius circle |
+
+All of these position parameters allow signed document coordinates in
+`[-16384, 16384]` on both axes, including dragging across the document origin.
+Radius ranges remain non-negative; default positions are unchanged.
+
+Gaussian Blur, Box Blur, Sharpen, Unsharp Mask, Glow, Outer Glow, Inner Glow,
+Stroke, Halftone, Noise and Grain have no editable center coordinates for a
+circle or position control. Their radius/size parameters describe sampling,
+edge width or pattern size, not a bounded circle in the document. Motion Blur,
+Drop Shadow and Wave expose angles/distances or wave parameters rather than
+X/Y positions; these require different control bindings and are left unchanged.
+The five Color Adjust effects have no spatial parameters.
+
+Radial Blur's `radius` is also deliberately not a circle: the shader computes
+the sampling displacement as `min(distanceFromCenter * amount, radius)` at each
+pixel. A ring of that radius around the center would misrepresent its meaning.
+No effect parameters or document defaults are added just to anchor an overlay.
+
 ## Minimal plugin skeleton
 
 ```c

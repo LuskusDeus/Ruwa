@@ -71,14 +71,14 @@ static const RuwaEffectParamDef k_motion_params[] = {
 static const RuwaEffectParamDef k_radial_params[] = {
     {
         .struct_size = sizeof(RuwaEffectParamDef), .key = "centerX", .label = "Center",
-        .type = RUWA_EFFECT_PARAM_REAL, .default_value = 0.0, .min_value = 0.0,
+        .type = RUWA_EFFECT_PARAM_REAL, .default_value = 0.0, .min_value = -16384.0,
         .max_value = 16384.0, .step_value = 1.0,
         .preferred_editor = RUWA_EFFECT_EDITOR_NUMBER_FIELD, .position_pair_key = "center",
         .position_axis = RUWA_EFFECT_AXIS_X,
     },
     {
         .struct_size = sizeof(RuwaEffectParamDef), .key = "centerY", .label = "Center Y",
-        .type = RUWA_EFFECT_PARAM_REAL, .default_value = 0.0, .min_value = 0.0,
+        .type = RUWA_EFFECT_PARAM_REAL, .default_value = 0.0, .min_value = -16384.0,
         .max_value = 16384.0, .step_value = 1.0,
         .preferred_editor = RUWA_EFFECT_EDITOR_NUMBER_FIELD, .position_pair_key = "center",
         .position_axis = RUWA_EFFECT_AXIS_Y,
@@ -129,6 +129,19 @@ static const RuwaEffectParamDef k_unsharp_mask_params[] = {
         .type = RUWA_EFFECT_PARAM_REAL, .default_value = 0.0, .min_value = 0.0,
         .max_value = 1.0, .step_value = 0.01,
         .preferred_editor = RUWA_EFFECT_EDITOR_SLIDER,
+    },
+};
+
+/* Only the radial center is document-space geometry. Its Max Radius caps
+ * per-pixel sampling displacement, not a circular region around this center. */
+static const RuwaEffectCanvasControlDef k_radial_controls[] = {
+    {
+        .struct_size = sizeof(RuwaEffectCanvasControlDef),
+        .id = "center",
+        .type = RUWA_EFFECT_CANVAS_CONTROL_POSITION,
+        .value_key = NULL,
+        .center_x_key = "centerX",
+        .center_y_key = "centerY",
     },
 };
 
@@ -200,6 +213,8 @@ static const RuwaEffectDescriptor k_effects[] = {
         .create_pass            = blur_radial_create_pass,
         .render_pass            = blur_radial_render_pass,
         .destroy_pass           = blur_radial_destroy_pass,
+        .canvas_controls        = k_radial_controls,
+        .canvas_control_count   = sizeof(k_radial_controls) / sizeof(k_radial_controls[0]),
     },
     {
         .struct_size            = sizeof(RuwaEffectDescriptor),

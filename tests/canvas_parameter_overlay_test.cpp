@@ -122,6 +122,47 @@ TEST_CASE("Position reuses circle hover animation and retains identity across re
     REQUIRE(overlay.isHidden());
 }
 
+TEST_CASE("Gradient endpoint positions move and hover independently", "[canvas][overlay]")
+{
+    CanvasParameterOverlayWidget overlay;
+    overlay.setDocumentToLocalFn([](const QPointF& p) { return p; });
+    auto start = positionControl();
+    start.id = QStringLiteral("start");
+    start.centerXParamKey = QStringLiteral("x0");
+    start.centerYParamKey = QStringLiteral("y0");
+    start.documentCenter = QPointF(0.0, 0.0);
+    auto end = positionControl();
+    end.id = QStringLiteral("end");
+    end.centerXParamKey = QStringLiteral("x1");
+    end.centerYParamKey = QStringLiteral("y1");
+    end.documentCenter = QPointF(512.0, 512.0);
+    overlay.setControls({ start, end });
+
+    overlay.setControlPosition(start.id, QPointF(100.0, 150.0));
+    REQUIRE(overlay.controlAt(0)->documentCenter == QPointF(100.0, 150.0));
+    REQUIRE(overlay.controlAt(1)->documentCenter == end.documentCenter);
+    REQUIRE(overlay.hitTest(QPointF(100.0, 150.0)) == 0);
+    REQUIRE(overlay.hitTest(end.documentCenter) == 1);
+
+    overlay.setControlPosition(end.id, QPointF(700.0, 800.0));
+    REQUIRE(overlay.controlAt(0)->documentCenter == QPointF(100.0, 150.0));
+    REQUIRE(overlay.controlAt(1)->documentCenter == QPointF(700.0, 800.0));
+    overlay.setHoveredControl(0);
+    auto* animation = overlay.findChild<QVariantAnimation*>();
+    REQUIRE(animation);
+    animation->setCurrentTime(animation->duration());
+    overlay.setHoveredControl(1);
+    animation->setCurrentTime(animation->duration());
+    REQUIRE(overlay.hoverProgress(0) == 0.0);
+    REQUIRE(overlay.hoverProgress(1) == 1.0);
+
+    // When endpoints coincide, the last-drawn anchor can be moved away first.
+    overlay.setControlPosition(end.id, overlay.controlAt(0)->documentCenter);
+    REQUIRE(overlay.hitTest(QPointF(100.0, 150.0)) == 1);
+    overlay.setControlPosition(end.id, QPointF(200.0, 250.0));
+    REQUIRE(overlay.hitTest(QPointF(100.0, 150.0)) == 0);
+}
+
 TEST_CASE("Controls without a coordinate mapping cannot be hit", "[canvas][overlay]")
 {
     CanvasParameterOverlayWidget overlay;
@@ -129,4 +170,22 @@ TEST_CASE("Controls without a coordinate mapping cannot be hit", "[canvas][overl
     REQUIRE(overlay.hitTest(QPointF()) == -1);
     REQUIRE(overlay.controlAt(-1) == nullptr);
     REQUIRE(overlay.controlAt(2) == nullptr);
+}
+
+TEST_CASE(
+    "Position and its radius circle follow negative document coordinates", "[canvas][overlay]")
+{
+    CanvasParameterOverlayWidget overlay;
+    overlay.setDocumentToLocalFn([](const QPointF& p) { return p + QPointF(500.0, 500.0); });
+    overlay.setControls({ circleControl(), positionControl() });
+    for (const QPointF position : { QPointF(-100.0, 50.0), QPointF(-100.0, -50.0),
+             QPointF(100.0, -50.0), QPointF(0.0, 0.0) }) {
+        overlay.setControlPosition(QStringLiteral("center"), position);
+        REQUIRE(overlay.controlAt(0)->documentCenter == position);
+        REQUIRE(overlay.controlAt(1)->documentCenter == position);
+        REQUIRE(overlay.controlAt(0)->documentRadius == 40.0);
+        const QPointF screen = position + QPointF(500.0, 500.0);
+        REQUIRE(overlay.hitTest(screen) == 1);
+        REQUIRE(overlay.hitTest(screen + QPointF(40.0, 0.0)) == 0);
+    }
 }
