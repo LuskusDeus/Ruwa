@@ -91,3 +91,17 @@ catch_discover_tests(RuwaCanvasParameterOverlayTests
         "$<TARGET_FILE_DIR:Qt6::Core>"
         "${RUWA_MINGW_BIN_DIR}"
 )
+
+# Undo teardown must not emit history updates into a partially destroyed canvas.
+add_executable(RuwaUndoManagerTests
+    undo_manager_lifecycle_test.cpp
+    ../src/shared/undo/UndoManager.cpp
+    ../src/shared/undo/CompositeUndoCommand.cpp
+)
+target_include_directories(RuwaUndoManagerTests PRIVATE ../src)
+target_link_libraries(RuwaUndoManagerTests PRIVATE Catch2::Catch2 Qt6::Core Qt6::Concurrent)
+catch_discover_tests(RuwaUndoManagerTests
+    DL_PATHS
+        "$<TARGET_FILE_DIR:Qt6::Core>"
+        "${RUWA_MINGW_BIN_DIR}"
+)

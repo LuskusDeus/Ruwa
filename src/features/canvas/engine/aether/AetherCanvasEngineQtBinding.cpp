@@ -1214,10 +1214,17 @@ void AetherCanvasEngineQtBinding::shutdown()
     }
     m_shuttingDown = true;
 
+    // History has its own QObject sender; disconnecting the viewport alone
+    // leaves its relay active while the canvas and undo stack are destroyed.
+    // Close the event boundary before hide/delete can re-enter feature code.
+    QObject::disconnect(m_events.get(), nullptr, nullptr, nullptr);
+
     // Deterministic teardown while the GL context is still valid: disconnect
     // everything, stop presenting, then destroy the host widget. The panel has
     // already detached it from its layout by this point.
     if (m_widget) {
+        QObject::disconnect(
+            &m_widget->canvas().undoManager(), nullptr, m_events.get(), nullptr);
         QObject::disconnect(m_widget, nullptr, nullptr, nullptr);
         m_widget->hide();
         delete m_widget;

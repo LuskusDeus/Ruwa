@@ -53,6 +53,10 @@ UndoManager::UndoManager(QObject* parent)
 
 UndoManager::~UndoManager()
 {
+    // The owning canvas may already have destroyed its drawing state. Keep
+    // clear()'s worker synchronization and cleanup, but do not notify views
+    // from a partially destroyed document.
+    blockSignals(true);
     clear();
 }
 

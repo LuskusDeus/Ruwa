@@ -373,6 +373,10 @@ CanvasPanel::~CanvasPanel()
         delete m_viewController;
         m_viewController = nullptr;
     }
+    // Invalidate borrowed pointers before teardown can deliver widget events.
+    // The binding remains the owner and still has the host needed for cleanup.
+    m_glWidget = nullptr;
+    m_viewportHostWidget = nullptr;
     // Tear the engine binding down first, while the GL context is still valid.
     // The binding disconnects, hides and destroys the host widget; the layout
     // is notified through Qt's normal widget-destruction path.
@@ -384,9 +388,6 @@ CanvasPanel::~CanvasPanel()
         }
         m_engineBinding.reset();
     }
-    m_glWidget = nullptr;
-    m_viewportHostWidget = nullptr;
-
     persistGlobalToolState();
     if (m_toolStateController) {
         m_toolStateController->flushQueuedSnapshotNoWait();
