@@ -38,6 +38,8 @@
 #include "features/canvas/ui/CanvasPanelHelpers.h"
 #include "features/canvas/ui/CanvasPanel.h"
 #include "features/fill/FillContextWidget.h"
+#include "features/brush/import/BrushImportWidget.h"
+#include "shared/widgets/overlays/ContentOverlay.h"
 #include <QCoreApplication>
 #include <QDesktopServices>
 #include <QApplication>
@@ -78,6 +80,29 @@ namespace {
 
 constexpr int kFirstLaunchUpdateAfterOnboardingMs = 1000;
 constexpr qint64 kMaxDroppedBrowserImageBytes = 50 * 1024 * 1024;
+
+QStringList droppedBrushPaths(const QMimeData* mimeData)
+{
+    if (!mimeData || !mimeData->hasUrls()) {
+        return {};
+    }
+    QStringList paths;
+    for (const QUrl& url : mimeData->urls()) {
+        if (!url.isLocalFile()) {
+            return {};
+        }
+        const QString path = url.toLocalFile();
+        const QString suffix = QFileInfo(path).suffix();
+        if (suffix.compare(QLatin1String("rbf"), Qt::CaseInsensitive) != 0
+            && suffix.compare(QLatin1String("abr"), Qt::CaseInsensitive) != 0) {
+            return {};
+        }
+        if (!paths.contains(path)) {
+            paths.append(path);
+        }
+    }
+    return paths;
+}
 
 void persistLastSeenUpdateVersion(
     const QString& organization, const QString& application, const QString& version)
@@ -357,12 +382,17 @@ MainWindow::MainWindow(QWidget* parent, const QStringList& startupOpenFilePaths)
     // Connect signals
     connectSignals();
 
+    // Child panels can claim drops themselves (notably the canvas). Route brush
+    // files before those handlers, scoped to this window and its active workspace.
+    qApp->installEventFilter(this);
+
     // Restore window state
     m_setupCoordinator->restoreWindowState(this);
 }
 
 MainWindow::~MainWindow()
 {
+    qApp->removeEventFilter(this);
     if (m_firstLaunchUpdateDismissSyncFuture.isRunning()) {
         m_firstLaunchUpdateDismissSyncFuture.waitForFinished();
     }
@@ -856,6 +886,51 @@ void MainWindow::changeEvent(QEvent* event)
         });
     }
     QMainWindow::changeEvent(event);
+}
+
+bool MainWindow::eventFilter(QObject* watched, QEvent* event)
+{
+    const auto type = event->type();
+    if (type != QEvent::DragEnter && type != QEvent::DragMove && type != QEvent::Drop) {
+        return QMainWindow::eventFilter(watched, event);
+    }
+    auto* target = qobject_cast<QWidget*>(watched);
+    if (!target || target->window() != this || !activeWorkspaceTab() || m_contextWindow
+        || m_brushImportOverlay || QApplication::activeModalWidget()) {
+        return QMainWindow::eventFilter(watched, event);
+    }
+    auto* drop = static_cast<QDropEvent*>(event);
+    const QStringList paths = droppedBrushPaths(drop->mimeData());
+    if (paths.isEmpty() || !drop->possibleActions().testFlag(Qt::CopyAction)) {
+        return QMainWindow::eventFilter(watched, event);
+    }
+    drop->setDropAction(Qt::CopyAction);
+    drop->accept();
+    if (type == QEvent::Drop) {
+        // Finish the native drag before showing the overlay.
+        QTimer::singleShot(0, this, [this, paths]() { showBrushImportOverlay(paths); });
+    }
+    return true;
+}
+
+void MainWindow::showBrushImportOverlay(const QStringList& filePaths)
+{
+    if (!activeWorkspaceTab() || m_contextWindow || m_brushImportOverlay
+        || QApplication::activeModalWidget()) {
+        return;
+    }
+    auto* content = new widgets::BrushImportWidget(filePaths);
+    auto* overlay = new widgets::ContentOverlay(
+        content, widgets::BrushImportWidget::tr("Import Brushes"), this);
+    m_brushImportOverlay = overlay;
+    connect(content, &widgets::BrushImportWidget::cancelRequested, overlay,
+        &widgets::ContentOverlay::hideOverlay);
+    connect(content, &widgets::BrushImportWidget::finished, overlay,
+        &widgets::ContentOverlay::hideOverlay);
+    connect(overlay, &widgets::ContentOverlay::hidden, overlay, &QObject::deleteLater);
+    connect(tabManager(), &ruwa::core::TabManager::activeTabChanged, overlay,
+        &widgets::ContentOverlay::hideOverlay);
+    overlay->showOverlay();
 }
 
 void MainWindow::dragEnterEvent(QDragEnterEvent* event)

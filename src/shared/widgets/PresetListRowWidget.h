@@ -29,6 +29,8 @@ class PresetListRowWidget : public QWidget, public ruwa::ui::widgets::IContextMe
     Q_PROPERTY(qreal selectionProgress READ selectionProgress WRITE setSelectionProgress)
     Q_PROPERTY(qreal renameHoverProgress READ renameHoverProgress WRITE setRenameHoverProgress)
     Q_PROPERTY(qreal deleteHoverProgress READ deleteHoverProgress WRITE setDeleteHoverProgress)
+    Q_PROPERTY(qreal rowOpacity READ rowOpacity WRITE setRowOpacity)
+    Q_PROPERTY(qreal actionHoverProgress READ actionHoverProgress WRITE setActionHoverProgress)
 
 public:
     explicit PresetListRowWidget(const PresetMenuItem& item, QWidget* parent = nullptr);
@@ -91,6 +93,10 @@ public:
 
     qreal deleteHoverProgress() const { return m_deleteHoverProgress; }
     void setDeleteHoverProgress(qreal progress);
+    qreal rowOpacity() const { return m_rowOpacity; }
+    void setRowOpacity(qreal opacity);
+    qreal actionHoverProgress() const { return m_actionHoverProgress; }
+    void setActionHoverProgress(qreal progress);
 
     // IContextMenuProvider
     ContextMenuType contextMenuType() const override;
@@ -124,6 +130,9 @@ private:
     void syncActionButtons();
     void updateInlineActionHover(const QPoint& pos);
     void clearInlineActionState();
+    void updateRowOpacity();
+    void setReservedActionHovered(bool hovered);
+    qreal actionAreaLeft() const;
 
     int horizontalPaddingPx() const;
     int contentLeftInset() const;
@@ -161,11 +170,16 @@ private:
     qreal m_selectionProgress = 0.0;
     qreal m_renameHoverProgress = 0.0;
     qreal m_deleteHoverProgress = 0.0;
+    qreal m_rowOpacity = 1.0;
+    qreal m_actionHoverProgress = 0.0;
+    bool m_reservedActionHovered = false;
 
     QPropertyAnimation* m_hoverAnimation = nullptr;
     QPropertyAnimation* m_selectionAnimation = nullptr;
     QPropertyAnimation* m_renameHoverAnimation = nullptr;
     QPropertyAnimation* m_deleteHoverAnimation = nullptr;
+    QPropertyAnimation* m_rowOpacityAnimation = nullptr;
+    QPropertyAnimation* m_actionHoverAnimation = nullptr;
     QLineEdit* m_editor = nullptr;
 
     mutable bool m_layoutDirty = true;

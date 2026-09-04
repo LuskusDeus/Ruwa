@@ -48,6 +48,7 @@ struct BrushData {
 
 struct BrushImportResult {
     QVector<BrushData> brushes;
+    QString packName;
     QString errorMessage;
     bool success = false;
 };
@@ -81,6 +82,8 @@ public:
     bool exportBrushesToFile(const QString& filePath, const QVector<BrushData>& brushes,
         const QString& packName, QString* errorMessage = nullptr) const;
     static BrushImportResult readBrushFileForImport(const QString& filePath);
+    /// Exact, case-sensitive pack-name collision handling shared with the import UI.
+    QString suggestUniquePresetName(const QString& name);
     bool importBrushesIntoPreset(const QString& filePath, const QString& presetId,
         QStringList* importedBrushIds = nullptr, QString* errorMessage = nullptr);
     bool importBrushesIntoPreset(const QVector<BrushData>& brushes, const QString& presetId,

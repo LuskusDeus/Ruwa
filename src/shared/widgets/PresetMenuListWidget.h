@@ -90,6 +90,8 @@ public:
     bool setSubtitleForItem(const QVariant& userData, const QString& subtitle);
 
     void setSelectedUserData(const QVariant& data, bool animate = true);
+    /// Action-only lists emit itemClicked without storing a current/active row.
+    void setSelectionEnabled(bool enabled);
     QVariant selectedUserData() const { return m_selectedData; }
 
     void setActiveUserData(const QVariant& data);
@@ -180,6 +182,7 @@ private slots:
 
 private:
     bool m_popupStyle = false;
+    bool m_selectionEnabled = true;
     bool m_popupPanelPainted = true;
     bool m_embeddedChromeTransparent = false;
     bool m_importExportVisible = true;

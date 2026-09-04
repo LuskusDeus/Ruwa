@@ -42,6 +42,7 @@ class WorkspaceTab;
 namespace widgets {
 class TopBar;
 class AnimatedTabWidget;
+class ContentOverlay;
 } // namespace widgets
 } // namespace ruwa::ui
 
@@ -122,6 +123,7 @@ public:
     ContextMenuCoordinator* contextMenuCoordinator() const { return m_contextMenuCoordinator; }
 
 protected:
+    bool eventFilter(QObject* watched, QEvent* event) override;
     void closeEvent(QCloseEvent* event) override;
     void changeEvent(QEvent* event) override;
     void dragEnterEvent(QDragEnterEvent* event) override;
@@ -140,6 +142,7 @@ private:
     void handleCopyRequest();
     void handlePasteRequest();
     void handleImportImagesRequest();
+    void showBrushImportOverlay(const QStringList& filePaths);
     void createProjectFromDroppedImage(const QImage& image, const QString& layerName);
     void downloadAndCreateProjectFromDroppedImage(const QUrl& url);
     QNetworkAccessManager* imageDropNetworkManager();
@@ -177,6 +180,7 @@ private:
     CommandCoordinator* m_commandCoordinator = nullptr;
     ContextMenuCoordinator* m_contextMenuCoordinator = nullptr;
     QPointer<ContextWindow> m_contextWindow;
+    QPointer<widgets::ContentOverlay> m_brushImportOverlay;
 
     // Hidden OpenGL widget for pre-warming
 

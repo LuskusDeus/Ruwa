@@ -16,6 +16,7 @@
 #include <QPainterPath>
 #include <QPaintEvent>
 #include <QResizeEvent>
+#include <QtMath>
 #include <algorithm>
 #include <cmath>
 
@@ -79,6 +80,10 @@ void PresetListRowWidget::setupAnimations()
 
     m_deleteHoverAnimation = new QPropertyAnimation(this, "deleteHoverProgress", this);
     m_deleteHoverAnimation->setEasingCurve(QEasingCurve::OutCubic);
+    m_rowOpacityAnimation = new QPropertyAnimation(this, "rowOpacity", this);
+    m_rowOpacityAnimation->setEasingCurve(QEasingCurve::OutCubic);
+    m_actionHoverAnimation = new QPropertyAnimation(this, "actionHoverProgress", this);
+    m_actionHoverAnimation->setEasingCurve(QEasingCurve::OutCubic);
 }
 
 void PresetListRowWidget::updateScaledSize()
@@ -250,7 +255,72 @@ void PresetListRowWidget::setExtraActions(QVector<PresetMenuExtraAction> actions
     m_extraPressed = QVector<bool>(m_extraActions.size(), false);
     markLayoutDirty();
     syncActionButtons();
+    updateRowOpacity();
+    if (m_isHovered && !m_isEditing) {
+        updateInlineActionHover(mapFromGlobal(QCursor::pos()));
+    }
     update();
+}
+
+void PresetListRowWidget::setRowOpacity(qreal opacity)
+{
+    m_rowOpacity = qBound(0.0, opacity, 1.0);
+    update();
+}
+
+void PresetListRowWidget::setActionHoverProgress(qreal progress)
+{
+    m_actionHoverProgress = qBound(0.0, progress, 1.0);
+    update();
+}
+
+void PresetListRowWidget::updateRowOpacity()
+{
+    const bool excluded = m_item.reserveActionArea
+        && std::any_of(m_extraActions.cbegin(), m_extraActions.cend(),
+            [](const PresetMenuExtraAction& action) {
+                return action.checkable && !action.checked;
+            });
+    const qreal target = excluded ? 0.5 : 1.0;
+    if (m_rowOpacityAnimation->state() == QAbstractAnimation::Running
+        && m_rowOpacityAnimation->endValue().toReal() == target) {
+        return;
+    }
+    m_rowOpacityAnimation->stop();
+    if (!isVisible() || qFuzzyCompare(m_rowOpacity, target)) {
+        setRowOpacity(target);
+        return;
+    }
+    m_rowOpacityAnimation->setStartValue(m_rowOpacity);
+    m_rowOpacityAnimation->setEndValue(target);
+    m_rowOpacityAnimation->setDuration(anim::duration(ANIMATION_DURATION));
+    anim::start(m_rowOpacityAnimation);
+}
+
+void PresetListRowWidget::setReservedActionHovered(bool hovered)
+{
+    hovered = hovered && m_item.reserveActionArea;
+    if (m_reservedActionHovered == hovered) {
+        return;
+    }
+    m_reservedActionHovered = hovered;
+    m_actionHoverAnimation->stop();
+    m_actionHoverAnimation->setStartValue(m_actionHoverProgress);
+    m_actionHoverAnimation->setEndValue(hovered ? 1.0 : 0.0);
+    m_actionHoverAnimation->setDuration(anim::duration(kActionHoverAnimationMs));
+    anim::start(m_actionHoverAnimation);
+}
+
+qreal PresetListRowWidget::actionAreaLeft() const
+{
+    ensureActionLayout();
+    if (m_layoutExtras.isEmpty()) {
+        return width();
+    }
+    // Mirror the right padding around the glyph/button, including the plate inset.
+    const qreal plateRight = width() - (m_popupChromeStyle ? 0.0 : 2.0);
+    const qreal rightGap = plateRight - (m_layoutExtras.last().right() + 1.0);
+    return m_layoutExtras.first().left() - rightGap;
 }
 
 void PresetListRowWidget::setContextMenuEnabled(bool enabled)
@@ -452,6 +522,9 @@ int PresetListRowWidget::rightReservedWidth() const
     }
 
     const int reserved = std::max(actionsWidth, showBadge ? pad + badgeWidth : 0);
+    if (m_item.reserveActionArea && !m_layoutExtras.isEmpty()) {
+        return qMax(reserved, qCeil(width() - actionAreaLeft()) + theme.scaled(BASE_BTN_GAP));
+    }
     return reserved > 0 ? reserved : pad;
 }
 
@@ -465,7 +538,7 @@ void PresetListRowWidget::syncActionButtons()
 
 int PresetListRowWidget::hitExtraIndex(const QPoint& pos) const
 {
-    if (!m_isHovered && !m_isEditing) {
+    if (!m_isHovered && !m_isEditing && !m_item.reserveActionArea) {
         return -1;
     }
     ensureActionLayout();
@@ -507,6 +580,7 @@ void PresetListRowWidget::updateInlineActionHover(const QPoint& pos)
     const bool renameHovered = hitRenameAction(pos);
     const bool deleteHovered = hitDeleteAction(pos);
     const int extraIndex = hitExtraIndex(pos);
+    setReservedActionHovered(extraIndex >= 0);
     bool changed = (renameHovered != m_renameHovered) || (deleteHovered != m_deleteHovered);
 
     const auto animateHover = [](QPropertyAnimation* hoverAnim, qreal current, bool hovered) {
@@ -545,6 +619,7 @@ void PresetListRowWidget::updateInlineActionHover(const QPoint& pos)
 
 void PresetListRowWidget::clearInlineActionState()
 {
+    setReservedActionHovered(false);
     bool changed = m_renameHovered || m_deleteHovered || m_renamePressed || m_deletePressed;
 
     if (m_renameHovered && m_renameHoverAnimation) {
@@ -755,6 +830,7 @@ void PresetListRowWidget::drawPreview(
     const int radius = m_item.previewWide ? qMax(5, theme.scaled(8))
                                           : qMax(4, theme.scaled(BASE_CORNER_RADIUS) - 1);
 
+    const qreal contentOpacity = painter.opacity();
     painter.save();
 
     if (m_item.fillPreviewBackground) {
@@ -763,9 +839,9 @@ void PresetListRowWidget::drawPreview(
         painter.setClipPath(clipPath);
 
         if (!m_item.previewImage.isNull()) {
-            painter.setOpacity(colors.isDark ? 0.9 : 0.82);
+            painter.setOpacity(contentOpacity * (colors.isDark ? 0.9 : 0.82));
             painter.drawImage(rect.toRect(), m_item.previewImage);
-            painter.setOpacity(1.0);
+            painter.setOpacity(contentOpacity);
         } else if (!m_item.previewColors.isEmpty()) {
             const qreal bandW = rect.width() / qMax(1, m_item.previewColors.size());
             for (int i = 0; i < m_item.previewColors.size(); ++i) {
@@ -798,6 +874,8 @@ void PresetListRowWidget::drawPreview(
         fade.setColorAt(0.34, fadeStart);
         fade.setColorAt(0.72, fadeMid);
         fade.setColorAt(1.0, fadeEnd);
+        // Dimming the content must not weaken the gradient that keeps the text readable.
+        painter.setOpacity(1.0);
         painter.fillRect(rect, fade);
 
         painter.restore();
@@ -886,6 +964,7 @@ void PresetListRowWidget::paintEvent(QPaintEvent* event)
     QPainter painter(this);
     painter.setRenderHint(QPainter::Antialiasing);
     painter.setRenderHint(QPainter::TextAntialiasing);
+    const qreal rowHover = m_hoverProgress * (m_item.reserveActionArea ? 0.3 : 1.0);
 
     const auto& theme = ThemeManager::instance();
     const auto& colors = theme.colors();
@@ -907,12 +986,11 @@ void PresetListRowWidget::paintEvent(QPaintEvent* event)
     }
 
     QColor selectedBg = ThemeColors::withAlpha(colors.primary, colors.isDark ? 44 : 34);
-    QColor bgColor = blend(
-        Qt::transparent, hoverBg, m_popupChromeStyle ? m_hoverProgress : m_hoverProgress * 0.75);
+    QColor bgColor
+        = blend(Qt::transparent, hoverBg, m_popupChromeStyle ? rowHover : rowHover * 0.75);
     bgColor = blend(bgColor, selectedBg, m_selectionProgress);
 
-    QColor borderColor
-        = blend(colors.borderSubtle(), colors.borderSubtleHover(), m_hoverProgress * 0.85);
+    QColor borderColor = blend(colors.borderSubtle(), colors.borderSubtleHover(), rowHover * 0.85);
     borderColor = blend(borderColor,
         ThemeColors::withAlpha(colors.primary, colors.isDark ? 68 : 52), m_selectionProgress);
     if (m_popupChromeStyle) {
@@ -926,7 +1004,27 @@ void PresetListRowWidget::paintEvent(QPaintEvent* event)
     }
 
     if (m_item.fillPreviewBackground) {
-        drawPreview(painter, plateRect.adjusted(1.0, 1.0, -1.0, -1.0), QColor());
+        QRectF previewRect = plateRect.adjusted(1.0, 1.0, -1.0, -1.0);
+        if (m_item.reserveActionArea && !m_layoutExtras.isEmpty()) {
+            // The preview ends before the controls, including their padding.
+            const qreal actionLeft = actionAreaLeft();
+            previewRect.setRight(actionLeft);
+            QPainterPath plateClip;
+            plateClip.addRoundedRect(plateRect, radius, radius);
+            painter.save();
+            painter.setClipPath(plateClip);
+            painter.fillRect(QRectF(actionLeft, plateRect.top(), plateRect.right() - actionLeft,
+                                 plateRect.height()),
+                colors.surface);
+            painter.setOpacity(m_rowOpacity);
+            painter.setPen(colors.borderSubtle());
+            painter.drawLine(QPointF(actionLeft, plateRect.top() + paddingV),
+                QPointF(actionLeft, plateRect.bottom() - paddingV));
+            painter.restore();
+        }
+        painter.setOpacity(m_rowOpacity);
+        drawPreview(painter, previewRect, QColor());
+        painter.setOpacity(1.0);
         if (bgColor.alpha() > 0) {
             painter.setPen(Qt::NoPen);
             painter.setBrush(bgColor);
@@ -934,6 +1032,7 @@ void PresetListRowWidget::paintEvent(QPaintEvent* event)
         }
     }
 
+    painter.setOpacity(m_rowOpacity);
     const qreal selectedTone = qMax(m_selectionProgress, m_isActive ? 1.0 : 0.0);
     if (!m_popupChromeStyle || selectedTone > 0.001) {
         QColor rowBorder = borderColor;
@@ -972,7 +1071,8 @@ void PresetListRowWidget::paintEvent(QPaintEvent* event)
     const QColor subtitleColor = blend(colors.textMuted, colors.text, m_selectionProgress * 0.22);
 
     const bool hasActions = m_isDeletable || m_isRenamable || !m_extraActions.isEmpty();
-    const bool showActions = hasActions && !m_isEditing && (m_isHovered || m_popupChromeStyle);
+    const bool showActions = hasActions && !m_isEditing
+        && (m_isHovered || m_popupChromeStyle || m_item.reserveActionArea);
     const bool showBadge = !showActions && !m_item.badgeText.trimmed().isEmpty();
 
     if (!m_isEditing) {
@@ -1055,10 +1155,15 @@ void PresetListRowWidget::paintEvent(QPaintEvent* event)
         const qreal hp = qBound<qreal>(0.0, hoverLevel, 1.0);
 
         if (hp > 0.001) {
+            painter.save();
+            if (m_item.reserveActionArea) {
+                // Hover feedback keeps the same strength for included/excluded rows.
+                painter.setOpacity(1.0);
+            }
             const int bgAlpha = qRound((danger ? 34 : 28) * hp);
             QColor btnBg = danger ? ThemeColors::withAlpha(c.error, bgAlpha)
                                   : ThemeColors::withAlpha(c.overlayColor, bgAlpha);
-            if (m_popupChromeStyle) {
+            if (m_popupChromeStyle || m_item.reserveActionArea) {
                 painter.setPen(Qt::NoPen);
             } else {
                 QColor btnBorder = danger ? ThemeColors::withAlpha(c.error, qRound(96 * hp))
@@ -1068,6 +1173,7 @@ void PresetListRowWidget::paintEvent(QPaintEvent* event)
             }
             painter.setBrush(btnBg);
             painter.drawRoundedRect(btnRect, qMax(2, r), qMax(2, r));
+            painter.restore();
         }
 
         QColor normalIcon = c.textMuted;
@@ -1094,8 +1200,15 @@ void PresetListRowWidget::paintEvent(QPaintEvent* event)
                 drawStarToggle(
                     painter, br, ax.checked, i < m_extraHovered.size() && m_extraHovered[i]);
             } else {
-                const qreal hov = (i < m_extraHovered.size() && m_extraHovered[i]) ? 1.0 : 0.0;
+                const qreal hov = m_item.reserveActionArea && m_extraActions.size() == 1
+                    ? m_actionHoverProgress
+                    : ((i < m_extraHovered.size() && m_extraHovered[i]) ? 1.0 : 0.0);
+                painter.save();
+                if (ax.checkable && !ax.checked && !m_item.reserveActionArea) {
+                    painter.setOpacity(0.25);
+                }
                 drawIconAction(br, hov, ax.dangerHover, ax.icon);
+                painter.restore();
             }
         }
 

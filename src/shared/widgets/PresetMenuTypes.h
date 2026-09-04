@@ -29,6 +29,8 @@ struct PresetMenuExtraAction {
     bool dangerHover = false;
     /// When true, draws a star (filled if checked) instead of @ref icon.
     bool useStarToggle = false;
+    /// Checkable action: dims the reserved row when unchecked, otherwise only the glyph.
+    bool checkable = false;
 };
 
 struct PresetMenuHeaderAction {
@@ -57,6 +59,8 @@ struct PresetMenuItem {
     bool previewWide = false;
     bool previewFrameless = false;
     bool hasTitleTrailingIcon = false;
+    /// Keep inline controls visible and outside the background preview area.
+    bool reserveActionArea = false;
     QString searchText;
     QVariant userData;
     bool deletable = true;

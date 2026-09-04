@@ -1663,6 +1663,9 @@ bool PresetMenuListWidget::setSubtitleForItem(const QVariant& userData, const QS
 
 void PresetMenuListWidget::setSelectedUserData(const QVariant& data, bool animate)
 {
+    if (!m_selectionEnabled) {
+        return;
+    }
     if (m_selectedData == data) {
         if (!animate) {
             updateSelectionVisuals(false);
@@ -1674,8 +1677,24 @@ void PresetMenuListWidget::setSelectedUserData(const QVariant& data, bool animat
     updateSelectionVisuals(animate);
 }
 
+void PresetMenuListWidget::setSelectionEnabled(bool enabled)
+{
+    if (m_selectionEnabled == enabled) {
+        return;
+    }
+    m_selectionEnabled = enabled;
+    if (!enabled) {
+        m_selectedData.clear();
+        m_activeData.clear();
+    }
+    updateSelectionVisuals(false);
+}
+
 void PresetMenuListWidget::setActiveUserData(const QVariant& data)
 {
+    if (!m_selectionEnabled) {
+        return;
+    }
     if (m_activeData == data) {
         return;
     }
@@ -1965,16 +1984,18 @@ void PresetMenuListWidget::rebuildRows()
         row->setPopupChromeStyle(m_popupStyle);
         row->setDeletable(it.deletable);
         row->setRenamable(it.renamable);
-        row->setActive(it.userData == m_activeData);
+        row->setActive(m_selectionEnabled && it.userData == m_activeData);
         row->setContextMenuEnabled(m_contextMenuEnabled);
         if (it.dragEnabled) {
             row->installEventFilter(this);
         }
 
         connect(row, &PresetListRowWidget::clicked, this, [this, row]() {
-            m_selectedData = row->userData();
-            updateSelectionVisuals();
-            emit itemClicked(m_selectedData);
+            if (m_selectionEnabled) {
+                m_selectedData = row->userData();
+                updateSelectionVisuals();
+            }
+            emit itemClicked(row->userData());
         });
         connect(row, &PresetListRowWidget::renameFinished, this,
             [this, row](const QString& t) { emit itemRenamed(row->userData(), t); });
@@ -2179,8 +2200,8 @@ void PresetMenuListWidget::updateSelectionVisuals(bool animateSelection)
         if (!row) {
             continue;
         }
-        row->setSelected(row->userData() == m_selectedData, animateSelection);
-        row->setActive(row->userData() == m_activeData);
+        row->setSelected(m_selectionEnabled && row->userData() == m_selectedData, animateSelection);
+        row->setActive(m_selectionEnabled && row->userData() == m_activeData);
     }
 }
 

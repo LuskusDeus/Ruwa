@@ -3,7 +3,6 @@
 #include "ImageImportSelectionOverlay.h"
 
 #include "shared/resources/IconProvider.h"
-#include "shared/style/AnimationPolicy.h"
 #include "features/theme/manager/ThemeColors.h"
 #include "features/theme/manager/ThemeManager.h"
 #include "shared/widgets/BaseAnimatedButton.h"
@@ -11,37 +10,24 @@
 #include "shared/widgets/layout/FlowLayout.h"
 #include "shared/widgets/layout/SmoothScrollArea.h"
 
-#include <QEvent>
-#include <QFrame>
+#include <QCoreApplication>
 #include <QFutureWatcher>
-#include <QGraphicsOpacityEffect>
 #include <QHBoxLayout>
 #include <QImageReader>
-#include <QKeyEvent>
 #include <QLabel>
 #include <QMouseEvent>
 #include <QPainter>
 #include <QPainterPath>
 #include <QPointer>
-#include <QPropertyAnimation>
-#include <QShortcut>
 #include <QTimer>
 #include <QVBoxLayout>
 #include <QtConcurrent>
 
 #include <algorithm>
 
-namespace anim = ruwa::ui::core::anim;
-
 namespace ruwa::ui::workspace {
 namespace {
 
-constexpr int kOverlayHorizontalMargin = 32;
-constexpr int kOverlayVerticalMargin = 32;
-constexpr int kPanelMaxWidth = 560;
-constexpr int kPanelMaxHeight = 520;
-constexpr int kPanelMinWidth = 360;
-constexpr int kPanelMinHeight = 260;
 constexpr int kPanelRadius = 16;
 constexpr int kPreviewTileWidth = 176;
 constexpr int kPreviewTileHeight = 132;
@@ -260,24 +246,8 @@ private:
 };
 
 ImageImportSelectionOverlay::ImageImportSelectionOverlay(QWidget* parent)
-    : QWidget(parent)
+    : ContentOverlay(parent)
 {
-    setAttribute(Qt::WA_StyledBackground, false);
-    setAttribute(Qt::WA_NoSystemBackground, false);
-    setFocusPolicy(Qt::StrongFocus);
-    setMouseTracking(true);
-
-    m_opacityEffect = new QGraphicsOpacityEffect(this);
-    m_opacityEffect->setOpacity(0.0);
-    setGraphicsEffect(m_opacityEffect);
-
-    m_opacityAnimation = new QPropertyAnimation(this, "overlayOpacity", this);
-    m_opacityAnimation->setEasingCurve(QEasingCurve::OutCubic);
-
-    m_panelOffsetAnimation = new QPropertyAnimation(this, "panelOffset", this);
-    m_panelOffsetAnimation->setEasingCurve(QEasingCurve::OutCubic);
-
-    m_panel = new QFrame(this);
     m_panel->setObjectName(QStringLiteral("imageImportSelectionPanel"));
     m_panel->setAttribute(Qt::WA_StyledBackground, true);
 
@@ -370,18 +340,8 @@ ImageImportSelectionOverlay::ImageImportSelectionOverlay(QWidget* parent)
                 m_importBoardButton->update();
             }
         });
-    auto* escapeShortcut = new QShortcut(QKeySequence(Qt::Key_Escape), this);
-    escapeShortcut->setContext(Qt::WidgetWithChildrenShortcut);
-    connect(escapeShortcut, &QShortcut::activated, this, [this]() {
-        hideOverlay();
-        emit cancelled();
-    });
-
-    if (parentWidget()) {
-        parentWidget()->installEventFilter(this);
-    }
-
-    hideImmediate();
+    connect(this, &ContentOverlay::hidden, this,
+        &ImageImportSelectionOverlay::resetClipboardImportState);
     updateStyles();
     updateButtonIcon();
 }
@@ -431,98 +391,7 @@ void ImageImportSelectionOverlay::showForSingleImage(const QImage& image, const 
 
 void ImageImportSelectionOverlay::showOverlayPanel()
 {
-    if (parentWidget()) {
-        setGeometry(parentWidget()->rect());
-    }
-    updatePanelGeometry();
-
-    const bool wasVisible = isVisible();
-    m_isHiding = false;
-
-    if (!wasVisible) {
-        setOverlayOpacity(0.0);
-        setPanelOffset(-PANEL_SLIDE_OFFSET);
-        show();
-    }
-
-    raise();
-    activateWindow();
-    setFocus(Qt::OtherFocusReason);
-    startShowAnimation();
-}
-
-void ImageImportSelectionOverlay::hideOverlay()
-{
-    if (!isVisible() || m_isHiding) {
-        return;
-    }
-    startHideAnimation();
-}
-
-bool ImageImportSelectionOverlay::isOverlayVisible() const
-{
-    return isVisible();
-}
-
-void ImageImportSelectionOverlay::setOverlayOpacity(qreal opacity)
-{
-    m_overlayOpacity = qBound(0.0, opacity, 1.0);
-    if (m_opacityEffect) {
-        m_opacityEffect->setOpacity(m_overlayOpacity);
-    }
-    update();
-}
-
-void ImageImportSelectionOverlay::setPanelOffset(qreal offset)
-{
-    m_panelOffset = offset;
-    updatePanelGeometry();
-}
-
-bool ImageImportSelectionOverlay::eventFilter(QObject* watched, QEvent* event)
-{
-    if (watched == parentWidget() && event) {
-        if (event->type() == QEvent::Resize || event->type() == QEvent::Show) {
-            if (parentWidget()) {
-                setGeometry(parentWidget()->rect());
-            }
-            updatePanelGeometry();
-        }
-    }
-    return QWidget::eventFilter(watched, event);
-}
-
-void ImageImportSelectionOverlay::paintEvent(QPaintEvent* event)
-{
-    Q_UNUSED(event);
-
-    QPainter painter(this);
-    painter.setRenderHint(QPainter::Antialiasing);
-    painter.fillRect(rect(), QColor(0, 0, 0, 110));
-}
-
-void ImageImportSelectionOverlay::keyPressEvent(QKeyEvent* event)
-{
-    if (event->key() == Qt::Key_Escape) {
-        hideOverlay();
-        emit cancelled();
-        event->accept();
-        return;
-    }
-
-    QWidget::keyPressEvent(event);
-}
-
-void ImageImportSelectionOverlay::mousePressEvent(QMouseEvent* event)
-{
-    if (!m_panel->geometry().contains(event->pos())) {
-        hideOverlay();
-        emit cancelled();
-        event->accept();
-        return;
-    }
-
-    QWidget::mousePressEvent(event);
+    showOverlay();
 }
 
 void ImageImportSelectionOverlay::setClipboardImagePreview(const QImage& image)
@@ -624,23 +493,6 @@ void ImageImportSelectionOverlay::populateList(const QStringList& filePaths)
     updateImportButtonState();
 }
 
-void ImageImportSelectionOverlay::updatePanelGeometry()
-{
-    if (!m_panel) {
-        return;
-    }
-
-    const int targetWidth
-        = qBound(kPanelMinWidth, width() - kOverlayHorizontalMargin * 2, kPanelMaxWidth);
-    const int targetHeight
-        = qBound(kPanelMinHeight, height() - kOverlayVerticalMargin * 2, kPanelMaxHeight);
-
-    const QSize panelSize(targetWidth, targetHeight);
-    m_panel->setFixedSize(panelSize);
-    m_panel->move((width() - panelSize.width()) / 2,
-        (height() - panelSize.height()) / 2 + qRound(m_panelOffset));
-}
-
 void ImageImportSelectionOverlay::updateImportButtonState()
 {
     const bool hasCheckedItems = (m_clipboardImportActive && !m_pendingClipboardImage.isNull())
@@ -711,72 +563,6 @@ void ImageImportSelectionOverlay::updateButtonIcon()
     if (m_importBoardButton) {
         m_importBoardButton->setIcon(icon);
     }
-}
-
-void ImageImportSelectionOverlay::startShowAnimation()
-{
-    if (!m_opacityAnimation || !m_panelOffsetAnimation) {
-        return;
-    }
-
-    m_opacityAnimation->stop();
-    m_panelOffsetAnimation->stop();
-
-    m_opacityAnimation->setDuration(anim::duration(SHOW_DURATION));
-    m_opacityAnimation->setStartValue(m_overlayOpacity);
-    m_opacityAnimation->setEndValue(1.0);
-    anim::start(m_opacityAnimation);
-
-    m_panelOffsetAnimation->setDuration(anim::duration(SHOW_DURATION));
-    m_panelOffsetAnimation->setStartValue(m_panelOffset);
-    m_panelOffsetAnimation->setEndValue(0.0);
-    anim::start(m_panelOffsetAnimation);
-}
-
-void ImageImportSelectionOverlay::startHideAnimation()
-{
-    if (!m_opacityAnimation || !m_panelOffsetAnimation) {
-        hideImmediate();
-        return;
-    }
-
-    m_isHiding = true;
-    m_opacityAnimation->stop();
-    m_panelOffsetAnimation->stop();
-
-    disconnect(m_opacityAnimation, nullptr, this, nullptr);
-    connect(m_opacityAnimation, &QPropertyAnimation::finished, this, [this]() {
-        if (m_isHiding) {
-            hideImmediate();
-        }
-    });
-
-    m_panelOffsetAnimation->setDuration(anim::duration(HIDE_DURATION));
-    m_panelOffsetAnimation->setStartValue(m_panelOffset);
-    m_panelOffsetAnimation->setEndValue(-PANEL_SLIDE_OFFSET);
-    anim::start(m_panelOffsetAnimation);
-
-    // Started last: its finished() handler runs hideImmediate(), which resets
-    // both animated values — with animations off that happens synchronously.
-    m_opacityAnimation->setDuration(anim::duration(HIDE_DURATION));
-    m_opacityAnimation->setStartValue(m_overlayOpacity);
-    m_opacityAnimation->setEndValue(0.0);
-    anim::start(m_opacityAnimation);
-}
-
-void ImageImportSelectionOverlay::hideImmediate()
-{
-    m_isHiding = false;
-    if (m_opacityAnimation) {
-        m_opacityAnimation->stop();
-    }
-    if (m_panelOffsetAnimation) {
-        m_panelOffsetAnimation->stop();
-    }
-    setOverlayOpacity(0.0);
-    setPanelOffset(0.0);
-    resetClipboardImportState();
-    hide();
 }
 
 } // namespace ruwa::ui::workspace

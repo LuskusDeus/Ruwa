@@ -6207,4 +6207,29 @@ Ruwa использует фреймворк Qt (версия %1), динами�
     <message><source>Missing preset data.</source><translation>В файле отсутствуют данные пресета.</translation></message>
     <message><source>Preset has no name.</source><translation>У пресета отсутствует название.</translation></message>
 </context>
+<context>
+    <name>ruwa::ui::widgets::BrushImportWidget</name>
+    <message><source>Import</source><comment>import mode heading</comment><translation>Импорт</translation></message>
+    <message><source>Import Brushes</source><translation>Импорт кистей</translation></message>
+    <message><source>Loading brushes…</source><translation>Загрузка кистей…</translation></message>
+    <message><source>Included</source><translation>Включена</translation></message>
+    <message><source>Excluded</source><translation>Исключена</translation></message>
+    <message><source>Exclude brush</source><translation>Исключить кисть</translation></message>
+    <message><source>Include brush</source><translation>Включить кисть</translation></message>
+    <message><source>Selected: %1 / %2</source><translation>Выбрано: %1 / %2</translation></message>
+    <message><source>A pack with this name already exists. The new pack will be named “%1”.</source><translation>Пак с таким именем уже существует. При создании новый пак будет переименован в «%1».</translation></message>
+    <message><source>%1 (%2 / %3)</source><translation>%1 (%2 / %3)</translation></message>
+    <message><source>As a separate pack</source><translation>Как отдельный пак</translation></message>
+    <message><source>Into an existing pack</source><translation>В существующий пак</translation></message>
+    <message><source>Pack name</source><translation>Имя пака</translation></message>
+    <message><source>Select a pack</source><translation>Выберите пак</translation></message>
+    <message><source>Destination pack</source><translation>Пак назначения</translation></message>
+    <message><source>Cancel</source><translation>Отмена</translation></message>
+    <message><source>Skip file</source><translation>Пропустить файл</translation></message>
+    <message><source>Import</source><translation>Импортировать</translation></message>
+    <message><source>Select all</source><translation>Выбрать все</translation></message>
+    <message><source>Deselect all</source><translation>Снять выбор</translation></message>
+    <message><source>No brushes</source><translation>Нет кистей</translation></message>
+    <message><source>This file has no brushes available for import.</source><translation>В этом файле нет кистей, доступных для импорта.</translation></message>
+</context>
 </TS>

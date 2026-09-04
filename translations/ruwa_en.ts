@@ -6152,4 +6152,29 @@ Ruwa uses the Qt framework (version %1), dynamically linked under the GNU Lesser
     <message><source>Missing preset data.</source><translation type="unfinished"></translation></message>
     <message><source>Preset has no name.</source><translation type="unfinished"></translation></message>
 </context>
+<context>
+    <name>ruwa::ui::widgets::BrushImportWidget</name>
+    <message><source>Import</source><comment>import mode heading</comment><translation>Import</translation></message>
+    <message><source>Import Brushes</source><translation>Import Brushes</translation></message>
+    <message><source>Loading brushes…</source><translation>Loading brushes…</translation></message>
+    <message><source>Included</source><translation>Included</translation></message>
+    <message><source>Excluded</source><translation>Excluded</translation></message>
+    <message><source>Exclude brush</source><translation>Exclude brush</translation></message>
+    <message><source>Include brush</source><translation>Include brush</translation></message>
+    <message><source>Selected: %1 / %2</source><translation>Selected: %1 / %2</translation></message>
+    <message><source>A pack with this name already exists. The new pack will be named “%1”.</source><translation>A pack with this name already exists. The new pack will be named “%1”.</translation></message>
+    <message><source>%1 (%2 / %3)</source><translation>%1 (%2 / %3)</translation></message>
+    <message><source>As a separate pack</source><translation>As a separate pack</translation></message>
+    <message><source>Into an existing pack</source><translation>Into an existing pack</translation></message>
+    <message><source>Pack name</source><translation>Pack name</translation></message>
+    <message><source>Select a pack</source><translation>Select a pack</translation></message>
+    <message><source>Destination pack</source><translation>Destination pack</translation></message>
+    <message><source>Cancel</source><translation>Cancel</translation></message>
+    <message><source>Skip file</source><translation>Skip file</translation></message>
+    <message><source>Import</source><translation>Import</translation></message>
+    <message><source>Select all</source><translation>Select all</translation></message>
+    <message><source>Deselect all</source><translation>Deselect all</translation></message>
+    <message><source>No brushes</source><translation>No brushes</translation></message>
+    <message><source>This file has no brushes available for import.</source><translation>This file has no brushes available for import.</translation></message>
+</context>
 </TS>

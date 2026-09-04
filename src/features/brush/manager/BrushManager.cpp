@@ -18,6 +18,7 @@
 #include <QJsonDocument>
 #include <QJsonObject>
 #include <QJsonValue>
+#include <QRegularExpression>
 #include <QSaveFile>
 #include <QSettings>
 #include <QStandardPaths>
@@ -336,8 +337,8 @@ QJsonObject brushToJsonObject(const BrushData& brush, const QStringList& starred
     return object;
 }
 
-bool readBrushesFromFile(
-    const QString& filePath, QVector<BrushData>& brushes, QString* errorMessage)
+bool readBrushesFromFile(const QString& filePath, QVector<BrushData>& brushes,
+    QString* errorMessage, QString* packName = nullptr)
 {
     QFile file(filePath);
     if (!file.open(QIODevice::ReadOnly)) {
@@ -454,16 +455,19 @@ bool readBrushesFromFile(
         return false;
     }
 
+    if (packName) {
+        *packName = document.object().value(QStringLiteral("packName")).toString().trimmed();
+    }
     brushes = parsedBrushes;
     return true;
 }
 
-bool readBrushesForImport(
-    const QString& filePath, QVector<BrushData>& brushes, QString* errorMessage)
+bool readBrushesForImport(const QString& filePath, QVector<BrushData>& brushes,
+    QString* errorMessage, QString* packName = nullptr)
 {
     const QString suffix = QFileInfo(filePath).suffix().toLower();
     if (suffix == QLatin1String("rbf")) {
-        return readBrushesFromFile(filePath, brushes, errorMessage);
+        return readBrushesFromFile(filePath, brushes, errorMessage, packName);
     }
     if (suffix != QLatin1String("abr")) {
         setError(errorMessage, QObject::tr("Unsupported brush file extension: .%1").arg(suffix));
@@ -908,8 +912,51 @@ bool BrushManager::exportBrushesToFile(const QString& filePath, const QVector<Br
 BrushImportResult BrushManager::readBrushFileForImport(const QString& filePath)
 {
     BrushImportResult result;
-    result.success = readBrushesForImport(filePath, result.brushes, &result.errorMessage);
+    result.success
+        = readBrushesForImport(filePath, result.brushes, &result.errorMessage, &result.packName);
+    if (result.packName.isEmpty()) {
+        result.packName = QFileInfo(filePath).completeBaseName();
+    }
     return result;
+}
+
+QString BrushManager::suggestUniquePresetName(const QString& name)
+{
+    ensureLoaded();
+    const QString requested
+        = name.trimmed().isEmpty() ? QObject::tr("Imported Brushes") : name.trimmed();
+    QSet<QString> names;
+    for (const auto& preset : m_presets) {
+        names.insert(preset.name);
+    }
+    if (!names.contains(requested)) {
+        return requested;
+    }
+
+    QString base = requested;
+    // Increment the existing numeric suffix instead of producing "Pack 2 2".
+    // Increment as decimal text so even a user-supplied very large suffix is safe.
+    QString suffix = QStringLiteral("1");
+    static const QRegularExpression trailingNumber(QStringLiteral("^(.*?)([0-9]+)$"));
+    const auto match = trailingNumber.match(requested);
+    if (match.hasMatch()) {
+        base = match.captured(1).trimmed();
+        suffix = match.captured(2);
+    }
+    QString candidate;
+    do {
+        qsizetype digit = suffix.size() - 1;
+        while (digit >= 0 && suffix.at(digit) == QLatin1Char('9')) {
+            suffix[digit--] = QLatin1Char('0');
+        }
+        if (digit < 0) {
+            suffix.prepend(QLatin1Char('1'));
+        } else {
+            suffix[digit] = QChar(suffix.at(digit).unicode() + 1);
+        }
+        candidate = base.isEmpty() ? suffix : base + QLatin1Char(' ') + suffix;
+    } while (names.contains(candidate));
+    return candidate;
 }
 
 bool BrushManager::importBrushesIntoPreset(const QString& filePath, const QString& presetId,
@@ -999,8 +1046,7 @@ QString BrushManager::importBrushesAsPreset(const QVector<BrushData>& brushes,
 
     BrushPresetData preset;
     preset.id = QUuid::createUuid().toString(QUuid::WithoutBraces);
-    preset.name
-        = presetName.trimmed().isEmpty() ? QObject::tr("Imported Brushes") : presetName.trimmed();
+    preset.name = suggestUniquePresetName(presetName);
 
     QStringList ids;
     QStringList starredRestoredIds;
