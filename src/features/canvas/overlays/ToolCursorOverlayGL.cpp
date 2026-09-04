@@ -233,8 +233,7 @@ void ToolCursorOverlayGL::renderParameterPosition(const ParameterControlOverlayS
     m_gl->glDisable(GL_DEPTH_TEST);
     m_gl->glBindTextureUnit(0, sceneTextureId);
     m_iconRenderer->draw(QStringLiteral(":/icons/Anchor"), size, state.centerX - size * 0.5f,
-        state.centerY - size * 0.5f, mvp, vpW, vpH, 1.0f, 1.0f, 0.0f, state.primaryColor,
-        1.5f * scale);
+        state.centerY - size * 0.5f, mvp, vpW, vpH, 1.0f, 1.0f, 0.0f);
     m_gl->glDisable(GL_BLEND);
 }
 

@@ -20,6 +20,7 @@ namespace ruwa::ui::workspace {
 /// feature's declarative parameter bindings before they reach this visual.
 struct CanvasParameterControl {
     QString id;
+    QString label;
     CanvasParameterControlType type = CanvasParameterControlType::Circle;
     QString valueParamKey;
     QString centerXParamKey;

@@ -3,6 +3,8 @@
 #ifndef RUWA_UI_WIDGETS_CANVASMETRICLABELOVERLAY_H
 #define RUWA_UI_WIDGETS_CANVASMETRICLABELOVERLAY_H
 
+#include "shared/rendering/CanvasBackdropSource.h"
+
 #include <QList>
 #include <QPixmap>
 #include <QPointF>
@@ -14,6 +16,7 @@
 
 class QGraphicsOpacityEffect;
 class QLabel;
+class QMoveEvent;
 class QPaintEvent;
 class QPropertyAnimation;
 
@@ -41,6 +44,9 @@ public:
     explicit CanvasMetricLabelOverlay(QWidget* parent = nullptr);
     ~CanvasMetricLabelOverlay() override;
 
+    void setFadeDurations(int fadeInMs, int fadeOutMs);
+    void setBackdropSource(ruwa::shared::rendering::ICanvasBackdropSource* source);
+    qreal presentationOpacity() const;
     void presentAtPoint(const QString& text, const QPointF& anchorPanel);
     void presentNearRect(const QString& text, const QRectF& rectPanel);
     /// Park the capsule beside the cursor — to its right, flipping to the left
@@ -57,6 +63,7 @@ public:
 
 protected:
     void paintEvent(QPaintEvent* event) override;
+    void moveEvent(QMoveEvent* event) override;
 
 private:
     struct SegmentWidgets {
@@ -86,6 +93,9 @@ private:
     std::vector<SegmentWidgets> m_segmentWidgets;
     QGraphicsOpacityEffect* m_opacityEffect = nullptr;
     QPropertyAnimation* m_fadeAnimation = nullptr;
+    int m_fadeInDurationMs = 90;
+    int m_fadeOutDurationMs = 120;
+    ruwa::shared::rendering::ICanvasBackdropSource* m_backdropSource = nullptr;
 };
 
 } // namespace ruwa::ui::widgets

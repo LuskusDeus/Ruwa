@@ -13,7 +13,9 @@
 #include <QGraphicsOpacityEffect>
 #include <QHBoxLayout>
 #include <QLabel>
+#include <QMoveEvent>
 #include <QPainter>
+#include <QPainterPath>
 #include <QPaintEvent>
 #include <QFontMetrics>
 #include <QImage>
@@ -32,8 +34,6 @@ constexpr int kAnchorGapBase = 8;
 /// Clear of the cursor glyph itself, so the capsule never sits under the pointer.
 constexpr int kCursorGapBase = 22;
 constexpr int kEdgeMarginBase = 6;
-constexpr int kFadeInDurationMs = 90;
-constexpr int kFadeOutDurationMs = 120;
 /// Icon box side, tuned against the 10pt DemiBold value next to it.
 constexpr int kIconSizeBase = 14;
 constexpr int kIconTextGapBase = 5;
@@ -54,11 +54,19 @@ CanvasMetricLabelOverlay::CanvasMetricLabelOverlay(QWidget* parent)
     m_opacityEffect = new QGraphicsOpacityEffect(this);
     m_opacityEffect->setOpacity(0.0);
     setGraphicsEffect(m_opacityEffect);
+    connect(m_opacityEffect, &QGraphicsOpacityEffect::opacityChanged, this, [this]() {
+        if (m_backdropSource) {
+            m_backdropSource->requestBackdropUpdate();
+        }
+    });
     m_fadeAnimation = new QPropertyAnimation(m_opacityEffect, "opacity", this);
     m_fadeAnimation->setEasingCurve(QEasingCurve::OutCubic);
     connect(m_fadeAnimation, &QPropertyAnimation::finished, this, [this]() {
         if (m_opacityEffect && m_opacityEffect->opacity() <= 0.0) {
             hide();
+            if (m_backdropSource) {
+                m_backdropSource->requestBackdropUpdate();
+            }
         }
     });
     connect(&ruwa::ui::core::ThemeManager::instance(), &ruwa::ui::core::ThemeManager::themeChanged,
@@ -69,6 +77,30 @@ CanvasMetricLabelOverlay::CanvasMetricLabelOverlay(QWidget* parent)
 
 CanvasMetricLabelOverlay::~CanvasMetricLabelOverlay() = default;
 
+void CanvasMetricLabelOverlay::setFadeDurations(int fadeInMs, int fadeOutMs)
+{
+    m_fadeInDurationMs = qMax(0, fadeInMs);
+    m_fadeOutDurationMs = qMax(0, fadeOutMs);
+}
+
+void CanvasMetricLabelOverlay::setBackdropSource(
+    ruwa::shared::rendering::ICanvasBackdropSource* source)
+{
+    if (m_backdropSource == source) {
+        return;
+    }
+    m_backdropSource = source;
+    if (m_backdropSource) {
+        m_backdropSource->requestBackdropUpdate();
+    }
+    update();
+}
+
+qreal CanvasMetricLabelOverlay::presentationOpacity() const
+{
+    return m_opacityEffect ? qBound<qreal>(0.0, m_opacityEffect->opacity(), 1.0) : 1.0;
+}
+
 void CanvasMetricLabelOverlay::setSegments(const QList<MetricSegment>& segments)
 {
     m_segments = segments;
@@ -76,7 +108,24 @@ void CanvasMetricLabelOverlay::setSegments(const QList<MetricSegment>& segments)
     for (int i = 0; i < m_segments.size(); ++i) {
         applySegment(m_segmentWidgets[static_cast<size_t>(i)], m_segments[i]);
     }
-    adjustSize();
+    // QLabel and its nested segment layout update their size hints lazily. An
+    // immediate adjustSize() can therefore reuse the capsule's previous width
+    // and clip newly presented text. Resolve both layouts before sizing.
+    for (int i = 0; i < m_segments.size(); ++i) {
+        const SegmentWidgets& widgets = m_segmentWidgets[static_cast<size_t>(i)];
+        if (widgets.container->layout()) {
+            widgets.container->layout()->invalidate();
+            widgets.container->layout()->activate();
+        }
+    }
+    if (layout()) {
+        layout()->invalidate();
+        layout()->activate();
+        resize(layout()->sizeHint().expandedTo(minimumSizeHint()));
+    }
+    if (m_backdropSource) {
+        m_backdropSource->requestBackdropUpdate();
+    }
 }
 
 void CanvasMetricLabelOverlay::ensureSegmentCount(int count)
@@ -123,6 +172,7 @@ void CanvasMetricLabelOverlay::ensureSegmentCount(int count)
         widgets.text = new QLabel(widgets.container);
         widgets.text->setAttribute(Qt::WA_TransparentForMouseEvents);
         widgets.text->setAlignment(Qt::AlignCenter);
+        widgets.text->setTextFormat(Qt::PlainText);
         widgets.text->setObjectName(QStringLiteral("canvasMetricLabel"));
         widgets.text->setAttribute(Qt::WA_TranslucentBackground);
         widgets.text->setAutoFillBackground(false);
@@ -219,7 +269,7 @@ void CanvasMetricLabelOverlay::presentAtPoint(const QString& text, const QPointF
     moveClamped(qRound(anchorPanel.x() - width() * 0.5), qRound(anchorPanel.y()) + gap);
     show();
     raise();
-    fadeTo(1.0, kFadeInDurationMs);
+    fadeTo(1.0, m_fadeInDurationMs);
 }
 
 void CanvasMetricLabelOverlay::presentNearRect(const QString& text, const QRectF& rectPanel)
@@ -228,7 +278,7 @@ void CanvasMetricLabelOverlay::presentNearRect(const QString& text, const QRectF
     positionNearRect(rectPanel);
     show();
     raise();
-    fadeTo(1.0, kFadeInDurationMs);
+    fadeTo(1.0, m_fadeInDurationMs);
 }
 
 void CanvasMetricLabelOverlay::presentAtCursor(
@@ -238,7 +288,7 @@ void CanvasMetricLabelOverlay::presentAtCursor(
     positionAtCursor(cursorPanel);
     show();
     raise();
-    fadeTo(1.0, kFadeInDurationMs);
+    fadeTo(1.0, m_fadeInDurationMs);
 }
 
 void CanvasMetricLabelOverlay::refreshNearRect(const QRectF& rectPanel)
@@ -296,7 +346,7 @@ void CanvasMetricLabelOverlay::moveClamped(int x, int y)
 void CanvasMetricLabelOverlay::dismiss()
 {
     if (isVisible()) {
-        fadeTo(0.0, kFadeOutDurationMs);
+        fadeTo(0.0, m_fadeOutDurationMs);
     }
 }
 
@@ -305,29 +355,76 @@ void CanvasMetricLabelOverlay::hideImmediately()
     m_fadeAnimation->stop();
     m_opacityEffect->setOpacity(0.0);
     hide();
+    if (m_backdropSource) {
+        m_backdropSource->requestBackdropUpdate();
+    }
 }
 
 void CanvasMetricLabelOverlay::paintEvent(QPaintEvent* event)
 {
     Q_UNUSED(event);
     auto& style = ruwa::ui::core::WidgetStyleManager::instance();
-    QColor background = style.colors().surface;
-    background.setAlpha(215);
-    QColor borderTop = style.colors().borderLight();
-    borderTop.setAlpha(95);
-    QColor borderBottom = style.colors().borderDark();
-    borderBottom.setAlpha(95);
+
+    // Existing metric labels that are not registered with the canvas backdrop
+    // keep their compact opaque treatment. Backdrop-aware labels use the same
+    // liquid-glass stack as the canvas zoom and tool-state overlays below.
+    if (!m_backdropSource) {
+        QColor background = style.colors().surface;
+        background.setAlpha(215);
+        QColor borderTop = style.colors().borderLight();
+        borderTop.setAlpha(95);
+        QColor borderBottom = style.colors().borderDark();
+        borderBottom.setAlpha(95);
+
+        QPainter painter(this);
+        painter.setRenderHint(QPainter::Antialiasing);
+        const QRectF bounds(rect());
+        const qreal radius = qMax(0.0, bounds.height() * 0.5 - 0.5);
+        painter.setPen(Qt::NoPen);
+        painter.setBrush(background);
+        painter.drawRoundedRect(bounds.adjusted(1.0, 1.0, -1.0, -1.0), qMax(0.0, radius - 1.0),
+            qMax(0.0, radius - 1.0));
+        ruwa::ui::painting::drawGradientBorder(
+            painter, bounds.adjusted(0.5, 0.5, -0.5, -0.5), radius, borderTop, borderBottom);
+        return;
+    }
+
+    QColor borderColor = style.colors().border;
+    borderColor.setAlphaF(borderColor.alphaF() * 0.5);
 
     QPainter painter(this);
     painter.setRenderHint(QPainter::Antialiasing);
     const QRectF bounds(rect());
-    const qreal radius = qMax(0.0, bounds.height() * 0.5 - 0.5);
+    const qreal radius = bounds.height() * 0.5;
+    QPainterPath backgroundPath;
+    backgroundPath.addRoundedRect(ruwa::ui::painting::glassSilhouetteRect(bounds),
+        ruwa::ui::painting::glassSilhouetteRadius(radius),
+        ruwa::ui::painting::glassSilhouetteRadius(radius));
+
     painter.setPen(Qt::NoPen);
-    painter.setBrush(background);
-    painter.drawRoundedRect(
-        bounds.adjusted(1.0, 1.0, -1.0, -1.0), qMax(0.0, radius - 1.0), qMax(0.0, radius - 1.0));
-    ruwa::ui::painting::drawGradientBorder(
-        painter, bounds.adjusted(0.5, 0.5, -0.5, -0.5), radius, borderTop, borderBottom);
+    QColor tint = style.colors().surface;
+    tint.setAlpha(ruwa::ui::painting::kBackdropTintAlpha);
+    if (!ruwa::ui::painting::drawBackdropBlurTint(
+            painter, this, m_backdropSource, backgroundPath, tint)) {
+        QColor background = style.colors().surface;
+        background.setAlpha(200);
+        painter.setBrush(background);
+        painter.drawPath(backgroundPath);
+    }
+
+    ruwa::ui::painting::drawGradientBorder(painter, bounds, radius, borderColor, borderColor);
+    ruwa::ui::painting::drawLiquidGlass(painter, bounds, radius, style.colors().primary,
+        qMin<qreal>(
+            style.scaled(ruwa::ui::painting::kLiquidGlassShadowDepth), bounds.height() * 0.25));
+}
+
+void CanvasMetricLabelOverlay::moveEvent(QMoveEvent* event)
+{
+    QWidget::moveEvent(event);
+    if (m_backdropSource) {
+        m_backdropSource->requestBackdropUpdate();
+        update();
+    }
 }
 
 void CanvasMetricLabelOverlay::applyTheme()
@@ -355,6 +452,9 @@ void CanvasMetricLabelOverlay::applyTheme()
     setMinimumWidth(theme.scaled(kMinimumWidthBase));
     adjustSize();
     update();
+    if (m_backdropSource) {
+        m_backdropSource->requestBackdropUpdate();
+    }
 }
 
 void CanvasMetricLabelOverlay::fadeTo(qreal opacity, int durationMs)

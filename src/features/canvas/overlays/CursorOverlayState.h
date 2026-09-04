@@ -41,7 +41,7 @@ enum class CanvasParameterControlType { Circle, Position };
 
 /// Fixed logical-pixel geometry shared by rendering and hit testing.
 inline constexpr float kParameterPositionSize = 20.0f;
-inline constexpr float kParameterPositionHoverGrowth = 4.0f;
+inline constexpr float kParameterPositionHoverGrowth = 2.0f;
 
 /// One canvas-parameter control, expressed in surface pixels.
 struct ParameterControlOverlayState {

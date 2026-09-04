@@ -85,6 +85,7 @@ class SelectionActionPopup;
 class ColorPickerOverlay;
 class DotGridLoadingIndicator;
 class CanvasPositionPickerOverlay;
+class CanvasMetricLabelOverlay;
 } // namespace ruwa::ui::widgets
 
 namespace ruwa::core::exporting {
@@ -886,6 +887,7 @@ private:
     void ensureEffectParameterOverlay();
     void refreshEffectParameterOverlay();
     void syncEffectParameterOverlayPresentation();
+    void syncEffectParameterPositionReadout();
     void finishEffectParameterOverlayDrag(bool notifyEditor);
     int effectParameterOverlayHitTest(const QPointF& globalPosition) const;
     void showBlockedDrawMessageForSelectedLayer() override;
@@ -1018,6 +1020,8 @@ private:
     // Layer model (stored for deferred application if widget not yet created)
     ruwa::core::layers::LayerModel* m_layerModel = nullptr;
     CanvasParameterOverlayWidget* m_effectParameterOverlay = nullptr;
+    ruwa::ui::widgets::CanvasMetricLabelOverlay* m_effectParameterPositionReadout = nullptr;
+    QString m_effectParameterPositionReadoutText;
     ruwa::core::layers::LayerId m_effectParameterOverlayLayerId;
     QUuid m_effectParameterOverlayEffectId;
     QString m_effectParameterOverlayDragControlId;

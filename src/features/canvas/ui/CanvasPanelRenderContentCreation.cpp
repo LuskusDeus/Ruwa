@@ -41,6 +41,7 @@
 #include "features/canvas/overlays/ToolCursorIcons.h"
 #include "features/canvas/radial-menu/RadialMenuWidget.h"
 #include "features/canvas/ui/CanvasToolStateOverlay.h"
+#include "features/canvas/ui/CanvasMetricLabelOverlay.h"
 #include "features/canvas/ui/CanvasZoomInfoOverlay.h"
 #include "features/canvas/ui/CanvasStylusJoystickContainerWidget.h"
 #include "features/canvas/ui/CanvasStylusJoystickWidget.h"
@@ -324,6 +325,12 @@ bool CanvasPanel::createRenderContent()
                 appendRegion(m_zoomInfoOverlay, QRectF(m_zoomInfoOverlay->rect()),
                     m_zoomInfoOverlay->height() / 2.0, m_zoomInfoOverlay->presentationOpacity());
             }
+            if (m_effectParameterPositionReadout) {
+                appendRegion(m_effectParameterPositionReadout,
+                    QRectF(m_effectParameterPositionReadout->rect()),
+                    m_effectParameterPositionReadout->height() / 2.0,
+                    m_effectParameterPositionReadout->presentationOpacity());
+            }
             if (m_stylusJoystick) {
                 const qreal opacity = effectOpacity(m_stylusJoystickOpacity);
                 if (auto* joystick = m_stylusJoystick->joystickWidget()) {
@@ -400,6 +407,17 @@ bool CanvasPanel::createRenderContent()
                     m_zoomInfoOverlay->setBackdropSource(nullptr);
                 }
             });
+        }
+        if (m_effectParameterPositionReadout) {
+            m_effectParameterPositionReadout->setBackdropSource(m_engineBinding->backdropSource());
+            connect(&events, &CanvasEngineQtEvents::backdropAvailabilityChanged,
+                m_effectParameterPositionReadout, QOverload<>::of(&QWidget::update));
+            connect(m_viewportHostWidget, &QObject::destroyed, m_effectParameterPositionReadout,
+                [this]() {
+                    if (m_effectParameterPositionReadout) {
+                        m_effectParameterPositionReadout->setBackdropSource(nullptr);
+                    }
+                });
         }
 
         setupCanvasResizeController();

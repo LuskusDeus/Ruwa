@@ -3,6 +3,7 @@
 #include "CanvasPanel.h"
 
 #include "CanvasCursorManager.h"
+#include "CanvasMetricLabelOverlay.h"
 #include "CanvasParameterOverlayWidget.h"
 #include "features/brush/ui/BrushControlOverlay.h"
 #include "features/canvas/engine/CanvasEngineSession.h"
@@ -81,6 +82,9 @@ void CanvasPanel::ensureEffectParameterOverlay()
     }
 
     m_effectParameterOverlay = new CanvasParameterOverlayWidget(m_contentWidget);
+    m_effectParameterPositionReadout
+        = new ruwa::ui::widgets::CanvasMetricLabelOverlay(m_effectParameterOverlay);
+    m_effectParameterPositionReadout->setFadeDurations(150, 160);
     m_effectParameterOverlay->setGeometry(m_contentWidget->rect());
     m_effectParameterOverlay->setDocumentToLocalFn([this](const QPointF& documentPosition) {
         if (!m_contentWidget || !m_viewportHostWidget) {
@@ -95,6 +99,7 @@ void CanvasPanel::ensureEffectParameterOverlay()
 
 void CanvasPanel::syncEffectParameterOverlayPresentation()
 {
+    syncEffectParameterPositionReadout();
     auto* presentation = inputPresentation();
     auto* view = inputView();
     if (!presentation) {
@@ -135,6 +140,61 @@ void CanvasPanel::syncEffectParameterOverlayPresentation()
         }
     }
     presentation->setParameterControlOverlayState(std::move(states));
+}
+
+void CanvasPanel::syncEffectParameterPositionReadout()
+{
+    if (!m_effectParameterOverlay || !m_effectParameterPositionReadout) {
+        return;
+    }
+
+    const int index = m_effectParameterOverlayDragging
+        ? m_effectParameterOverlay->controlIndex(m_effectParameterOverlayDragControlId)
+        : m_effectParameterOverlay->hoveredControl();
+    const auto* control = m_effectParameterOverlay->controlAt(index);
+    if (!m_effectParameterOverlay->isVisible() || !control
+        || control->type != CanvasParameterControlType::Position) {
+        if (!m_effectParameterOverlay->isVisible()) {
+            m_effectParameterPositionReadout->hideImmediately();
+        } else {
+            m_effectParameterPositionReadout->dismiss();
+        }
+        m_effectParameterPositionReadoutText.clear();
+        return;
+    }
+
+    const QPointF anchor = m_effectParameterOverlay->screenControlAt(index).center;
+    if (!std::isfinite(anchor.x()) || !std::isfinite(anchor.y())
+        || !QRectF(m_effectParameterOverlay->rect()).contains(anchor)) {
+        m_effectParameterPositionReadout->hideImmediately();
+        m_effectParameterPositionReadoutText.clear();
+        return;
+    }
+
+    // Match the position editor's precision, in document pixels regardless of zoom.
+    const int xDecimals
+        = !control->integralX && control->positionStep.x() > 0.0 && control->positionStep.x() < 1.0
+        ? 2
+        : 0;
+    const int yDecimals
+        = !control->integralY && control->positionStep.y() > 0.0 && control->positionStep.y() < 1.0
+        ? 2
+        : 0;
+    const QString text = QStringLiteral("%1\nX: %2   Y: %3")
+                             .arg(control->label)
+                             .arg(control->documentCenter.x(), 0, 'f', xDecimals)
+                             .arg(control->documentCenter.y(), 0, 'f', yDecimals);
+    if (text != m_effectParameterPositionReadoutText
+        || m_effectParameterPositionReadout->isHidden()) {
+        m_effectParameterPositionReadoutText = text;
+        m_effectParameterPositionReadout->presentAtCursor(
+            { ruwa::ui::widgets::MetricSegment {
+                QString(), false, false, text, QStringLiteral("X: -100000.00   Y: -100000.00") } },
+            anchor);
+    } else {
+        // Camera movement repositions the capsule without rebuilding its labels.
+        m_effectParameterPositionReadout->refreshAtCursor(anchor);
+    }
 }
 
 void CanvasPanel::refreshEffectParameterOverlay()
@@ -190,6 +250,8 @@ void CanvasPanel::refreshEffectParameterOverlay()
 
                 CanvasParameterControl control;
                 control.id = definition.id;
+                control.label
+                    = centerXParam->label.isEmpty() ? centerXParam->key : centerXParam->label;
                 control.type = definition.type == EffectCanvasControlType::Position
                     ? CanvasParameterControlType::Position
                     : CanvasParameterControlType::Circle;
