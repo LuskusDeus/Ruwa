@@ -215,6 +215,10 @@ private:
     // RGBA8 selection-mask snapshot scratch (separate format from the content
     // blur scratch). Used by the smudge/liquify mask-snapshot paths.
     bool ensureMaskScratchSize(GLsizei width, GLsizei height);
+    // R16F world-anchored grain snapshot for Wet's batched ROI apply pass.
+    // The ordinary brush already consumes the same cached procedural tiles
+    // directly; Wet assembles them once because its ping-pong pass spans an ROI.
+    bool ensureTextureScratchSize(GLsizei width, GLsizei height);
     // Numerator/denominator ROI textures for the blur brush's coverage-weighted
     // (normalized) pyramid — allocated only while a selection is active.
     bool ensureBlurNormalizeTextures(GLsizei width, GLsizei height, GLsizei levels);
@@ -286,6 +290,13 @@ private:
     GLuint m_maskScratchTex = 0;
     GLsizei m_maskScratchWidth = 0;
     GLsizei m_maskScratchHeight = 0;
+
+    // Raw procedural grain for the active Wet ROI. This is deliberately
+    // separate from m_maskScratchTex: texture grain is R16F and may be sampled
+    // at the same time as an RGBA8 selection mask.
+    GLuint m_textureScratchTex = 0;
+    GLsizei m_textureScratchWidth = 0;
+    GLsizei m_textureScratchHeight = 0;
 
     // Normalized-convolution pair for the blur brush under a selection. A plain
     // pyramid averages selected and unselected pixels together, so content that

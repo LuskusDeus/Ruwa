@@ -228,7 +228,13 @@ bool BrushExecutionBackend::strokeTo(TileBrush& brush, TileGrid& layerGrid, floa
         // rendering); for a stroke segment we batch all dabs into one ROI
         // ping-pong pass to avoid driver-call overhead saturating the main
         // thread during fast strokes.
-        if ((brush.isSmudgeMode() || brush.isWetMode()) && !segmentDabs.empty()) {
+        // Wet now samples the Texture-section grain during apply. Texture
+        // dynamics vary per dab and therefore need the existing looped replay,
+        // just like ordinary paint; the ROI batch has one shared grain field.
+        const bool wetNeedsPerDabTextureReplay
+            = brush.isWetMode() && brush.hasDynamicsRequiringCpuReplay();
+        if ((brush.isSmudgeMode() || brush.isWetMode()) && !segmentDabs.empty()
+            && !wetNeedsPerDabTextureReplay) {
             if (m_brushRenderer->stampSmudgeSegmentGPU(brush.strokeBuffer(), m_tileRenderer, brush,
                     segmentDabs, m_canvasWidth, m_canvasHeight, blurLayerGrid, selectionMask,
                     selectionMask != nullptr)) {

@@ -54,6 +54,10 @@ inline constexpr bool kReservoirPlanesAreAlphaPremultiplied = true;
 // smudge), selection mask and custom dab shape.
 constexpr std::array<int, kReservoirPlaneCount> kReservoirTextureUnits { 1, 4, 5, 6 };
 constexpr std::array<int, kLutTextureCount> kLutTextureUnits { 7, 8 };
+// Wet apply needs the world-anchored grain from Brush Editor's Texture
+// section in addition to the reservoir planes. Keep it separate from the dab
+// shape on unit 3: that texture describes the pen tip, not the canvas grain.
+constexpr int kBrushTextureUnit = 9;
 
 [[nodiscard]] constexpr std::size_t index(ReservoirPlane plane) noexcept
 {
@@ -62,7 +66,7 @@ constexpr std::array<int, kLutTextureCount> kLutTextureUnits { 7, 8 };
 
 [[nodiscard]] constexpr bool textureUnitsAreUnique() noexcept
 {
-    std::array<bool, 9> occupied {};
+    std::array<bool, 10> occupied {};
     for (const int unit : kReservoirTextureUnits) {
         if (unit < 0 || unit >= static_cast<int>(occupied.size()) || occupied[unit])
             return false;
@@ -73,6 +77,9 @@ constexpr std::array<int, kLutTextureCount> kLutTextureUnits { 7, 8 };
             return false;
         occupied[unit] = true;
     }
+    if (kBrushTextureUnit < 0 || kBrushTextureUnit >= static_cast<int>(occupied.size())
+        || occupied[kBrushTextureUnit])
+        return false;
     return true;
 }
 

@@ -193,3 +193,32 @@ TEST_CASE("Wet apply variants decode four planes into one canvas output", "[pigm
     REQUIRE(kWetPickupUpdateGlsl.find("pigmentMixPremult") == std::string_view::npos);
     REQUIRE(kWetApplyCoverageGlsl.find("pigmentMixPremult") == std::string_view::npos);
 }
+
+TEST_CASE("Wet apply variants use Brush Editor texture grain", "[pigment][gpu][texture]")
+{
+    using namespace aether::wet_pigment_gpu;
+    for (const auto preamble : { kWetPerDabApplyPreamble, kWetBatchedApplyPreamble }) {
+        REQUIRE(preamble.find("uniform sampler2D uTextureTile") != std::string_view::npos);
+        REQUIRE(preamble.find("uniform int uUseTexture") != std::string_view::npos);
+        REQUIRE(preamble.find("uniform vec2 uInvTextureSize") != std::string_view::npos);
+        REQUIRE(preamble.find("uniform float uTextureAmount") != std::string_view::npos);
+        REQUIRE(preamble.find("uniform float uTextureEdgeBoost") != std::string_view::npos);
+    }
+    REQUIRE(kWetApplyCoverageGlsl.find("float wetApplyTextureShaping(")
+        != std::string_view::npos);
+    REQUIRE(kWetApplyCoverageGlsl.find("texture(uTextureTile, textureUv).r")
+        != std::string_view::npos);
+    REQUIRE(kWetApplyCoverageGlsl.find("uTextureContrast * 2.5") != std::string_view::npos);
+    REQUIRE(kWetApplyCoverageGlsl.find("uTextureDepth * (1.0 - g)")
+        != std::string_view::npos);
+    REQUIRE(kWetApplyCoverageGlsl.find("uTextureBlend * (depthMix * depthMix)")
+        != std::string_view::npos);
+    REQUIRE(kWetApplyCoverageGlsl.find("edgeFactor * uTextureEdgeBoost * 8.0")
+        != std::string_view::npos);
+    REQUIRE(kWetPerDabApplyMain.find("wetTextureFactor(fragPixelCoord * uInvTextureSize")
+        != std::string_view::npos);
+    REQUIRE(kWetBatchedApplyMain.find("wetTextureFactor(fragPixelCoord * uInvTextureSize")
+        != std::string_view::npos);
+    REQUIRE(kWetPerDabApplyMain.find("falloff *= textureFactor") != std::string_view::npos);
+    REQUIRE(kWetBatchedApplyMain.find("falloff *= textureFactor") != std::string_view::npos);
+}

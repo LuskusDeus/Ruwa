@@ -115,6 +115,7 @@ void unbindWetTextures(QOpenGLFunctions_4_5_Core* gl)
     for (const int unit : wet_pigment_gpu::kLutTextureUnits) {
         gl->glBindTextureUnit(unit, 0);
     }
+    gl->glBindTextureUnit(wet_pigment_gpu::kBrushTextureUnit, 0);
 }
 
 void restoreDefaultPremultipliedBlendState(QOpenGLFunctions_4_5_Core* gl)
@@ -2179,11 +2180,14 @@ void GLBrushRenderer::shutdown()
     m_blurNormalizeHeight = 0;
     m_blurNormalizeLevels = 1;
     deleteTexture(m_gl, m_maskScratchTex);
+    deleteTexture(m_gl, m_textureScratchTex);
     deleteTexture(m_gl, m_pigmentLutTex[0]);
     deleteTexture(m_gl, m_pigmentLutTex[1]);
     m_pigmentLutSize = 0;
     m_maskScratchWidth = 0;
     m_maskScratchHeight = 0;
+    m_textureScratchWidth = 0;
+    m_textureScratchHeight = 0;
     deleteTexture(m_gl, m_smudgeWorkTex[0]);
     deleteTexture(m_gl, m_smudgeWorkTex[1]);
     m_smudgeWorkWidth = 0;
@@ -2933,6 +2937,7 @@ void GLBrushRenderer::stampGPU(TileGrid& strokeBuffer, GLTileRenderer* tileRende
             dabTexId = resolveDabTextureId(m_gl, brush);
         }
         const int useDabShape = dabTexId != 0 ? 1 : 0;
+        const bool useTexture = wetMode && brush.usesProceduralTexture();
         if (dabTexId != 0) {
             m_gl->glBindTextureUnit(3, dabTexId);
         }
@@ -3107,6 +3112,16 @@ void GLBrushRenderer::stampGPU(TileGrid& strokeBuffer, GLTileRenderer* tileRende
             applyProgram->setUniform("uPreserveCanvasAlpha", 0);
             applyProgram->setUniform(
                 "uCanvasIsRgba8", layerGrid->format() == TilePixelFormat::RGBA8 ? 1 : 0);
+            applyProgram->setUniform("uUseTexture", useTexture ? 1 : 0);
+            applyProgram->setUniform("uTextureTile", wet_pigment_gpu::kBrushTextureUnit);
+            applyProgram->setUniform("uInvTextureSize",
+                1.0f / static_cast<float>(TILE_SIZE),
+                1.0f / static_cast<float>(TILE_SIZE));
+            applyProgram->setUniform("uTextureEdgeBoost", brush.textureEdgeBoost());
+            applyProgram->setUniform("uTextureContrast", brush.textureContrast());
+            applyProgram->setUniform("uTextureDepth", brush.textureDepth());
+            applyProgram->setUniform("uTextureBlend", brush.textureBlend());
+            applyProgram->setUniform("uTextureAmount", brush.textureAmount());
             // Layering uses a spacing-normalized thin coat. A negative value
             // selects the normal wet deposit path.
             applyProgram->setUniform("uCoatPerDab",
@@ -3193,6 +3208,12 @@ void GLBrushRenderer::stampGPU(TileGrid& strokeBuffer, GLTileRenderer* tileRende
                         continue;
                     }
                     m_gl->glBindTextureUnit(2, maskTile->textureId());
+                }
+
+                if (useTexture) {
+                    const GLuint textureTileId = ensureProceduralTextureTile(key, brush);
+                    m_gl->glBindTextureUnit(
+                        wet_pigment_gpu::kBrushTextureUnit, textureTileId);
                 }
 
                 const bool tileAlreadyExists = strokeBuffer.hasTile(key);
@@ -5105,6 +5126,34 @@ bool GLBrushRenderer::ensureMaskScratchSize(GLsizei width, GLsizei height)
     return m_maskScratchTex != 0;
 }
 
+bool GLBrushRenderer::ensureTextureScratchSize(GLsizei width, GLsizei height)
+{
+    if (width <= 0 || height <= 0) {
+        return false;
+    }
+    if (m_textureScratchTex != 0 && m_textureScratchWidth >= width
+        && m_textureScratchHeight >= height) {
+        return true;
+    }
+
+    // Retain capacity independently per axis so nearby stroke segments do not
+    // continuously reallocate the ROI grain. The active region always begins
+    // at (0, 0); uInvTextureSize addresses it using the physical dimensions.
+    m_textureScratchWidth = std::max(m_textureScratchWidth, width);
+    m_textureScratchHeight = std::max(m_textureScratchHeight, height);
+    TextureParams params;
+    params.minFilter = GL_LINEAR;
+    params.magFilter = GL_LINEAR;
+    params.wrapS = GL_CLAMP_TO_EDGE;
+    params.wrapT = GL_CLAMP_TO_EDGE;
+    params.internalFormat = GL_R16F;
+    params.pixelFormat = GL_RED;
+    params.pixelType = GL_HALF_FLOAT;
+    recreateTexture2D(m_gl, m_textureScratchTex, m_textureScratchWidth,
+        m_textureScratchHeight, params);
+    return m_textureScratchTex != 0;
+}
+
 bool GLBrushRenderer::ensureBlurNormalizeTextures(GLsizei width, GLsizei height, GLsizei levels)
 {
     if (width <= 0 || height <= 0 || levels <= 0) {
@@ -5188,6 +5237,7 @@ bool GLBrushRenderer::stampSmudgeSegmentGPU(TileGrid& strokeBuffer, GLTileRender
         = wetMode ? m_wetPickupBatchProgram.get() : m_smudgePickupBatchProgram.get();
     GLShaderProgram* applyProgram
         = wetMode ? m_wetApplyBatchProgram.get() : m_smudgeBatchProgram.get();
+    const bool useTexture = wetMode && brush.usesProceduralTexture();
     const TilePixelFormat workFormat
         = wetMode ? wet_pigment_gpu::workingColorFormat(layerGrid->format()) : layerGrid->format();
     // Wet keeps the evolving canvas in float storage for the complete stroke;
@@ -5440,6 +5490,49 @@ bool GLBrushRenderer::stampSmudgeSegmentGPU(TileGrid& strokeBuffer, GLTileRender
         }
     }
 
+    if (useTexture) {
+        if (!ensureTextureScratchSize(roiW, roiH)) {
+            if (ownBatch) {
+                endStampBatch();
+            }
+            return false;
+        }
+        // Wet's apply ping-pong covers the complete ROI rather than one tile.
+        // Assemble that ROI from the exact same cached world-space grain tiles
+        // used by ordinary paint brushes, preserving the Texture section's
+        // anchoring and avoiding any second procedural implementation.
+        for (int32_t srcTy = srcMinTileY; srcTy <= srcMaxTileY; ++srcTy) {
+            for (int32_t srcTx = srcMinTileX; srcTx <= srcMaxTileX; ++srcTx) {
+                const TileKey textureKey { srcTx, srcTy };
+                const GLuint textureTileId = ensureProceduralTextureTile(textureKey, brush);
+                if (textureTileId == 0) {
+                    if (ownBatch) {
+                        endStampBatch();
+                    }
+                    return false;
+                }
+
+                const int32_t tileMinX = srcTx * static_cast<int32_t>(TILE_SIZE);
+                const int32_t tileMinY = srcTy * static_cast<int32_t>(TILE_SIZE);
+                const int32_t copyMinX = std::max(roiMinXi, tileMinX);
+                const int32_t copyMinY = std::max(roiMinYi, tileMinY);
+                const int32_t copyMaxX
+                    = std::min(roiMaxXi, tileMinX + static_cast<int32_t>(TILE_SIZE));
+                const int32_t copyMaxY
+                    = std::min(roiMaxYi, tileMinY + static_cast<int32_t>(TILE_SIZE));
+                if (copyMaxX <= copyMinX || copyMaxY <= copyMinY) {
+                    continue;
+                }
+
+                m_gl->glCopyImageSubData(textureTileId, GL_TEXTURE_2D, 0,
+                    copyMinX - tileMinX, copyMinY - tileMinY, 0, m_textureScratchTex,
+                    GL_TEXTURE_2D, 0, copyMinX - roiMinXi, copyMinY - roiMinYi, 0,
+                    copyMaxX - copyMinX, copyMaxY - copyMinY, 1);
+            }
+        }
+        m_gl->glBindTextureUnit(wet_pigment_gpu::kBrushTextureUnit, m_textureScratchTex);
+    }
+
     // ----- 3. Apply each dab via two ping-pongs (reservoir + work buffer) ---
     // For each dab we do:
     //   a) Pickup: reservoir[rDst] = mix(reservoir[rSrc], workBuf[wSrc], rate*falloff)
@@ -5510,6 +5603,16 @@ bool GLBrushRenderer::stampSmudgeSegmentGPU(TileGrid& strokeBuffer, GLTileRender
         applyProgram->setUniform("uPreserveCanvasAlpha", 0);
         applyProgram->setUniform(
             "uCanvasIsRgba8", layerGrid->format() == TilePixelFormat::RGBA8 ? 1 : 0);
+        applyProgram->setUniform("uUseTexture", useTexture ? 1 : 0);
+        applyProgram->setUniform("uTextureTile", wet_pigment_gpu::kBrushTextureUnit);
+        applyProgram->setUniform("uInvTextureSize",
+            useTexture ? 1.0f / static_cast<float>(m_textureScratchWidth) : 0.0f,
+            useTexture ? 1.0f / static_cast<float>(m_textureScratchHeight) : 0.0f);
+        applyProgram->setUniform("uTextureEdgeBoost", brush.textureEdgeBoost());
+        applyProgram->setUniform("uTextureContrast", brush.textureContrast());
+        applyProgram->setUniform("uTextureDepth", brush.textureDepth());
+        applyProgram->setUniform("uTextureBlend", brush.textureBlend());
+        applyProgram->setUniform("uTextureAmount", brush.textureAmount());
     } else {
         applyProgram->setUniform("uReservoirTexture", 1);
     }

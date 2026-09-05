@@ -286,24 +286,46 @@ vec2 wetSampleDabShapeSafe(vec2 uv) {
     }
     return shape;
 }
-float wetCustomDabCoverage(vec2 uv) {
+float wetCustomDabCoverage(vec2 uv, out float edgeFactor) {
     vec2 shape = wetSampleDabShapeSafe(uv);
     float baseAlpha = clamp(shape.r, 0.0, 1.0);
     float softAlpha = clamp(shape.g, 0.0, 1.0);
     float softness = max(1.0 - clamp(uBrushHardness, 0.0, 1.0), 0.0);
-    return mix(baseAlpha, softAlpha, softness);
+    float coverage = mix(baseAlpha, softAlpha, softness);
+    edgeFactor = max(0.0, coverage - baseAlpha);
+    return coverage;
 }
-float wetBrushCoverage(vec2 local) {
+float wetBrushCoverage(vec2 local, out float edgeFactor) {
+    edgeFactor = 0.0;
     if (uUseDabShapeTexture != 0) {
         vec2 shapeLocal = local / uBrushRadius / max(uDabShapeScale, vec2(0.0001));
         if (abs(shapeLocal.x) > 1.0 || abs(shapeLocal.y) > 1.0)
             return 0.0;
-        return wetCustomDabCoverage((shapeLocal + 1.0) * 0.5);
+        return wetCustomDabCoverage((shapeLocal + 1.0) * 0.5, edgeFactor);
     }
     float distanceToCenter = length(local) / uBrushRadius;
     if (distanceToCenter > 1.0) return 0.0;
+    edgeFactor = smoothstep(clamp(uBrushHardness + 0.05, 0.05, 0.95),
+        1.0, distanceToCenter);
     float softness = max(1.0 - clamp(uBrushHardness, 0.0, 1.0), 0.0);
     return softness <= 0.001 ? 1.0 : smoothstep(0.0, softness, 1.0 - distanceToCenter);
+}
+float wetApplyTextureShaping(float grain) {
+    float contrastStrength = 0.5 + uTextureContrast * 2.5;
+    float g = clamp(0.5 + (grain - 0.5) * contrastStrength, 0.0, 1.0);
+    float depthMix = 1.0 - uTextureDepth * (1.0 - g);
+    float blendMix = (1.0 - uTextureBlend) * depthMix
+        + uTextureBlend * (depthMix * depthMix);
+    return clamp((1.0 - uTextureAmount) + uTextureAmount * blendMix, 0.0, 1.0);
+}
+float wetTextureFactor(vec2 textureUv, float edgeFactor) {
+    if (uUseTexture == 0) return 1.0;
+    float factor = wetApplyTextureShaping(texture(uTextureTile, textureUv).r);
+    if (uTextureEdgeBoost > 0.0) {
+        float contrast = 1.0 + edgeFactor * uTextureEdgeBoost * 8.0;
+        factor = clamp(0.5 + (factor - 0.5) * contrast, 0.0, 1.0);
+    }
+    return factor;
 }
 vec4 wetDeposit(vec4 canvas, vec4 reservoir, float falloff, float maskScale) {
     float intensity = clamp(uBrushAlpha * falloff * maskScale, 0.0, 1.0);
@@ -358,6 +380,14 @@ uniform int uUseMask;
 uniform sampler2D uDabShapeTexture;
 uniform int uUseDabShapeTexture;
 uniform vec2 uDabShapeScale;
+uniform sampler2D uTextureTile;
+uniform int uUseTexture;
+uniform vec2 uInvTextureSize;
+uniform float uTextureEdgeBoost;
+uniform float uTextureContrast;
+uniform float uTextureDepth;
+uniform float uTextureBlend;
+uniform float uTextureAmount;
 uniform vec2 uTileOriginPx;
 uniform vec2 uInvTileSize;
 uniform vec2 uRoiOriginPx;
@@ -380,8 +410,12 @@ void main() {
     float s = sin(uBrushAngleRad);
     float roundness = max(0.01, clamp(uBrushRoundness, 0.0, 1.0));
     vec2 local = vec2(delta.x * c + delta.y * s, (-delta.x * s + delta.y * c) / roundness);
-    float falloff = wetBrushCoverage(local);
+    float edgeFactor = 0.0;
+    float falloff = wetBrushCoverage(local, edgeFactor);
     if (falloff <= 0.0) discard;
+    float textureFactor = wetTextureFactor(fragPixelCoord * uInvTextureSize, edgeFactor);
+    if (textureFactor <= 0.0) discard;
+    falloff *= textureFactor;
     float maskScale = uUseMask != 0 ? texture(uMaskTexture, fragPixelCoord * uInvTileSize).a : 1.0;
     if (maskScale <= 0.0) discard;
     vec2 worldPixel = uTileOriginPx + fragPixelCoord;
@@ -415,6 +449,14 @@ uniform vec2 uInvMaskSize;
 uniform sampler2D uDabShapeTexture;
 uniform int uUseDabShapeTexture;
 uniform vec2 uDabShapeScale;
+uniform sampler2D uTextureTile;
+uniform int uUseTexture;
+uniform vec2 uInvTextureSize;
+uniform float uTextureEdgeBoost;
+uniform float uTextureContrast;
+uniform float uTextureDepth;
+uniform float uTextureBlend;
+uniform float uTextureAmount;
 uniform vec2 uInvTexSize;
 uniform vec2 uMaxValidUv;
 uniform float uReservoirHalf;
@@ -439,8 +481,12 @@ void main() {
     float s = sin(uBrushAngleRad);
     float roundness = max(0.01, clamp(uBrushRoundness, 0.0, 1.0));
     vec2 local = vec2(delta.x * c + delta.y * s, (-delta.x * s + delta.y * c) / roundness);
-    float falloff = wetBrushCoverage(local);
+    float edgeFactor = 0.0;
+    float falloff = wetBrushCoverage(local, edgeFactor);
     if (falloff <= 0.0) { outColor = originalCanvas; return; }
+    float textureFactor = wetTextureFactor(fragPixelCoord * uInvTextureSize, edgeFactor);
+    if (textureFactor <= 0.0) { outColor = originalCanvas; return; }
+    falloff *= textureFactor;
     float maskScale = uUseMask != 0 ? texture(uMaskTexture, fragPixelCoord * uInvMaskSize).a : 1.0;
     if (maskScale <= 0.0) { outColor = originalCanvas; return; }
     vec4 canvas = originalCanvas;

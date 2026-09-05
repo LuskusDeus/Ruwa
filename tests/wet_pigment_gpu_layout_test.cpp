@@ -29,6 +29,7 @@ TEST_CASE("Wet pigment GPU texture units do not overlap", "[pigment][gpu]")
     REQUIRE(textureUnitsAreUnique());
     REQUIRE(kReservoirTextureUnits[0] == 1);
     REQUIRE(kLutTextureUnits[0] > kReservoirTextureUnits.back());
+    REQUIRE(kBrushTextureUnit > kLutTextureUnits.back());
 }
 
 TEST_CASE("Wet pigment working color never round-trips through RGBA8", "[pigment][gpu]")
