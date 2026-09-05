@@ -263,16 +263,15 @@ bool ensureSmudgeReservoirTextures(QOpenGLFunctions_4_5_Core* gl,
 }
 
 // Compute the reservoir logical side length needed to enclose the configured
-// brush footprint at every possible angle. Per-dab ROI calculation below still
-// uses the actual dynamic radius/shape values and never assumes this reservoir
-// bound also encloses the rendered dab.
-GLsizei computeSmudgeReservoirLogicalSize(const TileBrush& brush)
+// brush footprint at every possible angle AND the actual evaluated dabs.
+// Dynamics can expand a dab beyond the configured radius/hardness/roundness.
+GLsizei computeSmudgeReservoirLogicalSize(const TileBrush& brush, float renderedExtent)
 {
     const float maxRadius = std::max(0.5f, brush.radius());
     const float extent = dabRotationInvariantCoverageExtent(
         brush, maxRadius, brush.hardness(), brush.roundness(), true);
     // +2 for safe linear-sampling at the borders.
-    GLsizei side = static_cast<GLsizei>(std::ceil(2.0f * extent)) + 2;
+    GLsizei side = static_cast<GLsizei>(std::ceil(2.0f * std::max(extent, renderedExtent))) + 2;
     return std::max<GLsizei>(side, 4);
 }
 
@@ -302,6 +301,22 @@ int quantizeTo8BitFlag(const TileGrid& strokeBuffer)
 {
     return strokeBuffer.format() == TilePixelFormat::RGBA8 ? 1 : 0;
 }
+
+// Shared 8-bit rounding for brush, smudge and final layer writes. The deadband
+// keeps half-float representation error from turning a flat color into noise.
+const QString kColorQuantizationGlsl = QStringLiteral(
+    "const float kDitherDeadband = 0.1;\n"
+    "float quantizeTo8Bit(float v, float n) {\n"
+    "    float s = v * 255.0;\n"
+    "    float nearest = round(s);\n"
+    "    return mix(floor(s + n), nearest, step(abs(s - nearest), kDitherDeadband)) / 255.0;\n"
+    "}\n"
+    "vec3 quantizeTo8Bit(vec3 v, float n) {\n"
+    "    vec3 s = v * 255.0;\n"
+    "    vec3 nearest = round(s);\n"
+    "    return mix(floor(s + n), nearest, step(abs(s - nearest), vec3(kDitherDeadband)))\n"
+    "        / 255.0;\n"
+    "}\n");
 
 // Two geometries share one program:
 //   uInstancedDabs == 0 — a single quad spanning uQuadMin..uQuadMax, and the
@@ -398,18 +413,8 @@ const QString kBatchRebuildFrag = QStringLiteral(
     // storage leaves 97/255 at 96.99463, and the plain floor form reproduces
     // that residue as a sparse off-by-one speckle over a flat area. See the
     // long form in brush_stamp.frag.glsl; keep every copy in step.
-    "const float kDitherDeadband = 0.1;\n"
-    "float quantizeTo8Bit(float v, float n) {\n"
-    "    float s = v * 255.0;\n"
-    "    float nearest = round(s);\n"
-    "    return mix(floor(s + n), nearest, step(abs(s - nearest), kDitherDeadband)) / 255.0;\n"
-    "}\n"
-    "vec3 quantizeTo8Bit(vec3 v, float n) {\n"
-    "    vec3 s = v * 255.0;\n"
-    "    vec3 nearest = round(s);\n"
-    "    return mix(floor(s + n), nearest, step(abs(s - nearest), vec3(kDitherDeadband)))\n"
-    "        / 255.0;\n"
-    "}\n"
+    )
+    + kColorQuantizationGlsl + QStringLiteral(
     "vec4 ditherPremultiplied(vec4 color, vec2 worldPixelCoord) {\n"
     "    if (uQuantizeTo8Bit == 0 || color.a <= 0.0) return color;\n"
     "    float n = fract(52.9829189\n"
@@ -926,7 +931,7 @@ inline float buildupCoatPerDab(float buildup, float dabDistPx, float radiusPx)
 //   Each dab does two passes:
 //     1. Pickup — sample canvas under the brush and uniformly blend it into
 //        the travelling reservoir by pickupRate. The reservoir is an axis-
-//        aligned RGBA8 texture that "travels" with the brush position:
+//        aligned RGBA16F texture that "travels" with the brush position:
 //        reservoir pixel (rx, ry) maps to canvas (brushWorld + (rx,ry) -
 //        reservoirHalf). The first dab copies the complete canvas footprint
 //        into the reservoir (uInit=1), so the brush starts fully loaded.
@@ -947,6 +952,7 @@ const QString kSmudgeApplyFrag = QStringLiteral(
     "uniform float uBrushRoundness;\n"
     "uniform float uBrushAngleRad;\n"
     "uniform float uBrushAlpha;\n"
+    "uniform int   uQuantizeTo8Bit;\n"
     "uniform sampler2D uOriginalTexture;\n"
     "uniform sampler2D uReservoirTexture;\n"
     "uniform sampler2D uMaskTexture;\n"
@@ -961,7 +967,8 @@ const QString kSmudgeApplyFrag = QStringLiteral(
     "uniform float uReservoirHalf;\n"
     "uniform vec2  uInvReservoirPhys;\n"
     "in vec2 fragPixelCoord;\n"
-    "out vec4 outColor;\n"
+    "out vec4 outColor;\n")
+    + kColorQuantizationGlsl + QStringLiteral(
     "vec4 sanitizePremultiplied(vec4 color) {\n"
     "    if (color.a <= 1e-6) { return vec4(0.0); }\n"
     "    color.rgb = min(color.rgb, vec3(color.a));\n"
@@ -1030,20 +1037,16 @@ const QString kSmudgeApplyFrag = QStringLiteral(
     // Smudge transports the carried premultiplied color in both directions,
     // including coverage, so the reservoir can smear paint into transparency.
     "    outColor = sanitizePremultiplied(mix(canvas, reservoir, intensity));\n"
-    // Quantization-aware dither: noise ∈ [0, 1) is used as a rounding
-    // offset for the implicit 8-bit quantization on tile write, NOT as
-    // an additive perturbation. This preserves saturated values exactly
-    // (1.0 stays 1.0, 0.0 stays 0.0) and is statistically zero-mean for
-    // mid-range values — unlike additive dither, which drifts saturated
-    // channels down through asymmetric clamp at the boundaries and
-    // erodes opaque areas to transparency after many overlapping dabs.
-    "    vec2 ditherSeed = floor(uTileOriginPx + fragPixelCoord);\n"
-    "    float ditherN = fract(52.9829189 * fract(dot(ditherSeed, vec2(0.06711056, "
-    "0.00583715))));\n"
-    "    outColor.rgb = floor(outColor.rgb * 255.0 + vec3(ditherN)) / 255.0;\n"
-    "    outColor.a   = floor(outColor.a   * 255.0 + ditherN)       / 255.0;\n"
-    // Re-enforce premultiplied invariant (rgb may have rounded above alpha
-    // by at most 1/255).
+    // Reuse the brush/flatten quantizer: RGBA16F carry values are slightly
+    // off the 1/255 grid. Plain floor rounding repeatedly darkens flat paint.
+    // Float documents must retain their precision instead of being forced to 8-bit.
+    "    if (uQuantizeTo8Bit != 0) {\n"
+    "        vec2 ditherSeed = floor(uTileOriginPx + fragPixelCoord);\n"
+    "        float ditherN = fract(52.9829189 * fract(dot(ditherSeed,\n"
+    "            vec2(0.06711056, 0.00583715))));\n"
+    "        outColor.rgb = quantizeTo8Bit(outColor.rgb, ditherN);\n"
+    "        outColor.a = quantizeTo8Bit(outColor.a, ditherN);\n"
+    "    }\n"
     "    outColor.rgb = min(outColor.rgb, vec3(outColor.a));\n"
     "    if (outColor.a <= 1e-6) { outColor = vec4(0.0); }\n"
     "}\n");
@@ -1150,6 +1153,7 @@ const QString kSmudgeBatchFrag = QStringLiteral(
     "uniform float uBrushRoundness;\n"
     "uniform float uBrushAngleRad;\n"
     "uniform float uBrushAlpha;\n"
+    "uniform int   uQuantizeTo8Bit;\n"
     "uniform sampler2D uOriginalTexture;\n"
     "uniform sampler2D uReservoirTexture;\n"
     "uniform sampler2D uMaskTexture;\n"
@@ -1167,7 +1171,8 @@ const QString kSmudgeBatchFrag = QStringLiteral(
     "uniform float uReservoirHalf;\n"
     "uniform vec2  uInvReservoirPhys;\n"
     "in vec2 fragPixelCoord;\n"
-    "out vec4 outColor;\n"
+    "out vec4 outColor;\n")
+    + kColorQuantizationGlsl + QStringLiteral(
     "vec4 sanitizePremultiplied(vec4 color) {\n"
     "    if (color.a <= 1e-6) { return vec4(0.0); }\n"
     "    color.rgb = min(color.rgb, vec3(color.a));\n"
@@ -1231,15 +1236,16 @@ const QString kSmudgeBatchFrag = QStringLiteral(
     // Batched Smudge preserves the same premultiplied reservoir transport
     // semantics as the per-dab path.
     "    outColor = sanitizePremultiplied(mix(canvas, reservoir, intensity));\n"
-    // Quantization-aware dither — see kSmudgeApplyFrag for why we round
-    // via floor(v*255 + noise) rather than additive noise. The batched
-    // path ping-pongs the work buffer (RGBA8) every dab so each pass is
-    // a quantization step; dithered rounding decorrelates the error
-    // without dragging saturated channels toward zero.
-    "    float ditherN = fract(52.9829189 * fract(dot(floor(fragPixelCoord), vec2(0.06711056, "
-    "0.00583715))));\n"
-    "    outColor.rgb = floor(outColor.rgb * 255.0 + vec3(ditherN)) / 255.0;\n"
-    "    outColor.a   = floor(outColor.a   * 255.0 + ditherN)       / 255.0;\n"
+    // Reuse the brush/flatten quantizer: RGBA16F carry values are slightly
+    // off the 1/255 grid. Plain floor rounding repeatedly darkens flat paint.
+    // Float documents must retain their precision instead of being forced to 8-bit.
+    "    if (uQuantizeTo8Bit != 0) {\n"
+    "        vec2 ditherSeed = floor(fragPixelCoord);\n"
+    "        float ditherN = fract(52.9829189 * fract(dot(ditherSeed,\n"
+    "            vec2(0.06711056, 0.00583715))));\n"
+    "        outColor.rgb = quantizeTo8Bit(outColor.rgb, ditherN);\n"
+    "        outColor.a = quantizeTo8Bit(outColor.a, ditherN);\n"
+    "    }\n"
     "    outColor.rgb = min(outColor.rgb, vec3(outColor.a));\n"
     "    if (outColor.a <= 1e-6) { outColor = vec4(0.0); }\n"
     "}\n");
@@ -1859,18 +1865,8 @@ Result<void> GLBrushRenderer::initialize(const QString& shaderDir)
         // core of a stroke arrives a hundredth of an LSB off the grid — without
         // it that residue would be baked into the layer as a sparse
         // off-by-one speckle. See brush_stamp.frag.glsl for the full rationale.
-        "const float kDitherDeadband = 0.1;\n"
-        "float quantizeTo8Bit(float v, float n) {\n"
-        "    float s = v * 255.0;\n"
-        "    float nearest = round(s);\n"
-        "    return mix(floor(s + n), nearest, step(abs(s - nearest), kDitherDeadband)) / 255.0;\n"
-        "}\n"
-        "vec3 quantizeTo8Bit(vec3 v, float n) {\n"
-        "    vec3 s = v * 255.0;\n"
-        "    vec3 nearest = round(s);\n"
-        "    return mix(floor(s + n), nearest, step(abs(s - nearest), vec3(kDitherDeadband)))\n"
-        "        / 255.0;\n"
-        "}\n"
+        )
+        + kColorQuantizationGlsl + QStringLiteral(
         "vec4 ditherPremultiplied(vec4 color, vec2 worldPixelCoord) {\n"
         "    if (uQuantizeTo8Bit == 0 || color.a <= 0.0) return color;\n"
         "    float n = fract(52.9829189\n"
@@ -2786,7 +2782,9 @@ void GLBrushRenderer::stampGPU(TileGrid& strokeBuffer, GLTileRenderer* tileRende
         // to enclose the max possible brush footprint for this stroke; the
         // physical texture may be larger due to geometric growth across
         // strokes. Half-size centers the brush in the reservoir.
-        const GLsizei reservoirLogical = computeSmudgeReservoirLogicalSize(brush);
+        const GLsizei reservoirLogical = std::max(
+            computeSmudgeReservoirLogicalSize(brush, coverageExtent),
+            m_smudgePrevValid ? m_smudgeReservoirActive : 0);
         // If the reservoir gets reallocated mid-stroke (brush.radius()
         // changed enough to need a larger texture), the old contents are
         // gone — force a re-init on this dab.
@@ -2797,7 +2795,10 @@ void GLBrushRenderer::stampGPU(TileGrid& strokeBuffer, GLTileRenderer* tileRende
             finishOwnBatch();
             return;
         }
-        if (reservoirRealloc)
+        // The logical region can grow inside an already larger physical texture.
+        // Its newly exposed texels are not loaded, and its center has moved;
+        // reload even when no allocation was needed. Never shrink it mid-stroke.
+        if (reservoirRealloc || reservoirLogical != m_smudgeReservoirActive)
             m_smudgePrevValid = false;
         // Wipe stale pigment from a previous stroke (e.g. after undo) before
         // this stroke loads its own. Clears the full physical texture so no
@@ -3101,12 +3102,11 @@ void GLBrushRenderer::stampGPU(TileGrid& strokeBuffer, GLTileRenderer* tileRende
         // --- 3. Apply pass: deposit reservoir onto canvas per affected tile -
         applyProgram->use();
         applyProgram->setUniform("uOriginalTexture", 0);
+        applyProgram->setUniform("uQuantizeTo8Bit", quantizeTo8BitFlag(strokeBuffer));
         if (wetMode) {
             applyProgram->setUniform("uPreserveCanvasAlpha", 0);
             applyProgram->setUniform(
                 "uCanvasIsRgba8", layerGrid->format() == TilePixelFormat::RGBA8 ? 1 : 0);
-            applyProgram->setUniform(
-                "uQuantizeTo8Bit", m_blurScratchFormat == TilePixelFormat::RGBA8 ? 1 : 0);
             // Layering uses a spacing-normalized thin coat. A negative value
             // selects the normal wet deposit path.
             applyProgram->setUniform("uCoatPerDab",
@@ -5208,7 +5208,14 @@ bool GLBrushRenderer::stampSmudgeSegmentGPU(TileGrid& strokeBuffer, GLTileRender
     const bool clipToCanvas = (canvasWidth > 0 && canvasHeight > 0);
 
     // ----- 0. Allocate reservoir (sized for the stroke's max footprint) -----
-    const GLsizei reservoirLogical = computeSmudgeReservoirLogicalSize(brush);
+    float renderedExtent = 0.0f;
+    for (const auto& dab : dabs) {
+        renderedExtent = std::max(renderedExtent, dabCoverageExtent(
+            brush, dab.radius, dab.hardness, dab.roundness, dab.angleDegrees, true));
+    }
+    const GLsizei reservoirLogical = std::max(
+        computeSmudgeReservoirLogicalSize(brush, renderedExtent),
+        m_smudgePrevValid ? m_smudgeReservoirActive : 0);
     // If the reservoir gets reallocated mid-stroke (brush.radius() changed
     // enough to need a larger texture), the old contents are gone — force
     // a re-init on this segment.
@@ -5218,7 +5225,9 @@ bool GLBrushRenderer::stampSmudgeSegmentGPU(TileGrid& strokeBuffer, GLTileRender
             m_gl, m_smudgeReservoirTex, m_smudgeReservoirSize, reservoirLogical)) {
         return false;
     }
-    if (reservoirRealloc)
+    // Match the single-dab path: logical growth needs a reload even when the
+    // physical allocation is reused; shrinking would move the carry's center.
+    if (reservoirRealloc || reservoirLogical != m_smudgeReservoirActive)
         m_smudgePrevValid = false;
     // Wipe stale pigment from a previous stroke (e.g. after undo) before this
     // stroke loads its own — see the single-dab path / resetSmudgeState().
@@ -5305,9 +5314,8 @@ bool GLBrushRenderer::stampSmudgeSegmentGPU(TileGrid& strokeBuffer, GLTileRender
         writeMaxYi = std::min<int32_t>(writeMaxYi, static_cast<int32_t>(canvasHeight));
     }
     if (roiMaxXi <= roiMinXi || roiMaxYi <= roiMinYi) {
-        // ROI fully clipped — mark reservoir as loaded so the next valid
-        // segment doesn't re-init from scratch and skip the work entirely.
-        m_smudgePrevValid = true;
+        // No pickup ran. Preserve the current validity, especially for a new
+        // or resized reservoir which still needs initialization on re-entry.
         return true;
     }
 
@@ -5496,12 +5504,12 @@ bool GLBrushRenderer::stampSmudgeSegmentGPU(TileGrid& strokeBuffer, GLTileRender
         // below — see wetRatePerDab.
     }
     configureCommon(applyProgram, true);
+    applyProgram->setUniform(
+        "uQuantizeTo8Bit", m_smudgeWorkFormat == TilePixelFormat::RGBA8 ? 1 : 0);
     if (wetMode) {
         applyProgram->setUniform("uPreserveCanvasAlpha", 0);
         applyProgram->setUniform(
             "uCanvasIsRgba8", layerGrid->format() == TilePixelFormat::RGBA8 ? 1 : 0);
-        applyProgram->setUniform(
-            "uQuantizeTo8Bit", m_smudgeWorkFormat == TilePixelFormat::RGBA8 ? 1 : 0);
     } else {
         applyProgram->setUniform("uReservoirTexture", 1);
     }
