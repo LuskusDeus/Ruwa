@@ -1996,6 +1996,18 @@ Rasterize the layer to transform the selection?</source>
 <context>
     <name>ruwa::ui::first_run_integration::FirstRunIntegrationWidget</name>
     <message>
+        <location filename="../src/features/first-run-integration/FirstRunIntegrationWidget.cpp" line="490"/>
+        <location filename="../src/features/first-run-integration/FirstRunIntegrationWidget.cpp" line="683"/>
+        <source>Language</source>
+        <translation>Language</translation>
+    </message>
+    <message>
+        <location filename="../src/features/first-run-integration/FirstRunIntegrationWidget.cpp" line="491"/>
+        <location filename="../src/features/first-run-integration/FirstRunIntegrationWidget.cpp" line="684"/>
+        <source>Interface language</source>
+        <translation>Interface language</translation>
+    </message>
+    <message>
         <location filename="../src/features/first-run-integration/FirstRunIntegrationWidget.cpp" line="634"/>
         <source>Welcome to Ruwa</source>
         <translation>Welcome to Ruwa</translation>

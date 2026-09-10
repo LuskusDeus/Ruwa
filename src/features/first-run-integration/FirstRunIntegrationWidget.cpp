@@ -46,6 +46,7 @@ constexpr int kContentTopMargin = 48;
 constexpr int kContentBottomMargin = 64;
 constexpr int kContentSpacing = 24;
 constexpr int kSettingsSectionMinimumHeight = 180;
+constexpr int kLanguageSectionMinimumHeight = 120;
 constexpr int kFinishMinimumHeight = 320;
 constexpr int kAppearanceDelayMs = 800;
 constexpr int kAppearanceDurationMs = 933;
@@ -465,6 +466,42 @@ void FirstRunIntegrationWidget::setupUi()
     m_contentLayout->setSpacing(kContentSpacing);
     updateContentMargins();
 
+    // Language owns the first section so it can be picked before anything else is read.
+    auto* languageSection = createSection(
+        content, QStringLiteral("FirstRunLanguageSection"), kLanguageSectionMinimumHeight);
+    auto* languageLayout = new QVBoxLayout(languageSection);
+    languageLayout->setContentsMargins(0, 0, 0, 0);
+    languageLayout->setSpacing(8);
+
+    m_languageTitle = createSectionTitle(languageSection);
+    m_languageTitle->setAlignment(Qt::AlignCenter);
+    languageLayout->addWidget(m_languageTitle, 0, Qt::AlignHCenter);
+    languageLayout->addSpacing(8);
+
+    const auto languages = ruwa::ui::core::TranslationManager::instance().availableLanguages();
+    QStringList languageNames;
+    languageNames.reserve(languages.size());
+    m_languageCodes.reserve(languages.size());
+    for (const auto& language : languages) {
+        m_languageCodes.append(language.code);
+        languageNames.append(language.name);
+    }
+    const int currentLanguageIndex = qMax(0,
+        m_languageCodes.indexOf(ruwa::ui::core::TranslationManager::instance().currentLanguage()));
+    m_languageChoice = new ruwa::ui::widgets::SettingsChoice(tr("Language"),
+        tr("Interface language"), languageNames, currentLanguageIndex, languageSection);
+    connect(m_languageChoice, &ruwa::ui::widgets::SettingsChoice::selectionChanged, this,
+        [this](int index) {
+            if (index < 0 || index >= m_languageCodes.size()) {
+                return;
+            }
+            // TranslationManager persists the language through SettingsManager itself.
+            ruwa::ui::core::TranslationManager::instance().setLanguage(m_languageCodes.at(index));
+        });
+    languageLayout->addWidget(m_languageChoice);
+
+    m_contentLayout->addWidget(languageSection);
+
     auto* appearanceSection = createSection(
         content, QStringLiteral("FirstRunAppearanceSection"), kSettingsSectionMinimumHeight);
     auto* appearanceLayout = new QVBoxLayout(appearanceSection);
@@ -655,6 +692,10 @@ void FirstRunIntegrationWidget::retranslateUi()
     m_startCustomizationButton->syncSizeToText();
     m_skipCustomizationButton->setText(tr("No, thanks"));
     m_skipCustomizationButton->syncSizeToText();
+    m_languageTitle->setText(tr("Language"));
+    // Language names stay in their own language, so only the label pair is retranslated.
+    m_languageChoice->setLabel(tr("Language"));
+    m_languageChoice->setDescription(tr("Interface language"));
     m_appearanceTitle->setText(tr("Appearance settings"));
     m_uiScaleChoice->retranslateUi(tr("UI Scale"), tr("Adjust the size of UI elements"),
         { QStringLiteral("85%"), QStringLiteral("100%"), QStringLiteral("125%"),
@@ -770,6 +811,7 @@ void FirstRunIntegrationWidget::updateTheme()
                          "  border: none;"
                          "  border-radius: 0;"
                          "}"
+                         "QFrame#FirstRunLanguageSection, "
                          "QFrame#FirstRunAppearanceSection, "
                          "QFrame#FirstRunEditorSection, "
                          "QFrame#FirstRunPerformanceSection, "
@@ -804,7 +846,8 @@ void FirstRunIntegrationWidget::updateTheme()
     m_finishDescription->setFont(theme.font(ruwa::ui::core::ThemeFontRole::Label));
 
     const QFont sectionFont = theme.font(ruwa::ui::core::ThemeFontRole::H4, QFont::Bold);
-    for (QLabel* label : { m_appearanceTitle, m_editorTitle, m_performanceTitle }) {
+    for (QLabel* label :
+        { m_languageTitle, m_appearanceTitle, m_editorTitle, m_performanceTitle }) {
         label->setFont(sectionFont);
     }
 }

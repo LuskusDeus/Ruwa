@@ -2,7 +2,11 @@
 
 // SettingsManager.cpp
 #include "SettingsManager.h"
+#include "shared/i18n/TranslationManager.h"
+
 #include <QCoreApplication>
+#include <QLocale>
+#include <QRegularExpression>
 #include <QFileInfo>
 #include <QVariantMap>
 #include <QtConcurrent>
@@ -20,6 +24,25 @@ constexpr auto kFavoriteBrushIdsKey = "favoriteBrushIds";
 constexpr auto kFavoriteBrushOrderKey = "favoriteBrushOrder";
 constexpr int kMinBrushDisplayColorIndex = 0;
 constexpr int kMaxBrushDisplayColorIndex = 8;
+
+/// First-run language: the OS UI language when Ruwa ships a translation for it, else English.
+QString systemDefaultLanguageCode()
+{
+    const auto available = ruwa::ui::core::TranslationManager::instance().availableLanguages();
+    // uiLanguages() is ordered by preference and can be empty on a stripped-down system.
+    QStringList uiLanguages = QLocale::system().uiLanguages();
+    uiLanguages.append(QLocale::system().name());
+    for (const QString& uiLanguage : std::as_const(uiLanguages)) {
+        const QString base
+            = uiLanguage.split(QRegularExpression(QStringLiteral("[-_]"))).first().toLower();
+        for (const auto& language : available) {
+            if (language.code.compare(base, Qt::CaseInsensitive) == 0) {
+                return language.code;
+            }
+        }
+    }
+    return QStringLiteral("en");
+}
 
 bool welcomeBannerStoredKeysMatch(const QString& a, const QString& b)
 {
@@ -255,7 +278,10 @@ void SettingsManager::loadAppearance(QSettings& settings)
 
     m_settings.appearance.uiScale
         = normalizedUiScaleIndex(settings.value("uiScale", kDefaultUiScaleIndex).toInt());
-    m_settings.appearance.language = settings.value("language", "en").toString();
+    // No stored language means this is a first run: follow the system UI language.
+    const QString storedLanguage = settings.value("language").toString().trimmed().toLower();
+    m_settings.appearance.language
+        = storedLanguage.isEmpty() ? systemDefaultLanguageCode() : storedLanguage;
     const int tabAlign = settings.value("topBarTabAlignment", 0).toInt();
     m_settings.appearance.topBarTabAlignment = (tabAlign == 1) ? 1 : 0;
 

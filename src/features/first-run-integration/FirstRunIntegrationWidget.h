@@ -4,6 +4,7 @@
 #define RUWA_FEATURES_FIRSTRUNINTEGRATION_WIDGET_H
 
 #include <QPointer>
+#include <QStringList>
 #include <QWidget>
 
 class QEvent;
@@ -73,6 +74,8 @@ private:
     QLabel* m_heroDescription { nullptr };
     ruwa::ui::widgets::WelcomeBannerButton* m_startCustomizationButton { nullptr };
     ruwa::ui::widgets::WelcomeBannerButton* m_skipCustomizationButton { nullptr };
+    QLabel* m_languageTitle { nullptr };
+    ruwa::ui::widgets::SettingsChoice* m_languageChoice { nullptr };
     QLabel* m_appearanceTitle { nullptr };
     ruwa::ui::widgets::ThemeSelectorWidget* m_themeSelector { nullptr };
     ruwa::ui::widgets::SettingsChoice* m_uiScaleChoice { nullptr };
@@ -88,6 +91,7 @@ private:
     ruwa::ui::widgets::WelcomeBannerButton* m_finishButton { nullptr };
     QPointer<ruwa::ui::widgets::WidgetFadeInOverlay> m_appearanceOverlay;
     QTimer* m_appearanceRetryTimer { nullptr };
+    QStringList m_languageCodes;
     int m_contentSideMargin { 0 };
     bool m_appearanceAnimationStarted { false };
 };
