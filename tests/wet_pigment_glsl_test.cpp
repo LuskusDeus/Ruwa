@@ -2,6 +2,7 @@
 
 #include "features/brush/rendering/WetPigmentGlsl.h"
 #include "features/brush/rendering/WetShaderSources.h"
+#include "features/brush/rendering/DabTransformShaderSources.h"
 
 #include <catch2/catch_test_macros.hpp>
 
@@ -192,6 +193,20 @@ TEST_CASE("Wet apply variants decode four planes into one canvas output", "[pigm
         != std::string_view::npos);
     REQUIRE(kWetPickupUpdateGlsl.find("pigmentMixPremult") == std::string_view::npos);
     REQUIRE(kWetApplyCoverageGlsl.find("pigmentMixPremult") == std::string_view::npos);
+}
+
+TEST_CASE("Wet batched apply maps connected and refined dab transforms", "[pigment][gpu][stroke]")
+{
+    using namespace aether::wet_pigment_gpu;
+    REQUIRE(kWetBatchedApplyPreamble.find("uniform int uConnectedDab")
+        != std::string_view::npos);
+    REQUIRE(kWetBatchedApplyPreamble.find("uniform int uTransformSegments")
+        != std::string_view::npos);
+    REQUIRE(kWetConnectedApplyGlsl.find("wetConnectedCoverage") != std::string_view::npos);
+    REQUIRE(kWetConnectedApplyGlsl.find("inverseStretchQuad") != std::string_view::npos);
+    REQUIRE(kWetBatchedApplyMain.find("uConnectedDab != 0") != std::string_view::npos);
+    REQUIRE(aether::dab_transform_gpu::kMappingGlsl.find("cubicRail")
+        != std::string_view::npos);
 }
 
 TEST_CASE("Wet apply variants use Brush Editor texture grain", "[pigment][gpu][texture]")

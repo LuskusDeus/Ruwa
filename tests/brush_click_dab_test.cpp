@@ -340,6 +340,23 @@ TEST_CASE("a refined joint sits midway between both dabs' edges", "[brush][strok
     CHECK(plain[1].x == Catch::Approx(34.0f));
 }
 
+TEST_CASE("wet paint participates in connected dab joint refinement", "[brush][stroke][wet]")
+{
+    using namespace ruwa::core::brushes;
+
+    BrushSettingsData settings;
+    settings.connectDabs = true;
+    settings.refineDabJoints = true;
+    settings.colorBlending = 0.5f;
+
+    aether::TileBrush brush;
+    brush.setBrushSettings(settings);
+
+    REQUIRE(brush.isWetMode());
+    CHECK(brush.connectsDabs());
+    CHECK(brush.refinesDabJoints());
+}
+
 TEST_CASE("a refined joint takes half of each dab's rotation", "[brush][stroke][geometry]")
 {
     using namespace ruwa::core::brushes;

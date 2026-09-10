@@ -175,13 +175,12 @@ public:
     void setTransformSegments(int count) { m_transformSegments = std::clamp(count, 2, 10); }
     int transformSegments() const { return m_connectDabs ? m_transformSegments : 1; }
     /// True when a joint carries the median of both dabs instead of sitting on
-    /// the older one's leading edge. Only connected plain paint stretches dabs
-    /// at all - the canvas-reading tools run their own segment paths and never
-    /// build a ribbon, so the newest dab must not be held back for them.
+    /// the older one's leading edge. Wet reuses this ribbon geometry in its own
+    /// canvas-reading segment path; blur, smudge and liquify still render
+    /// independent dabs and must not hold the newest dab back.
     bool refinesDabJoints() const
     {
-        return m_connectDabs && m_refineDabJoints && !m_blurMode && !m_smudgeMode && !m_liquifyMode
-            && !isWetMode();
+        return m_connectDabs && m_refineDabJoints && !m_blurMode && !m_smudgeMode && !m_liquifyMode;
     }
     bool usesNonAccumulatingDabBlend() const { return useMaxBlendForCurrentMode(); }
     void setTextureAmount(float v)

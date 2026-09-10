@@ -2422,7 +2422,7 @@ void BrushStrokeHost::completeEndStrokeAfterQueueDrain()
         if (m_useGPUBrush && m_callbacks.makeCurrent) {
             m_callbacks.makeCurrent();
         }
-        executionBackend->stampHeldStrokeDabs(*currentBrush, paintMask, m_useGPUBrush);
+        executionBackend->stampHeldStrokeDabs(*currentBrush, *grid, paintMask, m_useGPUBrush);
         if (m_useGPUBrush && m_callbacks.doneCurrent) {
             m_callbacks.doneCurrent();
         }

@@ -87,7 +87,8 @@ public:
     /// is the joint with its successor, so it waits for one - call this when
     /// the stroke ends (before flatten) and it takes its own leading edge
     /// instead. No-op for every brush that does not refine joints.
-    void stampHeldStrokeDabs(TileBrush& brush, TileGrid* selectionMask, bool preferGpu);
+    void stampHeldStrokeDabs(
+        TileBrush& brush, TileGrid& layerGrid, TileGrid* selectionMask, bool preferGpu);
 
     // Rebuild in-progress stroke buffer from stored dabs.
     // Returns true when GPU path was used.
@@ -116,7 +117,8 @@ private:
     /// Stamp the stored stroke dabs that are ready, carrying the neighbours
     /// each of their joints needs. Returns true (the GPU path is the only one
     /// here; a refused batch falls back to per-dab stamps).
-    bool stampReadyRefinedDabsGPU(TileBrush& brush, TileGrid* selectionMask, bool includeNewest);
+    bool stampReadyRefinedDabsGPU(
+        TileBrush& brush, TileGrid* layerGrid, TileGrid* selectionMask, bool includeNewest);
 
 private:
     GLBrushRenderer* m_brushRenderer = nullptr; // non-owning

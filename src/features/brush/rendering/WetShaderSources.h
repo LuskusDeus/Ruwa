@@ -367,6 +367,61 @@ vec4 wetDitherPremultiplied(vec4 color, vec2 pixel) {
 }
 )glsl";
 
+// Coverage mapping for the same TileBrush::DabTransform ribbon used by ordinary
+// paint. kMappingGlsl supplies inverseStretchQuad() and cubicRail().
+inline constexpr std::string_view kWetConnectedApplyGlsl = R"glsl(
+float wetCanonicalCoverage(vec2 shapeLocal, float hardness, out float edgeFactor) {
+    edgeFactor = 0.0;
+    if (abs(shapeLocal.x) > 1.0 || abs(shapeLocal.y) > 1.0) return 0.0;
+    if (uUseDabShapeTexture != 0) {
+        vec2 uv = (shapeLocal + 1.0) * 0.5;
+        vec2 shape = wetSampleDabShapeSafe(uv);
+        float baseAlpha = clamp(shape.r, 0.0, 1.0);
+        float softness = max(1.0 - clamp(hardness, 0.0, 1.0), 0.0);
+        float coverage = mix(baseAlpha, clamp(shape.g, 0.0, 1.0), softness);
+        edgeFactor = max(0.0, coverage - baseAlpha);
+        return coverage;
+    }
+    float distanceToCenter = length(shapeLocal);
+    if (distanceToCenter > 1.0) return 0.0;
+    edgeFactor = smoothstep(clamp(hardness + 0.05, 0.05, 0.95),
+        1.0, distanceToCenter);
+    float softness = max(1.0 - clamp(hardness, 0.0, 1.0), 0.0);
+    return softness <= 0.001 ? 1.0 : smoothstep(0.0, softness, 1.0 - distanceToCenter);
+}
+bool wetConnectedCoverage(vec2 pixel, out float falloff, out float edgeFactor) {
+    int segmentCount = clamp(uTransformSegments, 1, 10);
+    vec2 stretchST = vec2(0.0);
+    int hitSegment = -1;
+    for (int segment = 0; segment < 10; ++segment) {
+        if (segment >= segmentCount) break;
+        float t0 = float(segment) / float(segmentCount);
+        float t1 = float(segment + 1) / float(segmentCount);
+        vec2 start0 = cubicRail(uStretchQuad01.xy, uStartControl0,
+            uEndControl0, uStretchQuad01.zw, t0);
+        vec2 end0 = cubicRail(uStretchQuad01.xy, uStartControl0,
+            uEndControl0, uStretchQuad01.zw, t1);
+        vec2 start1 = cubicRail(uStretchQuad23.zw, uStartControl1,
+            uEndControl1, uStretchQuad23.xy, t0);
+        vec2 end1 = cubicRail(uStretchQuad23.zw, uStartControl1,
+            uEndControl1, uStretchQuad23.xy, t1);
+        if (inverseStretchQuad(pixel, start0, end0, end1, start1, stretchST)) {
+            hitSegment = segment;
+            break;
+        }
+    }
+    if (hitSegment < 0) return false;
+    float progress = (float(hitSegment) + stretchST.x) / float(segmentCount);
+    float hardness = mix(uPreviousHardness, uBrushHardness, progress);
+    float softness = 1.0 - clamp(hardness, 0.0, 1.0);
+    vec4 contentBounds = mix(uDabContentBounds, uDabSoftContentBounds, softness);
+    vec2 shapeLocal = vec2(mix(contentBounds.x, contentBounds.z, progress),
+        mix(contentBounds.y, contentBounds.w, stretchST.y));
+    falloff = wetCanonicalCoverage(shapeLocal, hardness, edgeFactor);
+    return falloff > 0.0;
+}
+)glsl";
+
 inline constexpr std::string_view kWetPerDabApplyPreamble = R"glsl(#version 450 core
 uniform vec2 uBrushCenter;
 uniform float uBrushRadius;
@@ -466,6 +521,17 @@ uniform float uDepositRate;
 uniform int uPreserveCanvasAlpha;
 uniform int uQuantizeTo8Bit;
 uniform int uCanvasIsRgba8;
+uniform int uConnectedDab;
+uniform float uPreviousHardness;
+uniform vec4 uStretchQuad01;
+uniform vec4 uStretchQuad23;
+uniform vec2 uStartControl0;
+uniform vec2 uStartControl1;
+uniform vec2 uEndControl0;
+uniform vec2 uEndControl1;
+uniform int uTransformSegments;
+uniform vec4 uDabContentBounds;
+uniform vec4 uDabSoftContentBounds;
 in vec2 fragPixelCoord;
 layout(location = 0) out vec4 outColor;
 )glsl";
@@ -476,13 +542,22 @@ void main() {
     vec2 validMaxUv = max(uMaxValidUv - halfTexelUv, halfTexelUv);
     vec2 canvasUv = clamp(fragPixelCoord * uInvTexSize, halfTexelUv, validMaxUv);
     vec4 originalCanvas = wetSanitizePremultiplied(texture(uOriginalTexture, canvasUv));
-    vec2 delta = fragPixelCoord - uBrushCenter;
-    float c = cos(uBrushAngleRad);
-    float s = sin(uBrushAngleRad);
-    float roundness = max(0.01, clamp(uBrushRoundness, 0.0, 1.0));
-    vec2 local = vec2(delta.x * c + delta.y * s, (-delta.x * s + delta.y * c) / roundness);
     float edgeFactor = 0.0;
-    float falloff = wetBrushCoverage(local, edgeFactor);
+    float falloff = 0.0;
+    vec2 delta = fragPixelCoord - uBrushCenter;
+    if (uConnectedDab != 0) {
+        if (!wetConnectedCoverage(fragPixelCoord, falloff, edgeFactor)) {
+            outColor = originalCanvas;
+            return;
+        }
+    } else {
+        float c = cos(uBrushAngleRad);
+        float s = sin(uBrushAngleRad);
+        float roundness = max(0.01, clamp(uBrushRoundness, 0.0, 1.0));
+        vec2 local = vec2(delta.x * c + delta.y * s,
+            (-delta.x * s + delta.y * c) / roundness);
+        falloff = wetBrushCoverage(local, edgeFactor);
+    }
     if (falloff <= 0.0) { outColor = originalCanvas; return; }
     float textureFactor = wetTextureFactor(fragPixelCoord * uInvTextureSize, edgeFactor);
     if (textureFactor <= 0.0) { outColor = originalCanvas; return; }
@@ -493,7 +568,9 @@ void main() {
     if (uCanvasIsRgba8 != 0)
         canvas = wetResolveRgba8CanvasPremultiplied(
             uOriginalTexture, canvasUv, halfTexelUv, validMaxUv);
-    WetLatent latent = wetSampleReservoir((delta + vec2(uReservoirHalf)) * uInvReservoirPhys);
+    vec2 reservoirPx = clamp(delta + vec2(uReservoirHalf), vec2(0.5),
+        vec2(2.0 * uReservoirHalf - 0.5));
+    WetLatent latent = wetSampleReservoir(reservoirPx * uInvReservoirPhys);
     vec4 reservoir = wetDecodePremultiplied(latent);
     outColor = wetPreserveCanvasAlpha(wetDitherPremultiplied(
         wetDeposit(canvas, reservoir, falloff, maskScale), fragPixelCoord), canvas);

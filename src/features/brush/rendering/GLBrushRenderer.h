@@ -59,16 +59,19 @@ public:
         uint32_t canvasHeight = 0, const TileBrush::DabPoint* previousDab = nullptr,
         const TileBrush::DabPoint* nextDab = nullptr);
 
-    /// Batched smudge: process a whole stroke segment of dabs in one go,
+    /// Batched smudge/Wet: process a whole stroke segment of dabs in one go,
     /// with a single ROI snapshot and a ping-pong work buffer instead of
     /// per-dab tile-by-tile rendering. Reduces per-dab GL call overhead
     /// from ~20 to ~3, which removes the CPU bottleneck for fast strokes.
-    /// Returns false if smudge mode isn't active or GPU prerequisites fail
-    /// — caller should fall back to looped stampGPU().
+    /// Wet also consumes the optional neighboring dabs to build the same
+    /// connected/refined transform ribbon as ordinary paint. Returns false if
+    /// neither mode is active or GPU prerequisites fail — caller should fall
+    /// back to looped stampGPU().
     bool stampSmudgeSegmentGPU(TileGrid& strokeBuffer, GLTileRenderer* tileRenderer,
         const TileBrush& brush, const std::vector<TileBrush::DabPoint>& dabs, uint32_t canvasWidth,
         uint32_t canvasHeight, TileGrid* layerGrid, TileGrid* selectionMask = nullptr,
-        bool useSelectionMask = false);
+        bool useSelectionMask = false, const TileBrush::DabPoint* previousDab = nullptr,
+        const TileBrush::DabPoint* nextDab = nullptr);
 
     /// Liquify (geometric warp): process a stroke segment of dabs by snapshotting
     /// the layer/stroke ROI into a ping-pong work buffer and, per dab, inverse-

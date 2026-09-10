@@ -11,6 +11,7 @@
 #include "shared/tiles/DabShapeFalloff.h"
 #include "features/canvas/rendering/GLTileRenderer.h"
 #include "features/brush/rendering/DabShapeCache.h"
+#include "features/brush/rendering/DabTransformShaderSources.h"
 #include "features/brush/rendering/StrokeBufferFormat.h"
 #include "features/brush/rendering/WetPigmentGlsl.h"
 #include "features/brush/rendering/WetShaderSources.h"
@@ -463,57 +464,10 @@ const QString kBatchRebuildFrag = QStringLiteral(
     "    return mix(uDabContentBounds, uDabSoftContentBounds, softness);\n"
     "}\n"
     "#endif\n"
-    // This is the same analytical inverse-bilinear mapping used by Free
-    // Corners. A connected dab is one transformed surface split into adjacent
-    // patches, not another row of synthetic paint dabs inserted into the gap.
-    "#if RUWA_CONNECTED_DABS\n"
-    "float cross2d(vec2 a, vec2 b) { return a.x*b.y - a.y*b.x; }\n"
-    "bool tryStretchST(vec2 E, vec2 F, vec2 G, vec2 h, float t, out vec2 st) {\n"
-    "    const float margin = 0.002;\n"
-    "    if (t < -margin || t > 1.0 + margin) return false;\n"
-    "    vec2 denom = E + G * t;\n"
-    "    float s;\n"
-    "    if (abs(denom.x) > abs(denom.y)) {\n"
-    "        if (abs(denom.x) < 1e-8) return false;\n"
-    "        s = (h.x - F.x * t) / denom.x;\n"
-    "    } else {\n"
-    "        if (abs(denom.y) < 1e-8) return false;\n"
-    "        s = (h.y - F.y * t) / denom.y;\n"
-    "    }\n"
-    "    if (s < -margin || s > 1.0 + margin) return false;\n"
-    "    st = clamp(vec2(s, t), vec2(0.0), vec2(1.0));\n"
-    "    return true;\n"
-    "}\n"
-    "bool inverseStretchQuad(vec2 P, vec2 q0, vec2 q1, vec2 q2, vec2 q3, out vec2 st) {\n"
-    "    vec2 E0 = q1 - q0;\n"
-    "    vec2 F0 = q3 - q0;\n"
-    "    float quadScale = max(max(length(E0), length(F0)),\n"
-    "                          max(length(q2 - q1), length(q2 - q3)));\n"
-    "    float invScale = 1.0 / max(quadScale, 1e-6);\n"
-    "    vec2 E = E0 * invScale;\n"
-    "    vec2 F = F0 * invScale;\n"
-    "    vec2 G = (q0 - q1 + q2 - q3) * invScale;\n"
-    "    vec2 h = (P - q0) * invScale;\n"
-    "    float k2 = cross2d(G, F);\n"
-    "    float k1 = cross2d(E, F) + cross2d(h, G);\n"
-    "    float k0 = cross2d(h, E);\n"
-    "    if (abs(k2) < 1e-8) {\n"
-    "        if (abs(k1) < 1e-8) return false;\n"
-    "        return tryStretchST(E, F, G, h, -k0 / k1, st);\n"
-    "    }\n"
-    "    float disc = k1*k1 - 4.0*k0*k2;\n"
-    "    if (disc < 0.0) return false;\n"
-    "    float root = sqrt(disc);\n"
-    "    float qStable = -0.5 * (k1 + ((k1 >= 0.0) ? root : -root));\n"
-    "    if (tryStretchST(E, F, G, h, qStable / k2, st)) return true;\n"
-    "    return abs(qStable) > 1e-8\n"
-    "        && tryStretchST(E, F, G, h, k0 / qStable, st);\n"
-    "}\n"
-    "vec2 cubicRail(vec2 start, vec2 startControl, vec2 endControl, vec2 end, float t) {\n"
-    "    float u = 1.0 - t;\n"
-    "    return start * (u*u*u) + startControl * (3.0*u*u*t)\n"
-    "         + endControl * (3.0*u*t*t) + end * (t*t*t);\n"
-    "}\n"
+    // A connected dab is one transformed surface split into adjacent patches,
+    // not another row of synthetic paint dabs inserted into the gap.
+    "#if RUWA_CONNECTED_DABS\n")
+    + glsl(dab_transform_gpu::kMappingGlsl) + QStringLiteral(
     "#endif\n"
     "float shapeCoverage(vec2 shapeLocal, float hardness, out float edgeFactor) {\n"
     "    edgeFactor = 0.0;\n"
@@ -1429,6 +1383,7 @@ const QString kWetPerDabApplyFrag = glsl(wet_pigment_gpu::kWetPerDabApplyPreambl
 const QString kWetBatchedApplyFrag = glsl(wet_pigment_gpu::kWetBatchedApplyPreamble)
     + glsl(wet_pigment_gpu::kLatentGlsl) + glsl(wet_pigment_gpu::kWetCanvasSamplingGlsl)
     + glsl(wet_pigment_gpu::kWetApplyCoverageGlsl)
+    + glsl(dab_transform_gpu::kMappingGlsl) + glsl(wet_pigment_gpu::kWetConnectedApplyGlsl)
     + glsl(wet_pigment_gpu::kWetBatchedApplyMain);
 
 // ---------------------------------------------------------------------------
@@ -5222,7 +5177,8 @@ bool ensureSmudgeWorkTextures(QOpenGLFunctions_4_5_Core* gl, GLuint workTex[2], 
 
 bool GLBrushRenderer::stampSmudgeSegmentGPU(TileGrid& strokeBuffer, GLTileRenderer* tileRenderer,
     const TileBrush& brush, const std::vector<TileBrush::DabPoint>& dabs, uint32_t canvasWidth,
-    uint32_t canvasHeight, TileGrid* layerGrid, TileGrid* selectionMask, bool useSelectionMask)
+    uint32_t canvasHeight, TileGrid* layerGrid, TileGrid* selectionMask, bool useSelectionMask,
+    const TileBrush::DabPoint* previousDab, const TileBrush::DabPoint* nextDab)
 {
     const StrokeBufferVersionBump versionBump { strokeBuffer };
     if (dabs.empty())
@@ -5307,23 +5263,54 @@ bool GLBrushRenderer::stampSmudgeSegmentGPU(TileGrid& strokeBuffer, GLTileRender
     float writeMaxX = -std::numeric_limits<float>::infinity();
     float writeMaxY = -std::numeric_limits<float>::infinity();
     std::unordered_set<TileKey, TileKeyHash> writeTiles;
-    for (const auto& d : dabs) {
-        const float dabExtent
+    for (size_t dabIndex = 0; dabIndex < dabs.size(); ++dabIndex) {
+        const auto& d = dabs[dabIndex];
+        const TileBrush::DabPoint* stretchStart = wetMode && brush.connectsDabs()
+            ? (dabIndex > 0 ? &dabs[dabIndex - 1] : previousDab)
+            : nullptr;
+        const TileBrush::DabPoint* stretchEnd = wetMode && brush.refinesDabJoints()
+            ? (dabIndex + 1 < dabs.size() ? &dabs[dabIndex + 1] : nextDab)
+            : nullptr;
+        float dabExtent
             = dabCoverageExtent(brush, d.radius, d.hardness, d.roundness, d.angleDegrees, true);
+        if (stretchStart || stretchEnd) {
+            dabExtent = dabRotationInvariantCoverageExtent(
+                brush, d.radius, d.hardness, d.roundness, true);
+            if (stretchStart) {
+                dabExtent = std::max(dabExtent,
+                    dabRotationInvariantCoverageExtent(brush, stretchStart->radius,
+                        stretchStart->hardness, stretchStart->roundness, true));
+            }
+            if (stretchEnd) {
+                dabExtent = std::max(dabExtent,
+                    dabRotationInvariantCoverageExtent(brush, stretchEnd->radius,
+                        stretchEnd->hardness, stretchEnd->roundness, true));
+            }
+        }
+        const DabWorldBounds dabBounds
+            = stretchedDabWorldBounds(brush, d, stretchStart, stretchEnd);
+        const float drawMinX = dabBounds.minX - dabExtent;
+        const float drawMinY = dabBounds.minY - dabExtent;
+        const float drawMaxX = dabBounds.maxX + dabExtent;
+        const float drawMaxY = dabBounds.maxY + dabExtent;
         const float roiHalfExtent = std::max(reservoirHalf, dabExtent);
         roiMinX = std::min(roiMinX, d.worldX - roiHalfExtent);
         roiMinY = std::min(roiMinY, d.worldY - roiHalfExtent);
         roiMaxX = std::max(roiMaxX, d.worldX + roiHalfExtent);
         roiMaxY = std::max(roiMaxY, d.worldY + roiHalfExtent);
-        writeMinX = std::min(writeMinX, d.worldX - dabExtent);
-        writeMinY = std::min(writeMinY, d.worldY - dabExtent);
-        writeMaxX = std::max(writeMaxX, d.worldX + dabExtent);
-        writeMaxY = std::max(writeMaxY, d.worldY + dabExtent);
+        roiMinX = std::min(roiMinX, drawMinX);
+        roiMinY = std::min(roiMinY, drawMinY);
+        roiMaxX = std::max(roiMaxX, drawMaxX);
+        roiMaxY = std::max(roiMaxY, drawMaxY);
+        writeMinX = std::min(writeMinX, drawMinX);
+        writeMinY = std::min(writeMinY, drawMinY);
+        writeMaxX = std::max(writeMaxX, drawMaxX);
+        writeMaxY = std::max(writeMaxY, drawMaxY);
 
-        int32_t dabMinXi = static_cast<int32_t>(std::floor(d.worldX - dabExtent));
-        int32_t dabMinYi = static_cast<int32_t>(std::floor(d.worldY - dabExtent));
-        int32_t dabMaxXi = static_cast<int32_t>(std::ceil(d.worldX + dabExtent)) + 1;
-        int32_t dabMaxYi = static_cast<int32_t>(std::ceil(d.worldY + dabExtent)) + 1;
+        int32_t dabMinXi = static_cast<int32_t>(std::floor(drawMinX));
+        int32_t dabMinYi = static_cast<int32_t>(std::floor(drawMinY));
+        int32_t dabMaxXi = static_cast<int32_t>(std::ceil(drawMaxX)) + 1;
+        int32_t dabMaxYi = static_cast<int32_t>(std::ceil(drawMaxY)) + 1;
         if (clipToCanvas) {
             dabMinXi = std::max<int32_t>(dabMinXi, 0);
             dabMinYi = std::max<int32_t>(dabMinYi, 0);
@@ -5613,6 +5600,10 @@ bool GLBrushRenderer::stampSmudgeSegmentGPU(TileGrid& strokeBuffer, GLTileRender
         applyProgram->setUniform("uTextureDepth", brush.textureDepth());
         applyProgram->setUniform("uTextureBlend", brush.textureBlend());
         applyProgram->setUniform("uTextureAmount", brush.textureAmount());
+        applyProgram->setUniform(
+            "uDabContentBounds", brush.dabShapeContentBounds(1.0f).asArray());
+        applyProgram->setUniform(
+            "uDabSoftContentBounds", brush.dabShapeContentBounds(0.0f).asArray());
     } else {
         applyProgram->setUniform("uReservoirTexture", 1);
     }
@@ -5638,6 +5629,18 @@ bool GLBrushRenderer::stampSmudgeSegmentGPU(TileGrid& strokeBuffer, GLTileRender
 
     for (size_t i = 0; i < dabs.size(); ++i) {
         const auto& d = dabs[i];
+        const TileBrush::DabPoint* stretchStart = wetMode && brush.connectsDabs()
+            ? (i > 0 ? &dabs[i - 1] : previousDab)
+            : nullptr;
+        const TileBrush::DabPoint* stretchEnd = wetMode && brush.refinesDabJoints()
+            ? (i + 1 < dabs.size() ? &dabs[i + 1] : nextDab)
+            : nullptr;
+        TileBrush::DabTransform dabTransform {};
+        bool hasStretch = stretchStart
+            && brush.dabStretchedTransform(*stretchStart, d, stretchEnd, dabTransform);
+        if (!hasStretch && wetMode && !stretchStart && stretchEnd) {
+            hasStretch = brush.dabLeadingRefinedTransform(d, *stretchEnd, dabTransform);
+        }
         const float dabAlpha = static_cast<float>(d.alpha) / 255.0f;
         const float clampedRoundness = std::clamp(d.roundness, 0.0f, 1.0f);
         const float brushAngleRad = d.angleDegrees * deg2rad;
@@ -5762,6 +5765,32 @@ bool GLBrushRenderer::stampSmudgeSegmentGPU(TileGrid& strokeBuffer, GLTileRender
             applyProgram->setUniform("uDepositRate",
                 firstDabOfStroke ? clampedDabAlpha
                                  : wetRatePerDab(clampedDabAlpha, dabDist, d.radius));
+            applyProgram->setUniform("uConnectedDab", hasStretch ? 1 : 0);
+            if (hasStretch) {
+                const float originX = static_cast<float>(roiMinXi);
+                const float originY = static_cast<float>(roiMinYi);
+                const std::array<float, 4> quad01 { dabTransform.guide[0].x - originX,
+                    dabTransform.guide[0].y - originY, dabTransform.guide[1].x - originX,
+                    dabTransform.guide[1].y - originY };
+                const std::array<float, 4> quad23 { dabTransform.guide[2].x - originX,
+                    dabTransform.guide[2].y - originY, dabTransform.guide[3].x - originX,
+                    dabTransform.guide[3].y - originY };
+                applyProgram->setUniform("uStretchQuad01", quad01);
+                applyProgram->setUniform("uStretchQuad23", quad23);
+                applyProgram->setUniform("uStartControl0",
+                    dabTransform.startControls[0].x - originX,
+                    dabTransform.startControls[0].y - originY);
+                applyProgram->setUniform("uStartControl1",
+                    dabTransform.startControls[1].x - originX,
+                    dabTransform.startControls[1].y - originY);
+                applyProgram->setUniform("uEndControl0", dabTransform.endControls[0].x - originX,
+                    dabTransform.endControls[0].y - originY);
+                applyProgram->setUniform("uEndControl1", dabTransform.endControls[1].x - originX,
+                    dabTransform.endControls[1].y - originY);
+                applyProgram->setUniform("uTransformSegments", brush.transformSegments());
+                applyProgram->setUniform("uPreviousHardness",
+                    stretchStart ? stretchStart->hardness : d.hardness);
+            }
         }
         applyProgram->setUniform("uBrushCenter", brushCenterX, brushCenterY);
 

@@ -86,7 +86,7 @@ void BrushExecutionBackend::prepareStrokeBuffer(
 }
 
 bool BrushExecutionBackend::stampReadyRefinedDabsGPU(
-    TileBrush& brush, TileGrid* selectionMask, bool includeNewest)
+    TileBrush& brush, TileGrid* layerGrid, TileGrid* selectionMask, bool includeNewest)
 {
     const std::vector<TileBrush::DabPoint>& stored = brush.strokeDabs();
     const size_t start = brush.firstUnstampedStrokeDab();
@@ -101,32 +101,68 @@ bool BrushExecutionBackend::stampReadyRefinedDabsGPU(
     const TileBrush::DabPoint* previousDab = start > 0 ? &stored[start - 1] : nullptr;
     const TileBrush::DabPoint* nextDab = end < stored.size() ? &stored[end] : nullptr;
 
-    if (!m_brushRenderer->stampDabSegmentGPU(brush.strokeBuffer(), m_tileRenderer, brush, ready,
-            selectionMask, selectionMask != nullptr, m_canvasWidth, m_canvasHeight, previousDab,
-            nextDab)) {
+    bool stamped = false;
+    size_t fallbackOffset = 0;
+    if (brush.isWetMode() && layerGrid && brush.hasDynamicsRequiringCpuReplay()) {
+        stamped = true;
+        for (size_t index = start; index < end; ++index) {
+            const auto& dab = stored[index];
+            brush.setPressure(dab.pressure);
+            brush.setStrokeElapsedSeconds(dab.strokeElapsedSeconds, dab.strokeTimeAvailable);
+            brush.setInputDynamics(dab.inputDynamics);
+            const std::vector<TileBrush::DabPoint> oneDab { dab };
+            const TileBrush::DabPoint* onePrevious = index > 0 ? &stored[index - 1] : nullptr;
+            const TileBrush::DabPoint* oneNext
+                = index + 1 < stored.size() ? &stored[index + 1] : nullptr;
+            if (!m_brushRenderer->stampSmudgeSegmentGPU(brush.strokeBuffer(), m_tileRenderer, brush,
+                    oneDab, m_canvasWidth, m_canvasHeight, layerGrid, selectionMask,
+                    selectionMask != nullptr, onePrevious, oneNext)) {
+                stamped = false;
+                break;
+            }
+            fallbackOffset = index - start + 1;
+        }
+    } else if (brush.isWetMode() && layerGrid) {
+        stamped = m_brushRenderer->stampSmudgeSegmentGPU(brush.strokeBuffer(), m_tileRenderer,
+            brush, ready, m_canvasWidth, m_canvasHeight, layerGrid, selectionMask,
+            selectionMask != nullptr, previousDab, nextDab);
+    } else {
+        stamped = m_brushRenderer->stampDabSegmentGPU(brush.strokeBuffer(), m_tileRenderer, brush,
+            ready, selectionMask, selectionMask != nullptr, m_canvasWidth, m_canvasHeight,
+            previousDab, nextDab);
+    }
+    if (!stamped) {
         // The batch path refused (it owns every prerequisite check). The dabs
         // still have to land, so they go down one by one as plain shapes.
         m_brushRenderer->beginStampBatch();
-        for (const auto& dab : ready) {
+        for (size_t offset = fallbackOffset; offset < ready.size(); ++offset) {
+            const auto& dab = ready[offset];
             m_brushRenderer->stampGPU(brush.strokeBuffer(), m_tileRenderer, brush, dab.worldX,
                 dab.worldY, dab.radius, dab.hardness, dab.roundness, dab.angleDegrees,
                 dab.useMaxBlend, dab.colorR, dab.colorG, dab.colorB, dab.alpha, selectionMask,
-                selectionMask != nullptr, m_canvasWidth, m_canvasHeight, nullptr);
+                selectionMask != nullptr, m_canvasWidth, m_canvasHeight,
+                brush.isWetMode() ? layerGrid : nullptr);
         }
         m_brushRenderer->endStampBatch();
+    }
+    if (brush.isWetMode() && brush.hasDynamicsRequiringCpuReplay() && !stored.empty()) {
+        const auto& newest = stored.back();
+        brush.setPressure(newest.pressure);
+        brush.setStrokeElapsedSeconds(newest.strokeElapsedSeconds, newest.strokeTimeAvailable);
+        brush.setInputDynamics(newest.inputDynamics);
     }
     brush.markStrokeDabsStamped(end);
     return true;
 }
 
 void BrushExecutionBackend::stampHeldStrokeDabs(
-    TileBrush& brush, TileGrid* selectionMask, bool preferGpu)
+    TileBrush& brush, TileGrid& layerGrid, TileGrid* selectionMask, bool preferGpu)
 {
     if (!brush.refinesDabJoints() || !brush.hasUnstampedStrokeDabs()) {
         return;
     }
     if (preferGpu && hasGpuBackend()) {
-        stampReadyRefinedDabsGPU(brush, selectionMask, true);
+        stampReadyRefinedDabsGPU(brush, &layerGrid, selectionMask, true);
         return;
     }
     brush.stampStrokeDabsInto(brush.strokeBuffer(), selectionMask, true);
@@ -157,7 +193,7 @@ bool BrushExecutionBackend::stamp(TileBrush& brush, TileGrid& layerGrid, float w
         }
 
         if (brush.refinesDabJoints() && brush.hasActiveStroke()) {
-            return stampReadyRefinedDabsGPU(brush, selectionMask, false);
+            return stampReadyRefinedDabsGPU(brush, &layerGrid, selectionMask, false);
         }
 
         if (previousDab && !brush.isBlurMode() && !brush.isSmudgeMode() && !brush.isWetMode()) {
@@ -165,6 +201,14 @@ bool BrushExecutionBackend::stamp(TileBrush& brush, TileGrid& layerGrid, float w
             if (m_brushRenderer->stampDabSegmentGPU(brush.strokeBuffer(), m_tileRenderer, brush,
                     dabs, selectionMask, selectionMask != nullptr, m_canvasWidth, m_canvasHeight,
                     &*previousDab)) {
+                return true;
+            }
+        }
+        if (previousDab && brush.isWetMode()) {
+            const std::vector<TileBrush::DabPoint> dabs { dab };
+            if (m_brushRenderer->stampSmudgeSegmentGPU(brush.strokeBuffer(), m_tileRenderer, brush,
+                    dabs, m_canvasWidth, m_canvasHeight, &layerGrid, selectionMask,
+                    selectionMask != nullptr, &*previousDab)) {
                 return true;
             }
         }
@@ -224,6 +268,19 @@ bool BrushExecutionBackend::strokeTo(TileBrush& brush, TileGrid& layerGrid, floa
             return true;
         }
 
+        // Wet refinement uses the same one-dab look-ahead contract as ordinary
+        // paint, but stamps through the canvas-reading pigment pipeline.
+        if (brush.isWetMode() && brush.refinesDabJoints() && brush.hasActiveStroke()) {
+            if (!segmentDabs.empty()) {
+                const auto& last = segmentDabs.back();
+                brush.setPressure(last.pressure);
+                brush.setStrokeElapsedSeconds(last.strokeElapsedSeconds, last.strokeTimeAvailable);
+                brush.setInputDynamics(last.inputDynamics);
+            }
+            stampReadyRefinedDabsGPU(brush, &layerGrid, selectionMask, false);
+            return true;
+        }
+
         // Smudge has a CPU-heavy per-dab path (snapshot + tile-by-tile
         // rendering); for a stroke segment we batch all dabs into one ROI
         // ping-pong pass to avoid driver-call overhead saturating the main
@@ -233,11 +290,35 @@ bool BrushExecutionBackend::strokeTo(TileBrush& brush, TileGrid& layerGrid, floa
         // just like ordinary paint; the ROI batch has one shared grain field.
         const bool wetNeedsPerDabTextureReplay
             = brush.isWetMode() && brush.hasDynamicsRequiringCpuReplay();
+        if (brush.isWetMode() && brush.connectsDabs() && wetNeedsPerDabTextureReplay
+            && !segmentDabs.empty()) {
+            for (size_t index = 0; index < segmentDabs.size(); ++index) {
+                const auto& dab = segmentDabs[index];
+                brush.setPressure(dab.pressure);
+                brush.setStrokeElapsedSeconds(dab.strokeElapsedSeconds, dab.strokeTimeAvailable);
+                brush.setInputDynamics(dab.inputDynamics);
+                const std::vector<TileBrush::DabPoint> oneDab { dab };
+                const TileBrush::DabPoint* previous = index > 0
+                    ? &segmentDabs[index - 1]
+                    : (segmentPreviousDab ? &*segmentPreviousDab : nullptr);
+                if (!m_brushRenderer->stampSmudgeSegmentGPU(brush.strokeBuffer(), m_tileRenderer,
+                        brush, oneDab, m_canvasWidth, m_canvasHeight, blurLayerGrid, selectionMask,
+                        selectionMask != nullptr, previous)) {
+                    m_brushRenderer->stampGPU(brush.strokeBuffer(), m_tileRenderer, brush,
+                        dab.worldX, dab.worldY, dab.radius, dab.hardness, dab.roundness,
+                        dab.angleDegrees, dab.useMaxBlend, dab.colorR, dab.colorG, dab.colorB,
+                        dab.alpha, selectionMask, selectionMask != nullptr, m_canvasWidth,
+                        m_canvasHeight, blurLayerGrid);
+                }
+            }
+            return true;
+        }
         if ((brush.isSmudgeMode() || brush.isWetMode()) && !segmentDabs.empty()
             && !wetNeedsPerDabTextureReplay) {
             if (m_brushRenderer->stampSmudgeSegmentGPU(brush.strokeBuffer(), m_tileRenderer, brush,
                     segmentDabs, m_canvasWidth, m_canvasHeight, blurLayerGrid, selectionMask,
-                    selectionMask != nullptr)) {
+                    selectionMask != nullptr,
+                    segmentPreviousDab ? &*segmentPreviousDab : nullptr)) {
                 if (!segmentDabs.empty()) {
                     const auto& last = segmentDabs.back();
                     brush.setPressure(last.pressure);
@@ -266,7 +347,7 @@ bool BrushExecutionBackend::strokeTo(TileBrush& brush, TileGrid& layerGrid, floa
                 brush.setInputDynamics(last.inputDynamics);
             }
             if (!m_dabBatchActive) {
-                stampReadyRefinedDabsGPU(brush, selectionMask, false);
+                stampReadyRefinedDabsGPU(brush, nullptr, selectionMask, false);
             }
             return true;
         }
@@ -331,7 +412,8 @@ void BrushExecutionBackend::beginDabBatch(const TileBrush& brush)
     m_dabBatchActive = false;
     m_pendingBatchDabs.clear();
     m_pendingBatchPreviousDab.reset();
-    if (!hasGpuBackend()) {
+    if (!hasGpuBackend() || brush.isBlurMode() || brush.isSmudgeMode() || brush.isWetMode()
+        || brush.isLiquifyMode()) {
         return;
     }
     // A dynamic texture binding re-derives the procedural texture parameters
@@ -351,7 +433,7 @@ void BrushExecutionBackend::endDabBatch(TileBrush& brush, TileGrid* selectionMas
     }
     m_dabBatchActive = false;
     if (brush.refinesDabJoints() && hasGpuBackend() && brush.hasActiveStroke()) {
-        stampReadyRefinedDabsGPU(brush, selectionMask, false);
+        stampReadyRefinedDabsGPU(brush, nullptr, selectionMask, false);
         m_pendingBatchDabs.clear();
         m_pendingBatchPreviousDab.reset();
         return;
