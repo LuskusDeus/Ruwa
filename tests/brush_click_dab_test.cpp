@@ -544,6 +544,7 @@ TEST_CASE("transform segments follow a smooth rotated rail without adding dabs",
     previous.worldX = 10.0f;
     previous.worldY = 20.0f;
     previous.radius = 4.0f;
+    previous.roundness = 0.5f;
 
     aether::TileBrush::DabPoint current = previous;
     current.worldX = 30.0f;
