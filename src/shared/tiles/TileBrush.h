@@ -3678,10 +3678,8 @@ private:
         // outside the raster loops avoids repeating clamps and trigonometry for
         // ordinary (non-connected) dabs without changing the sampled geometry.
         const float plainHardness = std::clamp(dab.hardness, 0.0f, 1.0f);
-        const float plainRoundness
-            = std::max(0.01f, std::clamp(dab.roundness, 0.0f, 1.0f));
-        const float plainAngleRadians
-            = dab.angleDegrees * (3.14159265358979323846f / 180.0f);
+        const float plainRoundness = std::max(0.01f, std::clamp(dab.roundness, 0.0f, 1.0f));
+        const float plainAngleRadians = dab.angleDegrees * (3.14159265358979323846f / 180.0f);
         const float plainCosAngle = std::cos(plainAngleRadians);
         const float plainSinAngle = std::sin(plainAngleRadians);
         const float rasterExtent
@@ -3775,14 +3773,10 @@ private:
                             sampledDab = &connectedSampledDab;
                             connectedSampledDab.hardness
                                 = lerp(stretchSource.hardness, dab.hardness);
-                            connectedSampledDab.alpha
-                                = lerpByte(stretchSource.alpha, dab.alpha);
-                            connectedSampledDab.colorR
-                                = lerpByte(stretchSource.colorR, dab.colorR);
-                            connectedSampledDab.colorG
-                                = lerpByte(stretchSource.colorG, dab.colorG);
-                            connectedSampledDab.colorB
-                                = lerpByte(stretchSource.colorB, dab.colorB);
+                            connectedSampledDab.alpha = lerpByte(stretchSource.alpha, dab.alpha);
+                            connectedSampledDab.colorR = lerpByte(stretchSource.colorR, dab.colorR);
+                            connectedSampledDab.colorG = lerpByte(stretchSource.colorG, dab.colorG);
+                            connectedSampledDab.colorB = lerpByte(stretchSource.colorB, dab.colorB);
                             const DabContentBounds stretchContentBounds
                                 = dabShapeContentBounds(connectedSampledDab.hardness);
                             const float stretchShapeX = stretchContentBounds.minX
@@ -3799,8 +3793,8 @@ private:
                             const float brushX = dx * plainCosAngle + dy * plainSinAngle;
                             const float brushY
                                 = (-dx * plainSinAngle + dy * plainCosAngle) / plainRoundness;
-                            coverage = sampleDabFalloff(
-                                dab, brushX, brushY, plainHardness, dab.radius);
+                            coverage
+                                = sampleDabFalloff(dab, brushX, brushY, plainHardness, dab.radius);
                         }
                         if (coverage <= 0.0001f)
                             continue;

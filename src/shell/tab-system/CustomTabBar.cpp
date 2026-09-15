@@ -1846,8 +1846,8 @@ void CustomTabBar::bindTabDisplaySignals(ruwa::core::BaseTab* tab)
         &CustomTabBar::refreshManagedTabItemTitle, Qt::UniqueConnection);
     connect(tab, &ruwa::core::BaseTab::modifiedChanged, this,
         &CustomTabBar::refreshManagedTabItemTitle, Qt::UniqueConnection);
-    connect(tab, &ruwa::core::BaseTab::iconChanged, this,
-        &CustomTabBar::refreshManagedTabItemIcon, Qt::UniqueConnection);
+    connect(tab, &ruwa::core::BaseTab::iconChanged, this, &CustomTabBar::refreshManagedTabItemIcon,
+        Qt::UniqueConnection);
 }
 
 void CustomTabBar::refreshManagedTabItemTitle()

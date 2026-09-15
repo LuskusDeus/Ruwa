@@ -860,6 +860,26 @@ Try Square Selection first to restrict the area.</source>
 <context>
     <name>ReleaseNotesOverlay</name>
     <message>
+        <source>Copy release notes</source>
+        <translation>Copy release notes</translation>
+    </message>
+    <message>
+        <source>Copied</source>
+        <translation>Copied</translation>
+    </message>
+    <message>
+        <source>&lt;p&gt;&lt;b&gt;Interface&lt;/b&gt;&lt;/p&gt;&lt;ul&gt;&lt;li&gt;Release notes now use a liquid-glass master-detail layout with compact version navigation, animated page transitions, and one-click copying.&lt;/li&gt;&lt;/ul&gt;</source>
+        <translation>&lt;p&gt;&lt;b&gt;Interface&lt;/b&gt;&lt;/p&gt;&lt;ul&gt;&lt;li&gt;Release notes now use a liquid-glass master-detail layout with compact version navigation, animated page transitions, and one-click copying.&lt;/li&gt;&lt;/ul&gt;</translation>
+    </message>
+    <message>
+        <source>Continuous strokes, easier imports, and effects you can place</source>
+        <translation>Continuous strokes, easier imports, and effects you can place</translation>
+    </message>
+    <message>
+        <source>&lt;p&gt;&lt;b&gt;This release connects and refines brush dabs into continuous strokes, adds a visual drag-and-drop importer for Ruwa and Photoshop brush files, and puts effect positions directly on the canvas.&lt;/b&gt;&lt;/p&gt;&lt;p&gt;&lt;b&gt;New&lt;/b&gt;&lt;/p&gt;&lt;ul&gt;&lt;li&gt;The Brush Editor has a Stroke Rendering page. Connect Dabs joins each dab to the previous one, Refine Previous Dab forms a shared joint, and Transform Segments smooths the mapping through turns.&lt;/li&gt;&lt;li&gt;Drop one or more .rbf or Photoshop .abr files onto a workspace to preview their brushes, include or exclude individual entries, and import them into a new or existing pack.&lt;/li&gt;&lt;li&gt;Gradient Overlay has two draggable endpoints. Radial Blur, Twirl, Pinch and Ripple have draggable centres, and the three distortion effects keep their radius rings.&lt;/li&gt;&lt;li&gt;First-run setup starts with a language selector and follows the system language when Ruwa ships a matching translation.&lt;/li&gt;&lt;li&gt;The effect SDK advances to ABI 1.2 with declarative position controls.&lt;/li&gt;&lt;/ul&gt;&lt;p&gt;&lt;b&gt;Improved&lt;/b&gt;&lt;/p&gt;&lt;ul&gt;&lt;li&gt;Modern Photoshop brush descriptors now import sampled and computed round tips, non-square proportions, and supported dynamics.&lt;/li&gt;&lt;li&gt;Wet brushes can use connected, refined joints and now respect Texture section grain.&lt;/li&gt;&lt;li&gt;Effect anchors accept negative document coordinates and stay synchronized with their parameter fields as one undoable edit.&lt;/li&gt;&lt;li&gt;Brush Save records a portable baseline and Reset restores it.&lt;/li&gt;&lt;li&gt;New-project dimensions use the shared numeric input and update the canvas preview directly while scrubbing.&lt;/li&gt;&lt;/ul&gt;&lt;p&gt;&lt;b&gt;Fixes&lt;/b&gt;&lt;/p&gt;&lt;ul&gt;&lt;li&gt;Brush settings save in a serialized background queue instead of blocking the interface during repeated edits.&lt;/li&gt;&lt;li&gt;Wet paint keeps its colour at low alpha, and Smudge preserves colour and alpha outside the painted part of its sampled region.&lt;/li&gt;&lt;li&gt;Stroke Direction remains stable at zero geometry stabilization without adding visible input latency.&lt;/li&gt;&lt;li&gt;Closing a canvas no longer leaves undo-history signals connected to destroyed rendering state.&lt;/li&gt;&lt;li&gt;Stored project tab icons refresh after loading, and top-bar message popups follow theme scale changes.&lt;/li&gt;&lt;/ul&gt;</source>
+        <translation>&lt;p&gt;&lt;b&gt;This release connects and refines brush dabs into continuous strokes, adds a visual drag-and-drop importer for Ruwa and Photoshop brush files, and puts effect positions directly on the canvas.&lt;/b&gt;&lt;/p&gt;&lt;p&gt;&lt;b&gt;New&lt;/b&gt;&lt;/p&gt;&lt;ul&gt;&lt;li&gt;The Brush Editor has a Stroke Rendering page. Connect Dabs joins each dab to the previous one, Refine Previous Dab forms a shared joint, and Transform Segments smooths the mapping through turns.&lt;/li&gt;&lt;li&gt;Drop one or more .rbf or Photoshop .abr files onto a workspace to preview their brushes, include or exclude individual entries, and import them into a new or existing pack.&lt;/li&gt;&lt;li&gt;Gradient Overlay has two draggable endpoints. Radial Blur, Twirl, Pinch and Ripple have draggable centres, and the three distortion effects keep their radius rings.&lt;/li&gt;&lt;li&gt;First-run setup starts with a language selector and follows the system language when Ruwa ships a matching translation.&lt;/li&gt;&lt;li&gt;The effect SDK advances to ABI 1.2 with declarative position controls.&lt;/li&gt;&lt;/ul&gt;&lt;p&gt;&lt;b&gt;Improved&lt;/b&gt;&lt;/p&gt;&lt;ul&gt;&lt;li&gt;Modern Photoshop brush descriptors now import sampled and computed round tips, non-square proportions, and supported dynamics.&lt;/li&gt;&lt;li&gt;Wet brushes can use connected, refined joints and now respect Texture section grain.&lt;/li&gt;&lt;li&gt;Effect anchors accept negative document coordinates and stay synchronized with their parameter fields as one undoable edit.&lt;/li&gt;&lt;li&gt;Brush Save records a portable baseline and Reset restores it.&lt;/li&gt;&lt;li&gt;New-project dimensions use the shared numeric input and update the canvas preview directly while scrubbing.&lt;/li&gt;&lt;/ul&gt;&lt;p&gt;&lt;b&gt;Fixes&lt;/b&gt;&lt;/p&gt;&lt;ul&gt;&lt;li&gt;Brush settings save in a serialized background queue instead of blocking the interface during repeated edits.&lt;/li&gt;&lt;li&gt;Wet paint keeps its colour at low alpha, and Smudge preserves colour and alpha outside the painted part of its sampled region.&lt;/li&gt;&lt;li&gt;Stroke Direction remains stable at zero geometry stabilization without adding visible input latency.&lt;/li&gt;&lt;li&gt;Closing a canvas no longer leaves undo-history signals connected to destroyed rendering state.&lt;/li&gt;&lt;li&gt;Stored project tab icons refresh after loading, and top-bar message popups follow theme scale changes.&lt;/li&gt;&lt;/ul&gt;</translation>
+    </message>
+    <message>
         <location filename="../src/shell/update-message/ReleaseNotesOverlay.cpp" line="61"/>
         <source>Strokes and details</source>
         <translation>Strokes and details</translation>
@@ -1286,6 +1306,30 @@ Try Square Selection first to restrict the area.</source>
 </context>
 <context>
     <name>UpdateMessageOverlay</name>
+    <message>
+        <source>Continuous strokes, easier imports, and effects you can place</source>
+        <translation>Continuous strokes, easier imports, and effects you can place</translation>
+    </message>
+    <message>
+        <source>This release connects and refines brush dabs into continuous strokes, adds a visual drag-and-drop importer for Ruwa and Photoshop brush files, and puts effect positions directly on the canvas.</source>
+        <translation>This release connects and refines brush dabs into continuous strokes, adds a visual drag-and-drop importer for Ruwa and Photoshop brush files, and puts effect positions directly on the canvas.</translation>
+    </message>
+    <message>
+        <source>Connect and refine brush dabs into smooth, continuous strokes.</source>
+        <translation>Connect and refine brush dabs into smooth, continuous strokes.</translation>
+    </message>
+    <message>
+        <source>Drop Ruwa or Photoshop brush files, preview them, and choose what to import.</source>
+        <translation>Drop Ruwa or Photoshop brush files, preview them, and choose what to import.</translation>
+    </message>
+    <message>
+        <source>Place supported effect centres and gradient endpoints directly on the canvas.</source>
+        <translation>Place supported effect centres and gradient endpoints directly on the canvas.</translation>
+    </message>
+    <message>
+        <source>Reliable wet colour and Smudge alpha, non-blocking brush saves, and safer canvas shutdown.</source>
+        <translation>Reliable wet colour and Smudge alpha, non-blocking brush saves, and safer canvas shutdown.</translation>
+    </message>
     <message>
         <location filename="../src/shell/update-message/UpdateMessageOverlay.cpp" line="684"/>
         <source>Strokes and details</source>

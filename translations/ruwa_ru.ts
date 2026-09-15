@@ -864,6 +864,26 @@ Try Square Selection first to restrict the area.</source>
 <context>
     <name>ReleaseNotesOverlay</name>
     <message>
+        <source>Copy release notes</source>
+        <translation>Копировать примечания к выпуску</translation>
+    </message>
+    <message>
+        <source>Copied</source>
+        <translation>Скопировано</translation>
+    </message>
+    <message>
+        <source>&lt;p&gt;&lt;b&gt;Interface&lt;/b&gt;&lt;/p&gt;&lt;ul&gt;&lt;li&gt;Release notes now use a liquid-glass master-detail layout with compact version navigation, animated page transitions, and one-click copying.&lt;/li&gt;&lt;/ul&gt;</source>
+        <translation>&lt;p&gt;&lt;b&gt;Интерфейс&lt;/b&gt;&lt;/p&gt;&lt;ul&gt;&lt;li&gt;История выпусков теперь использует компоновку master-detail в стиле liquid glass с компактной навигацией по версиям, анимированными переходами и копированием одним нажатием.&lt;/li&gt;&lt;/ul&gt;</translation>
+    </message>
+    <message>
+        <source>Continuous strokes, easier imports, and effects you can place</source>
+        <translation>Непрерывные штрихи, удобный импорт и эффекты на своих местах</translation>
+    </message>
+    <message>
+        <source>&lt;p&gt;&lt;b&gt;This release connects and refines brush dabs into continuous strokes, adds a visual drag-and-drop importer for Ruwa and Photoshop brush files, and puts effect positions directly on the canvas.&lt;/b&gt;&lt;/p&gt;&lt;p&gt;&lt;b&gt;New&lt;/b&gt;&lt;/p&gt;&lt;ul&gt;&lt;li&gt;The Brush Editor has a Stroke Rendering page. Connect Dabs joins each dab to the previous one, Refine Previous Dab forms a shared joint, and Transform Segments smooths the mapping through turns.&lt;/li&gt;&lt;li&gt;Drop one or more .rbf or Photoshop .abr files onto a workspace to preview their brushes, include or exclude individual entries, and import them into a new or existing pack.&lt;/li&gt;&lt;li&gt;Gradient Overlay has two draggable endpoints. Radial Blur, Twirl, Pinch and Ripple have draggable centres, and the three distortion effects keep their radius rings.&lt;/li&gt;&lt;li&gt;First-run setup starts with a language selector and follows the system language when Ruwa ships a matching translation.&lt;/li&gt;&lt;li&gt;The effect SDK advances to ABI 1.2 with declarative position controls.&lt;/li&gt;&lt;/ul&gt;&lt;p&gt;&lt;b&gt;Improved&lt;/b&gt;&lt;/p&gt;&lt;ul&gt;&lt;li&gt;Modern Photoshop brush descriptors now import sampled and computed round tips, non-square proportions, and supported dynamics.&lt;/li&gt;&lt;li&gt;Wet brushes can use connected, refined joints and now respect Texture section grain.&lt;/li&gt;&lt;li&gt;Effect anchors accept negative document coordinates and stay synchronized with their parameter fields as one undoable edit.&lt;/li&gt;&lt;li&gt;Brush Save records a portable baseline and Reset restores it.&lt;/li&gt;&lt;li&gt;New-project dimensions use the shared numeric input and update the canvas preview directly while scrubbing.&lt;/li&gt;&lt;/ul&gt;&lt;p&gt;&lt;b&gt;Fixes&lt;/b&gt;&lt;/p&gt;&lt;ul&gt;&lt;li&gt;Brush settings save in a serialized background queue instead of blocking the interface during repeated edits.&lt;/li&gt;&lt;li&gt;Wet paint keeps its colour at low alpha, and Smudge preserves colour and alpha outside the painted part of its sampled region.&lt;/li&gt;&lt;li&gt;Stroke Direction remains stable at zero geometry stabilization without adding visible input latency.&lt;/li&gt;&lt;li&gt;Closing a canvas no longer leaves undo-history signals connected to destroyed rendering state.&lt;/li&gt;&lt;li&gt;Stored project tab icons refresh after loading, and top-bar message popups follow theme scale changes.&lt;/li&gt;&lt;/ul&gt;</source>
+        <translation>&lt;p&gt;&lt;b&gt;В этом обновлении отпечатки кисти соединяются и уточняются в непрерывный штрих, появился наглядный импорт файлов кистей Ruwa и Photoshop перетаскиванием, а позиции эффектов теперь можно менять прямо на холсте.&lt;/b&gt;&lt;/p&gt;&lt;p&gt;&lt;b&gt;Новое&lt;/b&gt;&lt;/p&gt;&lt;ul&gt;&lt;li&gt;В редакторе кистей появилась страница «Отрисовка штриха». «Соединять отпечатки» связывает каждый отпечаток с предыдущим, «Уточнять предыдущий отпечаток» создаёт общий стык, а «Сегменты трансформации» сглаживают отображение на поворотах.&lt;/li&gt;&lt;li&gt;Перетащите один или несколько файлов .rbf или .abr Photoshop в рабочую область, чтобы просмотреть кисти, включить или исключить отдельные элементы и импортировать их в новый или существующий набор.&lt;/li&gt;&lt;li&gt;У Gradient Overlay появились две перетаскиваемые конечные точки. У Radial Blur, Twirl, Pinch и Ripple можно перетаскивать центр, а три эффекта искажения сохраняют окружности радиуса.&lt;/li&gt;&lt;li&gt;Первоначальная настройка начинается с выбора языка и использует системный язык, если для него есть перевод Ruwa.&lt;/li&gt;&lt;li&gt;ABI SDK эффектов обновлён до версии 1.2 и поддерживает декларативные позиционные контролы.&lt;/li&gt;&lt;/ul&gt;&lt;p&gt;&lt;b&gt;Улучшено&lt;/b&gt;&lt;/p&gt;&lt;ul&gt;&lt;li&gt;Из современных дескрипторов кистей Photoshop теперь импортируются растровые и вычисляемые круглые отпечатки, неквадратные пропорции и поддерживаемая динамика.&lt;/li&gt;&lt;li&gt;Мокрые кисти могут использовать соединённые уточнённые стыки и теперь учитывают зерно из раздела «Текстура».&lt;/li&gt;&lt;li&gt;Маркеры эффектов принимают отрицательные координаты документа, синхронизируются с полями параметров и изменяются за одну отменяемую операцию.&lt;/li&gt;&lt;li&gt;Кнопка «Сохранить» записывает переносимую базовую конфигурацию кисти, а «Сбросить» восстанавливает её.&lt;/li&gt;&lt;li&gt;Размеры нового проекта используют общее числовое поле и обновляют предпросмотр холста напрямую при перетаскивании значения.&lt;/li&gt;&lt;/ul&gt;&lt;p&gt;&lt;b&gt;Исправления&lt;/b&gt;&lt;/p&gt;&lt;ul&gt;&lt;li&gt;Настройки кистей сохраняются в последовательной фоновой очереди и не блокируют интерфейс при повторных изменениях.&lt;/li&gt;&lt;li&gt;Мокрая краска сохраняет цвет при малой альфе, а Smudge не разрушает цвет и альфу за пределами закрашенной части области выборки.&lt;/li&gt;&lt;li&gt;Динамика направления штриха остаётся стабильной при нулевой геометрической стабилизации без заметной задержки ввода.&lt;/li&gt;&lt;li&gt;После закрытия холста сигналы истории отмены больше не обращаются к уничтоженному состоянию отрисовки.&lt;/li&gt;&lt;li&gt;Сохранённые значки вкладок проектов обновляются после загрузки, а всплывающие сообщения верхней панели следуют масштабу темы.&lt;/li&gt;&lt;/ul&gt;</translation>
+    </message>
+    <message>
         <location filename="../src/shell/update-message/ReleaseNotesOverlay.cpp" line="61"/>
         <source>Strokes and details</source>
         <translation>Штрихи и детали</translation>
@@ -1290,6 +1310,30 @@ Try Square Selection first to restrict the area.</source>
 </context>
 <context>
     <name>UpdateMessageOverlay</name>
+    <message>
+        <source>Continuous strokes, easier imports, and effects you can place</source>
+        <translation>Непрерывные штрихи, удобный импорт и эффекты на своих местах</translation>
+    </message>
+    <message>
+        <source>This release connects and refines brush dabs into continuous strokes, adds a visual drag-and-drop importer for Ruwa and Photoshop brush files, and puts effect positions directly on the canvas.</source>
+        <translation>В этом обновлении отпечатки кисти соединяются и уточняются в непрерывный штрих, появился наглядный импорт файлов кистей Ruwa и Photoshop перетаскиванием, а позиции эффектов теперь можно менять прямо на холсте.</translation>
+    </message>
+    <message>
+        <source>Connect and refine brush dabs into smooth, continuous strokes.</source>
+        <translation>Соединяйте и уточняйте отпечатки кисти в плавные непрерывные штрихи.</translation>
+    </message>
+    <message>
+        <source>Drop Ruwa or Photoshop brush files, preview them, and choose what to import.</source>
+        <translation>Перетаскивайте файлы кистей Ruwa или Photoshop, просматривайте и выбирайте, что импортировать.</translation>
+    </message>
+    <message>
+        <source>Place supported effect centres and gradient endpoints directly on the canvas.</source>
+        <translation>Размещайте центры поддерживаемых эффектов и концы градиента прямо на холсте.</translation>
+    </message>
+    <message>
+        <source>Reliable wet colour and Smudge alpha, non-blocking brush saves, and safer canvas shutdown.</source>
+        <translation>Надёжный мокрый цвет и альфа Smudge, фоновое сохранение кистей и безопасное закрытие холста.</translation>
+    </message>
     <message>
         <location filename="../src/shell/update-message/UpdateMessageOverlay.cpp" line="684"/>
         <source>Strokes and details</source>

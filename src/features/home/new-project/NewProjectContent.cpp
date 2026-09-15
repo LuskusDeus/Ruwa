@@ -1212,7 +1212,7 @@ void NewProjectContent::updateThemeColors()
              m_backgroundColorTitleLabel, m_widthTitleLabel, m_heightTitleLabel }) {
         if (label) {
             label->setStyleSheet(QString("QLabel { color: %1; background: transparent; }")
-                                    .arg(colors.textMuted.name(QColor::HexArgb)));
+                    .arg(colors.textMuted.name(QColor::HexArgb)));
         }
     }
     updateMemoryLabel();

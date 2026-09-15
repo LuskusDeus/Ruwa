@@ -7,21 +7,30 @@
 #include <QPropertyAnimation>
 #include <QWidget>
 
+#include <memory>
+
 class QEvent;
+class QHBoxLayout;
 class QKeyEvent;
 class QLabel;
 class QMouseEvent;
 class QPaintEvent;
 class QGraphicsOpacityEffect;
 class QResizeEvent;
+class QVBoxLayout;
+
+namespace ruwa::ui::workspace {
+class ToolButton;
+}
 
 namespace ruwa::ui::widgets {
 
-class CapsuleButton;
+class AnimatedStackedWidget;
+class ReleaseNotesModel;
 class SmoothScrollArea;
 
 /**
- * @brief Release notes overlay with a scrollable update history layout
+ * @brief Release notes overlay with a release navigator and lazy detail pages
  */
 class ReleaseNotesOverlay : public QWidget {
     Q_OBJECT
@@ -60,16 +69,26 @@ private:
     void setupAnimations();
     void rebuildEntries();
     void clearEntries();
+    void selectEntry(int index, bool animate);
+    void ensureEntryPage(int index);
     void updateCardPosition();
     void updateTexts();
+    void updateTheme();
+    void refreshCardBackdrop();
     QPoint cardTargetPosition() const;
 
 private:
+    std::unique_ptr<ReleaseNotesModel> m_model;
     QWidget* m_card { nullptr };
     QLabel* m_titleLabel { nullptr };
-    SmoothScrollArea* m_scrollArea { nullptr };
-    QWidget* m_scrollContent { nullptr };
-    CapsuleButton* m_closeButton { nullptr };
+    SmoothScrollArea* m_releaseNavigation { nullptr };
+    QWidget* m_releaseNavigationContent { nullptr };
+    AnimatedStackedWidget* m_releaseStack { nullptr };
+    QWidget* m_navigationDivider { nullptr };
+    ruwa::ui::workspace::ToolButton* m_closeButton { nullptr };
+    QVBoxLayout* m_cardLayout { nullptr };
+    QVBoxLayout* m_releaseNavigationLayout { nullptr };
+    QHBoxLayout* m_contentLayout { nullptr };
     QGraphicsOpacityEffect* m_cardOpacityEffect { nullptr };
     QPropertyAnimation* m_dimAnimation { nullptr };
     QPropertyAnimation* m_cardOpacityAnim { nullptr };
@@ -79,6 +98,7 @@ private:
     bool m_isHiding { false };
     bool m_shortcutsBlocked { false };
     bool m_entriesBuilt { false };
+    int m_selectedEntry { 0 };
     QElapsedTimer m_dismissCooldownTimer;
 
     static constexpr int DimAnimationDuration = 180;

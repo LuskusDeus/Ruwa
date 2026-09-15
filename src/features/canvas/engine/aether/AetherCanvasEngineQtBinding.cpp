@@ -1223,8 +1223,7 @@ void AetherCanvasEngineQtBinding::shutdown()
     // everything, stop presenting, then destroy the host widget. The panel has
     // already detached it from its layout by this point.
     if (m_widget) {
-        QObject::disconnect(
-            &m_widget->canvas().undoManager(), nullptr, m_events.get(), nullptr);
+        QObject::disconnect(&m_widget->canvas().undoManager(), nullptr, m_events.get(), nullptr);
         QObject::disconnect(m_widget, nullptr, nullptr, nullptr);
         m_widget->hide();
         delete m_widget;

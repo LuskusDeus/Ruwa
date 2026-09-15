@@ -66,35 +66,41 @@ source default tracks the latest release, but every release build sets it
 explicitly when configuring (see below). The build number is auto-incremented
 into `RuwaBuildInfo.h` on every build and is not committed.
 
-### 0.3.4-alpha release preparation
+### 0.3.5-alpha release preparation
 
-- Version: **0.3.4-alpha**; release date: **2026-08-31**.
-- Title: **Strokes and details** / **Штрихи и детали**.
-- Public release text: [English](docs/releases/0.3.4-alpha.md) and
-  [Russian](docs/releases/0.3.4-alpha.ru.md). Both use the same title and opening
+- Version: **0.3.5-alpha**; release date: **2026-09-15**.
+- Title: **Continuous strokes, easier imports, and effects you can place** /
+  **Непрерывные штрихи, удобный импорт и эффекты на своих местах**.
+- Public release text: [English](docs/releases/0.3.5-alpha.md) and
+  [Russian](docs/releases/0.3.5-alpha.ru.md). Both use the same title and opening
   paragraph as the corresponding in-app translation.
 - In an existing Qt Creator build configuration, explicitly set
-  `RUWA_RELEASE_DATE` to `2026-08-31` in the CMake configuration. Changing the
+  `RUWA_RELEASE_DATE` to `2026-09-15` in the CMake configuration. Changing the
   source default does not replace a date already stored in the CMake cache.
 - Package the newly built `effects/` and `shaders/` directories with the
   executable, including in the small update patch. The effect SDK is now ABI
-  1.1; the new canvas radius controls require the updated Standard Distort DLL.
+  1.2; the new position controls require the updated Standard Blur, Distort and
+  Stylize DLLs.
 - Verify the release in Qt Creator and test the packaged application before
   publishing. Updating these source files does not produce or validate a binary.
 
-In addition to the general smoke test below, check these 0.3.4 flows in the
+In addition to the general smoke test below, check these 0.3.5 flows in the
 packaged application:
 
-- Draw with tilt and speed dynamics at different canvas zoom levels, with
-  stabilization at zero and above zero; compare brush blend previews with the
-  finished stroke on a transparent layer.
-- Use Ctrl+J, Ctrl+Shift+J and Copy Merged on a soft selection. Fill and delete
-  across selected groups containing locked and hidden layers; undo each edit.
-- Drag a Twirl, Pinch or Ripple radius ring, check its panel value, and undo the
-  drag. Check Canvas Resize snapping to canvas and layer edges.
-- Reorder brushes, packs and favorites; save and restore list view, vertical
-  pack navigation and floating panels. Check the update card in both languages
-  and at the largest interface scale.
+- Draw sharp turns with Connect Dabs, Refine Previous Dab and several Transform
+  Segments values. Repeat with non-square tips, textures, dynamics and wet
+  brushes, then compare the live stroke with its committed result.
+- Drop single and multiple `.rbf` and modern Photoshop `.abr` files onto the
+  workspace. Include and exclude brushes, import into a new and an existing
+  pack, skip a file, and verify previews and pack selection after each import.
+- Drag the two Gradient Overlay anchors and the centers of Radial Blur, Twirl,
+  Pinch and Ripple across the document origin. Verify the parameter fields,
+  radius rings, labels and one-step undo/redo.
+- On a clean settings profile, verify system-language selection and switch the
+  language on the first-run page. Scrub new-project dimensions, load a project
+  with a custom tab icon, and close a canvas after changing its undo history.
+- Check the update card and full release notes in both languages and at the
+  largest interface scale.
 
 ## 1. Configure (release)
 

@@ -680,8 +680,8 @@ void UpdateMessageOverlay::setupUI()
     heroTextLayout->addWidget(statusLabel);
 
     auto* heroTitleLabel = new WrappedTextLabel(heroText);
-    heroTitleLabel->setText(
-        QCoreApplication::translate("UpdateMessageOverlay", "Strokes and details"));
+    heroTitleLabel->setText(QCoreApplication::translate(
+        "UpdateMessageOverlay", "Continuous strokes, easier imports, and effects you can place"));
     heroTitleLabel->setFont(theme.font(ruwa::ui::core::ThemeFontRole::H3, QFont::DemiBold));
     heroTitleLabel->setStyleSheet(
         QStringLiteral("QLabel { background: transparent; color: %1; }").arg(colors.text.name()));
@@ -696,8 +696,9 @@ void UpdateMessageOverlay::setupUI()
 
     auto* descriptionLabel = new WrappedTextLabel(leftWidget);
     descriptionLabel->setText(QCoreApplication::translate("UpdateMessageOverlay",
-        "This release adds brush dynamics driven by pen tilt and stroke speed, copying a "
-        "selection to a new layer, and radius controls for effects on the canvas."));
+        "This release connects and refines brush dabs into continuous strokes, adds a visual "
+        "drag-and-drop importer for Ruwa and Photoshop brush files, and puts effect positions "
+        "directly on the canvas."));
     descriptionLabel->setFont(theme.font(ruwa::ui::core::ThemeFontRole::Label));
     descriptionLabel->setStyleSheet(QStringLiteral("QLabel { background: transparent; color: %1; }")
             .arg(colors.textMuted.name()));
@@ -712,20 +713,19 @@ void UpdateMessageOverlay::setupUI()
 
     addReleaseHighlightRow(highlightsWidget, highlightsLayout, colors, theme, ChangelogBadge::New,
         QCoreApplication::translate("UpdateMessageOverlay",
-            "Pen tilt, stroke speed and adjustable smoothing for brush dynamics."));
+            "Connect and refine brush dabs into smooth, continuous strokes."));
     addReleaseHighlightRow(highlightsWidget, highlightsLayout, colors, theme, ChangelogBadge::New,
         QCoreApplication::translate("UpdateMessageOverlay",
-            "Copy or cut selected pixels to a new layer; copy the visible result with Copy "
-            "Merged."));
+            "Drop Ruwa or Photoshop brush files, preview them, and choose what to import."));
     addReleaseHighlightRow(highlightsWidget, highlightsLayout, colors, theme,
         ChangelogBadge::Updated,
         QCoreApplication::translate("UpdateMessageOverlay",
-            "Brush cards or a list, adjustable preview sizes and vertical pack navigation."));
+            "Place supported effect centres and gradient endpoints directly on the canvas."));
     addReleaseHighlightRow(highlightsWidget, highlightsLayout, colors, theme,
         ChangelogBadge::BugFix,
         QCoreApplication::translate("UpdateMessageOverlay",
-            "Correct brush blending, selection edits across multiple layers, and restored "
-            "floating panels."));
+            "Reliable wet colour and Smudge alpha, non-blocking brush saves, and safer canvas "
+            "shutdown."));
 
     enableHeightForWidth(highlightsWidget);
     leftLayout->addWidget(highlightsWidget);

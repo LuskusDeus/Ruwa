@@ -15,6 +15,81 @@ a release.
 
 ## [Unreleased]
 
+## [0.3.5-alpha] — 2026-09-15 — "Continuous strokes, easier imports, and effects you can place"
+
+This release connects and refines brush dabs into continuous strokes, adds a
+visual drag-and-drop importer for Ruwa and Photoshop brush files, and puts
+effect positions directly on the canvas.
+
+### Added
+
+- The Brush Editor has a Stroke Rendering page. Connect Dabs stretches each
+  dab back to the previous one, Refine Previous Dab forms a shared joint, and
+  Transform Segments smooths the mapping through turns. The CPU and GPU paths
+  share the same inverse-bilinear geometry and respect the opaque bounds of
+  custom dab images.
+- Dropping one or more `.rbf` or Photoshop `.abr` files onto a workspace opens
+  a brush-import overlay. It loads previews in the background, lets individual
+  brushes be included or excluded, and imports them into a new or existing
+  pack. Multiple-file imports can skip a file without cancelling the rest.
+- Gradient Overlay exposes two draggable position anchors on the canvas. Radial
+  Blur exposes its centre, and Twirl, Pinch and Ripple expose a centre anchor
+  together with their radius ring. Dragging stays synchronized with the effect
+  fields and is committed as one undo step.
+- The effect SDK advances to ABI 1.2 with a declarative position control. ABI
+  1.0 and 1.1 descriptors remain accepted through their `struct_size` prefix.
+- First-run setup begins with a language selector populated by the translation
+  manager. A new profile chooses the first shipped language matching the
+  operating system preference and falls back to English.
+
+### Changed
+
+- The release-notes popup has a new liquid-glass master-detail design with a
+  compact version navigator and animated detail pages. Pages are created only
+  when opened, and an icon action copies the selected release as plain text.
+- The `.abr` reader now follows the descriptor layout used by modern Photoshop
+  brush files. It imports sampled and computed round tips, preserves non-square
+  tip proportions, maps supported jitter and control settings onto Ruwa
+  dynamics, and rejects an unknown descriptor type instead of continuing with
+  corrupt data.
+- Brush Save now replaces a portable per-brush baseline, while Reset restores
+  that baseline. Existing brush storage is migrated when it has no baseline.
+- Brush-pack writes are serialized on a worker thread. Edits made while a save
+  is running remain pending, and shutdown drains the active write before
+  persisting the newest state.
+- Wet brushes now use Texture-section grain and can use connected, refined dab
+  joints through the same transform-ribbon mapping as ordinary paint. Blur,
+  Smudge and Liquify continue to stamp independent dabs.
+- Effect positions accept signed document coordinates from -16384 to 16384, so
+  their anchors can be dragged across the document origin. Radius values remain
+  non-negative.
+- New-project name and dimension controls reuse the shared input widgets.
+  Scrubbing dimensions updates the canvas preview directly, while discrete
+  changes retarget its existing morph animation.
+- Navigator readback for Board content reuses the board cache instead of
+  composing the same content again.
+
+### Fixed
+
+- Stroke Direction dynamics stay stable at zero geometry stabilization without
+  adding visible input latency; the private direction filter falls away as
+  stroke speed rises.
+- Refined connected dabs keep their corner topology through sharp turns and
+  non-square tips, and segmented transform rails no longer develop visible
+  discontinuities.
+- Wet paint no longer drifts in colour at low alpha, and Smudge no longer erodes
+  colour or alpha in untouched parts of its sampled region.
+- Repeated brush edits no longer stall the interface while waiting for an
+  earlier settings write.
+- Moving brushes between packs keeps the visible pack page and selection in
+  sync.
+- Closing a canvas no longer leaves undo-history signals connected to destroyed
+  rendering state.
+- Project tab icons refresh after a project with a stored custom icon finishes
+  loading.
+- Top-bar message popups now recompute their geometry and typography when the
+  theme scale changes.
+
 ## [0.3.4-alpha] — 2026-08-31 — "Strokes and details"
 
 This release adds brush dynamics driven by pen tilt and stroke speed, copying a

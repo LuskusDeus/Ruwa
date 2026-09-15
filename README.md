@@ -44,13 +44,14 @@ locked features.
   or a list, and keep favorites in their own order. Tune starred controls in the
   dockable Brush Settings panel, or open the full Brush Editor for shape,
   procedural textures, spacing, flow, and dynamics driven by pressure, pen tilt
-  or stroke speed.
+  or stroke speed. Connect and refine consecutive dabs for continuous strokes,
+  and drop `.rbf` or Photoshop `.abr` files onto Ruwa to import them.
 - **Spectral pigment mixing.** Wet brushes use Ruwa's custom pigment model for
   richer, more convincing colour mixing.
 - **Non-destructive editing.** Layer effects, adjustment layers, and masks stay
   editable, while Smart, Board, and text layers retain their source content
-  through transforms. Adjust the radius of Twirl, Pinch and Ripple directly on
-  the canvas.
+  through transforms. Adjust the radius and position of supported effects
+  directly on the canvas.
 - **Smart objects with a document inside.** A smart object opens in its own tab
   as a full layer stack, duplicates share their contents as instances, and
   filters can run in content space so they follow the object's placement.
@@ -78,7 +79,7 @@ locked features.
 
 | Item | Detail |
 | --- | --- |
-| Current release | `0.3.4-alpha` |
+| Current release | `0.3.5-alpha` |
 | Primary platform | Windows 10/11 x64 |
 | Graphics requirement | OpenGL 4.5 |
 | Technology | C++23, Qt 6, CMake |

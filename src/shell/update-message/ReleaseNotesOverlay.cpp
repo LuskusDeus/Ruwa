@@ -6,25 +6,29 @@
 #include "features/theme/manager/ThemeManager.h"
 #include "features/theme/manager/ThemeColors.h"
 #include "shared/style/AnimationPolicy.h"
+#include "shared/style/GlassPanel.h"
 #include "shared/style/PaintingUtils.h"
-#include "shared/widgets/CapsuleButton.h"
+#include "shared/widgets/SidebarButton.h"
+#include "shared/widgets/ToolButton.h"
+#include "shared/widgets/layout/AnimatedStackedWidget.h"
 #include "shared/widgets/layout/SmoothScrollArea.h"
 
 #include <QAbstractButton>
+#include <QClipboard>
 #include <QCoreApplication>
 #include <QEvent>
-#include <QFontMetrics>
+#include <QGuiApplication>
 #include <QGraphicsOpacityEffect>
 #include <QHBoxLayout>
 #include <QKeyEvent>
 #include <QLabel>
 #include <QMouseEvent>
 #include <QPainter>
-#include <QPainterPath>
-#include <QPalette>
+#include <QPixmap>
 #include <QResizeEvent>
 #include <QSizePolicy>
 #include <QTextDocument>
+#include <QTimer>
 #include <QVector>
 #include <QVBoxLayout>
 #include <QtMath>
@@ -35,17 +39,17 @@ namespace ruwa::ui::widgets {
 
 namespace {
 
-constexpr int CardWidth = 1100;
-constexpr int CardHeight = 840;
-constexpr int CardRadius = 12;
+constexpr int CardWidth = 1180;
+constexpr int CardHeight = 800;
+constexpr int CardRadius = 14;
 constexpr int CardPadding = 28;
-constexpr int CardSpacing = 16;
-constexpr int CloseButtonMinWidth = 110;
-constexpr int EntrySpacing = 36;
-constexpr int EntryBodySpacing = 8;
-constexpr int EntryBadgeRadius = 8;
-constexpr int EntryBadgePaddingH = 12;
-constexpr int EntryBadgePaddingV = 4;
+constexpr int CardSpacing = 22;
+constexpr int CardScreenMargin = 32;
+constexpr int NavigationWidth = 292;
+constexpr int NavigationGap = 24;
+constexpr int NavigationItemSpacing = 6;
+constexpr int PageHeaderSpacing = 8;
+constexpr int GlassFallbackBlurRadius = 45;
 
 struct ReleaseNoteEntry {
     QString name;
@@ -57,6 +61,61 @@ struct ReleaseNoteEntry {
 QVector<ReleaseNoteEntry> releaseNoteEntries()
 {
     return {
+        { .name = QCoreApplication::translate("ReleaseNotesOverlay",
+              "Continuous strokes, easier imports, and effects you can place"),
+            .version = QStringLiteral("0.3.5-alpha"),
+            .date = QStringLiteral("15.09.2026"),
+            .body
+            = QCoreApplication::translate("ReleaseNotesOverlay",
+                  "<p><b>This release connects and refines brush dabs into continuous strokes, "
+                  "adds a visual drag-and-drop importer for Ruwa and Photoshop brush files, and "
+                  "puts effect positions directly on the canvas.</b></p>"
+                  "<p><b>New</b></p>"
+                  "<ul>"
+                  "<li>The Brush Editor has a Stroke Rendering page. Connect Dabs joins each "
+                  "dab to the previous one, Refine Previous Dab forms a shared joint, and "
+                  "Transform Segments smooths the mapping through turns.</li>"
+                  "<li>Drop one or more .rbf or Photoshop .abr files onto a workspace to preview "
+                  "their brushes, include or exclude individual entries, and import them into a "
+                  "new or existing pack.</li>"
+                  "<li>Gradient Overlay has two draggable endpoints. Radial Blur, Twirl, Pinch "
+                  "and Ripple have draggable centres, and the three distortion effects keep their "
+                  "radius rings.</li>"
+                  "<li>First-run setup starts with a language selector and follows the system "
+                  "language when Ruwa ships a matching translation.</li>"
+                  "<li>The effect SDK advances to ABI 1.2 with declarative position controls.</li>"
+                  "</ul>"
+                  "<p><b>Improved</b></p>"
+                  "<ul>"
+                  "<li>Modern Photoshop brush descriptors now import sampled and computed round "
+                  "tips, non-square proportions, and supported dynamics.</li>"
+                  "<li>Wet brushes can use connected, refined joints and now respect Texture "
+                  "section grain.</li>"
+                  "<li>Effect anchors accept negative document coordinates and stay synchronized "
+                  "with their parameter fields as one undoable edit.</li>"
+                  "<li>Brush Save records a portable baseline and Reset restores it.</li>"
+                  "<li>New-project dimensions use the shared numeric input and update the canvas "
+                  "preview directly while scrubbing.</li>"
+                  "</ul>"
+                  "<p><b>Fixes</b></p>"
+                  "<ul>"
+                  "<li>Brush settings save in a serialized background queue instead of blocking "
+                  "the interface during repeated edits.</li>"
+                  "<li>Wet paint keeps its colour at low alpha, and Smudge preserves colour and "
+                  "alpha outside the painted part of its sampled region.</li>"
+                  "<li>Stroke Direction remains stable at zero geometry stabilization without "
+                  "adding visible input latency.</li>"
+                  "<li>Closing a canvas no longer leaves undo-history signals connected to "
+                  "destroyed rendering state.</li>"
+                  "<li>Stored project tab icons refresh after loading, and top-bar message popups "
+                  "follow theme scale changes.</li>"
+                  "</ul>")
+                + QCoreApplication::translate("ReleaseNotesOverlay",
+                    "<p><b>Interface</b></p>"
+                    "<ul>"
+                    "<li>Release notes now use a liquid-glass master-detail layout with compact "
+                    "version navigation, animated page transitions, and one-click copying.</li>"
+                    "</ul>") },
         { .name = QCoreApplication::translate("ReleaseNotesOverlay", "Strokes and details"),
             .version = QStringLiteral("0.3.4-alpha"),
             .date = QStringLiteral("31.08.2026"),
@@ -1205,11 +1264,19 @@ QString bodyDocumentHtml(const QString& body, const QColor& textColor)
 {
     return QStringLiteral("<html><head><style>"
                           "body { margin: 0; color: %1; }"
-                          "p { margin: 0 0 8px 0; }"
-                          "ul { margin: 0 0 12px 20px; padding: 0; }"
-                          "li { margin: 0 0 4px 0; }"
+                          "p { margin: 0 0 12px 0; }"
+                          "ul { margin: 0 0 16px 22px; padding: 0; }"
+                          "li { margin: 0 0 7px 0; }"
                           "</style></head><body>%2</body></html>")
         .arg(textColor.name(), body);
+}
+
+QString releaseNotePlainText(const ReleaseNoteEntry& entry)
+{
+    QTextDocument document;
+    document.setHtml(entry.body);
+    return QStringLiteral("%1\n%2 · %3\n\n%4")
+        .arg(entry.name, entry.version, entry.date, document.toPlainText().trimmed());
 }
 
 class ReleaseNotesCard : public QWidget {
@@ -1221,17 +1288,26 @@ public:
         setAttribute(Qt::WA_TranslucentBackground);
     }
 
-protected:
-    void resizeEvent(QResizeEvent* event) override
+    void refreshBackdropFrom(QWidget* source, const QRect& sourceRect, const QColor& wash)
     {
-        QWidget::resizeEvent(event);
+        if (!source || sourceRect.isEmpty()) {
+            m_backdrop = {};
+            update();
+            return;
+        }
 
         const auto& theme = ruwa::ui::core::ThemeManager::instance();
-        QPainterPath path;
-        path.addRoundedRect(QRectF(rect()), theme.scaled(CardRadius), theme.scaled(CardRadius));
-        setMask(QRegion(path.toFillPolygon().toPolygon()));
+        ruwa::ui::painting::GlassPanelOptics optics;
+        optics.surfaceTint = theme.colors().surfaceElevated();
+        optics.fallbackBlurRadius = GlassFallbackBlurRadius;
+        optics.backdropOverlay = wash;
+        m_backdrop = ruwa::ui::painting::captureGlassBackdrop(source,
+            QRect(source->mapToGlobal(sourceRect.topLeft()), sourceRect.size()),
+            theme.scaled(CardRadius), optics);
+        update();
     }
 
+protected:
     void paintEvent(QPaintEvent* event) override
     {
         Q_UNUSED(event);
@@ -1242,64 +1318,35 @@ protected:
 
         QPainter painter(this);
         painter.setRenderHint(QPainter::Antialiasing);
-        painter.setPen(Qt::NoPen);
-        painter.setBrush(colors.surface);
-        painter.drawRoundedRect(rect(), radius, radius);
-
-        ruwa::ui::painting::drawGradientBorder(painter, rect(), radius, colors.borderSubtleHover(),
-            ruwa::ui::core::ThemeColors::withAlpha(
-                colors.borderSubtle(), colors.borderSubtle().alpha() / 2));
+        ruwa::ui::painting::drawGlassSurface(painter, QRectF(rect()), radius, m_backdrop,
+            colors.surfaceElevated(), colors.primary, colors.borderSubtleHover(),
+            colors.borderSubtle());
     }
+
+private:
+    QPixmap m_backdrop;
 };
 
-class ReleaseNotesContentWidget : public QWidget {
+class ReleaseNotesBodyWidget : public QWidget {
 public:
-    explicit ReleaseNotesContentWidget(QWidget* parent = nullptr)
+    explicit ReleaseNotesBodyWidget(const QString& body, QWidget* parent = nullptr)
         : QWidget(parent)
+        , m_document(new QTextDocument(this))
     {
         setAutoFillBackground(false);
         setAttribute(Qt::WA_TranslucentBackground);
         setSizePolicy(QSizePolicy::Preferred, QSizePolicy::Preferred);
+        m_document->setDocumentMargin(0.0);
+        updateBody(body);
     }
 
-    ~ReleaseNotesContentWidget() override { qDeleteAll(m_bodyDocuments); }
-
-    void setEntries(const QVector<ReleaseNoteEntry>& entries, const QFont& bodyFont,
-        const QFont& badgeFont, const QColor& bodyColor, int entrySpacing, int bodySpacing,
-        int badgeRadius, int badgePaddingH, int badgePaddingV)
+    void updateBody(const QString& body)
     {
-        qDeleteAll(m_bodyDocuments);
-        m_bodyDocuments.clear();
-
-        m_entries = entries;
-        m_bodyFont = bodyFont;
-        m_badgeFont = badgeFont;
-        m_bodyColor = bodyColor;
-        m_entrySpacing = entrySpacing;
-        m_bodySpacing = bodySpacing;
-        m_badgeRadius = badgeRadius;
-        m_badgePaddingH = badgePaddingH;
-        m_badgePaddingV = badgePaddingV;
-
-        for (const ReleaseNoteEntry& entry : m_entries) {
-            auto* document = new QTextDocument(this);
-            document->setDocumentMargin(0.0);
-            document->setDefaultFont(m_bodyFont);
-            document->setHtml(bodyDocumentHtml(entry.body, m_bodyColor));
-            m_bodyDocuments.append(document);
-        }
-
-        invalidateLayout();
-        updateGeometry();
-        update();
-    }
-
-    void clear()
-    {
-        m_entries.clear();
-        qDeleteAll(m_bodyDocuments);
-        m_bodyDocuments.clear();
-        invalidateLayout();
+        const auto& theme = ruwa::ui::core::ThemeManager::instance();
+        m_document->setDefaultFont(theme.font(ruwa::ui::core::ThemeFontRole::BodyLarge));
+        m_document->setHtml(bodyDocumentHtml(body, theme.colors().textMuted));
+        m_cachedWidth = -1;
+        m_cachedHeight = 0;
         updateGeometry();
         update();
     }
@@ -1315,7 +1362,7 @@ public:
         }
 
         ensureLayout(width);
-        return m_cachedHeight + contentsMargins().top() + contentsMargins().bottom();
+        return m_cachedHeight;
     }
 
 protected:
@@ -1332,124 +1379,40 @@ protected:
 
         QPainter painter(this);
         ensureLayout(width());
-        const QMargins margins = contentsMargins();
-        painter.translate(margins.left(), margins.top());
-
-        const QFont previousFont = painter.font();
-        const QPen previousPen = painter.pen();
-
         painter.setRenderHint(QPainter::Antialiasing);
-        painter.setFont(m_badgeFont);
-
-        const QFontMetrics badgeMetrics(m_badgeFont);
-        const int count = qMin(m_entries.size(), m_bodyDocuments.size());
-        for (int i = 0; i < count; ++i) {
-            const ReleaseNoteEntry& entry = m_entries.at(i);
-            const EntryLayout& layout = m_layouts.at(i);
-            const QString badgeText
-                = QStringLiteral("%1 %2 %3 %2 %4")
-                      .arg(entry.name, QString(QChar(0x2022)), entry.version, entry.date);
-
-            const QRect badgeRect(0, layout.top, layout.badgeWidth, layout.badgeHeight);
-            painter.setPen(Qt::NoPen);
-            painter.setBrush(Qt::white);
-            painter.drawRoundedRect(badgeRect, m_badgeRadius, m_badgeRadius);
-
-            painter.setPen(Qt::black);
-            painter.drawText(badgeRect.adjusted(m_badgePaddingH, 0, -m_badgePaddingH, 0),
-                Qt::AlignVCenter | Qt::AlignLeft,
-                badgeMetrics.elidedText(
-                    badgeText, Qt::ElideRight, qMax(0, badgeRect.width() - (m_badgePaddingH * 2))));
-
-            painter.save();
-            painter.translate(0, layout.bodyTop);
-            m_bodyDocuments.at(i)->drawContents(
-                &painter, QRectF(QPointF(0.0, 0.0), QSizeF(layout.bodyWidth, layout.bodyHeight)));
-            painter.restore();
-        }
-
-        painter.setFont(previousFont);
-        painter.setPen(previousPen);
+        m_document->drawContents(
+            &painter, QRectF(QPointF(0.0, 0.0), QSizeF(width(), m_cachedHeight)));
     }
 
 private:
-    struct EntryLayout {
-        int top { 0 };
-        int badgeWidth { 0 };
-        int badgeHeight { 0 };
-        int bodyTop { 0 };
-        int bodyWidth { 0 };
-        int bodyHeight { 0 };
-    };
-
-    void invalidateLayout()
-    {
-        m_cachedWidth = -1;
-        m_cachedHeight = 0;
-        m_layouts.clear();
-    }
-
     void ensureLayout(int width) const
     {
-        const QMargins margins = contentsMargins();
-        const int contentWidth = qMax(0, width - margins.left() - margins.right());
-        if (contentWidth <= 0 || contentWidth == m_cachedWidth) {
+        if (width <= 0 || width == m_cachedWidth) {
             return;
         }
 
-        m_cachedWidth = contentWidth;
-        m_cachedHeight = 0;
-        m_layouts.clear();
-
-        const QFontMetrics badgeMetrics(m_badgeFont);
-        int y = 0;
-
-        const int count = qMin(m_entries.size(), m_bodyDocuments.size());
-        for (int i = 0; i < count; ++i) {
-            const ReleaseNoteEntry& entry = m_entries.at(i);
-            QTextDocument* document = m_bodyDocuments.at(i);
-            document->setTextWidth(contentWidth);
-
-            const QString badgeText
-                = QStringLiteral("%1 %2 %3 %2 %4")
-                      .arg(entry.name, QString(QChar(0x2022)), entry.version, entry.date);
-            const int badgeWidth = qMin(
-                contentWidth, badgeMetrics.horizontalAdvance(badgeText) + (m_badgePaddingH * 2));
-            const int badgeHeight = badgeMetrics.height() + (m_badgePaddingV * 2);
-            const int bodyTop = y + badgeHeight + m_bodySpacing;
-            const int bodyHeight = qCeil(document->size().height());
-
-            m_layouts.append(
-                EntryLayout { y, badgeWidth, badgeHeight, bodyTop, contentWidth, bodyHeight });
-            y = bodyTop + bodyHeight + m_entrySpacing;
-        }
-
-        if (!m_layouts.isEmpty()) {
-            y -= m_entrySpacing;
-        }
-        m_cachedHeight = qMax(0, y);
+        m_cachedWidth = width;
+        m_document->setTextWidth(width);
+        m_cachedHeight = qCeil(m_document->size().height());
     }
 
 private:
-    QVector<ReleaseNoteEntry> m_entries;
-    QVector<QTextDocument*> m_bodyDocuments;
-    QFont m_bodyFont;
-    QFont m_badgeFont;
-    QColor m_bodyColor;
-    int m_entrySpacing { 0 };
-    int m_bodySpacing { 0 };
-    int m_badgeRadius { 0 };
-    int m_badgePaddingH { 0 };
-    int m_badgePaddingV { 0 };
-    mutable QVector<EntryLayout> m_layouts;
+    QTextDocument* m_document = nullptr;
     mutable int m_cachedWidth { -1 };
     mutable int m_cachedHeight { 0 };
 };
 
 } // namespace
 
+class ReleaseNotesModel {
+public:
+    QVector<ReleaseNoteEntry> entries;
+    QVector<SidebarButton*> navigationButtons;
+};
+
 ReleaseNotesOverlay::ReleaseNotesOverlay(QWidget* parent)
     : QWidget(parent)
+    , m_model(std::make_unique<ReleaseNotesModel>())
 {
     setupUi();
     setupAnimations();
@@ -1472,61 +1435,82 @@ void ReleaseNotesOverlay::setupUi()
     setAutoFillBackground(false);
     setFocusPolicy(Qt::StrongFocus);
 
-    const auto& theme = ruwa::ui::core::ThemeManager::instance();
-    const auto& colors = theme.colors();
-
     m_card = new ReleaseNotesCard(this);
-    m_card->setFixedSize(theme.scaled(CardWidth), theme.scaled(CardHeight));
 
     m_cardOpacityEffect = new QGraphicsOpacityEffect(m_card);
     m_cardOpacityEffect->setOpacity(0.0);
     m_card->setGraphicsEffect(m_cardOpacityEffect);
 
-    auto* layout = new QVBoxLayout(m_card);
-    layout->setContentsMargins(theme.scaled(CardPadding), theme.scaled(CardPadding),
-        theme.scaled(CardPadding), theme.scaled(CardPadding));
-    layout->setSpacing(theme.scaled(CardSpacing));
+    m_cardLayout = new QVBoxLayout(m_card);
 
     m_titleLabel = new QLabel(m_card);
-    m_titleLabel->setWordWrap(true);
-    m_titleLabel->setStyleSheet(
-        QStringLiteral("QLabel { background: transparent; color: %1; }").arg(colors.text.name()));
-    m_titleLabel->setFont(theme.font(ruwa::ui::core::ThemeFontRole::H3, QFont::Bold));
-    layout->addWidget(m_titleLabel);
+    m_titleLabel->setWordWrap(false);
 
-    m_scrollArea = new SmoothScrollArea(m_card);
-    m_scrollArea->setVerticalScrollBarPolicy(Qt::ScrollBarAsNeeded);
-    m_scrollArea->setFillBackground(false);
-    m_scrollArea->setScrollBarTransparentTrack(true);
-    m_scrollArea->setAttribute(Qt::WA_TranslucentBackground);
-    m_scrollArea->setAutoFillBackground(false);
-    QPalette scrollPalette = m_scrollArea->palette();
-    scrollPalette.setColor(QPalette::Window, Qt::transparent);
-    scrollPalette.setColor(QPalette::Base, Qt::transparent);
-    m_scrollArea->setPalette(scrollPalette);
-    m_scrollArea->viewport()->setAutoFillBackground(false);
-    m_scrollArea->viewport()->setAttribute(Qt::WA_TranslucentBackground);
-    m_scrollArea->viewport()->setPalette(scrollPalette);
-
-    m_scrollContent = new ReleaseNotesContentWidget(m_card);
-    m_scrollContent->setAutoFillBackground(false);
-    m_scrollContent->setAttribute(Qt::WA_TranslucentBackground);
-    m_scrollContent->setPalette(scrollPalette);
-    m_scrollArea->setWidget(m_scrollContent);
-    layout->addWidget(m_scrollArea, 1);
-
-    auto* buttonRow = new QHBoxLayout();
-    buttonRow->addStretch();
-
-    m_closeButton = new CapsuleButton(QString(), CapsuleButton::Variant::Primary, m_card);
-    m_closeButton->setBaseMinimumWidth(CloseButtonMinWidth);
-    m_closeButton->setBannerBaseHeight(36);
-    m_closeButton->setSizeScale(0.82);
+    m_closeButton = new ruwa::ui::workspace::ToolButton(
+        ruwa::ui::workspace::ToolButton::Mode::Action, m_card);
+    m_closeButton->setBaseSquareSize(36, 14);
+    m_closeButton->setIconType(ruwa::ui::core::IconProvider::StandardIcon::Close);
+    m_closeButton->setChromeStyle(ruwa::ui::workspace::ToolButton::ChromeStyle::PrimaryHover);
+    m_closeButton->setBorderVisible(false);
+    m_closeButton->setMutedNormalIcon(true);
+    m_closeButton->setFocusPolicy(Qt::NoFocus);
     connect(m_closeButton, &QAbstractButton::clicked, this, &ReleaseNotesOverlay::onCloseRequested);
-    buttonRow->addWidget(m_closeButton);
-    layout->addLayout(buttonRow);
+
+    auto* headingLayout = new QHBoxLayout();
+    headingLayout->setContentsMargins(0, 0, 0, 0);
+    headingLayout->addWidget(m_titleLabel, 1);
+    headingLayout->addWidget(m_closeButton, 0, Qt::AlignTop);
+    m_cardLayout->addLayout(headingLayout);
+
+    auto* content = new QWidget(m_card);
+    content->setAttribute(Qt::WA_TranslucentBackground);
+    m_contentLayout = new QHBoxLayout(content);
+    m_contentLayout->setContentsMargins(0, 0, 0, 0);
+
+    auto* navigation = new QWidget(content);
+    navigation->setAttribute(Qt::WA_TranslucentBackground);
+    navigation->setFixedWidth(NavigationWidth);
+    auto* navigationLayout = new QVBoxLayout(navigation);
+    navigationLayout->setContentsMargins(0, 0, 0, 0);
+    navigationLayout->setSpacing(0);
+
+    m_releaseNavigation = new SmoothScrollArea(navigation);
+    m_releaseNavigation->setVerticalScrollBarPolicy(Qt::ScrollBarAsNeeded);
+    m_releaseNavigation->setFillBackground(false);
+    m_releaseNavigation->setScrollBarTransparentTrack(true);
+    m_releaseNavigation->setContentWidthFixedToViewport(true);
+
+    m_releaseNavigationContent = new QWidget(m_releaseNavigation);
+    m_releaseNavigationContent->setAttribute(Qt::WA_TranslucentBackground);
+    m_releaseNavigationLayout = new QVBoxLayout(m_releaseNavigationContent);
+    m_releaseNavigationLayout->setContentsMargins(0, 0, 0, 0);
+    m_releaseNavigationLayout->setSpacing(0);
+    m_releaseNavigation->setWidget(m_releaseNavigationContent);
+    navigationLayout->addWidget(m_releaseNavigation, 1);
+    m_contentLayout->addWidget(navigation);
+
+    m_navigationDivider = new QWidget(content);
+    m_navigationDivider->setFixedWidth(1);
+    m_contentLayout->addWidget(m_navigationDivider);
+
+    m_releaseStack = new AnimatedStackedWidget(content);
+    m_releaseStack->setSlideOrientation(AnimatedStackedWidget::SlideOrientation::Horizontal);
+    m_releaseStack->setAnimationDuration(220);
+    m_releaseStack->setAnimationEasing(QEasingCurve::OutCubic);
+    m_releaseStack->setInterruptEasing(QEasingCurve::OutCubic);
+    // Detail pages must occupy the complete stack viewport. Preserving their
+    // initial size would measure a newly built page before its scroll area has
+    // received geometry, collapse it to the header's hint, and hide the body.
+    m_releaseStack->setPreservePageSize(false);
+    m_releaseStack->setSuspendLayoutDuringAnimation(true);
+    m_contentLayout->addWidget(m_releaseStack, 1);
+    m_cardLayout->addWidget(content, 1);
+
+    connect(&ruwa::ui::core::ThemeManager::instance(), &ruwa::ui::core::ThemeManager::themeChanged,
+        this, &ReleaseNotesOverlay::updateTheme);
 
     updateTexts();
+    updateTheme();
 
     if (parentWidget()) {
         parentWidget()->installEventFilter(this);
@@ -1554,8 +1538,8 @@ void ReleaseNotesOverlay::updateTexts()
         m_titleLabel->setText(QCoreApplication::translate("ReleaseNotesOverlay", "Release notes"));
     }
     if (m_closeButton) {
-        m_closeButton->setText(QCoreApplication::translate("ReleaseNotesOverlay", "Close"));
-        m_closeButton->syncSizeToText();
+        m_closeButton->setAccessibleName(
+            QCoreApplication::translate("ReleaseNotesOverlay", "Close"));
     }
 
     if (m_entriesBuilt) {
@@ -1565,39 +1549,256 @@ void ReleaseNotesOverlay::updateTexts()
 
 void ReleaseNotesOverlay::rebuildEntries()
 {
-    if (!m_scrollContent) {
+    if (!m_releaseNavigation || !m_releaseNavigationLayout || !m_releaseStack) {
         return;
     }
 
-    const auto& theme = ruwa::ui::core::ThemeManager::instance();
-    const auto& colors = theme.colors();
+    m_model->entries = releaseNoteEntries();
+    const QVector<ReleaseNoteEntry>& entries = m_model->entries;
+    m_selectedEntry = qBound(0, m_selectedEntry, qMax(0, entries.size() - 1));
 
-    const QVector<ReleaseNoteEntry> entries = releaseNoteEntries();
-    auto* contentWidget = static_cast<ReleaseNotesContentWidget*>(m_scrollContent);
-    contentWidget->setContentsMargins(0, 0, theme.scaled(8), 0);
-    contentWidget->setEntries(entries, theme.font(ruwa::ui::core::ThemeFontRole::BodyLarge),
-        theme.font(ruwa::ui::core::ThemeFontRole::Label), colors.textMuted,
-        theme.scaled(EntrySpacing), theme.scaled(EntryBodySpacing), theme.scaled(EntryBadgeRadius),
-        theme.scaled(EntryBadgePaddingH), theme.scaled(EntryBadgePaddingV));
+    if (m_releaseStack->count() > 0) {
+        m_releaseStack->setCurrentIndexWithoutAnimation(
+            qBound(0, m_selectedEntry, m_releaseStack->count() - 1));
+    }
+    while (m_releaseStack->count() > 0) {
+        QWidget* page = m_releaseStack->widget(0);
+        m_releaseStack->removeWidget(page);
+        delete page;
+    }
 
-    m_scrollArea->refreshScrollGeometry();
-    m_scrollArea->scrollTo(0, false);
+    while (QLayoutItem* item = m_releaseNavigationLayout->takeAt(0)) {
+        delete item->widget();
+        delete item;
+    }
+    m_model->navigationButtons.clear();
+    m_model->navigationButtons.reserve(entries.size());
+
+    for (int i = 0; i < entries.size(); ++i) {
+        const ReleaseNoteEntry& entry = entries.at(i);
+
+        auto* navigationButton
+            = new SidebarButton(QStringLiteral("%1  ·  %2").arg(entry.version, entry.date), QIcon(),
+                m_releaseNavigationContent);
+        auto navigationStyle = navigationButton->style();
+        navigationStyle.metrics.baseHeight = 40;
+        navigationStyle.content.basePadding = { 12, 0, 12, 0 };
+        navigationButton->setStyle(navigationStyle);
+        navigationButton->setSizePolicy(QSizePolicy::Expanding, QSizePolicy::Fixed);
+        navigationButton->setActive(i == m_selectedEntry, false);
+        connect(navigationButton, &QAbstractButton::clicked, this,
+            [this, i]() { selectEntry(i, true); });
+        m_releaseNavigationLayout->addWidget(navigationButton);
+        m_model->navigationButtons.append(navigationButton);
+
+        auto* placeholder = new QWidget(m_releaseStack);
+        placeholder->setAttribute(Qt::WA_TranslucentBackground);
+        placeholder->setProperty("releaseNotesPageBuilt", false);
+        m_releaseStack->addWidget(placeholder);
+    }
+
+    m_releaseNavigationLayout->addStretch();
+    m_releaseNavigation->refreshScrollGeometry();
+    ensureEntryPage(m_selectedEntry);
+    m_releaseStack->setCurrentIndexWithoutAnimation(m_selectedEntry);
     m_entriesBuilt = true;
 }
 
 void ReleaseNotesOverlay::clearEntries()
 {
-    if (!m_scrollContent || !m_entriesBuilt) {
+    if (!m_releaseNavigationLayout || !m_releaseStack || !m_entriesBuilt) {
         return;
     }
 
-    auto* contentWidget = static_cast<ReleaseNotesContentWidget*>(m_scrollContent);
-    contentWidget->clear();
+    if (m_releaseStack->count() > 0) {
+        m_releaseStack->setCurrentIndexWithoutAnimation(
+            qBound(0, m_selectedEntry, m_releaseStack->count() - 1));
+    }
+    while (m_releaseStack->count() > 0) {
+        QWidget* page = m_releaseStack->widget(0);
+        m_releaseStack->removeWidget(page);
+        delete page;
+    }
 
+    while (QLayoutItem* item = m_releaseNavigationLayout->takeAt(0)) {
+        delete item->widget();
+        delete item;
+    }
+
+    m_model->navigationButtons.clear();
+    m_model->entries.clear();
     m_entriesBuilt = false;
-    if (m_scrollArea) {
-        m_scrollArea->refreshScrollGeometry();
-        m_scrollArea->scrollTo(0, false);
+}
+
+void ReleaseNotesOverlay::selectEntry(int index, bool animate)
+{
+    if (!m_entriesBuilt || !m_releaseStack || index < 0 || index >= m_releaseStack->count()) {
+        return;
+    }
+
+    m_selectedEntry = index;
+    for (int i = 0; i < m_model->navigationButtons.size(); ++i) {
+        m_model->navigationButtons.at(i)->setActive(i == index);
+    }
+    ensureEntryPage(index);
+    if (animate) {
+        m_releaseStack->setCurrentIndex(index);
+    } else {
+        m_releaseStack->setCurrentIndexWithoutAnimation(index);
+    }
+}
+
+void ReleaseNotesOverlay::ensureEntryPage(int index)
+{
+    if (!m_releaseStack || index < 0 || index >= m_releaseStack->count()) {
+        return;
+    }
+
+    QWidget* page = m_releaseStack->widget(index);
+    if (!page || page->property("releaseNotesPageBuilt").toBool()) {
+        return;
+    }
+
+    if (!m_model || index >= m_model->entries.size()) {
+        return;
+    }
+    const ReleaseNoteEntry entry = m_model->entries.at(index);
+    const auto& theme = ruwa::ui::core::ThemeManager::instance();
+    const auto& colors = theme.colors();
+
+    auto* pageLayout = new QVBoxLayout(page);
+    pageLayout->setContentsMargins(0, 0, theme.scaled(8), 0);
+    pageLayout->setSpacing(theme.scaled(18));
+
+    auto* heading = new QWidget(page);
+    heading->setAttribute(Qt::WA_TranslucentBackground);
+    auto* headingLayout = new QHBoxLayout(heading);
+    headingLayout->setContentsMargins(0, 0, 0, 0);
+    headingLayout->setSpacing(theme.scaled(20));
+
+    auto* headingText = new QWidget(heading);
+    headingText->setAttribute(Qt::WA_TranslucentBackground);
+    auto* headingTextLayout = new QVBoxLayout(headingText);
+    headingTextLayout->setContentsMargins(0, 0, 0, 0);
+    headingTextLayout->setSpacing(theme.scaled(PageHeaderSpacing));
+
+    auto* nameLabel = new QLabel(entry.name, headingText);
+    nameLabel->setWordWrap(true);
+    nameLabel->setFont(theme.font(ruwa::ui::core::ThemeFontRole::H3, QFont::DemiBold));
+    nameLabel->setStyleSheet(
+        QStringLiteral("QLabel { background: transparent; color: %1; }").arg(colors.text.name()));
+    headingTextLayout->addWidget(nameLabel);
+
+    auto* metadataLabel
+        = new QLabel(QStringLiteral("%1  ·  %2").arg(entry.version, entry.date), headingText);
+    metadataLabel->setFont(theme.font(ruwa::ui::core::ThemeFontRole::Label, QFont::DemiBold));
+    metadataLabel->setStyleSheet(QStringLiteral("QLabel { background: transparent; color: %1; }")
+            .arg(colors.textMuted.name()));
+    headingTextLayout->addWidget(metadataLabel);
+    headingLayout->addWidget(headingText, 1);
+
+    auto* copyButton = new ruwa::ui::workspace::ToolButton(
+        ruwa::ui::workspace::ToolButton::Mode::Action, heading);
+    copyButton->setBaseSquareSize(52, 20);
+    copyButton->setIconType(ruwa::ui::core::IconProvider::StandardIcon::Duplicate);
+    copyButton->setChromeStyle(ruwa::ui::workspace::ToolButton::ChromeStyle::Surface);
+    copyButton->setChromeOpacity(0.72);
+    copyButton->setBorderVisible(true);
+    copyButton->setMutedNormalIcon(true);
+    copyButton->setFocusPolicy(Qt::NoFocus);
+    const QString copyToolTip
+        = QCoreApplication::translate("ReleaseNotesOverlay", "Copy release notes");
+    copyButton->setToolTip(copyToolTip);
+    copyButton->setAccessibleName(copyToolTip);
+
+    auto* copyFeedbackTimer = new QTimer(copyButton);
+    copyFeedbackTimer->setSingleShot(true);
+    copyFeedbackTimer->setInterval(1400);
+    connect(copyFeedbackTimer, &QTimer::timeout, copyButton, [copyButton, copyToolTip]() {
+        copyButton->setIconType(ruwa::ui::core::IconProvider::StandardIcon::Duplicate);
+        copyButton->setToolTip(copyToolTip);
+    });
+    connect(copyButton, &QAbstractButton::clicked, copyButton,
+        [entry, copyButton, copyFeedbackTimer]() {
+            if (QClipboard* clipboard = QGuiApplication::clipboard()) {
+                clipboard->setText(releaseNotePlainText(entry));
+            }
+            copyButton->setIconType(ruwa::ui::core::IconProvider::StandardIcon::Confirm);
+            copyButton->setToolTip(QCoreApplication::translate("ReleaseNotesOverlay", "Copied"));
+            copyFeedbackTimer->start();
+        });
+    headingLayout->addWidget(copyButton, 0, Qt::AlignTop);
+    pageLayout->addWidget(heading);
+
+    auto* scrollArea = new SmoothScrollArea(page);
+    scrollArea->setVerticalScrollBarPolicy(Qt::ScrollBarAsNeeded);
+    scrollArea->setFillBackground(false);
+    scrollArea->setScrollBarTransparentTrack(true);
+    scrollArea->setAttribute(Qt::WA_TranslucentBackground);
+    scrollArea->viewport()->setAutoFillBackground(false);
+    scrollArea->viewport()->setAttribute(Qt::WA_TranslucentBackground);
+
+    auto* body = new ReleaseNotesBodyWidget(entry.body, scrollArea);
+    scrollArea->setWidget(body);
+    pageLayout->addWidget(scrollArea, 1);
+
+    page->setProperty("releaseNotesPageBuilt", true);
+    QTimer::singleShot(0, scrollArea, [scrollArea]() {
+        scrollArea->refreshScrollGeometry();
+        scrollArea->scrollTo(0, false);
+    });
+}
+
+void ReleaseNotesOverlay::updateTheme()
+{
+    const auto& theme = ruwa::ui::core::ThemeManager::instance();
+    const auto& colors = theme.colors();
+
+    if (m_cardLayout) {
+        m_cardLayout->setContentsMargins(theme.scaled(CardPadding), theme.scaled(CardPadding),
+            theme.scaled(CardPadding), theme.scaled(CardPadding));
+        m_cardLayout->setSpacing(theme.scaled(CardSpacing));
+    }
+    if (m_contentLayout) {
+        m_contentLayout->setSpacing(theme.scaled(NavigationGap));
+    }
+    if (m_releaseNavigationLayout) {
+        m_releaseNavigationLayout->setSpacing(theme.scaled(NavigationItemSpacing));
+    }
+    if (m_releaseNavigation) {
+        m_releaseNavigation->parentWidget()->setFixedWidth(theme.scaled(NavigationWidth));
+    }
+    if (m_navigationDivider) {
+        m_navigationDivider->setStyleSheet(
+            QStringLiteral("background: %1;").arg(colors.borderSubtle().name(QColor::HexArgb)));
+    }
+    if (m_titleLabel) {
+        m_titleLabel->setFont(theme.font(ruwa::ui::core::ThemeFontRole::H3, QFont::Bold));
+        m_titleLabel->setStyleSheet(QStringLiteral("QLabel { background: transparent; color: %1; }")
+                .arg(colors.text.name()));
+    }
+    if (m_entriesBuilt) {
+        rebuildEntries();
+    }
+    updateCardPosition();
+    m_card->update();
+}
+
+void ReleaseNotesOverlay::refreshCardBackdrop()
+{
+    if (!m_card || !parentWidget()) {
+        return;
+    }
+
+    const bool cardWasVisible = m_card->isVisible();
+    if (cardWasVisible) {
+        m_card->hide();
+    }
+    static_cast<ReleaseNotesCard*>(m_card)->refreshBackdropFrom(
+        parentWidget(), m_card->geometry(), QColor(0, 0, 0, static_cast<int>(MaxDimOpacity * 255)));
+    if (cardWasVisible) {
+        m_card->show();
+        m_card->raise();
     }
 }
 
@@ -1617,6 +1818,9 @@ void ReleaseNotesOverlay::showOverlay()
     if (parentWidget()) {
         resize(parentWidget()->size());
     }
+
+    updateCardPosition();
+    refreshCardBackdrop();
 
     QWidget::show();
     raise();
@@ -1759,9 +1963,17 @@ QPoint ReleaseNotesOverlay::cardTargetPosition() const
 
 void ReleaseNotesOverlay::updateCardPosition()
 {
-    if (m_card) {
-        m_card->move(cardTargetPosition());
+    if (!m_card) {
+        return;
     }
+
+    const auto& theme = ruwa::ui::core::ThemeManager::instance();
+    const int screenMargin = theme.scaled(CardScreenMargin);
+    const QSize desired(theme.scaled(CardWidth), theme.scaled(CardHeight));
+    const QSize available(
+        qMax(1, width() - screenMargin * 2), qMax(1, height() - screenMargin * 2));
+    m_card->resize(desired.boundedTo(available));
+    m_card->move(cardTargetPosition());
 }
 
 void ReleaseNotesOverlay::paintEvent(QPaintEvent* event)
@@ -1797,6 +2009,14 @@ void ReleaseNotesOverlay::keyPressEvent(QKeyEvent* event)
 {
     if (event->key() == Qt::Key_Escape) {
         hideOverlay();
+        event->accept();
+        return;
+    }
+
+    if (m_entriesBuilt && m_releaseStack
+        && (event->key() == Qt::Key_Up || event->key() == Qt::Key_Down)) {
+        const int direction = event->key() == Qt::Key_Up ? -1 : 1;
+        selectEntry(qBound(0, m_selectedEntry + direction, m_releaseStack->count() - 1), true);
         event->accept();
         return;
     }

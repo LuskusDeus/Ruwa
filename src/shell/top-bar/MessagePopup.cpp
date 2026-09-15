@@ -153,9 +153,8 @@ MessagePopup::MessagePopup(QWidget* parent)
     // Child controls update their own scale on themeChanged, but this popup has
     // an animated fixed height. Rebuild its layout as well so the surrounding
     // panel follows the new content metrics instead of clipping the controls.
-    connect(&ruwa::ui::core::ThemeManager::instance(),
-        &ruwa::ui::core::ThemeManager::themeChanged, this,
-        &MessagePopup::refreshForThemeChange, Qt::QueuedConnection);
+    connect(&ruwa::ui::core::ThemeManager::instance(), &ruwa::ui::core::ThemeManager::themeChanged,
+        this, &MessagePopup::refreshForThemeChange, Qt::QueuedConnection);
 }
 
 MessagePopup::~MessagePopup()
@@ -419,11 +418,9 @@ void MessagePopup::rebuildContent()
 
     m_layout->invalidate();
     m_layout->activate();
-    const int desiredWidth
-        = theme.scaled(m_width) + outerCornerRadius * 2 + shadowSideExtent * 2;
-    const int availableWidth = parentWidget()
-        ? qMax(1, parentWidget()->width() - theme.scaled(16))
-        : desiredWidth;
+    const int desiredWidth = theme.scaled(m_width) + outerCornerRadius * 2 + shadowSideExtent * 2;
+    const int availableWidth
+        = parentWidget() ? qMax(1, parentWidget()->width() - theme.scaled(16)) : desiredWidth;
     setFixedWidth(qMin(desiredWidth, availableWidth));
     // Force layout to compute proper sizes; sizeHint can be wrong when widget was previously hidden
     adjustSize();

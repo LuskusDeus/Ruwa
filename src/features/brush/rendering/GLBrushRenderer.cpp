@@ -38,11 +38,9 @@ QString batchShaderVariant(const QString& source, bool connectedDabs)
     const QString defines = QStringLiteral("#define RUWA_CONNECTED_DABS %1\n"
                                            "#define RUWA_BATCH_MAX_DABS %2\n")
                                 .arg(connectedDabs ? 1 : 0)
-                                .arg(connectedDabs ? kConnectedBatchMaxDabs
-                                                   : kPlainBatchMaxDabs);
+                                .arg(connectedDabs ? kConnectedBatchMaxDabs : kPlainBatchMaxDabs);
     return source.left(static_cast<qsizetype>(std::char_traits<char>::length(versionLine)))
-        + defines
-        + source.mid(static_cast<qsizetype>(std::char_traits<char>::length(versionLine)));
+        + defines + source.mid(static_cast<qsizetype>(std::char_traits<char>::length(versionLine)));
 }
 
 /// Bumps a stroke buffer's content version when a stamp entry point returns.
@@ -360,234 +358,238 @@ const QString kBatchRebuildVert
                      "    fragDabIndex = index;\n"
                      "}\n");
 
-const QString kBatchRebuildFrag = QStringLiteral(
-    "#version 450 core\n"
-    "uniform int uDabCount;\n"
-    "uniform vec2 uDabCenter[RUWA_BATCH_MAX_DABS];\n"
-    "uniform vec4 uDabParams[RUWA_BATCH_MAX_DABS]; // radius, hardness, roundness, angle\n"
-    "uniform vec4 uDabColor[RUWA_BATCH_MAX_DABS];  // premultiplied rgba\n"
-    "#if RUWA_CONNECTED_DABS\n"
-    "uniform vec4 uPreviousDabParams[RUWA_BATCH_MAX_DABS];\n"
-    "uniform vec4 uPreviousDabColor[RUWA_BATCH_MAX_DABS];\n"
-    "uniform vec4 uStretchQuad01[RUWA_BATCH_MAX_DABS]; // q0.xy, q1.xy\n"
-    "uniform vec4 uStretchQuad23[RUWA_BATCH_MAX_DABS]; // q2.xy, q3.xy\n"
-    "uniform int uTransformSegments;\n"
-    "uniform int uDabHasPrevious[RUWA_BATCH_MAX_DABS];\n"
-    "#endif\n"
-    "uniform int uBlendMode; // 0=src-over, 1=max\n"
-    "uniform sampler2D uMaskTexture;\n"
-    "uniform sampler2D uTextureTile;\n"
-    "uniform sampler2D uDabShapeTexture;\n"
-    "uniform int uUseMask;\n"
-    "uniform int uMaskAffectsAlpha;\n"
-    "uniform int uUseTexture;\n"
-    "uniform int uUseDabShapeTexture;\n"
-    "uniform vec2 uDabShapeScale;\n"
-    "uniform float uDabShapeRotationRad;\n"
-    "#if RUWA_CONNECTED_DABS\n"
-    "uniform vec4 uDabContentBounds; // minX, minY, maxX, maxY\n"
-    "uniform vec4 uDabSoftContentBounds;\n"
-    "#endif\n"
-    "uniform float uTextureEdgeBoost;\n"
-    // Shaping of the sampled grain. The procedural texture cache stores raw
-    // grain so these four stay out of textureRevision(); duplicated verbatim in
-    // brush_stamp.frag.glsl — keep the two in step.
-    "uniform float uTextureContrast;\n"
-    "uniform float uTextureDepth;\n"
-    "uniform float uTextureBlend;\n"
-    "uniform float uTextureAmount;\n"
-    "uniform float uInvTileSize;\n"
-    "uniform vec2  uTileOriginPx;\n"
-    "uniform int   uQuantizeTo8Bit;\n"
-    "uniform float uDitherSeed;\n"
-    "in vec2 fragPixelCoord;\n"
-    // >= 0 when the vertex stage emitted one quad per dab: evaluate only that
-    // dab and let the hardware blend. -1 for the single-quad geometry, where
-    // the whole uDabCount run is accumulated here in float.
-    "flat in int fragDabIndex;\n"
-    "out vec4 outColor;\n"
-    // Quantization-aware dither for the 8-bit stroke buffer — see the long
-    // rationale on ditherPremultiplied in brush_stamp.frag.glsl; keep the two
-    // in step. uDitherSeed is 0 for GL_MAX runs (a per-pixel-constant offset
-    // makes the quantizer monotone, so it commutes with max) and varies per
-    // src-over write, where the tile is blended into once per chunk.
-    // A value that is ALREADY on the 1/255 grid must round, not dither: 16F/32F
-    // storage leaves 97/255 at 96.99463, and the plain floor form reproduces
-    // that residue as a sparse off-by-one speckle over a flat area. See the
-    // long form in brush_stamp.frag.glsl; keep every copy in step.
-    )
-    + kColorQuantizationGlsl + QStringLiteral(
-    "vec4 ditherPremultiplied(vec4 color, vec2 worldPixelCoord) {\n"
-    "    if (uQuantizeTo8Bit == 0 || color.a <= 0.0) return color;\n"
-    "    float n = fract(52.9829189\n"
-    "        * fract(dot(floor(worldPixelCoord), vec2(0.06711056, 0.00583715)) + uDitherSeed));\n"
-    "    color.rgb = quantizeTo8Bit(color.rgb, n);\n"
-    "    color.a = quantizeTo8Bit(color.a, n);\n"
-    "    color.rgb = min(color.rgb, vec3(color.a));\n"
-    "    return color;\n"
-    "}\n"
-    "float hardnessFalloff(float edgeDistance, float hardness) {\n"
-    "    hardness = clamp(hardness, 0.0, 1.0);\n"
-    "    float softness = max(1.0 - hardness, 0.0);\n"
-    "    if (edgeDistance <= 0.0) return 0.0;\n"
-    "    if (softness <= 0.001) return 1.0;\n"
-    "    return smoothstep(0.0, softness, edgeDistance);\n"
-    "}\n"
-    "float applyTextureShaping(float grain) {\n"
-    "    float contrastStrength = 0.5 + uTextureContrast * 2.5;\n"
-    "    float g = clamp(0.5 + (grain - 0.5) * contrastStrength, 0.0, 1.0);\n"
-    "    float depthMix = 1.0 - uTextureDepth * (1.0 - g);\n"
-    "    float blendMix = (1.0 - uTextureBlend) * depthMix\n"
-    "                   + uTextureBlend * (depthMix * depthMix);\n"
-    "    return clamp((1.0 - uTextureAmount) + uTextureAmount * blendMix, 0.0, 1.0);\n"
-    "}\n"
-    "vec2 sampleDabShapeSafe(vec2 uv) {\n"
-    "    vec2 clampedUv = clamp(uv, vec2(0.0), vec2(1.0));\n"
-    "    vec2 shape = texture(uDabShapeTexture, clampedUv).rg;\n"
-    "    vec2 outsideUv = max(max(-uv, uv - vec2(1.0)), vec2(0.0)) * 2.0;\n"
-    "    if (outsideUv.x > 0.0 || outsideUv.y > 0.0) {\n"
-    "        shape.r = 0.0;\n"
-    "        shape.g = 0.0;\n"
-    "    }\n"
-    "    return shape;\n"
-    "}\n"
-    "float sampleCustomDabCoverage(vec2 uv, float hardness) {\n"
-    "    vec2 shape = sampleDabShapeSafe(uv);\n"
-    "    float baseAlpha = clamp(shape.r, 0.0, 1.0);\n"
-    "    float softAlpha = clamp(shape.g, 0.0, 1.0);\n"
-    "    float softness = max(1.0 - clamp(hardness, 0.0, 1.0), 0.0);\n"
-    "    return mix(baseAlpha, softAlpha, softness);\n"
-    "}\n"
-    "#if RUWA_CONNECTED_DABS\n"
-    "vec4 dabContentBounds(float hardness) {\n"
-    "    float softness = 1.0 - clamp(hardness, 0.0, 1.0);\n"
-    "    return mix(uDabContentBounds, uDabSoftContentBounds, softness);\n"
-    "}\n"
-    "#endif\n"
-    // A connected dab is one transformed surface split into adjacent patches,
-    // not another row of synthetic paint dabs inserted into the gap.
-    "#if RUWA_CONNECTED_DABS\n")
-    + glsl(dab_transform_gpu::kMappingGlsl) + QStringLiteral(
-    "#endif\n"
-    "float shapeCoverage(vec2 shapeLocal, float hardness, out float edgeFactor) {\n"
-    "    edgeFactor = 0.0;\n"
-    "    if (abs(shapeLocal.x) > 1.0 || abs(shapeLocal.y) > 1.0) return 0.0;\n"
-    "    if (uUseDabShapeTexture != 0) {\n"
-    "        vec2 uv = (shapeLocal + 1.0) * 0.5;\n"
-    "        float baseAlpha = sampleDabShapeSafe(uv).r;\n"
-    "        float falloff = sampleCustomDabCoverage(uv, hardness);\n"
-    "        edgeFactor = max(0.0, falloff - baseAlpha);\n"
-    "        return falloff;\n"
-    "    }\n"
-    "    float distanceToCenter = length(shapeLocal);\n"
-    "    if (distanceToCenter > 1.0) return 0.0;\n"
-    "    edgeFactor = smoothstep(clamp(hardness + 0.05, 0.05, 0.95),\n"
-    "                            1.0, distanceToCenter);\n"
-    "    return hardnessFalloff(max(0.0, 1.0 - distanceToCenter), hardness);\n"
-    "}\n"
-    "void main() {\n"
-    "    float maskScale = 1.0;\n"
-    "    if (uUseMask != 0) {\n"
-    "        maskScale = texture(uMaskTexture, fragPixelCoord * uInvTileSize).a;\n"
-    "        if (maskScale <= 0.0) { outColor = vec4(0.0); return; }\n"
-    "    }\n"
-    "    float textureA = 1.0;\n"
-    "    if (uUseTexture != 0) {\n"
-    "        textureA = applyTextureShaping(\n"
-    "            texture(uTextureTile, fragPixelCoord * uInvTileSize).r);\n"
-    "        if (textureA <= 0.0) { outColor = vec4(0.0); return; }\n"
-    "    }\n"
-    "    vec4 accum = vec4(0.0);\n"
-    "    int firstDab = (fragDabIndex >= 0) ? fragDabIndex : 0;\n"
-    "    int lastDab = (fragDabIndex >= 0) ? (fragDabIndex + 1) : uDabCount;\n"
-    "    for (int i = firstDab; i < RUWA_BATCH_MAX_DABS; ++i) {\n"
-    "        if (i >= lastDab) break;\n"
-    "        vec2 center = uDabCenter[i];\n"
-    "        vec4 dabParams = uDabParams[i];\n"
-    "        vec4 dabColor = uDabColor[i];\n"
-    "        float edgeFactor = 0.0;\n"
-    "        float falloff = 0.0;\n"
-    "#if RUWA_CONNECTED_DABS\n"
-    "        if (uDabHasPrevious[i] != 0) {\n"
-    // The segmented surface IS this dab's assigned ribbon span, so the
-    // unstretched shape is never stamped on top of it and nothing extra fills
-    // the gap.
-    "            vec4 quad01 = uStretchQuad01[i];\n"
-    "            vec4 quad23 = uStretchQuad23[i];\n"
-    // In this branch only params.y (hardness) remains semantically live. The
-    // otherwise-unused center/current/previous parameter components carry the
-    // four rail controls without growing the fragment-uniform arrays.
-    "            vec2 startControl0 = center;\n"
-    "            vec2 startControl1 = vec2(dabParams.x, dabParams.z);\n"
-    "            vec2 endControl0 = vec2(dabParams.w, uPreviousDabParams[i].x);\n"
-    "            vec2 endControl1 = uPreviousDabParams[i].zw;\n"
-    "            int segmentCount = clamp(uTransformSegments, 1, 10);\n"
-    "            vec2 stretchST = vec2(0.0);\n"
-    "            int hitSegment = -1;\n"
-    "            for (int segment = 0; segment < 10; ++segment) {\n"
-    "                if (segment >= segmentCount) break;\n"
-    "                float t0 = float(segment) / float(segmentCount);\n"
-    "                float t1 = float(segment + 1) / float(segmentCount);\n"
-    "                vec2 start0 = cubicRail(\n"
-    "                    quad01.xy, startControl0, endControl0, quad01.zw, t0);\n"
-    "                vec2 end0 = cubicRail(\n"
-    "                    quad01.xy, startControl0, endControl0, quad01.zw, t1);\n"
-    "                vec2 start1 = cubicRail(\n"
-    "                    quad23.zw, startControl1, endControl1, quad23.xy, t0);\n"
-    "                vec2 end1 = cubicRail(\n"
-    "                    quad23.zw, startControl1, endControl1, quad23.xy, t1);\n"
-    "                if (inverseStretchQuad(fragPixelCoord, start0, end0, end1, start1,\n"
-    "                        stretchST)) { hitSegment = segment; break; }\n"
-    "            }\n"
-    "            if (hitSegment < 0) continue;\n"
-    "            float progress = (float(hitSegment) + stretchST.x) / float(segmentCount);\n"
-    "            vec2 canonicalST = vec2(progress, stretchST.y);\n"
-    "            dabParams = mix(uPreviousDabParams[i], dabParams, progress);\n"
-    "            dabColor = mix(uPreviousDabColor[i], dabColor, progress);\n"
-    "            vec4 contentBounds = dabContentBounds(dabParams.y);\n"
-    "            vec2 stretchShape = vec2(\n"
-    "                mix(contentBounds.x, contentBounds.z, canonicalST.x),\n"
-    "                mix(contentBounds.y, contentBounds.w, canonicalST.y));\n"
-    "            falloff = shapeCoverage(stretchShape, dabParams.y, edgeFactor);\n"
-    "        } else\n"
-    "#endif\n"
-    "        {\n"
-    "            vec2 delta = fragPixelCoord - center;\n"
-    "            float radius = dabParams.x;\n"
-    "            float hardness = dabParams.y;\n"
-    "            float roundness = max(0.01, clamp(dabParams.z, 0.0, 1.0));\n"
-    "            float angle = dabParams.w;\n"
-    "            float c = cos(angle);\n"
-    "            float s = sin(angle);\n"
-    "            vec2 local = vec2(delta.x * c + delta.y * s,\n"
-    "                             (-delta.x * s + delta.y * c) / roundness);\n"
-    "            vec2 shapeLocal = local / radius;\n"
-    "            float shapeC = cos(uDabShapeRotationRad);\n"
-    "            float shapeS = sin(uDabShapeRotationRad);\n"
-    "            shapeLocal = vec2(shapeLocal.x * shapeC - shapeLocal.y * shapeS,\n"
-    "                              shapeLocal.x * shapeS + shapeLocal.y * shapeC);\n"
-    "            shapeLocal /= max(uDabShapeScale, vec2(0.0001));\n"
-    "            falloff = shapeCoverage(shapeLocal, hardness, edgeFactor);\n"
-    "        }\n"
-    "        if (falloff <= 0.0) continue;\n"
-    "        float dabTextureA = textureA;\n"
-    "        if (uUseTexture != 0 && uTextureEdgeBoost > 0.0) {\n"
-    "            float contrast = 1.0 + edgeFactor * uTextureEdgeBoost * 8.0;\n"
-    "            dabTextureA = clamp(0.5 + (dabTextureA - 0.5) * contrast, 0.0, 1.0);\n"
-    "        }\n"
-    "        float alpha = dabColor.a * falloff * dabTextureA;\n"
-    "        float colorScale = maskScale;\n"
-    "        if (uMaskAffectsAlpha != 0) { colorScale = 1.0; }\n"
-    "        if (alpha <= 0.0) continue;\n"
-    "        vec4 src = vec4(dabColor.rgb * falloff * dabTextureA * colorScale, alpha);\n"
-    "        if (uBlendMode == 0) {\n"
-    "            accum = src + accum * (1.0 - src.a);\n"
-    "        } else {\n"
-    "            if (src.a > accum.a) accum = src;\n"
-    "        }\n"
-    "    }\n"
-    "    outColor = ditherPremultiplied(accum, uTileOriginPx + fragPixelCoord);\n"
-    "}\n");
+const QString kBatchRebuildFrag
+    = QStringLiteral(
+          "#version 450 core\n"
+          "uniform int uDabCount;\n"
+          "uniform vec2 uDabCenter[RUWA_BATCH_MAX_DABS];\n"
+          "uniform vec4 uDabParams[RUWA_BATCH_MAX_DABS]; // radius, hardness, roundness, angle\n"
+          "uniform vec4 uDabColor[RUWA_BATCH_MAX_DABS];  // premultiplied rgba\n"
+          "#if RUWA_CONNECTED_DABS\n"
+          "uniform vec4 uPreviousDabParams[RUWA_BATCH_MAX_DABS];\n"
+          "uniform vec4 uPreviousDabColor[RUWA_BATCH_MAX_DABS];\n"
+          "uniform vec4 uStretchQuad01[RUWA_BATCH_MAX_DABS]; // q0.xy, q1.xy\n"
+          "uniform vec4 uStretchQuad23[RUWA_BATCH_MAX_DABS]; // q2.xy, q3.xy\n"
+          "uniform int uTransformSegments;\n"
+          "uniform int uDabHasPrevious[RUWA_BATCH_MAX_DABS];\n"
+          "#endif\n"
+          "uniform int uBlendMode; // 0=src-over, 1=max\n"
+          "uniform sampler2D uMaskTexture;\n"
+          "uniform sampler2D uTextureTile;\n"
+          "uniform sampler2D uDabShapeTexture;\n"
+          "uniform int uUseMask;\n"
+          "uniform int uMaskAffectsAlpha;\n"
+          "uniform int uUseTexture;\n"
+          "uniform int uUseDabShapeTexture;\n"
+          "uniform vec2 uDabShapeScale;\n"
+          "uniform float uDabShapeRotationRad;\n"
+          "#if RUWA_CONNECTED_DABS\n"
+          "uniform vec4 uDabContentBounds; // minX, minY, maxX, maxY\n"
+          "uniform vec4 uDabSoftContentBounds;\n"
+          "#endif\n"
+          "uniform float uTextureEdgeBoost;\n"
+          // Shaping of the sampled grain. The procedural texture cache stores raw
+          // grain so these four stay out of textureRevision(); duplicated verbatim in
+          // brush_stamp.frag.glsl — keep the two in step.
+          "uniform float uTextureContrast;\n"
+          "uniform float uTextureDepth;\n"
+          "uniform float uTextureBlend;\n"
+          "uniform float uTextureAmount;\n"
+          "uniform float uInvTileSize;\n"
+          "uniform vec2  uTileOriginPx;\n"
+          "uniform int   uQuantizeTo8Bit;\n"
+          "uniform float uDitherSeed;\n"
+          "in vec2 fragPixelCoord;\n"
+          // >= 0 when the vertex stage emitted one quad per dab: evaluate only that
+          // dab and let the hardware blend. -1 for the single-quad geometry, where
+          // the whole uDabCount run is accumulated here in float.
+          "flat in int fragDabIndex;\n"
+          "out vec4 outColor;\n"
+          // Quantization-aware dither for the 8-bit stroke buffer — see the long
+          // rationale on ditherPremultiplied in brush_stamp.frag.glsl; keep the two
+          // in step. uDitherSeed is 0 for GL_MAX runs (a per-pixel-constant offset
+          // makes the quantizer monotone, so it commutes with max) and varies per
+          // src-over write, where the tile is blended into once per chunk.
+          // A value that is ALREADY on the 1/255 grid must round, not dither: 16F/32F
+          // storage leaves 97/255 at 96.99463, and the plain floor form reproduces
+          // that residue as a sparse off-by-one speckle over a flat area. See the
+          // long form in brush_stamp.frag.glsl; keep every copy in step.
+          )
+    + kColorQuantizationGlsl
+    + QStringLiteral(
+        "vec4 ditherPremultiplied(vec4 color, vec2 worldPixelCoord) {\n"
+        "    if (uQuantizeTo8Bit == 0 || color.a <= 0.0) return color;\n"
+        "    float n = fract(52.9829189\n"
+        "        * fract(dot(floor(worldPixelCoord), vec2(0.06711056, 0.00583715)) + "
+        "uDitherSeed));\n"
+        "    color.rgb = quantizeTo8Bit(color.rgb, n);\n"
+        "    color.a = quantizeTo8Bit(color.a, n);\n"
+        "    color.rgb = min(color.rgb, vec3(color.a));\n"
+        "    return color;\n"
+        "}\n"
+        "float hardnessFalloff(float edgeDistance, float hardness) {\n"
+        "    hardness = clamp(hardness, 0.0, 1.0);\n"
+        "    float softness = max(1.0 - hardness, 0.0);\n"
+        "    if (edgeDistance <= 0.0) return 0.0;\n"
+        "    if (softness <= 0.001) return 1.0;\n"
+        "    return smoothstep(0.0, softness, edgeDistance);\n"
+        "}\n"
+        "float applyTextureShaping(float grain) {\n"
+        "    float contrastStrength = 0.5 + uTextureContrast * 2.5;\n"
+        "    float g = clamp(0.5 + (grain - 0.5) * contrastStrength, 0.0, 1.0);\n"
+        "    float depthMix = 1.0 - uTextureDepth * (1.0 - g);\n"
+        "    float blendMix = (1.0 - uTextureBlend) * depthMix\n"
+        "                   + uTextureBlend * (depthMix * depthMix);\n"
+        "    return clamp((1.0 - uTextureAmount) + uTextureAmount * blendMix, 0.0, 1.0);\n"
+        "}\n"
+        "vec2 sampleDabShapeSafe(vec2 uv) {\n"
+        "    vec2 clampedUv = clamp(uv, vec2(0.0), vec2(1.0));\n"
+        "    vec2 shape = texture(uDabShapeTexture, clampedUv).rg;\n"
+        "    vec2 outsideUv = max(max(-uv, uv - vec2(1.0)), vec2(0.0)) * 2.0;\n"
+        "    if (outsideUv.x > 0.0 || outsideUv.y > 0.0) {\n"
+        "        shape.r = 0.0;\n"
+        "        shape.g = 0.0;\n"
+        "    }\n"
+        "    return shape;\n"
+        "}\n"
+        "float sampleCustomDabCoverage(vec2 uv, float hardness) {\n"
+        "    vec2 shape = sampleDabShapeSafe(uv);\n"
+        "    float baseAlpha = clamp(shape.r, 0.0, 1.0);\n"
+        "    float softAlpha = clamp(shape.g, 0.0, 1.0);\n"
+        "    float softness = max(1.0 - clamp(hardness, 0.0, 1.0), 0.0);\n"
+        "    return mix(baseAlpha, softAlpha, softness);\n"
+        "}\n"
+        "#if RUWA_CONNECTED_DABS\n"
+        "vec4 dabContentBounds(float hardness) {\n"
+        "    float softness = 1.0 - clamp(hardness, 0.0, 1.0);\n"
+        "    return mix(uDabContentBounds, uDabSoftContentBounds, softness);\n"
+        "}\n"
+        "#endif\n"
+        // A connected dab is one transformed surface split into adjacent patches,
+        // not another row of synthetic paint dabs inserted into the gap.
+        "#if RUWA_CONNECTED_DABS\n")
+    + glsl(dab_transform_gpu::kMappingGlsl)
+    + QStringLiteral(
+        "#endif\n"
+        "float shapeCoverage(vec2 shapeLocal, float hardness, out float edgeFactor) {\n"
+        "    edgeFactor = 0.0;\n"
+        "    if (abs(shapeLocal.x) > 1.0 || abs(shapeLocal.y) > 1.0) return 0.0;\n"
+        "    if (uUseDabShapeTexture != 0) {\n"
+        "        vec2 uv = (shapeLocal + 1.0) * 0.5;\n"
+        "        float baseAlpha = sampleDabShapeSafe(uv).r;\n"
+        "        float falloff = sampleCustomDabCoverage(uv, hardness);\n"
+        "        edgeFactor = max(0.0, falloff - baseAlpha);\n"
+        "        return falloff;\n"
+        "    }\n"
+        "    float distanceToCenter = length(shapeLocal);\n"
+        "    if (distanceToCenter > 1.0) return 0.0;\n"
+        "    edgeFactor = smoothstep(clamp(hardness + 0.05, 0.05, 0.95),\n"
+        "                            1.0, distanceToCenter);\n"
+        "    return hardnessFalloff(max(0.0, 1.0 - distanceToCenter), hardness);\n"
+        "}\n"
+        "void main() {\n"
+        "    float maskScale = 1.0;\n"
+        "    if (uUseMask != 0) {\n"
+        "        maskScale = texture(uMaskTexture, fragPixelCoord * uInvTileSize).a;\n"
+        "        if (maskScale <= 0.0) { outColor = vec4(0.0); return; }\n"
+        "    }\n"
+        "    float textureA = 1.0;\n"
+        "    if (uUseTexture != 0) {\n"
+        "        textureA = applyTextureShaping(\n"
+        "            texture(uTextureTile, fragPixelCoord * uInvTileSize).r);\n"
+        "        if (textureA <= 0.0) { outColor = vec4(0.0); return; }\n"
+        "    }\n"
+        "    vec4 accum = vec4(0.0);\n"
+        "    int firstDab = (fragDabIndex >= 0) ? fragDabIndex : 0;\n"
+        "    int lastDab = (fragDabIndex >= 0) ? (fragDabIndex + 1) : uDabCount;\n"
+        "    for (int i = firstDab; i < RUWA_BATCH_MAX_DABS; ++i) {\n"
+        "        if (i >= lastDab) break;\n"
+        "        vec2 center = uDabCenter[i];\n"
+        "        vec4 dabParams = uDabParams[i];\n"
+        "        vec4 dabColor = uDabColor[i];\n"
+        "        float edgeFactor = 0.0;\n"
+        "        float falloff = 0.0;\n"
+        "#if RUWA_CONNECTED_DABS\n"
+        "        if (uDabHasPrevious[i] != 0) {\n"
+        // The segmented surface IS this dab's assigned ribbon span, so the
+        // unstretched shape is never stamped on top of it and nothing extra fills
+        // the gap.
+        "            vec4 quad01 = uStretchQuad01[i];\n"
+        "            vec4 quad23 = uStretchQuad23[i];\n"
+        // In this branch only params.y (hardness) remains semantically live. The
+        // otherwise-unused center/current/previous parameter components carry the
+        // four rail controls without growing the fragment-uniform arrays.
+        "            vec2 startControl0 = center;\n"
+        "            vec2 startControl1 = vec2(dabParams.x, dabParams.z);\n"
+        "            vec2 endControl0 = vec2(dabParams.w, uPreviousDabParams[i].x);\n"
+        "            vec2 endControl1 = uPreviousDabParams[i].zw;\n"
+        "            int segmentCount = clamp(uTransformSegments, 1, 10);\n"
+        "            vec2 stretchST = vec2(0.0);\n"
+        "            int hitSegment = -1;\n"
+        "            for (int segment = 0; segment < 10; ++segment) {\n"
+        "                if (segment >= segmentCount) break;\n"
+        "                float t0 = float(segment) / float(segmentCount);\n"
+        "                float t1 = float(segment + 1) / float(segmentCount);\n"
+        "                vec2 start0 = cubicRail(\n"
+        "                    quad01.xy, startControl0, endControl0, quad01.zw, t0);\n"
+        "                vec2 end0 = cubicRail(\n"
+        "                    quad01.xy, startControl0, endControl0, quad01.zw, t1);\n"
+        "                vec2 start1 = cubicRail(\n"
+        "                    quad23.zw, startControl1, endControl1, quad23.xy, t0);\n"
+        "                vec2 end1 = cubicRail(\n"
+        "                    quad23.zw, startControl1, endControl1, quad23.xy, t1);\n"
+        "                if (inverseStretchQuad(fragPixelCoord, start0, end0, end1, start1,\n"
+        "                        stretchST)) { hitSegment = segment; break; }\n"
+        "            }\n"
+        "            if (hitSegment < 0) continue;\n"
+        "            float progress = (float(hitSegment) + stretchST.x) / float(segmentCount);\n"
+        "            vec2 canonicalST = vec2(progress, stretchST.y);\n"
+        "            dabParams = mix(uPreviousDabParams[i], dabParams, progress);\n"
+        "            dabColor = mix(uPreviousDabColor[i], dabColor, progress);\n"
+        "            vec4 contentBounds = dabContentBounds(dabParams.y);\n"
+        "            vec2 stretchShape = vec2(\n"
+        "                mix(contentBounds.x, contentBounds.z, canonicalST.x),\n"
+        "                mix(contentBounds.y, contentBounds.w, canonicalST.y));\n"
+        "            falloff = shapeCoverage(stretchShape, dabParams.y, edgeFactor);\n"
+        "        } else\n"
+        "#endif\n"
+        "        {\n"
+        "            vec2 delta = fragPixelCoord - center;\n"
+        "            float radius = dabParams.x;\n"
+        "            float hardness = dabParams.y;\n"
+        "            float roundness = max(0.01, clamp(dabParams.z, 0.0, 1.0));\n"
+        "            float angle = dabParams.w;\n"
+        "            float c = cos(angle);\n"
+        "            float s = sin(angle);\n"
+        "            vec2 local = vec2(delta.x * c + delta.y * s,\n"
+        "                             (-delta.x * s + delta.y * c) / roundness);\n"
+        "            vec2 shapeLocal = local / radius;\n"
+        "            float shapeC = cos(uDabShapeRotationRad);\n"
+        "            float shapeS = sin(uDabShapeRotationRad);\n"
+        "            shapeLocal = vec2(shapeLocal.x * shapeC - shapeLocal.y * shapeS,\n"
+        "                              shapeLocal.x * shapeS + shapeLocal.y * shapeC);\n"
+        "            shapeLocal /= max(uDabShapeScale, vec2(0.0001));\n"
+        "            falloff = shapeCoverage(shapeLocal, hardness, edgeFactor);\n"
+        "        }\n"
+        "        if (falloff <= 0.0) continue;\n"
+        "        float dabTextureA = textureA;\n"
+        "        if (uUseTexture != 0 && uTextureEdgeBoost > 0.0) {\n"
+        "            float contrast = 1.0 + edgeFactor * uTextureEdgeBoost * 8.0;\n"
+        "            dabTextureA = clamp(0.5 + (dabTextureA - 0.5) * contrast, 0.0, 1.0);\n"
+        "        }\n"
+        "        float alpha = dabColor.a * falloff * dabTextureA;\n"
+        "        float colorScale = maskScale;\n"
+        "        if (uMaskAffectsAlpha != 0) { colorScale = 1.0; }\n"
+        "        if (alpha <= 0.0) continue;\n"
+        "        vec4 src = vec4(dabColor.rgb * falloff * dabTextureA * colorScale, alpha);\n"
+        "        if (uBlendMode == 0) {\n"
+        "            accum = src + accum * (1.0 - src.a);\n"
+        "        } else {\n"
+        "            if (src.a > accum.a) accum = src;\n"
+        "        }\n"
+        "    }\n"
+        "    outColor = ditherPremultiplied(accum, uTileOriginPx + fragPixelCoord);\n"
+        "}\n");
 
 const QString kBrushStampVert
     = QStringLiteral("#version 450 core\n"
@@ -899,112 +901,112 @@ inline float buildupCoatPerDab(float buildup, float dabDistPx, float radiusPx)
 //   Keeping pickup uniform avoids reservoir seams at the brush boundary.
 // ---------------------------------------------------------------------------
 
-const QString kSmudgeApplyFrag = QStringLiteral(
-    "#version 450 core\n"
-    "uniform vec2  uBrushCenter;\n"
-    "uniform float uBrushRadius;\n"
-    "uniform float uBrushHardness;\n"
-    "uniform float uBrushRoundness;\n"
-    "uniform float uBrushAngleRad;\n"
-    "uniform float uBrushAlpha;\n"
-    "uniform int   uQuantizeTo8Bit;\n"
-    "uniform sampler2D uOriginalTexture;\n"
-    "uniform sampler2D uReservoirTexture;\n"
-    "uniform sampler2D uMaskTexture;\n"
-    "uniform int   uUseMask;\n"
-    "uniform sampler2D uDabShapeTexture;\n"
-    "uniform int   uUseDabShapeTexture;\n"
-    "uniform vec2  uDabShapeScale;\n"
-    "uniform vec2  uTileOriginPx;\n"
-    "uniform vec2  uInvTileSize;\n"
-    "uniform vec2  uRoiOriginPx;\n"
-    "uniform vec2  uInvRoiSize;\n"
-    "uniform float uReservoirHalf;\n"
-    "uniform vec2  uInvReservoirPhys;\n"
-    "in vec2 fragPixelCoord;\n"
-    "out vec4 outColor;\n")
-    + kColorQuantizationGlsl + QStringLiteral(
-    "vec4 sanitizePremultiplied(vec4 color) {\n"
-    "    if (color.a <= 1e-6) { return vec4(0.0); }\n"
-    "    color.rgb = min(color.rgb, vec3(color.a));\n"
-    "    return color;\n"
-    "}\n"
-    "vec2 sampleDabShapeSafe(vec2 uv) {\n"
-    "    vec2 clampedUv = clamp(uv, vec2(0.0), vec2(1.0));\n"
-    "    vec2 shape = texture(uDabShapeTexture, clampedUv).rg;\n"
-    "    vec2 outsideUv = max(max(-uv, uv - vec2(1.0)), vec2(0.0)) * 2.0;\n"
-    "    if (outsideUv.x > 0.0 || outsideUv.y > 0.0) {\n"
-    "        shape.r = 0.0;\n"
-    "        shape.g = 0.0;\n"
-    "    }\n"
-    "    return shape;\n"
-    "}\n"
-    "float sampleCustomDabCoverage(vec2 uv, float hardness) {\n"
-    "    vec2 shape = sampleDabShapeSafe(uv);\n"
-    "    float baseAlpha = clamp(shape.r, 0.0, 1.0);\n"
-    "    float softAlpha = clamp(shape.g, 0.0, 1.0);\n"
-    "    float softness = max(1.0 - clamp(hardness, 0.0, 1.0), 0.0);\n"
-    "    return mix(baseAlpha, softAlpha, softness);\n"
-    "}\n"
-    "float brushCoverage(vec2 local) {\n"
-    "    if (uUseDabShapeTexture != 0) {\n"
-    "        vec2 shapeLocal = local / uBrushRadius;\n"
-    "        shapeLocal /= max(uDabShapeScale, vec2(0.0001));\n"
-    "        if (abs(shapeLocal.x) > 1.0 || abs(shapeLocal.y) > 1.0) {\n"
-    "            return 0.0;\n"
-    "        }\n"
-    "        return sampleCustomDabCoverage((shapeLocal + 1.0) * 0.5, uBrushHardness);\n"
-    "    }\n"
-    "    float t = length(local) / uBrushRadius;\n"
-    "    if (t > 1.0) { return 0.0; }\n"
-    "    float edgeDistance = max(0.0, 1.0 - t);\n"
-    "    float softness = max(1.0 - clamp(uBrushHardness, 0.0, 1.0), 0.0);\n"
-    "    return softness <= 0.001 ? 1.0 : smoothstep(0.0, softness, edgeDistance);\n"
-    "}\n"
-    "void main() {\n"
-    "    vec2 delta = fragPixelCoord - uBrushCenter;\n"
-    "    float c = cos(uBrushAngleRad);\n"
-    "    float s = sin(uBrushAngleRad);\n"
-    "    float roundness = max(0.01, clamp(uBrushRoundness, 0.0, 1.0));\n"
-    "    vec2 local = vec2(\n"
-    "        delta.x * c + delta.y * s,\n"
-    "        (-delta.x * s + delta.y * c) / roundness\n"
-    "    );\n"
-    "    float falloff = brushCoverage(local);\n"
-    "    if (falloff <= 0.0) { discard; }\n"
-    "    float maskScale = 1.0;\n"
-    "    if (uUseMask != 0) {\n"
-    "        maskScale = texture(uMaskTexture, fragPixelCoord * uInvTileSize).a;\n"
-    "        if (maskScale <= 0.0) { discard; }\n"
-    "    }\n"
-    "    vec2 worldPixelCoord = uTileOriginPx + fragPixelCoord;\n"
-    "    vec2 originalUv = (worldPixelCoord - uRoiOriginPx) * uInvRoiSize;\n"
-    "    vec4 canvas = sanitizePremultiplied(texture(uOriginalTexture, originalUv));\n"
-    // Reservoir lookup: reservoir is centered on brush, so reservoir pixel
-    // equals (delta + reservoirHalf). Phys-size division handles the case
-    // where the physical texture is larger than the active logical area
-    // (geometric growth across strokes).
-    "    vec2 reservoirPx = delta + vec2(uReservoirHalf);\n"
-    "    vec2 reservoirUv = reservoirPx * uInvReservoirPhys;\n"
-    "    vec4 reservoir = sanitizePremultiplied(texture(uReservoirTexture, reservoirUv));\n"
-    "    float strength = clamp(uBrushAlpha, 0.0, 1.0);\n"
-    "    float intensity = clamp(strength * falloff * maskScale, 0.0, 1.0);\n"
-    // Smudge transports the carried premultiplied color in both directions,
-    // including coverage, so the reservoir can smear paint into transparency.
-    "    outColor = sanitizePremultiplied(mix(canvas, reservoir, intensity));\n"
-    // Reuse the brush/flatten quantizer: RGBA16F carry values are slightly
-    // off the 1/255 grid. Plain floor rounding repeatedly darkens flat paint.
-    // Float documents must retain their precision instead of being forced to 8-bit.
-    "    if (uQuantizeTo8Bit != 0) {\n"
-    "        vec2 ditherSeed = floor(uTileOriginPx + fragPixelCoord);\n"
-    "        float ditherN = fract(52.9829189 * fract(dot(ditherSeed,\n"
-    "            vec2(0.06711056, 0.00583715))));\n"
-    "        outColor.rgb = quantizeTo8Bit(outColor.rgb, ditherN);\n"
-    "        outColor.a = quantizeTo8Bit(outColor.a, ditherN);\n"
-    "    }\n"
-    "    outColor.rgb = min(outColor.rgb, vec3(outColor.a));\n"
-    "    if (outColor.a <= 1e-6) { outColor = vec4(0.0); }\n"
-    "}\n");
+const QString kSmudgeApplyFrag = QStringLiteral("#version 450 core\n"
+                                                "uniform vec2  uBrushCenter;\n"
+                                                "uniform float uBrushRadius;\n"
+                                                "uniform float uBrushHardness;\n"
+                                                "uniform float uBrushRoundness;\n"
+                                                "uniform float uBrushAngleRad;\n"
+                                                "uniform float uBrushAlpha;\n"
+                                                "uniform int   uQuantizeTo8Bit;\n"
+                                                "uniform sampler2D uOriginalTexture;\n"
+                                                "uniform sampler2D uReservoirTexture;\n"
+                                                "uniform sampler2D uMaskTexture;\n"
+                                                "uniform int   uUseMask;\n"
+                                                "uniform sampler2D uDabShapeTexture;\n"
+                                                "uniform int   uUseDabShapeTexture;\n"
+                                                "uniform vec2  uDabShapeScale;\n"
+                                                "uniform vec2  uTileOriginPx;\n"
+                                                "uniform vec2  uInvTileSize;\n"
+                                                "uniform vec2  uRoiOriginPx;\n"
+                                                "uniform vec2  uInvRoiSize;\n"
+                                                "uniform float uReservoirHalf;\n"
+                                                "uniform vec2  uInvReservoirPhys;\n"
+                                                "in vec2 fragPixelCoord;\n"
+                                                "out vec4 outColor;\n")
+    + kColorQuantizationGlsl
+    + QStringLiteral(
+        "vec4 sanitizePremultiplied(vec4 color) {\n"
+        "    if (color.a <= 1e-6) { return vec4(0.0); }\n"
+        "    color.rgb = min(color.rgb, vec3(color.a));\n"
+        "    return color;\n"
+        "}\n"
+        "vec2 sampleDabShapeSafe(vec2 uv) {\n"
+        "    vec2 clampedUv = clamp(uv, vec2(0.0), vec2(1.0));\n"
+        "    vec2 shape = texture(uDabShapeTexture, clampedUv).rg;\n"
+        "    vec2 outsideUv = max(max(-uv, uv - vec2(1.0)), vec2(0.0)) * 2.0;\n"
+        "    if (outsideUv.x > 0.0 || outsideUv.y > 0.0) {\n"
+        "        shape.r = 0.0;\n"
+        "        shape.g = 0.0;\n"
+        "    }\n"
+        "    return shape;\n"
+        "}\n"
+        "float sampleCustomDabCoverage(vec2 uv, float hardness) {\n"
+        "    vec2 shape = sampleDabShapeSafe(uv);\n"
+        "    float baseAlpha = clamp(shape.r, 0.0, 1.0);\n"
+        "    float softAlpha = clamp(shape.g, 0.0, 1.0);\n"
+        "    float softness = max(1.0 - clamp(hardness, 0.0, 1.0), 0.0);\n"
+        "    return mix(baseAlpha, softAlpha, softness);\n"
+        "}\n"
+        "float brushCoverage(vec2 local) {\n"
+        "    if (uUseDabShapeTexture != 0) {\n"
+        "        vec2 shapeLocal = local / uBrushRadius;\n"
+        "        shapeLocal /= max(uDabShapeScale, vec2(0.0001));\n"
+        "        if (abs(shapeLocal.x) > 1.0 || abs(shapeLocal.y) > 1.0) {\n"
+        "            return 0.0;\n"
+        "        }\n"
+        "        return sampleCustomDabCoverage((shapeLocal + 1.0) * 0.5, uBrushHardness);\n"
+        "    }\n"
+        "    float t = length(local) / uBrushRadius;\n"
+        "    if (t > 1.0) { return 0.0; }\n"
+        "    float edgeDistance = max(0.0, 1.0 - t);\n"
+        "    float softness = max(1.0 - clamp(uBrushHardness, 0.0, 1.0), 0.0);\n"
+        "    return softness <= 0.001 ? 1.0 : smoothstep(0.0, softness, edgeDistance);\n"
+        "}\n"
+        "void main() {\n"
+        "    vec2 delta = fragPixelCoord - uBrushCenter;\n"
+        "    float c = cos(uBrushAngleRad);\n"
+        "    float s = sin(uBrushAngleRad);\n"
+        "    float roundness = max(0.01, clamp(uBrushRoundness, 0.0, 1.0));\n"
+        "    vec2 local = vec2(\n"
+        "        delta.x * c + delta.y * s,\n"
+        "        (-delta.x * s + delta.y * c) / roundness\n"
+        "    );\n"
+        "    float falloff = brushCoverage(local);\n"
+        "    if (falloff <= 0.0) { discard; }\n"
+        "    float maskScale = 1.0;\n"
+        "    if (uUseMask != 0) {\n"
+        "        maskScale = texture(uMaskTexture, fragPixelCoord * uInvTileSize).a;\n"
+        "        if (maskScale <= 0.0) { discard; }\n"
+        "    }\n"
+        "    vec2 worldPixelCoord = uTileOriginPx + fragPixelCoord;\n"
+        "    vec2 originalUv = (worldPixelCoord - uRoiOriginPx) * uInvRoiSize;\n"
+        "    vec4 canvas = sanitizePremultiplied(texture(uOriginalTexture, originalUv));\n"
+        // Reservoir lookup: reservoir is centered on brush, so reservoir pixel
+        // equals (delta + reservoirHalf). Phys-size division handles the case
+        // where the physical texture is larger than the active logical area
+        // (geometric growth across strokes).
+        "    vec2 reservoirPx = delta + vec2(uReservoirHalf);\n"
+        "    vec2 reservoirUv = reservoirPx * uInvReservoirPhys;\n"
+        "    vec4 reservoir = sanitizePremultiplied(texture(uReservoirTexture, reservoirUv));\n"
+        "    float strength = clamp(uBrushAlpha, 0.0, 1.0);\n"
+        "    float intensity = clamp(strength * falloff * maskScale, 0.0, 1.0);\n"
+        // Smudge transports the carried premultiplied color in both directions,
+        // including coverage, so the reservoir can smear paint into transparency.
+        "    outColor = sanitizePremultiplied(mix(canvas, reservoir, intensity));\n"
+        // Reuse the brush/flatten quantizer: RGBA16F carry values are slightly
+        // off the 1/255 grid. Plain floor rounding repeatedly darkens flat paint.
+        // Float documents must retain their precision instead of being forced to 8-bit.
+        "    if (uQuantizeTo8Bit != 0) {\n"
+        "        vec2 ditherSeed = floor(uTileOriginPx + fragPixelCoord);\n"
+        "        float ditherN = fract(52.9829189 * fract(dot(ditherSeed,\n"
+        "            vec2(0.06711056, 0.00583715))));\n"
+        "        outColor.rgb = quantizeTo8Bit(outColor.rgb, ditherN);\n"
+        "        outColor.a = quantizeTo8Bit(outColor.a, ditherN);\n"
+        "    }\n"
+        "    outColor.rgb = min(outColor.rgb, vec3(outColor.a));\n"
+        "    if (outColor.a <= 1e-6) { outColor = vec4(0.0); }\n"
+        "}\n");
 
 // ---------------------------------------------------------------------------
 //   Per-dab pickup shader (renders into the reservoir).
@@ -1100,110 +1102,111 @@ const QString kFormatCopyFrag
                      "    outColor = texelFetch(uSourceTexture, sourcePixel, 0);\n"
                      "}\n");
 
-const QString kSmudgeBatchFrag = QStringLiteral(
-    "#version 450 core\n"
-    "uniform vec2  uBrushCenter;\n" // in ROI-local pixel coords
-    "uniform float uBrushRadius;\n"
-    "uniform float uBrushHardness;\n"
-    "uniform float uBrushRoundness;\n"
-    "uniform float uBrushAngleRad;\n"
-    "uniform float uBrushAlpha;\n"
-    "uniform int   uQuantizeTo8Bit;\n"
-    "uniform sampler2D uOriginalTexture;\n"
-    "uniform sampler2D uReservoirTexture;\n"
-    "uniform sampler2D uMaskTexture;\n"
-    "uniform int   uUseMask;\n"
-    "uniform sampler2D uDabShapeTexture;\n"
-    "uniform int   uUseDabShapeTexture;\n"
-    "uniform vec2  uDabShapeScale;\n"
-    // Work buffers may be larger than the active ROI (geometric growth to
-    // avoid reallocating every segment). The valid data lives in
-    // [0, viewport]; texel sampling has to go via texel-size so we don't
-    // read garbage from the unused tail of the texture.
-    "uniform vec2  uInvTexSize;\n" // 1 / physical texture size
-    "uniform vec2  uInvMaskSize;\n"
-    "uniform vec2  uMaxValidUv;\n" // exclusive valid edge / texture size
-    "uniform float uReservoirHalf;\n"
-    "uniform vec2  uInvReservoirPhys;\n"
-    "in vec2 fragPixelCoord;\n"
-    "out vec4 outColor;\n")
-    + kColorQuantizationGlsl + QStringLiteral(
-    "vec4 sanitizePremultiplied(vec4 color) {\n"
-    "    if (color.a <= 1e-6) { return vec4(0.0); }\n"
-    "    color.rgb = min(color.rgb, vec3(color.a));\n"
-    "    return color;\n"
-    "}\n"
-    "vec2 sampleDabShapeSafe(vec2 uv) {\n"
-    "    vec2 clampedUv = clamp(uv, vec2(0.0), vec2(1.0));\n"
-    "    vec2 shape = texture(uDabShapeTexture, clampedUv).rg;\n"
-    "    vec2 outsideUv = max(max(-uv, uv - vec2(1.0)), vec2(0.0)) * 2.0;\n"
-    "    if (outsideUv.x > 0.0 || outsideUv.y > 0.0) {\n"
-    "        shape.r = 0.0;\n"
-    "        shape.g = 0.0;\n"
-    "    }\n"
-    "    return shape;\n"
-    "}\n"
-    "float sampleCustomDabCoverage(vec2 uv, float hardness) {\n"
-    "    vec2 shape = sampleDabShapeSafe(uv);\n"
-    "    float baseAlpha = clamp(shape.r, 0.0, 1.0);\n"
-    "    float softAlpha = clamp(shape.g, 0.0, 1.0);\n"
-    "    float softness = max(1.0 - clamp(hardness, 0.0, 1.0), 0.0);\n"
-    "    return mix(baseAlpha, softAlpha, softness);\n"
-    "}\n"
-    "float brushCoverage(vec2 local) {\n"
-    "    if (uUseDabShapeTexture != 0) {\n"
-    "        vec2 shapeLocal = local / uBrushRadius;\n"
-    "        shapeLocal /= max(uDabShapeScale, vec2(0.0001));\n"
-    "        if (abs(shapeLocal.x) > 1.0 || abs(shapeLocal.y) > 1.0) {\n"
-    "            return 0.0;\n"
-    "        }\n"
-    "        return sampleCustomDabCoverage((shapeLocal + 1.0) * 0.5, uBrushHardness);\n"
-    "    }\n"
-    "    float t = length(local) / uBrushRadius;\n"
-    "    if (t > 1.0) { return 0.0; }\n"
-    "    float edgeDistance = max(0.0, 1.0 - t);\n"
-    "    float softness = max(1.0 - clamp(uBrushHardness, 0.0, 1.0), 0.0);\n"
-    "    return softness <= 0.001 ? 1.0 : smoothstep(0.0, softness, edgeDistance);\n"
-    "}\n"
-    "void main() {\n"
-    "    vec2 originalUv = fragPixelCoord * uInvTexSize;\n"
-    "    vec4 canvas = sanitizePremultiplied(texture(uOriginalTexture, originalUv));\n"
-    "    vec2 delta = fragPixelCoord - uBrushCenter;\n"
-    "    float c = cos(uBrushAngleRad);\n"
-    "    float s = sin(uBrushAngleRad);\n"
-    "    float roundness = max(0.01, clamp(uBrushRoundness, 0.0, 1.0));\n"
-    "    vec2 local = vec2(\n"
-    "        delta.x * c + delta.y * s,\n"
-    "        (-delta.x * s + delta.y * c) / roundness\n"
-    "    );\n"
-    "    float falloff = brushCoverage(local);\n"
-    "    if (falloff <= 0.0) { outColor = canvas; return; }\n"
-    "    float maskScale = 1.0;\n"
-    "    if (uUseMask != 0) {\n"
-    "        maskScale = texture(uMaskTexture, fragPixelCoord * uInvMaskSize).a;\n"
-    "        if (maskScale <= 0.0) { outColor = canvas; return; }\n"
-    "    }\n"
-    "    vec2 reservoirPx = delta + vec2(uReservoirHalf);\n"
-    "    vec2 reservoirUv = reservoirPx * uInvReservoirPhys;\n"
-    "    vec4 reservoir = sanitizePremultiplied(texture(uReservoirTexture, reservoirUv));\n"
-    "    float strength = clamp(uBrushAlpha, 0.0, 1.0);\n"
-    "    float intensity = clamp(strength * falloff * maskScale, 0.0, 1.0);\n"
-    // Batched Smudge preserves the same premultiplied reservoir transport
-    // semantics as the per-dab path.
-    "    outColor = sanitizePremultiplied(mix(canvas, reservoir, intensity));\n"
-    // Reuse the brush/flatten quantizer: RGBA16F carry values are slightly
-    // off the 1/255 grid. Plain floor rounding repeatedly darkens flat paint.
-    // Float documents must retain their precision instead of being forced to 8-bit.
-    "    if (uQuantizeTo8Bit != 0) {\n"
-    "        vec2 ditherSeed = floor(fragPixelCoord);\n"
-    "        float ditherN = fract(52.9829189 * fract(dot(ditherSeed,\n"
-    "            vec2(0.06711056, 0.00583715))));\n"
-    "        outColor.rgb = quantizeTo8Bit(outColor.rgb, ditherN);\n"
-    "        outColor.a = quantizeTo8Bit(outColor.a, ditherN);\n"
-    "    }\n"
-    "    outColor.rgb = min(outColor.rgb, vec3(outColor.a));\n"
-    "    if (outColor.a <= 1e-6) { outColor = vec4(0.0); }\n"
-    "}\n");
+const QString kSmudgeBatchFrag
+    = QStringLiteral("#version 450 core\n"
+                     "uniform vec2  uBrushCenter;\n" // in ROI-local pixel coords
+                     "uniform float uBrushRadius;\n"
+                     "uniform float uBrushHardness;\n"
+                     "uniform float uBrushRoundness;\n"
+                     "uniform float uBrushAngleRad;\n"
+                     "uniform float uBrushAlpha;\n"
+                     "uniform int   uQuantizeTo8Bit;\n"
+                     "uniform sampler2D uOriginalTexture;\n"
+                     "uniform sampler2D uReservoirTexture;\n"
+                     "uniform sampler2D uMaskTexture;\n"
+                     "uniform int   uUseMask;\n"
+                     "uniform sampler2D uDabShapeTexture;\n"
+                     "uniform int   uUseDabShapeTexture;\n"
+                     "uniform vec2  uDabShapeScale;\n"
+                     // Work buffers may be larger than the active ROI (geometric growth to
+                     // avoid reallocating every segment). The valid data lives in
+                     // [0, viewport]; texel sampling has to go via texel-size so we don't
+                     // read garbage from the unused tail of the texture.
+                     "uniform vec2  uInvTexSize;\n" // 1 / physical texture size
+                     "uniform vec2  uInvMaskSize;\n"
+                     "uniform vec2  uMaxValidUv;\n" // exclusive valid edge / texture size
+                     "uniform float uReservoirHalf;\n"
+                     "uniform vec2  uInvReservoirPhys;\n"
+                     "in vec2 fragPixelCoord;\n"
+                     "out vec4 outColor;\n")
+    + kColorQuantizationGlsl
+    + QStringLiteral(
+        "vec4 sanitizePremultiplied(vec4 color) {\n"
+        "    if (color.a <= 1e-6) { return vec4(0.0); }\n"
+        "    color.rgb = min(color.rgb, vec3(color.a));\n"
+        "    return color;\n"
+        "}\n"
+        "vec2 sampleDabShapeSafe(vec2 uv) {\n"
+        "    vec2 clampedUv = clamp(uv, vec2(0.0), vec2(1.0));\n"
+        "    vec2 shape = texture(uDabShapeTexture, clampedUv).rg;\n"
+        "    vec2 outsideUv = max(max(-uv, uv - vec2(1.0)), vec2(0.0)) * 2.0;\n"
+        "    if (outsideUv.x > 0.0 || outsideUv.y > 0.0) {\n"
+        "        shape.r = 0.0;\n"
+        "        shape.g = 0.0;\n"
+        "    }\n"
+        "    return shape;\n"
+        "}\n"
+        "float sampleCustomDabCoverage(vec2 uv, float hardness) {\n"
+        "    vec2 shape = sampleDabShapeSafe(uv);\n"
+        "    float baseAlpha = clamp(shape.r, 0.0, 1.0);\n"
+        "    float softAlpha = clamp(shape.g, 0.0, 1.0);\n"
+        "    float softness = max(1.0 - clamp(hardness, 0.0, 1.0), 0.0);\n"
+        "    return mix(baseAlpha, softAlpha, softness);\n"
+        "}\n"
+        "float brushCoverage(vec2 local) {\n"
+        "    if (uUseDabShapeTexture != 0) {\n"
+        "        vec2 shapeLocal = local / uBrushRadius;\n"
+        "        shapeLocal /= max(uDabShapeScale, vec2(0.0001));\n"
+        "        if (abs(shapeLocal.x) > 1.0 || abs(shapeLocal.y) > 1.0) {\n"
+        "            return 0.0;\n"
+        "        }\n"
+        "        return sampleCustomDabCoverage((shapeLocal + 1.0) * 0.5, uBrushHardness);\n"
+        "    }\n"
+        "    float t = length(local) / uBrushRadius;\n"
+        "    if (t > 1.0) { return 0.0; }\n"
+        "    float edgeDistance = max(0.0, 1.0 - t);\n"
+        "    float softness = max(1.0 - clamp(uBrushHardness, 0.0, 1.0), 0.0);\n"
+        "    return softness <= 0.001 ? 1.0 : smoothstep(0.0, softness, edgeDistance);\n"
+        "}\n"
+        "void main() {\n"
+        "    vec2 originalUv = fragPixelCoord * uInvTexSize;\n"
+        "    vec4 canvas = sanitizePremultiplied(texture(uOriginalTexture, originalUv));\n"
+        "    vec2 delta = fragPixelCoord - uBrushCenter;\n"
+        "    float c = cos(uBrushAngleRad);\n"
+        "    float s = sin(uBrushAngleRad);\n"
+        "    float roundness = max(0.01, clamp(uBrushRoundness, 0.0, 1.0));\n"
+        "    vec2 local = vec2(\n"
+        "        delta.x * c + delta.y * s,\n"
+        "        (-delta.x * s + delta.y * c) / roundness\n"
+        "    );\n"
+        "    float falloff = brushCoverage(local);\n"
+        "    if (falloff <= 0.0) { outColor = canvas; return; }\n"
+        "    float maskScale = 1.0;\n"
+        "    if (uUseMask != 0) {\n"
+        "        maskScale = texture(uMaskTexture, fragPixelCoord * uInvMaskSize).a;\n"
+        "        if (maskScale <= 0.0) { outColor = canvas; return; }\n"
+        "    }\n"
+        "    vec2 reservoirPx = delta + vec2(uReservoirHalf);\n"
+        "    vec2 reservoirUv = reservoirPx * uInvReservoirPhys;\n"
+        "    vec4 reservoir = sanitizePremultiplied(texture(uReservoirTexture, reservoirUv));\n"
+        "    float strength = clamp(uBrushAlpha, 0.0, 1.0);\n"
+        "    float intensity = clamp(strength * falloff * maskScale, 0.0, 1.0);\n"
+        // Batched Smudge preserves the same premultiplied reservoir transport
+        // semantics as the per-dab path.
+        "    outColor = sanitizePremultiplied(mix(canvas, reservoir, intensity));\n"
+        // Reuse the brush/flatten quantizer: RGBA16F carry values are slightly
+        // off the 1/255 grid. Plain floor rounding repeatedly darkens flat paint.
+        // Float documents must retain their precision instead of being forced to 8-bit.
+        "    if (uQuantizeTo8Bit != 0) {\n"
+        "        vec2 ditherSeed = floor(fragPixelCoord);\n"
+        "        float ditherN = fract(52.9829189 * fract(dot(ditherSeed,\n"
+        "            vec2(0.06711056, 0.00583715))));\n"
+        "        outColor.rgb = quantizeTo8Bit(outColor.rgb, ditherN);\n"
+        "        outColor.a = quantizeTo8Bit(outColor.a, ditherN);\n"
+        "    }\n"
+        "    outColor.rgb = min(outColor.rgb, vec3(outColor.a));\n"
+        "    if (outColor.a <= 1e-6) { outColor = vec4(0.0); }\n"
+        "}\n");
 
 // ---------------------------------------------------------------------------
 //   Liquify forward-warp = accumulate a displacement field, sample the source
@@ -1367,24 +1370,22 @@ const QString kSmudgePickupBatchFrag = QStringLiteral(
 
 const QString kWetPerDabPickupFrag = glsl(wet_pigment_gpu::kWetPerDabPickupPreamble)
     + glsl(wet_pigment_gpu::kWetPickupOutputsGlsl) + glsl(wet_pigment_gpu::kLatentGlsl)
-    + glsl(wet_pigment_gpu::kWetCanvasSamplingGlsl)
-    + glsl(wet_pigment_gpu::kWetPickupUpdateGlsl) + glsl(wet_pigment_gpu::kWetPerDabPickupMain);
+    + glsl(wet_pigment_gpu::kWetCanvasSamplingGlsl) + glsl(wet_pigment_gpu::kWetPickupUpdateGlsl)
+    + glsl(wet_pigment_gpu::kWetPerDabPickupMain);
 
 const QString kWetBatchedPickupFrag = glsl(wet_pigment_gpu::kWetBatchedPickupPreamble)
     + glsl(wet_pigment_gpu::kWetPickupOutputsGlsl) + glsl(wet_pigment_gpu::kLatentGlsl)
-    + glsl(wet_pigment_gpu::kWetCanvasSamplingGlsl)
-    + glsl(wet_pigment_gpu::kWetPickupUpdateGlsl) + glsl(wet_pigment_gpu::kWetBatchedPickupMain);
+    + glsl(wet_pigment_gpu::kWetCanvasSamplingGlsl) + glsl(wet_pigment_gpu::kWetPickupUpdateGlsl)
+    + glsl(wet_pigment_gpu::kWetBatchedPickupMain);
 
 const QString kWetPerDabApplyFrag = glsl(wet_pigment_gpu::kWetPerDabApplyPreamble)
     + glsl(wet_pigment_gpu::kLatentGlsl) + glsl(wet_pigment_gpu::kWetCanvasSamplingGlsl)
-    + glsl(wet_pigment_gpu::kWetApplyCoverageGlsl)
-    + glsl(wet_pigment_gpu::kWetPerDabApplyMain);
+    + glsl(wet_pigment_gpu::kWetApplyCoverageGlsl) + glsl(wet_pigment_gpu::kWetPerDabApplyMain);
 
 const QString kWetBatchedApplyFrag = glsl(wet_pigment_gpu::kWetBatchedApplyPreamble)
     + glsl(wet_pigment_gpu::kLatentGlsl) + glsl(wet_pigment_gpu::kWetCanvasSamplingGlsl)
-    + glsl(wet_pigment_gpu::kWetApplyCoverageGlsl)
-    + glsl(dab_transform_gpu::kMappingGlsl) + glsl(wet_pigment_gpu::kWetConnectedApplyGlsl)
-    + glsl(wet_pigment_gpu::kWetBatchedApplyMain);
+    + glsl(wet_pigment_gpu::kWetApplyCoverageGlsl) + glsl(dab_transform_gpu::kMappingGlsl)
+    + glsl(wet_pigment_gpu::kWetConnectedApplyGlsl) + glsl(wet_pigment_gpu::kWetBatchedApplyMain);
 
 // ---------------------------------------------------------------------------
 //   GPU procedural texture generation shader
@@ -1788,181 +1789,194 @@ Result<void> GLBrushRenderer::initialize(const QString& shaderDir)
                          "    gl_Position = vec4(pos * 2.0 - 1.0, 0.0, 1.0);\n"
                          "    fragTexCoord = pos;\n"
                          "}\n");
-    static const QString flattenFrag = QStringLiteral(
-        "#version 450 core\n"
-        "uniform sampler2D uSrcTexture;\n"
-        "uniform sampler2D uBaseTexture;\n"
-        "uniform sampler2D uDstTexture;\n"
-        "uniform sampler2D uFinalSourceMaskTexture;\n"
-        "uniform float uStrokeOpacity;\n"
-        "uniform int uUseFinalSourceMask;\n"
-        "uniform int uReplaceWithBaseMix;\n"
-        "uniform int uUseProgrammaticBlend;\n"
-        "uniform int uStrokeBlendMode;\n"
-        "uniform int uAlphaLock;\n"
-        // Soft-selection alpha cap. When 1, the C++ caller has disabled GL blending
-        // and bound the layer's pre-stroke pixels to uDstTexture. Shader does manual
-        // src-over and clamps result alpha to the mask alpha (or preserves dst when
-        // dst.a > mask_alpha).
-        "uniform int uClipMaskAsAlphaCap;\n"
-        "uniform vec2 uTileWorldOrigin;\n"
-        "uniform int uQuantizeTo8Bit;\n"
-        "in vec2 fragTexCoord;\n"
-        "out vec4 outColor;\n"
-        // Flatten is where the stroke's alpha ramp becomes permanent layer
-        // pixels, and every branch below multiplies it by the stroke opacity
-        // before the 8-bit write — which lands neighbouring ramp values on the
-        // same level and re-creates contours even from an already-dithered
-        // stroke buffer. Dither the final value here too, same quantization-
-        // aware rounding as the stamp shaders.
-        //
-        // The deadband matters most at THIS stage on an 8-bit document: the
-        // stroke buffer is now 16F (see strokeBufferFormatFor), so the solid
-        // core of a stroke arrives a hundredth of an LSB off the grid — without
-        // it that residue would be baked into the layer as a sparse
-        // off-by-one speckle. See brush_stamp.frag.glsl for the full rationale.
-        )
-        + kColorQuantizationGlsl + QStringLiteral(
-        "vec4 ditherPremultiplied(vec4 color, vec2 worldPixelCoord) {\n"
-        "    if (uQuantizeTo8Bit == 0 || color.a <= 0.0) return color;\n"
-        "    float n = fract(52.9829189\n"
-        "        * fract(dot(floor(worldPixelCoord), vec2(0.06711056, 0.00583715))));\n"
-        "    color.rgb = quantizeTo8Bit(color.rgb, n);\n"
-        "    color.a = quantizeTo8Bit(color.a, n);\n"
-        "    color.rgb = min(color.rgb, vec3(color.a));\n"
-        "    return color;\n"
-        "}\n"
-        "const vec3 kLumWeights = vec3(0.299, 0.587, 0.114);\n"
-        "float lum(vec3 c) { return dot(c, kLumWeights); }\n"
-        "float sat(vec3 c) { return max(c.r, max(c.g, c.b)) - min(c.r, min(c.g, c.b)); }\n"
-        "vec3 clipColor(vec3 c) {\n"
-        "    float l = lum(c);\n"
-        "    float mn = min(c.r, min(c.g, c.b));\n"
-        "    float mx = max(c.r, max(c.g, c.b));\n"
-        "    if (mn < 0.0) c = vec3(l) + (c - vec3(l)) * l / max(l - mn, 0.00001);\n"
-        "    if (mx > 1.0) c = vec3(l) + (c - vec3(l)) * (1.0 - l) / max(mx - l, 0.00001);\n"
-        "    return clamp(c, 0.0, 1.0);\n"
-        "}\n"
-        "vec3 setLum(vec3 c, float l) { return clipColor(c + vec3(l - lum(c))); }\n"
-        "vec3 setSat(vec3 c, float s) {\n"
-        "    float v[3] = float[3](c.r, c.g, c.b);\n"
-        "    int mn = 0; int mx = 0;\n"
-        "    for (int i = 1; i < 3; ++i) { if (v[i] < v[mn]) mn = i; if (v[i] > v[mx]) mx = i; }\n"
-        "    if (v[mx] <= v[mn]) return vec3(0.0);\n"
-        "    int mid = 3 - mn - mx;\n"
-        "    float r[3]; r[mn] = 0.0; r[mid] = ((v[mid] - v[mn]) * s) / (v[mx] - v[mn]); r[mx] = "
-        "s;\n"
-        "    return clamp(vec3(r[0], r[1], r[2]), 0.0, 1.0);\n"
-        "}\n"
-        "float dodge(float b, float s) { return (s >= 1.0) ? 1.0 : min(1.0, b / max(1.0 - s, "
-        "0.00001)); }\n"
-        "float burn(float b, float s) { return (s <= 0.0) ? 0.0 : max(0.0, 1.0 - (1.0 - b) / "
-        "max(s, 0.00001)); }\n"
-        "float vivid(float b, float s) { return (s < 0.5) ? burn(b, clamp(2.0 * s, 0.0, 1.0)) : "
-        "dodge(b, clamp(2.0 * (s - 0.5), 0.0, 1.0)); }\n"
-        "vec3 blendColor(vec3 b, vec3 s, int mode) {\n"
-        "    vec3 overlay = mix(2.0 * b * s, 1.0 - 2.0 * (1.0 - b) * (1.0 - s), step(0.5, b));\n"
-        "    vec3 hard = mix(2.0 * b * s, 1.0 - 2.0 * (1.0 - b) * (1.0 - s), step(0.5, s));\n"
-        "    vec3 d = mix(sqrt(b), ((16.0 * b - 12.0) * b + 4.0) * b, step(0.25, b));\n"
-        "    vec3 soft = mix(b - (1.0 - 2.0 * s) * b * (1.0 - b), b + (2.0 * s - 1.0) * (d - b), "
-        "step(0.5, s));\n"
-        "    if (mode == 1) return b * s;\n"
-        "    if (mode == 2) return b + s - b * s;\n"
-        "    if (mode == 3) return overlay;\n"
-        "    if (mode == 4) return soft;\n"
-        "    if (mode == 5) return hard;\n"
-        "    if (mode == 6) return vec3(dodge(b.r, s.r), dodge(b.g, s.g), dodge(b.b, s.b));\n"
-        "    if (mode == 7) return vec3(burn(b.r, s.r), burn(b.g, s.g), burn(b.b, s.b));\n"
-        "    if (mode == 8) return min(b, s);\n"
-        "    if (mode == 9) return max(b, s);\n"
-        "    if (mode == 10) return abs(b - s);\n"
-        "    if (mode == 11) return b + s - 2.0 * b * s;\n"
-        "    if (mode == 13) return max(vec3(0.0), b + s - 1.0);\n"
-        "    if (mode == 14) return (lum(s) <= lum(b)) ? s : b;\n"
-        "    if (mode == 15) return min(vec3(1.0), b + s);\n"
-        "    if (mode == 16) return (lum(s) >= lum(b)) ? s : b;\n"
-        "    if (mode == 17) return vec3(vivid(b.r, s.r), vivid(b.g, s.g), vivid(b.b, s.b));\n"
-        "    if (mode == 18) return clamp(b + 2.0 * s - 1.0, 0.0, 1.0);\n"
-        "    if (mode == 19) return mix(min(b, 2.0 * s), max(b, 2.0 * (s - 0.5)), step(0.5, s));\n"
-        "    if (mode == 20) return step(vec3(0.5), vec3(vivid(b.r, s.r), vivid(b.g, s.g), "
-        "vivid(b.b, s.b)));\n"
-        "    if (mode == 21) return max(vec3(0.0), b - s);\n"
-        "    if (mode == 22) return vec3((s.r <= 0.0) ? 1.0 : min(1.0, b.r / max(s.r, 0.001)), "
-        "(s.g <= 0.0) ? 1.0 : min(1.0, b.g / max(s.g, 0.001)), (s.b <= 0.0) ? 1.0 : min(1.0, b.b / "
-        "max(s.b, 0.001)));\n"
-        "    if (mode == 23) return (sat(s) <= 0.00001) ? b : setLum(setSat(s, sat(b)), lum(b));\n"
-        "    if (mode == 24) return setLum(setSat(b, sat(s)), lum(b));\n"
-        "    if (mode == 25) return setLum(s, lum(b));\n"
-        "    if (mode == 26) return setLum(b, lum(s));\n"
-        "    return s;\n"
-        "}\n"
-        "uint hashPixel(uvec2 v) { uint h = v.x * 1597334677u + v.y * 3812015801u + 2246822519u; h "
-        "^= h >> 16; h *= 2246822519u; h ^= h >> 13; h *= 3266489917u; h ^= h >> 16; return h; }\n"
-        "float dissolveAlpha(float a) {\n"
-        "    if (a <= 0.0) return 0.0; if (a >= 1.0) return 1.0;\n"
-        "    vec2 sz = vec2(textureSize(uSrcTexture, 0));\n"
-        "    ivec2 p = ivec2(floor(uTileWorldOrigin + fragTexCoord * sz));\n"
-        "    float r = float(hashPixel(uvec2(p)) & 0x00ffffffu) / 16777215.0;\n"
-        "    return (r <= a) ? 1.0 : 0.0;\n"
-        "}\n"
-        // Writes outColor and returns early in a dozen places; main() below
-        // wraps it so the dither sits on the one value that reaches the tile.
-        "void flattenBody() {\n"
-        "    float opacity = clamp(uStrokeOpacity, 0.0, 1.0);\n"
-        "    vec4 src = texture(uSrcTexture, fragTexCoord);\n"
-        "    float maskA = 1.0;\n"
-        "    if (uUseFinalSourceMask != 0) {\n"
-        "        maskA = texture(uFinalSourceMaskTexture, fragTexCoord).a;\n"
-        "        src *= maskA;\n"
-        "    }\n"
-        "    if (uClipMaskAsAlphaCap != 0) {\n"
-        // Manual src-over with per-pixel alpha cap. C++ side: GL_BLEND disabled,
-        // uDstTexture bound to layer's pre-stroke pixels.
-        "        vec4 dst = texture(uDstTexture, fragTexCoord);\n"
-        "        if (dst.a > maskA) { outColor = dst; return; }\n"
-        "        vec4 srcEff = src * opacity;\n"
-        "        float ao = srcEff.a + dst.a * (1.0 - srcEff.a);\n"
-        "        vec3 co = srcEff.rgb + dst.rgb * (1.0 - srcEff.a);\n"
-        "        if (ao > maskA) {\n"
-        "            if (ao > 0.0) co *= maskA / ao;\n"
-        "            ao = maskA;\n"
-        "        }\n"
-        "        outColor = vec4(clamp(co, vec3(0.0), vec3(maskA)), ao);\n"
-        "        return;\n"
-        "    }\n"
-        "    if (uReplaceWithBaseMix != 0) {\n"
-        "        vec4 base = texture(uBaseTexture, fragTexCoord);\n"
-        "        outColor = mix(base, src, opacity);\n"
-        "        return;\n"
-        "    }\n"
-        "    if (uUseProgrammaticBlend == 0) {\n"
-        "        outColor = src * opacity;\n"
-        "        return;\n"
-        "    }\n"
-        "    vec4 dst = texture(uDstTexture, fragTexCoord);\n"
-        "    float ad = dst.a;\n"
-        "    float asRaw = src.a;\n"
-        "    float as = (uStrokeBlendMode == 12) ? dissolveAlpha(asRaw * opacity) : clamp(asRaw * "
-        "opacity, 0.0, 1.0);\n"
-        "    vec3 Cs = (asRaw > 0.0) ? src.rgb / asRaw : vec3(0.0);\n"
-        // Brush blending reads only the target layer, before layer compositing.
-        "    vec3 Cd = (ad > 0.0) ? dst.rgb / ad : vec3(0.0);\n"
-        "    vec3 B = blendColor(Cd, Cs, uStrokeBlendMode);\n"
-        "    if (uAlphaLock != 0) {\n"
-        "        vec3 coLocked = ad * as * B + (1.0 - as) * dst.rgb;\n"
-        "        outColor = vec4(clamp(coLocked, vec3(0.0), vec3(ad)), ad);\n"
-        "        return;\n"
-        "    }\n"
-        "    vec3 strokeColor = mix(Cs, B, ad);\n"
-        "    vec3 co = as * strokeColor + (1.0 - as) * dst.rgb;\n"
-        "    float ao = as + ad * (1.0 - as);\n"
-        "    outColor = vec4(clamp(co, vec3(0.0), vec3(ao)), ao);\n"
-        "}\n"
-        "void main() {\n"
-        "    flattenBody();\n"
-        "    outColor = ditherPremultiplied(\n"
-        "        outColor, uTileWorldOrigin + fragTexCoord * vec2(textureSize(uSrcTexture, 0)));\n"
-        "}\n");
+    static const QString flattenFrag
+        = QStringLiteral("#version 450 core\n"
+                         "uniform sampler2D uSrcTexture;\n"
+                         "uniform sampler2D uBaseTexture;\n"
+                         "uniform sampler2D uDstTexture;\n"
+                         "uniform sampler2D uFinalSourceMaskTexture;\n"
+                         "uniform float uStrokeOpacity;\n"
+                         "uniform int uUseFinalSourceMask;\n"
+                         "uniform int uReplaceWithBaseMix;\n"
+                         "uniform int uUseProgrammaticBlend;\n"
+                         "uniform int uStrokeBlendMode;\n"
+                         "uniform int uAlphaLock;\n"
+                         // Soft-selection alpha cap. When 1, the C++ caller has disabled GL
+                         // blending and bound the layer's pre-stroke pixels to uDstTexture. Shader
+                         // does manual src-over and clamps result alpha to the mask alpha (or
+                         // preserves dst when dst.a > mask_alpha).
+                         "uniform int uClipMaskAsAlphaCap;\n"
+                         "uniform vec2 uTileWorldOrigin;\n"
+                         "uniform int uQuantizeTo8Bit;\n"
+                         "in vec2 fragTexCoord;\n"
+                         "out vec4 outColor;\n"
+              // Flatten is where the stroke's alpha ramp becomes permanent layer
+              // pixels, and every branch below multiplies it by the stroke opacity
+              // before the 8-bit write — which lands neighbouring ramp values on the
+              // same level and re-creates contours even from an already-dithered
+              // stroke buffer. Dither the final value here too, same quantization-
+              // aware rounding as the stamp shaders.
+              //
+              // The deadband matters most at THIS stage on an 8-bit document: the
+              // stroke buffer is now 16F (see strokeBufferFormatFor), so the solid
+              // core of a stroke arrives a hundredth of an LSB off the grid — without
+              // it that residue would be baked into the layer as a sparse
+              // off-by-one speckle. See brush_stamp.frag.glsl for the full rationale.
+              )
+        + kColorQuantizationGlsl
+        + QStringLiteral(
+            "vec4 ditherPremultiplied(vec4 color, vec2 worldPixelCoord) {\n"
+            "    if (uQuantizeTo8Bit == 0 || color.a <= 0.0) return color;\n"
+            "    float n = fract(52.9829189\n"
+            "        * fract(dot(floor(worldPixelCoord), vec2(0.06711056, 0.00583715))));\n"
+            "    color.rgb = quantizeTo8Bit(color.rgb, n);\n"
+            "    color.a = quantizeTo8Bit(color.a, n);\n"
+            "    color.rgb = min(color.rgb, vec3(color.a));\n"
+            "    return color;\n"
+            "}\n"
+            "const vec3 kLumWeights = vec3(0.299, 0.587, 0.114);\n"
+            "float lum(vec3 c) { return dot(c, kLumWeights); }\n"
+            "float sat(vec3 c) { return max(c.r, max(c.g, c.b)) - min(c.r, min(c.g, c.b)); }\n"
+            "vec3 clipColor(vec3 c) {\n"
+            "    float l = lum(c);\n"
+            "    float mn = min(c.r, min(c.g, c.b));\n"
+            "    float mx = max(c.r, max(c.g, c.b));\n"
+            "    if (mn < 0.0) c = vec3(l) + (c - vec3(l)) * l / max(l - mn, 0.00001);\n"
+            "    if (mx > 1.0) c = vec3(l) + (c - vec3(l)) * (1.0 - l) / max(mx - l, 0.00001);\n"
+            "    return clamp(c, 0.0, 1.0);\n"
+            "}\n"
+            "vec3 setLum(vec3 c, float l) { return clipColor(c + vec3(l - lum(c))); }\n"
+            "vec3 setSat(vec3 c, float s) {\n"
+            "    float v[3] = float[3](c.r, c.g, c.b);\n"
+            "    int mn = 0; int mx = 0;\n"
+            "    for (int i = 1; i < 3; ++i) { if (v[i] < v[mn]) mn = i; if (v[i] > v[mx]) mx = i; "
+            "}\n"
+            "    if (v[mx] <= v[mn]) return vec3(0.0);\n"
+            "    int mid = 3 - mn - mx;\n"
+            "    float r[3]; r[mn] = 0.0; r[mid] = ((v[mid] - v[mn]) * s) / (v[mx] - v[mn]); r[mx] "
+            "= "
+            "s;\n"
+            "    return clamp(vec3(r[0], r[1], r[2]), 0.0, 1.0);\n"
+            "}\n"
+            "float dodge(float b, float s) { return (s >= 1.0) ? 1.0 : min(1.0, b / max(1.0 - s, "
+            "0.00001)); }\n"
+            "float burn(float b, float s) { return (s <= 0.0) ? 0.0 : max(0.0, 1.0 - (1.0 - b) / "
+            "max(s, 0.00001)); }\n"
+            "float vivid(float b, float s) { return (s < 0.5) ? burn(b, clamp(2.0 * s, 0.0, 1.0)) "
+            ": "
+            "dodge(b, clamp(2.0 * (s - 0.5), 0.0, 1.0)); }\n"
+            "vec3 blendColor(vec3 b, vec3 s, int mode) {\n"
+            "    vec3 overlay = mix(2.0 * b * s, 1.0 - 2.0 * (1.0 - b) * (1.0 - s), step(0.5, "
+            "b));\n"
+            "    vec3 hard = mix(2.0 * b * s, 1.0 - 2.0 * (1.0 - b) * (1.0 - s), step(0.5, s));\n"
+            "    vec3 d = mix(sqrt(b), ((16.0 * b - 12.0) * b + 4.0) * b, step(0.25, b));\n"
+            "    vec3 soft = mix(b - (1.0 - 2.0 * s) * b * (1.0 - b), b + (2.0 * s - 1.0) * (d - "
+            "b), "
+            "step(0.5, s));\n"
+            "    if (mode == 1) return b * s;\n"
+            "    if (mode == 2) return b + s - b * s;\n"
+            "    if (mode == 3) return overlay;\n"
+            "    if (mode == 4) return soft;\n"
+            "    if (mode == 5) return hard;\n"
+            "    if (mode == 6) return vec3(dodge(b.r, s.r), dodge(b.g, s.g), dodge(b.b, s.b));\n"
+            "    if (mode == 7) return vec3(burn(b.r, s.r), burn(b.g, s.g), burn(b.b, s.b));\n"
+            "    if (mode == 8) return min(b, s);\n"
+            "    if (mode == 9) return max(b, s);\n"
+            "    if (mode == 10) return abs(b - s);\n"
+            "    if (mode == 11) return b + s - 2.0 * b * s;\n"
+            "    if (mode == 13) return max(vec3(0.0), b + s - 1.0);\n"
+            "    if (mode == 14) return (lum(s) <= lum(b)) ? s : b;\n"
+            "    if (mode == 15) return min(vec3(1.0), b + s);\n"
+            "    if (mode == 16) return (lum(s) >= lum(b)) ? s : b;\n"
+            "    if (mode == 17) return vec3(vivid(b.r, s.r), vivid(b.g, s.g), vivid(b.b, s.b));\n"
+            "    if (mode == 18) return clamp(b + 2.0 * s - 1.0, 0.0, 1.0);\n"
+            "    if (mode == 19) return mix(min(b, 2.0 * s), max(b, 2.0 * (s - 0.5)), step(0.5, "
+            "s));\n"
+            "    if (mode == 20) return step(vec3(0.5), vec3(vivid(b.r, s.r), vivid(b.g, s.g), "
+            "vivid(b.b, s.b)));\n"
+            "    if (mode == 21) return max(vec3(0.0), b - s);\n"
+            "    if (mode == 22) return vec3((s.r <= 0.0) ? 1.0 : min(1.0, b.r / max(s.r, 0.001)), "
+            "(s.g <= 0.0) ? 1.0 : min(1.0, b.g / max(s.g, 0.001)), (s.b <= 0.0) ? 1.0 : min(1.0, "
+            "b.b / "
+            "max(s.b, 0.001)));\n"
+            "    if (mode == 23) return (sat(s) <= 0.00001) ? b : setLum(setSat(s, sat(b)), "
+            "lum(b));\n"
+            "    if (mode == 24) return setLum(setSat(b, sat(s)), lum(b));\n"
+            "    if (mode == 25) return setLum(s, lum(b));\n"
+            "    if (mode == 26) return setLum(b, lum(s));\n"
+            "    return s;\n"
+            "}\n"
+            "uint hashPixel(uvec2 v) { uint h = v.x * 1597334677u + v.y * 3812015801u + "
+            "2246822519u; h "
+            "^= h >> 16; h *= 2246822519u; h ^= h >> 13; h *= 3266489917u; h ^= h >> 16; return h; "
+            "}\n"
+            "float dissolveAlpha(float a) {\n"
+            "    if (a <= 0.0) return 0.0; if (a >= 1.0) return 1.0;\n"
+            "    vec2 sz = vec2(textureSize(uSrcTexture, 0));\n"
+            "    ivec2 p = ivec2(floor(uTileWorldOrigin + fragTexCoord * sz));\n"
+            "    float r = float(hashPixel(uvec2(p)) & 0x00ffffffu) / 16777215.0;\n"
+            "    return (r <= a) ? 1.0 : 0.0;\n"
+            "}\n"
+            // Writes outColor and returns early in a dozen places; main() below
+            // wraps it so the dither sits on the one value that reaches the tile.
+            "void flattenBody() {\n"
+            "    float opacity = clamp(uStrokeOpacity, 0.0, 1.0);\n"
+            "    vec4 src = texture(uSrcTexture, fragTexCoord);\n"
+            "    float maskA = 1.0;\n"
+            "    if (uUseFinalSourceMask != 0) {\n"
+            "        maskA = texture(uFinalSourceMaskTexture, fragTexCoord).a;\n"
+            "        src *= maskA;\n"
+            "    }\n"
+            "    if (uClipMaskAsAlphaCap != 0) {\n"
+            // Manual src-over with per-pixel alpha cap. C++ side: GL_BLEND disabled,
+            // uDstTexture bound to layer's pre-stroke pixels.
+            "        vec4 dst = texture(uDstTexture, fragTexCoord);\n"
+            "        if (dst.a > maskA) { outColor = dst; return; }\n"
+            "        vec4 srcEff = src * opacity;\n"
+            "        float ao = srcEff.a + dst.a * (1.0 - srcEff.a);\n"
+            "        vec3 co = srcEff.rgb + dst.rgb * (1.0 - srcEff.a);\n"
+            "        if (ao > maskA) {\n"
+            "            if (ao > 0.0) co *= maskA / ao;\n"
+            "            ao = maskA;\n"
+            "        }\n"
+            "        outColor = vec4(clamp(co, vec3(0.0), vec3(maskA)), ao);\n"
+            "        return;\n"
+            "    }\n"
+            "    if (uReplaceWithBaseMix != 0) {\n"
+            "        vec4 base = texture(uBaseTexture, fragTexCoord);\n"
+            "        outColor = mix(base, src, opacity);\n"
+            "        return;\n"
+            "    }\n"
+            "    if (uUseProgrammaticBlend == 0) {\n"
+            "        outColor = src * opacity;\n"
+            "        return;\n"
+            "    }\n"
+            "    vec4 dst = texture(uDstTexture, fragTexCoord);\n"
+            "    float ad = dst.a;\n"
+            "    float asRaw = src.a;\n"
+            "    float as = (uStrokeBlendMode == 12) ? dissolveAlpha(asRaw * opacity) : "
+            "clamp(asRaw * "
+            "opacity, 0.0, 1.0);\n"
+            "    vec3 Cs = (asRaw > 0.0) ? src.rgb / asRaw : vec3(0.0);\n"
+            // Brush blending reads only the target layer, before layer compositing.
+            "    vec3 Cd = (ad > 0.0) ? dst.rgb / ad : vec3(0.0);\n"
+            "    vec3 B = blendColor(Cd, Cs, uStrokeBlendMode);\n"
+            "    if (uAlphaLock != 0) {\n"
+            "        vec3 coLocked = ad * as * B + (1.0 - as) * dst.rgb;\n"
+            "        outColor = vec4(clamp(coLocked, vec3(0.0), vec3(ad)), ad);\n"
+            "        return;\n"
+            "    }\n"
+            "    vec3 strokeColor = mix(Cs, B, ad);\n"
+            "    vec3 co = as * strokeColor + (1.0 - as) * dst.rgb;\n"
+            "    float ao = as + ad * (1.0 - as);\n"
+            "    outColor = vec4(clamp(co, vec3(0.0), vec3(ao)), ao);\n"
+            "}\n"
+            "void main() {\n"
+            "    flattenBody();\n"
+            "    outColor = ditherPremultiplied(\n"
+            "        outColor, uTileWorldOrigin + fragTexCoord * vec2(textureSize(uSrcTexture, "
+            "0)));\n"
+            "}\n");
 
     m_flattenProgram = std::make_unique<GLShaderProgram>(m_gl);
     auto flatResult = m_flattenProgram->loadFromSource(flattenVert, flattenFrag);
@@ -2741,9 +2755,9 @@ void GLBrushRenderer::stampGPU(TileGrid& strokeBuffer, GLTileRenderer* tileRende
         // to enclose the max possible brush footprint for this stroke; the
         // physical texture may be larger due to geometric growth across
         // strokes. Half-size centers the brush in the reservoir.
-        const GLsizei reservoirLogical = std::max(
-            computeSmudgeReservoirLogicalSize(brush, coverageExtent),
-            m_smudgePrevValid ? m_smudgeReservoirActive : 0);
+        const GLsizei reservoirLogical
+            = std::max(computeSmudgeReservoirLogicalSize(brush, coverageExtent),
+                m_smudgePrevValid ? m_smudgeReservoirActive : 0);
         // If the reservoir gets reallocated mid-stroke (brush.radius()
         // changed enough to need a larger texture), the old contents are
         // gone — force a re-init on this dab.
@@ -3069,8 +3083,7 @@ void GLBrushRenderer::stampGPU(TileGrid& strokeBuffer, GLTileRenderer* tileRende
                 "uCanvasIsRgba8", layerGrid->format() == TilePixelFormat::RGBA8 ? 1 : 0);
             applyProgram->setUniform("uUseTexture", useTexture ? 1 : 0);
             applyProgram->setUniform("uTextureTile", wet_pigment_gpu::kBrushTextureUnit);
-            applyProgram->setUniform("uInvTextureSize",
-                1.0f / static_cast<float>(TILE_SIZE),
+            applyProgram->setUniform("uInvTextureSize", 1.0f / static_cast<float>(TILE_SIZE),
                 1.0f / static_cast<float>(TILE_SIZE));
             applyProgram->setUniform("uTextureEdgeBoost", brush.textureEdgeBoost());
             applyProgram->setUniform("uTextureContrast", brush.textureContrast());
@@ -3167,8 +3180,7 @@ void GLBrushRenderer::stampGPU(TileGrid& strokeBuffer, GLTileRenderer* tileRende
 
                 if (useTexture) {
                     const GLuint textureTileId = ensureProceduralTextureTile(key, brush);
-                    m_gl->glBindTextureUnit(
-                        wet_pigment_gpu::kBrushTextureUnit, textureTileId);
+                    m_gl->glBindTextureUnit(wet_pigment_gpu::kBrushTextureUnit, textureTileId);
                 }
 
                 const bool tileAlreadyExists = strokeBuffer.hasTile(key);
@@ -3422,8 +3434,8 @@ bool GLBrushRenderer::stampDabSegmentGPU(TileGrid& strokeBuffer, GLTileRenderer*
         = connectedDabs ? m_connectedBatchProgram.get() : m_plainBatchProgram.get();
     const DabBatchUniforms& batchUniforms
         = connectedDabs ? m_connectedBatchUniforms : m_plainBatchUniforms;
-    const size_t maxBatchDabs = static_cast<size_t>(
-        connectedDabs ? kConnectedBatchMaxDabs : kPlainBatchMaxDabs);
+    const size_t maxBatchDabs
+        = static_cast<size_t>(connectedDabs ? kConnectedBatchMaxDabs : kPlainBatchMaxDabs);
     if (!m_initialized || !batchProgram || !tileRenderer)
         return false;
     if (dabs.empty())
@@ -3527,8 +3539,7 @@ bool GLBrushRenderer::stampDabSegmentGPU(TileGrid& strokeBuffer, GLTileRenderer*
     batchProgram->setUniform("uMaskTexture", 1);
     batchProgram->setUniform("uTextureTile", 2);
     batchProgram->setUniform("uUseMask", useSelectionMask ? 1 : 0);
-    batchProgram->setUniform(
-        "uMaskAffectsAlpha", brush.selectionMaskAffectsAlpha() ? 1 : 0);
+    batchProgram->setUniform("uMaskAffectsAlpha", brush.selectionMaskAffectsAlpha() ? 1 : 0);
     const bool useTexture = brush.usesProceduralTexture();
     batchProgram->setUniform("uUseTexture", useTexture ? 1 : 0);
     const bool useDabShape = (brush.dabType() > 0);
@@ -3542,8 +3553,7 @@ bool GLBrushRenderer::stampDabSegmentGPU(TileGrid& strokeBuffer, GLTileRenderer*
     batchProgram->setUniform(
         "uDabShapeRotationRad", brush.dabRotation() * (3.14159265358979323846f / 180.0f));
     if (connectedDabs) {
-        batchProgram->setUniform(
-            "uDabContentBounds", brush.dabShapeContentBounds(1.0f).asArray());
+        batchProgram->setUniform("uDabContentBounds", brush.dabShapeContentBounds(1.0f).asArray());
         batchProgram->setUniform(
             "uDabSoftContentBounds", brush.dabShapeContentBounds(0.0f).asArray());
     }
@@ -3644,8 +3654,8 @@ void GLBrushRenderer::rebuildStrokeBufferFromDabsGPU(TileGrid& strokeBuffer,
         = connectedDabs ? m_connectedBatchProgram.get() : m_plainBatchProgram.get();
     const DabBatchUniforms& batchUniforms
         = connectedDabs ? m_connectedBatchUniforms : m_plainBatchUniforms;
-    const size_t maxBatchDabs = static_cast<size_t>(
-        connectedDabs ? kConnectedBatchMaxDabs : kPlainBatchMaxDabs);
+    const size_t maxBatchDabs
+        = static_cast<size_t>(connectedDabs ? kConnectedBatchMaxDabs : kPlainBatchMaxDabs);
     if (!m_initialized || !batchProgram || !tileRenderer)
         return;
     // Rebuilding the stroke from scratch invalidates any in-flight smudge carry.
@@ -3758,8 +3768,7 @@ void GLBrushRenderer::rebuildStrokeBufferFromDabsGPU(TileGrid& strokeBuffer,
     batchProgram->setUniform("uMaskTexture", 1);
     batchProgram->setUniform("uTextureTile", 2);
     batchProgram->setUniform("uUseMask", useSelectionMask ? 1 : 0);
-    batchProgram->setUniform(
-        "uMaskAffectsAlpha", brush.selectionMaskAffectsAlpha() ? 1 : 0);
+    batchProgram->setUniform("uMaskAffectsAlpha", brush.selectionMaskAffectsAlpha() ? 1 : 0);
     const bool useTexture = brush.usesProceduralTexture();
     batchProgram->setUniform("uUseTexture", useTexture ? 1 : 0);
     const bool useDabShape = (brush.dabType() > 0);
@@ -3773,8 +3782,7 @@ void GLBrushRenderer::rebuildStrokeBufferFromDabsGPU(TileGrid& strokeBuffer,
     batchProgram->setUniform(
         "uDabShapeRotationRad", brush.dabRotation() * (3.14159265358979323846f / 180.0f));
     if (connectedDabs) {
-        batchProgram->setUniform(
-            "uDabContentBounds", brush.dabShapeContentBounds(1.0f).asArray());
+        batchProgram->setUniform("uDabContentBounds", brush.dabShapeContentBounds(1.0f).asArray());
         batchProgram->setUniform(
             "uDabSoftContentBounds", brush.dabShapeContentBounds(0.0f).asArray());
     }
@@ -3878,8 +3886,8 @@ void GLBrushRenderer::rebuildStrokeBufferRangeFromDabsGPU(TileGrid& strokeBuffer
         = connectedDabs ? m_connectedBatchProgram.get() : m_plainBatchProgram.get();
     const DabBatchUniforms& batchUniforms
         = connectedDabs ? m_connectedBatchUniforms : m_plainBatchUniforms;
-    const size_t maxBatchDabs = static_cast<size_t>(
-        connectedDabs ? kConnectedBatchMaxDabs : kPlainBatchMaxDabs);
+    const size_t maxBatchDabs
+        = static_cast<size_t>(connectedDabs ? kConnectedBatchMaxDabs : kPlainBatchMaxDabs);
     if (!m_initialized || !batchProgram || !tileRenderer)
         return;
     if (dabCount == 0 || startDabIndex >= dabs.size())
@@ -4018,8 +4026,7 @@ void GLBrushRenderer::rebuildStrokeBufferRangeFromDabsGPU(TileGrid& strokeBuffer
     batchProgram->setUniform("uMaskTexture", 1);
     batchProgram->setUniform("uTextureTile", 2);
     batchProgram->setUniform("uUseMask", useSelectionMask ? 1 : 0);
-    batchProgram->setUniform(
-        "uMaskAffectsAlpha", brush.selectionMaskAffectsAlpha() ? 1 : 0);
+    batchProgram->setUniform("uMaskAffectsAlpha", brush.selectionMaskAffectsAlpha() ? 1 : 0);
     const bool useTexture = brush.usesProceduralTexture();
     batchProgram->setUniform("uUseTexture", useTexture ? 1 : 0);
     const bool useDabShape = (brush.dabType() > 0);
@@ -4033,8 +4040,7 @@ void GLBrushRenderer::rebuildStrokeBufferRangeFromDabsGPU(TileGrid& strokeBuffer
     batchProgram->setUniform(
         "uDabShapeRotationRad", brush.dabRotation() * (3.14159265358979323846f / 180.0f));
     if (connectedDabs) {
-        batchProgram->setUniform(
-            "uDabContentBounds", brush.dabShapeContentBounds(1.0f).asArray());
+        batchProgram->setUniform("uDabContentBounds", brush.dabShapeContentBounds(1.0f).asArray());
         batchProgram->setUniform(
             "uDabSoftContentBounds", brush.dabShapeContentBounds(0.0f).asArray());
     }
@@ -4852,10 +4858,10 @@ void GLBrushRenderer::renderDabBatchForTile(const TileBrush& brush,
                     previousParams.data());
                 m_gl->glUniform4fv(uniforms.previousDabColor, static_cast<GLsizei>(chunkCount),
                     previousColors.data());
-                m_gl->glUniform4fv(uniforms.stretchQuad01, static_cast<GLsizei>(chunkCount),
-                    stretchQuad01.data());
-                m_gl->glUniform4fv(uniforms.stretchQuad23, static_cast<GLsizei>(chunkCount),
-                    stretchQuad23.data());
+                m_gl->glUniform4fv(
+                    uniforms.stretchQuad01, static_cast<GLsizei>(chunkCount), stretchQuad01.data());
+                m_gl->glUniform4fv(
+                    uniforms.stretchQuad23, static_cast<GLsizei>(chunkCount), stretchQuad23.data());
                 m_gl->glUniform1i(uniforms.transformSegments, brush.transformSegments());
                 m_gl->glUniform1iv(
                     uniforms.dabHasPrevious, static_cast<GLsizei>(chunkCount), hasPrevious.data());
@@ -5104,8 +5110,8 @@ bool GLBrushRenderer::ensureTextureScratchSize(GLsizei width, GLsizei height)
     params.internalFormat = GL_R16F;
     params.pixelFormat = GL_RED;
     params.pixelType = GL_HALF_FLOAT;
-    recreateTexture2D(m_gl, m_textureScratchTex, m_textureScratchWidth,
-        m_textureScratchHeight, params);
+    recreateTexture2D(
+        m_gl, m_textureScratchTex, m_textureScratchWidth, m_textureScratchHeight, params);
     return m_textureScratchTex != 0;
 }
 
@@ -5216,12 +5222,13 @@ bool GLBrushRenderer::stampSmudgeSegmentGPU(TileGrid& strokeBuffer, GLTileRender
     // ----- 0. Allocate reservoir (sized for the stroke's max footprint) -----
     float renderedExtent = 0.0f;
     for (const auto& dab : dabs) {
-        renderedExtent = std::max(renderedExtent, dabCoverageExtent(
-            brush, dab.radius, dab.hardness, dab.roundness, dab.angleDegrees, true));
+        renderedExtent = std::max(renderedExtent,
+            dabCoverageExtent(
+                brush, dab.radius, dab.hardness, dab.roundness, dab.angleDegrees, true));
     }
-    const GLsizei reservoirLogical = std::max(
-        computeSmudgeReservoirLogicalSize(brush, renderedExtent),
-        m_smudgePrevValid ? m_smudgeReservoirActive : 0);
+    const GLsizei reservoirLogical
+        = std::max(computeSmudgeReservoirLogicalSize(brush, renderedExtent),
+            m_smudgePrevValid ? m_smudgeReservoirActive : 0);
     // If the reservoir gets reallocated mid-stroke (brush.radius() changed
     // enough to need a larger texture), the old contents are gone — force
     // a re-init on this segment.
@@ -5511,10 +5518,10 @@ bool GLBrushRenderer::stampSmudgeSegmentGPU(TileGrid& strokeBuffer, GLTileRender
                     continue;
                 }
 
-                m_gl->glCopyImageSubData(textureTileId, GL_TEXTURE_2D, 0,
-                    copyMinX - tileMinX, copyMinY - tileMinY, 0, m_textureScratchTex,
-                    GL_TEXTURE_2D, 0, copyMinX - roiMinXi, copyMinY - roiMinYi, 0,
-                    copyMaxX - copyMinX, copyMaxY - copyMinY, 1);
+                m_gl->glCopyImageSubData(textureTileId, GL_TEXTURE_2D, 0, copyMinX - tileMinX,
+                    copyMinY - tileMinY, 0, m_textureScratchTex, GL_TEXTURE_2D, 0,
+                    copyMinX - roiMinXi, copyMinY - roiMinYi, 0, copyMaxX - copyMinX,
+                    copyMaxY - copyMinY, 1);
             }
         }
         m_gl->glBindTextureUnit(wet_pigment_gpu::kBrushTextureUnit, m_textureScratchTex);
@@ -5600,8 +5607,7 @@ bool GLBrushRenderer::stampSmudgeSegmentGPU(TileGrid& strokeBuffer, GLTileRender
         applyProgram->setUniform("uTextureDepth", brush.textureDepth());
         applyProgram->setUniform("uTextureBlend", brush.textureBlend());
         applyProgram->setUniform("uTextureAmount", brush.textureAmount());
-        applyProgram->setUniform(
-            "uDabContentBounds", brush.dabShapeContentBounds(1.0f).asArray());
+        applyProgram->setUniform("uDabContentBounds", brush.dabShapeContentBounds(1.0f).asArray());
         applyProgram->setUniform(
             "uDabSoftContentBounds", brush.dabShapeContentBounds(0.0f).asArray());
     } else {
@@ -5629,9 +5635,8 @@ bool GLBrushRenderer::stampSmudgeSegmentGPU(TileGrid& strokeBuffer, GLTileRender
 
     for (size_t i = 0; i < dabs.size(); ++i) {
         const auto& d = dabs[i];
-        const TileBrush::DabPoint* stretchStart = wetMode && brush.connectsDabs()
-            ? (i > 0 ? &dabs[i - 1] : previousDab)
-            : nullptr;
+        const TileBrush::DabPoint* stretchStart
+            = wetMode && brush.connectsDabs() ? (i > 0 ? &dabs[i - 1] : previousDab) : nullptr;
         const TileBrush::DabPoint* stretchEnd = wetMode && brush.refinesDabJoints()
             ? (i + 1 < dabs.size() ? &dabs[i + 1] : nextDab)
             : nullptr;
@@ -5788,8 +5793,8 @@ bool GLBrushRenderer::stampSmudgeSegmentGPU(TileGrid& strokeBuffer, GLTileRender
                 applyProgram->setUniform("uEndControl1", dabTransform.endControls[1].x - originX,
                     dabTransform.endControls[1].y - originY);
                 applyProgram->setUniform("uTransformSegments", brush.transformSegments());
-                applyProgram->setUniform("uPreviousHardness",
-                    stretchStart ? stretchStart->hardness : d.hardness);
+                applyProgram->setUniform(
+                    "uPreviousHardness", stretchStart ? stretchStart->hardness : d.hardness);
             }
         }
         applyProgram->setUniform("uBrushCenter", brushCenterX, brushCenterY);
