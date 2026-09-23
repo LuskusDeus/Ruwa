@@ -59,7 +59,7 @@ jobs:
             libxkbcommon-x11-0
 
       - name: Install Qt
-        uses: jurplel/install-qt-action@48d3ad6db93f3627c8ee7a0454bc6f3744f7e730 # v4.3.1
+        uses: jurplel/install-qt-action@a9c63c7c123f3069cff414e7e482d95dfa9d8125 # v4.4.1
         with:
           version: ${{ matrix.qt }}
           cache: true
@@ -141,7 +141,7 @@ jobs:
             libxcb-cursor0 libxcb-xinerama0 libxkbcommon-x11-0
 
       - name: Install Qt
-        uses: jurplel/install-qt-action@48d3ad6db93f3627c8ee7a0454bc6f3744f7e730 # v4.3.1
+        uses: jurplel/install-qt-action@a9c63c7c123f3069cff414e7e482d95dfa9d8125 # v4.4.1
         with:
           # Analysis uses the compatibility CI baseline, not the release Qt.
           version: '6.9.2'
